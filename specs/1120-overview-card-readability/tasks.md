@@ -302,3 +302,79 @@ Source: `tdd/verification.md` (verdict **FAIL**, 2026-10-20). **The feature is n
 - [x] T047 [P] [US1] F7, F8, F10 (MED/LOW): in `crates/micold-client/src/ui/material/overview_card.rs` split `a_card_with_every_row_fits_at_every_card_width` (:555) into fit, ellipsis and tooltip tests with no `if long`; assert the title text exactly or its width-dependent cut with the full text in the tooltip instead of the prefix test at :473-479; drop the label-equals-label asserts at :704-713 for painted text. Done when `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card` is green.
 - [x] T048 [P] [US1] F9 (MED): extend the ripple probe at `overview_card.rs:1263` to press in the header row and assert the ripple colour moves from `header` toward `on_body`'s layer there too (US1.5). Done when `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card` is green.
 - [x] T049 [P] F11, F12 (LOW): name the anchor index chains in `crates/micold-client/tests/support/covered_states.rs:2030-2052` (a comment per index or a helper) and add rule messages to the bare asserts in `crates/micold-core/src/overview_text.rs:326-350, 493-513`. Done when `mise run gate` is green.
+
+---
+
+## Phase 9: Bugfix BUG-1298 — match the Overview Card Redesign mockup
+
+**Bugfix**: 2026-10-24 — BUG-1298 Updated from bugfix patch. Source: `bugs/BUG-1298.md` (differences
+D1–D19; D20–D23 are follow-ups). Requirements FR-021–FR-028, SC-006. Drawing only: keep every key,
+ripple, menu, focus-order, link hit-area and expansion test unchanged and green. Issue #1299 (card
+focus animation) works on the same file in parallel, so stay out of the focus-ring code.
+
+- [ ] T050 [US1] Regression tests first, red on `origin/main`, in the tests of `crates/micold-client/src/ui/material/overview_card.rs`, built with the design's data (`bugs/BUG-1298/render_probe.rs` has every model):
+  - (a) a pixel probe finds a 1 px `outline_variant` edge at the card's left, right and bottom, and the body fill is `surface`, in both schemes (FR-021);
+  - (b) the header words paint at 13 px, there is no type glyph, and the header is 8 px / 14 px padded (FR-022);
+  - (c) the issue link, the short branch (monospace, 13 px) and the sessions phrase paint on one line in that order at 243 px (FR-023);
+  - (d) "NOW" paints left of the activity on its first line (FR-025);
+  - (e) the bar lies above the caption and is 6 px tall (FR-025);
+  - (f) a card with rows paints no counts line, and "+1 more, hover to see" (FR-026);
+  - (g) the body's first line starts 12 px under the header, 14 px from the left (FR-027).
+
+  Record each red in `tdd/cycle-log.md`. Done when the new tests fail on main for the stated reason and the old tests still pass.
+- [ ] T051 [P] [US2] Core text in `crates/micold-core/src/overview_text.rs`, with unit tests. Each new text is a `CardText` field; the old `sessions` and `prs` fields go only where no caller is left (list them with LSP `findReferences` first):
+  - `meta_sessions((total, running), first: bool)` gives FR-023's phrases;
+  - `progress_row` gives FR-025's caption ("PR phase", " tasks"), leaving `Phase::label` alone;
+  - `CardText` drops `prs` when the model lists pull requests (FR-026);
+  - in `crates/micold-core/src/issue_link.rs` a Jira label is the bare key (FR-024), with that file's tests updated.
+
+  Done when `mise run test-core` is green.
+- [ ] T052 [US1] Frame and header in `overview_card.rs` (FR-021, FR-022, FR-027):
+  - `palette` body is `surface`; the `fill` container gets a 1 px `outline_variant` border;
+  - header padding is `[8, 14]`, the state word 13 px / 600, the type word 13 px / 500 at 85 % alpha with no type glyph;
+  - the title is weight 600 (`OVERVIEW_CARD_TITLE` token, or a card-scoped role), with `type_role_mapping` updated;
+  - the body padding is 12/14/14 with 8 px row gaps.
+
+  Add any 13 px role the card needs as a card-scoped role in `crates/micold-core/src/tokens/typography.rs` (`SCOPED`), as R10 did for 17 px. Extend `composition_contrast.rs` to the 85 % type word in all five states and both schemes. Done when T050 (a), (b) and (g) pass and `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card composition_contrast type_role_mapping card_grid` is green.
+- [ ] T053 [US2] Meta line in `collapsed_body` (FR-023, FR-024):
+  - one wrapping line of the issue link (13 px / 600, underlined: extend `TextLink` with an underline and role option if it lacks them), the short branch in the monospace face in `on_body`, and "· " plus the sessions phrase muted;
+  - the branch row and the separate sessions line are removed;
+  - the link keeps its id, Tab stop, hit area and messages (1122 tests stay green unchanged, apart from geometry asserts about the link's place, which are updated to the new place).
+
+  Done when T050 (c) passes and the 1122 link tests are green.
+- [ ] T054 [US2] Activity and progress in `collapsed_body` (FR-025):
+  - "NOW" (12 px, 600, muted) before the activity, which is tinted `on_body` and still clamped to two lines (1121 FR-001);
+  - the bar first (6 px, rounded: a thickness option on `ProgressBar`, so other users keep 4 px), then the caption at 13 px, muted.
+
+  Done when T050 (d) and (e) pass and `the_progress_row_has_a_bar_only_with_a_ratio` is updated and green.
+- [ ] T055 [US2] Pull request rows in `pull_request_rows` (FR-026):
+  - the number in the monospace face at 13 px, underlined, in the link colour;
+  - a tonal pill mapped in the card (`Open` → `primary_container`/`on_primary_container`, `Merged` → `success_container`/`on_success_container`, `Draft`/`Closed` → `surface_variant`/`on_surface_variant`), leaving `PrMark::role` alone for the sidebar;
+  - `CardPrRow.failing` becomes a tone (bad / waiting / good / plain), set in `crates/micold-client/src/ui/overview.rs::pr_rows` from `StatusPhrase`, and the words are drawn at 13 px in error-600 / warning / success / muted;
+  - "+N more, hover to see";
+  - no counts line when rows are drawn (from T051).
+
+  Contrast of each pill and word: 4.5:1 in `composition_contrast.rs`. Done when T050 (f) passes and the 1123 row tests are green with their colour and text expectations updated.
+- [ ] T056 [US1] Expanded body (FR-028): `expanded_body` uses T053's meta line, T054's NOW label and progress block, and T055's rows. It has no separate sessions line and no counts line with rows, and keeps the display name, full branch and directory lines. Done when every `expanded` test in `overview_card.rs` and `card_grid.rs` is green, with geometry asserts updated only where the meta line moved a line.
+- [ ] T057 Showcase, snapshot and guide (FR-027):
+  - the showcase's five-state grid (`crates/micold-client/src/showcase/sections/surfaces.rs`) follows the new card, and `showcase_completeness` is green;
+  - regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1 … --test layout_snapshot`) and check that the diff moves only Overview rectangles;
+  - `docs/user-guide/overview.md` describes the meta line ("Issue #1117 fix/1117 · 1 session running"), the NOW label and the progress caption, and drops the counts line under rows.
+
+  Done when `scripts/gate.sh` is green.
+- [ ] T058 Visual pass (SC-006): re-run `bugs/BUG-1298/render_probe.rs`, `shot.js` and `side.py` at `PROBE_WIDTH` 235 and 280 (design at the same widths: set the viewport so `.card` is that wide), in light and dark. Save the images as `bugs/BUG-1298/fixed-vs-design-*.png` and record, per D1–D19, matched or the reason it differs in `bugs/BUG-1298/visual-pass.md`. Done when D1–D19 all read matched, or are accepted as FR-027 exceptions.
+
+### M5 — Cards match the Overview Card Redesign mockup (BUG-1298)
+
+- **Tasks**: T050–T058
+- **Deliverable**: an Overview card reads as the mockup does in both themes:
+  - an outlined neutral card;
+  - the 13 px header with no type icon;
+  - one meta line `Issue #1117 fix/1117 · 1 session running`;
+  - "NOW" before the activity;
+  - the bar above `Implement · 4/10 tasks`;
+  - mono underlined pull request numbers with tonal pills and toned words, and no counts line under them.
+- **Satisfies**: FR-021–FR-028, SC-006; BUG-1298 D1–D19
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --lib -- overview_card card_grid composition_contrast type_role_mapping`; `--test layout_snapshot`; `--test showcase_completeness`; T058's side-by-side; `scripts/gate.sh`
+- **Depends on**: M4 (merged)
+- **Tier**: full

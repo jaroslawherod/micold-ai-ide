@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Overview Card Redesign design, copied from https://claude.ai/artifact/3xzeTa9hKufvxuiqjGFWPs on 2026-10-24 (rows "Proposed", "The other states", "Full text, pinned open"; the "Today" row and notes left out except the notes text at the bottom). -->
+<html><head><meta charset=utf8><title>Overview Card Redesign</title>
+<style>
+:root{
+  --bg:#f4f3f7;--fg:#1c1b22;--muted:#55536a;--line:#d9d6e4;--surface:#fff;--surface2:#ecebf3;
+  --action:#b3261e;--action-bg:#fbe3e0;--attn:#8a5a00;--attn-bg:#fbefd0;
+  --work:#4c3fa8;--work-bg:#e5e1fa;--done:#1d6b3a;--done-bg:#d9f0e0;--idle:#55536a;--idle-bg:#e6e5ee;
+  --bar:#4c3fa8;
+  --mono:ui-monospace,"JetBrains Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131217;--fg:#ece9f5;--muted:#b4b0c8;--line:#34323f;--surface:#1c1b23;--surface2:#25242e;
+  --action:#ffb4ab;--action-bg:#4a1d1a;--attn:#f3c969;--attn-bg:#41330f;
+  --work:#c9bfff;--work-bg:#32295f;--done:#8fd7a4;--done-bg:#173b25;--idle:#b4b0c8;--idle-bg:#2c2b36;
+  --bar:#c9bfff;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131217;--fg:#ece9f5;--muted:#b4b0c8;--line:#34323f;--surface:#1c1b23;--surface2:#25242e;
+  --action:#ffb4ab;--action-bg:#4a1d1a;--attn:#f3c969;--attn-bg:#41330f;
+  --work:#c9bfff;--work-bg:#32295f;--done:#8fd7a4;--done-bg:#173b25;--idle:#b4b0c8;--idle-bg:#2c2b36;
+  --bar:#c9bfff;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,"Segoe UI",Roboto,sans-serif;padding:24px 16px 48px}
+main{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+section{display:flex;flex-direction:column;gap:12px;min-width:0}
+.grid.five{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(235px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;
+  cursor:pointer;min-width:0;transition:box-shadow .15s}
+.card:hover,.card:focus-visible{box-shadow:0 0 0 2px var(--bar);outline:none}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;font-size:13px;font-weight:600;letter-spacing:.02em}
+.hd .ty{font-weight:500;opacity:.85}
+.s-action .hd{background:var(--action-bg);color:var(--action)}
+.s-attn .hd{background:var(--attn-bg);color:var(--attn)}
+.s-work .hd{background:var(--work-bg);color:var(--work)}
+.s-done .hd{background:var(--done-bg);color:var(--done)}
+.s-idle .hd{background:var(--idle-bg);color:var(--idle)}
+.bd{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.title{font-size:17px;line-height:1.3;font-weight:600;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.meta{font-size:14px;color:var(--muted)}.meta code{font-family:var(--mono);font-size:13px;color:var(--fg)}
+.act{font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.act::before{content:"Now  ";font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.prog{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--bar)}
+.chip{align-self:flex-start;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:1px 10px;color:var(--muted)}
+.cell{position:relative;min-height:0}
+.cell .card{position:relative}
+.full{display:none}
+.cell:hover .card,.cell:focus-within .card{position:absolute;inset:0 0 auto 0;z-index:5;box-shadow:0 8px 28px rgba(0,0,0,.35),0 0 0 2px var(--bar)}
+.cell:hover .title,.cell:focus-within .title,.cell:hover .act,.cell:focus-within .act{-webkit-line-clamp:unset;display:block}
+.cell:hover .full,.cell:focus-within .full{display:flex}
+.full{flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px;font-size:13px;color:var(--muted)}
+.full code{font-family:var(--mono);color:var(--fg);overflow-wrap:anywhere}
+.prs{display:flex;flex-direction:column;gap:6px}
+.pr{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:13px;line-height:1.35}
+.pr .n{font-family:var(--mono);color:var(--bar);text-decoration:underline;text-underline-offset:2px}
+.pp{font-size:12px;font-weight:600;border-radius:999px;padding:0 8px;background:var(--idle-bg);color:var(--idle)}
+.pp.open{background:var(--work-bg);color:var(--work)}.pp.merged{background:var(--done-bg);color:var(--done)}
+.pp.draft,.pp.closed{background:var(--idle-bg);color:var(--idle)}
+.ck{color:var(--muted)}.ck.bad{color:var(--action);font-weight:600}.ck.ok{color:var(--done)}.ck.wait{color:var(--attn)}
+.iss{color:var(--bar);font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:2px;margin-right:4px}
+.more{font-size:13px;color:var(--muted)}
+.prs.all .pr:nth-child(n+3){display:none}
+.cell:hover .prs.all .pr,.cell:focus-within .prs.all .pr,.pin .prs.all .pr{display:flex}
+.cell:hover .more,.cell:focus-within .more,.pin .more{display:none}
+.ph{height:190px}
+.pin .card{position:absolute;inset:0 0 auto 0;box-shadow:0 8px 28px rgba(0,0,0,.35),0 0 0 2px var(--bar)}
+.pin .title,.pin .act{-webkit-line-clamp:unset;display:block}.pin .full{display:flex}
+.pin{min-height:330px}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+</style></head><body>
+<main>
+  <section>
+    <div class="lbl">Proposed (hover or focus a card)</div>
+    <div class="grid five">
+      <div class="cell"><div class="card s-work" tabindex="0"><div class="hd"><span>▷ Working</span><span class="ty">Project root</span></div>
+        <div class="bd"><div class="title">micold-ai-ide</div><div class="meta">main · 1 session running</div>
+        <div class="act">prepare a redesign of overview</div>
+        <div class="full"><span>Directory</span><code>(project root)</code></div></div></div><div class="ph"></div></div>
+
+      <div class="cell"><div class="card s-work" tabindex="0"><div class="hd"><span>▷ Working</span><span class="ty">Bugfix</span></div>
+        <div class="bd"><div class="title">CI red on main: daemon tests fail to compile on…</div><div class="meta"><a class="iss">Issue #1117</a> <code>fix/1117</code> · 1 session running</div>
+        <div class="act">Running autopilot on #1117</div>
+        <div class="full"><span>Branch</span><code>fix/1117_ci-red-on-main-daemon-tests-fail-to-compile-on</code><span>Full title</span><span style="color:var(--fg)">CI red on main: daemon tests fail to compile on aarch64 musl</span></div></div></div><div class="ph"></div></div>
+
+      <div class="cell"><div class="card s-work" tabindex="0"><div class="hd"><span>▷ Working</span><span class="ty">Bugfix</span></div>
+        <div class="bd"><div class="title">Regression: sidebar worktree row shows visual artefacts</div><div class="meta"><a class="iss">Issue #1119</a> <code>fix/1119</code> · 1 session running</div>
+        <div class="act">Running autopilot on #1119</div>
+        <div class="full"><span>Branch</span><code>fix/1119_regression-sidebar-worktree-row-shows-visual</code></div></div></div><div class="ph"></div></div>
+
+      <div class="cell"><div class="card s-idle" tabindex="0"><div class="hd"><span>Ⅱ Idle</span><span class="ty">Feature</span></div>
+        <div class="bd"><div class="title">Allow the GitHub issues integration to be disabled</div><div class="meta"><a class="iss">Issue #1102</a> <code>feat/1102</code> · 1 session</div>
+        <div class="prog"><div class="bar"><i style="width:84%"></i></div><span>PR phase · 21/25 tasks</span></div>
+        <div class="prs"><div class="pr"><a class="n">#1121</a><span class="pp open">Open</span><span class="ck wait">checks running</span></div></div>
+        <div class="full"><span>Branch</span><code>feat/1102_allow-the-github-issues-integration-to-be-disabled</code></div></div></div><div class="ph"></div></div>
+
+      <div class="cell"><div class="card s-idle" tabindex="0"><div class="hd"><span>Ⅱ Idle</span><span class="ty">Bugfix</span></div>
+        <div class="bd"><div class="title">Container daemon fails to start with podman: "invalid argument"</div><div class="meta"><a class="iss">Issue #1115</a> <code>fix/1115</code> · 1 session</div>
+        <div class="prs all">
+          <div class="pr"><a class="n">#1118</a><span class="pp open">Open</span><span class="ck bad">checks failing</span><span class="ck bad">changes requested</span></div>
+          <div class="pr"><a class="n">#1103</a><span class="pp merged">Merged</span><span class="ck">2 days ago</span></div>
+          <div class="pr"><a class="n">#1099</a><span class="pp closed">Closed</span><span class="ck">last week</span></div>
+          <div class="more">+1 more, hover to see</div></div>
+        <div class="full"><span>Branch</span><code>fix/1115_container-daemon-fails-to-start-with-podman-i…</code></div></div></div><div class="ph"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="lbl">The other states</div>
+    <div class="grid five">
+      <div class="cell"><div class="card s-action" tabindex="0"><div class="hd"><span>! Needs action</span><span class="ty">Feature</span></div>
+        <div class="bd"><div class="title">Add dark mode to the settings page</div><div class="meta"><a class="iss">Issue #1130</a> <code>feat/1130</code> · 2 sessions, 1 running</div>
+        <div class="act">Waiting for permission to run cargo test</div>
+        <div class="prog"><div class="bar"><i style="width:40%"></i></div><span>Implement · 4/10 tasks</span></div></div></div><div class="ph"></div></div>
+      <div class="cell"><div class="card s-attn" tabindex="0"><div class="hd"><span>◉ Needs attention</span><span class="ty">Bugfix</span></div>
+        <div class="bd"><div class="title">Tab key skips the branch field</div><div class="meta"><a class="iss">Issue #1098</a> <code>fix/1098</code> · 1 session</div>
+        <div class="prs"><div class="pr"><a class="n">#1110</a><span class="pp open">Open</span><span class="ck bad">merge conflict</span></div>
+        <div class="pr"><a class="n">#1107</a><span class="pp draft">Draft</span><span class="ck">no checks</span></div></div></div></div><div class="ph"></div></div>
+      <div class="cell"><div class="card s-done" tabindex="0"><div class="hd"><span>✓ Done</span><span class="ty">Chore</span></div>
+        <div class="bd"><div class="title">Bump iced to 0.14</div><div class="meta"><a class="iss">MIC-87</a> <code>chore/1087</code> · no sessions</div>
+        <div class="prs"><div class="pr"><a class="n">#1089</a><span class="pp merged">Merged</span><span class="ck ok">checks passed</span></div></div></div></div><div class="ph"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="lbl">Full text, pinned open</div>
+    <div class="grid five"><div class="cell pin"><div class="card s-work"><div class="hd"><span>▷ Working</span><span class="ty">Bugfix</span></div>
+      <div class="bd"><div class="title">CI red on main: daemon tests fail to compile on aarch64 musl</div><div class="meta"><a class="iss">Issue #1117</a> <code>fix/1117</code> · 1 session running</div>
+      <div class="act">Rewriting the cfg gate in crates/micold-daemon/src/sock.rs so the aarch64 musl build compiles</div>
+      <div class="prs"><div class="pr"><a class="n">#1124</a><span class="pp open">Open</span><span class="ck ok">checks passed</span><span class="ck">approved</span></div>
+        <div class="pr"><a class="n">#1120</a><span class="pp draft">Draft</span><span class="ck wait">checks running</span></div>
+        <div class="pr"><a class="n">#1116</a><span class="pp merged">Merged</span><span class="ck">yesterday</span></div></div>
+      <div class="full"><span>Branch</span><code>fix/1117_ci-red-on-main-daemon-tests-fail-to-compile-on</code><span>Worktree</span><code>fix-1117_ci-red-on-main-daemon-tests-fail-to-compile-on</code></div></div></div></div></div>
+  </section>
+</main>
+<!-- Design notes (from the artifact):
+State leads: coloured header row with icon and word, type on the right. The body stays neutral, so text contrast no longer depends on the state colour.
+One title: issue title or branch. The dir name and long branch moved to the expanded view.
+Wrap before cut: title wraps to 3 lines and activity to 2. Hover or focus expands the card in place with every line complete.
+Fewer rows: counts merged into one line. "No task progress" and "0 open · 0 merged" are gone. Activity markup is stripped.
+Pull requests as a list: one row per PR (number link, state pill, checks/review in words). Up to two PRs, the rest on hover/focus. No PR, no row.
+Issue link: next to the branch, a link to the GitHub issue (Issue #1117) or Jira ticket (MIC-87). None when no issue.
+Bigger text: title 17 px, body 14 px, labels 12-13 px.
+-->
+</body></html>
