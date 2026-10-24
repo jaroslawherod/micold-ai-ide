@@ -16,7 +16,8 @@
 //!
 //! **Scope: the strip's own controls.** Since feature 1126 the strip above the terminal holds every
 //! session of the shown location, so pressing another session's tab moves the mark too (contract
-//! S5): it sends the sidebar row's `Selected`, which arms the reveal like the other four.
+//! S5): it sends the sidebar row's `Selected`, which arms the reveal like the other four. New
+//! session's confirmation appends a helper's tab and marks it, so `Started` arms it as well.
 //!
 //! The flag rather than a scroll offset, because that is all a reducer can decide: the viewport's
 //! width is not known in Tier 1 and `main.rs`'s `tab_reveal_scroll` drains the flag once it is
@@ -90,6 +91,15 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
         (
             "Selected (another session's tab)",
             Box::new(|_: &State, other| Message::Session(SessionMsg::Selected(other))),
+        ),
+        (
+            "Started (New session confirmed: the helper's tab is appended and marked)",
+            Box::new(|_: &State, _| {
+                Message::Session(SessionMsg::Started(Session::start_new(
+                    SessionLocation::Default,
+                    AiCli::ClaudeCode,
+                )))
+            }),
         ),
     ];
 

@@ -142,6 +142,29 @@ fn no_child_is_pushed_under_an_if_on_session_shape() {
     );
 }
 
+/// A1, SC-005: nothing is drawn under the terminal. The geometry gate cannot see a bar that comes
+/// back *inside* `terminal::pane` (the pane area fills the session area either way), so the pane's
+/// builder is held to drawing no bar: no row of controls, no toolbar surface, no split buttons.
+#[test]
+fn the_pane_area_draws_no_bar_under_the_terminal() {
+    let src = source("ui/terminal.rs");
+    let pane = body_from(&src, "pub fn pane<'a>(");
+    for bar_part in [
+        "row![",
+        "Row::",
+        "Surface::new",
+        "SurfaceKind::Toolbar",
+        "split_buttons",
+        "restart",
+    ] {
+        assert!(
+            !pane.contains(bar_part),
+            "`terminal::pane` builds `{bar_part}`: the bar under the terminal is back (A1, \
+             SC-005); its controls belong to the strip above the panes"
+        );
+    }
+}
+
 /// Feature 023 FR-021b, carried to the strip: no release-focus control. The reserved
 /// Ctrl+Shift+E / Cmd+Shift+E chord is the only explicit release.
 #[test]
