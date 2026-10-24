@@ -273,6 +273,7 @@ fn the_status_bar_anatomy_matches_the_contract() {
 // -------------------------------------------------------------------------------------------
 
 #[test]
+#[allow(clippy::assertions_on_constants)] // guarding the values is the point; clippy can see the answer
 fn the_review_bar_and_comments_drawer_anatomy_matches_the_contract() {
     assert_eq!(anatomy::review_bar::HEIGHT, 44.0);
     assert_eq!(anatomy::comments_drawer::WIDTH, 360.0);

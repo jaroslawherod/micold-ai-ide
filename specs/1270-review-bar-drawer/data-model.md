@@ -118,7 +118,7 @@ in `before` (R9). A report replacing an earlier report is not new.
 ## Core: `review::reply` (extended)
 
 - `CARD_LINES: usize = 4` (FR-021, D6).
-- `Preview { text: Cow<str>, cut: bool }` and `card_preview(reply: &str, lines_of: impl Fn(&str)
+- `Preview { text: String, cut: bool }` and `card_preview(reply: &str, lines_of: impl Fn(&str)
   -> usize) -> Preview` — `display()`, then the `CARD_CHARS` cap, then
   `tooltip::clamp_to_lines(.., CARD_LINES, lines_of)`; `cut` when either step shortened (R7).
 

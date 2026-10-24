@@ -5,6 +5,7 @@
 //! See `specs/1270-review-bar-drawer/data-model.md`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::mem::replace;
 
 use super::comment::{CommentId, ReviewComment, Status};
 use crate::tokens::anatomy;
@@ -67,11 +68,11 @@ pub fn tab_counts(comments: &[ReviewComment]) -> (usize, usize) {
 
 /// `tab`'s comments ordered by scope (working tree first, then pull requests by number), path
 /// bytewise, `line_of` (the client's shown range start), side, then creation (FR-014).
-pub fn rows_of<'a>(
-    comments: &'a [ReviewComment],
+pub fn rows_of(
+    comments: &[ReviewComment],
     tab: DrawerTab,
     line_of: impl Fn(&ReviewComment) -> u32,
-) -> Vec<&'a ReviewComment> {
+) -> Vec<&ReviewComment> {
     let mut rows: Vec<_> = comments
         .iter()
         .filter(|c| DrawerTab::of(c.state.status()) == tab)
@@ -82,7 +83,7 @@ pub fn rows_of<'a>(
             )
         })
         .collect();
-    rows.sort_by(|(a, _), (b, _)| a.cmp(b));
+    rows.sort_by_key(|(key, _)| *key);
     rows.into_iter().map(|(_, c)| c).collect()
 }
 
@@ -155,19 +156,24 @@ impl Drawer {
     /// closed since a send never opens itself for it; Esc on a closed drawer changes nothing and
     /// returns `false`, so the caller knows Esc was not used.
     pub fn apply(&mut self, event: DrawerEvent) -> bool {
-        let before = self.clone();
         match event {
             DrawerEvent::Toggle if self.open => self.close(),
-            DrawerEvent::Toggle => self.open = true,
-            DrawerEvent::Close | DrawerEvent::Escape => {
-                if self.open {
-                    self.close();
-                }
+            DrawerEvent::Toggle => {
+                self.open = true;
+                true
             }
-            DrawerEvent::SelectTab(tab) => self.tab = tab,
-            DrawerEvent::Scrolled { tab, offset } => self.offsets[tab.index()] = offset,
-            DrawerEvent::SendStarted(ids) => self.watch = Some(SendWatch { ids }),
-            DrawerEvent::SendFailed => self.watch = None,
+            DrawerEvent::Close | DrawerEvent::Escape => self.open && self.close(),
+            DrawerEvent::SelectTab(tab) => replace(&mut self.tab, tab) != tab,
+            DrawerEvent::Scrolled { tab, offset } => {
+                replace(&mut self.offsets[tab.index()], offset) != offset
+            }
+            DrawerEvent::SendStarted(ids) => {
+                let watch = Some(SendWatch { ids });
+                let changed = self.watch != watch;
+                self.watch = watch;
+                changed
+            }
+            DrawerEvent::SendFailed => self.watch.take().is_some(),
             DrawerEvent::Reported { ids, shown } => {
                 let hit = self
                     .watch
@@ -180,17 +186,18 @@ impl Drawer {
                         self.tab = DrawerTab::Replies;
                     }
                 }
+                hit
             }
         }
-        *self != before
     }
 
-    fn close(&mut self) {
+    /// Closes the drawer and drops the watch; always a change, as only an open drawer closes.
+    fn close(&mut self) -> bool {
         self.open = false;
         self.watch = None;
+        true
     }
 }
-
 /// The comments of `after` that are Applied or Answered and were Draft or Sent in `before`, or
 /// not in it at all; a report replacing an earlier report is not new (research R9).
 pub fn newly_reported(before: &[ReviewComment], after: &[ReviewComment]) -> BTreeSet<CommentId> {

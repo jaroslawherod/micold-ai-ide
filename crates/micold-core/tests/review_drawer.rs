@@ -361,7 +361,7 @@ fn a_report_of_a_draft_or_sent_comment_is_new() {
 fn a_report_of_a_comment_not_there_before_is_new() {
     let c = comment(Scope::WorkingTree, Status::Answered, "a", 1, 0);
     assert_eq!(
-        newly_reported(&[], &[c.clone()]),
+        newly_reported(&[], std::slice::from_ref(&c)),
         [c.id].into_iter().collect()
     );
 }
@@ -370,6 +370,10 @@ fn a_report_of_a_comment_not_there_before_is_new() {
 fn a_report_replacing_a_report_is_not_new() {
     let applied = comment(Scope::WorkingTree, Status::Applied, "a", 1, 0);
     let after = vec![with_status(&applied, Status::Answered)];
-    assert!(newly_reported(&[applied.clone()], &after).is_empty());
-    assert!(newly_reported(&[applied.clone()], &[applied]).is_empty());
+    assert!(newly_reported(std::slice::from_ref(&applied), &after).is_empty());
+    assert!(newly_reported(
+        std::slice::from_ref(&applied),
+        std::slice::from_ref(&applied)
+    )
+    .is_empty());
 }
