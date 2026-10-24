@@ -189,11 +189,14 @@ change being applied there (Edge *Two windows*).
 
 ## R11 — Milestone order
 
-**Decision**: core first (M1 stale, M2 drag and chips), then the client milestones in today's view
-(M3 hold, M4 drag, M5 chips), FR-013 last (M6). See plan *Delivery order*.
+**Decision**: the micold-core milestones build now (M1 identity + `review::stale`; M2
+`review::drag`, `review::chips`, the settings key). The client milestones that touch the
+Changes/Review view (M3 hold and notice, M4 drag to comment, M5 chips UI) wait until #1269 (Review
+tab) and #1271 are merged, because #1269 reshapes that view. M6 (FR-013) waits for #1271. See plan
+*Delivery order*.
 
-**Rationale**: the core is independent of every blocker and carries FR-028; the client milestones
-are small and each visible; only FR-013 needs #1271.
+**Rationale**: the core is independent of every blocker and carries FR-028, so it lands with its
+unit tests now; the client parts are written once, in the view they will live in.
 
-**Alternative rejected**: *wait for #1269/#1271 and build in the Review tab*: blocks the P1 stories
-on unmerged work for one requirement's sake.
+**Alternative rejected**: *build M3–M5 now in today's Changes view*: #1269 then reshapes the view
+under them, and the hold, gutter and composer glue would be rebased or rewritten (rework cost).

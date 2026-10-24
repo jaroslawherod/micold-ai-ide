@@ -31,11 +31,11 @@ This is slice R6 of the review UI redesign (`docs/development/review-redesign.md
 | Part | Needs | Can ship before its blocker |
 |---|---|---|
 | Stale tracking: which files differ between what is shown and what was last read, and the count (FR-001–FR-004) | a per-file change identity added to the list read (FR-001a); the comparison is then pure logic over two change lists | yes |
-| Holding the shown snapshot and the *n files changed since you looked* notice in the view (FR-005–FR-012, FR-014) | the view that exists when it is built: today's Changes view, or the Review tab of #1269 | yes, in today's Changes view; it moves with the view when #1269 lands |
+| Holding the shown snapshot and the *n files changed since you looked* notice in the view (FR-005–FR-012, FR-014) | the Review tab of #1269 | no: after #1269 and #1271 (core part ships now) |
 | Visible-tab only: while the Review tab is hidden, #1269 already marks it changed and re-reads when shown | #1269 | the hidden-tab part is #1269's, not this feature's |
 | A held change to a file marked reviewed returns it to unseen with the changed dot (FR-013) | #1271 (reviewed marks) | no: this requirement is built with or after #1271 |
-| Drag over line numbers picks and opens the comment box (FR-015–FR-021) | nothing beyond today's picking and comment box | yes |
-| Suggestion chips and their setting (FR-022–FR-027) | nothing beyond today's comment box and Settings | yes |
+| Drag over line numbers picks and opens the comment box (FR-015–FR-021) | today's picking and comment box, in the view #1269 reshapes | no: after #1269 and #1271 (core part ships now) |
+| Suggestion chips and their setting (FR-022–FR-027) | today's comment box and Settings, in the view #1269 reshapes | no: after #1269 and #1271 (core part ships now) |
 
 The issue lists #1271 as its blocker because the redesign sequences R6 after R4; only FR-013 truly
 needs it. The plan ships the pure core parts first; the client parts that touch the Changes/Review
@@ -62,7 +62,8 @@ a dot. When the developer is ready, they press the notice and the view shows the
 one step, keeping their selected file, picked lines and the comment they were writing.
 
 **Why this priority**: The reported problem of the redesign: re-reading within two seconds moves
-what the user is reading. It is the larger half of the issue and it needs no blocker.
+what the user is reading. It is the larger half of the issue; its core part needs no blocker; the
+view part waits for #1269 and #1271.
 
 **Independent Test**: Open the view on a worktree with changes, select a file, then edit that file
 and two others from a terminal. Within about two seconds the header reads *3 files changed since you
@@ -117,8 +118,8 @@ A developer wants to comment on lines 12–18. They press on line 12's number, d
 number and let go: the seven lines are picked and the comment box is already open under line 18,
 ready for typing.
 
-**Why this priority**: The most frequent review action, cut from three steps to one gesture. Needs
-no blocker.
+**Why this priority**: The most frequent review action, cut from three steps to one gesture. Its core
+part needs no blocker; the view part waits for #1269 and #1271.
 
 **Independent Test**: In a text diff, press on one added line's number, drag over five more numbers
 on the same side, release. The six lines are picked and the comment box is open under the last one
@@ -338,8 +339,8 @@ holds that chip's text and the focus stays in the box.
 
 - Chip texts: *Rename* → "Rename this to ", *Add test* → "Add a test that covers this.", *Why?* →
   "Why is this needed?". The set is fixed and not user-editable in this feature.
-- The notice sits in the view's header (today the Changes view header; the Review tab header once
-  #1269 lands); the dot sits on the file row of whatever list the view has (flat today, tree after
+- The notice sits in the view's header (the Review tab header of #1269, which the view part waits
+  for); the dot sits on the file row of whatever list the view has (flat today, tree after
   #1273).
 - "Since you looked" is per window and in memory: it is not persisted and not shared across
   windows. It restarts when the view is reopened.

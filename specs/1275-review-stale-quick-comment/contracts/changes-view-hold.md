@@ -1,4 +1,4 @@
-# Contract: the Changes view's hold (client reducer, M3)
+# Contract: the Review view's hold (client reducer, M3, after #1269 and #1271)
 
 `features::changes::update` behaviour, tested in `crates/micold-client/tests/features_changes.rs`
 and the reducer's own tests. "Watch read" = a `ListRead` answering a read started by `Msg::Changed`
