@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 B (conformance, sonnet) | 1 | ad49afbb772c22a42e02e75f8f1cb4a1b944597a:52632d457a59d561d87d7f30750d5367df16e913 | CHANGES: 1 BLOCKER (Verify file unreadable: prompt path lost its scratchpad prefix, not a code finding), 1 MAJOR (Changes label wraps at 640×480 with four-digit counts), 2 MINOR (ledger next step; late reds); F2–F4 fixed |
 | M3 A (re-review, sonnet) | 2 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 → 5a9d52fa | CLEAN; F1–F3 fixed and F4's decline confirmed, lines cited (first r2 answer cited none and was re-asked) |
 | M3 B (conformance, sonnet) | 2 | 7fd22c02a06c5b38313d3be8153870c14ebd905d:5a9d52fa68a1ff52373e5d0dc73e3717902a12fe | CLEAN; 1 MINOR (Verify output did not name the new gate) fixed in the Verify file |
+| Close review (tests + docs) | 1 | 3c2eade41bf2761279d2d9d2f1132b5bc05e73b3:1cd58a22f0613ffcd203d6af4ef995a3fa7e09c6 | running |
 
 ## Declined review findings
 
