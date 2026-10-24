@@ -76,7 +76,7 @@ impl Reviews {
         &mut self,
         catalog: &Catalog,
         project: &Path,
-    ) -> (&mut HashMap<String, EntryReview>, &Marks) {
+    ) -> (&mut HashMap<String, EntryReview>, &mut Marks) {
         if !self.projects.contains_key(project) {
             let file = catalog.load_reviews(project);
             let entries = file
@@ -363,7 +363,9 @@ impl Reviews {
     /// logged; memory forgets them regardless, since the worktree is gone.
     pub fn forget_worktree(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> DaemonMsg {
         let (entries, marks) = self.loaded(catalog, project);
-        if entries.remove(dir).is_some() {
+        // A marks-only entry is an entry too: its marks go with the worktree.
+        let had_comments = entries.remove(dir).is_some();
+        if marks.remove(dir).is_some() | had_comments {
             save_logged(
                 catalog,
                 project,
@@ -388,6 +390,7 @@ impl Reviews {
         let (entries, marks) = self.loaded(catalog, project);
         let mut pruned: Vec<String> = entries
             .keys()
+            .chain(marks.keys())
             .filter(|dir| !dir.is_empty() && gone(dir))
             .cloned()
             .collect();
@@ -395,8 +398,10 @@ impl Reviews {
             return Vec::new();
         }
         pruned.sort();
+        pruned.dedup();
         for dir in &pruned {
             entries.remove(dir);
+            marks.remove(dir);
         }
         save_logged(
             catalog,

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
 - **Phase**: implement M1
-- **Next step**: M1 review A round 2 (sonnet, fix diff) by the orchestrator; then full gate (`scripts/gate.sh`) and PR text
+- **Next step**: orchestrator opens the M1 PR from scratchpad pr-m1.md, waits on CI, merges
 
 ## Pull requests
 
@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 4898b5511d4f5bfda0a94ab413c3e0ee3b0e07e7:1fffd3bd01fcc90f2a112ade02d6051e1800f7dc | CLEAN (model sonnet, run by the orchestrator, fix diff from round 1) |
 | Tasks | 1 | 9585ec9b5c4444f1fb0f85c4ee8c95e4644fe2fd:2742a52748cad1ffbc15c420079a08ded6708f7c | CHANGES: 1 MAJOR, 3 MINOR (run by the orchestrator). F1 fixed, prose only: `[P]` removed from T004, T008, T012 (share marks.rs) and T021 (shares review_edit.rs), Dependencies and parallel example say so; F2 fixed, prose only: D5 records the rule 1 waiver (#1269, R8, tests only) and `mark_block` moved to M3; F3 fixed, prose only: D4 note names T025, T026, T027 s7, T028's `HiddenKind` arm; F4 fixed (MINOR, no new round): T029 starts with a failing daemon_sync test that a failed `ReviewMark` notifies and leaves state unchanged. Review done. Fix snapshot 44b93dad2fc8b2cfa901b4f068ffd6325655fcf7:7ec6e4fc0d4c9837d50a6bfc26ff768d1af15a11. speckit-analyze is not invocable here; FR/SC coverage checked by grep |
 | M1 diff | 1 | d666189b8e5357d37344c06f55639874bdebb5c7:3f3d70abe73089804fe8fe57960c022bef086b75 | A (high): CHANGES, 2 MAJOR, 2 MINOR. F1 fixed: `hash-object --stdin-paths` input C-quoted for a path starting with `"` or holding CR/LF (newline paths now hashed too), test with a quoted path; F2 fixed in part: `core.fileMode=false` gives an untracked file 100644, G2 test; the `core.symlinks=false` half declined (see below); F3 fixed: last entry wins for marks too, store test; F4 fixed: the daemon carries the file's marks through `Reviews` and writes them back unchanged, review_edit test. B (conformance, sonnet): CLEAN; Verify `review::` 218 passed 1 ignored, `review_git` 32 passed; MINORs: daemon `marks: Default::default()` (gone with F4), no tdd/cycle-log.md (not fixed) |
-| M1 diff | 2 | 91ddebc0bca0429a7d1369d72a451490b061fdbc:96b101ead03a0b38041050f7cd063eeb05b83e8d | pending: A re-review (sonnet) of the round 1 fix diff, run by the orchestrator. Scoped gate green (fmt; clippy core + daemon; core `review::` 219 passed 1 ignored, `review_git` 34, daemon review_edit/send/reports). 4 core permission tests fail as root on origin/main too (checked at its tip): settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers x2 |
+| M1 diff | 2 | 91ddebc0bca0429a7d1369d72a451490b061fdbc:96b101ead03a0b38041050f7cd063eeb05b83e8d | A (sonnet, fix diff): CLEAN; F1–F4 confirmed, core.symlinks decline stands. 1 MINOR fixed (no new round): `forget_worktree`/`prune_worktrees` also drop the dir's marks and treat a marks-only entry as present, review_edit test. Review done. Scoped gate green before; 4 core permission tests fail as root on origin/main too: settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers x2 |
 
 ## Declined review findings
 
@@ -61,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2: round 1 findings acted on (A: F1, F3, F4 fixed, F2 fixed in part, its symlinks half declined; B CLEAN), committed 96b101ea. Next: A round 2 on snapshot 91ddebc0bca0429a7d1369d72a451490b061fdbc:96b101ead03a0b38041050f7cd063eeb05b83e8d; if clean, the full gate (`scripts/gate.sh`) and the PR text. Deviations from the plan: D6; the daemon now carries marks through unchanged (F4), M2 still edits, pushes and removes them.
+M1 done: reviews A (2 rounds) and B clean, full gate run, PR text written for the orchestrator (gh unauthenticated). Next: M2 (T018–T024). Note for M2: the daemon already carries marks through `Reviews` (loaded with the file, written back, dropped with a forgotten/pruned worktree); M2 adds SetReviewed, the pushes and the client side. Deviations from the plan: D6.
 
 ## Open escalation
 
