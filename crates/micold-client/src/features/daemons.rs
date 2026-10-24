@@ -13,8 +13,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 
 use micold_core::daemons::{
-    Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
-    DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
+    default_container_name, Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId,
+    DaemonName, DaemonRegistry, DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange,
+    WorktreeRef,
 };
 use micold_core::kube::lifecycle::leftovers;
 use micold_core::kube::names::ResourceNames;
@@ -175,6 +176,17 @@ impl Draft {
             .then_some(VOLUME_NOTICE)
     }
 
+    /// The container name Save stores: the typed one trimmed, else the daemon name made into a
+    /// valid one (feature 1116, FR-001, FR-004). `None` when both are empty or unusable.
+    pub fn resolved_container_name(&self) -> Option<String> {
+        let typed = self.container_name.trim();
+        if typed.is_empty() {
+            default_container_name(&self.name)
+        } else {
+            Some(typed.to_string())
+        }
+    }
+
     /// The fields the form refuses empty for the runtime chosen now, in display order, with
     /// whether each is empty (feature 937, FR-002). Mirrors [`runtime_of`] and the registry's
     /// validation: the SSH host only over SSH, the container name and image reference for a
@@ -199,10 +211,8 @@ impl Draft {
                 ));
             }
             DraftRuntime::Container => {
-                fields.push((
-                    FieldId::DaemonContainerName,
-                    Requirement::text(true, &self.container_name),
-                ));
+                // The container name is not listed: left empty it defaults to the daemon name
+                // (feature 1116, FR-007).
                 // "My own image" needs a reference or an archive, not both (feature 806).
                 if ImageKind::of(&self.profile.image) == ImageKind::Own {
                     let archive = !self.image_path.trim().is_empty();
@@ -970,6 +980,12 @@ pub fn discard_draft(state: &mut State) {
     state.draft = None;
 }
 
+/// The name the container name field shows while empty: what Save would store, or nothing when
+/// the daemon name gives no usable one (feature 1116, FR-007).
+pub fn container_name_hint(draft: &Draft) -> String {
+    default_container_name(&draft.name).unwrap_or_default()
+}
+
 fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> FormError {
     let named = |id: DaemonId| {
         registry
@@ -991,9 +1007,10 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
             message: "A host daemon already exists; only one can run on this machine.".into(),
         },
         RegistryError::ContainerInUse { other } => {
+            let resolved = draft.resolved_container_name();
             let same_name = matches!(
                 registry.get(other).and_then(|e| e.container_name()),
-                Some(c) if c == draft.container_name
+                Some(c) if Some(c) == resolved.as_deref()
             );
             let (field, what) = if same_name {
                 ("container_name", "container")
@@ -1082,6 +1099,9 @@ fn runtime_of(
             target: ssh_target(draft)?,
         })),
         DraftRuntime::Container => {
+            let container_name = draft
+                .resolved_container_name()
+                .ok_or_else(|| invalid_field("container_name"))?;
             let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
             profile.image = image_choice(&profile.image, &draft.image_reference, &draft.image_path)
@@ -1111,7 +1131,7 @@ fn runtime_of(
             Ok(DaemonRuntime::Container(
                 micold_core::daemons::ContainerSettings {
                     profile,
-                    container_name: draft.container_name.trim().to_string(),
+                    container_name,
                     port,
                     migration: None,
                 },

@@ -195,3 +195,43 @@ fn container_ports_lists_every_stored_container_port() {
     r.add("B", container("c2", 7002), false).unwrap();
     assert_eq!(r.container_ports(), vec![7001, 7002]);
 }
+
+mod default_container_name {
+    use micold_core::daemons::{default_container_name, DEFAULT_CONTAINER_NAME_MAX};
+
+    fn of(name: &str) -> Option<String> {
+        default_container_name(name)
+    }
+
+    #[test]
+    fn unusable_characters_become_one_dash_and_the_edges_are_trimmed() {
+        assert_eq!(of("Build Box!").as_deref(), Some("Build-Box"));
+        assert_eq!(of("_web.").as_deref(), Some("web"));
+        assert_eq!(of("  web  ").as_deref(), Some("web"));
+        assert_eq!(of("build box").as_deref(), Some("build-box"));
+        assert_eq!(of("a !? b").as_deref(), Some("a-b"));
+    }
+
+    #[test]
+    fn a_typed_run_of_dashes_stays() {
+        assert_eq!(of("a--b").as_deref(), Some("a--b"));
+    }
+
+    #[test]
+    fn a_name_with_nothing_usable_has_no_default() {
+        assert_eq!(of("日本語"), None);
+        assert_eq!(of("!!!"), None);
+        assert_eq!(of("   "), None);
+        assert_eq!(of(""), None);
+    }
+
+    #[test]
+    fn a_long_name_is_cut_and_loses_a_trailing_separator() {
+        let long = "a".repeat(100);
+        assert_eq!(of(&long).unwrap().len(), DEFAULT_CONTAINER_NAME_MAX);
+        for sep in ['-', '.', '_'] {
+            let name = format!("{}{sep}{}", "a".repeat(62), "b".repeat(7));
+            assert_eq!(of(&name).unwrap(), "a".repeat(62), "separator {sep:?}");
+        }
+    }
+}
