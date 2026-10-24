@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #943
 - **Worktree branch**: claude/project-thread-k392yq
 - **Started**: 2026-10-22
-- **Phase**: M8 implemented (T055–T059) and committed at 255c6a31 on origin/main e65993bc; review A 1 round (7 findings, 6 fixed, 1 fixed-with-reason), review B 1 counted round (3 findings: T060 open, cycle log, guide check — the last two closed); full gate running; **T060 open** (the live-session visual pass)
+- **Phase**: M8 implemented (T055–T059) and committed at 255c6a31 on origin/main e65993bc; review A 1 round (7 findings, 6 fixed, 1 fixed-with-reason), review B 1 counted round (3 findings: T060 open, cycle log, guide check — the last two closed); full gate run on 73e55cbf: every suite green except the known `attention_error_notice` flake (`without_focus_the_first_reporting_window_gets_the_notice`, passed alone on rerun: 12 passed), so no green gate is recorded for this tree; **T060 open** (the live-session visual pass)
 - **Next step**: a fresh unit runs quickstart Part B 1, 2, 4 and 5 against a real structured session (the palette's component evidence is already in `visual-pass/`), ticks T060, re-runs the full gate, pushes and writes the PR files
 
 ## Pull requests
@@ -127,8 +127,9 @@ and the model*. Reviews: A 1 round (7 findings — the `lazy` era key, the picke
 keyboard back to the composer, `row_match`'s tiers, the showcase's words, one row builder, all
 fixed; the chip card's body kept, it shows the untruncated description); B 1 counted round (its
 cycle-log and guide-check findings closed; `check-user-guide-updated.sh origin/main HEAD` → `user
-guide: ok — 6 user-facing path(s), documented in 1 user-guide page(s)`). Scoped gate green; the
-full gate was started on this tree (its result is in the unit's return).
+guide: ok — 6 user-facing path(s), documented in 1 user-guide page(s)`). Scoped gate green. The full
+gate on 73e55cbf failed only on the ledger's known `attention_error_notice` flake (468 suites
+reported `ok`; the test passed alone on rerun), so the push hook still wants a green full gate.
 
 Next step: **T060**, quickstart Part B 1, 2, 4 and 5 against a real structured session in both
 themes (a logged-in `claude`, a scratch project, the client and daemon from one build — the
@@ -149,6 +150,6 @@ None.
 
 - `micold-daemon --test attention_error_notice` `without_focus_the_first_reporting_window_gets_the_notice` is flaky (1 in 5 in isolation, M3 gate run 3); not this feature's, not touched by its diff.
 - Overlapping model picks (Review A M4 F2/F3, Review B M4 F1, all MINOR): a stale idle-pick note can take the deferred slot; a flushed-but-unanswered deferred pick's `previous` is inherited by the next busy pick; an idle pick does not clear a still-unflushed deferred one. Correlate the deferred slot with its `set_model` request id when M5/M6 touches `pick_model`.
-- `attention_error_notice` flake hit again in M4's full gate run 1 (passed on rerun).
+- `attention_error_notice` flake hit again in M4's full gate run 1 (passed on rerun), and again in M8's full gate (passed alone on rerun).
 - Review A M6 F7: a `SessionStop` that arrives between a switch's stop and its start is undone by the start; hold the session gate across both (split `start_session`'s gated part) if it matters.
 - Review A M6 round 2 MINORs: a switch's delayed command task is not tied to the process it was for; the switch-ends-before-the-command ordering and the `SwitchEnding` guard have no test.
