@@ -53,12 +53,12 @@ the shim's name starts without a "not found in PATH" error.
    CLI starts that MCP server, **Then** the server starts (it inherits the session's `PATH`).
 4. **Given** an image whose own `PATH` already names a tool by the same name in a system folder,
    **When** a session starts, **Then** the version in the sandbox home folders is found first.
-7. **Given** a different `claude` executable in `~/.local/bin` of the sandbox home and Claude Code
+5. **Given** a different `claude` executable in `~/.local/bin` of the sandbox home and Claude Code
    installed and offered by the app, **When** a Claude Code session starts, **Then** the app's
    installed Claude Code runs, and the one in `~/.local/bin` is not used.
-5. **Given** neither folder exists in the sandbox home, **When** a session starts, **Then** it
+6. **Given** neither folder exists in the sandbox home, **When** a session starts, **Then** it
    starts normally with no error or notice about the missing folders.
-6. **Given** a tool the user installs into one of those folders while a session is running,
+7. **Given** a tool the user installs into one of those folders while a session is running,
    **When** the session's shell or AI CLI next looks it up, **Then** it is found without restarting
    the session.
 
@@ -245,8 +245,9 @@ existing daemon select.]
 - **FR-010**: When a worktree is created for a project with a setup command — from the New worktree
   form or through the `create_worktree` tool — the daemon the worktree runs on MUST start the
   command once the worktree exists, with the new worktree as the working directory.
-- **FR-011**: The setup command MUST run as a shell command line (so `a && b` works), as the same
-  user and with the same environment a session in that worktree gets, including the `PATH` of
+- **FR-011**: The setup command MUST run as a shell command line (so `a && b` works) in the shell
+  environment-include uses on that daemon (`bash`, falling back to `sh` when the image has no
+  `bash`; PowerShell on a Windows host daemon; see the Platforms edge case), as the same user and with the same environment a session in that worktree gets, including the `PATH` of
   FR-001 on a container or Kubernetes daemon.
 - **FR-012**: The command MUST receive no input: its standard input MUST be at end of file from the
   start.
