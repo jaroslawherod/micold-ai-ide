@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1272
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: orchestrator opens the design PR (title/body in the session scratchpad); after merge, milestone M1
+- **Phase**: milestone M1
+- **Next step**: M1 gate and reviews (worktree /home/user/wt-1272-m1, branch m1272-m1, based on design PR head 41ea39bb; orchestrator moves the commits onto the run branch after #1355 merges)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (to open) | Design PR: spec, plan, tasks | title/body in scratchpad pr-title.md / pr-body.md; orchestrator opens via MCP | |
+| #1355 | Design PR: spec, plan, tasks | open (CI running) when M1 started | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | | pending |
+| M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | | implemented, in review |
 | M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | | pending |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | | pending |
 | M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | blocked on #1270 |
