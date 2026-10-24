@@ -73,6 +73,8 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M2 review B (conformance, sonnet) | 1 | 092fa3acba03841019c0235d725522fea9aecfa0:bf2c21dfec749c3aae73d8db08e4ab95052cf4e8 | CLEAN (1 MINOR: T029 named `atoms.rs`; fixed, prose only) |
 | M2 visual pass | — | bf2c21df | B3, B4 (revealed row, both themes), B8 PASS; issue titles and a session's selected row not seen live (no GitHub, no agent session): `visual-pass/m2-record.md` |
 | M3 review A (code-review high) | 1 | 3e26f93812bf434d26e39518b6e128d54de8810c:8f29b0bac5ec9bae89a761cd901c3c093c787849 | CHANGES: F1 a location whose sessions are all archived became selectable while viewing one (fixed: `pressable_sessions`, as before 1125); F6 no selected Overview-row pose and T039 named `atoms.rs` (fixed: pose added, T039 points at surfaces.rs per D17); F2, F3, F4, F5, F7 declined. Scoped gate red on `feature_registration_cost` (`overview` named `features::sidebar` in a test; fixed: the tag-filter badge test moved to `ui/overview.rs`) |
+| M3 review A (code-review high, sonnet) | 2 | cb968e022a73bea38f9c5b38c83a8d44a4dc8b58:5d5b1577b5991f6d8c2bbf8636f5020e0dd89369 | CLEAN: F1, F6 and the test move hold; declines stand |
+| M3 review B (conformance, sonnet) | 1 | cb968e022a73bea38f9c5b38c83a8d44a4dc8b58:5d5b1577b5991f6d8c2bbf8636f5020e0dd89369 | CLEAN (1 MINOR: T032 named a "both" tooltip case `badge` cannot produce; fixed, prose only) |
 
 ## Declined review findings
 
