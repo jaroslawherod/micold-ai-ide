@@ -142,11 +142,7 @@ pub fn scroll_focused_into_view<M: Send + 'static>() -> Task<M> {
     operate(into_view())
 }
 
-/// The container id every dialog surface carries, so Tab can be confined to one (feature 1092,
-/// FR-009, research R5). iced's `focus_next` walks the whole view, page behind the scrim included.
-pub fn dialog_scope() -> Id {
-    Id::new("dialog")
-}
+pub use micold_material::surface::dialog_scope;
 
 /// Tab (`forward`) or Shift+Tab within the open dialog only: the traversal is scoped to the
 /// [`dialog_scope`] container, so the keyboard never reaches the page behind it.

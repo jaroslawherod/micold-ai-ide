@@ -259,7 +259,9 @@ const SANCTIONED: &str = "ui/cdk/motion.rs";
 /// Every `.rs` file under the render directories, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
     let src = src_dir();
-    let dirs: Vec<_> = RENDER_DIRS.iter().map(|dir| src.join(dir)).collect();
+    let mut dirs: Vec<_> = RENDER_DIRS.iter().map(|dir| src.join(dir)).collect();
+    // Feature 1262: the generic components, re-exported as `ui::material` and `ui::cdk`.
+    dirs.push(source_scan::material_src_dir());
     sources_under(&dirs)
 }
 
@@ -314,7 +316,8 @@ fn only_the_motion_primitive_asks_for_frames() {
 #[test]
 fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
     let src = strip_comments(
-        &fs::read_to_string(ui_dir().join("cdk/motion.rs")).expect("read the motion primitive"),
+        &fs::read_to_string(source_scan::material_src_dir().join("cdk/motion.rs"))
+            .expect("read the motion primitive"),
     );
     let lines: Vec<&str> = src.lines().collect();
 

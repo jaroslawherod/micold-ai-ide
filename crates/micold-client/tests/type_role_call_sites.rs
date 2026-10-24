@@ -39,7 +39,11 @@ use std::path::{Path, PathBuf};
 /// held to the same rules as the application it demonstrates (feature 020, FR-023).
 fn rendering_dirs() -> Vec<PathBuf> {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    vec![src.join("ui"), src.join("showcase")]
+    vec![
+        src.join("ui"),
+        src.join("showcase"),
+        source_scan::material_src_dir(),
+    ]
 }
 
 fn sources() -> Vec<(String, String)> {

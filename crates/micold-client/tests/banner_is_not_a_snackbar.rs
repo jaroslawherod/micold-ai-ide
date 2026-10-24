@@ -65,7 +65,7 @@ fn the_banner_is_drawn_from_connection_status_and_not_from_the_queue() {
 #[test]
 fn the_banner_spans_the_window_and_the_snackbar_does_not() {
     let ui = source("ui/mod.rs");
-    let snackbar = source("ui/material/snackbar.rs");
+    let snackbar = source("../../micold-material/src/snackbar.rs");
 
     assert!(
         ui.contains("connection_banner(connection, roles),"),

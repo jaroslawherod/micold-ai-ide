@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/micold-core", "crates/micold-daemon", "crates/micold-client"]
+members = [
+    "crates/micold-core",
+    "crates/micold-daemon",
+    "crates/micold-material",
+    "crates/micold-client",
+]
 
 # Shared package metadata — the single source of truth for version/edition/MSRV across
 # all three crates (feature 010, plan Decision 3: workspace split enforces the render-free
@@ -163,6 +168,8 @@ iced_tiny_skia = "=0.14.1"
 iced_runtime = "=0.14.0"
 # Internal crate, referenced by path so client & daemon share the one core.
 micold-core = { path = "crates/micold-core" }
+# Feature 1262: the generic Material building blocks the client composes.
+micold-material = { path = "crates/micold-material" }
 
 [workspace.lints.clippy]
 all = "warn"

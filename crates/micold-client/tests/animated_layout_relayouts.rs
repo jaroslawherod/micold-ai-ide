@@ -254,6 +254,11 @@ fn rendering_sources() -> Vec<(PathBuf, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
     let mut out = Vec::new();
     collect(&root, &mut out);
+    // Feature 1262: the generic components live in the Material crate the client re-exports.
+    collect(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-material/src"),
+        &mut out,
+    );
     assert!(
         !out.is_empty(),
         "found no sources under {} — this gate would pass vacuously",

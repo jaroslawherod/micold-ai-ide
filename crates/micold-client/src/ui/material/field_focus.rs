@@ -42,7 +42,14 @@ fn field<'a>(value: &'a str, r: Roles) -> TextField<'a, String> {
         .on_focus_change(|focused| format!("focus={focused}"))
 }
 
-impl<'a> Mounted<'a> {
+/// Drivers of [`Mounted`] these tests add (an extension trait: `Mounted` is the Material crate's).
+trait FieldDrive<'a> {
+    fn slot(&self, index: usize) -> Rectangle;
+    fn type_char(&mut self, c: char) -> Vec<String>;
+    fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String>;
+}
+
+impl<'a> FieldDrive<'a> for Mounted<'a> {
     /// The container's four slots: `[leading, control, trailing, label]`.
     fn slot(&self, index: usize) -> Rectangle {
         self.node.children()[0].children()[index].bounds()
@@ -506,7 +513,13 @@ fn an_unfocused_button_leaves_both_keys_alone() {
     );
 }
 
-impl Mounted<'_> {
+/// Drivers of [`Mounted`] these tests add (an extension trait: `Mounted` is the Material crate's).
+trait ButtonDrive {
+    fn button_focus(&self) -> super::keyboard_focus::Focus;
+    fn centre(&self) -> Point;
+}
+
+impl ButtonDrive for Mounted<'_> {
     /// The keyboard wrapper's state, for an element whose root is a `Button`.
     fn button_focus(&self) -> super::keyboard_focus::Focus {
         *self
@@ -779,7 +792,12 @@ fn button_before_terminal<'a>(r: Roles, terminal_holds_keyboard: bool) -> Elemen
     .into()
 }
 
-impl Mounted<'_> {
+/// Drivers of [`Mounted`] these tests add (an extension trait: `Mounted` is the Material crate's).
+trait FirstButtonDrive {
+    fn first_button_focus(&self) -> super::keyboard_focus::Focus;
+}
+
+impl FirstButtonDrive for Mounted<'_> {
     /// The keyboard wrapper's state for the button inside [`button_before_terminal`].
     fn first_button_focus(&self) -> super::keyboard_focus::Focus {
         *self.tree.children[0].children[0]

@@ -186,12 +186,20 @@ const CATEGORIES: &[&str] = &[
 /// held to the same rules as the application it demonstrates (feature 020, FR-023).
 fn rendering_dirs() -> Vec<PathBuf> {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    vec![src.join("ui"), src.join("showcase")]
+    vec![
+        src.join("ui"),
+        src.join("showcase"),
+        source_scan::material_src_dir(),
+    ]
 }
 
 fn material_mod_rs() -> String {
+    // Feature 1262: the module list is split between the client's `mod.rs` and the Material
+    // crate's `lib.rs`, which the client re-exports.
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/material/mod.rs");
+    let lib = source_scan::material_src_dir().join("lib.rs");
     fs::read_to_string(path).expect("read material/mod.rs")
+        + &fs::read_to_string(lib).expect("read micold-material's lib.rs")
 }
 
 /// The in-crate gates, read off their own declarations rather than listed here.
@@ -206,7 +214,7 @@ fn in_crate_gates() -> BTreeSet<String> {
     let mut armed = false;
     for line in src.lines() {
         let line = line.trim();
-        if line.starts_with("#[cfg(test)]") {
+        if line.starts_with("#[cfg(test)]") || line.starts_with("#[cfg(any(test,") {
             armed = true;
             continue;
         }

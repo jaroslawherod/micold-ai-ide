@@ -2,19 +2,33 @@
 
 How the rendering layer is organised, and the one rule that keeps it that way.
 
-## Two layers
+## Two layers, two crates
 
-Everything that decides an appearance lives in `crates/micold-client/src/ui/`, split in two:
+Everything that decides an appearance lives in two places (feature 1262, #1262):
 
-**`ui/cdk/`** — behavior primitives. Things that *do* something without deciding how it looks: the
-overlay that positions and stacks floating surfaces, the `Progress` track that advances an
-animation and knows when to stop. A primitive here must not hard-code a colour, a corner radius or
-a duration.
+- **`crates/micold-material/`** — the generic Material building blocks. It names no Micold domain
+  type (no session, daemon, worktree, queue or diff); `crates/micold-material/tests/no_domain_types.rs`
+  holds it to the render-free `micold_core` modules it may read (tokens, theme, and the models of a
+  required marker, a typeahead, an overlay, a tooltip, a notification and a markdown document).
+- **`crates/micold-client/src/ui/material/`** — Micold's own components (overview cards, the
+  terminal pane, diffs, pull-request rows, activity badges, the host picker), composed from the
+  crate above, which this module re-exports whole (`pub use micold_material::*`), so a call site
+  still names `material::Button`. The dependency runs one way: client → `micold-material`.
 
-**`ui/material/`** — styled components. `Button`, `TextField`, `Modal`, `NavigationDrawer`,
-`TreeView`, and the rest. These decide appearance, and they are the only place that may. The style
-layer (`ui/material/style.rs`) is *internal to this directory* — nothing outside it can reach the
-functions that turn a design token into a widget style.
+Inside the crate, the same two layers as before:
+
+**`cdk/`** (the client's `ui::cdk`) — behavior primitives. Things that *do* something without
+deciding how it looks: the overlay that positions and stacks floating surfaces, the `Progress`
+track that advances an animation and knows when to stop. A primitive here must not hard-code a
+colour, a corner radius or a duration.
+
+**The components** (`ui::material` in the client) — `Button`, `TextField`, `Modal`,
+`NavigationDrawer`, and the rest. These decide appearance, and they are the only place that may.
+The style layer (`style.rs`) turns a design token into a widget style; a feature module must not
+import it.
+
+`picker`, `select`, `typeahead` and `command_palette` are generic but still in the client: the
+picker's row carries a Jira `TicketStatus`. Moving them is a follow-up.
 
 Everything else under `ui/` — `sidebar.rs`, `toolbar.rs`, `shell.rs`, the dialogs — is a **feature
 module**. Feature modules compose components. They do not style widgets.

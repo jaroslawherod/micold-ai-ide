@@ -1,0 +1,36 @@
+[package]
+name = "micold-material"
+description = "Generic Material Design building blocks for Micold AI IDE's iced client (feature 1262)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Feature 1262: the generic half of the component library. It names no Micold domain type
+# (`tests/no_domain_types.rs`); the client's `ui::material` composes it into Micold's widgets.
+[lib]
+name = "micold_material"
+path = "src/lib.rs"
+
+[features]
+# The headless renderer the component tests share (`test_support`), for the client's own tests.
+test-support = ["dep:iced_renderer", "dep:iced_tiny_skia"]
+
+[dependencies]
+iced = { workspace = true }
+# Design tokens, the colour scheme and the render-free models the components draw (tokens, theme,
+# required, typeahead, overlay, tooltip, notify, markdown) — nothing else; see the test above.
+micold-core = { workspace = true }
+# `mono::install_monospace` reads the bundled monospace font's family name.
+ttf-parser = { workspace = true }
+iced_renderer = { workspace = true, optional = true }
+iced_tiny_skia = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+iced_renderer = { workspace = true }
+iced_tiny_skia = { workspace = true }
+
+[lints]
+workspace = true

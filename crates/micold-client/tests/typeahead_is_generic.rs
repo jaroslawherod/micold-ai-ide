@@ -24,15 +24,18 @@ use std::path::{Path, PathBuf};
 
 /// The two halves of the component.
 fn component_sources() -> Vec<(String, String)> {
-    ["src/ui/cdk/picker.rs", "src/ui/material/typeahead.rs"]
-        .iter()
-        .map(|rel| {
-            let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
-            let src = fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-            ((*rel).to_string(), src)
-        })
-        .collect()
+    [
+        "../micold-material/src/cdk/picker.rs",
+        "src/ui/material/typeahead.rs",
+    ]
+    .iter()
+    .map(|rel| {
+        let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+        let src =
+            fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        ((*rel).to_string(), src)
+    })
+    .collect()
 }
 
 /// Vocabulary that belongs to the feature module, never to the component.

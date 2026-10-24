@@ -2631,6 +2631,7 @@ dependencies = [
  "kube",
  "mac-usernotifications",
  "micold-core",
+ "micold-material",
  "notify",
  "serde",
  "serde_json",
@@ -2696,6 +2697,18 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "micold-material"
+version = "0.18.0"
+dependencies = [
+ "iced",
+ "iced_renderer",
+ "iced_tiny_skia",
+ "micold-core",
+ "tempfile",
+ "ttf-parser",
 ]
 
 [[package]]

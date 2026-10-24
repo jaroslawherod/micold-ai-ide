@@ -56,7 +56,27 @@ fn select<'a>(selected: Option<&'a str>, r: Roles) -> Select<'a, &'a str, String
         .label("Type")
 }
 
-impl<'a> Mounted<'a> {
+/// Drivers of [`Mounted`] these tests add (an extension trait: `Mounted` is the Material crate's).
+trait SelectDrive<'a> {
+    fn bounds(&self) -> Rectangle;
+    fn slots(&self) -> Vec<Rectangle>;
+    fn dispatch(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String>;
+    fn settle(&mut self);
+    fn press_trigger(&mut self) -> Vec<String>;
+    fn key(&mut self, named: iced::keyboard::key::Named) -> Vec<String>;
+    fn has_list(&mut self) -> bool;
+    fn send_probing_frames(&mut self, event: Event, cursor: mouse::Cursor) -> bool;
+    fn ripples_when_pressed_at(&mut self, at: Point) -> bool;
+    fn screenshot(&mut self, backdrop: Color, on: Color) -> (Vec<u8>, u32, u32);
+    fn screenshot_under(
+        &mut self,
+        backdrop: Color,
+        on: Color,
+        cursor: mouse::Cursor,
+    ) -> (Vec<u8>, u32, u32);
+}
+
+impl<'a> SelectDrive<'a> for Mounted<'a> {
     /// The whole field, including whatever sits beneath the container.
     fn bounds(&self) -> Rectangle {
         self.node.bounds()

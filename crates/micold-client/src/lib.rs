@@ -15,7 +15,7 @@ pub mod catalog_sync;
 pub mod daemon;
 pub mod features;
 pub mod grid;
-pub mod icons;
+pub use micold_material::icons;
 pub mod input;
 pub mod keymap;
 pub mod kube;

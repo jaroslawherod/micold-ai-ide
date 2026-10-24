@@ -1,0 +1,1226 @@
+//! The iced styling layer for the Material design system (gui-only).
+//!
+//! Converts the pure [`tokens`] into an [`iced::Theme`] and exposes shared style helpers so
+//! every surface draws from one place (SC-007). Nothing here holds decision logic; the
+//! values come from `src/tokens.rs` (contracts/design-tokens.md).
+
+use iced::widget::{button, checkbox as checkbox_widget, container, scrollable, text, text_input};
+use iced::{Background, Border, Color, Shadow, Theme};
+use micold_core::notify;
+use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, anatomy, elevation, shape, state, Rgb, Roles};
+
+/// How prominently a notification is presented.
+///
+/// The banner's vocabulary, deliberately narrower than [`notify::Level`]: it chooses a fill, not a
+/// duration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeLevel {
+    /// Something happened that the user should know about, but nothing failed.
+    Info,
+    /// An action the user asked for could not be completed.
+    Error,
+}
+
+impl NoticeLevel {
+    /// Every level, so a gate that reads the set cannot silently miss one added later.
+    pub const ALL: [NoticeLevel; 2] = [NoticeLevel::Info, NoticeLevel::Error];
+
+    /// The queue level this severity corresponds to.
+    ///
+    /// The one place the banner's vocabulary meets the core's. Written as a method on the source
+    /// type so a new variant cannot be added without the compiler pointing here — the previous
+    /// inline `match` in the reducer would have been just as exhaustive, but far less findable.
+    pub fn to_queue_level(self) -> notify::Level {
+        match self {
+            NoticeLevel::Info => notify::Level::Info,
+            NoticeLevel::Error => notify::Level::Error,
+        }
+    }
+}
+
+/// Convert a token color into an iced color.
+pub fn color(c: Rgb) -> Color {
+    Color::from_rgb8(c.r, c.g, c.b)
+}
+
+/// An iced color as the token type: both are 8-bit sRGB, so this changes representation, not value
+/// (alpha is dropped). The inverse of [`color`]. Only the contrast measurements read it.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn to_rgb(c: Color) -> Rgb {
+    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Rgb {
+        r: q(c.r),
+        g: q(c.g),
+        b: q(c.b),
+    }
+}
+
+/// The same color at a given alpha (for state layers and disabled states).
+fn alpha(c: Color, a: f32) -> Color {
+    Color { a, ..c }
+}
+
+/// The Material opacity for disabled content. The button style fns below apply it to their own
+/// labels; widgets that draw their own content (an icon glyph, say) must apply it themselves —
+/// an explicit `.color()` on the content overrides the button's inherited `text_color`, so a
+/// disabled button cannot grey out content that colors itself.
+pub const DISABLED_OPACITY: f32 = 0.38;
+
+/// `c` at the disabled opacity when the button is disabled, otherwise unchanged.
+fn disabled_alpha(c: Color, status: button::Status) -> Color {
+    if matches!(status, button::Status::Disabled) {
+        alpha(c, DISABLED_OPACITY)
+    } else {
+        c
+    }
+}
+
+/// The hover/press layer a transparent button paints over its content colour; none at rest.
+fn state_overlay(content: Color, status: button::Status) -> Option<Background> {
+    match status {
+        button::Status::Hovered => Some(Background::Color(state_fill(content, state::HOVER))),
+        button::Status::Pressed => Some(Background::Color(state_fill(content, state::PRESSED))),
+        _ => None,
+    }
+}
+
+/// A token color at the disabled opacity, for content a widget colors itself.
+pub fn disabled_color(c: Rgb) -> Color {
+    alpha(color(c), DISABLED_OPACITY)
+}
+
+/// A divider: a hairline separating content *within* a surface.
+///
+/// Drawn in `outline_variant`, which is the role Material defines for exactly this and one of the
+/// only three legitimate uses of a line at all (contract §1.5). It replaces feature 003's
+/// `outline`-at-40%: that was a full-strength role dimmed by hand to stop it reading as a hard
+/// rule, which is the job `outline_variant` already does at full alpha.
+pub fn separator(r: Roles) -> Color {
+    color(r.outline_variant)
+}
+
+/// Linearly blend `over` on top of `base` by factor `t` (0 = base, 1 = over).
+fn blend(base: Color, over: Color, t: f32) -> Color {
+    Color {
+        r: base.r + (over.r - base.r) * t,
+        g: base.g + (over.g - base.g) * t,
+        b: base.b + (over.b - base.b) * t,
+        a: 1.0,
+    }
+}
+
+/// A state layer over an opaque container (FR-020).
+///
+/// A state layer is the *content* colour composited over the container at the state's opacity.
+/// This is the only place that composition happens, so "what does a hover look like" has one
+/// answer for list rows, menu items, chips, tags and every button variant alike — the breadth is
+/// the requirement, and it is what feature 003 lacked when only buttons responded.
+///
+/// Opacities come from `tokens::state`, never from a literal. Feature 003 used 0.12 for pressed,
+/// which is the *selected* opacity: close enough to look reasonable, and wrong enough that a
+/// selected row and a pressed one were indistinguishable.
+pub fn state_layer(container: Color, content: Color, opacity: f32) -> Color {
+    if yield_to_ripple(opacity) {
+        return container;
+    }
+    blend(container, content, opacity)
+}
+
+/// The same layer as a standalone fill, for a surface that paints nothing at rest.
+///
+/// Left semi-transparent rather than composited, so it works over whatever it happens to sit on —
+/// a text button in a dialog and the same button on a card get a layer that suits each.
+pub fn state_fill(content: Color, opacity: f32) -> Color {
+    if yield_to_ripple(opacity) {
+        return Color::TRANSPARENT;
+    }
+    alpha(content, opacity)
+}
+
+thread_local! {
+    /// `Some` while a running ripple draws the surface beneath it: the heaviest layer that surface
+    /// asked for so far, which it does not get to draw (FR-024h, BUG-014).
+    static BENEATH_RIPPLE: std::cell::Cell<Option<f32>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether the layer being asked for belongs to a running ripple instead, noting it if so.
+fn yield_to_ripple(opacity: f32) -> bool {
+    BENEATH_RIPPLE.with(|cell| match cell.get() {
+        Some(heaviest) => {
+            cell.set(Some(heaviest.max(opacity)));
+            true
+        }
+        None => false,
+    })
+}
+
+/// Draw `content` as the surface under a running ripple: at its resting fill, whatever its status.
+/// Returns the heaviest state layer it would otherwise have drawn — the one it resumes once the
+/// ripple is over, and so the one the ripple fades to (FR-024h, BUG-014).
+///
+/// §5 says layers never sum, and a ripple is a layer. It is drawn by a wrapper that cannot see its
+/// child's status — iced picks `button::Status` inside the button's own `update` — and the child's
+/// style cannot see the ripple, so neither could decide alone which one shows. Every rippling style
+/// already composes its layer through [`state_layer`] or [`state_fill`], and draws synchronously
+/// inside its wrapper's `draw`, so this is scoped to exactly the subtree being drawn and to nothing
+/// else on the thread.
+pub fn beneath_ripple(content: impl FnOnce()) -> f32 {
+    /// Restores the enclosing scope even if drawing unwinds, so one panic cannot strip every later
+    /// frame's state layers on this thread.
+    struct Restore(Option<f32>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            BENEATH_RIPPLE.with(|cell| cell.set(self.0));
+        }
+    }
+    let restore = Restore(BENEATH_RIPPLE.with(|cell| cell.replace(Some(0.0))));
+    content();
+    let heaviest = BENEATH_RIPPLE.with(|cell| cell.get()).unwrap_or(0.0);
+    drop(restore);
+    heaviest
+}
+
+/// `layer` composited over `base`, both opaque afterwards.
+///
+/// For the one place a state layer cannot be a separate quad: `checkbox::Style` exposes a single
+/// opaque `background`, so its hover layer has to be blended into the fill rather than drawn on
+/// top of it. Everywhere else the layer is its own quad and this is not needed.
+///
+/// The arithmetic is [`tokens::blend_channel`] rather than written out here. `micold-core` needs the
+/// same blend to measure a composited pair (FR-004b), and it has no `Color`, so the choice was one
+/// function used from both crates or two copies of `l*a + b*(1-a)` — and a drifted copy of a blend
+/// does not fail, it measures a colour nothing draws (FR-029a; BUG-010 T160).
+pub fn over(layer: Color, base: Color) -> Color {
+    let ch = |l: f32, b: f32| tokens::blend_channel(l as f64, b as f64, layer.a as f64) as f32;
+    Color {
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
+        a: 1.0,
+    }
+}
+
+/// Which state layer a control carries (§5), strongest last.
+///
+/// An ordered enum rather than a set of booleans, and that is the point: a control that is both
+/// hovered and focused must show **one** layer, not two blended into a colour neither token names.
+/// Making the states mutually exclusive puts that beyond reach of a call site instead of asking
+/// every one of them to remember it (feature 022, FR-035; BUG-002).
+///
+/// Lives here rather than with any one widget because two now share it — the filled field draws it
+/// as a quad over its container, the checkbox composites it into a fill that has nowhere to put a
+/// quad — and the *ordering* is the part neither may restate.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum Layer {
+    #[default]
+    None,
+    Hovered,
+    Focused,
+    Pressed,
+}
+
+impl Layer {
+    /// The published opacity for this state. No number is written here: FR-036a requires the
+    /// existing scale, and `state::FOCUS` had been sitting in it unused by any input.
+    pub fn opacity(self) -> f32 {
+        match self {
+            Layer::None => 0.0,
+            Layer::Hovered => state::HOVER,
+            Layer::Focused => state::FOCUS,
+            Layer::Pressed => state::PRESSED,
+        }
+    }
+}
+
+fn radius(px: f32) -> Border {
+    Border {
+        radius: px.into(),
+        ..Border::default()
+    }
+}
+
+/// The drop shadow for an elevation level, in this scheme (contract §4, research R1).
+///
+/// **Material's key and ambient shadows folded into one.** The renderer exposes a single shadow per
+/// widget, so the key shadow's offset is kept and its blur widened to stand in for the ambient
+/// spread. Two overlapping shadows cannot be expressed here, and approximating them with one is
+/// closer than dropping either.
+///
+/// Level 0 returns the default (fully transparent, zero-blur) shadow: a resting surface casts
+/// nothing.
+pub fn elevation_shadow(r: Roles, level: u8) -> Shadow {
+    let Some(spec) = elevation::LEVELS[level as usize].shadow else {
+        return Shadow::default();
+    };
+    let strength = match r.scheme() {
+        ColorScheme::Light => spec.alpha_light,
+        // Stronger in dark, and only so the shadow is not lost entirely — the tonal shift remains
+        // the primary depth cue there (FR-016).
+        ColorScheme::Dark => spec.alpha_dark,
+    };
+    Shadow {
+        color: alpha(color(r.shadow), strength),
+        offset: iced::Vector::new(0.0, spec.offset_y),
+        blur_radius: spec.blur,
+    }
+}
+
+/// The shadow of elevation `level` grown from none by `strength` (feature 1299, R4, contract C4):
+/// its colour alpha, `offset.y` and `blur_radius` each times `strength.clamp(0.0, 1.0)`, as CSS
+/// interpolates a `box-shadow` from `none`. `1.0` is [`elevation_shadow`], `0.0` no shadow.
+pub fn eased_shadow(r: Roles, level: u8, strength: f32) -> Shadow {
+    let s = strength.clamp(0.0, 1.0);
+    if s <= 0.0 {
+        return Shadow::default();
+    }
+    let full = elevation_shadow(r, level);
+    if s >= 1.0 {
+        return full;
+    }
+    Shadow {
+        color: Color {
+            a: full.color.a * s,
+            ..full.color
+        },
+        offset: iced::Vector::new(full.offset.x, full.offset.y * s),
+        blur_radius: full.blur_radius * s,
+    }
+}
+
+/// A container at an elevation level, with the given corner size.
+///
+/// The single place a surface's depth is expressed, so "which containers are elevated, and how" is
+/// answerable by reading one function rather than every style below. **No border**: depth comes from
+/// the level's tone and its shadow, and adding an outline on top reads as a sticker rather than a
+/// raised plane (contract §1.5, asserted by `style_outline_discipline`).
+pub fn elevated(r: Roles, level: u8, corner: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.elevation_surface(level)))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(corner),
+        shadow: elevation_shadow(r, level),
+        ..container::Style::default()
+    }
+}
+
+/// Build the iced theme for a resolved scheme from the token palette
+/// (contracts/design-tokens.md palette mapping).
+pub fn theme(scheme: ColorScheme) -> Theme {
+    let r = tokens::roles(scheme);
+    let name = match scheme {
+        ColorScheme::Light => "Micold Light",
+        ColorScheme::Dark => "Micold Dark",
+    };
+    Theme::custom(
+        name.to_string(),
+        iced::theme::Palette {
+            background: color(r.background),
+            text: color(r.on_surface),
+            primary: color(r.primary),
+            // No dedicated success role in this UI; reuse primary.
+            success: color(r.primary),
+            // Likewise no dedicated warning role (new in iced 0.14) — `error` is the closest
+            // token, and nothing in this UI renders a palette-driven warning today.
+            warning: color(r.error),
+            danger: color(r.error),
+        },
+    )
+}
+
+/// The window background surface.
+pub fn window_bg(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.background))),
+        text_color: Some(color(r.on_background)),
+        ..container::Style::default()
+    }
+}
+
+/// A raised Material surface (a card, or grouped content). Elevation 1: the `surface_container_low`
+/// tone plus a shadow, and **no outline** — feature 003 drew a 1px border here to fake an edge, and
+/// that is exactly what depth replaces (FR-002, FR-015).
+pub fn surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    elevated(r, elevation::CARD, shape::MEDIUM)
+}
+
+/// The width of a failed [`DisclosureCard`](super::DisclosureCard)'s outline: Material's outlined
+/// card draws 1dp.
+const CARD_OUTLINE: f32 = 1.0;
+
+/// A [`DisclosureCard`](super::DisclosureCard)'s surface (feature 939, research R11): a raised card
+/// like [`surface`], at the medium corner. Failed, it is an *outlined* card instead — the same tone,
+/// a 1dp `error` outline and **no shadow** — so the outline is the one edge it draws and depth never
+/// doubles as a border (contract §1.5, `style_outline_discipline`). The outline is colour; the
+/// card's status label and icon carry the failure without it (FR-012).
+pub fn disclosure_card(r: Roles, failed: bool) -> impl Fn(&Theme) -> container::Style {
+    let raised = elevated(r, elevation::CARD, shape::MEDIUM);
+    move |theme| {
+        let mut s = raised(theme);
+        if failed {
+            s.border = Border {
+                color: color(r.error),
+                width: CARD_OUTLINE,
+                radius: shape::MEDIUM.into(),
+            };
+            s.shadow = Shadow::default();
+        }
+        s
+    }
+}
+
+/// The fill of code: a code block's surface and inline code's background (feature 940, research
+/// R9) — `surface_container_high`, one tone off the surface it sits on.
+pub fn code_fill(r: Roles) -> Rgb {
+    r.surface_container_high
+}
+
+/// A code block's surface (feature 940, research R9): [`code_fill`] at the small corner, with no
+/// border and no shadow — a tone inside the transcript, not a raised plane.
+pub fn code_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(code_fill(r)))),
+        border: radius(shape::SMALL),
+        ..container::Style::default()
+    }
+}
+
+/// The snackbar: the one deliberately **inverted** surface in the application (§7.8).
+///
+/// `inverse_surface` is light-on-dark in a light scheme and dark-on-light in a dark one, which is
+/// what makes a snackbar read as an interruption rather than as another panel. Elevation 3 and the
+/// extra-small corner; its text and action take the paired `inverse_*` roles, which exist only to
+/// stay legible against this container.
+pub fn snackbar(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.inverse_surface))),
+        text_color: Some(color(r.inverse_on_surface)),
+        border: radius(shape::EXTRA_SMALL),
+        shadow: elevation_shadow(r, elevation::SNACKBAR),
+        ..container::Style::default()
+    }
+}
+
+/// A dialog surface. Elevation 3 and the extra-large 28dp corner — both a step up from feature
+/// 003's 16dp and borrowed outline, and both what makes a dialog read as the frontmost thing on
+/// screen (FR-018, FR-028).
+pub fn dialog(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    elevated(r, elevation::DIALOG, shape::EXTRA_LARGE)
+}
+
+/// The sidebar panel. Elevation 1's tone, and **square corners**.
+///
+/// A deliberate departure from §3's `large` (16) assignment for "the sidebar panel": that size
+/// suits an inset panel, and this sidebar is docked flush to the window edge and full height, where
+/// a rounded corner would cut a notch out of the window rather than round a floating card. The tone
+/// is the part that carries the hierarchy, and it is applied.
+pub fn sidebar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    elevated(r, SIDEBAR_LEVEL, shape::NONE)
+}
+
+/// The sidebar's elevation, named once so everything painted inside the panel takes its tone.
+const SIDEBAR_LEVEL: u8 = elevation::CARD;
+
+/// The sidebar panel's fill, for parts of the panel drawn as raw quads rather than as a container —
+/// the resize handle's grab zone. Read from [`SIDEBAR_LEVEL`], so it moves when the panel does
+/// (BUG-012).
+pub fn sidebar_fill(r: Roles) -> Color {
+    color(r.elevation_surface(SIDEBAR_LEVEL))
+}
+
+/// The app bar at rest — elevation 0, so the `surface` tone and no shadow (§4).
+///
+/// It gains elevation 2 when content scrolls under it (FR-025a); that transition is US4's work.
+pub fn toolbar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    elevated(r, elevation::APP_BAR_REST, shape::NONE)
+}
+
+/// The app bar, flat at rest and raised once content passes beneath it (§7.1, FR-025a).
+///
+/// Two levels rather than a shadow toggled on: at elevation 2 the bar takes a *tonal* shift as well
+/// as a shadow, which is what keeps the raise readable in the dark scheme where a shadow alone
+/// barely registers (FR-016).
+pub fn app_bar_surface(r: Roles, scrolled: bool) -> impl Fn(&Theme) -> container::Style {
+    let level = if scrolled {
+        elevation::APP_BAR_SCROLLED
+    } else {
+        elevation::APP_BAR_REST
+    };
+    elevated(r, level, shape::NONE)
+}
+
+/// A floating menu, context menu or popover. Elevation 2 and the extra-small 4dp corner (§3).
+///
+/// Level 2 sits below a dialog's 3 on purpose: a menu opened *over* a dialog must still read as
+/// above it, which it does because the menu is drawn later in the overlay order while keeping its
+/// own shadow (FR-017) — elevation grades the resting hierarchy, not the stacking order.
+pub fn menu_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    elevated(r, elevation::MENU, shape::EXTRA_SMALL)
+}
+
+// `select_field` and `select_menu` were here, and are gone with the widget they were typed in
+// (feature 022, contract §5).
+//
+// Both were written against `pick_list`'s own types — `pick_list::Status` and `menu::Style` — so
+// neither could survive the widget leaving. Neither had to: the *look* they encoded is still wanted
+// and is now assembled from what the library already had, which is the whole of Principle VIII's
+// argument for the change.
+//
+// - `select_field`'s state layer is `state_fill(on_surface, …)` at the pressed or hover opacity,
+//   resolved by `material::select` itself. It reads the same two states — the difference is that
+//   the component now *knows* which it is in, where the closure knew and could tell nobody
+//   (FR-043a, accepted fidelity gap #3, closed).
+// - `select_field`'s text colours belong to the `Text` and the `Glyph` the trigger is built from,
+//   and its deliberately absent border to `field_container`, which already draws none.
+// - `select_menu` is [`menu_surface`] — literally, by way of `menu_panel`, which is the surface
+//   every floating popover in this application sits on. It was a second, hand-kept copy of it, and
+//   the copy had already drifted: a 1dp 40%-`outline` border and a flat shadow, where the shared
+//   surface has elevation 2 and none.
+
+/// A themed scrollbar for scrollable regions (e.g. the worktree sidebar): a subtle rail with a
+/// rounded `outline`-colored thumb that darkens on hover/drag. Visible whenever content overflows.
+pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
+    move |_theme, status| {
+        let thumb = match status {
+            scrollable::Status::Hovered {
+                is_vertical_scrollbar_hovered: true,
+                ..
+            }
+            | scrollable::Status::Dragged {
+                is_vertical_scrollbar_dragged: true,
+                ..
+            } => color(r.on_surface_variant),
+            _ => alpha(color(r.outline), 0.8),
+        };
+        let rail = scrollable::Rail {
+            background: Some(Background::Color(alpha(color(r.surface_variant), 0.6))),
+            border: radius(shape::FULL),
+            scroller: scrollable::Scroller {
+                background: Background::Color(thumb),
+                border: radius(shape::FULL),
+            },
+        };
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            // The autoscroll overlay is new in 0.14; themed to match the rest of the design
+            // system (surface pill, `outline` edge, flat) rather than iced's default.
+            auto_scroll: scrollable::AutoScroll {
+                background: Background::Color(alpha(color(r.surface), 0.9)),
+                border: Border {
+                    color: alpha(color(r.outline), 0.8),
+                    width: 1.0,
+                    radius: shape::FULL.into(),
+                },
+                shadow: iced::Shadow::default(),
+                icon: color(r.on_surface_variant),
+            },
+        }
+    }
+}
+
+/// A worktree tag chip: a dimmed **tonal** pill — a faint tint of `accent` behind `accent`-colored
+/// text, fully rounded (feature 008, FR-005). Softer than a solid fill so the tags read as calm
+/// metadata beneath the worktree name. The vivid `accent` as text on its own faint tint keeps
+/// high contrast in both light and dark schemes.
+pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(alpha(color(accent), 0.20))),
+        text_color: Some(color(accent)),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
+/// A dropped picture's chip in the composer (feature 941, `AttachmentChip`): a tonal
+/// `surface_container_high` plate at the small corner, its depth from tone and not a border.
+pub fn attachment_chip(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_high))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::SMALL),
+        ..container::Style::default()
+    }
+}
+
+/// A queued message's row above the composer (feature 941, `QueueRow`): the tonal
+/// `surface_container_low` the composer's own plate sits on, at the medium corner.
+pub fn queue_row(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_low))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::MEDIUM),
+        ..container::Style::default()
+    }
+}
+
+/// A permission request's card in the transcript (feature 942, `PromptCard`): an **outlined** card
+/// — `surface_container_low`, a 1dp `outline_variant` edge and no shadow — so it reads apart from
+/// the raised tool card above it as something waiting for the user, and depth never doubles as a
+/// border (contract §1.5).
+pub fn prompt_card(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_low))),
+        text_color: Some(color(r.on_surface)),
+        border: Border {
+            color: color(r.outline_variant),
+            width: CARD_OUTLINE,
+            radius: shape::MEDIUM.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// A single-choice row's mark (feature 942, `ChoiceList`): a fully rounded 2dp ring, `primary`
+/// when chosen and `on_surface_variant` when not — the mark of a radio button, which the library
+/// has no primitive for. The dot inside a chosen ring is [`choice_dot`].
+pub fn choice_ring(r: Roles, chosen: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        border: Border {
+            color: color(if chosen {
+                r.primary
+            } else {
+                r.on_surface_variant
+            }),
+            width: 2.0,
+            radius: shape::FULL.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The dot inside a chosen single-choice ring: `primary`, fully rounded.
+pub fn choice_dot(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.primary))),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
+/// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
+///
+/// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only
+/// while "whatever is behind it" is a plain surface. Over a filled container — a current navigation
+/// row, drawn in `primary` — a 20% tint of `error` is neither the accent nor the surface, and the
+/// label sitting on it is close to unreadable. A chip that has to survive an unknown background
+/// brings its own (feature 027, T075).
+pub fn chip_solid(fill: Rgb, on_fill: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(fill))),
+        text_color: Some(color(on_fill)),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
+/// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
+///
+/// Three things can be true of one row at the same time, so each gets its own channel and none can
+/// hide another: the current *selection* is a tonal fill — Material's `secondary_container`, the
+/// same treatment a selected list item carries — the *keyboard's* row is a state layer at the focus
+/// opacity over whatever fill it already has, and the *pointer's* row is the same layer at hover or
+/// pressed strength. Which characters *matched* is not here: the label colours those itself, so
+/// emphasis survives on a filled row.
+///
+/// Every opacity comes from `tokens::state`, never from a literal. That is not tidiness — the first
+/// draft of this function hardcoded `0.12` for pressed, which is the *selected* opacity, so a
+/// pressed row and a selected one were indistinguishable. Feature 019 had already fixed exactly that
+/// bug everywhere else; this function was written before those tokens existed and reintroduced it.
+///
+/// A row with nothing to press arrives here as `Disabled`. It keeps its fill and mutes only its
+/// label, so it still reads as a line of the list rather than disappearing from it (FR-012).
+pub fn menu_row(
+    r: Roles,
+    highlighted: bool,
+    selected: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let (fill, on) = if selected {
+            (
+                Some(color(r.secondary_container)),
+                color(r.on_secondary_container),
+            )
+        } else {
+            (None, color(r.on_surface))
+        };
+
+        let opacity = match status {
+            button::Status::Pressed => state::PRESSED,
+            button::Status::Hovered => state::HOVER,
+            // The keyboard's row reads at the focus opacity even with the pointer elsewhere — it is
+            // where the keyboard is, which is what focus means.
+            _ if highlighted => state::FOCUS,
+            _ => 0.0,
+        };
+
+        let background = match fill {
+            // Over an opaque fill the layer is composited, so the result stays opaque.
+            Some(fill) if opacity > 0.0 => Some(Background::Color(state_layer(fill, on, opacity))),
+            Some(fill) => Some(Background::Color(fill)),
+            // Over nothing it stays translucent, so it works on whatever the menu surface is.
+            None if opacity > 0.0 => Some(Background::Color(state_fill(on, opacity))),
+            None => None,
+        };
+
+        button::Style {
+            background,
+            text_color: if matches!(status, button::Status::Disabled) {
+                alpha(on, state::DISABLED_CONTENT)
+            } else {
+                on
+            },
+            border: radius(shape::SMALL),
+            ..button::Style::default()
+        }
+    }
+}
+
+/// A known-projects / selector list row.
+pub fn list_item(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_variant))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::MEDIUM),
+        ..container::Style::default()
+    }
+}
+
+/// A container's fill and the foreground role §1.3 pairs with it — what a component drawn *inside*
+/// it has to know (contract §1.3, §7.3 "Host surface", FR-004a).
+///
+/// The rendering stack's inherited `text_color` carries a container's foreground to the children
+/// that have no opinion, and only to those: a `Button` writes its own into `button::Style`, from
+/// the role §7.3 assigns its variant. So the banner's statement "on this surface, foregrounds are
+/// `on_error`" reached its title and its detail and stopped at the one child that also had a
+/// statement to make. This type is that statement made explicit, for the children that need it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Host {
+    /// The container's own fill.
+    pub fill: Rgb,
+    /// The foreground role paired with that fill **for a component drawn on it**.
+    ///
+    /// Usually this is also the container's prose colour — `error`/`on_error` is one role pair
+    /// serving both. It is not always: `inverse_surface` sets prose in `inverse_on_surface` but
+    /// pairs an *action* with `inverse_primary`, which is the role's whole purpose. So this field
+    /// is the component's foreground, and a container that differs sets its own `text_color`
+    /// directly rather than reading it back from here (contract §7.3 "Host surface").
+    pub on_fill: Rgb,
+    /// Whether `fill` is an **accent** role rather than a neutral surface.
+    ///
+    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. A button
+    /// on a fill §1.3 enumerates for `primary` keeps §7.3's table, while one on `error` cannot: both
+    /// roles read their ramps at the tone their scheme assigns, which puts `primary` and `error` on
+    /// the same tone in each scheme, and two roles at the same tone have the same luminance by
+    /// construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    ///
+    /// **Neutral is not the test; enumerated is** (BUG-010). This comment used to say §1.3's
+    /// backgrounds for `primary` "are all neutral surfaces — `surface_variant` among them", and the
+    /// second half was never true: the row lists four `surface`/`surface_container_*` levels and
+    /// `surface_variant` is not one of them. The `Info` banner was built on that sentence, so its
+    /// action drew `primary` on a host the contract does not permit — 4.40:1 pressed in the light
+    /// scheme, with an `outline` border at 2.96:1 in the dark before any state layer at all. A
+    /// neutral fill outside the enumeration is still not a host, and [`imposed`] cannot say so on
+    /// its own: it answers "does this fill oblige a substitution", not "is this fill permitted".
+    ///
+    /// [`imposed`]: Host::imposed
+    accent: bool,
+}
+
+impl Host {
+    /// A container filled with an **accent** role, which imposes `on_fill` on its children.
+    pub fn accent(fill: Rgb, on_fill: Rgb) -> Self {
+        Self {
+            fill,
+            on_fill,
+            accent: true,
+        }
+    }
+
+    /// A container filled with a **neutral surface** — one §1.3 already enumerates for `primary`,
+    /// so it imposes nothing and a child keeps its variant's own colours.
+    pub fn neutral(fill: Rgb, on_fill: Rgb) -> Self {
+        Self {
+            fill,
+            on_fill,
+            accent: false,
+        }
+    }
+
+    /// What this host **imposes** on a component drawn in it — `(fill, on_fill)` — or `None` where
+    /// it imposes nothing.
+    ///
+    /// Returned as a pair because the substitution is a pair: a component that draws a container of
+    /// its own fills it with `on_fill` and labels it `fill`, which is the inverse arrangement
+    /// Material uses for an action on a filled surface. One value would serve the outlined and text
+    /// variants and leave the filled one with nothing to label against.
+    pub fn imposed(self) -> Option<(Rgb, Rgb)> {
+        self.accent.then_some((self.fill, self.on_fill))
+    }
+}
+
+/// What a global notification banner stands on, by severity. `Error` uses the error role so a
+/// failed action reads as one at a glance; `Info` reuses the neutral list-row surface.
+///
+/// **The one decision**, so a level added later cannot give the banner a colour and its action a
+/// different one: [`notification`] draws from this, and so does the banner's own action
+/// (FR-004a, FR-027b — a foreground is *derived* from the decision that produced the fill, never
+/// restated beside it).
+pub fn notification_host(r: Roles, level: NoticeLevel) -> Host {
+    match level {
+        NoticeLevel::Error => Host::accent(r.error, r.on_error),
+        // `surface_container_high`, not `surface_variant`: §1.3 enumerates `primary` on the
+        // `surface_container_*` levels and never on `surface_variant`, and the banner's action is a
+        // text button in `primary`. The fill moves rather than the action's role, which is FR-004b's
+        // remedy — narrow the host, leave the ramp alone (BUG-010).
+        NoticeLevel::Info => Host::neutral(r.surface_container_high, r.on_surface),
+    }
+}
+
+/// What the snackbar's action stands on: the inverted container, paired with `inverse_primary`.
+///
+/// `inverse_primary` rather than `inverse_on_surface` because the contract's **Host surface** table
+/// says so, and because the role exists for no other reason — it is the accent that survives on an
+/// inverted surface. The snackbar's *message* keeps `inverse_on_surface`; that is prose, and
+/// [`snackbar`] sets it on the container.
+///
+/// The action's label was already `inverse_primary`, tinted at the call site. What was not was
+/// everything the label does not cover: the press and hover layers, and the ripple, all still
+/// `primary` over the inverted fill. That is BUG-009's shape at a smaller amplitude — a foreground
+/// corrected in the one place someone looked, in a component whose other colours are decided
+/// elsewhere — and it is why FR-027b puts the role in the component rather than on the label.
+pub fn snackbar_host(r: Roles) -> Host {
+    Host::accent(r.inverse_surface, r.inverse_primary)
+}
+
+/// A global notification banner.
+pub fn notification(r: Roles, level: NoticeLevel) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| {
+        let host = notification_host(r, level);
+        container::Style {
+            background: Some(Background::Color(color(host.fill))),
+            text_color: Some(color(host.on_fill)),
+            border: radius(shape::MEDIUM),
+            ..container::Style::default()
+        }
+    }
+}
+
+/// Filled button: primary fill, `on_primary` label (the single primary action, FR-015) — unless it
+/// stands on an accent fill, where the pair inverts.
+///
+/// On such a host the button's own container takes the host's `on_*` role and its label takes the
+/// host's fill, so the action reads as an action *on* that colour instead of a second, unrelated
+/// accent laid beside it (FR-004a, FR-027b, contract §7.3 'Host surface'). Both halves of the pair
+/// move together, which is why [`Host::imposed`] hands back a pair rather than one colour.
+pub fn filled(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let (fill, label) = match host.and_then(Host::imposed) {
+        Some((host_fill, on_host_fill)) => (on_host_fill, host_fill),
+        None => (r.primary, r.on_primary),
+    };
+    move |_theme, status| {
+        let base = color(fill);
+        let on = color(label);
+        let bg = match status {
+            button::Status::Active => base,
+            button::Status::Hovered => state_layer(base, on, state::HOVER),
+            button::Status::Pressed => state_layer(base, on, state::PRESSED),
+            button::Status::Disabled => alpha(base, DISABLED_OPACITY),
+        };
+        let text = disabled_alpha(on, status);
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: text,
+            border: radius(shape::FULL),
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Outlined button: transparent fill, `outline` border, `primary` label (secondary actions) — or,
+/// on an accent fill, the host's `on_*` role for both.
+///
+/// The border moves with the label rather than staying on `outline`: FR-004a reaches the non-text
+/// parts too, and `outline` is a neutral-variant tone, which on `error` reads 1.42:1 — under the
+/// 3:1 a 1dp edge needs (BUG-009).
+pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let imposed = host.and_then(Host::imposed);
+    let front = imposed.map_or(r.primary, |(_, on_fill)| on_fill);
+    let edge = imposed.map_or(r.outline, |(_, on_fill)| on_fill);
+    move |_theme, status| {
+        let prim = color(front);
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
+        let border_color = disabled_alpha(color(edge), status);
+        button::Style {
+            background: fill,
+            text_color: text,
+            border: Border {
+                color: border_color,
+                // §7.3's outline row. The literal was the right number joined to nothing: it would
+                // not have followed the contract, and nothing would have said so.
+                width: anatomy::button::OUTLINE,
+                radius: shape::FULL.into(),
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Text button: transparent, no border, `primary` label (low-emphasis actions) — or the host's
+/// `on_*` role where it stands on an accent fill (FR-004a).
+pub fn text_button(
+    r: Roles,
+    host: Option<Host>,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let front = host
+        .and_then(Host::imposed)
+        .map_or(r.primary, |(_, on_fill)| on_fill);
+    move |_theme, status| {
+        let prim = color(front);
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
+        button::Style {
+            background: fill,
+            text_color: text,
+            border: radius(shape::FULL),
+            ..button::Style::default()
+        }
+    }
+}
+
+/// A small icon-only button with a fully-rounded hit area (`IconButton::circular`) — same
+/// hover/press fill and label color as [`text_button`], but a `shape::FULL` border radius so a
+/// roughly-square button (small, uniform padding) reads as a circle around the glyph rather than
+/// a rounded square.
+pub fn circular_icon_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let prim = color(r.primary);
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
+        button::Style {
+            background: fill,
+            text_color: text,
+            border: radius(shape::FULL),
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Secondary/caption text color (paths, labels, badges) — `on_surface_variant`.
+pub fn muted(r: Roles) -> impl Fn(&Theme) -> text::Style {
+    move |_theme| text::Style {
+        color: Some(color(r.on_surface_variant)),
+    }
+}
+
+/// A checkbox styled to the design system (feature 011's "Enabled" toggle).
+///
+/// `focused` is supplied rather than read from `status`, because the rendering stack's checkbox has
+/// no focus to report: its `Status` is active, hovered or disabled, and the widget itself is not
+/// focusable and answers no key. `Checkbox` wraps it in something that *is*, and tells this what it
+/// found — the same arrangement as [`field_indicator`], and for the same reason (BUG-003).
+pub fn checkbox(
+    r: Roles,
+    focused: bool,
+) -> impl Fn(&Theme, checkbox_widget::Status) -> checkbox_widget::Style {
+    move |_theme, status| {
+        let is_checked = matches!(
+            status,
+            checkbox_widget::Status::Active { is_checked: true }
+                | checkbox_widget::Status::Hovered { is_checked: true }
+        );
+        let border_color = match status {
+            checkbox_widget::Status::Hovered { .. } => color(r.primary),
+            _ if focused => color(r.primary),
+            _ => color(r.outline),
+        };
+        // A disabled box keeps its mark (feature 613, §B5): checked, it fills with on-surface at
+        // the disabled opacity and draws the mark in surface, Material's disabled-selected tone.
+        let disabled_checked = matches!(
+            status,
+            checkbox_widget::Status::Disabled { is_checked: true }
+        );
+        let base = if is_checked {
+            color(r.primary)
+        } else if disabled_checked {
+            over(disabled_color(r.on_surface), color(r.surface))
+        } else {
+            color(r.surface)
+        };
+        // §5's state layer, composited into the box's own fill (FR-035, FR-036; BUG-002, BUG-003).
+        // Before this, a hovered checkbox changed its *border* colour and nothing else, which is a
+        // Material 2 affordance rather than a state layer — and it left the checkbox the one
+        // control in the app whose hover could be missed entirely against a busy background. Focus
+        // did not exist for it at all.
+        //
+        // Composited rather than overlaid because `checkbox::Style` has one opaque `background` and
+        // no layer of its own: there is nowhere to put a translucent quad, so the blend happens
+        // here. The opacity is still the published one; only the arithmetic is local.
+        //
+        // `max` and not a chain of ifs: a focused, hovered checkbox shows **one** layer, and which
+        // one is [`Layer`]'s to say rather than this function's — the field settles the same
+        // question with the same enum.
+        let hovered = match status {
+            checkbox_widget::Status::Hovered { .. } => Layer::Hovered,
+            _ => Layer::None,
+        };
+        let layer = hovered.max(if focused { Layer::Focused } else { Layer::None });
+        let background = match layer {
+            Layer::None => base,
+            layer => over(state_fill(color(r.on_surface), layer.opacity()), base),
+        };
+        checkbox_widget::Style {
+            background: Background::Color(background),
+            icon_color: if disabled_checked {
+                color(r.surface)
+            } else {
+                color(r.on_primary)
+            },
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: shape::SMALL.into(),
+            },
+            // A disabled box's label takes the disabled colour, as its glyph does (feature 613,
+            // FR-017).
+            text_color: Some(match status {
+                checkbox_widget::Status::Disabled { .. } => disabled_color(r.on_surface),
+                _ => color(r.on_surface),
+            }),
+        }
+    }
+}
+
+// --- the filled form field (feature 018, T044b/T045 — FR-031, FR-031a, FR-031c; contract §7.7) --
+
+/// The filled field container: `surface_container_highest`, rounded at the top and square at the
+/// bottom, with **no border at all**.
+///
+/// The squared bottom is not a stylistic flourish — it is what makes the active indicator read as
+/// part of the field rather than as a line underneath it. A uniform radius would leave the
+/// indicator's ends floating past the container's curve.
+///
+/// Today's field is `surface`, the same tone as the dialog behind it, inside a uniform 1dp box.
+/// That is the largest single departure in this feature (§7.7).
+pub fn field_container(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_highest))),
+        text_color: Some(color(r.on_surface)),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: iced::border::Radius {
+                top_left: shape::EXTRA_SMALL,
+                top_right: shape::EXTRA_SMALL,
+                bottom_right: 0.0,
+                bottom_left: 0.0,
+            },
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The bottom active indicator's colour and thickness, as one decision.
+///
+/// Returned together because they move together: the indicator is 1dp `on_surface_variant` at rest
+/// and 2dp in the accent when the field is active, and an implementation that took them from two
+/// places could thicken without recolouring. `error` outranks `active` — a field that is both
+/// focused and invalid is invalid, and showing it in the accent would say the opposite.
+///
+/// "Active" is deliberately not "focused": it is **focus** for a text input and **open** for the
+/// select and for the search picker's list — §7.7 asks for open there, and both controls answer it
+/// from state they hold themselves (FR-043a, feature 022). The wrapper is told which; it never assumes.
+pub fn field_indicator(r: Roles, active: bool, error: bool) -> (Color, f32) {
+    let thickness = if active {
+        tokens::anatomy::text_field::INDICATOR_ACTIVE
+    } else {
+        tokens::anatomy::text_field::INDICATOR
+    };
+    let tone = if error {
+        r.error
+    } else if active {
+        r.primary
+    } else {
+        r.on_surface_variant
+    };
+    (color(tone), thickness)
+}
+
+/// The in-container label's colour.
+///
+/// Separate from [`field_support`] because the label answers to focus and the supporting text does
+/// not: a focused field draws its label in the accent, which — together with the thickened
+/// indicator — is how a filled field says it is the one taking input. Recolouring only the
+/// indicator left the field reading as inactive with a coloured rule under it. `error` outranks
+/// focus here for the same reason it does on the indicator: a focused invalid field is still
+/// invalid.
+pub fn field_label(r: Roles, active: bool, error: bool) -> Rgb {
+    if error {
+        r.error
+    } else if active {
+        r.primary
+    } else {
+        r.on_surface_variant
+    }
+}
+
+/// The supporting text beneath the container: the muted foreground, or `error` when the field is
+/// invalid.
+///
+/// It follows the error state along with the label — an error that recoloured one and left the
+/// other muted would read as two unrelated pieces of text — but not the focus state, because a
+/// focused field's hint is not itself the thing taking input.
+pub fn field_support(r: Roles, error: bool) -> Rgb {
+    if error {
+        r.error
+    } else {
+        r.on_surface_variant
+    }
+}
+
+/// The input *inside* a [`field_container`]: no background and no border of its own.
+///
+/// The container and the indicator belong to `FormField`, so the input draws neither (FR-031c).
+/// Leaving its old box in place would put a 1dp outline inside the filled container — the exact
+/// duplication the wrapper exists to remove.
+pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    // The status *is* read, and only for the disabled case. A field is disabled by having no
+    // `on_input` (see `TextField`), which is how a limit the runtime cannot enforce is rendered —
+    // and until this arm existed that field was pixel-identical to an editable one. The user
+    // clicked it, typed, saw nothing happen and had no way to tell a disabled control from a
+    // broken application (FR-015, SC-009).
+    move |_theme, status| text_input::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        icon: color(r.on_surface_variant),
+        placeholder: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface_variant),
+            _ => color(r.on_surface_variant),
+        },
+        value: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface),
+            _ => color(r.on_surface),
+        },
+        selection: alpha(color(r.primary), 0.3),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Bin unit tests — run with `cargo test --features gui`.
+    use super::*;
+    use iced::widget::button::Status;
+
+    #[test]
+    fn a_disabled_checkbox_label_takes_the_disabled_colour() {
+        // Feature 613, FR-017: a disabled kind row's label dims as its glyph does.
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let style = checkbox(r, false);
+            let disabled = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: true },
+            );
+            let active = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Active { is_checked: true },
+            );
+            assert_eq!(disabled.text_color, Some(disabled_color(r.on_surface)));
+            assert_eq!(active.text_color, Some(color(r.on_surface)));
+        }
+    }
+
+    #[test]
+    fn a_disabled_checked_checkbox_keeps_a_visible_mark() {
+        // Feature 613, quickstart §B5: with Desktop notifications off the kind rows grey out and
+        // keep their marks. A checked box must still read as checked when disabled.
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let style = checkbox(r, false);
+            let checked = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: true },
+            );
+            let unchecked = style(
+                &iced::Theme::Dark,
+                checkbox_widget::Status::Disabled { is_checked: false },
+            );
+            assert_ne!(checked.background, unchecked.background, "{scheme:?}");
+            assert_ne!(
+                checked.background,
+                Background::Color(checked.icon_color),
+                "{scheme:?}: the mark is drawn in its own box's colour"
+            );
+        }
+    }
+
+    /// A glyph that colors itself does not inherit a disabled button's `text_color`, so
+    /// `IconButton` greys it via `disabled_color`. That must match what the button style fn
+    /// applies to its own label, or a disabled icon button and a disabled text button would
+    /// disagree about how faded "disabled" looks.
+    #[test]
+    fn disabled_color_matches_the_button_styles_disabled_label() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let style = text_button(r, None)(&iced::Theme::Dark, Status::Disabled);
+        assert_eq!(disabled_color(r.primary), style.text_color);
+    }
+
+    /// A disabled field has to *look* disabled.
+    ///
+    /// `TextField` expresses unavailability by omitting `on_input`, which is what the sandbox's
+    /// unenforceable limits do. This style function ignored its status until T086, so those fields
+    /// rendered identically to editable ones — the setting said "you cannot change this" in its
+    /// supporting line while looking exactly like one you could.
+    #[test]
+    fn a_disabled_field_greys_its_value() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let disabled = field_input(r)(
+            &iced::Theme::Dark,
+            iced::widget::text_input::Status::Disabled,
+        );
+        let active = field_input(r)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);
+        assert_eq!(disabled.value, disabled_color(r.on_surface));
+        assert_eq!(active.value, color(r.on_surface));
+        assert_ne!(disabled.value, active.value);
+    }
+
+    /// The enabled path must stay fully opaque — greying is the disabled state alone.
+    #[test]
+    fn enabled_icon_tint_is_opaque() {
+        let r = tokens::roles(ColorScheme::Dark);
+        assert_eq!(color(r.on_surface).a, 1.0);
+        assert_eq!(disabled_color(r.on_surface).a, DISABLED_OPACITY);
+    }
+
+    // --- Feature 1299: the expanded card's shadow eases (C4, R4) -------------------------------
+
+    /// C4, FR-010: at 1 the eased shadow is the level's own, at 0 none, at 0.5 its alpha, offset
+    /// and blur are half the level's, and a strength outside `0..=1` is clamped.
+    #[test]
+    fn an_eased_shadow_scales_the_levels_shadow_by_its_strength() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = tokens::roles(scheme);
+            let full = elevation_shadow(r, elevation::MENU);
+            assert!(full.color.a > 0.0 && full.blur_radius > 0.0 && full.offset.y > 0.0);
+            assert_eq!(eased_shadow(r, elevation::MENU, 1.0), full);
+            assert_eq!(eased_shadow(r, elevation::MENU, 0.0), Shadow::default());
+            let half = eased_shadow(r, elevation::MENU, 0.5);
+            assert!((half.color.a - full.color.a / 2.0).abs() < 1e-6, "{half:?}");
+            assert_eq!(
+                (half.color.r, half.color.g, half.color.b),
+                (full.color.r, full.color.g, full.color.b)
+            );
+            assert!((half.offset.y - full.offset.y / 2.0).abs() < 1e-6);
+            assert!((half.blur_radius - full.blur_radius / 2.0).abs() < 1e-6);
+            assert_eq!(eased_shadow(r, elevation::MENU, 1.5), full);
+            assert_eq!(eased_shadow(r, elevation::MENU, -0.5), Shadow::default());
+        }
+    }
+}

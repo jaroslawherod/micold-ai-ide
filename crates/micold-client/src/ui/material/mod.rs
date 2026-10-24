@@ -7,10 +7,15 @@
 //! cross-platform. This module is the living catalog Principle VIII refers to.
 //!
 //! [`Roles`]: micold_core::tokens::Roles
+//!
+//! Feature 1262 split the catalog in two. The generic Material building blocks — buttons, fields,
+//! menus, motion, the styling layer, the CDK behaviour layer and the icon vocabulary — live in the
+//! `micold-material` crate, which names no Micold domain type. What remains here composes them into
+//! Micold's own widgets (sessions, overview cards, diffs, pull requests, the terminal pane), and the
+//! glob re-export below keeps every `material::X` path the client already names.
 
-mod accordion;
-mod accordion_group;
-mod accordion_section;
+pub use micold_material::*;
+
 mod activity_badge;
 /// Whether a component lays out at the size its anatomy entry states, or grows into whatever room
 /// it is offered. The constants gate reads the numbers, the snapshot records the geometry, and
@@ -18,19 +23,12 @@ mod activity_badge;
 /// (BUG-002).
 #[cfg(test)]
 mod anatomy_size;
-mod animation;
-mod attachment_chip;
-mod browse_bar;
-mod busy_indicator;
-mod button;
 /// §7.3's horizontal paddings, read off the laid-out button. `anatomy_size` covers the height and
 /// the touch target; a button is content-sized across, so no size check can see its inset.
 #[cfg(test)]
 mod button_anatomy;
 mod card_grid;
 mod card_lift;
-mod checkbox;
-mod choice_list;
 mod code_block;
 mod command_palette;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
@@ -44,50 +42,30 @@ mod connection_banner;
 /// rather than the constants it was built from (BUG-001).
 #[cfg(test)]
 mod content_placement;
-pub(crate) mod dialog;
 /// §7.4's spatial figures, read off a laid-out dialog. Every one of them is a *gap*, which no
 /// size check can see.
 #[cfg(test)]
 mod dialog_anatomy;
 mod diff_view;
-mod disclosure_card;
-mod divider;
-mod edge_fade;
-mod ellipsized;
+/// An expanded section stays inside the scrollable that holds it, in pixels (feature 1092).
+#[cfg(test)]
+mod expand_clipping;
 /// A field reporting and taking the keyboard, driven rather than posed — the gap the anatomy
 /// modules structurally cannot see (BUG-003).
 #[cfg(test)]
 mod field_focus;
-mod field_group;
-mod filled_field;
-mod filter_panel;
-mod form_field;
 /// `FormField`'s composition and chrome, checked in-crate because `material` is `pub(crate)` and a
 /// `FormField` cannot be constructed from `tests/` at all.
 #[cfg(test)]
 mod form_field_anatomy;
-pub mod glyph;
 mod host_picker;
-mod icon_button;
-mod icon_label;
 mod inline_diff;
-pub(crate) mod key_value_list;
-mod keyboard_focus;
-/// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
-/// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
-mod labelled_toggle;
-mod line_clamp;
-mod link_text;
 mod markdown_view;
-mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
 /// (BUG-003).
 #[cfg(test)]
 mod menu_anatomy;
-mod modal;
-mod mono;
-mod navigation_drawer;
 mod overview_card;
 mod picker;
 /// The transition both lists arrive and leave by, asserted against **each other** and against
@@ -104,384 +82,101 @@ mod picker_parity;
 /// state-level test can see, and the one that closed the add-worktree form (016 BUG-002, FR-035).
 #[cfg(test)]
 mod picker_press;
-mod progress;
 mod progress_bar;
 mod prompt_card;
+mod pull_request_indicator;
+mod pull_request_row;
 mod queue_row;
-mod required_legend;
-mod resize_handle;
 mod review_comment;
 mod review_panel_row;
-mod ripple;
-mod scrollable;
-mod scrolling_dialog;
-mod section_list;
+/// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
+/// same reason as the snapshots above.
+#[cfg(test)]
+mod ripple_clipping;
+/// The reference scene's ripple, and the rule it presses by. In-crate for the same reason.
+#[cfg(test)]
+mod ripple_pulse;
 mod select;
 /// The select's own anatomy, and the two behaviours nothing outside it can observe — its indicator
 /// answering for itself, and its highlight seeded from the current choice. In-crate for the same
 /// reason as `form_field_anatomy` (feature 022, FR-013).
 #[cfg(test)]
 mod select_anatomy;
-mod shaped_text;
-mod snackbar;
-/// The split action — a primary button with an adjacent "…or choose" chevron (feature 026,
-/// T033). Used by the sidebar's start-a-session row action.
-mod split_action;
 mod split_view;
 mod state_icon;
-/// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
-/// module that could reach it could render an off-spec variant of a shared component, which is
-/// exactly the drift this feature removes. `pub(crate)` rather than private only because the
-/// application's own theme function lives behind it — see [`crate::ui::theme`].
-pub(crate) mod style;
-
-/// An expanded section stays inside the scrollable that holds it, in pixels (feature 1092).
-#[cfg(test)]
-mod expand_clipping;
-mod pull_request_indicator;
-mod pull_request_row;
-/// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
-/// same reason as the snapshots above.
-#[cfg(test)]
-mod ripple_clipping;
-/// A press draws one state layer with its ripple, read back from rendered frames (BUG-014).
-#[cfg(test)]
-mod ripple_layers;
-/// The reference scene's ripple, and the rule it presses by. In-crate for the same reason.
-#[cfg(test)]
-mod ripple_pulse;
-mod status_bar;
 mod status_chip;
-/// The style layer's parity snapshot. Lives inside the crate rather than in `tests/` because the
-/// layer it asserts is no longer reachable from outside it — which is the point.
-#[cfg(test)]
-mod style_elevation;
-#[cfg(test)]
-mod style_outline_discipline;
 #[cfg(test)]
 mod style_shape;
 #[cfg(test)]
 mod style_snapshot;
-#[cfg(test)]
-mod style_states;
-mod surface;
-pub(crate) mod tab;
-mod tab_strip;
-mod tag;
 pub(crate) mod terminal_pane;
-/// The headless renderer the in-crate component tests share.
-#[cfg(test)]
-pub mod test_support;
-mod text;
-mod text_area;
-mod text_field;
-/// The filled field's anatomy, checked in-crate — `material` is `pub(crate)`.
+/// The filled field's anatomy, checked in-crate — `material` is `pub`.
 #[cfg(test)]
 mod text_field_anatomy;
-mod text_link;
-mod toggle_chip;
 pub(crate) mod toleration_list;
-mod toolbar;
 mod tree_view;
-/// The application's typographic vocabulary, pinned. In-crate for the same reason as the style
-/// snapshots above: `TypeRole` is not reachable from `tests/`.
-#[cfg(test)]
-mod type_role_mapping;
 mod typeahead;
-mod unread_mark;
 mod usage_indicator;
-mod virtual_rows;
-
-pub use accordion::Accordion;
-pub use accordion_group::AccordionGroup;
-pub use accordion_section::AccordionSection;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
-pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
-pub use attachment_chip::AttachmentChip;
-pub use browse_bar::BrowseBar;
-pub use busy_indicator::BusyIndicator;
-pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
 pub use card_grid::{CardGrid, Zoom};
-pub use checkbox::Checkbox;
-pub use choice_list::{ChoiceList, OTHER as CHOICE_OTHER, OTHER_PLACEHOLDER};
 pub use code_block::CodeBlock;
 pub use command_palette::CommandPalette;
 pub use connection_banner::ConnectionBanner;
 pub use diff_view::{
     DiffLayout, DiffView, MARKER_WIDTH as DIFF_MARKER_WIDTH, ROW_HEIGHT as DIFF_ROW_HEIGHT,
 };
-pub use disclosure_card::DisclosureCard;
-pub use divider::Divider;
-pub use edge_fade::EdgeFade;
-pub use ellipsized::Ellipsized;
-pub use field_group::FieldGroup;
-pub use filter_panel::FilterTrigger;
-pub(crate) use form_field::beneath;
-pub use form_field::{FormField, Layer as FieldLayer};
-pub use glyph::Glyph;
 pub use host_picker::HostPicker;
-pub use icon_button::IconButton;
-pub use icon_label::IconLabel;
 pub use inline_diff::InlineDiff;
-pub use key_value_list::KeyValueList;
-pub use labelled_toggle::LabelledToggle;
-pub use link_text::LinkText;
 pub use markdown_view::MarkdownView;
-pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
-pub use modal::Modal;
-pub use mono::{
-    install_monospace, pin_monospace, FIRA_MONO_BOLD_BYTES, FIRA_MONO_REGULAR_BYTES, MONO_FAMILY,
-};
-pub use navigation_drawer::NavigationDrawer;
 pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
-pub use progress::StageProgress;
 pub use progress_bar::ProgressBar;
 pub use prompt_card::PromptCard;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
 pub use queue_row::QueueRow;
-pub use required_legend::RequiredLegend;
-pub use resize_handle::{ResizeHandle, WIDTH as RESIZE_HANDLE_WIDTH};
 pub use review_comment::{CardState, ReviewCommentCard};
 pub use review_panel_row::{status_label, ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT};
-pub use ripple::{pulse as ripple_pulse, Ripple};
-pub use scrollable::{ScrollDirection, Scrollable};
-pub use scrolling_dialog::ScrollingDialog;
-pub use section_list::{Section, SectionList};
 pub use select::Select;
-pub use snackbar::Snackbar;
-pub use split_action::SplitAction;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
 pub use state_icon::StateIcon;
-pub use status_bar::{GiveWay, ItemTone, StatusBar, StatusItem};
 pub use status_chip::StatusChip;
-pub use surface::{Kind as SurfaceKind, Surface};
-pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
-pub use tab_strip::TabStrip;
-pub use tag::Tag;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::GridSizeReporter;
 pub use terminal_pane::TerminalPane;
-pub use text::{
-    Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
-};
-pub use text_area::TextArea;
-pub use text_field::TextField;
-pub use text_link::TextLink;
-pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toleration_list::TolerationList;
-pub use toolbar::Toolbar;
 pub use tree_view::{Selection, TreeItem, TreeView};
 pub use typeahead::Typeahead;
-pub use unread_mark::UnreadMark;
 pub use usage_indicator::UsageIndicator;
-pub use virtual_rows::VirtualRows;
 
-/// The application's theme, derived from the active colour scheme.
-///
-/// The one part of the styling layer that reaches beyond the library. The window needs a theme to
-/// hand the renderer, and that is application wiring rather than a call site styling a widget —
-/// every other entry point is unreachable from outside, so a feature module is structurally unable
-/// to render an off-spec variant of a shared component (FR-002).
-pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
-    style::theme(scheme)
-}
-
-use crate::ui::cdk::tooltip;
-use iced::widget::container;
-use iced::Element;
-use micold_core::tokens::{spacing, Roles};
-
-/// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
-/// directly.
-pub use crate::ui::cdk::tooltip::Position as TooltipPosition;
-
-/// The widest a tooltip panel may grow before its label wraps (feature 029, FR-009).
-///
-/// Material 3's ceiling for a rich tooltip, and component-owned rather than an `anatomy::` token:
-/// `anatomy::ALL` is a fixed array asserted against feature 018's contract, which names no tooltip
-/// figure at all, so adding one there would edit that feature's gate to state something it never
-/// claimed. `tab.rs`'s `LABEL_MAX_WIDTH` is the precedent for a component holding its own ceiling.
-///
-/// It matters here because a tooltip's label used to be one short phrase and is now a block of
-/// lines, one of which is a filesystem path. Unbounded, the panel measures at that path's natural
-/// width and can end up wider than the sidebar it is describing.
-pub const TOOLTIP_MAX_WIDTH: f32 = 320.0;
-
-/// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
-/// builder-API rule: construct with the required content + label + roles, then optionally
-/// `.position(...)`, then `.into()`). Theme-aware surface styling; shown below the element by
-/// default, and on the opposite side of it when the asked-for side has no room, so it does not
-/// cover the element it describes (029 BUG-001, FR-013). Only a panel too large for either side
-/// is slid onto it, from the side with more room.
-///
-/// The label may be multi-line: it is bounded at [`TOOLTIP_MAX_WIDTH`] and wraps on glyphs where a
-/// word boundary is unavailable, so a long path breaks rather than widening the panel.
-pub struct Tooltip<'a, M> {
-    content: Element<'a, M>,
-    label: String,
-    roles: Roles,
-    position: tooltip::Position,
-    wait: tooltip::Wait,
-    max_lines: Option<usize>,
-    subject: Option<u64>,
-}
-
-impl<'a, M: 'a> Tooltip<'a, M> {
-    /// Wrap `content` with a hover tooltip showing `label`, themed by `roles`. Defaults to
-    /// showing below the content — override with `.position(...)` for content near an edge
-    /// (e.g. `tooltip::Position::Left` for controls pinned to the right edge of their
-    /// container, so the tooltip opens inward instead of overflowing off-screen).
-    pub fn new(content: impl Into<Element<'a, M>>, label: impl Into<String>, roles: Roles) -> Self {
-        Self {
-            content: content.into(),
-            label: label.into(),
-            roles,
-            position: tooltip::Position::Bottom,
-            wait: tooltip::Wait::Hover,
-            max_lines: None,
-            subject: None,
-        }
+/// The tooltip of the unread count on the switcher's button (feature 039, FR-023): what the
+/// number counts, which the button itself has no room to say.
+pub fn unread_total_tooltip(unread: usize) -> String {
+    if unread == 1 {
+        "1 unread session in other projects".to_string()
+    } else {
+        format!("{unread} unread sessions in other projects")
     }
-
-    /// Open only after the cursor has rested on the content for `delay`, and never while it moves
-    /// (feature 038, FR-015, FR-016). A press on the content closes the tooltip until the cursor
-    /// has left. Without this the tooltip opens on hover. An alternative to
-    /// [`Tooltip::show_delay`]: the one called last wins.
-    pub fn after_rest(mut self, delay: std::time::Duration) -> Self {
-        self.wait = tooltip::Wait::Rest(delay);
-        self
-    }
-
-    /// Open only once the pointer has been over the content for `delay`, counted from entering and
-    /// not restarted by movement (feature 430, FR-003). Works with
-    /// [`TooltipPosition::FollowCursor`]. An alternative to [`Tooltip::after_rest`]: the one called
-    /// last wins.
-    pub fn show_delay(mut self, delay: std::time::Duration) -> Self {
-        self.wait = tooltip::Wait::Delay(delay);
-        self
-    }
-
-    /// Show at most `lines` lines of the label; a label that takes more is cut after a whole word
-    /// and ends in an ellipsis, and one that fits is shown whole (FR-021).
-    pub fn max_lines(mut self, lines: usize) -> Self {
-        self.max_lines = Some(lines);
-        self
-    }
-
-    /// What the content describes, for a tooltip on a row a list reuses: when `key` changes, an
-    /// open tooltip closes and the rest delay starts again (FR-017).
-    pub fn subject(mut self, key: u64) -> Self {
-        self.subject = Some(key);
-        self
-    }
-
-    /// Override where the tooltip opens relative to its content.
-    pub fn position(mut self, position: tooltip::Position) -> Self {
-        self.position = position;
-        self
-    }
-}
-
-impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
-    fn from(t: Tooltip<'a, M>) -> Self {
-        // A tooltip explains, so it is prose at `Caption` — Material's `body_small`.
-        //
-        // `WordOrGlyph` rather than the stack's default `Word`: the labels this carries include
-        // filesystem paths, which contain no spaces and so cannot be word-wrapped at all. Without
-        // the glyph fallback the ceiling below would be a limit the text simply ignores.
-        let label: Element<'a, M> = match t.max_lines {
-            // Measured where it is laid out: inside the ceiling below, less the panel's padding.
-            Some(lines) => line_clamp::LineClamped::new(t.label, TypeRole::Caption, lines).into(),
-            None => Text::new(t.label, TypeRole::Caption, t.roles)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-                .into(),
-        };
-        let tip = container(label)
-            .max_width(TOOLTIP_MAX_WIDTH)
-            .padding(spacing::XS)
-            .style(style::surface(t.roles));
-        // Built on `cdk::tooltip` rather than the stack's own: that one slides a panel with no
-        // room on its side back over the trigger, and this one opens it on the other side
-        // (029 BUG-001, FR-013).
-        let mut floated = tooltip::Tooltip::new(t.content, tip, t.position).gap(spacing::XS);
-        match t.wait {
-            tooltip::Wait::Hover => {}
-            tooltip::Wait::Delay(delay) => floated = floated.show_delay(delay),
-            tooltip::Wait::Rest(delay) => floated = floated.after_rest(delay),
-        }
-        if let Some(key) = t.subject {
-            floated = floated.subject(key);
-        }
-        floated.into()
-    }
-}
-
-/// The themed surface every floating popover's inner panel sits on (`MenuOverlay`,
-/// `ContextMenu`, the sidebar's filter accordion): padded content on
-/// the `menu_surface` background, at `width` (pass `Length::Shrink` for a natural-width panel
-/// like the filter accordion, or `Length::Fixed(...)` for a fixed-width dropdown). Factors out
-/// what was otherwise the identical `container(...).padding(...).style(...)` chain repeated at
-/// every popover call site. `bordered` drops the outline for panels that already read as
-/// distinct without one (the filter accordion sits inline in the sidebar rather than floating,
-/// so its own outline would be redundant next to the sidebar's edge).
-///
-/// `padding` is stated by the caller rather than fixed here, because the panels this serves do not
-/// agree about it and pretending they do is how §7.5's 8dp went unapplied. A **menu** panel pads 8dp
-/// above its first item and below its last and nothing at either side — its items run edge to edge,
-/// which is what makes a full-width state layer possible. The filter accordion holds arbitrary
-/// content and pads it on all four sides. One number could satisfy either, not both.
-pub fn menu_panel<'a, M: 'a>(
-    content: impl Into<Element<'a, M>>,
-    width: impl Into<iced::Length>,
-    roles: Roles,
-    bordered: bool,
-    padding: impl Into<iced::Padding>,
-) -> Element<'a, M> {
-    container(content)
-        .padding(padding)
-        .width(width)
-        .style(move |theme: &iced::Theme| {
-            let mut panel_style = style::menu_surface(roles)(theme);
-            if !bordered {
-                panel_style.border.width = 0.0;
-            }
-            panel_style
-        })
-        .into()
 }
 
 #[cfg(test)]
-mod tooltip_wait_tests {
-    use super::*;
-    use micold_core::theme::ColorScheme;
-    use micold_core::tokens;
-    use std::time::Duration;
+mod unread_total_tests {
+    use super::unread_total_tooltip;
 
-    fn tip() -> Tooltip<'static, ()> {
-        Tooltip::new(
-            Text::new("a", TypeRole::Label, tokens::roles(ColorScheme::Dark)),
-            "label",
-            tokens::roles(ColorScheme::Dark),
-        )
-    }
-
-    /// 430 research R1: `after_rest` and `show_delay` are alternatives; the one called last wins.
+    /// U158 (FR-023).
     #[test]
-    fn the_wait_set_last_wins() {
-        let d = Duration::from_secs(1);
+    fn the_unread_totals_tooltip_names_the_other_projects() {
         assert_eq!(
-            tip().after_rest(d).show_delay(d).wait,
-            tooltip::Wait::Delay(d)
+            unread_total_tooltip(1),
+            "1 unread session in other projects"
         );
         assert_eq!(
-            tip().show_delay(d).after_rest(d).wait,
-            tooltip::Wait::Rest(d)
+            unread_total_tooltip(3),
+            "3 unread sessions in other projects"
         );
     }
 }

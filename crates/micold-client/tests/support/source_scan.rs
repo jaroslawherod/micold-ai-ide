@@ -30,6 +30,64 @@ pub fn src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+/// `crates/micold-material/src`: the generic half of the component library (feature 1262).
+///
+/// The client re-exports it whole — its components as `ui::material::*`, its `cdk/` as `ui::cdk`,
+/// its `icons.rs` as `crate::icons` — so a guard that scans "the client's sources" scans this too,
+/// and [`logical_key`] names each file by the path the client sees it at.
+pub fn material_src_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-material/src")
+}
+
+/// `path` as a key relative to the client's `src/`. A file of the Material crate gets the path the
+/// client re-exports it at: `cdk/motion.rs` is `ui/cdk/motion.rs`, `icons.rs` is `icons.rs`, and
+/// every other file `ui/material/<name>` (its `lib.rs` is the old `ui/material/mod.rs`'s generic
+/// half, keyed `ui/material/lib.rs`).
+pub fn logical_key(path: &Path) -> String {
+    let slash = |p: &Path| p.display().to_string().replace('\\', "/");
+    if let Ok(rel) = path.strip_prefix(src_dir()) {
+        return slash(rel);
+    }
+    match path.strip_prefix(material_src_dir()) {
+        Ok(rel) if rel.starts_with("cdk") || rel == Path::new("icons.rs") => {
+            let rel = slash(rel);
+            if rel == "icons.rs" {
+                rel
+            } else {
+                format!("ui/{rel}")
+            }
+        }
+        Ok(rel) => format!("ui/material/{}", slash(rel)),
+        Err(_) => slash(path),
+    }
+}
+
+/// Where the client-relative path `rel` (`ui/material/tab.rs`, `ui/cdk`, `icons.rs`) lives now:
+/// in the client if it is still there, else at its place in the Material crate.
+pub fn client_path(rel: &str) -> PathBuf {
+    let here = src_dir().join(rel);
+    if here.exists() {
+        return here;
+    }
+    if rel == "icons.rs" {
+        return material_src_dir().join(rel);
+    }
+    if let Some(rest) = rel.strip_prefix("ui/cdk") {
+        return material_src_dir()
+            .join("cdk")
+            .join(rest.trim_start_matches('/'));
+    }
+    if let Some(rest) = rel.strip_prefix("ui/material/") {
+        return material_src_dir().join(rest);
+    }
+    here
+}
+
+/// The client's `src/` and the Material crate's, for a guard over everything the client compiles.
+pub fn client_dirs() -> Vec<PathBuf> {
+    vec![src_dir(), material_src_dir()]
+}
+
 /// Every `.rs` file under `dir`, recursively, sorted.
 pub fn rs_files(dir: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -59,12 +117,15 @@ pub fn read_rs_under(dirs: &[PathBuf], root: &Path) -> Vec<(String, String)> {
         .iter()
         .flat_map(|dir| rs_files(dir))
         .map(|path| {
-            let name = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string()
-                .replace('\\', "/");
+            let name = if root == src_dir() {
+                logical_key(&path)
+            } else {
+                path.strip_prefix(root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            };
             let src = fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
             (name, src)

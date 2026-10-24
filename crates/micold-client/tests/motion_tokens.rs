@@ -26,7 +26,11 @@ use source_scan::{sources_under, src_dir, strip_comments};
 /// Everything that renders, and is therefore animated by the design system's clock.
 fn rendering_sources() -> Vec<(String, String)> {
     let src = src_dir();
-    sources_under(&[src.join("ui"), src.join("showcase")])
+    sources_under(&[
+        src.join("ui"),
+        src.join("showcase"),
+        source_scan::material_src_dir(),
+    ])
 }
 
 /// In-crate test modules that drive the primitive with a stand-in clock.
