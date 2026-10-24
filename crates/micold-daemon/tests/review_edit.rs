@@ -501,6 +501,30 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
     );
 }
 
+#[tokio::test]
+async fn a_comment_edit_keeps_the_files_reviewed_marks() {
+    // Feature 1271, review A M1 F4: the service writes a version 4 file's marks back unchanged.
+    use micold_core::review::marks::{ChangeId, ReviewMark};
+    use micold_core::review::RelPath;
+    let f = Fixture::new();
+    let mut seed = ReviewFile::default();
+    seed.marks.insert(
+        "feat".into(),
+        vec![ReviewMark {
+            scope: micold_core::review::comment::Scope::WorkingTree,
+            path: RelPath::from_native("src/lib.rs").unwrap(),
+            change: ChangeId::parse(&"ab".repeat(20)).unwrap(),
+        }],
+    );
+    f.files().save_reviews(&f.project(), &seed).unwrap();
+
+    let service = f.service();
+    let mut client = connect(&service).await;
+    attach(&mut client, &f.project()).await;
+    add_one(&mut client, 1, &f.project(), "A comment").await;
+    assert_eq!(f.on_disk().marks, seed.marks, "the marks survive the write");
+}
+
 // ---- Clear, discard, and removal with the worktree (M8, T091; W4, W11; US4 s3, s5) ----
 
 /// A comment of entry `feat` in state `state`, as the file holds it.

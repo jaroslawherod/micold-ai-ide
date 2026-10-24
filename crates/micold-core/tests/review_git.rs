@@ -849,6 +849,42 @@ fn a_new_file_keeps_its_id_from_untracked_to_staged_to_committed() {
 }
 
 #[test]
+fn a_path_starting_with_a_quote_is_hashed_and_keeps_its_id_when_staged() {
+    // Review A M1 F1: `hash-object --stdin-paths` C-unquotes a line starting with `"`.
+    let f = fixture();
+    write(&f.wt, "\"n\".md", "quoted\n");
+    write(&f.wt, "plain.rs", "fn plain() {}\n");
+    let untracked = worktree_whole(&f.wt);
+    let id = id_of(&untracked, "\"n\".md");
+    assert!(
+        whole_file(&untracked, "plain.rs").id.is_some(),
+        "the run did not fail"
+    );
+    git(&f.wt, &["add", "--", "\"n\".md"]);
+    assert_eq!(
+        id_of(&worktree_whole(&f.wt), "\"n\".md"),
+        id,
+        "the id is git's"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_untracked_executable_keeps_its_id_when_staged_without_file_mode() {
+    // Review A M1 F2: with `core.fileMode=false`, `git add` records 100644.
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture();
+    git(&f.wt, &["config", "core.fileMode", "false"]);
+    write(&f.wt, "run.sh", "echo run\n");
+    let full = f.wt.join("run.sh");
+    std::fs::set_permissions(&full, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let untracked = id_of(&worktree_whole(&f.wt), "run.sh");
+    git(&f.wt, &["add", "run.sh"]);
+    let staged = id_of(&worktree_whole(&f.wt), "run.sh");
+    assert_eq!(staged, untracked, "git add keeps the id (research R1)");
+}
+
+#[test]
 fn a_reverted_and_redone_change_gets_the_same_id() {
     let f = fixture();
     write(&f.wt, "b.rs", "fn b() { first(); }\n");

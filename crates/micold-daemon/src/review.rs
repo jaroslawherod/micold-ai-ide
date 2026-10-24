@@ -5,7 +5,7 @@
 //! first time anything asks for them, and every accepted edit is written back through the catalog
 //! before memory changes (W5), so a failed write leaves the comments as they were.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use micold_core::mcp::errors::{ErrorCategory, OpError};
@@ -14,6 +14,7 @@ use micold_core::review::comment::{
     fresh_id, CommentId, CommentRef, Draft, EntryReview, Outcome, PrAnchor, Reporter,
     ReviewComment, ReviewError, Scope, SendSnapshot, Status,
 };
+use micold_core::review::marks::ReviewMark;
 use micold_core::review::prompt::{EntryKind, PrContext};
 use micold_core::review::store::ReviewFile;
 use micold_core::review::{LineRange, RelPath};
@@ -56,21 +57,44 @@ impl From<ReviewError> for Refusal {
 #[derive(Debug, Default)]
 pub struct Reviews {
     projects: HashMap<PathBuf, HashMap<String, EntryReview>>,
+    /// Each read project's reviewed marks, as its file held them: written back unchanged with
+    /// every save, so a comment edit keeps them (feature 1271, review A M1 F4; M2 edits them).
+    marks: HashMap<PathBuf, Marks>,
 }
+
+/// A project's reviewed marks per entry, keyed like its comments.
+type Marks = BTreeMap<String, Vec<ReviewMark>>;
 
 impl Reviews {
     /// `project`'s entries, read from its review file on first use.
     fn project(&mut self, catalog: &Catalog, project: &Path) -> &mut HashMap<String, EntryReview> {
-        self.projects
-            .entry(project.to_path_buf())
-            .or_insert_with(|| {
-                catalog
-                    .load_reviews(project)
-                    .entries
-                    .into_iter()
-                    .map(|(dir, comments)| (dir, EntryReview::from_comments(comments)))
-                    .collect()
-            })
+        self.loaded(catalog, project).0
+    }
+
+    /// `project`'s entries and its marks, read from its review file on first use.
+    fn loaded(
+        &mut self,
+        catalog: &Catalog,
+        project: &Path,
+    ) -> (&mut HashMap<String, EntryReview>, &Marks) {
+        if !self.projects.contains_key(project) {
+            let file = catalog.load_reviews(project);
+            let entries = file
+                .entries
+                .into_iter()
+                .map(|(dir, comments)| (dir, EntryReview::from_comments(comments)))
+                .collect();
+            self.projects.insert(project.to_path_buf(), entries);
+            self.marks.insert(project.to_path_buf(), file.marks);
+        }
+        let entries = self
+            .projects
+            .get_mut(project)
+            .expect("the project was just read");
+        (
+            entries,
+            self.marks.entry(project.to_path_buf()).or_default(),
+        )
     }
 
     /// One `ReviewChanged` per entry of `project` that has comments, for a client that has just
@@ -98,7 +122,7 @@ impl Reviews {
         op: ReviewEditOp,
         now: u64,
     ) -> Result<Option<DaemonMsg>, Refusal> {
-        let entries = self.project(catalog, project);
+        let (entries, marks) = self.loaded(catalog, project);
         let mut edited = entries.get(dir).cloned().unwrap_or_default();
         match op {
             ReviewEditOp::Add {
@@ -165,7 +189,7 @@ impl Reviews {
             }
         }
 
-        catalog.save_reviews(project, &file_with(entries, dir, &edited)).map_err(|err| {
+        catalog.save_reviews(project, &file_with(entries, marks, dir, &edited)).map_err(|err| {
             tracing::warn!(project = %project.display(), entry = dir, %err, "review comments not written");
             Refusal::new(
                 ErrorKind::IoFailed,
@@ -252,13 +276,13 @@ impl Reviews {
         snapshot: &SendSnapshot,
         at: u64,
     ) -> DaemonMsg {
-        let entries = self.project(catalog, project);
+        let (entries, marks) = self.loaded(catalog, project);
         let Some(review) = entries.get_mut(dir) else {
             return changed(project, dir, &EntryReview::default());
         };
         review.finish_send(snapshot, at);
         let msg = changed(project, dir, review);
-        let file = file_with(entries, dir, &entries[dir]);
+        let file = file_with(entries, marks, dir, &entries[dir]);
         if let Err(err) = catalog.save_reviews(project, &file) {
             tracing::warn!(project = %project.display(), entry = dir, %err, "sent review comments not written");
         }
@@ -282,7 +306,7 @@ impl Reviews {
         by: Reporter,
         at: u64,
     ) -> Result<(ReviewComment, Status, DaemonMsg), OpError> {
-        let entries = self.project(catalog, project);
+        let (entries, marks) = self.loaded(catalog, project);
         let holds = |review: &EntryReview| {
             review
                 .comments()
@@ -317,7 +341,7 @@ impl Reviews {
                     }
                 })?;
         catalog
-            .save_reviews(project, &file_with(entries, dir, &reported))
+            .save_reviews(project, &file_with(entries, marks, dir, &reported))
             .map_err(|err| {
                 tracing::warn!(project = %project.display(), entry = dir, %err, "review report not written");
                 OpError::service_error(format!("the report could not be saved: {err}"))
@@ -338,12 +362,12 @@ impl Reviews {
     /// the review file, and the empty `ReviewChanged` to push is returned. A failed write is
     /// logged; memory forgets them regardless, since the worktree is gone.
     pub fn forget_worktree(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> DaemonMsg {
-        let entries = self.project(catalog, project);
+        let (entries, marks) = self.loaded(catalog, project);
         if entries.remove(dir).is_some() {
             save_logged(
                 catalog,
                 project,
-                entries,
+                (entries, marks),
                 "deleted worktree's review comments not removed",
             );
             tracing::info!(project = %project.display(), entry = dir, "review comments of a deleted worktree removed");
@@ -361,7 +385,7 @@ impl Reviews {
         project: &Path,
         gone: impl Fn(&str) -> bool,
     ) -> Vec<DaemonMsg> {
-        let entries = self.project(catalog, project);
+        let (entries, marks) = self.loaded(catalog, project);
         let mut pruned: Vec<String> = entries
             .keys()
             .filter(|dir| !dir.is_empty() && gone(dir))
@@ -377,7 +401,7 @@ impl Reviews {
         save_logged(
             catalog,
             project,
-            entries,
+            (entries, marks),
             "removed worktrees' review comments not pruned",
         );
         tracing::info!(project = %project.display(), entries = ?pruned, "review comments of removed worktrees pruned");
@@ -391,6 +415,7 @@ impl Reviews {
     /// its review file, W11).
     pub fn forget_project(&mut self, project: &Path) {
         self.projects.remove(project);
+        self.marks.remove(project);
     }
 
     /// Close entry `dir`'s send undelivered (W9): every comment stays as it was.
@@ -406,11 +431,11 @@ impl Reviews {
     }
 }
 
-/// Write `entries` as `project`'s review file, logging a failure as `what`.
+/// Write `entries` and `marks` as `project`'s review file, logging a failure as `what`.
 fn save_logged(
     catalog: &Catalog,
     project: &Path,
-    entries: &HashMap<String, EntryReview>,
+    (entries, marks): (&HashMap<String, EntryReview>, &Marks),
     what: &str,
 ) {
     let file = ReviewFile {
@@ -418,18 +443,18 @@ fn save_logged(
             .iter()
             .map(|(dir, review)| (dir.clone(), review.comments().to_vec()))
             .collect(),
-        // Feature 1271 M2 keeps and writes the service's marks.
-        marks: Default::default(),
+        marks: marks.clone(),
     };
     if let Err(err) = catalog.save_reviews(project, &file) {
         tracing::warn!(project = %project.display(), %err, "{what}");
     }
 }
 
-/// The review file of a project whose entry `dir` holds `review` and every other entry what
-/// `entries` holds.
+/// The review file of a project whose entry `dir` holds `review`, every other entry what
+/// `entries` holds, and whose marks are `marks`.
 fn file_with(
     entries: &HashMap<String, EntryReview>,
+    marks: &Marks,
     dir: &str,
     review: &EntryReview,
 ) -> ReviewFile {
@@ -439,7 +464,7 @@ fn file_with(
             .filter(|(other, _)| other.as_str() != dir)
             .map(|(other, review)| (other.clone(), review.comments().to_vec()))
             .collect(),
-        marks: Default::default(),
+        marks: marks.clone(),
     };
     file.entries
         .insert(dir.to_owned(), review.comments().to_vec());

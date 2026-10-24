@@ -177,8 +177,10 @@ fn untracked_paths(dir: &Path) -> io::Result<Vec<RelPath>> {
 }
 
 /// The mode git gives a new file at `full` (feature 1271): `120000` for a symlink, `100755` for an
-/// executable file, else `100644`; `None` for what is not a file or a symlink.
-fn disk_mode(full: &Path) -> Option<&'static str> {
+/// executable file when `file_mode` (git's `core.fileMode`) trusts the exec bit, else `100644`;
+/// `None` for what is not a file or a symlink. A symlink stays `120000` whatever `core.symlinks`
+/// says, as `git add` records it.
+fn disk_mode(full: &Path, file_mode: bool) -> Option<&'static str> {
     let meta = std::fs::symlink_metadata(full).ok()?;
     if meta.file_type().is_symlink() {
         return Some("120000");
@@ -189,24 +191,56 @@ fn disk_mode(full: &Path) -> Option<&'static str> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if meta.permissions().mode() & 0o100 != 0 {
+        if file_mode && meta.permissions().mode() & 0o100 != 0 {
             return Some("100755");
         }
     }
+    #[cfg(not(unix))]
+    let _ = file_mode;
     Some("100644")
+}
+
+/// Whether git trusts the exec bit in `dir` (`core.fileMode`, true unless set false).
+fn trusts_file_mode(dir: &Path) -> bool {
+    read(
+        dir,
+        &["config", "--type=bool", "--get", "core.fileMode"],
+        None,
+    )
+    .map_or(true, |value| value.trim() != "false")
+}
+
+/// `path` as one line of `git hash-object --stdin-paths` input: C-quoted when git would otherwise
+/// misread it (a leading `"` is unquoted, a trailing CR stripped, a newline ends the line).
+fn stdin_path(path: &str) -> String {
+    if !path.starts_with('"') && !path.contains(['\r', '\n']) {
+        return path.to_owned();
+    }
+    let mut quoted = String::from("\"");
+    for ch in path.chars() {
+        match ch {
+            '"' => quoted.push_str("\\\""),
+            '\\' => quoted.push_str("\\\\"),
+            '\r' => quoted.push_str("\\r"),
+            '\n' => quoted.push_str("\\n"),
+            _ => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 /// The blob ids of the working-tree files `paths` (research R2 step 3): one `git hash-object
 /// --stdin-paths` for the files, which applies the clean filters as `git add` does, and the
 /// symlinks hashed here over their target path, as git stores them (hash-object would follow the
-/// link). A path holding a newline, a path that is no longer a file and every path of a failed
-/// run get no id.
+/// link). Paths git would misread go C-quoted (review A M1 F1). A path that is no longer a file and
+/// every path of a failed run get no id.
 fn blob_ids(dir: &Path, paths: &[RelPath]) -> BTreeMap<RelPath, String> {
     let mut ids = BTreeMap::new();
     let mut files = Vec::new();
-    for path in paths.iter().filter(|path| !path.as_str().contains('\n')) {
+    for path in paths {
         let full = dir.join(path.as_str());
-        match disk_mode(&full) {
+        match disk_mode(&full, true) {
             Some("120000") => {
                 if let Ok(target) = worktree_bytes(&full) {
                     ids.insert(path.clone(), blob_id(&target));
@@ -219,7 +253,10 @@ fn blob_ids(dir: &Path, paths: &[RelPath]) -> BTreeMap<RelPath, String> {
     if files.is_empty() {
         return ids;
     }
-    let input: String = files.iter().map(|path| format!("{path}\n")).collect();
+    let input: String = files
+        .iter()
+        .map(|path| stdin_path(path.as_str()) + "\n")
+        .collect();
     let Ok(out) = read(dir, &["hash-object", "--stdin-paths"], Some(&input)) else {
         return ids;
     };
@@ -511,10 +548,11 @@ impl GitCli {
             ),
             None => (None, BTreeSet::new()),
         };
+        let file_mode = trusts_file_mode(dir);
         let untracked: Vec<(RelPath, String)> = untracked_paths(dir)?
             .into_iter()
             .filter_map(|path| {
-                let mode = disk_mode(&dir.join(path.as_str()))?;
+                let mode = disk_mode(&dir.join(path.as_str()), file_mode)?;
                 Some((path, mode.to_owned()))
             })
             .collect();
