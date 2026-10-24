@@ -100,6 +100,15 @@ pub struct NameStatus {
     pub kind: ChangeKind,
     /// The two modes differ.
     pub mode_changed: bool,
+    /// The old side's mode, as git printed it (`000000` for an added file; feature 1271).
+    pub old_mode: String,
+    /// The new side's mode, as git printed it (`000000` for a deleted file).
+    pub new_mode: String,
+    /// The old side's object id, as git printed it (all zeros for an added file).
+    pub old_id: String,
+    /// The new side's object id, as git printed it: all zeros for a deleted file, and for a
+    /// working-tree file git has not hashed (research R2 step 3 hashes it).
+    pub new_id: String,
 }
 
 /// An untracked, not-ignored file as read from disk.
@@ -168,7 +177,7 @@ pub fn parse_name_status(raw: &str) -> Vec<NameStatus> {
             continue;
         };
         let fields: Vec<&str> = header.split(' ').collect();
-        let [old_mode, new_mode, _, _, status] = fields[..] else {
+        let [old_mode, new_mode, old_id, new_id, status] = fields[..] else {
             continue;
         };
         let Some(first) = tokens.next() else {
@@ -199,6 +208,10 @@ pub fn parse_name_status(raw: &str) -> Vec<NameStatus> {
             path: RelPath::from_git(path),
             kind,
             mode_changed,
+            old_mode: old_mode.to_owned(),
+            new_mode: new_mode.to_owned(),
+            old_id: old_id.to_owned(),
+            new_id: new_id.to_owned(),
         });
     }
     names
@@ -361,44 +374,120 @@ mod tests {
         );
     }
 
+    /// A record of `--raw` without the modes and ids: what the tests before feature 1271 checked.
+    fn name(path: &str, kind: ChangeKind, mode_changed: bool) -> NameStatus {
+        NameStatus {
+            path: p(path),
+            kind,
+            mode_changed,
+            old_mode: String::new(),
+            new_mode: String::new(),
+            old_id: String::new(),
+            new_id: String::new(),
+        }
+    }
+
+    /// `names` with the modes and ids left out, to compare with [`name`]s.
+    fn without_ids(names: Vec<NameStatus>) -> Vec<NameStatus> {
+        names
+            .into_iter()
+            .map(|n| name(n.path.as_str(), n.kind, n.mode_changed))
+            .collect()
+    }
+
     #[test]
     fn raw_status_reads_kinds_renames_and_mode_changes() {
-        let names = parse_name_status(RAW);
+        let names = without_ids(parse_name_status(RAW));
         assert_eq!(
             names,
             vec![
-                NameStatus {
-                    path: p("a.txt"),
-                    kind: ChangeKind::Modified,
-                    mode_changed: false
-                },
-                NameStatus {
-                    path: p("added.txt"),
-                    kind: ChangeKind::Added,
-                    mode_changed: false
-                },
-                NameStatus {
-                    path: p("bin.dat"),
-                    kind: ChangeKind::Modified,
-                    mode_changed: false
-                },
-                NameStatus {
-                    path: p("m.sh"),
-                    kind: ChangeKind::Modified,
-                    mode_changed: true
-                },
-                NameStatus {
-                    path: p("new name é.txt"),
-                    kind: ChangeKind::Renamed { from: p("old.txt") },
-                    mode_changed: false,
-                },
-                NameStatus {
-                    path: p("gone.rs"),
-                    kind: ChangeKind::Deleted,
-                    mode_changed: false
-                },
+                name("a.txt", ChangeKind::Modified, false),
+                name("added.txt", ChangeKind::Added, false),
+                name("bin.dat", ChangeKind::Modified, false),
+                name("m.sh", ChangeKind::Modified, true),
+                name(
+                    "new name é.txt",
+                    ChangeKind::Renamed { from: p("old.txt") },
+                    false
+                ),
+                name("gone.rs", ChangeKind::Deleted, false),
             ]
         );
+    }
+
+    /// `git diff --raw -z --no-abbrev` (git 2.43): modified, added, deleted, a rename and a mode
+    /// change, with full object ids (feature 1271).
+    const FULL_RAW: &str = concat!(
+        ":100644 100644 422c2b7ab3b3c668038da977e4e93a5fc623169c 0000000000000000000000000000000000000000 M\x00a.txt\x00",
+        ":000000 100644 0000000000000000000000000000000000000000 8ba3a16384aacc37d01564b28401755ce8053f51 A\x00added.txt\x00",
+        ":100644 000000 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 D\x00gone.rs\x00",
+        ":100644 100644 74c047b0e4e5a1fa7c7b2d14f2a3c1e8b5d9f001 74c047b0e4e5a1fa7c7b2d14f2a3c1e8b5d9f001 R100\x00old.txt\x00new.txt\x00",
+        ":100644 100755 587be6b4c3f93f93c489c0111bba5596147a26cb 587be6b4c3f93f93c489c0111bba5596147a26cb T\x00m.sh\x00",
+    );
+
+    #[test]
+    fn raw_status_keeps_both_modes_and_ids_as_git_printed_them() {
+        let names = parse_name_status(FULL_RAW);
+        let sides: Vec<(&str, &str, &str, &str, &str)> = names
+            .iter()
+            .map(|n| {
+                (
+                    n.path.as_str(),
+                    n.old_mode.as_str(),
+                    n.new_mode.as_str(),
+                    n.old_id.as_str(),
+                    n.new_id.as_str(),
+                )
+            })
+            .collect();
+        let zeros = "0000000000000000000000000000000000000000";
+        assert_eq!(
+            sides,
+            vec![
+                (
+                    "a.txt",
+                    "100644",
+                    "100644",
+                    "422c2b7ab3b3c668038da977e4e93a5fc623169c",
+                    zeros
+                ),
+                (
+                    "added.txt",
+                    "000000",
+                    "100644",
+                    zeros,
+                    "8ba3a16384aacc37d01564b28401755ce8053f51"
+                ),
+                (
+                    "gone.rs",
+                    "100644",
+                    "000000",
+                    "1111111111111111111111111111111111111111",
+                    zeros
+                ),
+                (
+                    "new.txt",
+                    "100644",
+                    "100644",
+                    "74c047b0e4e5a1fa7c7b2d14f2a3c1e8b5d9f001",
+                    "74c047b0e4e5a1fa7c7b2d14f2a3c1e8b5d9f001"
+                ),
+                (
+                    "m.sh",
+                    "100644",
+                    "100755",
+                    "587be6b4c3f93f93c489c0111bba5596147a26cb",
+                    "587be6b4c3f93f93c489c0111bba5596147a26cb"
+                ),
+            ],
+            "an added file's old side and a deleted file's new side are all zeros, as git printed"
+        );
+        assert_eq!(
+            names[4].kind,
+            ChangeKind::Modified,
+            "a type change is modified"
+        );
+        assert!(names[4].mode_changed);
     }
 
     #[test]
@@ -455,11 +544,7 @@ mod tests {
     #[test]
     fn a_mode_change_with_content_changes_is_modified() {
         let rows = assemble(
-            vec![NameStatus {
-                path: p("m.sh"),
-                kind: ChangeKind::Modified,
-                mode_changed: true,
-            }],
+            vec![name("m.sh", ChangeKind::Modified, true)],
             vec![NumStat {
                 path: p("m.sh"),
                 lines: Some((2, 0)),

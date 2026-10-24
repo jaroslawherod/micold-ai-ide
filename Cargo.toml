@@ -60,6 +60,9 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # Feature 940 (research R6): line diffs of Edit, MultiEdit and Write tool calls in core. Myers with
 # a deadline; dependency-free, Apache-2.0.
 similar = "2"
+# Feature 1271 (research R1): a file's change id is the SHA-1 of its change record. Already in
+# `Cargo.lock` (0.10.7, RustCrypto, MIT OR Apache-2.0), so it adds no crate.
+sha1 = "0.10"
 directories = "6.0.0"
 # Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
 iana-time-zone = "0.1"

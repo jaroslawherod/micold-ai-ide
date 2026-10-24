@@ -418,6 +418,8 @@ fn save_logged(
             .iter()
             .map(|(dir, review)| (dir.clone(), review.comments().to_vec()))
             .collect(),
+        // Feature 1271 M2 keeps and writes the service's marks.
+        marks: Default::default(),
     };
     if let Err(err) = catalog.save_reviews(project, &file) {
         tracing::warn!(project = %project.display(), %err, "{what}");
@@ -437,6 +439,7 @@ fn file_with(
             .filter(|(other, _)| other.as_str() != dir)
             .map(|(other, review)| (other.clone(), review.comments().to_vec()))
             .collect(),
+        marks: Default::default(),
     };
     file.entries
         .insert(dir.to_owned(), review.comments().to_vec());

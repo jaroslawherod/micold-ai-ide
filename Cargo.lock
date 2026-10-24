@@ -2664,6 +2664,7 @@ dependencies = [
  "pulldown-cmark",
  "serde",
  "serde_json",
+ "sha1",
  "similar",
  "tempfile",
  "tokio",

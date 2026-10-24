@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::diff::SideLines;
+use super::marks::{ChangeId, EntryMarks};
 use super::prompt::{self, EntryKind, PrContext};
 use super::{LineRange, RelPath, Side};
 
@@ -571,15 +572,34 @@ pub struct SendSnapshot {
 pub struct EntryReview {
     comments: Vec<ReviewComment>,
     sending: Option<Vec<CommentId>>,
+    /// Its reviewed marks (feature 1271): only [`Self::set_reviewed`] changes them.
+    marks: EntryMarks,
 }
 
 impl EntryReview {
-    /// An entry holding `comments` as loaded.
+    /// An entry holding `comments` as loaded, with no marks.
     pub fn from_comments(comments: Vec<ReviewComment>) -> Self {
+        Self::from_parts(comments, EntryMarks::default())
+    }
+
+    /// An entry holding `comments` and `marks` as loaded (feature 1271).
+    pub fn from_parts(comments: Vec<ReviewComment>, marks: EntryMarks) -> Self {
         Self {
             comments,
             sending: None,
+            marks,
         }
+    }
+
+    /// Its reviewed marks.
+    pub fn marks(&self) -> &EntryMarks {
+        &self.marks
+    }
+
+    /// Mark `path` in `scope` reviewed on `change`, or unmark it with `None` ([`EntryMarks::set`]):
+    /// `false` when nothing changed. Allowed while a send is open: a mark is not a comment.
+    pub fn set_reviewed(&mut self, scope: Scope, path: RelPath, change: Option<ChangeId>) -> bool {
+        self.marks.set(scope, path, change)
     }
 
     /// A send is open for this entry.
@@ -654,9 +674,9 @@ impl EntryReview {
         &self.comments
     }
 
-    /// No comments at all.
+    /// No comments and no marks: nothing of the entry to keep.
     pub fn is_empty(&self) -> bool {
-        self.comments.is_empty()
+        self.comments.is_empty() && self.marks.is_empty()
     }
 
     /// Add a Draft comment `id` made at `created` (W1): refused when the quote does not hold
@@ -2047,5 +2067,102 @@ x",
                 );
             }
         }
+    }
+
+    // ---- reviewed marks (feature 1271, T014) ----------------------------------------------------
+
+    fn change(n: u8) -> ChangeId {
+        ChangeId::parse(&format!("{n:02x}").repeat(20)).expect("40 hex characters")
+    }
+
+    fn a_rs() -> RelPath {
+        RelPath::from_git("src/a.rs")
+    }
+
+    #[test]
+    fn an_entry_with_marks_and_no_comments_is_not_empty() {
+        let mut review = EntryReview::default();
+        assert!(review.is_empty());
+        assert!(review.set_reviewed(Scope::WorkingTree, a_rs(), Some(change(1))));
+        assert!(review.comments().is_empty());
+        assert!(!review.is_empty(), "its marks are kept like comments");
+        assert!(review.set_reviewed(Scope::WorkingTree, a_rs(), None));
+        assert!(review.is_empty());
+    }
+
+    #[test]
+    fn from_parts_keeps_comments_and_marks() {
+        let mut marks = EntryMarks::default();
+        marks.set(Scope::PullRequest(4), a_rs(), Some(change(2)));
+        let comments = three_pending_one_sent().comments().to_vec();
+        let review = EntryReview::from_parts(comments.clone(), marks.clone());
+        assert_eq!(review.comments(), comments.as_slice());
+        assert_eq!(review.marks(), &marks);
+    }
+
+    #[test]
+    fn set_reviewed_answers_whether_the_marks_changed() {
+        let mut review = EntryReview::default();
+        assert!(review.set_reviewed(Scope::WorkingTree, a_rs(), Some(change(1))));
+        assert!(!review.set_reviewed(Scope::WorkingTree, a_rs(), Some(change(1))));
+        assert!(review.set_reviewed(Scope::WorkingTree, a_rs(), Some(change(2))));
+        assert_eq!(
+            review.marks().get(Scope::WorkingTree, &a_rs()),
+            Some(&change(2))
+        );
+        assert!(!review.set_reviewed(Scope::PullRequest(1), a_rs(), None));
+    }
+
+    #[test]
+    fn no_comment_operation_touches_the_marks() {
+        let mut review = one_sent_one_draft();
+        review.set_reviewed(Scope::WorkingTree, a_rs(), Some(change(1)));
+        review.set_reviewed(Scope::PullRequest(9), a_rs(), Some(change(2)));
+        let marks = review.marks().clone();
+        let snapshot = review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("a draft to send");
+        assert_eq!(review.marks(), &marks, "begin_send");
+        assert!(
+            review.set_reviewed(
+                Scope::WorkingTree,
+                RelPath::from_git("b.rs"),
+                Some(change(3))
+            ),
+            "a mark is accepted while a send is open"
+        );
+        review.set_reviewed(Scope::WorkingTree, RelPath::from_git("b.rs"), None);
+        review.abort_send();
+        assert_eq!(review.marks(), &marks, "abort_send");
+        let snapshot2 = review
+            .begin_send(EntryKind::Worktree, Scope::WorkingTree, None, &[])
+            .expect("the draft again");
+        assert_eq!(snapshot2.ids, snapshot.ids);
+        review.finish_send(&snapshot2, NOW + 1);
+        assert_eq!(review.marks(), &marks, "finish_send");
+        review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Applied,
+                "Done",
+                agent(),
+                NOW + 2,
+            )
+            .expect("reported");
+        assert_eq!(review.marks(), &marks, "report");
+        let sent = snapshot2.ids[0];
+        review
+            .mark(sent, Outcome::Applied, "", NOW + 3)
+            .expect("Mark applied");
+        assert_eq!(review.marks(), &marks, "mark (Mark applied)");
+        review.clear_sent(Scope::WorkingTree);
+        assert_eq!(review.marks(), &marks, "clear_sent");
+        review
+            .add(draft(1, 1, &["x"], "again"), id(20), NOW)
+            .expect("a new draft");
+        review.discard_pending(Scope::WorkingTree);
+        assert_eq!(review.marks(), &marks, "discard_pending");
+        assert!(review.comments().is_empty());
+        assert!(!review.is_empty(), "the marks alone keep the entry");
     }
 }

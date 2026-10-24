@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1271
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: design PR (text in scratchpad pr-design.md; gh unauthenticated, orchestrator opens it). D4 still provisional; M1 needs A or B
+- **Phase**: implement M1
+- **Next step**: M1 review round 1 (A high, B) by the orchestrator; then full gate and PR text
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1360 | design (spec, plan, tasks) | merged | e683d5db1514b59179c91d03dc1b85ed4fc1a049 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | micold-core: change ids, whole-change read, EntryMarks, states, progress, review file v4 | — | planned (needs D4 A or B) |
+| M1 | T001–T017 | full | micold-core: change ids, whole-change read, EntryMarks, states, progress, review file v4 | — | implemented, in review |
 | M2 | T018–T024 | full | wire SetReviewed + ReviewChanged.marks, service keeps/pushes/removes marks, client holds them; no view change (docs-not-needed) | — | planned |
 | M3 | T025–T034 | full | MVP: row states, Mark reviewed control, n of m reviewed + bar, user guide | — | waits for #1269 |
 | M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | — | planned |
@@ -36,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Header wording: *n of m reviewed* or *n/m reviewed*? | *n of m reviewed* | agent-resolved | issue #1271 body (spec.md#Input) |
 | D4 | clarify | Mark a file while a toggle hides part of its change? | A: no — Mark reviewed unavailable (tooltip) for a file with changes of a hidden kind; unmark stays available. Applied to FR-002, FR-005, Edge Cases > Toggles | provisional, pending user | spec.md US2 rationale, FR-005; Open escalation Q1 |
 | D5 | tasks | Milestone cut vs plan's proposal | M1, M2 as planned; `pr_change_ids` moved to M5 (US4); plan's M3 split by story into M3 (US1), M4 (US2 + US3 view), M5 (US4); guide text and snapshot states in each story's milestone; visual pass and redesign note to the close unit. M1 (17 tasks, all of micold-core, likely >800 lines) kept whole: core-only, no observable split along a scenario, and it must land before #1269. Plan fixed: `Icon` lives in `crates/micold-material/src/icons.rs`, not micold-client. milestones.md rule 1 waived: M1 and M2 are Foundational alone and carry no P1 story, because US1's view is the one #1269 rewrites (research R8); their items are pub in lib crates (no dead code) and they are checked by tests only (each milestone's Verify). `mark_block` moved from plan M1 to M3 (T025, T026), with the control it gates | agent-resolved | tasks.md#Milestones, milestones.md rules 1, 3, 4, research R8 |
+| D6 | implement M1 | Where the plan's text does not fit the code | (1) `ChangeId::of_worktree` digests the resolved `NameStatus` record (kind, path, both modes and ids), since `WholeFile` holds only the resulting id; (2) `WholeChange::assemble` takes `committed: Option<&set>` (None = no base, all Uncommitted) and `untracked: Vec<(RelPath, mode)>`, the mode read from disk; (3) `--no-abbrev`, not `--full-index`: git 2.43 abbreviates `--raw` ids under `--full-index` (contract G2, research R2, tasks fixed); (4) a symlink's blob id is hashed in core over its target path (hash-object follows the link); a submodule's unhashed side gets no id; (5) the daemon's two `ReviewFile` literals get `marks: Default::default()` to compile, M2 fills them | agent-resolved | contracts/marks-wire.md G2; tests/review_git.rs G2 tests |
 
 ## Review rounds
 

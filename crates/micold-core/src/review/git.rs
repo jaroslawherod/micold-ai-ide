@@ -1,7 +1,7 @@
 //! The Changes view's git reads (research R1): the commands, run through the helpers of
 //! [`crate::git`], their output handed to the pure parsers of this module.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -13,6 +13,7 @@ use super::changes::{
     ChangeList, ChangedFile, Content, NameStatus, Origin, Untracked, VersionSizes,
 };
 use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
+use super::marks::WholeChange;
 use super::{limits, RelPath};
 use crate::git::{git_failed, local_only, run_git, GitCli};
 use crate::process::{no_window, run_bounded_with_input, RunOutcome};
@@ -138,17 +139,9 @@ fn range_paths(dir: &Path, revs: &[&str]) -> io::Result<BTreeSet<RelPath>> {
 /// Untracked, not-ignored files, read from disk (FR-005). A nested repository or worktree that
 /// git lists as `dir/` is not a file and is skipped.
 fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
-    let raw = read(
-        dir,
-        &["ls-files", "-z", "--others", "--exclude-standard"],
-        None,
-    )?;
     let mut files = Vec::new();
-    for path in raw
-        .split('\0')
-        .filter(|p| !p.is_empty() && !p.ends_with('/'))
-    {
-        let full = dir.join(path);
+    for path in untracked_paths(dir)? {
+        let full = dir.join(path.as_str());
         let Ok(meta) = std::fs::symlink_metadata(&full) else {
             continue;
         };
@@ -159,13 +152,97 @@ fn untracked(dir: &Path) -> io::Result<Vec<Untracked>> {
             (Content::Text, 0)
         };
         files.push(Untracked {
-            path: RelPath::from_git(path),
+            path,
             lines,
             content,
             bytes,
         });
     }
     Ok(files)
+}
+
+/// The paths of the untracked, not-ignored files; a nested repository or worktree (`dir/`) is
+/// left out.
+fn untracked_paths(dir: &Path) -> io::Result<Vec<RelPath>> {
+    let raw = read(
+        dir,
+        &["ls-files", "-z", "--others", "--exclude-standard"],
+        None,
+    )?;
+    Ok(raw
+        .split('\0')
+        .filter(|p| !p.is_empty() && !p.ends_with('/'))
+        .map(RelPath::from_git)
+        .collect())
+}
+
+/// The mode git gives a new file at `full` (feature 1271): `120000` for a symlink, `100755` for an
+/// executable file, else `100644`; `None` for what is not a file or a symlink.
+fn disk_mode(full: &Path) -> Option<&'static str> {
+    let meta = std::fs::symlink_metadata(full).ok()?;
+    if meta.file_type().is_symlink() {
+        return Some("120000");
+    }
+    if !meta.is_file() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if meta.permissions().mode() & 0o100 != 0 {
+            return Some("100755");
+        }
+    }
+    Some("100644")
+}
+
+/// The blob ids of the working-tree files `paths` (research R2 step 3): one `git hash-object
+/// --stdin-paths` for the files, which applies the clean filters as `git add` does, and the
+/// symlinks hashed here over their target path, as git stores them (hash-object would follow the
+/// link). A path holding a newline, a path that is no longer a file and every path of a failed
+/// run get no id.
+fn blob_ids(dir: &Path, paths: &[RelPath]) -> BTreeMap<RelPath, String> {
+    let mut ids = BTreeMap::new();
+    let mut files = Vec::new();
+    for path in paths.iter().filter(|path| !path.as_str().contains('\n')) {
+        let full = dir.join(path.as_str());
+        match disk_mode(&full) {
+            Some("120000") => {
+                if let Ok(target) = worktree_bytes(&full) {
+                    ids.insert(path.clone(), blob_id(&target));
+                }
+            }
+            Some(_) => files.push(path),
+            None => {}
+        }
+    }
+    if files.is_empty() {
+        return ids;
+    }
+    let input: String = files.iter().map(|path| format!("{path}\n")).collect();
+    let Ok(out) = read(dir, &["hash-object", "--stdin-paths"], Some(&input)) else {
+        return ids;
+    };
+    let hashed: Vec<&str> = out.lines().map(str::trim).collect();
+    if hashed.len() == files.len() {
+        for (path, id) in files.into_iter().zip(hashed) {
+            ids.insert(path.clone(), id.to_owned());
+        }
+    }
+    ids
+}
+
+/// Git's SHA-1 blob id of `bytes`.
+fn blob_id(bytes: &[u8]) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(format!("blob {}\0", bytes.len()));
+    hasher.update(bytes);
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// The sizes of `specs` (`<rev>:<path>`) in one `git cat-file --batch-check`; `None` for one git
@@ -407,6 +484,58 @@ impl GitCli {
             }
         };
         Ok(ChangeList { files, scope })
+    }
+
+    /// The entry's whole working-tree change, whatever the toggles (feature 1271, research R2,
+    /// contracts/marks-wire.md § G2): `git diff --raw --no-abbrev` over the merge-base (or `HEAD`
+    /// for the Default entry and a worktree without a base), the origins from the committed and
+    /// uncommitted path sets, and the blob ids git did not print from one `hash-object`. A failure
+    /// of the diff or of a path set is the read's error; a file whose blob id could not be read
+    /// has no id.
+    pub fn whole_change(&self, dir: &Path, scope: &ReviewScope) -> io::Result<WholeChange> {
+        let base = match scope {
+            ReviewScope::Worktree {
+                base: Base::MergeBase { commit, .. },
+            } => Some(commit.as_str()),
+            _ => None,
+        };
+        let names = parse_name_status(&diff(
+            dir,
+            "--raw",
+            &["--no-abbrev", base.unwrap_or("HEAD")],
+        )?);
+        let (committed, uncommitted) = match base {
+            Some(base) => (
+                Some(range_paths(dir, &[base, "HEAD"])?),
+                range_paths(dir, &["HEAD"])?,
+            ),
+            None => (None, BTreeSet::new()),
+        };
+        let untracked: Vec<(RelPath, String)> = untracked_paths(dir)?
+            .into_iter()
+            .filter_map(|path| {
+                let mode = disk_mode(&dir.join(path.as_str()))?;
+                Some((path, mode.to_owned()))
+            })
+            .collect();
+        let unhashed: Vec<RelPath> = names
+            .iter()
+            .filter(|name| {
+                let zeros = |text: &str| text.bytes().all(|b| b == b'0');
+                // A submodule's new side (`160000`) is a commit, not a file to hash.
+                zeros(&name.new_id) && !zeros(&name.new_mode) && name.new_mode != "160000"
+            })
+            .map(|name| name.path.clone())
+            .chain(untracked.iter().map(|(path, _)| path.clone()))
+            .collect();
+        let hashed = blob_ids(dir, &unhashed);
+        Ok(WholeChange::assemble(
+            names,
+            committed.as_ref(),
+            &uncommitted,
+            &hashed,
+            untracked,
+        ))
     }
 
     /// The diff of `path` (R1, R8): `git diff -M -U3` over the view's range, the old path too for a

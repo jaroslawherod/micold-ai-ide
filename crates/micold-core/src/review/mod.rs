@@ -10,6 +10,7 @@ pub mod comment;
 pub mod diff;
 pub mod expand;
 pub mod git;
+pub mod marks;
 pub mod pr_diff;
 pub mod prompt;
 pub mod reference;
