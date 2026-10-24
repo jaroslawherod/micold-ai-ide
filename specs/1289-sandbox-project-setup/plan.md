@@ -208,21 +208,13 @@ has a render-free reducer plus thin views built from shared components.
 The isolation and lifecycle gate: worktree create and delete with setup are covered by the daemon
 integration tests (A6, A12), not by unit tests alone.
 
-## Suggested milestones (for the tasks unit)
+## Milestones
 
-Each fits one session (task-size gate). They go in dependency order:
-
-1. **M1 PATH**: `toolchain_path`, `with_sandbox_path`, tests A1–A3, the real sandbox assertion,
-   and the `sandboxed-daemon.md` PATH and own-image text (FR-025 part). This ships alone and fixes
-   Story 1.
-2. **M2 Setup core**: the `setup` module, `StreamingChild`, settings and store additions, and
-   protocol messages with the version bump (A4, A5, A14, A15).
-3. **M3 Setup daemon**: `setup.rs`, the `ops` and `server` wiring, the MCP field, persistence,
-   restart and unwind (A6–A13), and the `agent-tools.md` field.
-4. **M4a Setup client state**: the reducer, `ProjectSetupSet` sync (A16), the Settings › Project
-   section (A17, U1), and the `settings.md` doc.
-5. **M4b Setup client UI**: the row tag, the menu, the output dialog, the notification, and the
-   delete line (G1, G2); the `worktrees-and-sessions.md` doc; the visual pass (U2–U6).
+The tasks unit cut seven milestones from the five suggested here; [tasks.md](tasks.md)
+§Milestones is binding. By the size rule (about 10 tasks or 800 lines), the daemon milestone is
+split into run-on-create (M3) and persistence plus delete (M4). The client is cut along scenarios:
+M5 is the command, its sync, the row tag and the notification; M6 is the output view; M7 is US3's
+**Run setup** and **Stop setup**.
 
 ## Complexity Tracking
 
