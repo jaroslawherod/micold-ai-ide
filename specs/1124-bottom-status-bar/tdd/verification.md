@@ -3,12 +3,12 @@ feature: 1124-bottom-status-bar
 verdict: PASS_WITH_GAPS
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # no override in .specify/templates/overrides or presets
 verified_at: 7eb6815 # m4-local: M1–M3 merged or open, M4 and M5 local; audit fixes c239782 and 7eb6815 included, S7/S9 in the close commit
-behaviors: 34 # cycle-log rows (no tdd/test-list.md), M2 rebuilt from its commit; T001/T002 counted once
-proven: 6
-likely: 20 # red shown by a deliberate mutant after green, by the milestone (M1) or by this audit (M2, M4, M5)
+behaviors: 36 # rows of the table below: cycle-log rows (no tdd/test-list.md), M2 rebuilt from its commit
+proven: 5
+likely: 23 # red shown by a deliberate mutant after green, by the milestone (M1) or by this audit (M2, M4, M5)
 test_after: 0
 no_test: 0
-not_applicable: 8 # guards true by construction (3), first recordings of new snapshot states (4), the M4 background-session guard (1)
+not_applicable: 8 # guards true by construction (4: B3, contrast, focus stop, M3 seven conditions), first recordings of new snapshot states (3), the M4 background-session guard (1)
 high_smells: 0 # S1 fixed in 7eb6815; S2 judged a restated rule, not a weakening (see Findings)
 criteria_total: 21 # FR-001..FR-015 and SC-001..SC-006
 criteria_covered: 21 # SC-006 by the layout snapshot's words in every covered state and the T039 visual pass
@@ -20,7 +20,7 @@ suite: "micold-client --all-targets --no-fail-fast: 5013 passed, 1 failed (featu
 # TDD Verification: Bottom status bar (#1124)
 
 **Verdict: PASS_WITH_GAPS.** Every criterion has a test through the real layout or the real model,
-and all 16 deliberate mutants failed a test. The gap is test-first evidence: 20 of 34 behaviours
+and all 16 deliberate mutants failed a test. The gap is test-first evidence: 23 of 36 behaviours
 show their red only as a mutant run after the code was green (M1's own runs, and this audit's runs
 for M2, M4 and M5). The milestones landed tests and code in the same commit.
 
@@ -93,11 +93,8 @@ commit cannot be seen. A row is `PROVEN` only where the log records a red before
 | M5 usage only for a current reading, switch on | PROVEN | FAILED (`expect("a current reading")` on `None`) |
 | M5 app bar draws no usage | PROVEN | FAILED ("37%" drawn in the app bar) |
 | M5 usage follows the CLI item | LIKELY | passed before the change (a guard then). MU16 (usage before the CLI) FAILED |
-| M5 usage drops before any text shortens | PROVEN | MU7 (usage never drops) FAILED. A recorded fixture-clash red also exists |
+| M5 usage drops before any text shortens | LIKELY | M5's only recorded failure was a fixture clash, not the missing behaviour; MU7 (usage never drops) FAILED |
 | M5 usage covered state | NOT_APPLICABLE | first recording |
-
-(The last two M5 rows count PROVEN for the drop order: M5's log records a red for the test. The
-order itself comes from the M1 pass, and MU7 confirms the test pins it.)
 
 ### Tests that already existed
 

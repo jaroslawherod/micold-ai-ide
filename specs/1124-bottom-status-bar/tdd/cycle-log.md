@@ -84,7 +84,8 @@ time, so no red was possible for them.
 16 deliberate mutants were run against `ui/status_bar.rs` and the window column of `ui/mod.rs`. All
 16 were caught; the table is in [verification.md](verification.md). For the M4 rows marked "written
 beside the change", these runs are the red evidence: MU3, MU4, MU5, MU6, MU14 and MU15. For M5's
-usage order guard it is MU16, and for M1's six model tests that M1's mutants did not reach it is
+usage order guard it is MU16. Of M1's six model tests that M1's mutants did not reach, five
+remain (the sixth, empty CLI/usage/hints, was replaced in M4 and M5); their red evidence is
 MU9 to MU13.
 
 | Behaviour | Test | Red | Result |
