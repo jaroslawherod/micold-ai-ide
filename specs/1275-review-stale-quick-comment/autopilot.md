@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: clarify
-- **Next step**: plan (FR-014 answered provisionally with A; if the user picks B or C, reopen clarify and revise FR-005/FR-008/FR-009/FR-014 and US1 AS1, 5, 9–11)
+- **Phase**: plan
+- **Next step**: plan review round 1 (fresh reviewer, rubrics/plan.md), then tasks unit. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -40,6 +40,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | spec | 1 | 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | 3 MAJOR, 2 MINOR. F1 fixed: FR-001a per-row change identity (git object ids from `diff --raw`, `hash-object` for working-tree files, size+mtime over limits, PR patch hash), AS12, FR-003, Context/Assumptions. F2 fixed: FR-009 + US1 AS9–11 (select non-held reads as today; held reads latest and leaves set; no-longer-listed says no changes), Key Entities. F3 fixed: whole-view-only MUSTs marked conditional on FR-014. F4 fixed: match by path, rename counts once under new path. F5 fixed: checklist item unticked. |
 | spec | 2 | 89c07d79a52e9cb5ae89d0beff62b6ccf424039e:4a06e88388d0b4cd7395ec7ce70882b466871cf9 | CLEAN (sonnet), 1 MINOR: edge case *Selected between reads* not marked conditional on FR-014. Fixed: prefixed "under the whole-view hold (FR-014)" and noted it does not arise under open-diff-only. |
+
+Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
+changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
+(identity + `review::stale`), M2 core drag/chips/setting, M3 hold in today's Changes view, M4 drag,
+M5 chips + visual pass, M6 FR-013 after #1271. M1/M2 need no blocker. Plan review not yet run (unit
+had no Agent tool).
 
 Clarify: round 1 asked FR-014 (escalated; applied provisionally as A, which made the whole-view
 items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
