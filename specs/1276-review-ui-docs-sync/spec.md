@@ -81,6 +81,11 @@ check every statement about where a review control is and what it does; the docs
 6. **Given** `worktrees-and-sessions.md`, **When** a reader reads the worktree row menu and the
    sidebar row, **Then** **Review changes** opens or focuses the tab, and the *Review · n drafts* line
    is described if the build shows it.
+7. **Given** the guide, **When** a reader looks for what happens with two worktrees or two windows,
+   **Then** it says each worktree's Review tab keeps its own state, all windows on one worktree show
+   the same reviewed marks and drafts, also while one of them sends, and it names the error shown
+   when a PR's diff cannot be read and each review key that differs between macOS and Linux /
+   Windows.
 
 ---
 
@@ -102,7 +107,8 @@ bar's padding fails it naming the bar.
 **Acceptance Scenarios**:
 
 1. **Given** all blockers merged, **When** the fixture is re-recorded, **Then** the diff to the
-   fixture holds only review-tab and Overview-card records (or a stated reason for any other line),
+   fixture holds only review-tab records (or a stated reason for any other line group, such as
+   drift from #1128's Overview or layout states),
    and the coverage-narrowing check passes.
 2. **Given** the re-recorded fixture, **When** the test suite runs on Linux, macOS and Windows CI,
    **Then** it passes on all three without per-host text-width differences.
@@ -179,7 +185,7 @@ the merged PRs.
 **Acceptance Scenarios**:
 
 1. **Given** the doc, **When** a reader reads its status line and the Tasks table, **Then** the status
-   is "built" with the epic, and each R0–R7 row names its merged PR.
+   is "built" with the epic, and each R0–R6 row names its merged PR and the R7 row names this feature's PR.
 2. **Given** the doc's open questions 0–5, **When** a reader reads them, **Then** each carries the
    answer the build took.
 
@@ -222,7 +228,10 @@ the merged PRs.
   counts, **Send review (n)**, overflow, *Sending…* and the send error; the comments drawer with
   **Drafts** / **Replies** and replies on cards; the keyboard map and shortcut sheet; *changed since
   you looked*; drag-to-comment and the suggestion-chips setting. Each section names the control or
-  key and its visible result.
+  key and its visible result. The guide MUST also state that each worktree's Review tab keeps its
+  own state, that all windows on a worktree show the same reviewed marks and drafts (including during
+  a send from one of them), the error shown when a PR source's diff cannot be read, and each review
+  key that differs by platform (`Ctrl` vs `Cmd`).
 - **FR-002**: The guide MUST contain no statement that holds only for the pre-redesign view (three
   columns, left-column Pull requests section and Committed / Uncommitted / Files toggles, right-hand
   review panel, **Close** button, the view replacing the terminal or closing on session selection,
@@ -263,7 +272,7 @@ the merged PRs.
   the bundled monospace face with an inline draft card and a sent card showing its reply; review bar
   above the status bar in idle, *Sending…* and error states; drawer over the diff on both tabs;
   shortcut sheet; *changed since you looked* on the tab and the notice in the header; drag-to-comment
-  composer; empty review; Overview board with as-built cards. [NEEDS CLARIFICATION: 1280×800 only, as
+  composer; empty review; drawer with no drafts and no replies; a PR source whose diff cannot be read; two worktrees with separate open Review tabs (switching between them); Overview board with as-built cards. [NEEDS CLARIFICATION: 1280×800 only, as
   the issue's acceptance says, or also 900 and 1920 px wide as the redesign doc's "Scope and files"
   lists?]
 - **FR-010**: Each FAIL in the pass MUST be either fixed in this feature (styling or doc defects that
@@ -284,7 +293,7 @@ the merged PRs.
 **Redesign record**
 
 - **FR-013**: `docs/development/review-redesign.md` MUST change from proposal to a record: status
-  built, each slice row with its merged PR, each open question answered with what the build chose,
+  built, each R0–R6 row with its merged PR and the R7 row with this feature's PR, each open question answered with what the build chose,
   every difference between the build and the proposal listed, and the follow-ups not built listed.
 - **FR-014**: The docs CI checks (links and docs build) MUST pass with the updated pages, and links
   from other user-guide pages to renamed or removed sections of `reviewing-changes.md` MUST be updated.
