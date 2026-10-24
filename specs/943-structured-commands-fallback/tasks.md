@@ -390,7 +390,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   functions with unit tests, replacing T024's plain `TerminalPeriod` caption; draw **Open in structured view** (from `switch_entries`) and the
   held-queue line in `client/src/ui/terminal.rs` and the marker in
   `client/src/ui/transcript/entries.rs` (GUI exception for the draw glue only)
-- [ ] T065 Quickstart Part B 3 (SC-007, needs #942 M8) and 6–9 (8: a sandboxed session switches
+- [x] T065 Quickstart Part B 3 (SC-007, needs #942 M8) and 6–9 (8: a sandboxed session switches
   inside its sandbox), evidence in `specs/943-structured-commands-fallback/visual-pass/`
 
 ---
