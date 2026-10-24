@@ -49,6 +49,9 @@ use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, M
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::path::PathBuf;
 
+/// The selector's advanced JQL mode, a sub-state of this form (feature 1186).
+pub mod jira_query;
+
 /// What this feature remembers (feature 028, contract S1).
 ///
 /// The fields keep the names they had as flat members of `app::State`, and the reducers below
@@ -613,7 +616,7 @@ pub struct WorktreeForm {
     /// (feature 1161, FR-007).
     pub first_prompt_edited: bool,
     /// The selector's advanced JQL state (feature 1186).
-    pub jira_query: crate::features::jira_query::JiraQuery,
+    pub jira_query: jira_query::JiraQuery,
 }
 
 impl WorktreeForm {
@@ -773,7 +776,7 @@ impl WorktreeForm {
             return None;
         };
         if self.jira_query.is_advanced() {
-            return Some(crate::features::jira_query::notice(site));
+            return Some(jira_query::notice(site));
         }
         Some(format!(
             "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
@@ -1748,8 +1751,8 @@ pub fn issue_details_loaded(
 /// keyboard apply whatever the form is doing, as a load's answer does; the switch, the input and
 /// Run are inputs, inert while a create runs or a prompt is up. A run or a basic load the message
 /// started takes the next seq.
-fn jira_query_changed(state: &mut crate::app::State, msg: crate::features::jira_query::Msg) {
-    use crate::features::jira_query::Msg as QueryMsg;
+fn jira_query_changed(state: &mut crate::app::State, msg: jira_query::Msg) {
+    use jira_query::Msg as QueryMsg;
     let next_seq = state.worktree_form.issue_request_seq + 1;
     let mut handed_out = false;
     let inert_while_busy = !matches!(
@@ -1757,7 +1760,7 @@ fn jira_query_changed(state: &mut crate::app::State, msg: crate::features::jira_
         QueryMsg::Ran { .. } | QueryMsg::HighlightMoved(_) | QueryMsg::Dismissed
     );
     let change = |form: &mut WorktreeForm| {
-        handed_out = crate::features::jira_query::update(form, msg, next_seq);
+        handed_out = jira_query::update(form, msg, next_seq);
     };
     if inert_while_busy {
         while_editing_unprompted(state, change);
@@ -2153,7 +2156,7 @@ pub enum Msg {
         result: Result<Box<IssueDetails>, IssueLoadError>,
     },
     /// A message of the selector's advanced mode (feature 1186, data-model §7).
-    JiraQuery(crate::features::jira_query::Msg),
+    JiraQuery(jira_query::Msg),
 }
 
 /// The form's own reducer: one entry point, thirty-five answers (FR-004a).

@@ -185,7 +185,7 @@ fn the_advanced_query_is_never_logged_or_notified() {
         "Notification",
     ];
     for file in [
-        "crates/micold-client/src/features/jira_query.rs",
+        "crates/micold-client/src/features/worktree_form/jira_query.rs",
         "crates/micold-client/src/shell/jira_query.rs",
     ] {
         let lines = code_lines(&root.join(file));

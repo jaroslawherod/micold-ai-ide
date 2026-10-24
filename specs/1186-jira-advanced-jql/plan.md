@@ -58,7 +58,7 @@ No NEEDS CLARIFICATION remains: the one deferred item (clarify Q5, the message c
 
 | # | Principle | Status | How |
 |---|---|---|---|
-| I | Test-First | PASS | Every rule is in `micold_core::jira_query` or the render-free `features::jira_query` and is written Red first (§Test strategy). Only the view glue (`ui/jira_query.rs`, the two hook lines in `ui/worktree_form.rs`) uses the GUI exception, validated by quickstart §B and the geometry gates. |
+| I | Test-First | PASS | Every rule is in `micold_core::jira_query` or the render-free `features::worktree_form::jira_query` and is written Red first (§Test strategy). Only the view glue (`ui/jira_query.rs`, the two hook lines in `ui/worktree_form.rs`) uses the GUI exception, validated by quickstart §B and the geometry gates. |
 | II | Multi-Session | PASS (N/A) | No session state: the selector state lives in the open form of one window and is dropped with it. Nothing is written to a session's history (FR-016). |
 | III | Worktree Integration | PASS (N/A) | Creating the worktree is the existing form's path; a pick fills the same fields (FR-009). No git step. |
 | IV | Local-First | PASS | The remembered state is a local owner-only file; the Jira request is the opt-in integration of 533 (switch + connection), sent only on Enter/Run or the FR-004a run, with the notice naming the query (FR-015). Offline: the request fails with basic mode's notice; everything else works. |
@@ -106,7 +106,7 @@ Tracking stays empty.
 | Client reducer (`crates/micold-client/tests/jira_query_state.rs`, new; render-free `features`) | Each data-model §6 transition: switch shown only with Jira; switch never runs; Run/Enter runs, typing does not; refused queries send nothing; stale `Ran` dropped; Retry same scoped query; FR-004a open-in-advanced run and prompt; FR-003 restore basic state; FR-003a GitHub round trip; pick fills as basic; outcomes `JiraQueryRemembered` at switch and run only (never for a draft). | FR-001–FR-004a, FR-009, FR-011–FR-014, US1–US3 |
 | Client adapter (`crates/micold-client/tests/jira_http_adapter.rs`, extended, loopback server) | `query_page` body is `{jql: scoped, fields, maxResults: 100}` with the four headers only; 400 with messages → `Rejected`; 400 HTML → `Rejected([])`; 401/429/timeout classified as basic; status path unchanged by `BadRequest(body)`. | FR-005, FR-010, FR-011, FR-015 |
 | Client shell (`jira_connection_shell.rs` extended; `main_tests.rs` for `on_form_opened`) | File read at open → `Restored`; write is read-modify-write of one field; Remove deletes the file; write failure notice has no query text. | FR-013, FR-014, FR-016 |
-| Source scans (`issues_are_requested_only_on_named_events.rs`, `jira_is_requested_only_on_named_events.rs`) | `start_query` called only from the accepted-event paths; the source still asked for once, in the gate; no `tracing::`/`log` macro and no notification in `features/jira_query.rs`, `shell/jira_query.rs` or `ui/jira_query.rs` takes the draft, `last_run` or a `UserQuery`/`ScopedQuery`. | FR-004, FR-015, FR-016 |
+| Source scans (`issues_are_requested_only_on_named_events.rs`, `jira_is_requested_only_on_named_events.rs`) | `start_query` called only from the accepted-event paths; the source still asked for once, in the gate; no `tracing::`/`log` macro and no notification in `features/worktree_form/jira_query.rs`, `shell/jira_query.rs` or `ui/jira_query.rs` takes the draft, `last_run` or a `UserQuery`/`ScopedQuery`. | FR-004, FR-015, FR-016 |
 | Shared component (`ui/material/typeahead.rs` unit tests) | `.on_submit` reaches the field; Enter with a highlighted row still picks; no `.on_submit` = old behaviour. | R8, Principle VIII |
 | Geometry gates (`crates/micold-client/tests/gates/`) | Advanced rows show all text (arm of `issue_rows_show_all_text.rs`); the dialog with the switch keeps the panel placement the basic gate measures. | FR-006, SC-005 |
 | Quickstart §B visual pass | B1–B13 (render glue, theme, platforms). | FR-001, FR-002, FR-015, Principle VI/VIII |
@@ -144,7 +144,7 @@ crates/micold-core/tests/
 └── jira_query.rs              # NEW
 
 crates/micold-client/src/
-├── features/jira_query.rs     # NEW: JiraQuery state, Msg, reducers, notice
+├── features/worktree_form/jira_query.rs     # NEW: JiraQuery state, Msg, reducers, notice
 ├── features/worktree_form.rs  # + field jira_query; Msg::JiraQuery; State::awaited_jira_query; hooks in source_changed,
 │                              #   issue_provider_changed, reset_issues, jira_notice; apply_pick,
 │                              #   shown_issues
@@ -183,7 +183,7 @@ each with an additive edit:
 |---|---|---|
 | `JiraSource` trait + `FakeJiraSource` (`core/src/jira.rs`) | one method with a default body, one script field, two builder methods, appended at the end | adjacent-append conflict at most |
 | `WorktreeForm` struct, `worktree_form::Msg` | one field `jira_query`, one variant `JiraQuery(..)` | one-line conflicts |
-| `source_changed`, `issue_provider_changed`, `reset_issues` (#1185 FR-016 resets filters there) | one call each into `features::jira_query` | one-line conflicts |
+| `source_changed`, `issue_provider_changed`, `reset_issues` (#1185 FR-016 resets filters there) | one call each into `features::worktree_form::jira_query` | one-line conflicts |
 | `WorktreeForm::jira_notice` (#1185 FR-014 adds filter values) | one early branch to `jira_query::notice` in advanced mode | small |
 | `ui::worktree_form::issue_picker` (#1185 adds the filter row) | one early `return` at the top; the basic body is untouched | small |
 | `ui::worktree_form::modal` | one `if` pushing `mode_switch` after `provider_switch` | small |
@@ -202,7 +202,7 @@ Milestones for the tasks unit to size (Task-size gate); [tasks.md §Milestones](
    generic, `query_page` + fake, `jira_query::load`, `jira_query_path`. Core tests only.
 2. **M2 Request and storage**: `JiraCloud::query_page` and the 400 body; `shell/jira_query.rs` file
    read/write; Remove deletes the file; `fake_jira` `badjql`. Adapter and shell tests.
-3. **M3 Selector state and view**: `features::jira_query` reducers and hooks; `Typeahead::on_submit`;
+3. **M3 Selector state and view**: `features::worktree_form::jira_query` reducers and hooks; `Typeahead::on_submit`;
    `ui/jira_query.rs`; shell wiring; scans and geometry gates; user guide; quickstart §B.
 
 ## Risks

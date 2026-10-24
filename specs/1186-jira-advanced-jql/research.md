@@ -170,7 +170,7 @@ the Component-reuse gate's one-off.
 
 ## R9 — State, messages and requests in the client
 
-**Decision.** A new render-free module `crates/micold-client/src/features/jira_query.rs` holds
+**Decision.** A new render-free module `crates/micold-client/src/features/worktree_form/jira_query.rs` holds
 `JiraQuery` (mode, draft, last run query, run state) and its reducers; `WorktreeForm` gets one
 field `jira_query: JiraQuery`, and `worktree_form::Msg` one variant `JiraQuery(jira_query::Msg)`.
 A run is numbered from the form's existing `issue_request_seq`, so every reset that already bumps it

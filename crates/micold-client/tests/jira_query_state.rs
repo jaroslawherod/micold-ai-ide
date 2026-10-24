@@ -6,7 +6,9 @@
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
-use micold_client::features::jira_query::{self, JiraQuery, Msg as QueryMsg, QueryRun};
+use micold_client::features::worktree_form::jira_query::{
+    self, JiraQuery, Msg as QueryMsg, QueryRun,
+};
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, JiraAvailability, JiraSite, Msg, WorktreeForm,
 };

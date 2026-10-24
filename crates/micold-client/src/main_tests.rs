@@ -15669,7 +15669,7 @@ mod jira_status_driver {
 
 mod jira_query_run {
     use super::*;
-    use micold_client::features::jira_query::{Msg as QueryMsg, QueryRun};
+    use micold_client::features::worktree_form::jira_query::{Msg as QueryMsg, QueryRun};
     use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
     use micold_core::github::{Issue, IssuePage};
     use micold_core::jira::{connection_key, FakeJiraSource, JiraConnection};

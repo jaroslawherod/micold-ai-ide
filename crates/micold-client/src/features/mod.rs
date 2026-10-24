@@ -328,7 +328,6 @@ pub mod daemon_sections;
 pub mod daemons;
 pub mod daemons_kube;
 pub mod help;
-pub mod jira_query;
 pub mod jira_status;
 pub mod kube_clone;
 pub mod navigation;
