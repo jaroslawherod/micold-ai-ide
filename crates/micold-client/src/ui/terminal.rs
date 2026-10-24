@@ -834,9 +834,13 @@ pub(crate) fn transcript_body<'a>(
             // #942: the mode control, and *Waiting for you* while a request waits (plan I-1);
             // #943: the command palette in the completion slot.
             crate::ui::composer::Seams {
-                // #943: the offer to open the session in the terminal, else the palette.
+                // #943: the offer to open the session in the terminal, else the palette, else
+                // the /login offer an authentication failure leaves.
                 completion: crate::ui::composer::switch_offer(state, id, tokens::roles(scheme))
-                    .or_else(|| crate::ui::composer::palette(state, id, tokens::roles(scheme))),
+                    .or_else(|| crate::ui::composer::palette(state, id, tokens::roles(scheme)))
+                    .or_else(|| {
+                        crate::ui::composer::login_offer(state, id, tokens::roles(scheme))
+                    }),
                 ..crate::ui::mode_control::seams(state, id, mode, tokens::roles(scheme))
             },
         ),

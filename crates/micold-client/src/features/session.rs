@@ -380,7 +380,7 @@ impl SwitchOffer {
     pub fn title(&self) -> String {
         match &self.command {
             Some(command) => format!("/{command} opens in the terminal"),
-            None => format!("{}?", switch_label(self.to)),
+            None => switch_question(self.to),
         }
     }
 
@@ -394,6 +394,12 @@ impl SwitchOffer {
             None => "The session restarts in the same conversation.".to_owned(),
         }
     }
+}
+
+/// A switch to `to` asked as a question: the offer's headline without a command, and the
+/// confirmation's.
+pub fn switch_question(to: SessionKind) -> String {
+    format!("{}?", switch_label(to))
 }
 
 /// The headline of the offer beside an authentication failure (FR-022a).
@@ -414,6 +420,14 @@ pub struct SwitchRequest {
     pub to: SessionKind,
     pub command: Option<String>,
     pub confirmed: bool,
+}
+
+impl SwitchRequest {
+    /// The command as the service types it into the terminal (contracts/wire.md
+    /// `SessionSwitchKind.command`): the command with its `/`.
+    pub fn wire_command(&self) -> Option<String> {
+        self.command.as_ref().map(|name| format!("/{name}"))
+    }
 }
 
 /// One switching entry a session's menu and view offer (#943 FR-019, US4 scenarios 3, 4, 7).

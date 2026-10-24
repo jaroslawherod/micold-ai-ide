@@ -912,6 +912,15 @@ impl crate::app::State {
         });
     }
 
+    /// Whether the window's switch offer is `session`'s: a confirm or a dismiss sent for another
+    /// session's (a stale press, a scrim built for an earlier offer) leaves it alone.
+    pub fn switch_offer_is(&self, session: SessionId) -> bool {
+        self.composers
+            .switch_offer
+            .as_ref()
+            .is_some_and(|offer| offer.session == session)
+    }
+
     /// The offer was dismissed: nothing changes, the draft stays (US4 scenario 1).
     pub fn switch_dismissed(&mut self) {
         self.composers.switch_offer = None;

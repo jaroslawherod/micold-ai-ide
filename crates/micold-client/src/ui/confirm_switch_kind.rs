@@ -5,24 +5,13 @@
 
 use crate::app::{Message, State};
 use crate::features::composer::Msg as ComposerMsg;
-use crate::features::session::switch_label;
+use crate::features::session::{switch_label, switch_question};
 use crate::ui::material::{self, Text, TypeRole};
 use iced::widget::column;
 use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::session::SessionKind;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
-
-/// The dialog's headline for a switch to `to`.
-pub fn title(to: SessionKind) -> String {
-    format!("{}?", action(to))
-}
-
-/// The confirming button's label for a switch to `to`.
-pub fn action(to: SessionKind) -> &'static str {
-    switch_label(to)
-}
 
 /// The confirmation while the window's switch offer waits for it.
 pub fn dialog<'a>(
@@ -34,14 +23,14 @@ pub fn dialog<'a>(
     let message = offer.confirm.as_deref()?;
     let r = tokens::roles(scheme);
     let fields = column![
-        Text::new(title(offer.to), TypeRole::Headline, r),
+        Text::new(switch_question(offer.to), TypeRole::Headline, r),
         Text::new(message.to_owned(), TypeRole::Body, r).muted(),
     ];
     Some(material::dialog::confirm(
         r,
         fields,
         (
-            action(offer.to),
+            switch_label(offer.to),
             Message::Composer(ComposerMsg::SwitchConfirmed(offer.session)),
         ),
         (
@@ -56,7 +45,7 @@ pub fn dialog<'a>(
 mod tests {
     use super::*;
     use crate::features::session::OPEN_IN_TERMINAL;
-    use micold_core::session::SessionId;
+    use micold_core::session::{SessionId, SessionKind};
 
     fn offered(confirm: Option<&str>) -> (State, SessionId) {
         let mut state = State::default();
