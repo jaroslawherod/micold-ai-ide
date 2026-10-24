@@ -33,8 +33,9 @@ Clarifications), so the 600 italic is the one bold-italic needs.
 ## R2 — How emphasis reaches the bundled bytes, even with a host Roboto
 
 **Decision**: a new `ui/material/roboto.rs`, the twin of `mono.rs`: `pin_roboto_italics(db)` removes
-every face of family `Roboto` whose style is not normal and whose source is not
-`fontdb::Source::Binary` (a host italic or oblique copy), and `install_roboto(fonts)` loads all six
+every face of family `Roboto` whose source is not `fontdb::Source::Binary` and that is either not
+upright (a host italic or oblique copy) or upright at a weight the application does not ship (not
+400, 500 or 600: a host Bold, Black, Light…), and `install_roboto(fonts)` loads all six
 bundled Roboto faces with `FontSystem::load_font` and then calls the pin. It runs once per process,
 before any text is shaped, at the four places that register fonts today (contract C-3).
 
@@ -43,8 +44,23 @@ found first, and host faces are loaded first (the same reason feature 1260 pins 
 research R2). Removing the host italic copies leaves only the bundled italics to match an italic
 query, whatever the tie-break rule, so FR-006 holds without depending on cosmic-text internals.
 
+The off-weight upright faces go too because otherwise FR-003 fails on any host with a full Roboto
+(e.g. Linux with `fonts-roboto`): markdown bold asks for 700 (`link_text::painted`), upright bold
+then matches the host's exact Bold 700, while bold-italic can only reach the bundled 600 italic, so
+bold-italic is drawn lighter than bold (plan review 1, F1). A host Black 900 is worse: `fontdb`
+resolves a missing 700 to the nearest heavier weight first, so it would beat the bundled 600 too.
+Removing them changes upright resolution only where the application already drifts from the
+faces it ships: every upright query the client makes is 400, 500, 600 (`text.rs` roles,
+`overview_card.rs`) or 700 (markdown bold, `Weight::Bold`), and only the 700 one could reach an
+off-weight host face. That is the case FR-004 is narrowed for (spec FR-004, ledger D8); the
+upright 400/500/600 faces, where a host Roboto can still win the tie (`layout_apparatus.rs`), stay.
+
 **Alternatives rejected**:
 
+- *Keep every host upright face and narrow FR-003/SC-002 to "where upright bold resolves to the
+  bundled 600"* (plan review 1, F1 option b): leaves US2's defect, bold-italic lighter than bold,
+  on the hosts most likely to have Roboto installed, and makes a requirement hold only on some
+  hosts, which FR-006 and SC-003 reject for the italic faces themselves.
 - *Remove every host `Roboto` face, upright too* (exactly `pin_monospace`'s rule): it would also
   change which face upright text resolves to on a host with Roboto installed, which FR-004 forbids.
   Upright host precedence is feature 018's concern, guarded by `tests/layout_apparatus.rs`; left as
@@ -109,6 +125,12 @@ interface characters; bytes differ from every upright face. Assert the upright f
 **Rationale**: the same guard the upright faces have, in the file a reader looks in. The resolution
 tests use `test_support::resolves_to_bundled`, the helper `mono.rs` uses.
 
+**Alternatives rejected**: *a new `tests/roboto_italic_font.rs`*: a second file with the same
+parsing and coverage helpers, which `mise run duplication` budgets, and the upright `!is_italic()`
+check would have no obvious home. *Face assertions inside `roboto.rs`'s unit tests*: those test the
+pin and the resolution on a database; the bytes' own properties belong with the upright faces'
+guard, which runs as an integration test without the crate's private test support.
+
 ## R7 — Geometry impact
 
 **Decision**: expect `tests/fixtures/layout_snapshot.txt` to change in `session-transcript-rich`
@@ -120,9 +142,21 @@ state is an FR-004 failure.
 **Rationale**: SC-001's "0% of upright words change" is checked across every covered state by the
 snapshot's diff, on all three CI runners.
 
+**Alternatives rejected**: *exclude italic runs from the snapshot*: hides the one geometry change
+the feature is meant to make. *A new snapshot state for emphasis*: the existing
+`session-transcript-rich` state already draws an emphasised word; a second state adds upkeep and
+no coverage.
+
 ## R8 — Size
 
-Three files of ~158 KB each (the upright instances' size, cut the same way; spec Clarifications),
-about 0.47 MB embedded in the client binary, within SC-004. Nothing is packaged separately: faces
-are `include_bytes!`, and the Roboto licence file every bundle already ships covers them, so no
-packaging manifest changes.
+**Decision**: embed three files of ~158 KB each (the upright instances' size, cut the same way;
+spec Clarifications), about 0.47 MB in the client binary, within SC-004. Nothing is packaged
+separately: faces are `include_bytes!`, and the Roboto licence file every bundle already ships
+covers them, so no packaging manifest changes.
+
+**Rationale**: the same embedding as every other bundled face; no runtime path to resolve.
+
+**Alternatives rejected**: *subset the italic faces to the interface's character set*: smaller,
+but the upright faces are not subset, and an italic missing glyphs its upright twin has would fall
+back to a host font mid-word. *Ship them beside the binary and load at runtime*: a new packaging
+path per platform for 0.47 MB.

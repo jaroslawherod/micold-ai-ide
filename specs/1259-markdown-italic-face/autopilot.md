@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: plan written
-- **Next step**: plan review round 1 (orchestrator dispatches), then commit fixes; then tasks unit
+- **Phase**: plan review round 1 applied
+- **Next step**: plan re-review round 2 (orchestrator dispatches, sonnet); then tasks unit
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | plan | FR-009 sample location | Shared `markdown-subset.md` gains `***bold italic***`; core test asserts bold+italic style | agent-resolved | research R5; showcase draws MARKDOWN_SUBSET |
 | D6 | plan | How to make emphasis beat a host Roboto Italic (FR-006) | `install_roboto` loads six faces, `pin_roboto_italics` removes non-Binary non-normal Roboto faces only (upright host faces kept for FR-004) | agent-resolved | research R2; mono.rs precedent |
 | D7 | plan | Code inside emphasis | `painted` sets no slant on code runs | agent-resolved | research R4; spec Edge: inline code |
+| D8 | plan review 1 | F1: host Roboto Bold 700 makes upright bold heavier than bold-italic (600). Pin off-weight host faces (a) or narrow FR-003 (b)? | (a): the pin also removes non-Binary upright Roboto faces whose weight is not 400/500/600; FR-004 gains that one exception; C-2 gains weight-700-upright row and a `roboto.rs` case with a file-loaded Bold 700 | agent-resolved | every client upright query is 400/500/600 or 700 (`Weight::Bold`); fontdb picks nearest heavier for a missing 700, so a host Black 900 would also win; (b) leaves US2's defect on hosts with fonts-roboto |
 
 ## Review rounds
 
@@ -40,7 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 6721080f0a781ff07679652e804cc693d92581c9:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN, 2 MINOR (run by orchestrator): F1 FR-005/FR-008 implementation detail vs checklist, F2 FR-009 bold-italic vs shared fixture; both applied in clarify |
 | Clarify | 1 | spec.md | 3 questions, all agent-resolved (record existing rules); no new requirement, unit ends |
-| Plan review | 1 | e209d8637cc99c1c00d5b3b330033eabd3b06074:7bcd080cc6c6f537fd45f68b69b97148f3485dca | pending (orchestrator dispatches) |
+| Plan review | 1 | e209d8637cc99c1c00d5b3b330033eabd3b06074:7bcd080cc6c6f537fd45f68b69b97148f3485dca | CHANGES (run by orchestrator): F1 MAJOR host Roboto Bold 700 breaks FR-003/SC-002 → option (a), D8; F2 MINOR R6/R7/R8 lacked rejected alternatives → added. Both applied |
 
 ## Declined review findings
 

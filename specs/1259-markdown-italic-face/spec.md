@@ -142,7 +142,11 @@ including when a host copy of the same family is present.
 - **FR-003**: A run that is both bold and italic MUST be drawn at the same weight as a bold run that
   is not italic.
 - **FR-004**: Text that is not italic MUST resolve to the same face as before this feature;
-  adding the italic faces MUST NOT change any upright text's glyphs or widths.
+  adding the italic faces MUST NOT change any upright text's glyphs or widths. One exception, so
+  that FR-003 holds on every host: upright text that resolved to a host-installed face of the
+  interface family at a weight the application does not ship (e.g. a host Roboto Bold 700) now
+  resolves to the bundled face, as it already does on a host without one. _(plan review 1, F1;
+  ledger D8)_
 - **FR-005**: The italic faces MUST be embedded in the application, and emphasis MUST draw in them
   wherever markdown is drawn: in the application, in the component showcase, and in test renders.
   Where and how the faces are registered is left to the plan.

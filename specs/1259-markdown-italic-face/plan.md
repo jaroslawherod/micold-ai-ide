@@ -50,7 +50,7 @@ installer, 1 line in `painted`, 3 font files, 1 fixture line, 2 provenance files
 
 | Principle | Status | How |
 |---|---|---|
-| I. Test-First | PASS | Decision logic is `pin_roboto_italics` (which faces go) and the one-line slant rule in `painted`; both unit-tested red first (a bare `fontdb::Database` with a file-loaded Roboto Italic; a code span inside emphasis). The face guard in `tests/roboto_font.rs` and the core bold-italic assertion are written failing first (they fail on the missing files and fixture run). `install_roboto` and its four call sites are glue (a loop and a call, no branch), covered by the resolution tests through `test_support::renderer`, the layout tests through `tests/support/layout.rs`, and quickstart §B for `startup.rs` and `showcase/main.rs` (binary wiring, as in feature 1260). |
+| I. Test-First | PASS | Decision logic is `pin_roboto_italics` (which faces go) and the one-line slant rule in `painted`; both unit-tested red first (a bare `fontdb::Database` with a file-loaded Roboto Italic and Roboto Bold 700; a code span inside emphasis). The face guard in `tests/roboto_font.rs` and the core bold-italic assertion are written failing first (they fail on the missing files and fixture run). `install_roboto` and its four call sites are glue (a loop and a call, no branch), covered by the resolution tests through `test_support::renderer`, the layout tests through `tests/support/layout.rs`, and quickstart §B for `startup.rs` and `showcase/main.rs` (binary wiring, as in feature 1260). |
 | II. Multi-Session | PASS | One process-wide registration, no per-session state; every session view, the Overview and the showcase share it (quickstart B7). |
 | III. Worktree Integration | PASS | No file or VCS operation. |
 | IV. Local-First | PASS | Faces are compiled in; nothing is fetched at run time. The upstream is downloaded once at implementation and pinned by sha256 (research R1). |
@@ -88,6 +88,9 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   call it inside their `Once` instead of the three Roboto `load_font`s.
 - Order: host faces are loaded when the global `FontSystem` is built; `install_roboto` loads the
   bundled faces as `Source::Binary` and then pins, so the pin sees both.
+- The pin removes host Roboto faces that are italic, or upright at a weight outside
+  `ROBOTO_WEIGHTS` (a host Bold 700 would otherwise make plain bold heavier than bold-italic,
+  FR-003); host upright 400/500/600 stay (FR-004). Research R2, ledger D8.
 
 ### D3 — The markdown span — research R4; FR-001, FR-003, FR-010, Edge: inline code
 
@@ -126,7 +129,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 | FR-001 | D2, D3 | `roboto.rs` resolution test (italic 400 → bundled); B1, B3 |
 | FR-002 | D1 | `roboto_font.rs` weights 400/500/600 italic; `roboto.rs` resolution per weight |
 | FR-003 | D3, contract C-2 | `roboto.rs`: weight 700 italic → SemiBoldItalic; `link_text.rs`: bold+italic span asks 700 italic; B1, B3 |
-| FR-004 | D2 (pin keeps upright faces), D5 | `roboto.rs`: upright queries unchanged after pin, host upright kept; layout snapshot diff; B2, B7 |
+| FR-004 | D2 (pin keeps upright faces at shipped weights), D5 | `roboto.rs`: upright 400/500/600 queries unchanged after pin, host upright 400 kept; layout snapshot diff; B2, B7 |
 | FR-005 | D2 (four callers) | resolution through `test_support::renderer`; layout tests through `tests/support/layout.rs`; B1 (showcase), B3 (app) |
 | FR-006 | D2 (`pin_roboto_italics`) | `roboto.rs` host-copy test (file-loaded Roboto Italic removed, query → bundled); B5 |
 | FR-007 | D1 | review of `PROVENANCE.md`; quickstart §A hashes |
@@ -134,7 +137,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 | FR-009 | D4 | `markdown_subset.rs` bold-italic style; B1 |
 | FR-010 | D3 | `link_text.rs` italic span test (mapping kept) |
 | SC-001 | D3, D5 | layout snapshot (upright unchanged); B1 |
-| SC-002 | contract C-2 | `roboto.rs` weight-700 italic and weight-700 upright both resolve to weight-600 faces |
+| SC-002 | contract C-2, research R2 | `roboto.rs` weight-700 italic and weight-700 upright both resolve to weight-600 faces, on a database that also holds a file-loaded Roboto Bold 700 (removed by the pin) |
 | SC-003 | D2 | host-copy test; CI on three runners |
 | SC-004 | D1 | quickstart §A file sizes |
 
