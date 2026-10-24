@@ -92,7 +92,8 @@ all PASS, no deviation.
   (*Keeping up with changes*, *Picking lines*, *Writing a comment*) or `docs/user-guide/settings.md`
   in the same PR, with the layout snapshot (FR-029).
 - [x] **VIII. Reusable UI**: the notice is the shared `Button` (text variant) with a count label;
-  the row dot is a new `ChangedDot` primitive in `ui/material/` with a builder, also usable by #1273's
+  the row dot is a new `ChangedDot` primitive in the `micold-material` crate (drawn with
+  `unread_mark`'s `filled_circle`) with a builder, also usable by #1273's
   tree rows; chips reuse `ToggleChip`, extended with keyboard focus through `TakesTheKeyboard` (as
   `AttachmentChip` does). The gutter drag extends `DiffView`'s builder (`.on_gutter_drag(..)`), not
   a new diff widget. New and extended primitives appear in the showcase.
@@ -132,7 +133,8 @@ crates/micold-client/src/shell/changes.rs      ReadDiff also runs change_list_of
 crates/micold-client/src/features/settings.rs  suggestion_chips on the draft and the applied state
 crates/micold-client/src/ui/changes.rs         notice in the header, dot on file_row, chips under
                                                the composer, gutter drag wiring (glue)
-crates/micold-client/src/ui/material/{diff_view.rs,toggle_chip.rs,changed_dot.rs (new),mod.rs}
+crates/micold-client/src/ui/material/diff_view.rs   gutter drag
+crates/micold-material/src/{toggle_chip.rs,changed_dot.rs (new),lib.rs}
 crates/micold-client/src/ui/settings/appearance.rs   the switch
 crates/micold-client/src/showcase/sections/review.rs  dot, focusable chip
 crates/micold-client/tests/{features_changes.rs,layout_snapshot.rs,fixtures/layout_snapshot.txt}
