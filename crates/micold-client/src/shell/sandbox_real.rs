@@ -225,7 +225,7 @@ fn ssh_runner() -> micold_core::ssh::SystemSsh {
 /// `dir` and named for every CLI. `dir` is a project, which the container sees at the same path.
 fn standin_table(dir: &Path) -> micold_core::provision::AiCliTable {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../micold-daemon/tests/sandbox_real_support/standin-cli/good");
+        .join("../micold-daemon/tests/sandbox_real/sandbox_real_support/standin-cli/good");
     let mut cmd = std::process::Command::new("npm");
     cmd.args(["pack", "--silent", "--pack-destination"])
         .arg(dir)

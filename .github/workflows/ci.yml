@@ -625,7 +625,7 @@ jobs:
           docker manifest inspect "$pin" >/dev/null
       # `sandbox_real_` is a *test-name* filter, not a file filter: cargo matches it against the
       # test function's path, and an integration target's name is not part of that path. So a test
-      # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally
+      # in `tests/sandbox_real/` whose function is not also named `sandbox_real_*` runs locally
       # and is silently skipped here — no failure, just a smaller number in the summary. Every
       # real-runtime test therefore carries the prefix in its own name.
       - name: Test (real runtime, adapter layer)
@@ -651,13 +651,13 @@ jobs:
       # which is why `--no-fail-fast` is here too. Without it cargo stops at that target and every
       # target after it is skipped in silence, `sandbox_real_staleness` included.
       #
-      # Issue 955: the step builds only the `sandbox_real_*` integration targets (`--test
-      # 'sandbox_real_*'`, a cargo glob) instead of every test binary of the crate. A run of this
+      # Issue 955: the step builds only the `sandbox_real` integration target (`--test
+      # sandbox_real`; #1175 folded the `sandbox_real_*.rs` files into it) instead of every test binary of the crate. A run of this
       # step spent ~930 s of its ~950 s compiling 149 release test binaries for 25 tests that take
       # ~16 s; the 25 tests all live in those targets (`-- --list` gives 25 with and without the
       # glob), and the daemon has no `sandbox_real_` doctests, so none are lost.
       - name: Test (real runtime, daemon)
-        run: cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_ --no-fail-fast -- --test-threads=1
+        run: cargo test --release -p micold-daemon --features sandbox-real-runtime --test sandbox_real sandbox_real_ --no-fail-fast -- --test-threads=1
 
   # #1281. The container daemon a user adds in Settings, end to end against a real runtime, on
   # docker **and** on rootless podman. The job above starts its containers with the harness's own

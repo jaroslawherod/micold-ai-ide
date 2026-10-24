@@ -21,7 +21,7 @@ stacks:
     exemplar: # one per test kind, each opened and confirmed
       unit_src: crates/micold-core/src/git.rs # `#[cfg(test)] mod failure_message_tests`, line 409
       unit: crates/micold-core/tests/workspace_lookup.rs
-      acceptance: crates/micold-daemon/tests/sandbox_real_session_start.rs
+      acceptance: crates/micold-daemon/tests/sandbox_real/sandbox_real_session_start.rs
     helpers: # reuse these instead of hand-rolling doubles or scaffolding
       - crates/micold-core/tests/support/mod.rs
       - crates/micold-client/tests/support/mod.rs
@@ -75,7 +75,7 @@ all — see "Missing capabilities" below for what that costs.
 - **Acceptance tests run against the real container runtime**, are named
   `sandbox_real_*`, and are gated behind the `sandbox-real-runtime` feature so the
   default suite needs no runtime installed. Exemplar:
-  `crates/micold-daemon/tests/sandbox_real_session_start.rs`.
+  `crates/micold-daemon/tests/sandbox_real/sandbox_real_session_start.rs`.
 - **Snapshots are homegrown, not `insta`.** The gates compare against committed
   fixtures and print their own regeneration command; regeneration is opt-in via
   `UPDATE_LAYOUT_SNAPSHOT=1` / `UPDATE_STYLE_SNAPSHOT=1`. Regenerating rewrites
