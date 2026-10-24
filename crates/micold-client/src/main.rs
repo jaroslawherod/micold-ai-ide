@@ -596,6 +596,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 
 /// Drain an armed reveal into a scroll, once there is something to scroll to (feature 024, §6.4).
 ///
+/// Before the conditions below, an armed reveal whose target sits in a closed state group opens that
+/// group (feature 1125), once the viewport is known.
+///
 /// Three conditions, and the arm survives all three failing:
 ///
 /// - nothing is armed — the ordinary case, and the reason this is cheap to call on every message;
@@ -608,7 +611,12 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     // Feature 1125 (FR-006, R5): a target in a closed state group opens it, so its row is drawn.
-    if app.core.sidebar.pending_reveal_scroll && app.core.sidebar.viewport_height != 0 {
+    // Only once the viewport is known and only while the target is not drawn: a drawn target's
+    // group is open already, and a reveal waiting on layout should not derive the list per message.
+    if app.core.sidebar.pending_reveal_scroll
+        && app.core.sidebar.viewport_height != 0
+        && !app.core.current_session_is_listed()
+    {
         app.core.open_group_of_reveal_target();
     }
     if !app.core.sidebar.pending_reveal_scroll

@@ -156,9 +156,9 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // a zero-worktree or filtered-to-nothing project still shows the Default row and its
     // start-session action, with a muted hint appended below about worktrees specifically.
     //
-    // `sidebar_entries()` always puts the Default entry first, so "only that one entry survived"
-    // is equivalent to "no worktree entries matched" without a second filter pass.
-    // Feature 1125: the groups are built once per render and give both the hint and the list.
+    // The groups hold every entry once, the Default entry among them, so "one entry in all" is
+    // "no worktree entries matched". Built once per render (feature 1125): they give both the hint
+    // and the list.
     let groups = state.sidebar_groups();
     let no_worktree_entries = groups.iter().map(|g| g.entries.len()).sum::<usize>() <= 1;
     // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
