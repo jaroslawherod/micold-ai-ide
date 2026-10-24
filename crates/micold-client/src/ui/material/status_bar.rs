@@ -141,9 +141,7 @@ impl StatusItem {
                 .shrink()
                 .into(),
         );
-        let content = row(parts)
-            .spacing(spacing::XS)
-            .align_y(Alignment::Center);
+        let content = row(parts).spacing(spacing::XS).align_y(Alignment::Center);
         let label = self.tooltip.unwrap_or(self.text);
         Tooltip::new(content, label, r)
             .position(TooltipPosition::Top)
@@ -472,9 +470,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Bar<'_, M> {
             if dropped(l) {
                 continue;
             }
-            child
-                .as_widget_mut()
-                .update(state, event, l, cursor, renderer, clipboard, shell, viewport);
+            child.as_widget_mut().update(
+                state, event, l, cursor, renderer, clipboard, shell, viewport,
+            );
         }
     }
 
@@ -728,7 +726,9 @@ mod tests {
         let mut m = Mounted::new_in(steady(roles()), Size::new(400.0, 600.0));
         let drawn: Vec<String> = m.painted_text().into_iter().map(|p| p.content).collect();
         assert!(
-            !drawn.iter().any(|t| t.contains("Overview") || t.contains("Jump")),
+            !drawn
+                .iter()
+                .any(|t| t.contains("Overview") || t.contains("Jump")),
             "{drawn:?}"
         );
     }

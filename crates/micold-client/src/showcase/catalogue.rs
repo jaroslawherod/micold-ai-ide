@@ -839,6 +839,20 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::connection_banner,
     },
     Entry {
+        module: "material/status_bar.rs",
+        component: "StatusBar",
+        variants: &[
+            "Neutral", "Positive", "Warning", "Error", "Keep", "Drop", "Shorten",
+        ],
+        density: &[],
+        posed: &["steady", "busy", "warning", "too narrow"],
+        live: &["hover an item for its tooltip"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::surfaces::status_bar,
+    },
+    Entry {
         module: "material/progress.rs",
         component: "StageProgress",
         variants: &[],

@@ -271,8 +271,7 @@ mod tests {
 
     #[test]
     fn a_host_daemon_is_local_and_another_runtime_is_named() {
-        let (mut state, host, boxed) =
-            project(SessionLocation::Worktree("feat-a".to_string()));
+        let (mut state, host, boxed) = project(SessionLocation::Worktree("feat-a".to_string()));
         bind(&mut state, &[("feat-a", host)]);
         assert_eq!(connected_text(&state), "Daemon connected · local");
         bind(&mut state, &[("feat-a", boxed)]);
@@ -372,7 +371,10 @@ mod tests {
     #[test]
     fn steady_sandbox_states_are_neutral_and_quiet() {
         for (state, text) in [
-            (SandboxState::Running(ContainerId("c".into())), "Sandbox ready"),
+            (
+                SandboxState::Running(ContainerId("c".into())),
+                "Sandbox ready",
+            ),
             (SandboxState::Disabled, "Sandbox off"),
         ] {
             let item = sandbox_of(sandbox(state));
@@ -384,7 +386,10 @@ mod tests {
     fn bring_up_stages_are_busy_with_the_attempt_line_as_tooltip() {
         for (state, text) in [
             (SandboxState::Probing, "Checking runtime…"),
-            (SandboxState::Acquiring(progress(Some(42))), "Getting image… 42%"),
+            (
+                SandboxState::Acquiring(progress(Some(42))),
+                "Getting image… 42%",
+            ),
             (SandboxState::Acquiring(progress(None)), "Getting image…"),
             (SandboxState::Starting, "Starting sandbox…"),
         ] {
