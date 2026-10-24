@@ -1321,7 +1321,10 @@ mod review_comments {
             format!("diff --git a/p.rs b/p.rs\n--- a/p.rs\n+++ b/p.rs\n@@ -0,0 +1,5001 @@\n{body}");
         read(&mut state, seq, Ok(split_pr_diff(&raw)));
         select(&mut state);
-        assert!(!can_pick(state.tabs.shown_view().unwrap()), "large, not shown");
+        assert!(
+            !can_pick(state.tabs.shown_view().unwrap()),
+            "large, not shown"
+        );
         changes::update(&mut state, Msg::ShowLarge);
         assert!(can_pick(state.tabs.shown_view().unwrap()), "large, shown");
 
@@ -2124,7 +2127,8 @@ fn a_browsed_path_missing_from_the_other_source_says_so() {
             spans: Default::default(),
         },
     );
-    let Some(BrowseBody::Failed { message, .. }) = browse_body(state.tabs.shown_view().unwrap()) else {
+    let Some(BrowseBody::Failed { message, .. }) = browse_body(state.tabs.shown_view().unwrap())
+    else {
         panic!("a failure line");
     };
     assert_eq!(message, "This file does not exist in this version");

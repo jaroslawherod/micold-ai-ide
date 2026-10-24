@@ -2031,10 +2031,18 @@ mod review_tab_tests {
         state.runs.compare = None;
         let _ = changes::update(&mut state.changes, Msg::SessionSelected);
         assert_eq!(state.review_watch_entry(), None, "hidden");
-        assert_eq!(state.header_watch_entry(), Some(&w), "the header's watch takes over");
+        assert_eq!(
+            state.header_watch_entry(),
+            Some(&w),
+            "the header's watch takes over"
+        );
         state.workspace.active = Some(PathBuf::from("/other"));
         let _ = changes::opened(&mut state.changes, PathBuf::from("/repo"), w, None);
-        assert_eq!(state.review_shown(), None, "another project's review is not shown");
+        assert_eq!(
+            state.review_shown(),
+            None,
+            "another project's review is not shown"
+        );
         assert_eq!(state.review_watch_entry(), None);
     }
 }
