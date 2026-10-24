@@ -115,7 +115,7 @@ capture, shell choice, a streaming child that ends its whole tree, and the setti
   Refused>` as the only way out of `Running`, `SetupRunSummary` (`SetupRun` plus `output_lines:
   u64`), `SetupStart { Started(RunId), NotConfigured, Busy }`. Times via `unix_time::unix_secs`.
   T008 passes
-- [ ] T010 [P] [US2] Test A4 (output), red until T011, in `core/tests/setup_model.rs`:
+- [ ] T010 [P] [US2] Test A4 (output), red until T011, new `core/tests/setup_output.rs`:
   `OutputBuffer::push(stream, bytes)` returns completed lines with indices; `\r\n` and `\n` end a
   line; a lone `\r` clears the partial line; a line split across two pushes is joined; stdout and
   stderr partials are kept apart; ANSI CSI (`\x1b[31m`) and OSC (`\x1b]0;t\x07`) are removed;
@@ -126,7 +126,7 @@ capture, shell choice, a streaming child that ends its whole tree, and the setti
   first_index: u64, partial per stream }`, `Stream { Stdout, Stderr }`, `KEEP_LINES`) per
   data-model §OutputBuffer. Reuse an existing ANSI-stripping helper if `grep -rn "\\\\x1b\["
   crates/micold-core/src` finds one; else write it here. T010 passes
-- [ ] T012 [P] [US2] Test A4 (shell), red until T013, in `core/tests/setup_model.rs`: the three
+- [ ] T012 [P] [US2] Test A4 (shell), red until T013, new `core/tests/setup_shell.rs`: the three
   rows of data-model's `shell_line` table, asserting program and args exactly; `bash_on_path` is
   true for a temp `PATH` holding an executable `bash` stub and false for an empty one (Unix only)
 - [ ] T013 [US2] Implement `core/src/setup/shell.rs`: `ShellPlatform { Unix, Windows }`,
@@ -190,14 +190,16 @@ and **Stop setup**. State lives in memory in this phase; Phase 6 persists it.
   `Worktree(dir_name)`; `marker` exists in the worktree; a `SetupOutputWatch` from line 0 gets
   `hi`, and the last batch's last line is the reason line; a second client's `SetupOutputWatch`
   after the end gets the backlog. A session started while Running starts at once (A6, FR-014)
-- [ ] T021 [US2] Test A8, red until T025, in `daemon/tests/setup_run.rs`: `exit 3` gives
+- [ ] T021 [US2] Test A8, red until T025–T027, in `daemon/tests/setup_run.rs`: `exit 3` gives
   `Failed(Exit(3))` and the output's last line *Exited with status 3.*; a run whose folder was
   removed before the spawn gives `Failed(NotStarted(_))` with *Could not start:* (FR-017, SC-004);
   `ProjectSetupSet` with `None`, then a create, starts nothing and pushes no `SetupChanged` (US2
   scenario 7)
-- [ ] T022 [US2] Test A10, red only if T026 wires the wrong path, in `daemon/tests/setup_run.rs`:
-  a worktree joined through `WorktreeInclude` and one found by refresh start no run and push no
-  `SetupChanged` (FR-020, R10)
+- [ ] T022 [US2] Test A10, red until T025–T027, in `daemon/tests/setup_run.rs`: with a command
+  set, a worktree created with `WorktreeCreate` pushes `SetupChanged` Running (the positive control
+  that makes the test red before T026 and proves the watch would see a push), while a worktree
+  joined through `WorktreeInclude` and one found by refresh start no run and push no `SetupChanged`
+  within the same wait (FR-020, R10)
 - [ ] T023 [US3] Test A9, red until T028, in `daemon/tests/setup_run.rs`: `SetupRun` while a run is
   Running answers `OperationError` `Busy` *Setup is already running in <location>.* (FR-023a);
   `SetupRun` with no command answers `InvalidInput` *This project has no setup command.*;
@@ -231,12 +233,12 @@ and **Stop setup**. State lives in memory in this phase; Phase 6 persists it.
   only records and spawns (nothing awaits the run, FR-013); `create_worktree_with_session` (line
   921) does the same and keeps its own return. Follow the new type at the callers:
   `daemon/src/runs.rs` line 443, `daemon/src/server.rs` line 1912, `daemon/src/mcp/tools.rs` line
-  1068 (check with LSP `findReferences`). `WorktreeInclude` and refresh do not call it (R10).
-  T020, T021, T022 pass
+  1068 (check with LSP `findReferences`). `WorktreeInclude` and refresh do not call it (R10)
 - [ ] T027 [US2] `daemon/src/server.rs`: handle `ProjectSetupSet` (store or clear, answer
   `OperationOk`, never start a run), `SetupOutputWatch` (answer at once with the backlog from
   `max(from_line, first kept line)`, then register the connection), `SetupOutputUnwatch`
-  (idempotent), and drop the connection's watches on disconnect (contract C1)
+  (idempotent), and drop the connection's watches on disconnect (contract C1). T020, T021, T022
+  pass
 - [ ] T028 [US3] `daemon/src/server.rs`: handle `SetupRun` (`start`; `Busy` / `NotConfigured` /
   unknown project or worktree map to contract C1's `OperationError`s) and `SetupStop` (`stop`, or
   `NotFound`). T023 passes
@@ -363,7 +365,7 @@ notification), B6; visual pass U1, U2.
 **Goal**: **Setup output** opens a dialog that streams the run's kept lines, follows the tail, and
 copies them; a delete of a worktree whose setup runs says so (U4, U6).
 
-**Independent test**: T050, T053 pass; quickstart B3 (output view), B4 (last line), B7; visual
+**Independent test**: T050, T052 pass; quickstart B3 (output view), B4 (last line), B7; visual
 pass U4, U6.
 
 - [ ] T050 [P] [US2] Test A16 (view), red until T051, in `client/tests/features_setup.rs`:
@@ -372,22 +374,24 @@ pass U4, U6.
   a new `run` resets the lines; `FollowToggled` and scrolling up stop the follow, reaching the
   bottom resumes it; `CopyRequested` yields the kept lines joined with `\n`; a reconnect while the
   view is open re-sends the watch from the last line held (FR-018); `output_offered` is true exactly
-  when a record exists
+  when a record exists; `delete_warns_setup(summary)` is true exactly while the run is Running
+  (none, Succeeded, Failed, Stopped, Interrupted → false) (U6)
 - [ ] T051 [US2] `client/src/features/setup.rs`: `view: Option<OutputView>` and `Msg::Output`,
-  `ViewOpened`, `ViewClosed`, `FollowToggled`, `CopyRequested`, `output_offered`;
+  `ViewOpened`, `ViewClosed`, `FollowToggled`, `CopyRequested`, `output_offered`,
+  `delete_warns_setup`;
   `client/src/shell/daemon_sync.rs` routes `SetupOutput` and re-watches on reconnect. T050 passes
-- [ ] T052 [US2] New `client/src/ui/setup_output.rs`: contract U4 — `ScrollingDialog` titled
+- [ ] T052 [US2] Test G2, red until T053, new `client/tests/setup_output_geometry.rs`: at 10,000
+  lines the dialog builds only the visible rows, and the action row stays inside the dialog at the
+  smallest window size
+- [ ] T053 [US2] New `client/src/ui/setup_output.rs`: contract U4 — `ScrollingDialog` titled
   *Setup — <location display name>*, the command in monospace clamped to 3 lines with its full text
   in the tooltip, the state worded as U2, a `VirtualRows` body of monospace lines (first row *<n>
   earlier lines not kept* when `dropped > 0`, *No output yet.* when empty), actions **Copy output**
   and **Close** (last). `client/src/ui/mod.rs` `location_menu_items` (line 866): **Setup output**
   above **Delete** on a worktree and appended on the Default row, with an existing terminal-like
-  icon, when `output_offered`
-- [ ] T053 [US2] Test G2, red until T052, new `client/tests/setup_output_geometry.rs`: at 10,000
-  lines the dialog builds only the visible rows, and the action row stays inside the dialog at the
-  smallest window size
-- [ ] T054 [US2] `client/src/ui/confirm_delete.rs`: for a worktree whose setup is Running, the line
-  *Setup is running here. It will be stopped first.* (U6)
+  icon, when `output_offered`. T052 passes
+- [ ] T054 [US2] `client/src/ui/confirm_delete.rs`: when T051's `delete_warns_setup` is true for
+  the worktree's summary, the line *Setup is running here. It will be stopped first.* (U6)
 - [ ] T055 [P] [US2] `guide/worktrees-and-sessions.md`: **Setup output** (what it shows, the 10,000
   line limit, follow, copy, that it survives a reconnect) and the delete line
 
@@ -433,16 +437,17 @@ setup** in the output view (U3, U4).
 - Phase 4 (T008–T017) → Phase 5 (T018–T030) → Phase 6 (T031–T039) → Phase 7 (T040–T049) →
   Phase 8 (T050–T055) → Phase 9 (T056–T059).
 - Red before green: T001 → T002; T003, T004 → T005; T008 → T009; T010 → T011; T012 → T013; T014 →
-  T015; T016 → T017; T018 → T019; T020–T022 → T025–T026; T023 → T028; T024 → T029; T031 → T035;
+  T015; T016 → T017; T018 → T019; T020–T022 → T025–T027; T023 → T028; T024 → T029; T031 → T035;
   T032 → T036–T037; T033 → T038; T034 → T039; T040 → T041–T043; T044 → T045; T047 → T048; T050 →
-  T051; T053 → T052; T056 → T057.
+  T051; T052 → T053; T056 → T057.
 - T025 needs T009, T011, T013, T015 and T019. T027–T029 need T025–T026. T041 needs T019. T046
-  needs T045. T052 needs T051. T058 needs T052 and T057.
+  needs T045. T053 needs T051. T058 needs T053 and T057.
 
 ## Parallel Opportunities
 
 - T001 and T007 beside T003–T004.
-- T008, T010, T012, T014, T016 (different test files or modules) together, then their
+- T008, T010, T012, T014, T016 (five different test files: `setup_model.rs`, `setup_output.rs`,
+  `setup_shell.rs`, `streaming_child.rs`, and the `settings.rs`/`catalog.rs` unit tests) together, then their
   implementations, which touch different files.
 - T018 and T024 beside T020–T023; T030 any time in Phase 5.
 - T031 beside T032–T034.
@@ -485,7 +490,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   `setup_commands` entry, also across a host daemon's service-settings write
 - **Satisfies**: FR-009 (storage), FR-011, FR-012, FR-021 (buffer), FR-023 (process tree), US2
   scenario 5's reason lines (SC-004 wording)
-- **Verify**: `cargo test -p micold-core --test setup_model --test streaming_child`; `cargo test -p
+- **Verify**: `cargo test -p micold-core --test setup_model --test setup_output --test setup_shell --test
+  streaming_child`; `cargo test -p
   micold-core --lib -- settings`; `cargo test -p micold-daemon --lib -- catalog`; CI's three-OS
   test jobs; merge check: `mise run gate` (`scripts/gate.sh` in a cloud session)
 - **Depends on**: —
