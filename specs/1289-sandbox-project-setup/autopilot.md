@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: design PR open (specs-only gate green); orchestrator waits on CI and merges, then M1
+- **Phase**: design-pr
+- **Next step**: design PR #1347 open (specs-only gate green); orchestrator waits on CI and merges, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1347 | design (spec, plan, tasks) | open | — |
 
 ## Milestones
 
