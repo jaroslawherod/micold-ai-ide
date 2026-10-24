@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks unit: tasks review, close checklists, specs-only gate, push the design PR branch
+- **Phase**: design-pr
+- **Next step**: orchestrator opens the design PR from branch `claude/project-thread-6rh2yo` (title/body in the scratchpad), waits on CI and merges; then milestone M1 (T001–T009). Checklists: 16/16 ticked; specs-only gate green
 
 ## Pull requests
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 06a25d880f08b234d103ea2291fb03b0635afc26:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 2 MINOR (FR-003/FR-012 provisional note, checklist ticks), fixed, prose only |
 | Plan | 1 | f93f61f0638c026a651b066a3a3c09d0f324d277:2a80f46d473c0f15a956be19111e42659504b291 | CLEAN: 3 MINOR (alternatives for R8/R12–R14, M2 header-only in U16, M2 hand check in quickstart B0), fixed, prose only |
 | Tasks | 1 | 501c0f33fe1293434c6134b8cfeeb6673a1ec891:6a7e4285a0140f2655e8c1c3f4db8d6f7ac9dc72 | CHANGES: 1 MAJOR ([P] on T032/T035 same file), 3 MINOR (T012 stopgap readers, M1 rule-1 note, Failure edge case test); all fixed |
+| Tasks | 2 | 7db6eeab3ffaf9740641fff36e24e6d87b7390ff:5ee8f094664b699079681e5e7772ee08435c3259 | CLEAN (sonnet re-review of the fix diff) |
 
 ## Declined review findings
 
