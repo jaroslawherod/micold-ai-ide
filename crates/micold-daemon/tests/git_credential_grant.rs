@@ -119,7 +119,13 @@ async fn refusal(client: &mut Client) -> (ErrorKind, String) {
 /// Give a credential root and wait out a failure of its own: a flushed `Ping` is not needed, the
 /// grant is handled in order with what follows it.
 fn root_env(root: &Path) -> Env {
-    Env::set(&[(ROOT_ENV, Some(root.as_os_str().to_owned()))])
+    // The host's git config must not rewrite the fixtures' URLs (`url.<base>.insteadOf` turned
+    // https into ssh on the dev host, #1352).
+    Env::set(&[
+        (ROOT_ENV, Some(root.as_os_str().to_owned())),
+        ("GIT_CONFIG_GLOBAL", Some("/dev/null".into())),
+        ("GIT_CONFIG_NOSYSTEM", Some("1".into())),
+    ])
 }
 
 #[tokio::test]
