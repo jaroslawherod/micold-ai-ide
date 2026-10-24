@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: clarify
-- **Next step**: clarify round 1 escalated (FR-014); on the answer, apply it to spec.md (Clarifications + FR-014 + whole-view-conditional items), then run clarify round 2
+- **Next step**: plan (FR-014 answered provisionally with A; if the user picks B or C, reopen clarify and revise FR-005/FR-008/FR-009/FR-014 and US1 AS1, 5, 9–11)
 
 ## Pull requests
 
@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | FR-014: hold the whole view or only the open diff? | A, whole-view hold (provisional, awaiting user) | orchestrator (recommended; user not yet answered) | docs/development/review-redesign.md item 8 |
 
 ## Review rounds
 
@@ -39,6 +40,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | spec | 1 | 9e154017e95adc6a613e45c3f02e6da155dc11ba:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | 3 MAJOR, 2 MINOR. F1 fixed: FR-001a per-row change identity (git object ids from `diff --raw`, `hash-object` for working-tree files, size+mtime over limits, PR patch hash), AS12, FR-003, Context/Assumptions. F2 fixed: FR-009 + US1 AS9–11 (select non-held reads as today; held reads latest and leaves set; no-longer-listed says no changes), Key Entities. F3 fixed: whole-view-only MUSTs marked conditional on FR-014. F4 fixed: match by path, rename counts once under new path. F5 fixed: checklist item unticked. |
 | spec | 2 | 89c07d79a52e9cb5ae89d0beff62b6ccf424039e:4a06e88388d0b4cd7395ec7ce70882b466871cf9 | CLEAN (sonnet), 1 MINOR: edge case *Selected between reads* not marked conditional on FR-014. Fixed: prefixed "under the whole-view hold (FR-014)" and noted it does not arise under open-diff-only. |
+
+Clarify: round 1 asked FR-014 (escalated; applied provisionally as A, which made the whole-view
+items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
 
 ## Declined review findings
 
@@ -51,7 +55,8 @@ None.
 
 ## Open escalation
 
-Clarify round 1, Q1 (category 1, product decision the repo does not settle): **FR-014 — while
+**Pending user confirmation**: applied provisionally as A (whole-view hold) on the orchestrator's
+word; spec.md records it as provisional. Clarify round 1, Q1 (category 1, product decision the repo does not settle): **FR-014 — while
 changes are held, is the whole view frozen, or only the open file's diff?**
 
 - **A. Whole-view hold (Recommended)**: the file list, its +/- counts and every file stay one

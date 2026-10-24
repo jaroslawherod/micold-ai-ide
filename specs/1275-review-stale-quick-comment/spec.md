@@ -40,6 +40,16 @@ This is slice R6 of the review UI redesign (`docs/development/review-redesign.md
 The issue lists #1271 as its blocker because the redesign sequences R6 after R4; only FR-013 truly
 needs it. The plan may ship the other parts first, in today's view.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: While changes are held, is the whole view (file list, counts, every file) frozen, or only the
+  open file's diff? → A: Whole-view hold (FR-014): the list, its counts and every file stay one
+  snapshot until the notice is pressed; changed files carry a dot and count in *n*; selecting a
+  dotted file shows its latest diff. _(A (recommended; provisional, awaiting user):
+  `docs/development/review-redesign.md` item 8 counts 3 files with row dots while one diff is open)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read a diff without it moving while the agent works (Priority: P1)
@@ -82,22 +92,21 @@ Press the notice: the diff shows the edits, the dots and the notice go.
 8. **Given** the view is showing a pull request, **When** the pull request list refreshes with a new
    head for it, **Then** the files whose diff differs are counted and held the same way as edits in
    the working tree.
-9. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file that is not
+9. **Given** changes are held, **When** the user selects a file that is not
    in the changed-since set, **Then** its diff is read and shown, as today; it matches the shown
    snapshot because the file has not changed since.
-10. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file in the
+10. **Given** changes are held, **When** the user selects a file in the
    set that the latest read still lists, **Then** the view reads and shows that file's latest diff,
    its row takes the latest counts and loses its dot, it leaves the count, and every other held file
    stays held.
-11. **Given** changes are held (whole-view hold, FR-014), **When** the user selects a file in the
+11. **Given** changes are held, **When** the user selects a file in the
    set that the latest read no longer lists (its changes were reverted or it was removed), **Then**
    the diff area says the file has no changes any more, the row keeps its dot and stays in the list
    until the user applies.
 12. **Given** a file already shown as modified, **When** an already-changed line of it is edited
    again so its added and removed counts stay the same, **Then** it counts and carries a dot.
 
-Scenarios 1 (the two other files), 5, 9, 10 and 11 assume the whole-view hold proposed in FR-014;
-under the open-diff-only answer only the open file is held and the list updates live as today.
+Scenarios 1 (the two other files), 5, 9, 10 and 11 follow from the whole-view hold (FR-014).
 
 ---
 
@@ -173,10 +182,9 @@ holds that chip's text and the focus stays in the box.
 - **Open file removed by the agent**: it counts and carries its dot; the user keeps reading it until
   they apply. On apply it leaves the list as today, and an unsaved new comment on it is closed as
   today (*Writing a comment*).
-- **Selected between reads**: under the whole-view hold (FR-014), a file changed after the last background read but before the user
+- **Selected between reads**: a file changed after the last background read but before the user
   selects it shows the diff read on selection; its row takes that read's counts and identity, and
-  the next background read compares against them, so it does not count for that change. Under the
-  open-diff-only answer it does not arise: the list and other files update live as today.
+  the next background read compares against them, so it does not count for that change.
 - **Large files**: a working-tree file over the size limits is identified by its size and
   modification time instead of its content (FR-001a); touching it without changing its bytes counts
   it once, which is accepted.
@@ -232,22 +240,19 @@ holds that chip's text and the focus stays in the box.
 
 - **FR-005**: While the review view is shown and has a list on screen, a change found by the file
   watch (or a new pull request head for the shown pull request) MUST NOT change the shown diff or
-  its scroll position until the user applies it; under the whole-view hold (FR-014) it MUST NOT
-  change the shown list either.
+  its scroll position, nor the shown list and its counts (FR-014), until the user applies it.
 - **FR-006**: The view MUST still read the latest changes in the background, within about two
   seconds of a settled burst as today, and update the set and the count.
 - **FR-007**: While the set is not empty the view's header MUST show *n file(s) changed since you
   looked* (singular for one), and that notice MUST apply the changes when pressed.
 - **FR-008**: Each listed file in the set MUST carry a *changed since you looked* dot on its row.
-  Under the whole-view hold (FR-014), a file in the set that the shown list does not yet have MUST
-  still count in *n*.
+  A file in the set that the shown list does not yet have MUST still count in *n*.
 - **FR-009**: Changes the user makes to what the view shows (source, toggles, pull request, base)
   MUST take effect at once and leave nothing held. Selecting another file MUST NOT apply the other
-  held changes. Under the whole-view hold (FR-014): selecting a file not in the set reads and shows
-  its diff as today; selecting a file in the set that the latest read lists MUST read and show its
-  latest diff, update its row and drop it from the set; selecting one the latest read no longer
-  lists MUST say it has no changes any more and keep it in the set (US1 scenarios 9–11). For a pull
-  request every file's diff is already in memory and selection shows the held snapshot's patch,
+  held changes. Selecting a file not in the set reads and shows its diff as today; selecting a file
+  in the set that the latest read lists MUST read and show its latest diff, update its row and drop
+  it from the set; selecting one the latest read no longer lists MUST say it has no changes any more
+  and keep it in the set (US1 scenarios 9–11). For a pull request every file's diff is already in memory and selection shows the held snapshot's patch,
   except for a file in the set, which shows the latest patch and leaves the set.
 - **FR-010**: Applying MUST keep the selected file while it is listed, and MUST keep picked lines
   and comment-box text by the rules a refresh follows today.
@@ -256,12 +261,9 @@ holds that chip's text and the focus stays in the box.
   applied at once.
 - **FR-013** *(needs #1271)*: A held change to a file marked reviewed MUST show that file as unseen
   with the changed dot, and the *n of m reviewed* progress MUST drop by one for it.
-- **FR-014**: Whether the hold covers the whole view or only the open file's diff:
-  [NEEDS CLARIFICATION: Does the hold cover the whole view — the file list and every file stay one
-  snapshot until the notice is pressed (proposed, nothing on screen moves) — or only the open diff,
-  with the file list and other files updating live as today?] Requirements and scenarios marked
-  *whole-view hold* apply only under the first answer; under the second, the set holds at most the
-  open file and the list, its counts and other files update live as today.
+- **FR-014**: The hold MUST cover the whole view: the file list, its counts and every file's diff
+  stay one snapshot until the user applies (or selects a file in the set, FR-009); nothing on screen
+  moves. The open diff alone being held, with the list updating live, does not meet this.
 
 **Quick comment**
 
