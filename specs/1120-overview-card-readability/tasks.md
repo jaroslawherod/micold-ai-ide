@@ -356,13 +356,13 @@ focus animation) works on the same file in parallel, so stay out of the focus-ri
 
   Contrast of each pill and word: 4.5:1 in `composition_contrast.rs`. Done when T050 (f) passes and the 1123 row tests are green with their colour and text expectations updated.
 - [X] T056 [US1] Expanded body (FR-028): `expanded_body` uses T053's meta line, T054's NOW label and progress block, and T055's rows. It has no separate sessions line and no counts line with rows, and keeps the display name, full branch and directory lines. Done when every `expanded` test in `overview_card.rs` and `card_grid.rs` is green, with geometry asserts updated only where the meta line moved a line.
-- [x] T057 Showcase, snapshot and guide (FR-027):
+- [X] T057 Showcase, snapshot and guide (FR-027):
   - the showcase's five-state grid (`crates/micold-client/src/showcase/sections/surfaces.rs`) follows the new card, and `showcase_completeness` is green;
   - regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1 … --test layout_snapshot`) and check that the diff moves only Overview rectangles;
   - `docs/user-guide/overview.md` describes the meta line ("Issue #1117 fix/1117 · 1 session running"), the NOW label and the progress caption, and drops the counts line under rows.
 
   Done when `scripts/gate.sh` is green.
-- [x] T058 Visual pass (SC-006): re-run `bugs/BUG-1298/render_probe.rs`, `shot.js` and `side.py` at `PROBE_WIDTH` 235 and 280 (design at the same widths: set the viewport so `.card` is that wide), in light and dark. Save the images as `bugs/BUG-1298/fixed-vs-design-*.png` and record, per D1–D19, matched or the reason it differs in `bugs/BUG-1298/visual-pass.md`. Done when D1–D19 all read matched, or are accepted as FR-027 exceptions.
+- [X] T058 Visual pass (SC-006): re-run `bugs/BUG-1298/render_probe.rs`, `shot.js` and `side.py` at `PROBE_WIDTH` 235 and 280 (design at the same widths: set the viewport so `.card` is that wide), in light and dark. Save the images as `bugs/BUG-1298/fixed-vs-design-*.png` and record, per D1–D19, matched or the reason it differs in `bugs/BUG-1298/visual-pass.md`. Done when D1–D19 all read matched, or are accepted as FR-027 exceptions.
 
 ### M5 — Cards match the Overview Card Redesign mockup (BUG-1298)
 

@@ -788,9 +788,20 @@ fn meta_line<'a, M: Clone + 'a>(
     } else {
         text.sessions.clone()
     };
+    let mut words: Vec<String> = Vec::new();
     for word in sessions.split(' ') {
+        match words.last_mut() {
+            // "·" keeps to the word after it, so it never ends a line on its own.
+            Some(last) if last == "\u{b7}" => {
+                last.push(' ');
+                last.push_str(word);
+            }
+            _ => words.push(word.to_string()),
+        }
+    }
+    for word in words {
         pieces.push(
-            Text::new(word.to_string(), TypeRole::Body, roles)
+            Text::new(word, TypeRole::Body, roles)
                 .tint(p.on_body_variant)
                 .into(),
         );
@@ -3254,7 +3265,11 @@ mod tests {
                 let mut m = in_room(linked(&model, expanded), 380.0);
                 let text = m.painted_text();
                 let link = text.iter().find(|p| p.content == LINK).expect("link");
-                let sessions = word(&text, "\u{b7}");
+                // "·" is painted with the word after it, so it never ends a line alone.
+                let sessions = text
+                    .iter()
+                    .find(|p| p.content.starts_with("\u{b7} "))
+                    .unwrap_or_else(|| panic!("no \"\u{b7} \" piece: {text:?}"));
                 assert!(
                     (link.bounds.x - BODY_SIDE - EDGE).abs() <= 0.5,
                     "expanded {expanded}: {link:?} is flush with the body"
