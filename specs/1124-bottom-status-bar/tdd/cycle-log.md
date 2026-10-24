@@ -4,7 +4,7 @@
 
 The StatusBar and model tests (T003, T007) were written in the same step as their implementation
 (T004, T004b, T012), so their first red was not captured then. After review B M1 F1 each behaviour
-was shown red against a mutated build (`scripts`-free, reverted with `git checkout`): the give-way
+was shown red against a mutated build (reverted with `git checkout`): the give-way
 pass made the identity, every tone `on_surface_variant`, the leading group flush to the edge, the bar
 4 dp taller, no busy ring, the connection dot always positive, the fallback check removed, warning
 words neutral with no notice, bring-up not busy, and the host daemon named instead of "local".

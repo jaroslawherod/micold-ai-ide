@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M1 verify
-- **Next step**: M1 verify: full gate, review B, visual pass; then the M1 PR
+- **Phase**: M1 pr
+- **Next step**: orchestrator opens the M1 PR from scratchpad pr-title.md / pr-body.md; after merge, milestone M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | — | in progress |
+| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: gate green, A CLEAN, B CLEAN r2, visual pass 5/5 |
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | — | planned |
 | M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | planned |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
@@ -48,7 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | a336c6f1ebfd5e1598c453a4535ea5aeff6790b2:fe7a79742614d045774446cb51b847fe9564bb1e | CLEAN (2 MINOR: R11 typo, R6 None fallback — fixed, prose only) |
 | Tasks | 1 | c125de1a0438346af357aa10e590a942959da084:697e95407233a56669e0a960535abc7d181ec6f6 | CHANGES: 1 MAJOR (M4 Verify ran main_tests with --lib), 3 MINOR (SC-001 split, checklist note, macOS chord example) — all fixed |
 | Tasks | 2 | c42ec5e995bdd8f5e3c6560f3f5651acdf8c85f1:697e95407233a56669e0a960535abc7d181ec6f6 | CLEAN |
-| B M1 (conformance, sonnet) | 1 | 9bcb0c9d1fceee0a76897160ebb03fbe36ef3391:e4cc913076548077f3026bcb11c688c30388e4b1 | CHANGES: 1 MAJOR (F1 no red recorded for T003/T007/T009–T011 — fixed: red runs against a mutated build recorded in tdd/cycle-log.md), 1 MINOR (F2 banner-words refactor — noted in the log); fix is evidence/prose only, no code changed, so no round 2 |
+| B M1 (conformance, sonnet) | 1 | 9bcb0c9d1fceee0a76897160ebb03fbe36ef3391:e4cc913076548077f3026bcb11c688c30388e4b1 | CHANGES: 1 MAJOR (F1 no red recorded for T003/T007/T009–T011 — fixed: red runs against a mutated build recorded in tdd/cycle-log.md), 1 MINOR (F2 banner-words refactor — noted in the log) |
+| B M1 (conformance, sonnet) | 2 | bc81fc61c3a72f35e00d9e3c432be7e7f6da6680:8dec2fd824c32932a342e929595d8405e244a948 | CLEAN (1 MINOR: wording in the log — fixed, prose only) |
 | A M1 (code-review high) | 1 | 1d17c59cc149d73c326b84b00dd8f37f9e20fae5:8a60fd0f91a8e9b92cd69538ff8e8903fe9ad44d | CLEAN (4 MINOR: F1 dot duplicated — fixed, shared `unread_mark::filled_circle`; F3 operate visits dropped items — fixed; F2, F4 declined) |
 
 ## Declined review findings
@@ -71,6 +72,6 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- M1 visual §B7: at 640 px the M1 bar's texts fit whole, so the client never showed "…"; the shortening is covered by the showcase's too-narrow instance and `status_bar_fits`. Re-check at 640 px once M4/M5 add the CLI item, hints and usage.
 
 Notes: speckit-analyze (sonnet) 0 CRITICAL/HIGH; its MEDIUM/LOW findings fixed in tasks.md, plan.md (state count), quickstart.md, spec.md (US3 wording). Optional after_tasks hooks (tdd.plan, docguard.score) skipped. Checklist requirements.md: last item ticked (markers resolved in clarify).
