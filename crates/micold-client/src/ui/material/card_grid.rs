@@ -49,6 +49,7 @@ pub struct CardGrid<'a, M> {
     expanded: Option<(usize, OverviewCard<'a, M>)>,
     on_window_blur: Option<M>,
     rest_scope: u64,
+    instant: bool,
 }
 
 /// What a grid asks its owner when a zoom moves the card at the top of the view.
@@ -71,6 +72,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             expanded: None,
             on_window_blur: None,
             rest_scope: 0,
+            instant: false,
         }
     }
 
@@ -396,8 +398,16 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
         self
     }
 
+    /// *Reduce motion* (feature 1299, FR-007): every card's focus appears and goes at once.
+    /// Defaults to `false`.
+    pub fn instant(mut self, instant: bool) -> Self {
+        self.instant = instant;
+        self
+    }
+
     /// The grid proper, without its scrollable.
     fn into_grid(self) -> Grid<'a, M> {
+        let instant = self.instant;
         let (expanded, twin) = match self.expanded.clone() {
             Some((index, twin)) if index < self.cards.len() => (
                 Some(index),
@@ -414,7 +424,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             cards: self
                 .cards
                 .iter()
-                .map(|card| Element::from(card.clone()))
+                .map(|card| Element::from(card.clone().instant(instant)))
                 .collect(),
             min_width: self.min_width,
             spacing: self.spacing,
@@ -2940,19 +2950,7 @@ mod tests {
         let slot = slots(&m.node, 6)[1];
         let on = link_in(&mut m, slot);
         let asked = |m: &mut Mounted<'_>, now: std::time::Instant| {
-            let mut messages = Vec::new();
-            let mut shell = iced::advanced::Shell::new(&mut messages);
-            m.element.as_widget_mut().update(
-                &mut m.tree,
-                &Event::Window(iced::window::Event::RedrawRequested(now)),
-                iced::advanced::Layout::new(&m.node),
-                mouse::Cursor::Available(on),
-                &m.renderer,
-                &mut iced::advanced::clipboard::Null,
-                &mut shell,
-                &Rectangle::with_size(m.room),
-            );
-            shell.redraw_request()
+            m.tick(now, mouse::Cursor::Available(on)).1
         };
         let t0 = std::time::Instant::now();
         assert!(matches!(asked(&mut m, t0), RedrawRequest::At(_)));
@@ -3193,22 +3191,7 @@ mod tests {
         let mut m = mounted(numbered_grid(), 900.0, 4000.0);
         let slot = slots(&m.node, 6)[1];
         let on = painted_in(&mut m, slot, "#12");
-        let mut asked = |now: std::time::Instant| {
-            let mut messages = Vec::new();
-            let mut shell = iced::advanced::Shell::new(&mut messages);
-            m.element.as_widget_mut().update(
-                &mut m.tree,
-                &Event::Window(iced::window::Event::RedrawRequested(now)),
-                iced::advanced::Layout::new(&m.node),
-                mouse::Cursor::Available(on),
-                &m.renderer,
-                &mut iced::advanced::clipboard::Null,
-                &mut shell,
-                &Rectangle::with_size(m.room),
-            );
-            let redraw = shell.redraw_request();
-            (messages, redraw)
-        };
+        let mut asked = |now: std::time::Instant| m.tick(now, mouse::Cursor::Available(on));
         let t0 = std::time::Instant::now();
         assert!(matches!(asked(t0).1, RedrawRequest::At(_)));
         assert_eq!(
@@ -3235,5 +3218,57 @@ mod tests {
         let t0 = std::time::Instant::now();
         assert_eq!(frame_at(&mut m, at, t0), NOTHING);
         assert_eq!(frame_at(&mut m, at, t0 + EXPAND_REST), ["rest 1"]);
+    }
+
+    // --- Feature 1299: Reduce motion reaches the cards (D4) ------------------------------------
+
+    use super::super::test_support::{at, strengths, DONE, MIDWAY};
+    use iced::window::RedrawRequest;
+
+    fn focus_grid(instant: bool) -> Mounted<'static> {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        mounted(plain_grid(&models).instant(instant), 900.0, 4000.0)
+    }
+
+    /// The Reduce motion test (US3-1, FR-007, SC-002): with `instant`, Tab onto a card shows its
+    /// focus at full on the first frame, Tab away at none on the first frame, and neither asks
+    /// for a next one.
+    #[test]
+    fn an_instant_grid_shows_and_drops_a_cards_focus_on_the_first_frame() {
+        let mut m = focus_grid(true);
+        m.focus_next();
+        let onto = m.frames(0, 0, strengths);
+        assert_eq!(onto[0].1[..2], [1.0, 0.0]);
+        assert_eq!(onto[0].2, RedrawRequest::Wait);
+        m.focus_next();
+        let away = m.frames(16, 16, strengths);
+        assert_eq!(away[0].1[..2], [0.0, 1.0]);
+        assert_eq!(away[0].2, RedrawRequest::Wait);
+    }
+
+    /// The flag reaches the cards: a default grid's card is part-way at ~75 ms.
+    #[test]
+    fn a_default_grids_card_focus_fades() {
+        let mut m = focus_grid(false);
+        m.focus_next();
+        let mid = at(&m.frames(0, DONE, strengths), MIDWAY)[0];
+        assert!(
+            0.0 < mid && mid < 1.0,
+            "at ~75 ms the card's focus is at {mid}"
+        );
+    }
+
+    /// FR-008: a grid rebuilt `instant` mid-fade is at its end state on the next frame.
+    #[test]
+    fn reduce_motion_saved_mid_fade_ends_it_on_the_next_frame() {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        let mut m = focus_grid(false);
+        m.focus_next();
+        let mid = at(&m.frames(0, MIDWAY, strengths), MIDWAY)[0];
+        assert!(mid < 1.0, "{mid}");
+        m.rebuild(plain_grid(&models).instant(true).unscrolled());
+        let next = m.frames(MIDWAY + 16, MIDWAY + 16, strengths);
+        assert_eq!(next[0].1[0], 1.0);
+        assert_eq!(next[0].2, RedrawRequest::Wait);
     }
 }

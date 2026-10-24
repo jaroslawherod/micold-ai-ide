@@ -185,6 +185,33 @@ pub fn holds_whole<M>(host: Element<'_, M>, part: Element<'_, M>, room: Size) ->
 /// The window the mounted-element tests lay their element out in.
 pub const WINDOW: Size = Size::new(400.0, 800.0);
 
+/// One nominal frame, in milliseconds: [`Mounted::frames`] ticks this far apart.
+pub const FRAME_MS: u64 = 16;
+/// The tick nearest 75 ms into a 150 ms transition that starts on a tick: five frames on.
+pub const MIDWAY: u64 = 5 * FRAME_MS;
+/// The last tick by 150 ms and one frame into such a transition (SC-001).
+pub const DONE: u64 = (150 + FRAME_MS) / FRAME_MS * FRAME_MS;
+
+/// How much of each focus indicator in `tree` is drawn, in tree order (feature 1299).
+pub fn strengths(tree: &Tree) -> Vec<f32> {
+    use super::keyboard_focus::Focus;
+    let mut found = Vec::new();
+    if tree.tag == iced::advanced::widget::tree::Tag::of::<Focus>() {
+        found.push(tree.state.downcast_ref::<Focus>().strength(true));
+    }
+    found.extend(tree.children.iter().flat_map(strengths));
+    found
+}
+
+/// What [`Mounted::frames`] read at the tick `ms`.
+pub fn at<T>(ticks: &[(u64, T, iced::window::RedrawRequest)], ms: u64) -> &T {
+    &ticks
+        .iter()
+        .find(|(t, ..)| *t == ms)
+        .expect("a tick at that time")
+        .1
+}
+
 /// A mounted element, its widget tree and its layout — the three things that have to stay in step
 /// for an event to land where the test thinks it does.
 ///
@@ -263,11 +290,67 @@ impl<'a> Mounted<'a> {
 
     /// [`Self::send`], and whether the element captured the event, so no later handler sees it.
     pub fn send_captured(&mut self, event: Event, cursor: mouse::Cursor) -> (Vec<String>, bool) {
+        let (messages, captured, _) = self.deliver(&event, cursor);
+        (messages, captured)
+    }
+
+    /// One frame tick stamped `at`, with the pointer at `cursor`: what was published and the frame
+    /// the element asked for next (`RedrawRequest::Wait` once nothing moves, FR-025).
+    pub fn tick(
+        &mut self,
+        at: std::time::Instant,
+        cursor: mouse::Cursor,
+    ) -> (Vec<String>, iced::window::RedrawRequest) {
+        let (messages, _, redraw) = self.deliver(
+            &Event::Window(iced::window::Event::RedrawRequested(at)),
+            cursor,
+        );
+        (messages, redraw)
+    }
+
+    /// Frame ticks [`FRAME_MS`] apart from `from` to `until` ms after `origin`, inclusive, with
+    /// the pointer away: each tick's time, what `read` takes from the tree after it, and the
+    /// frame asked for next.
+    pub fn frames<T>(
+        &mut self,
+        from: u64,
+        until: u64,
+        read: impl Fn(&Tree) -> T,
+    ) -> Vec<(u64, T, iced::window::RedrawRequest)> {
+        (from..=until)
+            .step_by(FRAME_MS as usize)
+            .map(|ms| {
+                let at = self.origin + std::time::Duration::from_millis(ms);
+                let (_, asked) = self.tick(at, mouse::Cursor::Unavailable);
+                (ms, read(&self.tree), asked)
+            })
+            .collect()
+    }
+
+    /// Rebuild the element over the **same** tree, the way a frame does after the application's
+    /// state has moved on: each widget keeps its state, and the element is laid out again.
+    ///
+    /// A supplied flag is read when the widget is *built*, so "the application changed its mind"
+    /// is not an event that can be sent: it is a rebuild carrying a different answer.
+    /// `Mounted::new` would allocate a fresh tree and lose exactly the state under test.
+    pub fn rebuild(&mut self, element: impl Into<Element<'a, String>>) {
+        self.element = element.into();
+        self.tree.diff(&self.element);
+        self.relayout();
+    }
+
+    /// One event through `update`: what was published, whether it was captured, and the frame
+    /// asked for.
+    fn deliver(
+        &mut self,
+        event: &Event,
+        cursor: mouse::Cursor,
+    ) -> (Vec<String>, bool, iced::window::RedrawRequest) {
         let mut messages = Vec::new();
         let mut shell = iced::advanced::Shell::new(&mut messages);
         self.element.as_widget_mut().update(
             &mut self.tree,
-            &event,
+            event,
             Layout::new(&self.node),
             cursor,
             &self.renderer,
@@ -277,11 +360,12 @@ impl<'a> Mounted<'a> {
         );
         let captured = shell.is_event_captured();
         let invalid = shell.is_layout_invalid();
+        let redraw = shell.redraw_request();
         // As the runtime does: a widget that asks for a new layout gets it before the next event.
         if invalid {
             self.relayout();
         }
-        (messages, captured)
+        (messages, captured, redraw)
     }
 
     /// Run `operation` against the element to the end of its chain, the way the runtime does,

@@ -209,7 +209,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    let mut grid = CardGrid::new(cards, r);
+    // Reduce motion as saved, the flag the drawer reads too (feature 1299, FR-007, FR-008).
+    let mut grid = CardGrid::new(cards, r).instant(state.settings.reduce_motion);
     if let Some(index) = expanded_at {
         // The twin: the same card collapsed, with no id or messages, measured for its row (U2).
         grid = grid.expanded(index, {

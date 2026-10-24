@@ -26,9 +26,11 @@ use iced::widget::{button, column, container, row, stack, Space};
 use iced::{keyboard, Alignment, Element, Length};
 use micold_core::overview::{CardModel, CardState};
 use micold_core::overview_text::{CardText, ExpandedText};
+use micold_core::tokens::motion::duration;
 use micold_core::tokens::{elevation, spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::time::Duration;
 
 /// The card's minimum height: feature 813's card, which every card was until feature 1120. A card is
 /// as tall as its rows need and never shorter than this when its limits ask it to be: the grid lays
@@ -201,6 +203,7 @@ pub struct OverviewCard<'a, M> {
     pr_link_id: Option<ByNumber<'a, iced::advanced::widget::Id>>,
     on_pr_link_keyboard_focus: Option<Rc<dyn Fn(u64, bool) -> M + 'a>>,
     on_pr_link_menu: Option<ByNumber<'a, M>>,
+    instant: bool,
     _marker: PhantomData<&'a M>,
 }
 
@@ -222,6 +225,10 @@ const BODY_TOP: f32 = 12.0;
 const BODY_SIDE: f32 = 14.0;
 /// The room between the body's rows (FR-027).
 const ROW_GAP: f32 = 8.0;
+
+/// How long the card's focus takes to fade in or out (feature 1299, R5): one name, so the fade
+/// and the expanded card's lift cannot drift apart.
+pub(crate) const CARD_MOTION: Duration = Duration::from_millis(duration::SHORT_3);
 
 /// The target outline's width (feature 972, R7).
 pub const TARGET_WIDTH: f32 = 2.0;
@@ -257,6 +264,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             pr_link_id: None,
             on_pr_link_keyboard_focus: None,
             on_pr_link_menu: None,
+            instant: false,
             _marker: PhantomData,
         }
     }
@@ -493,6 +501,13 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self.id = Some(id);
         self
     }
+
+    /// *Reduce motion* (feature 1299, FR-007): the card's focus appears and goes at once rather
+    /// than fading over [`CARD_MOTION`]. Defaults to `false`.
+    pub fn instant(mut self, instant: bool) -> Self {
+        self.instant = instant;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
@@ -633,11 +648,13 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         if let Some(f) = card.on_keyboard_focus {
             focusable = focusable.on_shown_change(move |shown| f(shown));
         }
-        let focusable = focusable.indicator(Indicator {
-            outline: roles.secondary,
-            layer: p.on_body,
-            radius: RADIUS,
-        });
+        let focusable = focusable
+            .indicator(Indicator {
+                outline: roles.secondary,
+                layer: p.on_body,
+                radius: RADIUS,
+            })
+            .fade((!card.instant).then_some(CARD_MOTION));
         // The ripple is the card's only state layer while it runs (feature 971, D1); the context
         // area outside it takes only the secondary press, which the ripple ignores (feature 972).
         // The control chain is a layer over the face, which sees every event first: a press its
@@ -1851,6 +1868,8 @@ mod tests {
             (((size.height.ceil() as u32 - row_from_end) * width + width / 2) * 4) as usize
         };
         card.focus_next();
+        // The ring fades in (feature 1299): draw it once it has.
+        card.frames(0, DONE, strengths);
         let (focused, _) = card.drawn(backdrop);
         let i = bottom(2);
         assert!(
@@ -2322,6 +2341,8 @@ mod tests {
         // equality.
         let i = ((width + width / 2) * 4) as usize;
         card.focus_next();
+        // The ring fades in (feature 1299): draw it once it has.
+        card.frames(0, DONE, strengths);
         let (focused, _) = card.drawn(backdrop);
         assert!(
             apart(&focused[i..i + 3]) + 60.0 < apart(&rest[i..i + 3]),
@@ -4200,6 +4221,79 @@ mod tests {
             (title.bounds.x - 15.0).abs() < 0.5,
             "1 px edge and 14 px padding: {:?}",
             title.bounds
+        );
+    }
+
+    // --- Feature 1299: the card's focus fades (D2) ---------------------------------------------
+
+    use super::super::test_support::{at, strengths, DONE, FRAME_MS, MIDWAY};
+
+    /// R5: the card moves on `short_3`, one name for the fade and the lift.
+    #[test]
+    fn the_cards_motion_is_short_3() {
+        assert_eq!(
+            CARD_MOTION,
+            std::time::Duration::from_millis(tokens::motion::duration::SHORT_3)
+        );
+    }
+
+    fn focusable_card(instant: bool) -> Mounted<'static> {
+        Mounted::new(
+            OverviewCard::<String>::new(&titled(), roles())
+                .on_press("open".to_string())
+                .instant(instant),
+        )
+    }
+
+    /// FR-001, SC-001: an activatable card's focus is part-way at ~75 ms after Tab, full by
+    /// 150 ms and a frame.
+    #[test]
+    fn an_activatable_cards_focus_fades_in() {
+        let mut m = focusable_card(false);
+        m.focus_next();
+        let up = m.frames(0, DONE, strengths);
+        let mid = at(&up, MIDWAY)[0];
+        assert!(
+            0.0 < mid && mid < 1.0,
+            "at ~75 ms the card's focus is at {mid}"
+        );
+        assert_eq!(at(&up, DONE)[0], 1.0);
+    }
+
+    /// FR-007: an instant card is fully indicated on the first frame after Tab, and asks for no
+    /// next frame.
+    #[test]
+    fn an_instant_cards_focus_is_full_on_the_first_frame() {
+        let mut m = focusable_card(true);
+        m.focus_next();
+        let first = m.frames(0, 0, strengths);
+        assert_eq!(first[0].1, [1.0]);
+        assert_eq!(first[0].2, iced::window::RedrawRequest::Wait);
+    }
+
+    /// US4-3, FR-011: Tab from the card onto its link: the card's focus fades out, the link's
+    /// ring is there at once.
+    #[test]
+    fn the_cards_link_is_not_faded() {
+        let mut m = Mounted::new_in(
+            container(
+                linked(&with_link(Some("feat/1122_x")), false)
+                    .on_link_keyboard_focus(|f| format!("link focus {f}")),
+            )
+            .height(Length::Fixed(300.0)),
+            Size::new(380.0, 400.0),
+        );
+        m.focus_next();
+        let up = m.frames(0, DONE, strengths);
+        assert!(at(&up, DONE).contains(&1.0), "{:?}", at(&up, DONE));
+        m.focus_next();
+        let next = m.frames(DONE + FRAME_MS, DONE + FRAME_MS, strengths);
+        let drawn = &next[0].1;
+        assert_eq!(drawn.len(), 2, "the card and its link: {drawn:?}");
+        assert_eq!(drawn.iter().filter(|s| **s == 1.0).count(), 1, "{drawn:?}");
+        assert!(
+            drawn.iter().any(|s| 0.0 < *s && *s < 1.0),
+            "the card's focus did not fade out: {drawn:?}"
         );
     }
 }

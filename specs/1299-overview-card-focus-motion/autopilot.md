@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: tasks (design PR open)
-- **Next step**: orchestrator waits on CI for #1319 and merges; then milestone M1. Checklists closed (requirements.md: 0 unchecked). Specs-only gate green; full scripts/gate.sh ran out of disk (30 GB free not enough) and was stopped, target dirs wiped
+- **Phase**: implement M1 (reviews pending)
+- **Next step**: reviews A and B of M1 (orchestrator runs them; unit has no Agent tool), then full gate and the M1 PR. Visual pass deferred to the close unit (no Agent/visual-pass in this session)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1319 | design (spec, plan, tasks) | open | — |
+| #1319 | design (spec, plan, tasks) | merged | 1f66380fd3092861e818531f9c3a308d08abd5c5 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | — | pending |
+| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | — | implemented, in review |
 | M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | pending |
 
 ## Decisions
@@ -58,4 +58,5 @@ None.
 
 ## Follow-ups not done
 
-- Issue #1298 (card design match) runs in a parallel session and edits `overview_card.rs`; expect a rebase conflict there.
+- M1 visual pass (quickstart §B.4 arrow half, §B.6, §B.7, §B.8 focus half; client Tab onto/away fade): deferred to the close unit, no visual-pass skill reachable in this session.
+- M1
