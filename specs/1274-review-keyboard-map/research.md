@@ -11,7 +11,8 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
   lists, hunk counts, a reviewed predicate, comment facts). None of it names a type from #1269,
   #1270, #1271, #1273 or #1127. That is milestone **M1** and can merge before any blocker. The
   client wiring (listener, Review tab state, sheet, tooltips, jump-to entries), docs, layout
-  snapshot and visual pass are **M2** (after #1269, #1270, #1271, #1273) and **M3** (after #1127).
+  snapshot and visual pass are **M2** and **M3** (after #1269, #1270, #1271, #1273) and **M4**
+  (after #1127); the tasks unit split the client work by story into M2 and M3.
 - **Rationale**: the issue's acceptance asks for the pure logic in core with unit tests (Principle
   I); the spec's Dependencies section forbids stand-ins for another issue's work. Inputs as plain
   slices and closures are what each blocker will hand over whatever its own types turn out to be.
@@ -186,7 +187,7 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
 - Core unit (M1): every rule of R2–R6 and R9 (`mise run test-core`), including a 200-file,
   500-comment timing test with a generous 50 ms bound so loaded CI does not flake (SC-003's 100 ms
   is the view's budget).
-- Client render-free (M2/M3): `tests/keymap.rs` (send chord decode, near misses, conflicts with
+- Client render-free (M2–M4): `tests/keymap.rs` (send chord decode, near misses, conflicts with
   #803 FR-006 reserved lists and every existing app chord: FR-011; labels in docs: SC-004),
   `tests/review_keys.rs` (new: holder gate, press → reducer effects on a Review tab state, send
   chord ≡ `SendPressed`: SC-006, selection change clears current hunk), `tests/quick_switch.rs`

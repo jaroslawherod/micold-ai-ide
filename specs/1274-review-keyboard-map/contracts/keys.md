@@ -1,7 +1,7 @@
 # Contract: Review keys (#1274)
 
 The user-facing key map and how a press is decided. Rules K1–K4 are core (`review::keys`, M1);
-K5–K7 are client (M2). Data shapes: [data-model.md](../data-model.md).
+K5–K7 are client (M2, M3). Data shapes: [data-model.md](../data-model.md).
 
 ## K1 — The table (`micold_core::review::keys::REVIEW_KEYS`, public, sheet order)
 

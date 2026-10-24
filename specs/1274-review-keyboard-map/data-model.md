@@ -57,7 +57,7 @@ side-by-side rows, in hunk order (R9).
 | `Via { Name, Detail }`, `Ranked.via` | sort `(via, rank, index)`; spans index the matched text (R6, FR-017) |
 | `jump::review_candidates(files: &[RelPath], is_reviewed, comments: &[ReviewComment]) -> Vec<(Candidate, ReviewEntry)>` | file: name = file name, detail = path; comment: name = text joined by spaces, detail = path; `ReviewEntry` carries what the row shows (reviewed state; status, path, line, first text line) |
 
-## Client — Review tab view state (M2, on #1269's per-entry view)
+## Client — Review tab view state (M2, M3; on #1269's per-entry view)
 
 | Field | Type | Rules |
 |---|---|---|
