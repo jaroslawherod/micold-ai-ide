@@ -114,9 +114,13 @@ the file is Reviewed again.
    new commit is made that leaves `src/a.rs`'s change the same, **Then** `src/a.rs` stays Reviewed
    (the new file is Unseen and *m* goes up).
 5. **Given** `src/a.rs` is Reviewed in the working tree with only its uncommitted change, **When**
-   that change is committed unaltered, **Then** it stays Reviewed (committing does not alter the
-   file's change against the base).
-6. **Given** the Review tab is not shown (#1269) while a marked file changes, **When** I show the
+   that change is committed unaltered in an entry that has a base (see the base line), **Then** it
+   stays Reviewed (committing does not alter the file's change against the base). In an entry
+   without a base (the Default entry, or no default branch or common history) only uncommitted
+   changes are listed, so the committed file leaves the list: see *File no longer changed*.
+6. **Given** `src/a.rs` is Reviewed, **When** its change is reverted so it leaves the list, the app
+   is restarted, and the same change is made again, **Then** `src/a.rs` is Reviewed again.
+7. **Given** the Review tab is not shown (#1269) while a marked file changes, **When** I show the
    tab and it re-reads, **Then** the file is shown Changed since reviewed.
 
 ---
@@ -164,7 +168,10 @@ the same path there is not marked; switch back and check it still is.
 
 1. **Given** the view shows pull request #12, **When** I mark `src/a.rs`, **Then** the header reads
    *1 of m reviewed* for #12, and the working tree's `src/a.rs` is not marked by it.
-2. **Given** that mark, **When** pull request #12 gets a new head commit that changes `src/a.rs`'s
+2. **Given** a mark in pull request #12, **When** #12 is merged, closed or leaves the entry's list
+   of pull requests, **Then** the mark is kept, as #12's comments are (feature 1149), and is shown
+   again whenever #12's diff is shown; it goes only when unmarked or when the entry is removed.
+3. **Given** that mark, **When** pull request #12 gets a new head commit that changes `src/a.rs`'s
    diff, **Then** `src/a.rs` is Changed since reviewed in #12; a new head commit that leaves that
    diff the same keeps it Reviewed.
 
@@ -179,10 +186,10 @@ the same path there is not marked; switch back and check it still is.
 - **Renamed file**: a rename is listed under its new path; a mark on the old path does not carry
   over, so the renamed file is Unseen. A file whose rename is undone gets its old mark back if its
   change is the same.
-- **File no longer changed**: a marked file that leaves the list (reverted, or deleted when it was
-  added) is not counted; if it comes back with the same change it is Reviewed again. Marks of files
-  that are no longer listed may be dropped by the session service when it next stores the entry's
-  marks; nothing visible depends on keeping them.
+- **File no longer changed**: a marked file that leaves the list (reverted, committed in an entry
+  without a base, or deleted when it was added) is not counted, but its mark is kept (FR-016); if it
+  comes back with the same change it is Reviewed again, and with a different change it is Changed
+  since reviewed.
 - **Binary, not-text and large files** (shown without a line diff): they can be marked; their file's
   change is the same while the file's kind and its contents on both sides are unchanged.
 - **The diff cannot be read** (error, or still *Reading changes…*): files keep the state last
@@ -191,6 +198,9 @@ the same path there is not marked; switch back and check it still is.
   marks): the mark control is unavailable with a tooltip saying why, rows show ○ / ● from drafts
   only, and the header shows no progress. Comments keep working as today. A mark request that fails
   leaves the state as it was and shows the failure where the view shows other review errors.
+- **Older window, newer service** (Principle II): a window of a build without marks, attached to a
+  service that keeps them, keeps working as before: it shows no marks or progress, its comments
+  and sends are unaffected, and the marks other windows set are not changed by it.
 - **Concurrent windows** (Principle II): the session service holds one set of marks per entry and
   source; the last change of a file's mark wins and is pushed to every attached window, so all
   converge.
@@ -228,6 +238,9 @@ the same path there is not marked; switch back and check it still is.
   request's marks are separate, and a mark in one never shows in another.
 - **FR-007**: Marking or unmarking MUST NOT change any comment, its status or the draft count, and
   sending, clearing or discarding comments MUST NOT change any mark.
+- **FR-016**: A mark MUST be kept until the user unmarks the file, marks it again (which replaces
+  it), or the entry is removed (FR-010). It MUST NOT be dropped because the file left the list, its
+  change differs, or its pull request was merged, closed or left the entry's list.
 
 **Progress**
 
@@ -267,7 +280,8 @@ the same path there is not marked; switch back and check it still is.
   file's change it was made on (enough to tell whether the current change is the same, not the
   diff itself).
 - **Entry marks**: all marks of one entry, grouped by source (working tree, or a pull request
-  number); kept by the session service beside the entry's comments and removed with them.
+  number); kept by the session service beside the entry's comments and removed with them, never
+  earlier (FR-016).
 - **Review state**: derived for each listed file from its marks, its Draft comments and its current
   file's change; never stored.
 - **Progress**: derived *n of m* for the listed files of the source shown; never stored.
