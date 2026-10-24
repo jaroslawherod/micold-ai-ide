@@ -401,7 +401,7 @@ pub fn progress(files: impl IntoIterator<Item = FileReview>) -> Option<Ratio> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::review::changes::Content;
+    use crate::review::changes::{ChangeIdentity, Content};
 
     fn p(path: &str) -> RelPath {
         RelPath::from_git(path)
@@ -539,6 +539,7 @@ mod tests {
             removed: 1,
             large: false,
             origin: Origin::Committed,
+            identity: ChangeIdentity::Unknown,
         }
     }
 

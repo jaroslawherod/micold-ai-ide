@@ -79,7 +79,7 @@ fn short_name(branch: &str) -> &str {
 mod tests {
     use super::*;
     use crate::review::base::{Base, ReviewScope};
-    use crate::review::changes::{ChangeKind, ChangedFile, Content};
+    use crate::review::changes::{ChangeIdentity, ChangeKind, ChangedFile, Content};
     use crate::review::RelPath;
 
     fn row(path: &str, added: u32, removed: u32, origin: Origin, content: Content) -> ChangedFile {
@@ -91,6 +91,7 @@ mod tests {
             removed,
             large: false,
             origin,
+            identity: ChangeIdentity::Unknown,
         }
     }
 

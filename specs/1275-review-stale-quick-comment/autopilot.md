@@ -15,19 +15,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: orchestrator opens the design PR (body prepared by the tasks unit) and records its number; after merge, milestone M1. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Phase**: implement M1
+- **Next step**: reviews A (`code-review` high) and B (conformance) of M1 on `origin/main...HEAD` (the M1 unit had no Agent tool), then open the M1 PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | planned (builds now) |
+| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | implemented, gated; reviews A/B pending |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | planned (builds now) |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
@@ -123,3 +124,9 @@ together within ~2 s.
 - Blockers not merged at spec time: #1271 (reviewed marks; only FR-013 needs it), #1269 (Review
   tab), #1270. Mockup not reachable from the cloud container; spec written from
   `docs/development/review-redesign.md`.
+- M1 notes (for review): `assemble` marks a working-tree new side with no id as
+  `VersionId::Unknown`, which `git::identify` fills (hash, `Stat`, or `Absent` when missing; a
+  failed `hash-object` falls back to `Stat`). I6 counts `hash-object` by re-running the test binary
+  in a child with `GIT_TRACE` set, so parallel tests do not write to the trace. TDD red shown by
+  mutation (no `identify`, no `--no-abbrev`: I1a, I3–I6 fail); the unit lacked the Agent tool, so
+  reviews A/B did not run in it.

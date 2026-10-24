@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn the_summary_counts_rows_and_sums_their_lines() {
         use crate::review::base::ReviewScope;
-        use crate::review::changes::{ChangeKind, ChangedFile, Content, Origin};
+        use crate::review::changes::{ChangeIdentity, ChangeKind, ChangedFile, Content, Origin};
         use crate::review::RelPath;
         let file = |path: &str, kind, content, added, removed| ChangedFile {
             path: RelPath::from_git(path),
@@ -421,6 +421,7 @@ mod tests {
             removed,
             large: false,
             origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
         };
         let list = ChangeList {
             files: vec![

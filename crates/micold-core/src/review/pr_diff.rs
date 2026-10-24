@@ -2,7 +2,10 @@
 //! diff for the whole request; the Changes view lists its files and parses a file's `patch` with
 //! [`super::diff::parse_unified`] when the user selects it. Pure: nothing here reads a file.
 
-use super::changes::{ChangeKind, ChangedFile, Content, Origin};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+use super::changes::{ChangeIdentity, ChangeKind, ChangedFile, Content, Origin};
 use super::{limits, RelPath};
 
 /// A pull request's files, in the order GitHub printed them.
@@ -110,9 +113,18 @@ fn read_section(section: &str) -> Option<PrFile> {
             removed,
             large: lines > u64::from(limits::MAX_CHANGED_LINES),
             origin: Origin::Committed,
+            identity: ChangeIdentity::Patch(patch_hash(section.as_bytes())),
         },
         patch: section.as_bytes().to_vec(),
     })
+}
+
+/// A file's identity in a pull request (FR-001a): a hash of its section. Never stored, so it
+/// need not be stable across processes.
+fn patch_hash(section: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    section.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// The path of a `---`/`+++` line, `None` for `/dev/null`; `prefix` is `a/` or `b/`.

@@ -21,6 +21,7 @@ pub mod prompt;
 pub mod reference;
 pub mod reply;
 pub mod source_menu;
+pub mod stale;
 pub mod store;
 pub mod target;
 pub mod tree;

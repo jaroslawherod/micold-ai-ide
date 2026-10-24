@@ -140,3 +140,34 @@ fn a_patch_is_its_section_byte_for_byte() {
     assert_eq!(diff.files[0].patch, first.as_bytes());
     assert_eq!(diff.files[1].patch, second.as_bytes());
 }
+
+/// I8 (feature 1275, FR-001a): a file's identity is a hash of its own section, so two sections
+/// that differ in any byte differ, and equal sections are equal.
+#[test]
+fn a_files_identity_follows_every_byte_of_its_section() {
+    use micold_core::review::changes::ChangeIdentity;
+    let section = |line: &str| {
+        format!(
+            "diff --git a/f.rs b/f.rs\nindex 1111111..2222222 100644\n--- a/f.rs\n+++ b/f.rs\n@@ -1 +1 @@\n-old\n+{line}\n"
+        )
+    };
+    let identity = |raw: &str| split_pr_diff(raw).files[0].file.identity.clone();
+    let first = identity(&section("new"));
+    assert!(matches!(first, ChangeIdentity::Patch(_)), "{first:?}");
+    assert_eq!(
+        first,
+        identity(&section("new")),
+        "equal sections, equal values"
+    );
+    assert_ne!(
+        first,
+        identity(&section("nex")),
+        "an edit with the same counts changes the identity"
+    );
+    let both = split_pr_diff(&format!("{}{}", section("new"), section("new2")));
+    assert_eq!(
+        both.files[0].file.identity, first,
+        "a section, not the whole diff"
+    );
+    assert_ne!(both.files[1].file.identity, first);
+}
