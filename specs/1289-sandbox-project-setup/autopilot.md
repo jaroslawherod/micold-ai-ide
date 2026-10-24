@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: spec
-- **Next step**: dispatch spec review round 1 (review.md + rubrics/spec.md, fresh autopilot-reviewer), act on it, then clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (FR-009 setup command location; Story 4 per-project image scope)
+- **Next step**: orchestrator dispatches spec review round 2 (sonnet, fix diff since round-1 snapshot); then clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (FR-009 setup command location; Story 4 per-project image scope)
 
 ## Pull requests
 
@@ -31,6 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Spec | 1 | b0a77d005ab504233e2ea45937bad3888c721813:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CHANGES: 3 MAJOR, 3 MINOR — all fixed (F1 PATH order + scenario; F2 stop vs disconnect; F3 FR-023a one run per worktree, notification per app; F4 bash/sh; F5 Default entry state/output; F6 citation) |
 
 ## Declined review findings
 
@@ -39,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec unit wrote spec.md, checklists/requirements.md and this ledger, committed and pushed. The spec review was NOT run: this unit has no Agent/subagent tool, and self-review is not allowed. Next: dispatch review round 1 on spec.md (snapshot b0a77d005ab504233e2ea45937bad3888c721813:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316), act on findings per review-rounds.md, commit, push; then clarify. Open findings: none yet.
+None.
 
 ## Open escalation
 
