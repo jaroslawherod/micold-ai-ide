@@ -1422,7 +1422,9 @@ mod tests {
         let at = iced::Point::new(bounds.x + bounds.width * 0.6, bounds.center_y());
         mounted.press(at);
         let released = mounted.send(
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)),
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
             iced::mouse::Cursor::Available(at),
         );
         assert!(released.contains(&"toggle".to_string()), "{released:?}");
