@@ -34,6 +34,9 @@
 - The feature is about which font files ship, so the spec names the typeface (Roboto), its weights,
   the provenance file and the licence file: these are the product's observable assets, not
   implementation choices. Code-level choices (where faces are registered, how a host copy is kept
-  from winning) are left to the plan.
+  from winning, whether the showcase sample shares the core markdown fixture) are left to the plan.
+- FR-008 lists the properties each shipped face must be checked for (parses, weight, italic style,
+  family, distinct file). These are the observable facts of the asset that make FR-002/FR-006
+  verifiable, not a test design; how the tests are written is left to the plan.
 - The issue offered two options; the spec decides (bundle italic faces, FR-010) with its reason in
   *Context*, so no clarification marker is left.

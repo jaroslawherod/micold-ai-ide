@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: spec
-- **Next step**: orchestrator dispatches spec review round 1 (autopilot-reviewer, rubrics/spec.md) on spec.md, then clarify unit (spec has no open markers)
+- **Phase**: clarify done
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -29,12 +29,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Bundle italic faces or drop the italic mapping (issue's two options)? | Bundle italic faces; keep the mapping (FR-010) | agent-resolved | spec.md#Context; orchestrator prompt prefers option 1 |
 | D2 | spec | Which italic weights? Issue suggests Italic + Medium Italic | 400, 500 and 600: one italic twin per shipped upright weight, so bold (resolves to 600) + italic keeps its weight (FR-002/FR-003) | agent-resolved | link_text.rs `painted` sets `Weight::Bold`; assets/fonts ships 400/500/600 only |
 | D3 | spec | Upstream reachable from the sandbox? | Yes: raw.githubusercontent.com google/fonts `ofl/roboto/Roboto-Italic[wdth,wght].ttf` returns 200; `uv` present for fonttools | agent-resolved | curl -I 2026-10-24 |
+| D4 | clarify | FR-009 sample: extend shared core fixture or showcase-only sample? | Left to the plan; spec requires only a bold-italic run | agent-resolved | spec review F2 |
 
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec review | 1 | 6721080f0a781ff07679652e804cc693d92581c9:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | not run: this unit has no Agent tool to dispatch a fresh reviewer; orchestrator to dispatch it (rubrics/spec.md) |
+| Spec review | 1 | 6721080f0a781ff07679652e804cc693d92581c9:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN, 2 MINOR (run by orchestrator): F1 FR-005/FR-008 implementation detail vs checklist, F2 FR-009 bold-italic vs shared fixture; both applied in clarify |
+| Clarify | 1 | spec.md | 3 questions, all agent-resolved (record existing rules); no new requirement, unit ends |
 
 ## Declined review findings
 
