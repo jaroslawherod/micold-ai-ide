@@ -319,6 +319,18 @@ fn status_bar_model(
     status_bar::model(state, connection, sandbox, now, offset)
 }
 
+/// Whether `view_with` draws the session view as the body (feature 1124, R8): a project is open, no
+/// Settings draft, Overview, Changes or Compare takes its place, and a session is active. The
+/// status bar's CLI item shows only then (FR-007).
+pub fn session_view_visible(state: &State) -> bool {
+    state.settings.settings_draft.is_none()
+        && state.workspace.active_project().is_some()
+        && !state.overview.open
+        && state.changes.open.is_none()
+        && crate::features::runs::compare_rows(&state.runs, state.active_sessions()).is_none()
+        && state.session.active.is_some()
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty state),
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
@@ -417,7 +429,7 @@ pub fn view_with<'a>(
         } else if let Some(compare) = compare::view(state, scheme) {
             // Feature 483, C1: Compare stands there too; the Changes view sits over it.
             compare
-        } else if state.session.active.is_some() {
+        } else if session_view_visible(state) {
             let link_context = terminal::link_context(state, sandbox);
             // Feature 1126, A1: the header above the pane area.
             session_area::view(

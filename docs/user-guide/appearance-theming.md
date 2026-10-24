@@ -39,6 +39,11 @@ with the full detail.
   "Getting image… 42%", "Starting sandbox…") with a turning ring, and the runtime's last line and
   any retry reason in the tooltip; in amber, "Sandbox failed", "Sandbox out of date" or
   "No sandbox" when the session runs without it.
+- **CLI** — in the session view only, the AI CLI the focused pane's session runs, for example
+  "CLI: Claude Code". It follows focus when you move between split panes, and it is left out in
+  the Overview, Changes, Compare, Settings, the project page and the empty start screen.
+- **Key hints** — at the right end, the chords that open the Overview and the quick switcher
+  ("Ctrl+Shift+O Overview", "Ctrl+Shift+P Jump"; "Cmd+Shift+O" and "Cmd+Shift+P" on macOS).
 
 When the window is too narrow for every item, the bar gives way in a fixed order: key hints go
 first, then the plan usage, then the texts are shortened with "…" — the connection item last. A
