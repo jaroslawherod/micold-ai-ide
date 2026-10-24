@@ -152,8 +152,8 @@ Each decision names what was chosen, why, and what was rejected. Paths are relat
 
 ## R9. The app mark
 
-- **Decision**: The 64 × 64 RGBA icon `shell/startup.rs` embeds (`assets/icon/icon-64.rgba`) moves
-  to the library as `icons::APP_ICON_RGBA` (startup reads it from there) and is drawn by NEW
+- **Decision**: The 64 × 64 RGBA icon `shell/startup.rs` embeds as private `ICON_RGBA` (`assets/icon/icon-64.rgba`) moves
+  to the library renamed `pub icons::APP_ICON_RGBA` (startup reads it from there) and is drawn by NEW
   `ui/material/app_mark.rs` `AppMark::new(roles)` → an `iced::widget::image` of `app_bar::MARK`
   side from one `LazyLock<image::Handle>`, wrapped in `Tooltip` with `metadata::APP_NAME` (FR-003,
   US1 s8). It has no press handler and no `TakesTheKeyboard`, so it is neither a control nor a Tab

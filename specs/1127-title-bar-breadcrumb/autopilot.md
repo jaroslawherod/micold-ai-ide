@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan unit (continuing a handover): review round 1 of plan.md, research.md, data-model.md, contracts/title-bar-ui.md, quickstart.md with rubrics/plan.md
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 8eb3f915c06f64566ad2e62c6f69da7d28f756f5:08ff39f5c466168d2ad5a9ff688e3b192d4f9461 | CLEAN (3 MINOR, fixed, prose only) |
+| Plan | 1 | 11ac16c31ec7892dbc9503a8efc59c62abc11341:7c59c3b9c7fa3e6b0a2d12520149d5778c88796e | CLEAN (1 MINOR: APP_ICON_RGBA is a rename of private ICON_RGBA; fixed, prose only) |
 
 ## Declined review findings
 
@@ -49,12 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit, 2026-10-24, handed over at 189k context (checkpoint OVER). Done: branch rebased onto
-origin/main (REBASED 2); speckit-plan run; plan.md, research.md (R1–R13), data-model.md,
-contracts/title-bar-ui.md, quickstart.md written and committed. #1125 checked on origin/main after
-fetch: M1, M2 merged, M3 (Overview row) not — plan keeps US3 as last milestone (R12). Next: review
-round 1 (review.md with rubrics/plan.md; snapshot first), act on findings, set Next step to
-`tasks unit`, return DONE PR: none. No review run yet; no open findings.
+None.
 
 ## Open escalation
 
