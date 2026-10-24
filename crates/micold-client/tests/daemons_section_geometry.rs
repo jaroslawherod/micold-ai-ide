@@ -870,7 +870,7 @@ fn field_and_section_gaps_take_one_value_across_kinds() {
     let field = step(&ssh, "User", "Port");
     assert!((step(&ssh, "Port", "Key file") - field).abs() < 0.5);
     assert!(
-        (step(&c, "Container name*", "Port") - field).abs() < 0.5,
+        (step(&c, "Container name", "Port") - field).abs() < 0.5,
         "container {c:?}"
     );
 

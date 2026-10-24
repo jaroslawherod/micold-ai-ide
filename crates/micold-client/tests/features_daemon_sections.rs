@@ -411,9 +411,8 @@ mod summaries {
     #[test]
     fn the_marker_follows_the_required_fields() {
         let mut c = fresh(DraftRuntime::Container);
+        // The container name is not required (feature 1116), so the section is never marked.
         c.container_name = String::new();
-        assert!(marked(&c, Section::Connection));
-        c.container_name = "box".into();
         assert!(!marked(&c, Section::Connection));
         c.profile.image = ImageChoice::Own(OwnImage::Reference(String::new()));
         c.image_reference = String::new();

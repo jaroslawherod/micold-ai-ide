@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1116
 - **Worktree branch**: feat/1116_container-daemon-default-the-container-name-to-the
 - **Started**: 2026-10-23
-- **Phase**: tasks
-- **Next step**: design PR merge, then milestone M1
+- **Phase**: milestone M1
+- **Next step**: M1 PR merge, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1297 | Design | open | … |
+| #1297 | Design | merged | 2ecf9e9eaa23625479047f65c2f6a7f2625b7c2b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Empty container name defaults to the sanitized daemon name | – | pending |
+| M1 | T001–T012 | full | Empty container name defaults to the sanitized daemon name | – | in review |
 
 ## Decisions
 
@@ -40,16 +40,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | d1dc2627e7c471c4fd0886ffdd06b8898735a213:f8d2257e9c0f112ac40a6a3e85cb74b9d46eaa10 | CLEAN (2 MINOR fixed) |
 | Plan review | 1 | 7eb8f0557e92900b6ded9f7b12df73a2977aca3a:1c6576b9833ac192a4518a3b5add680eca80ae58 | CLEAN (3 MINOR fixed, prose only) |
 | Tasks review | 1 | f8a62c6461cd10a70849a0054ef26320f185ed28:a5b8e5e01b17e843112acab15b68f3ace542dd0c | CHANGES: 1 MAJOR (T005 path, fixed, prose only) |
+| M1 code review A (high) | 1 | 7c93b3fef4c8dde01996ca6745345a3303f1388c:636da86ef2842bf145d1a2eb8a6191b49aadf370 | MINORs only |
+| M1 review B | 1 | same | CLEAN |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | Default of one character (`a`) is rejected by Docker (needs 2+) | FR-002/FR-011 fix the charset and length only; typed names are not length-checked either. Noted as a follow-up. |
+| M1 | A | Hint not shown for whitespace-only field; hint/resolve share logic; dead field_name arm; test names | MINOR, not fixed |
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+None.
 
 ## Open escalation
 
@@ -57,4 +60,4 @@ None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- A defaulted container name of one character (`a`) passes FR-002 but Docker needs at least two; consider a minimum length for defaulted and typed names.
