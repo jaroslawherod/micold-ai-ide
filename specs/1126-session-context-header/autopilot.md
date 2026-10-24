@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: design PR (orchestrator opens it), then M1
+- **Phase**: implement M1
+- **Next step**: M1 verify (scoped gate + review A, review B, full gate), then PR (M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1318 | design (spec, plan, tasks) | merged | f8eeaa43e5f151a08a2c20b055c5c9ce64bf9584 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | — | pending |
+| M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | — | in progress |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | — | pending |
 | M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | pending |
 

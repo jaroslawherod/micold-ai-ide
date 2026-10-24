@@ -335,7 +335,7 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 2];
 /// nodes BUG-002 moved. Filled in from the recorded tree rather than derived by reading the view,
 /// the way `sidebar.row.label` above was; an anchor that does not resolve fails by name
 /// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
-const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
+const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1, 1];
 /// The "+" that opens another instance, and the AI tab, the bar row's **last two** children.
 ///
 /// Feature 027 deleted the mode toggle that used to sit past them (FR-001) and reordered what was
@@ -345,7 +345,7 @@ const TERMINAL_BOTTOM_BAR: &[usize] = &[0, 0, 1, 1, 1];
 /// The AI tab being **last** is load-bearing, not incidental: iced settles a row's shortfall by
 /// shrinking trailing children, so the last child is the first thing squeezed when the bar runs out
 /// of room. `gates/bar_controls_hold_their_size.rs` reads this anchor for exactly that reason.
-const TERMINAL_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+const TERMINAL_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 3];
 
 /// The instance tab strip, and three of its tabs (feature 012 T057). The bar's row holds its title,
 /// a filling spacer and the status text, then whichever optional controls the session's state calls
@@ -372,15 +372,15 @@ const TERMINAL_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
 /// silently about something else. That is not hypothetical here: before feature 027 this state
 /// borrowed `TERMINAL_TAB_AI_PINNED`, which in a bar with a restart control lands on the *scrolling
 /// region*, and `gates/tab_children_fit.rs` had been measuring that region as though it were a tab.
-const TERMINAL_RESTARTABLE_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
-const TERMINAL_RESTARTABLE_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
+const TERMINAL_RESTARTABLE_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 4];
+const TERMINAL_RESTARTABLE_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 5];
 
 const TAB_STRIP_VIEWPORT: u32 = 668;
 
-const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
-const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0];
-const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1];
-const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 2];
+const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1];
+const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 2];
 /// The **AI tab** (feature 026 FR-001, FR-002), the strip's last child — one past the instances.
 ///
 /// Two indices, because two covered states hold different numbers of instances and FR-002 pins this
@@ -392,7 +392,7 @@ const TERMINAL_TAB_EXITED: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 2];
 /// One path, not one per instance count: FR-002b pins this tab **outside** the scrolling region, so
 /// it is the bar row's own child rather than the strip's last one, and its position no longer moves
 /// with the number of instances. That is the requirement stated as a path.
-const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
+const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 4];
 
 /// Inside a tab: the button's content column, whose first child is the active indicator (or, on an
 /// inactive tab, the transparent rule reserving its height) and whose second is the tab's content
@@ -403,7 +403,12 @@ const TERMINAL_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
 /// (FR-010b). Its anchor is deleted with it rather than left pointing at nothing —
 /// `an_anchor_whose_path_does_not_resolve_fails_naming_it` would fail on a stale one, which is the
 /// behaviour that makes an anchor worth writing.
-const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+const TERMINAL_TAB_ACTIVE_INDICATOR: &[usize] =
+    &[0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+
+/// The session area's context header (feature 1126, A1): the session area's first child, above
+/// the pane area, which moved one level down with it.
+const SESSION_HEADER: &[usize] = &[0, 0, 1, 1, 0];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -1538,6 +1543,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "toolbar.title",
                     path: TOOLBAR_TITLE,
                 },
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
                 // The bar itself, and the control BUG-002 moved. Named so a failure says "the mode
                 // toggle" rather than a bare path — the whole point of FR-004.
                 Anchor {
@@ -1582,11 +1592,16 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "toolbar.title",
                     path: TOOLBAR_TITLE,
                 },
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
                 // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1607,11 +1622,16 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "toolbar.title",
                     path: TOOLBAR_TITLE,
                 },
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
                 // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1632,9 +1652,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "toolbar.title",
                     path: TOOLBAR_TITLE,
                 },
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 0, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 0, 1, 0],
                 },
             ],
         },
@@ -1723,6 +1748,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "toolbar.title",
                     path: TOOLBAR_TITLE,
+                },
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
                 },
                 Anchor {
                     name: "terminal.bottom_bar",
@@ -1820,6 +1850,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                 StateUnderTest::new(state)
             },
             anchors: &[
+                // Feature 1126: the header above the panes.
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
                 Anchor {
                     name: "shell.root",
                     path: &[],

@@ -232,6 +232,7 @@ pub use mono::{
     install_monospace, pin_monospace, FIRA_MONO_BOLD_BYTES, FIRA_MONO_REGULAR_BYTES, MONO_FAMILY,
 };
 pub use navigation_drawer::NavigationDrawer;
+pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;

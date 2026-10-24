@@ -30,7 +30,7 @@ after.
 
 **Purpose**: the new modules exist and compile empty, so later tasks only fill them.
 
-- [ ] T001 Declare the new modules: `pub mod context_header;` in `core/src/lib.rs` with an empty
+- [x] T001 Declare the new modules: `pub mod context_header;` in `core/src/lib.rs` with an empty
   `core/src/context_header.rs` (module doc: text rules of the session area's header, render-free,
   no I/O); `pub mod session_strip;` in `client/src/features/mod.rs` with an empty
   `client/src/features/session_strip.rs` (module doc: render-free rules of the strip; it must not
@@ -44,11 +44,11 @@ after.
 **Purpose**: the session area's frame and the behaviour-preserving moves the strip builds on. No
 visible change after this phase.
 
-- [ ] T002 Draw the session area through `client/src/ui/session_area.rs::view(state, id, ..)`:
+- [x] T002 Draw the session area through `client/src/ui/session_area.rs::view(state, id, ..)`:
   `column![terminal::pane(..)]` for now, and call it from the active-session branch of
   `client/src/ui/mod.rs::view_with` instead of `terminal::pane` (R12; touch only that branch, for the
   #1124/#1125 rebases). `tests/layout_snapshot.rs` stays green with the fixture unchanged
-- [ ] T003 Move `StripTab`, `marked_tab`, `process_stopped`, `session_status`, `restart_message`,
+- [x] T003 Move `StripTab`, `marked_tab`, `process_stopped`, `session_status`, `restart_message`,
   `attached_process_restartable`, `session_title`, `overflowing`, `strip_overflow`, `scroll_into_view` and
   `marked_tab_index` with their unit tests from `client/src/ui/terminal.rs` into
   `client/src/features/session_strip.rs` (R7); `ui/terminal.rs` and `ui/panes.rs` import them from
@@ -59,12 +59,12 @@ visible change after this phase.
   (`SessionState::shell_instance_menu`, `strip_tab_menu_requested`, `Msg::StripTabMenuRequested`)
   names `crate::features::session_strip::StripTab`. Moved tests pass unchanged;
   `tests/features_are_render_free.rs` passes
-- [ ] T004 [P] Promote `client/src/ui/transcript/keyed.rs::KeyedColumn` to
+- [x] T004 [P] Promote `client/src/ui/transcript/keyed.rs::KeyedColumn` to
   `client/src/ui/cdk/keyed.rs` as `Keyed` with an axis (`Keyed::row(children)` /
   `Keyed::column(children)`, builder methods `spacing`, `padding`, `width`, ends in `.into()`;
   R10), export it from `client/src/ui/cdk/mod.rs`, switch `client/src/ui/transcript/` to it and
   delete `ui/transcript/keyed.rs`; its existing tests move with it and pass for both axes
-- [ ] T005 Add the header's follow entry: `HeaderCounts { entry: Option<(PathBuf, SessionLocation)> }`
+- [x] T005 Add the header's follow entry: `HeaderCounts { entry: Option<(PathBuf, SessionLocation)> }`
   as `changes::State.header` and `Msg::HeaderFollowed { project, entry: Option<SessionLocation> }`
   in `client/src/features/changes.rs`, which sets or clears `entry` (data-model *HeaderCounts*:
   the follow rows without their read, which T048 adds with the `load` field); and the follow step
@@ -87,54 +87,54 @@ header shows each; switch worktrees and the header follows (quickstart B1 header
 
 ### Tests for User Story 1 (write first, see them fail)
 
-- [ ] T006 [P] [US1] Core unit tests H1–H4 in `core/src/context_header.rs` (`#[cfg(test)] mod
+- [x] T006 [P] [US1] Core unit tests H1–H4 in `core/src/context_header.rs` (`#[cfg(test)] mod
   tests`): the four title rows and their tooltips (H1), each of the five card states' word
   `CardState::label` and `model.reason.label()` tooltip (H2), the three branch-chip rows (H3), the eight pull-request-chip rows and the stale tooltip note (H4); written against the
   two-argument `HeaderText::of` of T013, which T047 extends (these tests then pass `Unknown`)
-- [ ] T007 [P] [US1] Core unit test in `core/src/pr_list.rs` tests: `StatusPhrase::of_status` and
+- [x] T007 [P] [US1] Core unit test in `core/src/pr_list.rs` tests: `StatusPhrase::of_status` and
   `StatusPhrase::of` agree on every `(checks, review, conflict, state)` combination (one table test
   over both); `of_status` is `None` for merged and closed (R4)
-- [ ] T008 [P] [US1] Client unit test in `client/src/ui/overview.rs` tests: for the Default entry and
+- [x] T008 [P] [US1] Client unit test in `client/src/ui/overview.rs` tests: for the Default entry and
   for a worktree of a sidebar fixture, `location_card(state, &location)` equals the `CardModel` the
   Overview builds for the same place (title, state, reason, branch; SC-001), and `None` for a
   location that does not resolve
-- [ ] T009 [P] [US1] Client unit tests in `client/src/ui/session_area.rs` tests for
+- [x] T009 [P] [US1] Client unit tests in `client/src/ui/session_area.rs` tests for
   `pr_chip_input(state, branch, now)`: `None` without a branch, `None` while `pr_status.enabled` is
   false, `None` with no status for the branch; otherwise `PrChipInput { number, state, review,
   conflict, stale: pull_request::is_stale(read_at, now) }` (data-model *PrChipInput*, FR-005)
-- [ ] T010 [P] [US1] Extend `client/tests/issues_are_requested_only_on_named_events.rs` and add a case
+- [x] T010 [P] [US1] Extend `client/tests/issues_are_requested_only_on_named_events.rs` and add a case
   to `client/tests/features_changes.rs` (through `State::update`): following a worktree whose issue
   title is not held asks for that one title once; following it again, or a session of the same
   location, asks nothing; the Default entry asks nothing (R3, H7 first two bullets); and a change of the location's
   state, branch or pull request reading applied through one `State::update` shows in the sidebar
   row and in `location_card`/`HeaderText::of` of the same state (US1 scenario 5, FR-014)
-- [ ] T011 [US1] Geometry gate `client/tests/gates/session_area_fits.rs` (compiled into the
+- [x] T011 [US1] Geometry gate `client/tests/gates/session_area_fits.rs` (compiled into the
   `layout_snapshot` binary, registered in `client/tests/layout_snapshot.rs`): at `MIN_WINDOW_SIZE`
   (640×480, sidebar 300 px) and 1280×800, light and dark, in the session covered states, the title
   and every chip lie inside the session area and overlap nothing (H10)
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] `StatusPhrase::of_status(&PullRequestStatus) -> Option<StatusPhrase>` in
+- [x] T012 [P] [US1] `StatusPhrase::of_status(&PullRequestStatus) -> Option<StatusPhrase>` in
   `core/src/pr_list.rs`, sharing one private candidate list with `of` (data-model *StatusPhrase*)
-- [ ] T013 [US1] `PrChipInput`, `Chip { text, tooltip }` and `HeaderText::of(&CardModel,
+- [x] T013 [US1] `PrChipInput`, `Chip { text, tooltip }` and `HeaderText::of(&CardModel,
   Option<&PrChipInput>) -> HeaderText` with `title`, `title_tooltip`, `state`, `branch`,
   `pull_request` in `core/src/context_header.rs` (contract H1–H4; `branch` uses 1120's
   `short_branch`, falling back to the full branch; the `changes` field and the `CountsReading`
   argument come in T047); T006 and T007 pass
-- [ ] T014 [US1] `pub(crate) fn location_card(state, &SessionLocation) -> Option<CardModel>` in
+- [x] T014 [US1] `pub(crate) fn location_card(state, &SessionLocation) -> Option<CardModel>` in
   `client/src/ui/overview.rs`: resolves the `Place` (Default, or the worktree node with that
   `dir_name`) and calls the existing `card` (R2); T008 passes
-- [ ] T015 [US1] Split `client/src/shell/issues.rs::on_overview_opened` into
+- [x] T015 [US1] Split `client/src/shell/issues.rs::on_overview_opened` into
   `request_titles(app, dirs: &[String])` (seed, `titles_to_fetch`, `send_remotes_read`) called by
   `on_overview_opened` with every worktree's dir as today, and by the shell on a header follow
   (T005's `HeaderFollowed` to a new worktree) with that worktree's dir only (R3); T010 passes
-- [ ] T016 [P] [US1] `Tag::leading(Element)` (a glyph or `PullRequestIndicator` before the label) and
+- [x] T016 [P] [US1] `Tag::leading(Element)` (a glyph or `PullRequestIndicator` before the label) and
   `Tag::max_width(f32)` (ellipsis under a ceiling, the chip sized by its content below it; unlike
   `truncate_to`, which fixes the width) in `client/src/ui/material/tag.rs`, with builder-API tests
   as its siblings have (`tests/material_builder_api.rs` stays green); show both in the showcase's
   atoms section `client/src/showcase/sections/atoms.rs` (`tests/showcase_completeness.rs`)
-- [ ] T017 [US1] `session_area::header(state, &location)` in `client/src/ui/session_area.rs` (H9
+- [x] T017 [US1] `session_area::header(state, &location)` in `client/src/ui/session_area.rs` (H9
   without the Changes button, which T052 adds): `column![title, chips]` at `Length::Fill`, padding
   `spacing::LG` horizontally; title `Ellipsized` at `TypeRole::Title` in a `Tooltip` with
   `title_tooltip`; chips row: state chip always (`overview_card::palette(state)` fill,
@@ -143,14 +143,14 @@ header shows each; switch worktrees and the header follows (quickstart B1 header
   form under the sidebar's rule); each chip `.max_width(CHIP_MAX_WIDTH)` (new const) in a `Tooltip`
   with its full text; child lists fixed. `session_area::view` draws it above the pane area when
   `current_session_location()` resolves (A1, R12); T009, T011 pass
-- [ ] T018 [US1] Layout snapshot: add the anchor `session.header` to the session covered states in
+- [x] T018 [US1] Layout snapshot: add the anchor `session.header` to the session covered states in
   `client/tests/support/covered_states.rs`, regenerate `client/tests/fixtures/layout_snapshot.txt`
   (`UPDATE_LAYOUT_SNAPSHOT=1`), and check its diff changes only the session states (header added
   above the panes); `docs/development/layout-snapshot.md` *What is covered* names the header
-- [ ] T019 [P] [US1] User guide: `docs/user-guide/terminal-panes.md` gains a short section above
+- [x] T019 [P] [US1] User guide: `docs/user-guide/terminal-panes.md` gains a short section above
   *Split and pick a terminal* describing the header (title rule, state, branch and pull request
   chips, tooltips for cut text); the bar under the terminal is unchanged in this milestone
-- [ ] T020 [US1] Visual pass for the header (quickstart B1 header part, B8, B9 header part, B12),
+- [x] T020 [US1] Visual pass for the header (quickstart B1 header part, B8, B9 header part, B12),
   screenshots under `specs/1126-session-context-header/visual-pass/` and results in
   `specs/1126-session-context-header/visual-pass.md`
 

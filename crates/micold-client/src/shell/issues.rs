@@ -660,11 +660,8 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
 
 // ---- The Overview's issue titles (feature 813, research R8) ----
 
-/// The Overview opened: seed titles from the issues the New-worktree form already holds, then read
-/// each numeric ticket still without an entry, once. The remotes come first (the repository is
-/// whatever the daemon says); a window with no route to a daemon reads nothing (FR-019).
+/// The Overview opened: read the title of every worktree's issue ([`request_titles`]).
 pub fn on_overview_opened(app: &mut App) -> Task<Message> {
-    use micold_client::features::overview::{numeric_ticket, titles_to_fetch, Msg, TitleLookup};
     let dirs: Vec<String> = app
         .core
         .worktree
@@ -672,6 +669,25 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
         .iter()
         .map(|worktree| worktree.dir_name.clone())
         .collect();
+    // The issue links need the repository even when no title is read (feature 1122, R2).
+    if !request_titles(app, &dirs) {
+        read_repo(app);
+    }
+    Task::none()
+}
+
+/// The session area's header followed the worktree `dir` (feature 1126, R3): read its issue's
+/// title, as an Overview card would, so the header shows it without the Overview having opened.
+pub fn on_header_followed(app: &mut App, dir: &str) {
+    request_titles(app, &[dir.to_string()]);
+}
+
+/// Seed titles of `dirs`' issues from the issues the New-worktree form already holds, then read
+/// each numeric ticket still without an entry, once. The remotes come first (the repository is
+/// whatever the daemon says); a window with no route to a daemon reads nothing (FR-019). Whether a
+/// read was sent.
+fn request_titles(app: &mut App, dirs: &[String]) -> bool {
+    use micold_client::features::overview::{numeric_ticket, titles_to_fetch, Msg, TitleLookup};
     let seeds: Vec<(u64, String)> = dirs
         .iter()
         .filter_map(|dir| numeric_ticket(dir))
@@ -696,16 +712,15 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
     // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
     let routed = has_route(app);
     let wanted = if app.core.settings.github_issues_enabled {
-        titles_to_fetch(&app.core.overview, &dirs, routed)
+        titles_to_fetch(&app.core.overview, dirs, routed)
     } else {
         Vec::new()
     };
     if wanted.is_empty() {
-        read_repo(app);
-        return Task::none();
+        return false;
     }
     let Some(project) = app.core.workspace.active.clone() else {
-        return Task::none();
+        return false;
     };
     // `wanted` is empty unless `routed` held just above (a route to a daemon with an outbox), which
     // is exactly what `send_op` needs, so the request below is always sent and marking the titles
@@ -715,7 +730,7 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
     app.core
         .update(Message::Overview(Msg::TitlesRequested(wanted.clone())));
     send_remotes_read(app, project, wanted);
-    Task::none()
+    true
 }
 
 /// Whether the window has a route to a daemon with an outbox, which [`send_op`] needs.

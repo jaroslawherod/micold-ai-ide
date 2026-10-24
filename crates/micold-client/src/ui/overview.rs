@@ -699,6 +699,25 @@ pub fn step_card<T: Send + 'static>(
     }
 }
 
+/// The Overview card's model for `location`, built by the card's own [`card`] so the session
+/// area's header cannot disagree with the card (feature 1126, R2, SC-001); `None` for a worktree
+/// the sidebar does not list.
+pub(crate) fn location_card(state: &State, location: &SessionLocation) -> Option<CardModel> {
+    let SessionLocation::Worktree(dir) = location else {
+        return Some(card(state, &Place::Default));
+    };
+    let entries = state.sidebar_entries();
+    let node = entries.iter().find_map(|entry| match entry {
+        SidebarEntry::Default(_) => None,
+        SidebarEntry::Worktree(node) => (node.worktree.dir_name == *dir).then_some(node),
+        SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
+            RunRow::Worktree(node) if node.worktree.dir_name == *dir => Some(node),
+            _ => None,
+        }),
+    })?;
+    Some(card(state, &Place::Worktree(node)))
+}
+
 /// What a card stands for.
 enum Place<'a> {
     Default,
@@ -1072,6 +1091,48 @@ mod tests {
         );
         let focus = iced::Event::Window(iced::window::Event::Focused);
         assert!(mounted.send(focus, away).is_empty());
+    }
+
+    /// Feature 1126 T008 (SC-001): a location's card model is the one the Overview builds for the
+    /// same place, for the Default entry and a worktree; a location the sidebar does not list has
+    /// none.
+    #[test]
+    fn a_locations_card_is_the_overviews_card_for_that_place() {
+        let mut state = overview_of(2);
+        state.overview.titles.insert(
+            1,
+            crate::features::overview::TitleLookup::Known("Fix the build".into()),
+        );
+        state.worktree.worktrees[1].dir_name = "feat-1_build".into();
+        let cards = cards(&state);
+        for location in [
+            SessionLocation::Default,
+            SessionLocation::Worktree("feat-0".into()),
+            SessionLocation::Worktree("feat-1_build".into()),
+        ] {
+            let built = location_card(&state, &location);
+            let shown = cards.iter().find(|card| card.location == location).cloned();
+            assert!(shown.is_some(), "the Overview has a card for {location:?}");
+            assert_eq!(
+                built, shown,
+                "{location:?}: the header's model is the card's"
+            );
+        }
+        assert_eq!(
+            location_card(&state, &SessionLocation::Default).map(|c| c.title),
+            Some("Default".to_string())
+        );
+        assert_eq!(
+            location_card(&state, &SessionLocation::Worktree("feat-1_build".into()))
+                .map(|c| c.title),
+            Some("Fix the build".to_string()),
+            "the issue title, as the card shows it"
+        );
+        assert_eq!(
+            location_card(&state, &SessionLocation::Worktree("gone".into())),
+            None,
+            "a worktree the sidebar does not list has no card"
+        );
     }
 
     /// An open Overview of the root and `n` worktrees.

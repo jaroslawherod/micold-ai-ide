@@ -169,6 +169,29 @@ pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
                     .role(TypeRole::Label),
                 roles,
             ),
+            // Feature 1126: the session area's header chips, led by a glyph and cut under a
+            // ceiling.
+            posed(
+                "led by a glyph",
+                material::Tag::<Message>::new("Working", roles.primary_container)
+                    .solid(roles.on_primary_container)
+                    .role(TypeRole::Label)
+                    .leading(
+                        material::Glyph::<Message>::new(Icon::StateRunning, TypeRole::Label, roles)
+                            .tint(roles.on_primary_container),
+                    ),
+                roles,
+            ),
+            posed(
+                "cut under a ceiling",
+                material::Tag::<Message>::new(
+                    "feat/1126_worktree-context-header-and-session-tabs",
+                    roles.on_surface_variant,
+                )
+                .role(TypeRole::Label)
+                .max_width(120.0),
+                roles,
+            ),
         ],
         Layout::Inline,
     )

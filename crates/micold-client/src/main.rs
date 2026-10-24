@@ -476,7 +476,16 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
     let link_before = LinkFocus::of(app);
+    let header_before = app.core.changes.header.entry.clone();
     let task = update_inner(app, message);
+    // Feature 1126, R3/R6: the header follows the shown location after any message, including one
+    // the shell applied itself, and a newly followed worktree's issue title is read.
+    app.core.follow_header();
+    if app.core.changes.header.entry != header_before {
+        if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {
+            shell::issues::on_header_followed(app, &dir);
+        }
+    }
     // Feature 1101: the statuses follow the Jira switch and connection, and the project's open
     // read starts once its worktrees are known. Here because both come from many messages.
     let task = Task::batch([task, shell::jira_refresh::after_update(app)]);

@@ -940,7 +940,7 @@ pub(crate) fn unix_now() -> u64 {
 /// The indicator's marks for a pull request state: the shared component does not know the pull
 /// request module, so the mapping lives here (contract §1). Only an open or draft one has checks,
 /// and `None` means no checks at all (FR-003).
-fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
+pub(super) fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
     let checks = |c: &CheckStatus| crate::features::changes::check_mark(*c);
     match state {
         PrState::Open { checks: c } => (PrMark::Open, checks(c)),

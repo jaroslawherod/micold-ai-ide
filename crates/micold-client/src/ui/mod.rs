@@ -82,6 +82,7 @@ pub use settings::github::GITHUB_ISSUES_INTRO;
 pub use settings::container_fields::{
     limits as sandbox_limits, network_warning, ContainerView, LimitControl, NO_OUTBOUND_WARNING,
 };
+pub(crate) mod session_area;
 pub(crate) mod settings_view;
 mod shell;
 mod sidebar;
@@ -412,7 +413,8 @@ pub fn view_with<'a>(
             compare
         } else if state.session.active.is_some() {
             let link_context = terminal::link_context(state, sandbox);
-            terminal::pane(
+            // Feature 1126, A1: the header above the pane area.
+            session_area::view(
                 state,
                 panes,
                 grid,
