@@ -215,6 +215,8 @@ pub fn update(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> bool {
             if form.shows_advanced() {
                 form.jira_query.draft = text;
                 form.jira_query.list_open = true;
+                // The rows are the last run's: Enter after an edit runs the edit (§3).
+                form.jira_query.highlight = None;
             }
             false
         }

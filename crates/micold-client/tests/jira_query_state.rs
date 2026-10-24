@@ -596,6 +596,20 @@ fn the_keyboard_moves_over_the_results_and_a_dismiss_closes_them() {
     assert!(jq(&state).list_open);
 }
 
+/// Editing the query takes the keyboard off the rows, so the next Enter runs the edited query
+/// rather than picking a row of the last one's results (contracts/selector-ui.md §3).
+#[test]
+fn editing_the_query_drops_the_highlight() {
+    let mut state = advanced_loaded("type = Bug", vec![issue("ABC-1", 1, "One", &[], "Bug")]);
+    query(&mut state, QueryMsg::HighlightMoved(Direction::Next));
+    assert_eq!(jq(&state).highlight, Some(0));
+    query(
+        &mut state,
+        QueryMsg::DraftChanged("type = Story".to_string()),
+    );
+    assert_eq!(jq(&state).highlight, None);
+}
+
 // ---- FR-004a: no basic load while advanced mode shows ----
 
 #[test]

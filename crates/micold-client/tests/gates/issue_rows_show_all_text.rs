@@ -457,7 +457,7 @@ fn the_advanced_state_lists_a_querys_results() {
     let results = form
         .jira_query
         .results()
-        .expect("{ADVANCED_RESULTS} has run a query");
+        .unwrap_or_else(|| panic!("{ADVANCED_RESULTS} has run a query"));
     assert!(!results.is_empty(), "{ADVANCED_RESULTS} lists no result");
     assert!(
         form.issue_matches.is_empty() && form.issues.held().is_empty(),
