@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1126
 - **Worktree branch**: claude/project-thread-y28cqn
 - **Started**: 2026-10-24
-- **Phase**: M3 review
-- **Next step**: M3 review A round 2 and review B round 2 on the fix diff, then the full gate, push, PR title/body
+- **Phase**: M3 PR
+- **Next step**: orchestrator opens the M3 PR (title/body in the scratchpad), waits on CI and merges; then the close unit (Polish T056–T057)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | merged |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | #1334 | merged |
-| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | — | in progress |
+| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | (to open) | gate green, pushed |
 
 ## Decisions
 
@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B (conformance, sonnet) | 1 | dd505d9a035d24e925094c0ceb5780578a4b3107:0e326613517ad725c43eaba23d8c3341db1b4ebe | CLEAN; 1 MINOR (T039 guard written after T033, already noted in the cycle log) |
 | M3 A (code review, high) | 1 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 | CHANGES: 1 MAJOR (counts stale after the Overview hid the header), 3 MINOR; F1–F3 fixed, F4 declined |
 | M3 B (conformance, sonnet) | 1 | ad49afbb772c22a42e02e75f8f1cb4a1b944597a:52632d457a59d561d87d7f30750d5367df16e913 | CHANGES: 1 BLOCKER (Verify file unreadable: prompt path lost its scratchpad prefix, not a code finding), 1 MAJOR (Changes label wraps at 640×480 with four-digit counts), 2 MINOR (ledger next step; late reds); F2–F4 fixed |
+| M3 A (re-review, sonnet) | 2 | 971ff20c3c357d30d2f9710c6cbe9b1481b50dea:d2f82b178335efee2987c5707c1e18199b1d1463 → 5a9d52fa | CLEAN; F1–F3 fixed and F4's decline confirmed, lines cited (first r2 answer cited none and was re-asked) |
+| M3 B (conformance, sonnet) | 2 | 7fd22c02a06c5b38313d3be8153870c14ebd905d:5a9d52fa68a1ff52373e5d0dc73e3717902a12fe | CLEAN; 1 MINOR (Verify output did not name the new gate) fixed in the Verify file |
 
 ## Declined review findings
 
@@ -79,6 +81,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M3 gate: `micold-daemon` `mcp_audit_log::every_successful_mutating_call_writes_one_info_line` failed once (paste refused: "no bracketed paste") and passed 3/3 on rerun; untouched by this feature, a flake to watch in CI.
 
 - M3: at 640×480 beside a 300 px sidebar the Changes button leaves the title little room (`fe…` with `Changes · 3 files · +42 −7`, visual pass B6); FR-013 allows it. A compact label for the narrowest window would give the title room back; not specified.
 
