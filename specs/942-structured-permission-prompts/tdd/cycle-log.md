@@ -278,3 +278,15 @@ Red runs recorded live, each before its implementation existed; commands with
 - First green attempt put the `Select` in the status-row slot: #941's
   `a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view` failed (transcript 171 px
   < 200): moved beside the text area (ledger decision 21).
+
+### Cycle 14 — T071 review A r1 fixes: the mode control's open list (M9)
+
+- Red: `pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it` (the open list
+  the visual pass could not capture, and review A r1's F2 "the test cannot fail": it presses the
+  painted `Permissions` field, reads what the floated list painted, and presses each row) written
+  against the control unwired from the composer (`Seams::control: None`): panicked at
+  `composer_fits.rs:115` — the overlay offered no `Default` row. Wired back: green, with all four
+  modes painted in the overlay layer and each row publishing `ModeRequested` for its own mode.
+- The press needs the overlay's own event dispatch, which neither `messages_after` nor `clicks_at`
+  does (the base tree never contains a `Select`'s list): `support/layout.rs`
+  `messages_from_open_list`.

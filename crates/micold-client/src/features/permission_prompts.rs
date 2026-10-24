@@ -534,11 +534,20 @@ impl State {
         self.mode_confirmation
     }
 
+    /// The change the shown confirmation would send if it were accepted.
+    ///
+    /// The one place that knows which mode a shown confirmation is for: the shell reads it before
+    /// handing `ModeConfirmed` to the core, whose own [`Self::confirm_mode`] closes it.
+    pub fn mode_confirmed_change(&self) -> Option<(SessionId, PermissionMode)> {
+        self.mode_confirmation
+            .map(|session| (session, PermissionMode::Bypass))
+    }
+
     /// The Bypass confirmation was accepted: the change it sends, once.
     pub fn confirm_mode(&mut self) -> Option<(SessionId, PermissionMode)> {
-        self.mode_confirmation
-            .take()
-            .map(|session| (session, PermissionMode::Bypass))
+        let change = self.mode_confirmed_change();
+        self.mode_confirmation = None;
+        change
     }
 
     /// The Bypass confirmation was dismissed: nothing is sent.

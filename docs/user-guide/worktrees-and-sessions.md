@@ -1231,7 +1231,8 @@ the background service keeps the events it reports. It is Claude Code only.
   another), **Accept edits**, **Plan** and **Bypass** — set the mode the next structured session
   starts in; the list stays open so you can then pick **Claude Code (structured)**. Once you confirm a
   Bypass start, the choice goes back to **Default**. The mode is kept with the session,
-  across restarts. The composer's **Permissions** control, at the end of its state row, shows the
+  across restarts. The composer's **Permissions** control, beside the message box and
+  before **Send** (and **Stop**, while Claude works), shows the
   session's mode and changes it at any time: a running session's Claude Code uses the new mode
   from its next tool request on, without a restart and with the conversation kept (a request
   already waiting is unaffected); a stopped session starts in it next time. Every window shows the

@@ -1101,6 +1101,85 @@ pub fn messages_after<'a, M: 'a>(
     published
 }
 
+/// The messages the **open overlay** published for a left click at `at`, having been opened by
+/// pressing the node at `press_at` first.
+///
+/// [`messages_after`] and [`clicks_at`] dispatch into the base widget tree only, and a
+/// `material::Select`'s list is not in that tree at all: it is floated from `Widget::overlay`,
+/// which the runtime updates separately (see [`painted_text_pressing`], which draws it). So asking
+/// what *picking a row* sends takes three steps the base tree cannot provide — press the trigger,
+/// let the floated list finish arriving, then click inside the list itself (#942 M9, T071).
+///
+/// Messages published while the list arrives are dropped: only what the click published is
+/// returned. No overlay after the press means the control stayed shut, which comes back as an empty
+/// `Vec` — so a caller asserts on the message it expects rather than on the absence of one.
+pub fn messages_from_open_list<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &iced::Renderer,
+    press_at: &[usize],
+    at: iced::Point,
+) -> Vec<M> {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let mut element = element;
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    press_and_settle(
+        &mut element,
+        &mut tree,
+        &mut node,
+        renderer,
+        &limits,
+        press_at,
+    );
+
+    let viewport = Rectangle::with_size(WINDOW);
+    let mut published: Vec<M> = Vec::new();
+    let Some(mut overlay) = element.as_widget_mut().overlay(
+        &mut tree,
+        Layout::new(&node),
+        renderer,
+        &viewport,
+        Vector::ZERO,
+    ) else {
+        return published;
+    };
+
+    let mut overlay_node = overlay.as_overlay_mut().layout(renderer, WINDOW);
+    let origin = std::time::Instant::now();
+    for frame in 0..SETTLE_FRAMES {
+        let mut shell = Shell::new(&mut published);
+        overlay.as_overlay_mut().update(
+            &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
+            Layout::new(&overlay_node),
+            mouse::Cursor::Unavailable,
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+        );
+    }
+    overlay_node = overlay.as_overlay_mut().layout(renderer, WINDOW);
+    published.clear();
+
+    for event in [
+        mouse::Event::CursorMoved { position: at },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let mut shell = Shell::new(&mut published);
+        overlay.as_overlay_mut().update(
+            &iced::Event::Mouse(event),
+            Layout::new(&overlay_node),
+            mouse::Cursor::Available(at),
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+        );
+    }
+    published
+}
+
 /// The messages a left click (press, then release) published at each of `points`, in order, after
 /// the element has settled. For asking what a button *sends* rather than what it paints.
 pub fn clicks_at<'a, M: 'a>(
