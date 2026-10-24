@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1124
 - **Worktree branch**: claude/project-thread-6jo3w5
 - **Started**: 2026-10-24
-- **Phase**: M4 pr
-- **Next step**: the orchestrator rebases m4-local after M3 merges, runs the full gate, pushes and opens the M4 PR from scratchpad m4-pr-title.md / m4-pr-body.md
+- **Phase**: M5 pr
+- **Next step**: the orchestrator rebases m4-local after M3 and M4 merge, runs the full gate, pushes and opens the M4 and M5 PRs from scratchpad m4-pr-*.md / m5-pr-*.md; then the close unit runs T039 (visual pass)
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | #1330 | done: merged |
 | M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | T021–T025 done; gate green at ba558456, A CLEAN, B CLEAN, visual pass not run (layout snapshot + text-overflow cover the states) |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | T026–T032 done on local branch m4-local (not pushed); scoped checks green (fmt, clippy, Verify tests), A CLEAN, B CHANGES r1 (cycle-log M4 section missing, fixed, prose only); visual pass not run (snapshot + text-overflow cover it) |
-| M5 | T033–T038 | light | Plan usage moves from the app bar into the status bar | — | planned |
+| M5 | T033–T038 | light | Plan usage moves from the app bar into the status bar | — | T033–T038 done on local branch m4-local (not pushed); scoped checks green (fmt, clippy, Verify tests), A CHANGES r1 (Settings description said "app bar", stale comments; fixed), B CHANGES r1 (tasks not ticked, cycle-log wording; fixed); visual pass not run (snapshot + text-overflow cover it) |
 
 ## Decisions
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | A M3 (code-review high) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: source-substring tests weak — declined, the overview height test measures the real banner) |
 | B M3 (conformance) | 1 | 1a47b96016f1232a162280f363770e2d9277dcd1:ba5584566b52696ac012392be4583a271a73bbcf | CLEAN (2 MINOR: same two tests; no test for the banner ending on Connected — declined) |
+| A M5 (code-review high, `claude -p` reviewer) | 1 | 48862f0d7e7c9205917a5eec3ee4fdd5d7d052d5:9b28cbddeb6440fde7288f705cd53b6ab5d45577 | CHANGES: 1 MAJOR (Settings description string still "app bar"; fixed), 2 MINOR (comments fixed; clock read per redraw declined, two cheap calls, same as A M1 F2) |
+| B M5 (conformance, `claude -p` reviewer) | 1 | 48862f0d7e7c9205917a5eec3ee4fdd5d7d052d5:9b28cbddeb6440fde7288f705cd53b6ab5d45577 | CHANGES: 1 MAJOR (T033–T038 unticked; ticked), 1 MINOR (cycle-log wording; fixed) |
 | A M4 (code-review high, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CLEAN |
 | B M4 (conformance, `claude -p` reviewer) | 1 | 7749633dda9668555742afd106cf354a3d225446:c6d03bc1ef8b3c15779ea453f9bc85b3e0392634 | CHANGES: 1 MAJOR (no M4 section in tdd/cycle-log.md; added, prose only), 1 MINOR (`session_view_visible` repeats checks of earlier arms; kept on purpose, so view_with and the bar share one predicate) |
 
@@ -83,6 +85,6 @@ None.
 ## Follow-ups not done
 
 - Pre-existing (#941): the composer's caps are fixed, so a crowded composer (~520 px at its limits) overflows the pane at the 640×480 minimum window. Caps that follow the window's height would fix it; out of 1124's scope (D6).
-- M1 visual §B7: at 640 px the M1 bar's texts fit whole, so the client never showed "…"; the shortening is covered by the showcase's too-narrow instance and `status_bar_fits`. Re-check at 640 px once M4/M5 add the CLI item, hints and usage.
+- M1 visual §B7: at 640 px the M1 bar's texts fit whole, so the client never showed "…"; the shortening is covered by the showcase's too-narrow instance and `status_bar_fits`. Re-checked in M5: `status_bar_fits` holds CLI item, hints and usage against the longest texts at 640 px (hints and usage drop first, nothing overflows); the client's own texts still fit whole there, so "…" shows only in the gate's long-text state.
 
 Notes: speckit-analyze (sonnet) 0 CRITICAL/HIGH; its MEDIUM/LOW findings fixed in tasks.md, plan.md (state count), quickstart.md, spec.md (US3 wording). Optional after_tasks hooks (tdd.plan, docguard.score) skipped. Checklist requirements.md: last item ticked (markers resolved in clarify).

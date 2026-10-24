@@ -261,24 +261,24 @@ label, warning look, details) and not in the app bar; absent with no reading or 
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T033 [US5] Move `usage_indicator`'s test from `client/src/ui/toolbar.rs` to
+- [x] T033 [US5] Move `usage_indicator`'s test from `client/src/ui/toolbar.rs` to
   `client/src/ui/status_bar.rs` and add failing cases: `model().usage` is `Some` only with a current
   reading and the setting on; `client/tests/toolbar.rs` asserts the app bar draws no
   `UsageIndicator`
-- [ ] T034 [P] [US5] Extend `client/tests/gates/status_bar_fits.rs` with plan usage present at 640 dp:
+- [x] T034 [P] [US5] Extend `client/tests/gates/status_bar_fits.rs` with plan usage present at 640 dp:
   usage is dropped after the hints and before any text is shortened; append covered state
   `status-bar-usage` to `client/tests/support/covered_states.rs`
 
 ### Implementation for User Story 5
 
-- [ ] T035 [US5] Move `usage_indicator` (logic unchanged) from `client/src/ui/toolbar.rs` to
+- [x] T035 [US5] Move `usage_indicator` (logic unchanged) from `client/src/ui/toolbar.rs` to
   `client/src/ui/status_bar.rs`, add it via `StatusBar::item_element(.., GiveWay::Drop(1))` after
   the CLI item, and remove the usage block and its import from `toolbar::view`
-- [ ] T036 [P] [US5] Change the `UsageIndicator` showcase caption to say "status bar" in
+- [x] T036 [P] [US5] Change the `UsageIndicator` showcase caption to say "status bar" in
   `client/src/showcase/sections/atoms.rs`
-- [ ] T037 [US5] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (usage
+- [x] T037 [US5] Regenerate `client/tests/fixtures/layout_snapshot.txt` and review the diff (usage
   leaves the app bar, joins the bar)
-- [ ] T038 [P] [US5] Update `docs/user-guide/settings.md` (§Claude plan usage: "status bar", not "app
+- [x] T038 [P] [US5] Update `docs/user-guide/settings.md` (§Claude plan usage: "status bar", not "app
   bar"; the intro's "connection strip") and `docs/user-guide/worktrees-and-sessions.md` (§Claude
   plan usage), and add plan usage to the "Status bar" section of
   `docs/user-guide/appearance-theming.md`
