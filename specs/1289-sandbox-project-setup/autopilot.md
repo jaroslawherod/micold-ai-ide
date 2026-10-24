@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: plan
-- **Next step**: plan review round 2 (sonnet, fix diff), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (fresh reviewer, rubrics/tasks.md), then specs-only gate and design PR
 
 ## Pull requests
 
@@ -21,6 +21,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | — | pending |
+| M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | — | pending |
+| M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | pending |
+| M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
+| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
+| M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
+| M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
 
 ## Decisions
 
@@ -30,6 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify | Story 4: per-project image in scope? | A: deferred to follow-up; second container daemon + remembered Daemon select documented (FR-025), Out of scope | provisional — recommended option, awaiting user answer | docs/user-guide/worktrees-and-sessions.md ~466 (Daemon select remembered per project) |
 | 3 | plan | How does a daemon learn the setup command (MCP create_worktree has no client in the loop)? | Client stores it in settings.json and pushes ProjectSetupSet (in memory) to each daemon holding the project, on connect and on change | unit (research R4) | persist.rs sends service settings to active daemon only |
 | 4 | plan | Which daemons get the home PATH folders? | Those with offered.json (app-owned container/pod) | unit (research R2) | provision::Ownership::AppOwned; MICOLD_IMAGE_REFERENCE absent on pods |
+| 5 | tasks | Milestone cut vs plan's five suggestions | Seven: plan M3 split into M3 (run on create) / M4 (persistence, delete) by size; client cut along scenarios into M5 (command, sync, tag, notification), M6 (output view), M7 (US3 run/stop). M3 kept at 13 tasks (~1000 lines): protocol messages, their handlers and the run task cannot land apart without a second version bump or a server answering Unsupported. plan.md §Milestones updated to point at tasks.md | unit (milestones.md rules 2–3) | tasks.md §Milestones |
+| 6 | tasks | How does the daemon look up `bash` (resolve_on_path is pub(crate) in core)? | New core `setup::shell::bash_on_path(&OsStr)` wraps it; data-model §shell_line updated | unit | provider.rs:575 private fn |
 
 ## Review rounds
 
@@ -40,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1 | 54752543 | 2 questions → provisional A/A applied (FR-009, FR-025, Out of scope, Story 4 removed) |
 | Clarify | 2 | after round-1 answers | no critical ambiguities (UI placement and app→daemon command hand-off left to plan) → CLEAN |
 | Plan | 1 | f5e4485bc71dd9eaf5ff5dfa2d7a3c0444768d51:cfc387029e91b351cae9a77b2329e2e5b12d471a | CHANGES: 2 MAJOR, 3 MINOR — all fixed (F1 daemon-wide persisted RunId counter + A12/A16 recreate test; F2 delete awaits run end via stop_and_wait bounded by RUN_OVERRUN, stale finish dropped, A12 asserts no record/log; F3 C4 three values + Started(RunId); F4 M4 split into M4a/M4b; F5 ProjectSetupSet carries daemon-catalog path, A16 mapped case) |
-| Plan | 2 (sonnet, scoped) | c6904f37533cfa3183cad458c3e458eb852b92f7:71a9120e6a1fca096755b00c0c38b356273d79f9 | pending — reviewer to dispatch |
+| Plan | 2 (sonnet, scoped) | c6904f37533cfa3183cad458c3e458eb852b92f7:71a9120e6a1fca096755b00c0c38b356273d79f9 | CLEAN, 1 MINOR — fixed, prose only (data-model §RunId: id allocated in memory under the lock, counter file persisted just after release, before the record write) |
 
 ## Declined review findings
 

@@ -19,8 +19,9 @@ user typed, not a secret.
 ### `RunId` (NEW)
 
 `u64`, unique across the whole daemon, never per location. The daemon keeps a counter in
-`setup/next_run_id` (`JsonFileStore::setup_counter_path()`), written atomically with the new
-value before the run's record is written. At start it loads the counter as
+`setup/next_run_id` (`JsonFileStore::setup_counter_path()`). The id is allocated in memory under
+the state lock; the counter file is persisted atomically just after the lock is released (no I/O
+under the state lock), before the run's record is written. At start it loads the counter as
 `max(counter, highest loaded record id + 1)`, so a lost counter file cannot repeat an id. A
 worktree deleted and recreated under the same `dir_name` (`ops.rs`: "a worktree recreated for the
 same branch reuses this exact path") gets a fresh id, because a delete removes the record but not
@@ -98,7 +99,9 @@ sequences are removed before a line is stored. Invalid UTF-8 is decoded lossily.
 | `Windows` | (ignored) | `powershell.exe -NoProfile -NonInteractive -Command <command>` |
 
 `ShellPlatform` (NEW enum) is chosen by the daemon at its call site. `bash_on_path` is a lookup of
-`bash` on the run's `PATH`, using the existing `provider::resolve_on_path` (made `pub(crate)` if it is not).
+`bash` on the run's `PATH` through `setup::shell::bash_on_path(path: &OsStr) -> bool` (NEW, core),
+which wraps the existing `provider::resolve_on_path` (made `pub(crate)`), so the daemon calls a
+core function rather than the provider internals.
 
 ## Core: `micold_core::sandbox::toolchain_path` (NEW, R1–R3)
 
