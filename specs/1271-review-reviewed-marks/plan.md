@@ -25,9 +25,9 @@ receipt of marks build and merge before #1269; the view's controls after it (R8)
 **Primary Dependencies**: existing crates: `micold-core` (`review::{comment, changes, git,
 pr_diff, store}`, new `review::marks`, `protocol::{messages, version}`, `git::Git`,
 `task_progress::Ratio`), `micold-daemon` (`review.rs`, `state.rs`, `server.rs`), `micold-client`
-(`features/changes.rs`, `shell/{changes, daemon_sync}.rs`, `ui/changes.rs`, `icons.rs`,
-`ui/material::{ProgressBar, ToggleChip, UnreadMark, Tooltip, Glyph}`). One direct dependency
-added to `micold-core`: `sha1` 0.10, already in `Cargo.lock` (R1).
+(`features/changes.rs`, `shell/{changes, daemon_sync}.rs`, `ui/changes.rs`,
+`ui/material::{ProgressBar, ToggleChip, UnreadMark, Tooltip, Glyph}`), `micold-material`
+(`icons.rs`). One direct dependency added to `micold-core`: `sha1` 0.10, already in `Cargo.lock` (R1).
 
 **Storage**: `reviews/<project id>.json` (482), version 4 only while some entry has marks (R5).
 Local only.
@@ -125,6 +125,11 @@ No violation: Complexity Tracking is empty.
 
 ## Milestones (proposed for the tasks unit)
 
+Final cut: tasks.md § Milestones. It keeps M1 and M2, moves `pr_change_ids` from M1 to the pull
+request milestone, splits M3 by story (M3 US1, M4 US2 and US3's view, M5 US4), puts each story's
+user-guide text and layout snapshot state in its own milestone, and leaves the visual pass and the
+redesign note (this table's M4) to the close unit.
+
 | M | Content | Depends on |
 |---|---|---|
 | M1 | Core: `review::marks` (ids, `EntryMarks`, states, progress, `mark_block`), `NameStatus` ids, `WholeChange` + `GitCli::whole_change` + `Git` trait and fakes, `pr_change_ids`, `EntryReview.marks`, store v4, `sha1` dependency | D4 answered (A or B; C changes the data model, R7) |
@@ -173,8 +178,8 @@ crates/micold-client/src/
 ├── shell/daemon_sync.rs       # marks into Msg::ReviewChanged (M2); PendingOp::ReviewMark (M3)
 ├── shell/changes.rs           # read_list runs whole_change; SetReviewed through PendingOp::ReviewMark
 ├── ui/changes.rs              # row glyph and dot, diff header chip, header progress slot
-└── icons.rs                   # ReviewUnseen, ReviewDrafts, ReviewDone
 crates/micold-client/tests/support/covered_states.rs, tests/fixtures/layout_snapshot.txt
+crates/micold-material/src/icons.rs      # Icon::{ReviewUnseen, ReviewDrafts, ReviewDone}
 docs/user-guide/reviewing-changes.md, docs/development/review-redesign.md
 ```
 
