@@ -13195,11 +13195,11 @@ mod panes {
         let second = split_focused(&mut app, Axis::Vertical);
         assert_eq!(app.core.session.active, Some(ids[1]));
         let copilot = format!("CLI: {}", AiCli::Copilot.provider().display_name());
-        assert_eq!(bar_cli(&app), Some(copilot));
+        assert_eq!(bar_cli(&app), Some(copilot.clone()));
         pane_msg(&mut app, PaneMsg::FocusPane(first));
         assert_eq!(bar_cli(&app).as_deref(), Some("CLI: Claude Code"));
         pane_msg(&mut app, PaneMsg::FocusPane(second));
-        assert_ne!(bar_cli(&app).as_deref(), Some("CLI: Claude Code"));
+        assert_eq!(bar_cli(&app), Some(copilot));
     }
 
     /// FR-001: a 7th pane is refused, with a reason the view shows.

@@ -612,7 +612,8 @@ mod tests {
         assert_eq!(m.usage, None);
     }
 
-    /// A reading whose only window never resets, so it is current at any clock.
+    /// A reading whose only window resets an hour after `NOON`: current at `NOON`, every window
+    /// reset by `NOON + 7200`.
     fn reading() -> micold_core::plan_usage::UsageReading {
         micold_core::plan_usage::UsageReading {
             windows: vec![micold_core::plan_usage::LimitWindow {
