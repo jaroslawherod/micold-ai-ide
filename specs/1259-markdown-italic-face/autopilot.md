@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1 | spec.md | 3 questions, all agent-resolved (record existing rules); no new requirement, unit ends |
 | Plan review | 1 | e209d8637cc99c1c00d5b3b330033eabd3b06074:7bcd080cc6c6f537fd45f68b69b97148f3485dca | CHANGES (run by orchestrator): F1 MAJOR host Roboto Bold 700 breaks FR-003/SC-002 → option (a), D8; F2 MINOR R6/R7/R8 lacked rejected alternatives → added. Both applied |
 | Plan review | 2 | b530e8ce4e792f8d5efd2595d56a740898e653ed:7dc4a597b0b322dedf551f73f0d16810cf578500 | CLEAN (orchestrator, sonnet); 1 MINOR: plan.md Test strategy roboto.rs row not updated for D8 → fixed, prose only |
+| Tasks review | 1 | 73cdce2dbb41cb29369c478080c14350bb320212:d20f1b50e27026933493e4e4d962f14aadbb3a33 | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
