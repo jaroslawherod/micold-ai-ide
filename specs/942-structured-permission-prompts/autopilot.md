@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: close
-- **Next step**: close unit: tdd-verify, quickstart record, spec status, review, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1266 | M7: requests, plans and questions in the transcript | merged (rebase) | b636391e9e89f14bd664f2f7a867048c1ad1b89d |
 | #1309 | M8: prompts on, create-flow mode rows, Bypass confirmation and label, user guide | merged (rebase) | 9e643d698af63cd79632eff27560db8423730b58 |
 | #1312 | M9: the composer's mode control and *Waiting for you* | merged (rebase; the orchestrator rebased it onto #941 M7 a669ad1d first, resolving one conflict in `ui/composer.rs` by keeping #941's `FocusWithin` wrapper and passing `seams.control` to `input_row`; full gate and CI green at 27572a3f) | ae23a467276dc2960e327ea1c9d489c859d23652 |
+| #1315 | Close: tdd verification, quickstart results, test-strength fixes, spec closed | open (draft) | |
 
 ## Milestones
 
@@ -114,6 +115,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Smell pass close (`claude -p` sonnet, 2 reviewers, paths only, Bash denied) | 1 | ae23a467 | CLEAN both (no HIGH); 7 MED: 3 fixed (confirm dialog paints `EFFECT`, prompt card's plate pinned to its style, composer restating loop dropped), 4 declined (below); 5 LOW left |
 | Traceability close (`claude -p` sonnet) | 1 | ae23a467 | 7 findings: SC-006 and FR-021 untested (recorded in `verification.md`), SC-007 recorded by the gate, F6 plan/question views untested declined (below), rest LOW |
 | Review close (`claude -p`, session model, diff inline, 6 Bash denials) | 1 | 16ff625a48cf56f60df5c44a78ec1da23a4ea4c9:ae23a467276dc2960e327ea1c9d489c859d23652 | CLEAN, `Checked:` cites every test name, file:line and count; 1 MINOR (Part B step 8 named no test) fixed, prose only |
+| Full gate close (final) | 1 | 16ff625a | Green (`split-gate.sh`, CI's order): 10,129 passed, 0 failed, 18 ignored, 639 binaries; pushed, draft PR #1315 |
 
 ## Declined review findings
 
@@ -153,9 +155,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit over 150k context after the review. Done: branch reset to origin/main ae23a467 (#1312 merged, recorded); the full gate green at ae23a467; tdd-verify steps → `tdd/verification.md` (PASS_WITH_GAPS); three test-strength fixes (`ui/confirm_bypass.rs`, `ui/material/prompt_card.rs`, `tests/gates/composer_fits.rs`, cycle 15); quickstart *Results* (Part A recorded, Part B not run live); T070 ticked; spec **Status** Closed; close review CLEAN. All committed locally, not pushed, no PR yet.
-
-Next step: the full gate on the fixed tree was started detached at 03:41 (`split-gate.sh`, log `/tmp/claude-0/-home-user-micold-ai-ide/5dc50992-3b07-5e40-93d0-678a5e52d35f/scratchpad/gate-2.log`; snapshot tree 16ff625a… before the ledger and quickstart prose edits). Hold on it with `scripts/autopilot/hold.sh <log>`; if it is gone or red, run it again. Once it is green, set **Phase** `done`, **Next step** `handoff`, the close PR row in *Pull requests*, add the close PR to the spec's **Status**, and set this section back to `None.` Then push (`--force-with-lease`; prune a stale remote ref first) and open the draft PR through the GitHub MCP tools: title "#942: Structured session: permission prompts via permission-prompt-tool — close", body ending `Refs #942`. Do not merge, do not close the issue. Open findings: none.
+None.
 
 ## Open escalation
 
