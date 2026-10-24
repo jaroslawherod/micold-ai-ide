@@ -6,7 +6,7 @@ Each decision names what was chosen, why, and what was rejected. Paths are works
 ## R1. Where the header's text rules live
 
 **Decision**: A new render-free module `micold_core::context_header` (`core/src/context_header.rs`)
-holds every rule with a branch in it: `HeaderText::of(&CardModel, Option<PrChipInput>,
+holds every rule with a branch in it: `HeaderText::of(&CardModel, Option<&PrChipInput>,
 CountsReading)` gives the title and its tooltip, the state word, the branch chip (short branch, full
 branch as tooltip), the pull request chip text and the Changes button label. `ChangeSummary::of(&ChangeList)`
 sums the counts. The header widget only lays these values out (Principle I exception).
@@ -151,7 +151,14 @@ member's own session and process). It also yields the shown session's status wor
 restart message (`restart_message`). These render-free functions, `StripTab`, and the strip's
 overflow and reveal arithmetic (`overflowing`, `strip_overflow`, `scroll_into_view`,
 `marked_tab_index`) move from `client/src/ui/terminal.rs` into this module with their tests;
-`ui/terminal.rs` and `ui/panes.rs` import them from there.
+`ui/terminal.rs` and `ui/panes.rs` import them from there, and `ui/terminal.rs` re-exports them
+(`pub use`) so its other users keep their paths: `ui/mod.rs::strip_tab_menu_items` and
+`strip_tab_menu_labels`, and `tests/app_state.rs`, `tests/popover_displacement.rs`,
+`tests/overlay_registration.rs`. `features/session.rs` (`SessionState::shell_instance_menu`,
+`strip_tab_menu_requested`, `Msg::StripTabMenuRequested`) imports `StripTab` from
+`features::session_strip` instead, so no feature module names a `ui` type. The tab menu
+(feature 012 FR-012d) stays on the shown session's tab and its shell tabs; another session's tab
+opens no menu, because the menu's AI restart (`TerminalRestartRequested`) acts on the shown session.
 
 **Rationale**: Clarifications 1 and 2 fix the members and their order; `unfolded_sessions` is the
 order the previous/next-session chords step through (`navigation.rs:136`), so the strip, the
@@ -164,6 +171,10 @@ shown session's state.
 - Build the members inside the view as `tab_strip_row` does today: decision logic in `ui/`.
 - Leave the predicates in `ui/terminal.rs` and call them from the feature module: a render-free
   module would then depend on a rendering one.
+- Drop the re-export and rewrite every importer: churn in three tests and `ui/mod.rs` for no
+  behaviour change, against the plan's narrow `ui/mod.rs` footprint (parallel #1124/#1125).
+- A menu on another session's tab aimed at that session: needs a new session-addressed restart
+  message for a case the bar never had (it showed only the shown session's AI tab).
 - `listed_sessions` (respects folds): a session under a folded origin would have no tab while it is
   shown.
 
@@ -283,6 +294,10 @@ rebase small against #1124 (status bar, the window column) and #1125 (sidebar).
 
 **Rationale**: Edge case *Platforms*: tooltips name Cmd on macOS. The bar's literal was wrong there.
 
+**Alternatives rejected**:
+- Keep the literal *Ctrl+Shift+T*: wrong on macOS.
+- A per-call `cfg!(target_os)` branch in the view: a second copy of the keymap's platform rule.
+
 ## R14. Tests, gates and the layout snapshot
 
 **Decision**:
@@ -307,7 +322,17 @@ rebase small against #1124 (status bar, the window column) and #1125 (sidebar).
   `session-area-twelve-tabs`; new `session-area-changes-open` (header over the Changes view);
   anchors `session.header`, `session.header.changes`, `session.strip`, `session.strip.tabs`,
   `session.strip.new_session`, `session.strip.split`; fixture regenerated once the area is done.
+- `gates/containment.rs`: `the_recorded_tab_overflow_is_the_instance_strip` is pinned to
+  `session-terminal-instance-tabs-overflowing` and the bar's container path; it is retargeted to
+  `session-area-twelve-tabs` and the strip's `EdgeFade` → `Scrollable` → keyed row path, with the
+  child count being the twelve members (its doc comment updated: the strip, not the bar).
 - Visual pass: quickstart Part B.
+
+**Alternatives rejected**:
+- Keep `tabs_anchor_the_trailing_edge` and adapt it: it asserts feature 027's trailing anchoring of
+  the tabs themselves, which FR-008 replaces; adapting it would invert every assertion.
+- Keep the old covered-state names: they name a bar that no longer exists, and the gates pinned to
+  them would silently test a different layout.
 
 **Rationale**: the spec's test layers per requirement (plan *Requirement map*); fonts are the
 bundled Roboto on every platform and layout is in logical px, so the gates measure what each platform

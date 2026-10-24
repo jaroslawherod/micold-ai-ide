@@ -91,7 +91,7 @@ covered by a client unit test.
 `row![ column![ title, chips ], changes_button ]`, padding `spacing::LG` horizontally, the column
 `Length::Fill`. The child lists of the row and the column never vary; the chips row holds the state
 chip always, then the branch chip and pull request chip when present. Title is `Ellipsized` at
-`TypeRole::Title`; each chip is a `Tag` with `.max_width(CHIP_MAX_WIDTH)` in a `Tooltip` with its
+`TypeRole::Title`; each chip is a `Tag` with `.max_width(CHIP_MAX_WIDTH)` (`CHIP_MAX_WIDTH` a new const in `ui/session_area.rs`) in a `Tooltip` with its
 full text. The Changes button is never narrower than it asks (gate, H10).
 
 ### H10. Fit (FR-013, SC-004)

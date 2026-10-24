@@ -15,7 +15,8 @@ module `micold_core::context_header`, fed by the Overview card's own `CardModel`
 of the Changes view's list for the shown location (`features::changes::HeaderCounts`). The strip's
 members, order, marks and arithmetic are a new render-free module `features::session_strip`, into
 which the bar's predicates move from `ui/terminal.rs`. The view is a new `ui/session_area.rs`;
-`ui/mod.rs` changes only in the branch that draws an active session. Design decisions:
+`ui/mod.rs` changes only in the branches that draw an active session and the Changes view (its tab
+menu reaches the moved `StripTab` through a re-export in `ui/terminal.rs`). Design decisions:
 [research.md](research.md).
 
 ## Technical Context
@@ -103,8 +104,11 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 - **`src/ui/session_area.rs`** (new): `view` (header, strip, body order, A1), `header` (H9),
   `strip` (S7), `changes_press` (H8).
 - **`src/ui/terminal.rs`**: `pane` returns the pane area only (the bottom bar, `tab_strip_row`,
-  `pinned_ai_tab`, `right_aligned_tabs`, `leading_slack`, `natural_strip_width` removed); imports the
-  moved predicates.
+  `pinned_ai_tab`, `right_aligned_tabs`, `leading_slack`, `natural_strip_width` removed); imports and
+  re-exports (`pub use`) the moved predicates and `StripTab`, so `ui/mod.rs`'s tab menu and
+  `tests/{app_state,popover_displacement,overlay_registration}.rs` keep their paths (R7).
+- **`src/features/session.rs`**: `shell_instance_menu`, `strip_tab_menu_requested` and
+  `Msg::StripTabMenuRequested` take `features::session_strip::StripTab` (R7).
 - **`src/ui/mod.rs`**: the active-session branch of `view_with` calls `session_area::view`; the
   Changes branch draws under the header when a session is shown (R12).
 - **`src/ui/material/tag.rs`**: `.leading(Element)`, `.max_width(f32)` (R11).
@@ -121,7 +125,9 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
   retargeted to the strip; `features_changes.rs` gains H7.
 - `gates/bar_controls_hold_their_size.rs` → `gates/strip_controls_hold_their_size.rs`;
   `gates/tabs_anchor_the_trailing_edge.rs` retired for `gates/strip_controls_anchor_the_trailing_edge.rs`;
-  `gates/tab_children_fit.rs` re-anchored; new `gates/session_area_fits.rs` (S9, H10, A1).
+  `gates/tab_children_fit.rs` re-anchored; `gates/containment.rs`'s strip-overflow case retargeted
+  to `session-area-twelve-tabs` and the strip's path (R14); new `gates/session_area_fits.rs` (S9,
+  H10, A1).
 - `support/covered_states.rs`: `session-area-one-tab`, `session-area-six-tabs`,
   `session-area-twelve-tabs`, `session-area-changes-open`; `fixtures/layout_snapshot.txt` regenerated
   (R14).
@@ -145,7 +151,7 @@ session, status and restart; no bar under the terminal), `docs/user-guide/review
 | FR-006 Changes counts, none, unknown | `ChangeSummary`, `CountsReading`, H5, H6, R5 | core unit; client: `HeaderCounts` transitions (stale seq, failure, re-read hides the last figure) |
 | FR-007 open, shown open, close | `changes_press`, `Button::selected`, H8 | client unit; §B B6 |
 | FR-008 strip members, New session, splits | `StripModel::of`, S1, S5, S7 | client unit; gate `strip_controls_anchor_the_trailing_edge`; §B B1, B3 |
-| FR-009 nothing the bar offered is lost | S3–S5, R9 | client unit (status, restart target, presses); `tab_reveal.rs`; §B B2–B5 |
+| FR-009 nothing the bar offered is lost | S3–S5 (incl. the tab menu), R7, R9 | client unit (status, restart target, presses, menu *Restart* iff stopped per member); `tab_reveal.rs`; `popover_displacement.rs`, `overlay_registration.rs`; §B B2–B5 |
 | FR-010 scroll, fixed controls, edge cue | `member_offsets`, `strip_overflow`, `scroll_into_view`, S6, R8, R9 | client unit; gates `strip_controls_hold_their_size`, `tab_children_fit`; covered state twelve tabs; §B B10 |
 | FR-011 press on first try, on that control | fixed child lists, keyed row, S8, R10 | `session_area_stability.rs`; `cdk::keyed` slot test |
 | FR-012 chords and focus unchanged | same messages as the bar (S5); `KeyboardElsewhere` unchanged | `terminal_focus.rs`, `keyboard.rs`, `navigation.rs`, lib `app_chord_tests` kept green; §B B11 |
@@ -198,12 +204,13 @@ crates/micold-client/src/
 ├── features/
 │   ├── mod.rs                    # + pub mod session_strip;
 │   ├── session_strip.rs          # new (predicates moved in from ui/terminal.rs)
+│   ├── session.rs                # StripTab from session_strip
 │   └── changes.rs                # HeaderCounts, HeaderFollowed, HeaderCountsRead, ReadCounts
 ├── shell/{changes.rs,issues.rs,subscriptions.rs}
 ├── ui/
 │   ├── mod.rs                    # active-session branch
 │   ├── session_area.rs           # new
-│   ├── terminal.rs               # bottom bar removed
+│   ├── terminal.rs               # bottom bar removed; re-exports session_strip
 │   ├── overview.rs               # location_card
 │   ├── cdk/{mod.rs,keyed.rs}     # Keyed promoted from ui/transcript/keyed.rs
 │   ├── transcript/{mod.rs,keyed.rs}  # keyed.rs removed, uses cdk::Keyed
@@ -213,7 +220,7 @@ crates/micold-client/tests/
 ├── session_area_stability.rs     # replaces terminal_bar_stability.rs
 ├── terminal_tabs.rs, tab_reveal.rs, features_changes.rs
 ├── gates/{strip_controls_hold_their_size.rs,strip_controls_anchor_the_trailing_edge.rs,
-│          session_area_fits.rs,tab_children_fit.rs}
+│          session_area_fits.rs,tab_children_fit.rs,containment.rs}
 ├── support/covered_states.rs
 └── fixtures/layout_snapshot.txt
 docs/user-guide/{terminal-panes.md,reviewing-changes.md}
