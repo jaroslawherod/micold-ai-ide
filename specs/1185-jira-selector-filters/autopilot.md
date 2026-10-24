@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | — | pending |
+| M2 | T023–T030 | full | Fix-version filter, AND with component | — | pending |
+| M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) | — | pending |
+| M4 | T040–T045 | full | Label filter from loaded issues; all four in one row | — | pending |
 
 ## Decisions
 
@@ -33,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | clarify | Label choices once a filter is chosen? | Taken at the unfiltered load, kept for the dialog | agent-resolved | spec.md#FR-005, #FR-007 |
 | D6 | plan | How do the filter clauses compose with #1186's JQL work? | Separate `micold_core::jira_filter` (`clauses`, `narrowed`); `list_jql`/`search_jql`/`list_open`/`search_open` unchanged; additive `JiraSource` methods with defaults | agent-resolved | research.md#R1, #R10 |
 | D7 | plan | Filter controls in the 520 px, tallest dialog? | One row of four `Typeahead`s (Any row clears), one "Filtered by … / Clear filters" line while active; no new widget | agent-resolved | research.md#R8; SC-001 |
+| D8 | tasks | US1 split? M1 over the ~800-line guide | Split US1 along AS3: M1 = mechanism + component, M2 = fix version; the mechanism has no smaller observable slice. T046 (quickstart, no code) left to the close unit | agent-resolved | tasks.md#Notes; milestones.md rule 3, 4 |
 
 ## Review rounds
 

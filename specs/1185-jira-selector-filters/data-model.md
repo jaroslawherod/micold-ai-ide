@@ -64,7 +64,7 @@ NotRequested ──focus──▶ Loading{seq} ──ok──▶ Loaded(Vec<T>)
 | `versions` | `ChoiceLoad<VersionChoice>` | |
 | `me` | `ChoiceLoad<JiraUser>` | at most one user |
 | `people` | `ChoiceLoad<JiraUser>` | last typed search; own user removed |
-| `labels` | `LabelSource` | `Waiting` (unfiltered load running) / `Failed` / `Ready(LabelChoices)` |
+| `labels` | `LabelSource` | `Waiting { seq }` (the unfiltered load's seq) / `Failed` / `Ready(LabelChoices)`; a result of that seq fills `Ready` even when a filter change superseded it as the listing (FR-005) |
 | `queries` | per-kind typed text | each field's own text |
 | `matches`, `highlight`, `open` | per-kind | as the issue typeahead (`rank`, `clamp_highlight`); row 0 of every list is "Any <filter>" |
 | `people_pending` | `Option<u64>` | the debounced reporter search awaiting its due time |
