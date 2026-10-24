@@ -210,6 +210,13 @@ measures `Font::MONOSPACE` with that shipped face, with no test-only copy. Befor
 on the host and measured differently on CI's Ubuntu runner (feature 940); see
 `tests/fixtures/FONT-PROVENANCE.md`.
 
+**Text Roboto does not cover is host-dependent.** The shipped Roboto has no arrow (U+2192) or CJK,
+so such a glyph falls back to whichever system font the host has (`Noto Sans` on Fedora, another on
+CI's Ubuntu) and the row's width differs by a few pixels (#1352: the sandbox banner's remedy
+"Settings → Daemons" measured 775.2 on Fedora, 778.1 on CI). A covered state must therefore not draw
+text outside Roboto's coverage; `status-bar-warnings` uses a failure whose remedy is Latin-1 only.
+Check a new state's strings for `→`, `…`-like symbols and non-Latin text before pinning it.
+
 `tests/layout_apparatus.rs` still guards this: if a system font named Roboto ever wins the family
 lookup, every measurement shifts at once. Read a mass geometry difference on one platform as a font
 problem, not as a layout regression.

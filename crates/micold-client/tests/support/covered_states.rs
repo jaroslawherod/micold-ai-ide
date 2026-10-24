@@ -2496,7 +2496,9 @@ fn warnings_state(state: State) -> StateUnderTest {
         micold_client::features::sandbox::Sandbox::for_placement(PlacementKind::LocalSandbox);
     sandbox.failed(Failure {
         stage: Stage::Probing,
-        error: RuntimeError::NotInstalled {
+        // Not `NotInstalled`: its remedy says "Settings → Daemons", and Roboto has no arrow, so the
+        // banner's width would be the host's fallback font's (#1352). This remedy is Latin-1 only.
+        error: RuntimeError::PermissionDenied {
             kind: RuntimeKind::Docker,
         },
     });
