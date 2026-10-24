@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: tasks unit done; gate green after rebase onto main; design PR pending (orchestrator opens it)
-- **Next step**: orchestrator opens the design PR (title/body written by the tasks unit) and merges it; then milestone M1. M2–M4 wait for #1125 and #1127 to merge.
+- **Phase**: M1 implemented (T001–T011 ticked); docs gate and review A clean; awaiting review B
+- **Next step**: orchestrator dispatches review B for M1 (snapshot in *Review rounds*), then continues the M1 unit for the full gate and the M1 PR. M2–M4 wait for #1125 and #1127 to merge.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -18,12 +18,13 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1365 | Design (spec, plan, tasks) | merged (rebase) | f955fbea3ac738910219cb0daf5c61bdf6a03415 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | todo |
+| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | implemented; awaiting review B |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | blocked: #1125 and #1127 must merge |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | blocked: #1125 and #1127 must merge; after M2 |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
@@ -49,11 +50,15 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | tasks | 1 | `d43d91dcbdf609cfb6bd9034bc18cb89f689db50:fdcd26120f013b2724b34a84e104a307cb892afb` | CHANGES: F1 MAJOR fixed (M2 tier docs → full, since `site/media.toml` is not `micold-docs`; *Incremental delivery* says only all-`micold-docs` PRs skip CI and that M2 runs the pipeline; `media-references.test.sh` added to T020 and M2 Verify); F2 MINOR fixed (T007 loses `[P]`, sequenced with T003–T006); F3 MINOR fixed (T026 times the two states warm, with and without, for T028). Round 2 needed: F1 changes a tier and a verify step. |
 | tasks | 2 | `3e3714988e7394b14e7a1dcddb5b0f65e0b66e72:708ca247350fd73c1e8dd3852fd6197b4eb7f3be` (Sonnet re-review of the diff from `d43d91dc…:fdcd2612…`) | CLEAN; no findings. |
 | analyze | 1 | — | No CRITICAL/HIGH/MEDIUM: 27/27 FR and SC have tasks; no placeholders; T035 (Phase 7) belongs to the close unit, outside M1–M4 by design; checklist has no unchecked items. No change. |
+| M1 review A (code-review, high) | 1 | — (working tree on f955fbea) | 10 findings: fixed — `### The tab strip` vs the shortcut-from-AI-tab bullet (stale: the chord opens a shell from the AI tab since 027 FR-004), settings.md restart placement, give-up sentence placing restart in the pane, chord focus condition, E6 rewrite dropping the session group, terminal-panes.md:94 macOS forms, status-bar sentence missing key hints; recorded as follow-up — in-app "Choose restart below"; declined — reflow (MINOR), dup of the first paragraph (MINOR: SC-007 needs the answer there). |
+| M1 review A (code-review, high) | 2 | — (fix diff) | 8 findings, all wording precision in round-1 fixes: Cmd+C/Cmd+V (no Shift) on macOS, tab order when a helper is shown, restart only while stopped, "Both restart controls" ambiguity, "+" shown with no instance, layout bullet in appearance-theming.md, '+' bullet focus condition; all fixed; reflow declined again. |
+| M1 review A (code-review, high) | 3 | — (fix diff) | 9 findings, wording precision in round-2 fixes (tab placed after itself, other sessions' order main-then-helpers, focus qualifier scope, '+' anchor with no instances, "new terminal"/"unchanged" release-note wording at terminal-panes.md:94, conditional status-bar items, "a single tab" on a new session, how to get a stopped process for the restart); all fixed, prose only. Rated MINOR (no wrong placement of an element remains); not escalated; review B covers the final text. |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A rounds 1–3 | MINOR: reflow the paragraphs whose added links pushed lines past 100 columns | The pages are not wrapped consistently (hundreds of lines over 100 columns in each touched file); reflowing would widen the diff past FR-011's "that sentence only". |
 | — (design) | plan round 2 | MINOR: `contracts/covered-states.md:40` says each anchor is "held by W1–W4" under a W1–W5 table | W5 is a state-level assertion on the `State`, not on an anchor, so W1–W4 are the anchors' properties; the sentence is correct. |
 
 ## Handover
@@ -66,6 +71,8 @@ None.
 
 ## Follow-ups not done
 
+- M1: the app's empty-pane text still says "Choose restart below to resume it." (`crates/micold-client/src/ui/terminal.rs` `empty_terminal_message`, test comment ~:1075 "the bar below"), while restart now sits in the tab strip above; FR-020 forbids the fix here — needs its own bug issue.
+- M1: `lychee` not installed and `mise` not on PATH in this cloud environment: links (A1) left to CI; the docs gate ran as the `test-scripts` loop directly (28/28 pass). Stage-1 extra hits fixed beyond E1–E12: `settings.md` restart recovery sentence (FR-011), `terminal-panes.md` other-section tab-strip mentions linked, `worktrees-and-sessions.md` shortcut-from-AI-tab bullet (stale since 027 FR-004). Left for stage 2: `appearance-theming.md:58`, `sandboxed-daemon.md:505` ("under the app bar"), `settings.md:4`, `settings.md:52` (app bar).
 - Design-PR unit: `speckit-analyze` run inline (no Agent tool to fork it to Sonnet). `gh` not authenticated, so the orchestrator opens the design PR via GitHub MCP.
 
 - Cloud environment: `gh` not authenticated; `branch-start.sh` ran without a previous PR (none). Issue #1127's body was read through the GitHub MCP instead.
