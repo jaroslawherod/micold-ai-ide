@@ -27,8 +27,14 @@ title and short branch), feature 484 (terminal panes) and feature 027 (the bar u
   status, a restart control when the process is stopped, the tab strip of terminal instances, the
   split buttons, the "+" (new terminal instance) and the pinned AI tab.
 - **Context header**: the new band at the top of the session area that names the active location.
-- **Tab strip**: the new row directly under the context header that holds the tabs, a "new" control
-  and, at its right end, the split buttons.
+- **Tab strip**: the new row directly under the context header that holds, in order, one session tab
+  per session of the shown location (main first, then helpers), the shown session's shell tabs and
+  "+" right after its own session tab, the **New session** control, and at its right end the split
+  buttons.
+- **Session tab**: a strip tab for one session of the location. The shown session's session tab
+  stands for its AI conversation (today's AI tab); pressing another session's tab shows that
+  session as selecting it in the sidebar does. Session tabs follow the sidebar's order.
+- **Shell tab**: a strip tab for one shell instance of the shown session (today's numbered tab).
 - **Chip**: a small labelled shape in the context header carrying one fact (state, branch, pull
   request).
 - **Changes button**: the control in the context header that opens the Changes view
@@ -36,6 +42,20 @@ title and short branch), feature 484 (terminal panes) and feature 027 (the bar u
   added and removed.
 - **Minimum window width**: the narrowest window the app allows (640 px today), with the sidebar at
   its default width.
+
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Which tabs does the strip hold, and what does "New session" open? → A: One session tab per
+  session of the location (main first, then helpers); the shown session's tab is its AI
+  conversation, followed by that session's shell tabs and "+"; **New session** runs the existing
+  **Start another session...** action, confirmation included. _(orchestrator's provisional pick of
+  the recommended option, user decision pending)_
+- Q: In what order are session tabs drawn, and what does pressing another session's tab do? → A:
+  In the sidebar's order for the location (main first, then helpers, agent-started sessions where
+  the sidebar lists them), and pressing one shows that session exactly as selecting it in the
+  sidebar does. _(agent-resolved: docs/user-guide/worktrees-and-sessions.md#starting-switching-and-closing-sessions)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -95,15 +115,11 @@ stacked, all from the strip; check no bar is drawn under the terminal.
 2. **Given** the tab strip, **When** the developer presses a tab, **Then** that tab's terminal is
    shown (or the pane already showing it is focused), exactly as pressing the same tab in the bottom
    bar did.
-3. **Given** the tab strip, **When** the developer presses its "new" control, **Then** a new tab is
-   opened and shown, exactly as the action it replaces did [NEEDS CLARIFICATION: Which tabs does
-   the strip hold, and what does "New session" open? (a) the active session's AI tab and terminal
-   instances as today, with "New session" opening a terminal instance as the "+" does; (b) the
-   location's sessions (main first, then helpers), with "New session" starting a new session in the
-   location; (c) the location's sessions, with each session's terminal instances listed after it.
-   Recommended: (c), the issue's "main/helper, New session" with today's instances still reachable.
-   The answer also places today's pinned AI tab and decides what "tab" means in FR-008 to FR-010 and
-   SC-004].
+3. **Given** the tab strip, **When** the developer presses its **New session** control, **Then**
+   the sidebar's **Start another session...** action runs for the shown location, confirmation
+   included, and the new helper session's tab is added after the location's other session tabs,
+   selected and shown; cancelling the confirmation changes nothing. The "+" after the shown
+   session's shell tabs opens a new shell instance exactly as the bottom bar's "+" did.
 4. **Given** the strip, **When** the developer presses the split side by side or split stacked
    button at its right end, **Then** the focused pane splits as the same buttons in the bottom bar
    did, and the split buttons in each pane's own header stay.
@@ -114,9 +130,10 @@ stacked, all from the strip; check no bar is drawn under the terminal.
    session's name and its process status (for example running, starting, stopped) are readable above
    the terminal, on its selected tab or beside it, as the bottom bar's left end showed them.
 7. **Given** a session whose AI tab the bottom bar pinned at its right corner, **When** the strip is
-   drawn, **Then** the AI tab is in the strip and reachable in one press at any tab count.
+   drawn, **Then** that AI conversation is the shown session's own session tab, and it is reachable
+   in one press at any tab count; another session's shell tabs are not drawn while it is not shown.
 8. **Given** more tabs than fit, **When** the strip is drawn, **Then** it scrolls rather than
-   shrinking, cutting or dropping a tab, the "new" control and the split buttons keep their place and
+   shrinking, cutting or dropping a tab, the **New session** control and the split buttons keep their place and
    size, and the faded edge points at a marked tab beyond it, as the bottom bar's strip did
    (feature 027).
 
@@ -223,13 +240,17 @@ focus.
 - **FR-007**: Pressing the Changes button MUST open the Changes view for the shown location, as the
   sidebar's **Review changes** does; while the view is open the button MUST show it is open and
   pressing it MUST close the view.
-- **FR-008**: The tab strip MUST hold the tabs and the "new" control of US2, with the split side by
-  side and split stacked buttons at its right end acting on the focused pane.
+- **FR-008**: The tab strip MUST hold one session tab per session of the shown location (main first,
+  then helpers), the shown session's shell tabs and a "+" directly after its session tab, and a
+  **New session** control that runs **Start another session...** for the location, confirmation
+  included; the split side by side and split stacked buttons sit at its right end and act on the
+  focused pane.
 - **FR-009**: Everything the bottom bar offered MUST stay above the panes with the same result: the
-  shown session's name and process status, switching tabs, the pinned AI tab, opening a new tab,
-  splitting and restarting a stopped process (US2 scenarios 2 to 7).
-- **FR-010**: The tab strip MUST scroll when its tabs do not fit, keeping every tab at its own width
-  and the "new" control and split buttons at their place and size, and MUST keep the bottom bar's
+  shown session's name and process status, switching between its AI conversation and its shell
+  instances, opening a new shell instance with "+", splitting and restarting a stopped process
+  (US2 scenarios 2 to 7).
+- **FR-010**: The tab strip MUST scroll when its tabs do not fit, keeping every session and shell tab at its own
+  width and the **New session** control and split buttons at their place and size, and MUST keep the bottom bar's
   marked-tab edge cue (feature 027).
 - **FR-011**: A press on a header or strip control MUST act on its first try and on that control
   only, also while focus, a process state, a chip or the tab count changes (the outcome feature 023
@@ -250,8 +271,9 @@ focus.
 - **Context header content**: title, card state, short branch (optional), current pull request with
   its state and checks state (optional), change counts (files, added, removed; or unknown) — all for
   one location, derived from what the Overview card and the Changes view already read.
-- **Tab**: one entry of the strip, with a name, whether it is shown, whether its process is stopped,
-  and whether it is marked.
+- **Tab**: one entry of the strip, either a session tab (one session of the location: its name,
+  main or helper, its process status) or a shell tab (one shell instance of the shown session), with
+  whether it is shown, whether its process is stopped, and whether it is marked.
 
 ## Success Criteria *(mandatory)*
 
@@ -264,7 +286,8 @@ focus.
 - **SC-003**: Opening the Changes view takes one press from the session area, against a right-click
   and a menu choice before.
 - **SC-004**: At the minimum window width (640 px) and at 1280×800, in light and dark, no element of
-  the header or strip overlaps another or overflows the window, with 1 tab, 6 tabs and 12 tabs, on
+  the header or strip overlaps another or overflows the window, with 1 tab (one session, no shell), 6 tabs and
+  12 tabs (counting session and shell tabs together), on
   each of Linux, macOS and Windows.
 - **SC-005**: Nothing is drawn under the panes in any covered layout state.
 - **SC-006**: Every press on a header or strip control acts on the first try, including while the
