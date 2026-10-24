@@ -1046,9 +1046,10 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     )
 }
 
-/// Feature 1123 (FR-015, quickstart §B1, §B2): a card with three pull requests (open with *checks
-/// failing*, draft with *checks pending*, merged) collapsed with "+1 more" and expanded, and one
-/// with a long number and *changes requested* at the card widths 280, 380 and 480 px.
+/// Feature 1123 (FR-015, quickstart §B1, §B2): a card with four pull requests (open with *checks
+/// failing*, draft with *checks pending*, open with *checks passing*, merged) collapsed with
+/// "+2 more" and expanded, and one with a long number and *changes requested* at the card widths
+/// 280, 380 and 480 px. Between them the rows pose each [`material::PrTone`] (BUG-1298 FR-026).
 fn pull_request_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
     use micold_core::pr_list::{BranchPrList, ListedPr};
@@ -1085,6 +1086,13 @@ fn pull_request_rows_pose<'a>(roles: Roles) -> Element<'a, Message> {
                 C::Pending,
                 ReviewState::None,
                 "2026-10-02T00:00:00Z",
+            ),
+            listed(
+                10,
+                P::Open,
+                C::Passing,
+                ReviewState::None,
+                "2026-10-01T12:00:00Z",
             ),
             listed(
                 9,

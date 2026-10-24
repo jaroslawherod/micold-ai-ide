@@ -222,24 +222,25 @@ fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
 ///
 /// It arrived with `overview-issue-link` (T028), the only covered state with a link: the link
 /// alone in the branch line's place on the first card, and after the branch on the second; M5
-/// (T048) added a third, a Jira key's link after its card's branch. It holds only there and only by
-/// the gutter, so a link that grew past its gutter still fires.
+/// (T048) added a third, a Jira key's link after its card's branch. BUG-1298 (FR-023) moved each
+/// link to lead its card's meta line, a wrapping row, one wrapper deeper. It holds only there and
+/// only by the gutter, so a link that grew past its gutter still fires.
 const INLINE_LINK_GUTTER: &[&str] = &[
-    "0/0/0/1/1/0/1/0/1/0/0/1/0/1/0",
-    "0/0/0/1/1/0/1/0/2/0/0/1/0/1/1/0",
-    "0/0/0/1/1/0/1/0/4/0/0/1/0/1/0",
+    "0/0/0/1/1/0/1/0/1/0/0/1/0/1/0/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/0/1/0/0/0",
+    "0/0/0/1/1/0/1/0/4/0/0/1/0/1/0/0/0",
 ];
 
 /// The same gutter on a **pull request row's number** (feature 1123, M2): each number is an
 /// inline link, so its row keeps the line's height and the gutter overhangs the row by exactly the
 /// gutter. `overview-pr-rows` holds them: two numbers on the collapsed card and three on the
-/// expanded one.
+/// expanded one, renumbered by BUG-1298's expanded body order (D9).
 const PR_NUMBER_GUTTER: &[&str] = &[
     "0/0/0/1/1/0/1/0/1/0/0/1/0/2/0/0/0",
     "0/0/0/1/1/0/1/0/1/0/0/1/0/2/1/0/0",
-    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/0/0/0",
-    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/1/0/0",
-    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/3/2/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/1/0/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/1/1/0/0",
+    "0/0/0/1/1/0/1/0/2/0/0/1/1/0/0/0/1/2/0/0",
 ];
 
 /// The gutter of [`INLINE_LINK_GUTTER`]: twice the focus ring's width (`text_link.rs`).

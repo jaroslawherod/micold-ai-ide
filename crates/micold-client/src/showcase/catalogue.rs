@@ -149,6 +149,11 @@ pub const COMPONENTS: &[Entry] = &[
             "SidebarSessionCurrent",
             // Feature 1120: the Overview card's 17 px title, scoped to the card (R10).
             "CardTitle",
+            // BUG-1298: the card-scoped 13/12 px roles of the Overview Card Redesign (D6).
+            "CardStrong",
+            "CardType",
+            "CardSmall",
+            "CardTag",
         ],
         density: &[],
         posed: &["muted"],
@@ -346,7 +351,8 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/overview_card.rs",
         component: "OverviewCard",
-        variants: &[],
+        // BUG-1298 FR-026: the status words' tones, posed by the "pull request rows" pose.
+        variants: &["Bad", "Waiting", "Good", "Plain"],
         density: &[],
         posed: &[
             "five states",
