@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks unit: speckit-analyze, tasks review, design PR
+- **Phase**: design-pr
+- **Next step**: orchestrator opens the design PR (title/body in the session scratchpad), waits on CI and merges; then milestone M1
 
 ## Pull requests
 
@@ -48,6 +48,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | Spec | 1 | da2d807c9816acd2626754adf775bd75bfdf81bb:3c7db2eb08425cc9cab3f4001be9e64c03c8ccd2 | CLEAN (3 MINOR, fixed, prose only) |
 | Plan | 1 | e7874cdbc745d323aa39bf2af5b3eb37e903f5d6:14cef2c07be917f0d69a3be91fbcea6f77f1b079 | CLEAN |
 | Analyze | 1 | — | 0 CRITICAL/HIGH; 4 MEDIUM, 7 LOW: I1 (spec FR-007/US2.5 now say no Overview row with no project open, matching Edge Cases), C1 (T012 and the test migration split), C2 (Tab-order tests T035, T045), C3 (revealed row in T033), C4, C5, D1 (plan Docs list), D2, A2, U1 fixed; A1 left (G5 already cross-referenced by FR-005/FR-006) |
+| Tasks | 1 | c3988cc2b123a2d2b824ce43111671dff99979ae:a53d7012cf8f7b5295432a203dac8857c4efd1dc | CLEAN (3 MINOR: test callers named in T014, M1 and M4 Verify widened, US5.1 moved to M4 Satisfies; fixed) |
 
 ## Declined review findings
 
