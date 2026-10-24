@@ -47,7 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 2 | after D4 applied | No critical ambiguities (US1 s7 added to test D4) |
 | Plan | 1 | 94d6338cedb4a1484792ddd227b4525777910dda:eff5ce1c9241292547074d7c78439557f5f162c8 | CHANGES: 2 MAJOR, 2 MINOR (run by the orchestrator). F1 fixed: untracked file digested as git's added file (no `U` tag), two G2 tests added (R1, data-model, contract G2); F2 fixed: `PendingOp::ReviewMark` moved to M3 with its sender; F3 fixed (prose): M2's edit of the `Msg::ReviewChanged` arm and the expected trivial conflict stated (plan, R8); F4 fixed (prose): M1 depends on D4 answered (A or B) |
 | Plan | 2 | 4898b5511d4f5bfda0a94ab413c3e0ee3b0e07e7:1fffd3bd01fcc90f2a112ade02d6051e1800f7dc | CLEAN (model sonnet, run by the orchestrator, fix diff from round 1) |
-| Tasks | 1 | SNAP | pending (orchestrator runs it, rubric tasks.md). speckit-analyze is not invocable here (no Skill entry); FR/SC coverage checked by grep: every FR-001–016 and SC-001–005 named by a task or milestone |
+| Tasks | 1 | 9585ec9b5c4444f1fb0f85c4ee8c95e4644fe2fd:2742a52748cad1ffbc15c420079a08ded6708f7c | pending (orchestrator runs it, rubric tasks.md). speckit-analyze is not invocable here (no Skill entry); FR/SC coverage checked by grep: every FR-001–016 and SC-001–005 named by a task or milestone |
 
 ## Declined review findings
 
