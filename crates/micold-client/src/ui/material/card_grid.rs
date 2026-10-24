@@ -519,11 +519,6 @@ impl<M: Clone> Grid<'_, M> {
         let topmost = pointer.and_then(|(card, _)| self.rests.get(card).map(|r| &r.at));
         let on_link = pointer.is_some_and(|(_, on_link)| on_link);
         let messages = |at: &SessionLocation| self.rests.iter().find(|r| &r.at == at);
-        if state.rest_scope != self.rest_scope {
-            // The old set's card is gone with its owner's state: nothing to leave.
-            state.rest_scope = self.rest_scope;
-            state.resting = None;
-        }
         if topmost != state.resting.as_ref().map(|(card, _)| card) {
             if let Some((left, true)) = &state.resting {
                 if let Some(on_leave) = messages(left).and_then(|r| r.on_leave.as_ref()) {
@@ -948,6 +943,14 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             );
         }
         let state = tree.state.downcast_mut::<ZoomState>();
+        if state.rest_scope != self.rest_scope {
+            // A new set of cards (another project's): the old set's rest is gone with its owner's
+            // state, nothing to leave, and its lifts with it, so a card of the new set at the old
+            // one's location fades no shadow it never cast (feature 1299).
+            state.rest_scope = self.rest_scope;
+            state.resting = None;
+            state.lifts = Lifts::seeded(self.expanded_at());
+        }
         self.observe_rest(state, event, pointer, shell);
         // The expanded card's shadow eases in, a collapsed one's out (feature 1299, D3); a zoom
         // draws cards in pieces, so while one runs no card is left settling over them (C3).
@@ -1086,10 +1089,18 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             }
         }
         // Each settling card whole at its slot, after its shadow, over its neighbours (1299, D3).
+        // A settling card off screen, shadow and all, is not drawn.
+        let reach = {
+            let shadow = style::eased_shadow(self.roles, elevation::MENU, 1.0);
+            shadow.blur_radius + shadow.offset.x.abs().max(shadow.offset.y.abs())
+        };
         for &index in &settling {
             let Some(card_layout) = layout.children().nth(index) else {
                 continue;
             };
+            if !card_layout.bounds().expand(reach).intersects(viewport) {
+                continue;
+            }
             let strength = state.lifts.strength(&self.rests[index].at, false, instant);
             renderer.with_layer(*viewport, |renderer| {
                 self.draw_lift(renderer, card_layout.bounds(), strength);
@@ -3531,6 +3542,23 @@ mod tests {
             m.drawn(backdrop()).0 == at_rest.0,
             "the settled grid is not the rest grid"
         );
+    }
+
+    /// A new rest scope (another project) drops the old set's lifts: a card of the new set at the
+    /// old expanded card's location fades no shadow and asks for no frame.
+    #[test]
+    fn a_new_rest_scope_drops_the_old_sets_lifts() {
+        let models = nine();
+        let mut m = mounted(
+            lift_grid(&models, Some(4), GAP).rest_scope("/a"),
+            900.0,
+            4000.0,
+        );
+        assert_eq!(strength_of(&m, &models, 4, true), 1.0, "seeded lifted");
+        m.rebuild(lift_grid(&models, None, GAP).rest_scope("/b").unscrolled());
+        assert_eq!(tick_at(&mut m, 0), RedrawRequest::Wait);
+        assert_eq!(strength_of(&m, &models, 4, false), 0.0);
+        assert_eq!(lifts(&m).settling(None).count(), 0);
     }
 
     /// C3, R8: while a zoom runs a collapsing card's shadow ends at once, asking for no frame.
