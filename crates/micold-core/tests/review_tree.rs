@@ -81,16 +81,24 @@ fn folder(rows: &[Row], label: &str) -> FolderRow {
         .unwrap_or_else(|| panic!("no folder row {label}"))
 }
 
-/// Every file row's leaf index names the input path its label ends.
+/// Every file row's leaf index names the input path its folder rows and label spell out.
 fn assert_leaves_index_input(rows: &[Row], paths: &[&str]) {
+    let mut folders: Vec<String> = Vec::new();
     for row in rows {
-        if let RowKind::File { leaf } = row.kind {
-            let path = paths[leaf];
-            assert!(
-                path == row.label || path.ends_with(&format!("/{}", row.label)),
-                "{} indexes {path}",
-                row.label
-            );
+        folders.truncate(usize::from(row.depth));
+        match &row.kind {
+            RowKind::Folder(f) => folders.push(f.paths.last().cloned().expect("a folder path")),
+            RowKind::File { leaf } => {
+                let expected = match folders.last() {
+                    Some(parent) => format!("{parent}/{}", row.label),
+                    None => row.label.clone(),
+                };
+                assert_eq!(
+                    paths[*leaf], expected,
+                    "row {} indexes the wrong leaf",
+                    row.label
+                );
+            }
         }
     }
 }
@@ -107,6 +115,10 @@ fn folders_come_before_files_and_hold_their_files() {
         ["0src/", "1ui/", "2b.rs", "1a.rs", "0README.md"]
     );
     assert!(rows.iter().all(|row| row.spans.is_empty()));
+    assert_leaves_index_input(&rows, &paths);
+    let paths = ["src/a.rs", "docs/a.rs", "a.rs"];
+    let rows = changes_tree(&paths, &BTreeSet::new());
+    assert_eq!(shape(&rows), ["0docs/", "1a.rs", "0src/", "1a.rs", "0a.rs"]);
     assert_leaves_index_input(&rows, &paths);
 }
 
@@ -250,6 +262,31 @@ fn files_tree_does_not_chain_and_sorts_unsorted_input() {
         ["0z/", "1y/", "2a.rs", "2b.rs", "0B.rs", "0m.rs"]
     );
     assert_leaves_index_input(&rows, &paths);
+}
+
+/// A folder opened while its parent is closed stays hidden; with chaining, a default-closed
+/// chained row opens only when every folder it stands for is open.
+#[test]
+fn default_closed_hides_an_open_folder_under_a_closed_one_and_opens_chains_whole() {
+    let paths = ["z/y/a.rs", "m.rs"];
+    assert_eq!(
+        shape(&files_tree(&paths, &set(&["z/y"]))),
+        ["0z/-", "0m.rs"]
+    );
+    let chained = |open: &BTreeSet<String>| {
+        shape(&layout(
+            &leaves(&paths),
+            &LayoutOptions {
+                chain: true,
+                openness: Openness::DefaultClosed { open },
+                sort: TreeSort::Path,
+                query: None,
+                reviewed: &never,
+            },
+        ))
+    };
+    assert_eq!(chained(&set(&["z"])), ["0z/y/-", "0m.rs"]);
+    assert_eq!(chained(&set(&["z", "z/y"])), ["0z/y/", "1a.rs", "0m.rs"]);
 }
 
 // --- T005: TreeChoices ----------------------------------------------------------------------
