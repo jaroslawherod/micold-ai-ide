@@ -85,7 +85,7 @@ specs/1127-title-bar-breadcrumb/
 crates/micold-core/src/tokens/anatomy.rs         # app_bar: HEIGHT 43, PADDING 12, ICON_TARGET 40; + GAP, MARK, FIELD_HEIGHT, FIELD_MAX_WIDTH; ALL
 crates/micold-core/tests/tokens_anatomy.rs       # new expected figures
 crates/micold-core/src/context_header.rs         # branch_chip → pub
-crates/micold-client/src/icons.rs                # + APP_ICON_RGBA (moved from shell/startup.rs)
+crates/micold-client/src/icons.rs                # + APP_ICON_RGBA (startup.rs private ICON_RGBA, renamed, pub)
 crates/micold-client/src/shell/startup.rs        # reads icons::APP_ICON_RGBA
 crates/micold-client/src/ui/material/
 ├── toolbar.rs                                   # reshaped: mark/leading/leading_fixed/centre/action, measuring layout
