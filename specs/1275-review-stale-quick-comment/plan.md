@@ -26,8 +26,10 @@ half that draws it.
   client-owned `Settings::suggestion_chips` (off by default) switches them on; the composer shows
   them as `ToggleChip`s that join the keyboard order.
 
-Core lands first (M1, M2) on today's code with unit tests. The client milestones build in today's
-Changes view, which #1269 later turns into the Review tab; only FR-013 waits for #1271.
+Core lands first (M1, M2) on today's code with unit tests; they build now. The client milestones
+that touch the Changes/Review view (M3 hold and notice, M4 drag to comment, M5 chips UI) wait until
+#1269 (Review tab) and #1271 are merged, since #1269 reshapes that view; FR-013 (M6) also needs
+#1271.
 
 ## Technical Context
 
@@ -148,9 +150,9 @@ docs/user-guide/{reviewing-changes.md,settings.md}
 | Change identity in the list read (FR-001a) | core `changes`, `git`, `pr_diff` | nothing | yes (M1) |
 | Stale comparison and held snapshot (FR-001–FR-004) | core `stale` | M1 | yes (M1) |
 | Drag pick, chip insertion, setting default (FR-015–FR-018 decisions, FR-022, FR-024, FR-028) | core `drag`, `chips`, `settings` | nothing | yes (M2) |
-| Hold, notice, dot, selection under hold, PR hold (FR-005–FR-012, FR-014) | client `features::changes`, `ui/changes.rs` | M1 | yes, in today's Changes view (M3) |
-| Drag gesture and composer opening (FR-015–FR-021) | client reducer, `DiffView` gutter | M2 | yes (M4) |
-| Chips in the composer and the Settings switch (FR-022–FR-027) | client reducer, settings, `ui` | M2 | yes (M5) |
+| Hold, notice, dot, selection under hold, PR hold (FR-005–FR-012, FR-014) | client `features::changes`, `ui/changes.rs` | M1, #1269, #1271 merged | no: after #1269 and #1271 (M3) |
+| Drag gesture and composer opening (FR-015–FR-021) | client reducer, `DiffView` gutter | M2, #1269, #1271 merged | no: after #1269 and #1271 (M4) |
+| Chips in the composer and the Settings switch (FR-022–FR-027) | client reducer, settings, `ui` | M2, #1269, #1271 merged | no: after #1269 and #1271 (M5) |
 | Reviewed file returns to unseen while held (FR-013) | client, #1271's reviewed set | #1271 merged | no (M6) |
 
 Client parts that #1269–#1273 reshape:
@@ -166,10 +168,12 @@ Client parts that #1269–#1273 reshape:
   shared `ChangedDot`, so the tree row places the same primitive; `features::changes` exposes
   `changed_since_you_looked(view, path) -> bool`, which the tree row reads instead of the flat row.
 - **#1271 (reviewed marks)**: FR-013 only (M6). Nothing else here reads reviewed marks.
-- **Drag (M4) and chips (M5)** touch the diff pane and the composer, which none of #1269–#1273
-  change; they do not wait.
+- **Drag (M4) and chips (M5)** touch the diff pane and the composer inside the Changes/Review view,
+  which #1269 reshapes; like M3 they wait until #1269 and #1271 are merged.
 
-If #1269 merges before M3 starts, M3 builds in the Review tab directly; nothing in the core changes.
+Only the micold-core milestones (M1 identity + `review::stale`; M2 `review::drag`, `review::chips`,
+the settings key) build now. M3–M5 build in the Review tab once #1269 and #1271 have merged;
+nothing in the core changes for that.
 
 ## Test strategy by layer
 
@@ -212,14 +216,15 @@ Milestones, each leaving the app working (tasks.md cuts them into tasks):
    visible change.
 2. **M2 — core quick comment and chips**: `review::drag`, `review::chips`, `Settings::suggestion_chips`.
    No visible change.
-3. **M3 — hold and notice in today's Changes view** (US1, FR-005–FR-012, FR-014): reducer, shell,
+3. **M3 — hold and notice in the Review tab, after #1269 and #1271** (US1, FR-005–FR-012, FR-014): reducer, shell,
    `ChangedDot`, header notice, docs *Keeping up with changes*, snapshot.
-4. **M4 — drag to comment** (US2): gutter events, reducer, docs *Picking lines*, *Writing a comment*.
-5. **M5 — suggestion chips** (US3): setting, composer chips, focusable `ToggleChip`, docs
+4. **M4 — drag to comment, after #1269 and #1271** (US2): gutter events, reducer, docs *Picking lines*, *Writing a comment*.
+5. **M5 — suggestion chips, after #1269 and #1271** (US3): setting, composer chips, focusable `ToggleChip`, docs
    `settings.md` and *Writing a comment*, snapshot, visual pass of M3–M5 together.
 6. **M6 — reviewed files while held** (FR-013): after #1271 merges.
 
-M1 and M2 are independent and may run in parallel; M3 needs M1; M4 and M5 need M2. If the user's
+M1 and M2 are independent, build now, and may run in parallel; M3 needs M1; M4 and M5 need M2;
+M3, M4 and M5 also wait until #1269 (Review tab) and #1271 are merged. If the user's
 answer to FR-014 is B or C, only M3 changes (the list stays live; `Held` holds only the open file's
 row), and M1's `changed_since` serves all three answers unchanged.
 

@@ -38,7 +38,8 @@ This is slice R6 of the review UI redesign (`docs/development/review-redesign.md
 | Suggestion chips and their setting (FR-022–FR-027) | nothing beyond today's comment box and Settings | yes |
 
 The issue lists #1271 as its blocker because the redesign sequences R6 after R4; only FR-013 truly
-needs it. The plan may ship the other parts first, in today's view.
+needs it. The plan ships the pure core parts first; the client parts that touch the Changes/Review
+view wait until #1269 (which reshapes that view) and #1271 are merged.
 
 ## Clarifications
 

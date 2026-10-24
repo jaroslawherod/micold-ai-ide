@@ -8,8 +8,12 @@ Each decision with what was rejected. Code references are to the tree at the pla
 
 - The old side, and a new side that is a commit (`BaseToHead`), come from the ids `git diff -z -M
   --raw` already prints (`:<mode> <mode> <old id> <new id> <status>`), which
-  `review::changes::parse_name_status` skips today (`[old_mode, new_mode, _, _, status]`). An
-  all-zero id means *absent* on an added/deleted side.
+  `review::changes::parse_name_status` skips today (`[old_mode, new_mode, _, _, status]`). Those
+  ids are abbreviated by default (`DIFF` in `review/git.rs` has no `--no-abbrev`), and git lengthens
+  an abbreviation as the object count grows, so `range_rows`/`range_paths` add `--no-abbrev` to the
+  `--raw` read: every id is then full length (40 hex, 64 in a SHA-256 repository), the form
+  `hash-object` prints, so a listed id and a hashed one compare equal. An id of all zeros (full
+  length) means *absent* on an added/deleted side.
 - A working-tree new side: `--raw` prints zeros when the file is not stat-clean against the index,
   and the index blob's id when it is. Zeros are filled by one `git hash-object --stdin-paths` over
   those paths (untracked files too), with the default filters, so a file edited back to its
@@ -89,6 +93,12 @@ pathspec-limited `change_list` that shares its code (identity included). The red
 row through `Held::adopt` (or, with nothing held, writes it into the shown list): the shown row and
 the held latest row both take it, so the file leaves the set and the next background read compares
 against what the user now sees.
+
+`Msg::DiffRead.row` is a `DiffRow`: `Row(ChangedFile)` as above; `Unlisted` when `change_list_of`
+succeeds with no row for the path (the reducer shows "no changes any more" as H9 does and leaves
+the shown and held rows to the next watch read); `NotRead` for a read that is not of the working
+tree and when `change_list_of` fails (its error is not shown: the diff still shows, and nothing is
+adopted, so the file keeps its dot until the next watch read settles it).
 
 **Rationale**: the diff read on selection may be newer than the last background read; without the
 row, the next background read would count a change the user is already looking at.

@@ -6,7 +6,10 @@ numbered rule is at least one unit test. `row(path, kind, added, removed, identi
 
 ## Identity (FR-001a) — `review::changes`, `review::git`, `review::pr_diff`
 
-- **I1** `parse_name_status` reads the old and new ids; an all-zero id is `None`.
+- **I1** `parse_name_status` reads the old and new ids; an id of all zeros (40 `0`s, as
+  `--no-abbrev` prints it) is `None`.
+- **I1a** (real git) The `--raw` read prints full-length ids: every `Object` id in a `change_list`
+  row has the length of `git rev-parse HEAD` (no abbreviation, R1).
 - **I2** `assemble` sets `Sides { old, new }`: `Object(id)` for a present id, `Absent` for an
   added file's old side or a deleted file's new side.
 - **I3** (real git) A committed range (`BaseToHead`) needs no `hash-object`: both sides are
@@ -68,4 +71,5 @@ numbered rule is at least one unit test. `row(path, kind, added, removed, identi
 - **K3** `insert("Looks off", chip) == "Looks off\n" + chip.text`.
 - **K4** `insert("Looks off\n", chip) == "Looks off\n" + chip.text` (no blank line added).
 - **K5** `Settings::default().suggestion_chips == false`; a `settings.json` without the key reads
-  false; true round-trips.
+  false; true round-trips through `StoredSettings` (written as `suggestion_chips`, loaded back on),
+  as `reduce_motion_round_trips` does.
