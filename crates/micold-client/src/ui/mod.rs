@@ -85,6 +85,7 @@ pub use settings::container_fields::{
 pub(crate) mod settings_view;
 mod shell;
 mod sidebar;
+pub mod status_bar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
@@ -160,86 +161,92 @@ use crate::features::connection::ConnectionStatus;
 /// The persistent connection-status strip, shown between the toolbar and the notification stack.
 /// Empty (zero-height) when connected, so it never crowds a healthy session.
 fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a, Message> {
-    let banner = match status {
-        ConnectionStatus::Connected => {
-            return Space::new()
-                .width(Length::Fixed(0.0))
-                .height(Length::Fixed(0.0))
-                .into()
-        }
-        ConnectionStatus::Disconnected => material::ConnectionBanner::new(
+    let Some((title, body)) = connection_words(status) else {
+        return Space::new()
+            .width(Length::Fixed(0.0))
+            .height(Length::Fixed(0.0))
+            .into();
+    };
+    let mut banner = material::ConnectionBanner::new(title, body, roles);
+    if let Some((label, message)) = connection_action(status) {
+        banner = banner.action(label, message);
+    }
+    container(banner)
+        .padding([spacing::SM, spacing::MD])
+        .width(Length::Fill)
+        .into()
+}
+
+/// The connection banner's title and sentence, or `None` when connected. One source for the banner
+/// and the status bar's tooltip (feature 1124, FR-006), so the two never disagree.
+fn connection_words(status: &ConnectionStatus) -> Option<(&'static str, String)> {
+    Some(match status {
+        ConnectionStatus::Connected => return None,
+        ConnectionStatus::Disconnected => (
             "Not connected to the session service",
-            "The displayed content may be stale. Reconnecting…",
-            roles,
+            "The displayed content may be stale. Reconnecting…".to_string(),
         ),
         // Past tense for the same reason the refusal's is (`010` BUG-023): this label is recorded
         // when the takeover arrives and never re-derived, so "is now attached" went on asserting
         // that a window killed minutes ago held the project. What happened is the part that stays
         // true.
-        ConnectionStatus::Displaced { by } => material::ConnectionBanner::new(
+        ConnectionStatus::Displaced { by } => (
             "Another window took over this project",
             format!("{by} took it — this window is read-only until you take it back."),
-            roles,
-        )
-        .action(
-            "Take over",
-            Message::Connection(ConnectionMsg::TakeoverRequested),
         ),
         // The same read-only state and the same button, and deliberately not the same sentence
         // (`010` BUG-023): this window never held the project, so nothing was taken from it and
         // there is no "back" to take it. Said in the past tense because it is a report of the
         // answer this window got, not a live claim about who is attached now — the label is never
         // re-derived, and the holder may since have exited.
-        ConnectionStatus::ProjectBusy { holder } => material::ConnectionBanner::new(
+        ConnectionStatus::ProjectBusy { holder } => (
             "This project is already open in another window",
             format!(
                 "{holder} was holding it when this window asked, so this one is read-only. Take \
                  it over to work here."
             ),
-            roles,
-        )
-        .action(
-            "Take over",
-            Message::Connection(ConnectionMsg::TakeoverRequested),
         ),
         ConnectionStatus::VersionMismatch {
             client,
             daemon,
             daemon_build,
-        } => material::ConnectionBanner::new(
+        } => (
             "The session service is a different version",
             format!(
                 "This app speaks contract v{client}; the running service ({daemon_build}) speaks \
                  v{daemon}. Restart the service to match — running processes stop, but your \
                  sessions are preserved and resumable."
             ),
-            roles,
-        )
-        .action(
-            "Restart service",
-            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
         ConnectionStatus::BuildMismatch {
             client_build,
             daemon_build,
-        } => material::ConnectionBanner::new(
+        } => (
             "A newer session service is installed",
             format!(
                 "This app is {client_build}; the running service is still {daemon_build}. \
                  Restart the service to pick up the update — your sessions are unaffected either \
                  way and remain resumable."
             ),
-            roles,
-        )
-        .action(
-            "Restart service",
-            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
-    };
-    container(banner)
-        .padding([spacing::SM, spacing::MD])
-        .width(Length::Fill)
-        .into()
+    })
+}
+
+/// The action that ends a connection condition, when it has one.
+fn connection_action(status: &ConnectionStatus) -> Option<(&'static str, Message)> {
+    match status {
+        ConnectionStatus::Connected | ConnectionStatus::Disconnected => None,
+        ConnectionStatus::Displaced { .. } | ConnectionStatus::ProjectBusy { .. } => Some((
+            "Take over",
+            Message::Connection(ConnectionMsg::TakeoverRequested),
+        )),
+        ConnectionStatus::VersionMismatch { .. } | ConnectionStatus::BuildMismatch { .. } => {
+            Some((
+                "Restart service",
+                Message::Connection(ConnectionMsg::RestartServiceRequested),
+            ))
+        }
+    }
 }
 
 /// The sandbox's standing conditions, in the same slot and for the same reason (FR-035b, S-3).
@@ -292,6 +299,17 @@ fn sandbox_banner<'a>(
         .padding([spacing::SM, spacing::MD])
         .width(Length::Fill)
         .into()
+}
+
+/// [`status_bar::model`] for the window's clock and time zone now.
+fn status_bar_model(
+    state: &State,
+    connection: &ConnectionStatus,
+    sandbox: &crate::features::sandbox::Sandbox,
+) -> status_bar::StatusModel {
+    let now = micold_core::unix_time::unix_secs() as i64;
+    let offset = micold_core::local_time::UtcOffset::local_at(now);
+    status_bar::model(state, connection, sandbox, now, offset)
 }
 
 /// Render the main window: the top app bar over the shell body (active project / empty state),
@@ -449,7 +467,10 @@ pub fn view_with<'a>(
             // condition of the whole window, not of whichever body branch happens to be taken
             // (T043, SC-004).
             sandbox_status::indicator(sandbox_status::attempt_line(sandbox), roles),
-            body
+            body,
+            // The status bar (feature 1124, R1): the column's last child, so it is drawn under every
+            // body branch and beneath every overlay pushed after `base` (FR-002, FR-013).
+            status_bar::view(status_bar_model(state, connection, sandbox), roles),
         ],
         material::SurfaceKind::Window,
         roles,

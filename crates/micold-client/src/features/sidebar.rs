@@ -1195,12 +1195,32 @@ impl crate::app::State {
 
     /// [`Self::daemon_binding`] as the text a row shows: the daemon's name, or [`NO_DAEMON_LABEL`].
     pub fn daemon_label_of(&self, key: &str) -> String {
+        self.daemon_text_of(key, |entry| entry.name.as_str().to_string())
+    }
+
+    /// Where `key`'s daemon runs, as the status bar names it (feature 1124, research R6): "local"
+    /// for the host daemon, the daemon's name for any other runtime, or [`NO_DAEMON_LABEL`].
+    pub fn daemon_location_of(&self, key: &str) -> String {
+        self.daemon_text_of(key, |entry| match entry.runtime {
+            micold_core::daemons::DaemonRuntime::Host => "local".to_string(),
+            _ => entry.name.as_str().to_string(),
+        })
+    }
+
+    /// The one lookup behind [`Self::daemon_label_of`] and [`Self::daemon_location_of`]: `key`'s
+    /// bound daemon put into words by `text`, or [`NO_DAEMON_LABEL`] when it is bound to none or to
+    /// an id the registry no longer holds.
+    fn daemon_text_of(
+        &self,
+        key: &str,
+        text: impl Fn(&micold_core::daemons::DaemonEntry) -> String,
+    ) -> String {
         match self.daemon_binding(key) {
             micold_core::daemons::Binding::Bound(id) => self
                 .settings
                 .daemons
                 .get(id)
-                .map(|entry| entry.name.as_str().to_string())
+                .map(text)
                 .unwrap_or_else(|| NO_DAEMON_LABEL.to_string()),
             micold_core::daemons::Binding::NoDaemon => NO_DAEMON_LABEL.to_string(),
         }

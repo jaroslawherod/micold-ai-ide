@@ -89,7 +89,7 @@ Overview (full screen too), Changes, Settings and the empty screen.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T007 [US1] Write failing render-free tests for `ui::status_bar::model(&State,
+- [x] T007 [US1] Write failing render-free tests for `ui::status_bar::model(&State,
   &ConnectionStatus, &Sandbox, now, offset)` in `client/src/ui/status_bar.rs`: every row of the
   data-model *Connection item* table (text, dot, tooltip) incl. `{location}` = "local" for a Host
   daemon and for no project open, the daemon's name for another runtime, "no daemon" for
@@ -119,17 +119,17 @@ Overview (full screen too), Changes, Settings and the empty screen.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Factor the location lookup out of `State::daemon_label_of` into one shared helper
+- [x] T011 [US1] Factor the location lookup out of `State::daemon_label_of` into one shared helper
   in `client/src/features/sidebar.rs` (Host → "local", other runtime → name, `NoDaemon`/missing →
   `NO_DAEMON_LABEL`), used by both `daemon_label_of` and the bar (R6; no copy); a refactor with no behaviour change,
   guarded by the existing `client/tests/worktree_daemon_label.rs` and by T007's location cases
-- [ ] T012 [US1] Implement `StatusModel { connection, sandbox, cli: Option<ItemModel>, usage:
+- [x] T012 [US1] Implement `StatusModel { connection, sandbox, cli: Option<ItemModel>, usage:
   Option<UsageView>, hints: [String; 2] }`, `ItemModel { text, dot, tone, busy, tooltip }`,
   `model(..)` (connection and sandbox items; `cli`/`usage` `None`, hints empty until US4/US5) and
   `view(model, roles)` feeding `material::StatusBar` with GiveWay CLI `Shorten(0)`, sandbox
   `Shorten(1)`, connection `Shorten(2)` in NEW `client/src/ui/status_bar.rs`; re-export `model` from
   `client/src/ui/mod.rs` for the crate's tests
-- [ ] T013 [US1] Mount `status_bar::view(..)` as the last child of the window column in
+- [x] T013 [US1] Mount `status_bar::view(..)` as the last child of the window column in
   `ui::view_with` (`client/src/ui/mod.rs`) after `body`, outside every body branch; the
   install-location early return stays before it (R1, contract P1)
 - [ ] T014 [US1] Regenerate `client/tests/fixtures/layout_snapshot.txt`
