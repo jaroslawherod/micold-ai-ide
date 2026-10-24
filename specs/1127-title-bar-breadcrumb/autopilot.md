@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: tasks unit (continue from *Handover*)
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR from the scratchpad title/body; after merge, milestone M1
 
 ## Pull requests
 
@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 8eb3f915c06f64566ad2e62c6f69da7d28f756f5:08ff39f5c466168d2ad5a9ff688e3b192d4f9461 | CLEAN (3 MINOR, fixed, prose only) |
 | Plan | 1 | 11ac16c31ec7892dbc9503a8efc59c62abc11341:7c59c3b9c7fa3e6b0a2d12520149d5778c88796e | CLEAN (1 MINOR: APP_ICON_RGBA is a rename of private ICON_RGBA; fixed, prose only) |
+| Tasks | 1 | 84a84006f20dfcb2715de005af939bd8cc8f3def:605ab3e676a083538fdd7b001e0f5be80469cecb | CLEAN (3 MINOR: `app_bar.*` paths in T032/T044, T022 under Implementation, M1 Verify narrowed to its quickstart parts; fixed, prose only) |
 
 ## Declined review findings
 
@@ -67,4 +68,4 @@ None.
 ## Follow-ups not done
 
 - T051 (visual pass of quickstart Part B) is in no milestone: the close unit runs it (analyze G5).
-- Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5, T1.
+- Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5. (T1 fixed with tasks review F2.)
