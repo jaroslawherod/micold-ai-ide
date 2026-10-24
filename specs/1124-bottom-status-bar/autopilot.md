@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: gate green, A CLEAN, B CLEAN r2, visual pass 5/5 |
+| M1 | T001–T015 | full | Status bar on every body branch with connection and sandbox items; StatusBar in the showcase | (orchestrator opens) | done: rebased on 4910aeee, gate green at 2045d640, A CLEAN (r2 scoped CLEAN), B CLEAN r2, visual pass 5/5 |
 | M2 | T016–T020 | light | Bring-up shown in the bar; no row above the body | — | planned |
 | M3 | T021–T025 | light | Lost connection in the bar only; 7 action banners kept | — | planned |
 | M4 | T026–T032 | light | CLI item follows the focused pane; Overview/Jump key hints | — | planned |
