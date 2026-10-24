@@ -175,8 +175,15 @@ fn the_monospace_face_parses_and_is_the_face_that_measures() {
         .filter(|n| n.name_id == ttf_parser::name_id::FAMILY)
         .find_map(|n| n.to_string())
         .expect("the shipped Fira Mono must carry a decodable family name");
-    assert_eq!(family, lay::REFERENCE_MONO_FONT_FAMILY);
-    assert!(face.is_monospaced());
+    assert_eq!(
+        family,
+        lay::REFERENCE_MONO_FONT_FAMILY,
+        "the shipped Fira Mono Regular must report the family the installer pins"
+    );
+    assert!(
+        face.is_monospaced(),
+        "the shipped Fira Mono must be fixed-pitch"
+    );
 
     let _ = lay::renderer();
 
