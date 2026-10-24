@@ -41,7 +41,7 @@ request (FR-005).
 | `branch` | `Option<Chip>` | `None` without a branch; text `short_branch(b)` else `b`, tooltip the full branch (FR-004) |
 | `pull_request` | `Option<Chip>` | `None` without input; text `PR #n · <state word>[ · <phrase>]`, tooltip the same plus *as of the last reading* when stale (FR-005) |
 | `changes` | `String` | `Changes`, then `· N file(s) · +A −R`, or `· no changes`, or nothing while `Unknown` (FR-006) |
-| `changes_tooltip` | `String` | *Open the Changes view* / *Close the Changes view*, chosen by the client from whether the view is open on this location (FR-007) |
+| `changes_tooltip` | `String` | *Open the Changes view* / *Close the Changes view*, chosen by the client from whether the view is open on this location (FR-007), then the label on a second line (it may be cut at the smallest window, H10) |
 
 `Chip { text: String, tooltip: String }`.
 

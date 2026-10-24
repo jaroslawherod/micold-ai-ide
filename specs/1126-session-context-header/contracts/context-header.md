@@ -92,7 +92,8 @@ covered by a client unit test.
 `Length::Fill`. The child lists of the column and the rows never vary; the chips row holds the state
 chip always, then the branch chip and pull request chip when present. Title is `Ellipsized` at
 `TypeRole::Title`; each chip is a `Tag` with `.max_width(CHIP_MAX_WIDTH)` (`CHIP_MAX_WIDTH` a new const in `ui/session_area.rs`) in a `Tooltip` with its
-full text. The Changes button sits on the title line, so the chips keep the header's whole width at
+full text. The Changes button's label is one `Ellipsized` line, its tooltip the action (*Open* /
+*Close the Changes view*) then the label. The Changes button sits on the title line, so the chips keep the header's whole width at
 the smallest window (M3: beside both lines it left the chips no room at 640×480). It is never
 narrower than it asks (gate, H10).
 
@@ -101,3 +102,10 @@ narrower than it asks (gate, H10).
 At 640×480 with the sidebar at 300 px, and at 1280×800, light and dark: the title, every chip and the
 Changes button lie inside the session area and overlap nothing; the title and chips may be cut with
 an ellipsis; the Changes button is laid out at its requested width.
+
+**Bound (M3 decision).** The title line holds about 286 px at 640×480 beside a 300 px sidebar. The
+Changes button is whole there for counts up to three digits (`Changes · 12 files · +345 −67`, the
+gate's stress case). A label wider than the room left beside the title (four-digit line counts,
+e.g. `Changes · 128 files · +2048 −1024`, 283 px) is cut with an ellipsis at that one size, its
+full text in the button's tooltip under the action (FR-013), as the title and chips are. At 1280×800
+counts up to five digits of files and six of lines are whole (gate).

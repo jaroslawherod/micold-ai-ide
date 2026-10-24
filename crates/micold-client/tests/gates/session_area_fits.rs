@@ -292,9 +292,8 @@ fn a_long_title_and_a_pull_request_chip_still_fit() {
             conflict: false,
         },
     );
-    // A branch's worth of counts, so the button asks for more than `Changes` alone. The title line
-    // has about 286 px at the smallest window beside the 300 px sidebar: counts in the thousands
-    // would wrap the button's label there (recorded in the ledger's follow-ups).
+    // A branch's worth of counts, so the button asks for more than `Changes` alone: H10's bound at
+    // the smallest window (about 286 px on the title line beside the 300 px sidebar).
     let location = state
         .current_session_location()
         .expect("a session is shown");
@@ -367,5 +366,85 @@ fn the_header_stands_over_the_open_changes_view() {
             }
             assert_button_unsqueezed(&what, &records, &state);
         }
+    }
+}
+
+/// H10's bound (M3 review B F2): at 1280×800 a label with counts as wide as a branch ever gets is
+/// laid out whole beside the title and the chips. At the smallest window, where the bound is
+/// three-digit counts (`a_long_title_and_a_pull_request_chip_still_fit`), it is cut rather than
+/// pushing anything out: the title, chips and button still lie inside the area, overlapping nothing.
+#[test]
+fn the_widest_counts_fit_at_the_layout_window() {
+    let covered = covered_states()
+        .iter()
+        .find(|s| s.name == "session-area-one-tab")
+        .expect("the covered state exists");
+    let mut one_line: Option<f32> = None;
+    for (theme, window) in [ThemePreference::Light, ThemePreference::Dark]
+        .into_iter()
+        .flat_map(|theme| [(theme, WINDOW), (theme, MIN_WINDOW_SIZE)])
+    {
+        let mut under = (covered.build)();
+        under.panes = Some(micold_core::pane_layout::PaneLayout::single());
+        under.state.settings.theme_pref = theme;
+        under.state.sidebar.width = SIDEBAR;
+        let location = under
+            .state
+            .current_session_location()
+            .expect("a session is shown");
+        let project = under.state.workspace.active.clone().unwrap();
+        under.state.changes.header.entry = Some((project, location));
+        under.state.changes.header.load = micold_client::features::changes::Load::Ready(
+            micold_core::context_header::ChangeSummary {
+                files: 12_345,
+                added: 987_654,
+                removed: 876_543,
+            },
+        );
+        let state = under.state.clone();
+        let records = records_of(under, window);
+        let what = format!("widest counts {theme:?} {window:?}");
+        if window == WINDOW {
+            assert_button_unsqueezed(&what, &records, &state);
+        }
+        let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+        let parts = header_parts(&records);
+        for (part, r) in &parts {
+            assert!(
+                r.width > 0.0 && inside(r, &area),
+                "{what}: the {part} {r:?} lies inside the session area {area:?}"
+            );
+        }
+        for (i, (a_name, a)) in parts.iter().enumerate() {
+            for (b_name, b) in &parts[i + 1..] {
+                assert!(
+                    !overlap(a, b),
+                    "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
+                );
+            }
+        }
+        // The label stays one line: its text is no taller than at the layout window, where it is
+        // laid out whole (checked first).
+        let button = [SESSION_AREA, CHANGES_BUTTON].concat();
+        let inside_button: Vec<&LayoutRecord> = records
+            .iter()
+            .filter(|r| r.path.len() > button.len() && r.path.starts_with(&button))
+            .collect();
+        // The deepest nodes are the glyph and the label's text, under the 40 dp button's fill.
+        let deepest = inside_button
+            .iter()
+            .map(|r| r.path.len())
+            .max()
+            .unwrap_or(0);
+        let inner = inside_button
+            .iter()
+            .filter(|r| r.path.len() == deepest)
+            .map(|r| r.height)
+            .fold(0.0_f32, f32::max);
+        let one_line = *one_line.get_or_insert(inner);
+        assert!(
+            inner <= one_line + TOLERANCE,
+            "{what}: the button's label wraps ({inner} tall inside, one line is {one_line})"
+        );
     }
 }
