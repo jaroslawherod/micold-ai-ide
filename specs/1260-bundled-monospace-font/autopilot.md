@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: close
-- **Next step**: close unit: tdd-verify, close review, gate, close PR. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
+- **Phase**: done
+- **Next step**: handoff. The run ends when the close PR merges. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1323 | M1 | merged (rebase, rebased onto main by orchestrator; gate re-run green) | 7afe5d296498e81f004074655ec19ee67a9e72ff |
 | #1329 | M2 | merged (rebase) | 55f6f5e5f714d3a57d0fdc299316fe5726f27cf7 |
 | #1332 | M3 | merged (rebase; orchestrator rebased onto main once after main's layout snapshot went red from other work, fixed by #1126 M2; full gate re-run green) | 12d38521a1c7dec7a8cb2ac56a07102f906509c9 |
+| pending | close (T028–T034, spec closed) | branch pushed; orchestrator opens the PR | — |
 
 ## Milestones
 
@@ -68,6 +69,8 @@ Polish T028–T029 (quickstart §A/§C records, no code): done by the close unit
 | Close review (tests + docs) | 1 | fb7d8473b968335f6676f488d81d965ea3014020:fdf6d7dc23bd80870d18261693ddd460bec7cace | CHANGES (1 MAJOR: order note wrongly put T016 after T018 — fixed, T016 and T018 share `56efcebc`; 2 MINOR: Phase 7 intro contradicted the declines, quickstart claimed the close gate before it ran — both fixed). New test judged sound. Headless `claude -p` |
 | Close review (re-review, sonnet) | 2 | fix diff after fdf6d7dc | CLEAN (1 MINOR: quickstart points at the close gate row before it exists — the row is added with the gate result). Headless `claude -p --model sonnet` |
 | Close gate | 1 | fdf6d7dc | red: `ui_glyph_literals::no_ui_surface_hardcodes_an_icon_glyph` — T034's test spelled U+E5CD as a literal; now `crate::icons::Icon::Close.glyph()` (same codepoint). `-- mono` 8 passed, `ui_glyph_literals` 2 passed |
+| Close re-review of the gate fix (sonnet) | 2 (not counted: red-gate fix) | 0b6f05dc | CLEAN (`Icon::Close => '\u{e5cd}'`, icons.rs:332, same codepoint). Headless `claude -p --model sonnet` |
+| Close gate | 2 | 0b6f05dc | green (`split-gate.sh`, GATE_EXIT=0) |
 
 ## Implementation notes
 
