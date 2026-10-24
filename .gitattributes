@@ -143,10 +143,12 @@ scripts/windows-install-smoke.sh      micold-packaging
 /Cargo.toml                           micold-packaging
 /Cargo.lock                           micold-packaging
 /.github/workflows/release.yml        micold-packaging
-# Inputs the installer build reads beside the set above: the .iss icon and licence, the scripts
+# Inputs the installer build reads beside the set above: the .iss icon and licences, the scripts
 # windows-installer.sh calls, and the toolchain pins.
 /assets/icon/icon.ico                 micold-packaging
 /LICENSE                              micold-packaging
+/assets/fonts/LICENSE*                micold-packaging
+/assets/fonts/PROVENANCE.md           micold-packaging
 scripts/remote-daemon-bundle.sh       micold-packaging
 scripts/build-lock.sh                 micold-packaging
 /rust-toolchain.toml                  micold-packaging

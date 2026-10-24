@@ -15,3 +15,13 @@ task pair it covers.
 | T016, T018 | `Family::Monospace` at Regular and Bold resolves to the shipped bytes and `Font::MONOSPACE` measures with each face's own advances | before T018: `the_monospace_face_parses_and_is_the_face_that_measures ... FAILED` ("Fira Mono Bold: Family::Monospace resolved to ... at weight 400") | after `install_monospace` in `renderer`: 12 `layout_apparatus` tests ok |
 | T017 | one `FiraMono*.ttf/.otf` in the repository, under `assets/fonts/` | passes after T001; with a temporary `tests/fixtures/FiraMono-Regular.ttf` it FAILED naming that path (copy deleted) | `there_is_one_copy_of_fira_mono_in_the_repository` ok |
 | T019 | `layout_snapshot` unchanged (research R4) | — | 105 passed, fixture untouched |
+
+## M3
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T020 | `repo_root`, `manifest_path`, `deb_assets`, `rpm_assets` shared from `tests/support/packaging.rs` | refactor, no behaviour change | `packaging_excludes_showcase` and `deb_ships_no_service_units` green before and after |
+| T021, T024–T026 | deb, rpm, `.app` script and `.iss` each ship the four licence-set files to their `fonts` licence directory | with `Cargo.toml`, the `.iss` and `macos-bundle.sh` reverted: `every_release_bundle_ships_the_font_licence_set ... FAILED`, 16 lines, one per file and bundle ("the deb ... does not ship assets/fonts/LICENSE-FiraMono-OFL.txt to usr/share/doc/micold-ai-ide/fonts/") | after T024–T026: 6 passed |
+| T022, T026 | a licence-set file is allowed in the `.iss` only with `DestDir` under `{app}\licenses\`; an unlisted file there still fails | mutation (licence allowance removed from `windows_violations`): `a_windows_installer_that_ships_a_font_licence_under_licenses_passes ... FAILED`, `the_windows_installer_contains_no_showcase ... FAILED` | restored: 24 passed |
+| T023, T025 | the staged `.app` holds the four files in `Contents/Resources/licenses/fonts/`; a missing one fails with `missing font licence: assets/fonts/<file>` | before T025: `macos-bundle.test.sh` 25 cases, 5 failures (four files missing, "a missing font licence is named: exited 0") | after T025: 25 cases, 0 failures |
+| T027 | `.gitattributes` packaging set | config | `git check-attr` shows `micold-packaging: set` on the four files; `classify-change.test.sh` 69 passed |

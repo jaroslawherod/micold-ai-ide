@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: M2 PR pending
-- **Next step**: M2 gate, reviews, push; orchestrator opens the M2 PR and merges; then M3. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
+- **Phase**: M3 in progress
+- **Next step**: M3 gate, reviews, push; orchestrator opens the M3 PR and merges; then the close unit. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1316 | design (spec, plan, tasks) | merged (rebase) | 5d634edeb2db3f2be6f85e07df320623911e2c36 |
 | #1323 | M1 | merged (rebase, rebased onto main by orchestrator; gate re-run green) | 7afe5d296498e81f004074655ec19ee67a9e72ff |
+| #1329 | M2 | merged (rebase) | 55f6f5e5f714d3a57d0fdc299316fe5726f27cf7 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | #1323 | done |
-| M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | pending (branch pushed) | done |
-| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | — | pending |
+| M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | #1329 | done |
+| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | pending | implemented (T020–T027 ticked); gate and reviews next |
 
 Polish T028–T029 (quickstart §A/§C records, no code) is left to the close unit.
 
@@ -56,6 +57,10 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | M2 review A (code-review, high) | 1 | abf0d23b | CHANGES (1 MAJOR: old resolve check asserted under the font-system lock and duplicated the new loop; 4 MINOR: messages not naming Fira Mono, weight mapped twice, symlink-following walk) - all fixed except unreadable-dir panic and extra extensions (taste). Headless `claude -p --model sonnet` |
 | M2 review B (conformance, sonnet) | 1 | 4bb0eba | CLEAN (2 MINOR: assert messages naming Fira Mono - fixed; Bold width check is vacuous since advances are weight-independent - the byte comparison carries it, no change). Headless `claude -p --model sonnet` |
 | M2 gate | 1 | final tree | green (`split-gate.sh`, ALL_GREEN) |
+
+## Implementation notes
+
+- M3 T026: `iss_file_entries` lives in `tests/support/packaging.rs` beside the shared manifest readers (not beside `iss_file_sources`, which it replaces), because `packaging_ships_font_licences.rs` reads the `.iss` entries too. The `.iss` licence lines use paths relative to the script (`..\..\assets\fonts\…`), as `LicenseFile` does, so `windows-installer.sh` needs no new define.
 
 ## Declined review findings
 

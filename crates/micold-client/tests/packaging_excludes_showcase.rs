@@ -29,8 +29,14 @@
 //! produced bundle: a glob over a directory that happens to hold two files looks exactly like an
 //! explicit copy.
 
+#[path = "support/packaging.rs"]
+mod packaging;
+
+use packaging::{
+    deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
+};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The showcase binary's name, as `Cargo.toml` declares it.
 const SHOWCASE_BIN: &str = "micold-showcase";
@@ -38,68 +44,12 @@ const SHOWCASE_BIN: &str = "micold-showcase";
 /// The binaries the macOS bundle ships, and the only ones (contracts/bundle-layout.md).
 const BUNDLED_BINS: &[&str] = &["micold-ai-ide", "micold-daemon"];
 
-fn repo_root() -> PathBuf {
-    // tests/ -> crates/micold-client -> crates -> repo root
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("repo root above crates/micold-client")
-        .to_path_buf()
-}
-
-fn manifest_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
-}
-
 fn desktop_path() -> PathBuf {
     repo_root().join("packaging/micold-ai-ide.desktop")
 }
 
 fn macos_bundle_path() -> PathBuf {
     repo_root().join("scripts/macos-bundle.sh")
-}
-
-/// The `[package.metadata.deb] assets` list, verbatim, or `None` when the section is absent.
-///
-/// Read as text rather than parsed: the property is about what a *declarative file says*, and a TOML
-/// parser would add a dependency to assert something a substring already settles.
-///
-/// The closing bracket is found **at depth**, not by the first `]`. Every entry in this list is
-/// itself an array, so a naive `find(']')` returns only the first asset — which is how the first
-/// draft of this function passed a manifest that shipped the showcase. The synthetic tests below are
-/// what caught it, and are the reason they exist.
-fn deb_assets(manifest: &str) -> Option<&str> {
-    let after = manifest.split_once("[package.metadata.deb]")?.1;
-    let open = after.find("assets = [")?;
-    let rest = &after[open + "assets = [".len()..];
-    let mut depth = 0usize;
-    for (i, c) in rest.char_indices() {
-        match c {
-            '[' => depth += 1,
-            ']' if depth == 0 => return Some(&rest[..i]),
-            ']' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
-}
-
-/// The `[package.metadata.generate-rpm] assets` list, verbatim, or `None` when absent. Same reading
-/// as `deb_assets`, with braces counted too because the entries are inline tables.
-fn rpm_assets(manifest: &str) -> Option<&str> {
-    let after = manifest.split_once("[package.metadata.generate-rpm]")?.1;
-    let open = after.find("assets = [")?;
-    let rest = &after[open + "assets = [".len()..];
-    let mut depth = 0usize;
-    for (i, c) in rest.char_indices() {
-        match c {
-            '[' | '{' => depth += 1,
-            ']' if depth == 0 => return Some(&rest[..i]),
-            ']' | '}' => depth -= 1,
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Whether a file's text names the showcase — by binary name or by build-output path.
@@ -480,23 +430,37 @@ const WINDOWS_SHIPPED: &[&str] = &[
     "micold-daemon-linux-aarch64",
 ];
 
+/// The font licence set's destination in the installed app (feature 1260, research R5).
+const WINDOWS_LICENCE_DIR: &str = r"{app}\licenses\";
+
 /// The Inno Setup rule for `script`, the text of a `.iss` file.
 ///
 /// Inno Setup copies whatever a `[Files]` `Source:` matches, so the showcase would reach users
 /// through a wildcard as easily as through its own name. Wildcards are therefore a violation on
 /// their own, whatever they happen to match on the build machine today.
-fn windows_violations(script: &str, bin: &str, shipped: &[&str]) -> Vec<Violation> {
+///
+/// `licences` are the only other basenames the installer may ship, and only into a `DestDir` under
+/// `{app}\licenses\` (feature 1260, FR-008): a licence text is documentation, never something
+/// installed beside the executables.
+fn windows_violations(
+    script: &str,
+    bin: &str,
+    shipped: &[&str],
+    licences: &[&str],
+) -> Vec<Violation> {
     let mut out = Vec::new();
-    let sources = iss_file_sources(script);
+    let entries = iss_file_entries(script);
     for name in shipped {
-        if !sources.iter().any(|source| basename(source) == *name) {
+        if !entries.iter().any(|(source, _)| basename(source) == *name) {
             out.push(Violation(format!(
                 "packaging/windows/micold-ai-ide.iss does not ship `{name}` — the installed app \
                  would start without it (FR-002)"
             )));
         }
     }
-    for source in sources {
+    for (source, dest_dir) in entries {
+        let is_licence =
+            licences.contains(&basename(source)) && dest_dir.starts_with(WINDOWS_LICENCE_DIR);
         if names_showcase(source, bin) {
             out.push(Violation(format!(
                 "packaging/windows/micold-ai-ide.iss ships `{source}` — the showcase is a \
@@ -509,11 +473,12 @@ fn windows_violations(script: &str, bin: &str, shipped: &[&str]) -> Vec<Violatio
                  whatever matches on the build machine, which can include the showcase (FR-012). \
                  Name each file."
             )));
-        } else if !shipped.contains(&basename(source)) {
+        } else if !shipped.contains(&basename(source)) && !is_licence {
             out.push(Violation(format!(
-                "packaging/windows/micold-ai-ide.iss ships `{source}`, which is not one of \
-                 {shipped:?} — the installer ships the app and its daemon and nothing else \
-                 (FR-012)"
+                "packaging/windows/micold-ai-ide.iss ships `{source}` to `{dest_dir}`, which is \
+                 not one of {shipped:?}, nor one of the licence texts {licences:?} under \
+                 `{WINDOWS_LICENCE_DIR}` — the installer ships the app, its daemon and their \
+                 licences, and nothing else (FR-012)"
             )));
         }
     }
@@ -523,35 +488,6 @@ fn windows_violations(script: &str, bin: &str, shipped: &[&str]) -> Vec<Violatio
 /// The file name at the end of an Inno Setup source path.
 fn basename(source: &str) -> &str {
     source.rsplit(['\\', '/']).next().unwrap_or(source)
-}
-
-/// The `Source:` values of the `[Files]` section, with `;` comment lines skipped.
-fn iss_file_sources(script: &str) -> Vec<&str> {
-    let mut in_files = false;
-    let mut sources = Vec::new();
-    for line in script.lines().map(str::trim) {
-        if line.is_empty() || line.starts_with(';') {
-            continue;
-        }
-        if line.starts_with('[') {
-            in_files = line.eq_ignore_ascii_case("[Files]");
-            continue;
-        }
-        if !in_files {
-            continue;
-        }
-        let Some(rest) = line.strip_prefix("Source:") else {
-            continue;
-        };
-        let value = rest
-            .split(';')
-            .next()
-            .unwrap_or("")
-            .trim()
-            .trim_matches('"');
-        sources.push(value);
-    }
-    sources
 }
 
 const HEALTHY_ISS: &str = r#"
@@ -570,7 +506,7 @@ Source: "{#RemoteDir}\micold-daemon-linux-aarch64"; DestDir: "{app}\remote"; Fla
 fn a_windows_installer_with_a_wildcard_source_fails() {
     let wildcard = HEALTHY_ISS.replace(r"micold-daemon.exe", r"micold-*.exe");
 
-    let found = windows_violations(&wildcard, SHOWCASE_BIN, WINDOWS_SHIPPED);
+    let found = windows_violations(&wildcard, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
 
     assert!(
         found.iter().any(|v| v.0.contains("micold-*.exe")),
@@ -585,7 +521,7 @@ fn a_windows_installer_that_ships_the_showcase_fails() {
         "\nSource: \"{#BinDir}\\micold-showcase.exe\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
     );
 
-    let found = windows_violations(&shipping, SHOWCASE_BIN, WINDOWS_SHIPPED);
+    let found = windows_violations(&shipping, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
 
     assert!(
         found.iter().any(|v| v.0.contains("micold-showcase.exe")),
@@ -601,7 +537,12 @@ fn a_windows_installer_without_the_daemon_fails() {
         .map(|line| format!("{line}\n"))
         .collect();
 
-    let found = windows_violations(&without_daemon, SHOWCASE_BIN, WINDOWS_SHIPPED);
+    let found = windows_violations(
+        &without_daemon,
+        SHOWCASE_BIN,
+        WINDOWS_SHIPPED,
+        FONT_LICENCES,
+    );
 
     assert!(
         found.iter().any(|v| v.0.contains("micold-daemon.exe")),
@@ -616,11 +557,60 @@ fn a_windows_installer_that_ships_an_unlisted_file_fails() {
         "\nSource: \"{#BinDir}\\micold-debug.dll\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
     );
 
-    let found = windows_violations(&extra, SHOWCASE_BIN, WINDOWS_SHIPPED);
+    let found = windows_violations(&extra, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
 
     assert!(
         found.iter().any(|v| v.0.contains("micold-debug.dll")),
         "a `Source:` outside the shipped set must be reported, got {found:?}"
+    );
+}
+
+/// One `[Files]` line shipping the licence `file` to `dest_dir`, placed before the first comment.
+fn iss_with_licence(file: &str, dest_dir: &str) -> String {
+    HEALTHY_ISS.replace(
+        "\n; the app",
+        &format!(
+            "\nSource: \"{{#FontsDir}}\\{file}\"; DestDir: \"{dest_dir}\"; Flags: ignoreversion\n; the app"
+        ),
+    )
+}
+
+#[test]
+fn a_windows_installer_that_ships_a_font_licence_under_licenses_passes() {
+    let script = iss_with_licence("LICENSE-FiraMono-OFL.txt", r"{app}\licenses\fonts");
+
+    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
+
+    assert_eq!(
+        found,
+        vec![],
+        "a licence text under {{app}}\\licenses\\ is allowed"
+    );
+}
+
+#[test]
+fn a_windows_installer_that_ships_a_font_licence_beside_the_app_fails() {
+    let script = iss_with_licence("LICENSE-FiraMono-OFL.txt", "{app}");
+
+    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
+
+    assert!(
+        found
+            .iter()
+            .any(|v| v.0.contains("LICENSE-FiraMono-OFL.txt")),
+        "a licence text outside {{app}}\\licenses\\ must be reported, got {found:?}"
+    );
+}
+
+#[test]
+fn a_windows_installer_that_ships_an_unlisted_file_under_licenses_fails() {
+    let script = iss_with_licence("micold-debug.dll", r"{app}\licenses\fonts");
+
+    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
+
+    assert!(
+        found.iter().any(|v| v.0.contains("micold-debug.dll")),
+        "the licences directory is not a way around the allow-list, got {found:?}"
     );
 }
 
@@ -635,7 +625,7 @@ fn the_windows_installer_contains_no_showcase() {
         panic!("read {}: {e}", iss_path().display());
     });
 
-    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED);
+    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
 
     assert!(
         found.is_empty(),
