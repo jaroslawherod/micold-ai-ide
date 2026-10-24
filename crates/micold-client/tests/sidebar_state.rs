@@ -1046,6 +1046,15 @@ mod state_groups {
             .any(|r| matches!(r, ListRow::Entry(SidebarEntry::Worktree(n)) if n.location() == worktree("work"))));
     }
 
+    /// Review A M1 r2: a toggle for a group that is not shown records nothing.
+    #[test]
+    fn a_toggle_for_a_group_not_shown_records_nothing() {
+        let mut state = state_with_active();
+        deliver(&mut state, vec![listed("only-idle")]);
+        toggle(&mut state, StateGroup::Done);
+        assert!(state.sidebar.group_choices.is_empty());
+    }
+
     /// T006 (US5.3, FR-005): the choice survives rows moving, a re-read, and a project switch and
     /// back, and is per project.
     #[test]

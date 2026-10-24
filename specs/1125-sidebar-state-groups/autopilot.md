@@ -54,11 +54,14 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | Plan | 1 | e7874cdbc745d323aa39bf2af5b3eb37e903f5d6:14cef2c07be917f0d69a3be91fbcea6f77f1b079 | CLEAN |
 | Analyze | 1 | — | 0 CRITICAL/HIGH; 4 MEDIUM, 7 LOW: I1 (spec FR-007/US2.5 now say no Overview row with no project open, matching Edge Cases), C1 (T012 and the test migration split), C2 (Tab-order tests T035, T045), C3 (revealed row in T033), C4, C5, D1 (plan Docs list), D2, A2, U1 fixed; A1 left (G5 already cross-referenced by FR-005/FR-006) |
 | Tasks | 1 | c3988cc2b123a2d2b824ce43111671dff99979ae:a53d7012cf8f7b5295432a203dac8857c4efd1dc | CLEAN (3 MINOR: test callers named in T014, M1 and M4 Verify widened, US5.1 moved to M4 Satisfies; fixed) |
+| M1 review A (code-review high) | 1 | aa345f554d65d9fd7a1b953deeb7a72508a0915f:9c2e4ba039aabe727a2b5933e8a90cf7a20669c7 | CHANGES: F1 header focus-loss sent KeyboardRowLeft (fixed); F2, F3 repeated sidebar derivations (fixed); F4 unreachable fallback (fixed); F6 unused From (fixed); F5 declined |
+| M1 review A (code-review high, sonnet) | 2 | c656359f69d7d2b23bfdc07e5431aa3337fb346f:e11c2f7e8bb8d6cadc64b82f86df2e9ed1ae9100 | running |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 F5 | `card()` and `location_card_state` each filter the location's sessions | a constant factor per card; one function owning the card state (R2) is what makes the sidebar and the Overview agree |
 
 ## Handover
 

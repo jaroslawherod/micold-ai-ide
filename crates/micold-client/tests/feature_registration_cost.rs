@@ -84,6 +84,19 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "overview",
+        "pr_status",
+        "State — `location_card_state` reads the pull request reading to derive a location's card \
+         state, as the card always did; it is read, never written (feature 1125, research R2)",
+    ),
+    (
+        "sidebar",
+        "overview",
+        "location_card_state — the sidebar groups each location by the card state its Overview card \
+         shows, from the one function both call, so the two cannot disagree; a pure read (feature \
+         1125, R2, US1.7)",
+    ),
+    (
         "composer",
         "command_palette",
         "State, classify, PaletteKey, Picked, SendIntent — the command palette and the model picker \
