@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks.md and milestones, then tasks review round 1
+- **Next step**: speckit-analyze, then tasks review round 1
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | — | pending |
+| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | pending |
 
 ## Decisions
 
