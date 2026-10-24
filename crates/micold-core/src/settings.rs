@@ -219,9 +219,10 @@ pub struct Settings {
     /// How the app selects its theme.
     #[serde(default)]
     pub theme: ThemePreference,
-    /// Whether the Overview's full-screen zoom switches in one step instead of animating (feature
-    /// 970, FR-008). Off by default; a file written before the key existed reads as off. It governs
-    /// that zoom only, and the operating system's reduced-motion preference is not read.
+    /// Whether the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
+    /// expansion (feature 1299) switch in one step instead of animating. Off by default; a file
+    /// written before the key existed reads as off. The operating system's reduced-motion
+    /// preference is not read.
     #[serde(default)]
     pub reduce_motion: bool,
     /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).

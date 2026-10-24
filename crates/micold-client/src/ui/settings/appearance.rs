@@ -66,7 +66,7 @@ pub fn view<'a>(
         .on_toggle(|on| Message::Settings(SettingsMsg::ReduceMotionToggled(on)));
     let reduce_motion = field_note(
         reduce_motion,
-        Some("Switch the Overview's full-screen zoom in one step"),
+        Some("Switch the Overview's full-screen zoom, card focus and expansion in one step"),
         roles,
     );
 

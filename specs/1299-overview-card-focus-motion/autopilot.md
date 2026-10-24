@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: close (checks, polish, visual pass done; close review pending)
-- **Next step**: close review (fresh reviewer, snapshot in *Review rounds*); then finish the ledger and open the close PR (full gate green at fba4e302's tree)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1319 | design (spec, plan, tasks) | merged | 1f66380fd3092861e818531f9c3a308d08abd5c5 |
 | #1324 | M1 (T001–T011) | merged | 92fe861ca11843a9f43ad66386360a75c31f0cf4 |
 | #1331 | M2 (T012–T023) | merged | 2ff3ceef8806fffb3ce20d83fad2c77c71be8f66 |
+| this PR | close (spec closed, close review fixes) | open | |
 
 ## Milestones
 
@@ -55,7 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | CLEAN (scoped, sonnet, orchestrator-run: all four round-1 findings fixed, no new bugs) |
 | A M2 (code-review high) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN, 3 MINOR all fixed in c1590fd9: F1 project switch kept the old set's lifts → `update` reseeds `lifts` with `resting` on a rest_scope change (test `a_new_rest_scope_drops_the_old_sets_lifts`, fails without the fix); F2 catalogue OverviewCard `live: ["expand and collapse"]`, interactive (showcase_completeness `the_overview_card_and_grid_are_posed` now expects both interactive); F3 settling pass culls cards whose shadow-expanded bounds miss the viewport. No re-review (minors) |
 | B M2 (conformance) | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | CLEAN (Verify: style/card_lift/card_grid/overview_card 206 passed; idle_requests_no_frames 14, layout_snapshot 105 passed); 1 MINOR fixed, prose only: settings.md Reduce motion paragraph rewrapped |
-| close (tests and docs) | 1 | 09a1ac600ab91bd0fca414d71907cbe40cb528ae:fba4e302c119b20af9aadfcd10d02990f8add7d1 | pending (orchestrator runs it) |
+| close (tests and docs) | 1 | 09a1ac600ab91bd0fca414d71907cbe40cb528ae:fba4e302c119b20af9aadfcd10d02990f8add7d1 | CHANGES (2 MAJOR, 1 MINOR, all fixed, prose only — no re-review: F1 Reduce motion note now "Switch the Overview's full-screen zoom, card focus and expansion in one step" (only the layout snapshot pins its width, regenerated: 301.1 → 443.8 px in the settings-view states); F2 `reduce_motion` doc comments in core and client settings name card focus and expansion (feature 1299); F3 visual-pass B9 says dark is the B2 live pose only and the five-states pose was checked by eye, no capture) |
 
 ## Declined review findings
 
@@ -64,15 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit, over the context cap after its checks. Done: T024 (comment on #1299), T025 (gate green,
-`quickstart.md` Results), T026 (`visual-pass.md`, `visual/`), tdd-verify inline
-(`tdd/verification.md`, FAIL resolved: T027, T028 in 25281aa7), spec Status Closed, full gate
-(`scripts/gate.sh`) green on 25281aa7's code. Pushed to the branch; no PR yet. Next: act on the close
-review (snapshot in *Review rounds*); then set **Phase** `done`, **Next step** `handoff`, add the
-close PR row, and open it via REST (`gh api repos/{owner}/{repo}/pulls`): title
-`#1299: Overview cards: animate keyboard focus and expansion — close`, body as the orchestrator's
-prompt requires (attribution header, `Refs #1299`, session footer), summarising
-`verification.md`, `visual-pass.md` and the two *Follow-ups not done* findings.
+None: close review fixed, full gate green, close PR opened. The run ends when it merges.
 
 ## Open escalation
 
@@ -82,5 +75,4 @@ None.
 
 - Visual pass (close unit, `visual-pass.md`): end states only; mid-transition frames not capturable under tiny-skia on Xvfb; B1, B7 and the issue-link half of B5 not run (reasons recorded there).
 - tiny-skia stale shadow outline after a hover move with Reduce motion off (`visual-pass.md`, Observation): cleared by a forced redraw, absent with Reduce motion on; suspected `iced_tiny_skia` quad damage not covering shadows. Not checked on wgpu (no GPU). Needs a decision: an issue, or a damage fix in the grid.
-- Settings → Appearance, Reduce motion supporting text still names only the full-screen zoom (`ui/settings/appearance.rs`); the user guide (FR-013) names the cards. Small UI-text follow-up.
 - No speckit converge run: *Review rounds* holds a CLEAN review B for M1 and M2 (close.md step 1).
