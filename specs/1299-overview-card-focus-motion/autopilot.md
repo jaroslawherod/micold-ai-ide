@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: implement M1 (review A round 2 pending)
-- **Next step**: review A round 2 (scoped, sonnet) of the M1 fix commit (orchestrator runs it); then full gate (scripts/gate.sh, CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0) and the M1 PR. Visual pass deferred to the close unit
+- **Phase**: implement M1 (reviews done, PR open)
+- **Next step**: orchestrator waits on M1 PR CI and merges; then M2 (T012–T023). Visual pass deferred to the close unit
 
 ## Pull requests
 
@@ -45,7 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks | 2 | 6b49c1b05d37c7c32799ad09201c21d974d12f3f:426765d05b781532d0d71423dd122cba5db2be39 | CLEAN (1 MINOR applied: M1 Verify §B.8 limited to its focus half) |
 | A M1 (code-review high) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CHANGES (1 MAJOR, 3 MINOR, all fixed: F1 press snaps any fade > 0, not only a shown one, + test pressing mid fade-out; F2 grid's instant ORs with a card's own; F3 `Focus::hold` puts the fade at the handed-over shown state, + test; F4 FRAME_MS/DONE derived from cdk FRAME and CARD_MOTION) |
 | B M1 (conformance) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CLEAN (3 MINOR, all fixed: F1 edited ring tests recorded as Decision 5; F2 dangling ledger line removed; F3 settings.md rewrapped, prose only) |
-| A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | pending (orchestrator, scoped, sonnet) |
+| A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | CLEAN (scoped, sonnet, orchestrator-run: all four round-1 findings fixed, no new bugs) |
 
 ## Declined review findings
 
