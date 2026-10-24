@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit over the context cap after writing the plan. Done: plan.md, research.md, data-model.md, contracts/marks-wire.md, quickstart.md committed and pushed. Next: act on plan review round 1 (snapshot in Review rounds) in a fresh plan unit, then tasks unit. No open findings yet.
 
 ## Open escalation
 
