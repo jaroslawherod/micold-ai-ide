@@ -1074,11 +1074,10 @@ mod state_groups {
         // Another project, where nothing was chosen, and back.
         let home = state.workspace.active.clone();
         state.workspace.active = Some(PathBuf::from("/other"));
-        assert!(state
+        assert!(!state
             .sidebar
             .group_choices
-            .get(&PathBuf::from("/other"))
-            .is_none());
+            .contains_key(&PathBuf::from("/other")));
         state.workspace.active = home;
         assert_eq!(
             header(&state, StateGroup::Working).map(|h| h.open),
