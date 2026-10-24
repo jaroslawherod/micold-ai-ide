@@ -610,19 +610,8 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// Once it does drain, the offset may still be `None`: the row was already fully visible, and
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    // Feature 1125 (FR-006, R5): a target in a closed state group opens it, so its row is drawn.
-    // Only once the viewport is known and only while the target is not drawn: a drawn target's
-    // group is open already, and a reveal waiting on layout should not derive the list per message.
-    if app.core.sidebar.pending_reveal_scroll
-        && app.core.sidebar.viewport_height != 0
-        && !app.core.current_session_is_listed()
-    {
-        app.core.open_group_of_reveal_target();
-    }
-    if !app.core.sidebar.pending_reveal_scroll
-        || app.core.sidebar.viewport_height == 0
-        || !app.core.current_session_is_listed()
-    {
+    // Feature 1125 (FR-006, R5): `reveal_ready` first opens the closed state group of the target.
+    if !app.core.reveal_ready() {
         if app.core.sidebar.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
             micold_client::reveal_trace::line(format_args!(
                 "armed, waiting: viewport_h={} listed={}",

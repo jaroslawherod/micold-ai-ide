@@ -198,7 +198,7 @@ mod into_a_closed_group {
         }
         assert_eq!(step, Step::Stop(worktree("done")));
         assert!(!done_open(&state), "not before the reveal drains");
-        state.open_group_of_reveal_target();
+        assert!(state.reveal_ready(), "the stop armed the reveal");
         assert!(done_open(&state));
         assert_eq!(chosen(&state, StateGroup::Done), Some(true));
         let list = state.sidebar_list();
@@ -209,6 +209,40 @@ mod into_a_closed_group {
             .expect("below a 60 px viewport");
         state.sidebar.scroll_offset = offset;
         assert_eq!(state.reveal_scroll_offset(), None, "now fully in view");
+    }
+
+    /// A chord into closed Done opens it even while the current session's row is drawn in an
+    /// open group: the reveal's target is the chord's row, not the current session's.
+    #[test]
+    fn a_chord_into_closed_done_opens_it_while_the_current_session_is_drawn() {
+        let mut state = five_states();
+        let working = state
+            .active_sessions()
+            .iter()
+            .find(|s| s.location == worktree("work"))
+            .map(|s| s.id)
+            .expect("five_states has a session in `work`");
+        state.session.active = Some(working);
+        state.sidebar.viewport_height = 60;
+        assert!(
+            state.current_session_is_listed(),
+            "Working is open, its row drawn"
+        );
+        state.apply_navigation(Step::Stop(worktree("done")), false);
+        assert!(!done_open(&state));
+        assert!(state.reveal_ready());
+        assert!(done_open(&state));
+        assert_eq!(chosen(&state, StateGroup::Done), Some(true));
+        assert!(location_row(&state.sidebar_list(), &worktree("done")).is_some());
+        let offset = state
+            .reveal_scroll_offset()
+            .expect("below a 60 px viewport");
+        state.sidebar.scroll_offset = offset;
+        assert_eq!(
+            state.reveal_scroll_offset(),
+            None,
+            "the chord's row is in view"
+        );
     }
 
     /// The Overview's reveal opens the closed group of its row; an open group's choice stays
@@ -244,7 +278,9 @@ mod into_a_closed_group {
             micold_client::features::sidebar::Msg::GroupToggled(StateGroup::Done),
         ));
         assert!(!done_open(&state), "the user closed it");
-        state.open_group_of_reveal_target();
+        state.reveal_scroll_armed();
+        state.sidebar.viewport_height = 60;
+        assert!(state.reveal_ready());
         assert!(done_open(&state));
     }
 }
