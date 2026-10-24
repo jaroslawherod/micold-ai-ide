@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | PR open, CI running; full gate green at e0c0e828; reviews A, B clean |
-| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — (branch `m2-1270`, worktree /home/user/micold-m2) | implemented; gate and reviews in progress |
+| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — (branch `m2-1270`, worktree /home/user/micold-m2; PR title/body in the session scratchpad `pr-title-m2.md`, `pr-body-m2.md`) | committed, not pushed; full gate green at 0b8e6365 (on M1's head a54ab92e); reviews A, B clean; visual pass recorded |
 | M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B, **blocked by #1269**) | — | blocked |
 | M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B, **blocked by #1269**) | — | blocked |
 
