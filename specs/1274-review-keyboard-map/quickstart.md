@@ -6,14 +6,14 @@ How to show the feature works. Rules: [contracts/keys.md](./contracts/keys.md),
 ## Prerequisites
 
 - M1: nothing beyond the workspace (`mise trust` once in a fresh worktree).
-- M2: #1269, #1270, #1271 and #1273 merged. M3: #1127 merged.
+- M2, M3: #1269, #1270, #1271 and #1273 merged. M4: #1127 merged.
 
 ## §A — Automated
 
 | Milestone | Command | Expect |
 |---|---|---|
 | M1 | `mise run test-core` | `review::keys`, `review::navigate`, `review::jump`, `review::diff::header_rows` and `quick_switch` tests green; 968's existing `quick_switch` tests unchanged and green |
-| M2, M3 | `mise run gate` | `tests/keymap.rs`, `tests/review_keys.rs` (new), `tests/quick_switch.rs`, `tests/overlay_registry.rs`, docs test, layout snapshot and its gates green |
+| M2–M4 | `mise run gate` | `tests/keymap.rs`, `tests/review_keys.rs` (new), `tests/quick_switch.rs`, `tests/overlay_registry.rs`, docs test, layout snapshot and its gates green |
 
 ## §B — Recorded pass on Linux (visual-pass, 1280×800, light and dark)
 
@@ -35,7 +35,7 @@ reviewed, and comments on `a.rs:3`, `a.rs:20`, `c.rs:7` plus one outdated commen
 | B11 | `?`; `j`; Escape; overflow → **Keyboard shortcuts**; `?` | sheet lists all of `REVIEW_KEYS` in the platform's form; `j` does nothing; closes; opens; closes |
 | B12 | hover previous/next hunk, **Mark reviewed**, **Send review** | tooltips name `p`/`n`, `v`, the chord |
 | B13 | focus the tree filter and type `jk` | text in the filter, selection unchanged |
-| B14 | (M3) jump-to field: empty query; `tests`; a comment word; choose each | review files and comments after locations/sessions, before projects; file selected; card shown |
+| B14 | (M4) jump-to field: empty query; `tests`; a comment word; choose each | review files and comments after locations/sessions, before projects; file selected; card shown |
 | B15 | layout snapshot states `review-current-hunk` and `review-shortcut-sheet` | recorded and reviewed (FR-021) |
 
 ## §C — macOS and Windows

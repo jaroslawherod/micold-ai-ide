@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: tasks
-- **Next step**: tasks unit. Plan committed (plan, research, data-model, quickstart, contracts). Cut M1 core-only first (plan.md#milestones: REVIEW_KEYS + resolve, navigate, jump, header_rows; no blocker needed), then M2 after #1269/#1270/#1271/#1273, M3 after #1127. D4 still provisional.
+- **Next step**: tasks unit: analyze, tasks review, design PR. Then M1 (no blocker). T058 (quickstart §C) left to the close unit.
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | — | pending |
+| M2 | T012–T021, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, docs — **blocked by #1269, #1270, #1271, #1273** | — | blocked |
+| M3 | T033–T047 | full | ]/[, c, send chord, shortcut sheet, full docs — after M2 (same blockers) | — | blocked |
+| M4 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M3 | — | blocked |
 
 ## Decisions
 
@@ -30,6 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | spec | Do next/prev wrap? | j/k, ]/[, g wrap (803 step rule); n/p continue into adjacent file and wrap | agent-resolved | crates/micold-core/src/navigation.rs; spec.md FR-003, FR-004 |
 | D3 | clarify 1 | Send chord with unsaved composer text: save+send, or saved drafts only? | Saved drafts only; composer stays open with its text and the keyboard | agent-resolved | spec.md#FR-010 ("exactly" Send review); crates/micold-client/src/features/changes.rs Msg::SendPressed; review-redesign.md proposal 8 |
 | D4 | clarify 1 | FR-001: single-letter keys on by default or behind a Settings switch (redesign open question 5)? | On by default, no setting | provisional — recommended option, awaiting user | review-redesign.md open question 5; spec.md#terms, FR-002, SC-002; specs/803-keyboard-navigation/spec.md#assumptions. If the user picks a switch (on or off by default), FR-001 gains a Settings requirement and clarify re-runs |
+| D5 | tasks | Plan's M2 (US1–US5 client, ~29 tasks) as one milestone? | Split by story into M2 (US1, US2) and M3 (US3–US5); jump-to becomes M4. Plan, quickstart, contracts, research updated to match | agent-resolved | milestones.md rules 2–3; tasks.md#milestones |
+| D6 | tasks | M1 is core-only (22 tasks, no user-visible deliverable)? | Kept whole: every client task needs the blockers (rule 6: core and tests ship, UI waits); splitting core gains nothing observable | agent-resolved | plan.md#milestones; research R1 |
 
 ## Review rounds
 

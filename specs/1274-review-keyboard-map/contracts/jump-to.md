@@ -1,7 +1,7 @@
 # Contract: Jump-to review entries (#1274)
 
 Extends the quick-switcher of `specs/968-quick-switcher` (opened by the #1127 title bar field or
-Ctrl/Cmd+Shift+P). Core rules J1–J3 are M1; J4–J5 are M3 (after #1127).
+Ctrl/Cmd+Shift+P). Core rules J1–J3 are M1; J4–J5 are M4 (after #1127).
 
 ## J1 — Keys and texts (core `review::jump::review_candidates`)
 
