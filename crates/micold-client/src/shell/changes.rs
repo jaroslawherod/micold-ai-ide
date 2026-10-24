@@ -19,6 +19,7 @@ use micold_client::features::changes::Msg;
 use micold_client::features::changes::SourceKey;
 use micold_client::features::settings;
 use micold_client::ui::syntax;
+use micold_core::context_header::ChangeSummary;
 use micold_core::git::Git;
 use micold_core::github::GithubRepo;
 use micold_core::pull_request::{PullRequestSource, ReadingFailure, TreeListing};
@@ -115,6 +116,15 @@ fn sync_composer(app: &mut App) {
         app.composer = text_editor::Content::with_text(text);
         app.composer
             .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+    }
+}
+
+/// Run the counts read the header's follow left pending (feature 1126, R6), when the message
+/// that moved the header did not already run it.
+pub fn run_followed(app: &mut App) -> Task<Message> {
+    match app.core.take_changes_effect() {
+        Some(effect) => run(app, effect),
+        None => Task::none(),
     }
 }
 
@@ -224,6 +234,24 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 }
             });
             Task::none()
+        }
+        Effect::ReadCounts { seq, entry } => {
+            // Feature 1126 R5: the view's own reader under the toggles it opens with, so the
+            // header counts what the view would list; reduced off the update thread too.
+            let answer = move |result| Message::Changes(Msg::HeaderCountsRead { seq, result });
+            let (dir, git) = match local(app, &entry) {
+                Ok(found) => found,
+                Err(why) => return Task::done(answer(Err(why.into()))),
+            };
+            let label = format!("counts seq={seq} entry={entry:?}");
+            off_thread(
+                label,
+                move || {
+                    read_list(&*git, &dir, &entry, Toggles::default())
+                        .map(|list| ChangeSummary::of(&list))
+                },
+                answer,
+            )
         }
         Effect::ReadList {
             seq,

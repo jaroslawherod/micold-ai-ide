@@ -82,7 +82,7 @@ pub use settings::github::GITHUB_ISSUES_INTRO;
 pub use settings::container_fields::{
     limits as sandbox_limits, network_warning, ContainerView, LimitControl, NO_OUTBOUND_WARNING,
 };
-pub(crate) mod session_area;
+pub mod session_area;
 pub(crate) mod settings_view;
 mod shell;
 mod sidebar;
@@ -424,8 +424,9 @@ pub fn view_with<'a>(
             // Feature 813, U1: the Overview takes the main area, ahead of Changes and Compare.
             overview::view(state, scheme)
         } else if let Some(view) = state.changes.open.as_ref() {
-            // Feature 482, V1: the Changes view takes the terminal pane's place while open.
-            changes::view(state, view, scheme, composer)
+            // Feature 482, V1: the Changes view takes the terminal pane's place while open;
+            // feature 1126 R12: under the header while a session is shown.
+            session_area::over_changes(state, changes::view(state, view, scheme, composer), scheme)
         } else if let Some(compare) = compare::view(state, scheme) {
             // Feature 483, C1: Compare stands there too; the Changes view sits over it.
             compare

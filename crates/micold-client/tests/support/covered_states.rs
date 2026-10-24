@@ -364,6 +364,9 @@ const SESSION_STRIP_TAB_SESSION: [usize; 12] = strip_member(0);
 /// the pane area, which moved one level down with it.
 const SESSION_HEADER: &[usize] = &[0, 0, 1, 1, 0];
 
+/// The header's Changes button (feature 1126, H9): the title line's second child, after the title.
+pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 1];
+
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
 /// the `Default` project row, then `feat-short`, then its session, then the two remaining
@@ -1518,6 +1521,32 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1126: the header over the open Changes view (T053, R12, H9) -----------------
+        //
+        // The view opened on the shown worktree from the header, so its Changes button shows the
+        // view open, its label with counts read: the header stays above the view, the strip goes.
+        CoveredState {
+            name: "session-area-changes-open",
+            build: || StateUnderTest::new(changes_open_under_header()),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "session.header.changes",
+                    path: SESSION_HEADER_CHANGES,
+                },
+            ],
+        },
         // --- Feature 939: a structured session's pane is its transcript (T038) -------------------
         //
         // One card open and detached from the end, so the state holds every part a transcript
@@ -2429,6 +2458,28 @@ fn with_active_session() -> State {
     let mut state = with_project();
     state.workspace = workspace;
     state.session.active = Some(active);
+    state
+}
+
+/// The shown worktree `feat-short` with the Changes view open on it and the header's counts read
+/// (feature 1126, `session-area-changes-open`).
+pub fn changes_open_under_header() -> State {
+    use micold_client::features::changes::{self, Load, Msg};
+    let mut state = with_active_session();
+    let entry = SessionLocation::Worktree("feat-short".to_string());
+    changes::update(
+        &mut state.changes,
+        Msg::Opened {
+            project: PathBuf::from(PROJECT),
+            entry: entry.clone(),
+        },
+    );
+    state.changes.header.entry = Some((PathBuf::from(PROJECT), entry));
+    state.changes.header.load = Load::Ready(micold_core::context_header::ChangeSummary {
+        files: 3,
+        added: 42,
+        removed: 7,
+    });
     state
 }
 

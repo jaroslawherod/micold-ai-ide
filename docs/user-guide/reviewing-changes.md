@@ -5,13 +5,27 @@ before you merge it or tell the session what to change next.
 
 ## Opening the Changes view
 
-Right-click a worktree in the sidebar and choose **Review changes**. The **Default** entry (the
-project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
+While a session is shown, the header above the terminal ends with a **Changes** button for the
+worktree (or the project root) the session runs in. Press it to open the Changes view of that
+location. Its label counts the changes the way the view's list does, with both **Committed** and
+**Uncommitted** on:
+
+- **Changes · 3 files · +42 −7**: three changed files, 42 lines added and 7 removed;
+- **Changes · no changes**: nothing to review;
+- **Changes** alone: the counts are being read, or cannot be read here (for example, the session
+  service runs on another computer). The button still opens the view.
+
+The counts follow your edits: when files change on disk, they are read again, and while that read
+runs the button shows **Changes** alone rather than an old figure.
+
+You can also right-click a worktree in the sidebar and choose **Review changes**. The **Default**
+entry (the project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
 has a right-click menu too, with **Review changes** as its one item.
 
-The view takes the place of the terminal. Its header names the entry; **Close** returns to the
-terminal. Selecting a session in the sidebar also closes it, and so does the worktree disappearing
-from the sidebar (for example, deleted from another window).
+The view takes the place of the terminal, with the header still above it and the **Changes**
+button shown pressed. Its own header names the entry; **Close**, or pressing **Changes** again,
+returns to the terminal. Selecting a session in the sidebar also closes it, and so does the
+worktree disappearing from the sidebar (for example, deleted from another window).
 
 ## What the list shows
 

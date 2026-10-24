@@ -152,6 +152,12 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if let Some(view) = &app.core.changes.open {
         subs.extend(crate::shell::changes_watch::watch(app, &view.entry));
     }
+    // Feature 1126 R6: the header's counts follow edits too, so the shown location is watched
+    // while a session is shown and the Overview is closed. Not a second watch of the view's entry:
+    // the view's own wakes both reads.
+    if let Some(entry) = app.core.header_watch_entry() {
+        subs.extend(crate::shell::changes_watch::watch(app, entry));
+    }
     // Compare's per-run watches (483 R11), likewise only while the view is open.
     subs.extend(crate::shell::runs_watch::watches(app));
     // The Overview's progress watches (813 R9), likewise only while it is open.

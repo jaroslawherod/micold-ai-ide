@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 
+use micold_core::context_header::{ChangeSummary, CountsReading};
 use micold_core::protocol::messages::{PrSend, ReviewEditOp};
 use micold_core::pull_request::{
     BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure, TreeListing,
@@ -1182,12 +1183,25 @@ pub struct State {
     pub header: HeaderCounts,
 }
 
-/// The location the session area's header is for (feature 1126, R6): the follow rows of
-/// data-model *HeaderCounts*; the counts read joins them with the Changes button (T048).
+/// The location the session area's header is for and its change counts (feature 1126, R5, R6;
+/// data-model *HeaderCounts*).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HeaderCounts {
     /// The project and location the header shows; `None` while no location is shown.
     pub entry: Option<(PathBuf, SessionLocation)>,
+    /// The counts of `entry`, read with the Changes view's own list reader.
+    pub load: Load<ChangeSummary>,
+}
+
+impl HeaderCounts {
+    /// What the Changes button may say: only a finished read's answer, never the figure of a read
+    /// that is being repeated or one that failed (US3 scenario 4).
+    pub fn reading(&self) -> CountsReading {
+        match &self.load {
+            Load::Ready(summary) => CountsReading::Known(*summary),
+            _ => CountsReading::Unknown,
+        }
+    }
 }
 
 /// What this feature is told.
@@ -1209,6 +1223,13 @@ pub enum Msg {
         project: PathBuf,
         /// The shown location; `None` while no location is shown.
         entry: Option<SessionLocation>,
+    },
+    /// Header counts read `seq` ended (feature 1126, R5).
+    HeaderCountsRead {
+        /// The read it answers.
+        seq: u64,
+        /// The summary of the entry's change list, or why it could not be read.
+        result: Result<ChangeSummary, String>,
     },
     /// The Committed toggle was pressed.
     CommittedToggled,
@@ -1416,6 +1437,14 @@ pub enum Effect {
     None,
     /// Several effects, run together.
     Batch(Vec<Effect>),
+    /// Read the change list of the header's `entry` under the default toggles as counts read
+    /// `seq`, and answer its summary (feature 1126, R5).
+    ReadCounts {
+        /// The read's sequence number.
+        seq: u64,
+        /// The entry.
+        entry: SessionLocation,
+    },
     /// Read the change list of `entry` under `toggles` as read `seq`.
     ReadList {
         /// The read's sequence number.
@@ -1538,8 +1567,10 @@ pub enum Effect {
 /// Apply `msg` (contracts/changes-view.md V1–V3, L1).
 pub fn update(state: &mut State, msg: Msg) -> Effect {
     // The header's follow touches nothing of the open view: not its notice, not its reads.
-    if let Msg::HeaderFollowed { project, entry } = msg {
-        return header_followed(&mut state.header, project, entry);
+    match msg {
+        Msg::HeaderFollowed { project, entry } => return header_followed(state, project, entry),
+        Msg::HeaderCountsRead { seq, result } => return header_counts_read(state, seq, result),
+        _ => {}
     }
     let scroll = matches!(
         msg,
@@ -1624,20 +1655,83 @@ fn reread_after_source_change(
     (!effects.is_empty()).then_some(effects)
 }
 
-/// The header follows `entry` of `project` (data-model *HeaderCounts* transitions).
-fn header_followed(
-    header: &mut HeaderCounts,
-    project: PathBuf,
-    entry: Option<SessionLocation>,
+/// The header follows `entry` of `project` (data-model *HeaderCounts* transitions): a new entry
+/// is read at once; the same one is left as it is.
+fn header_followed(state: &mut State, project: PathBuf, entry: Option<SessionLocation>) -> Effect {
+    let entry = entry.map(|entry| (project, entry));
+    if entry == state.header.entry {
+        return Effect::None;
+    }
+    state.header.entry = entry;
+    state.header.load = Load::Idle;
+    request_counts(state)
+}
+
+/// Header counts read `seq` ended: kept only while it is the current read; a read asked for
+/// meanwhile runs once more after a success.
+fn header_counts_read(
+    state: &mut State,
+    seq: u64,
+    result: Result<ChangeSummary, String>,
 ) -> Effect {
-    header.entry = entry.map(|entry| (project, entry));
-    Effect::None
+    let Load::Loading {
+        seq: current,
+        again,
+        ..
+    } = state.header.load
+    else {
+        return Effect::None;
+    };
+    if current != seq {
+        return Effect::None;
+    }
+    match result {
+        Ok(summary) => {
+            state.header.load = Load::Ready(summary);
+            if again {
+                request_counts(state)
+            } else {
+                Effect::None
+            }
+        }
+        Err(why) => {
+            state.header.load = Load::Failed(why);
+            Effect::None
+        }
+    }
+}
+
+/// Read the header's counts again (a new entry, or the worktree changed); while a read is under
+/// way, queue one more instead. `Effect::None` without an entry.
+fn request_counts(state: &mut State) -> Effect {
+    let Some((_, entry)) = state.header.entry.as_ref() else {
+        return Effect::None;
+    };
+    if let Load::Loading { again, .. } = &mut state.header.load {
+        *again = true;
+        return Effect::None;
+    }
+    let last = match std::mem::take(&mut state.header.load) {
+        Load::Ready(summary) => Some(summary),
+        _ => None,
+    };
+    let seq = state.next_seq;
+    state.next_seq += 1;
+    state.header.load = Load::Loading {
+        seq,
+        again: false,
+        last,
+    };
+    Effect::ReadCounts {
+        seq,
+        entry: entry.clone(),
+    }
 }
 
 fn apply(state: &mut State, msg: Msg) -> Effect {
     match msg {
         // Handled in `update` before the view's bookkeeping.
-        Msg::HeaderFollowed { .. } => Effect::None,
+        Msg::HeaderFollowed { .. } | Msg::HeaderCountsRead { .. } => Effect::None,
         Msg::LayoutChosen(layout) => {
             if state.layout != layout {
                 if let Some(view) = state.open.as_mut() {
@@ -2125,6 +2219,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if gone {
                 state.open = None;
             }
+            // Feature 1126: the header's worktree gone, it follows nothing until the root's follow
+            // step finds what is shown now.
+            if matches!(
+                state.header.entry.as_ref().map(|(_, entry)| entry),
+                Some(SessionLocation::Worktree(name)) if !names.contains(name)
+            ) {
+                state.header = HeaderCounts::default();
+            }
             Effect::None
         }
         Msg::GutterPressed { old, new, extend } => {
@@ -2184,7 +2286,15 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ComposerSaved => composer_saved(state),
-        Msg::Changed => request_read(state),
+        // The watch's wake rereads the open view's list and the header's counts (R5, R6).
+        Msg::Changed => {
+            let list = request_read(state);
+            match (list, request_counts(state)) {
+                (list, Effect::None) => list,
+                (Effect::None, counts) => counts,
+                (list, counts) => Effect::Batch(vec![list, counts]),
+            }
+        }
         Msg::SendPressed => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -3776,7 +3886,10 @@ mod tests {
     fn the_header_follows_the_shown_location() {
         let mut state = State::default();
         let worktree = SessionLocation::Worktree("feat-1_x".into());
-        assert_eq!(follow(&mut state, Some(worktree.clone())), Effect::None);
+        assert!(matches!(
+            follow(&mut state, Some(worktree.clone())),
+            Effect::ReadCounts { .. }
+        ));
         assert_eq!(
             state.header.entry,
             Some((project(), worktree.clone())),
@@ -3795,5 +3908,202 @@ mod tests {
         );
         follow(&mut state, None);
         assert_eq!(state.header.entry, None, "no location shown: no entry");
+    }
+
+    fn summary(files: u32) -> ChangeSummary {
+        ChangeSummary {
+            files,
+            added: 4,
+            removed: 1,
+        }
+    }
+
+    /// The header's state after following `entry` and its first read answering `result`.
+    fn read_once(entry: SessionLocation, result: Result<ChangeSummary, String>) -> State {
+        let mut state = State::default();
+        let Effect::ReadCounts { seq, .. } = follow(&mut state, Some(entry)) else {
+            panic!("a new entry is read");
+        };
+        assert_eq!(
+            update(&mut state, Msg::HeaderCountsRead { seq, result }),
+            Effect::None
+        );
+        state
+    }
+
+    /// Feature 1126 T044: following a new entry starts a counts read of it; the same entry again
+    /// starts none; `None` clears and reads nothing.
+    #[test]
+    fn following_a_new_entry_reads_its_counts() {
+        let mut state = State::default();
+        let worktree = SessionLocation::Worktree("feat-1_x".into());
+        let effect = follow(&mut state, Some(worktree.clone()));
+        let Effect::ReadCounts { seq, entry } = effect else {
+            panic!("a new entry is read, got {effect:?}");
+        };
+        assert_eq!(entry, worktree);
+        assert_eq!(
+            state.header.load,
+            Load::Loading {
+                seq,
+                again: false,
+                last: None
+            }
+        );
+        assert_eq!(
+            follow(&mut state, Some(worktree)),
+            Effect::None,
+            "same entry"
+        );
+        assert_eq!(follow(&mut state, None), Effect::None, "nothing shown");
+        assert_eq!(state.header.load, Load::Idle);
+    }
+
+    /// T044: the current read's answer is kept (`Ready` or `Failed`); an older read's is dropped.
+    #[test]
+    fn the_current_counts_answer_is_kept_and_an_old_one_dropped() {
+        let entry = SessionLocation::Default;
+        let ready = read_once(entry.clone(), Ok(summary(3)));
+        assert_eq!(ready.header.load, Load::Ready(summary(3)));
+        assert_eq!(ready.header.reading(), CountsReading::Known(summary(3)));
+        let failed = read_once(entry, Err("not a git repository".into()));
+        assert_eq!(
+            failed.header.load,
+            Load::Failed("not a git repository".into())
+        );
+
+        let mut state = State::default();
+        let Effect::ReadCounts { seq: old, .. } =
+            follow(&mut state, Some(SessionLocation::Worktree("a".into())))
+        else {
+            panic!("read of a");
+        };
+        follow(&mut state, Some(SessionLocation::Worktree("b".into())));
+        let before = state.clone();
+        update(
+            &mut state,
+            Msg::HeaderCountsRead {
+                seq: old,
+                result: Ok(summary(9)),
+            },
+        );
+        assert_eq!(
+            state, before,
+            "an answer for an earlier location is dropped"
+        );
+    }
+
+    /// T044: a change while the counts are known, failed or idle reads them again (hiding the
+    /// last figure); a change during a read queues one more, run when the read succeeds.
+    #[test]
+    fn a_change_rereads_the_counts_or_queues_a_read() {
+        let entry = SessionLocation::Worktree("w".into());
+        for start in [Ok(summary(2)), Err("boom".to_string())] {
+            let mut state = read_once(entry.clone(), start.clone());
+            let effect = update(&mut state, Msg::Changed);
+            let Effect::ReadCounts { seq, entry: read } = effect else {
+                panic!("a change rereads from {start:?}, got {effect:?}");
+            };
+            assert_eq!(read, entry);
+            assert_eq!(
+                state.header.load,
+                Load::Loading {
+                    seq,
+                    again: false,
+                    last: start.ok(),
+                }
+            );
+            assert_eq!(state.header.reading(), CountsReading::Unknown);
+        }
+        // Idle with an entry: a read that cannot be answered left none behind.
+        let mut idle = State::default();
+        idle.header.entry = Some((project(), entry.clone()));
+        assert!(matches!(
+            update(&mut idle, Msg::Changed),
+            Effect::ReadCounts { .. }
+        ));
+        // No entry: nothing to read.
+        assert_eq!(update(&mut State::default(), Msg::Changed), Effect::None);
+
+        let mut state = State::default();
+        let Effect::ReadCounts { seq, .. } = follow(&mut state, Some(entry.clone())) else {
+            panic!("read");
+        };
+        assert_eq!(update(&mut state, Msg::Changed), Effect::None, "queued");
+        assert!(matches!(
+            state.header.load,
+            Load::Loading { again: true, .. }
+        ));
+        let effect = update(
+            &mut state,
+            Msg::HeaderCountsRead {
+                seq,
+                result: Ok(summary(1)),
+            },
+        );
+        let Effect::ReadCounts { seq: next, .. } = effect else {
+            panic!("the queued read runs, got {effect:?}");
+        };
+        assert_ne!(next, seq);
+        assert_eq!(
+            state.header.load,
+            Load::Loading {
+                seq: next,
+                again: false,
+                last: Some(summary(1)),
+            }
+        );
+    }
+
+    /// T044: the shown worktree removed clears the header's entry and counts.
+    #[test]
+    fn a_removed_worktree_clears_the_header() {
+        let entry = SessionLocation::Worktree("w".into());
+        let mut state = read_once(entry, Ok(summary(2)));
+        update(
+            &mut state,
+            Msg::WorktreesListed(BTreeSet::from(["w".to_string()])),
+        );
+        assert!(state.header.entry.is_some(), "still listed: kept");
+        update(
+            &mut state,
+            Msg::WorktreesListed(BTreeSet::from(["other".to_string()])),
+        );
+        assert_eq!(state.header.entry, None);
+        assert_eq!(state.header.load, Load::Idle);
+        // The Default entry is never a listed worktree.
+        let mut root = read_once(SessionLocation::Default, Ok(summary(2)));
+        update(&mut root, Msg::WorktreesListed(BTreeSet::new()));
+        assert!(root.header.entry.is_some());
+    }
+
+    /// T044, US3 scenario 4: only a finished read's figure is shown.
+    #[test]
+    fn the_counts_are_unknown_unless_a_read_finished() {
+        let header = |load| HeaderCounts { entry: None, load };
+        for load in [
+            Load::Idle,
+            Load::Loading {
+                seq: 1,
+                again: false,
+                last: None,
+            },
+            Load::Loading {
+                seq: 1,
+                again: true,
+                last: Some(summary(5)),
+            },
+            Load::Failed("boom".into()),
+        ] {
+            assert_eq!(
+                header(load.clone()).reading(),
+                CountsReading::Unknown,
+                "{load:?}"
+            );
+        }
+        assert_eq!(
+            header(Load::Ready(summary(5))).reading(),
+            CountsReading::Known(summary(5))
+        );
     }
 }

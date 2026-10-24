@@ -483,6 +483,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // the shell applied itself, and a newly followed worktree's issue title is read — or read once
     // titles become readable (the switch arrives, a daemon route opens) while it is shown.
     app.core.follow_header();
+    let task = Task::batch([task, shell::changes::run_followed(app)]);
     let became_readable = !titles_were_readable && shell::issues::titles_readable(app);
     if app.core.changes.header.entry != header_before || became_readable {
         if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {

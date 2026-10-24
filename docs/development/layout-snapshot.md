@@ -102,7 +102,10 @@ and scrolls. `gates/session_area_fits.rs` holds the header's title and chips and
 controls inside the session area at the smallest window and at 1280×800, in that order above the
 panes; `gates/strip_controls_hold_their_size.rs` and `gates/strip_controls_anchor_the_trailing_edge.rs`
 hold every member at its own width and New session and the split buttons at the strip's right end.
-The bar that sat under the terminal, and its `session-terminal-*` states, are gone.
+`session-area-changes-open` draws the header over the open Changes view, with no strip; its
+Changes button is anchored as `session.header.changes`, and the same gate holds it at the width it
+asks for, beside the title and chips, in every session state. The bar that sat under the terminal,
+and its `session-terminal-*` states, are gone.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session

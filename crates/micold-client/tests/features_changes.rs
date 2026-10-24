@@ -3292,13 +3292,13 @@ fn following_from_a_browsed_file_goes_back_to_that_file() {
     assert_eq!(view_of(&state).browse.as_ref().unwrap().path, path("x.md"));
 }
 
-/// Feature 1126 H7 (FR-014), through the root's `State::update`: selecting a session of another
-/// location points the header at it; another session of the same location changes nothing; with
-/// the session's worktree gone, the header follows nothing.
-#[test]
-fn the_header_follows_the_shown_location_through_the_root() {
-    use micold_client::app::{Message, State as App};
-    use micold_client::features::session::Msg as SessionMsg;
+/// A window with a project whose worktrees `feat-a` (two sessions) and `feat-b` (one) are listed,
+/// for the header's follow through the root (feature 1126 H7). Returns the ids `(a1, a2, b)`.
+fn two_worktrees_app() -> (
+    micold_client::app::State,
+    [micold_core::session::SessionId; 3],
+) {
+    use micold_client::app::State as App;
     use micold_core::project::{Availability, Project};
     use micold_core::session::{AiCli, Session};
     use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -3321,8 +3321,21 @@ fn the_header_follows_the_shown_location_through_the_root() {
     let at =
         |dir: &str| Session::start_new(SessionLocation::Worktree(dir.into()), AiCli::ClaudeCode);
     let (a1, a2, b) = (at("feat-a"), at("feat-a"), at("feat-b"));
-    let (a1_id, a2_id, b_id) = (a1.id, a2.id, b.id);
-    app.workspace.sessions.insert(root.clone(), vec![a1, a2, b]);
+    let ids = [a1.id, a2.id, b.id];
+    app.workspace.sessions.insert(root, vec![a1, a2, b]);
+    (app, ids)
+}
+
+/// Feature 1126 H7 (FR-014), through the root's `State::update`: selecting a session of another
+/// location points the header at it; another session of the same location changes nothing; with
+/// the session's worktree gone, the header follows nothing.
+#[test]
+fn the_header_follows_the_shown_location_through_the_root() {
+    use micold_client::app::{Message, State as App};
+    use micold_client::features::session::Msg as SessionMsg;
+
+    let (mut app, [a1_id, a2_id, b_id]) = two_worktrees_app();
+    let root = project();
     let entry = |app: &App| app.changes.header.entry.clone();
     let follows = |dir: &str| Some((root.clone(), SessionLocation::Worktree(dir.into())));
 
@@ -3349,4 +3362,132 @@ fn the_header_follows_the_shown_location_through_the_root() {
     app.worktree.worktrees.retain(|w| w.dir_name != "feat-a");
     app.update(Message::NoOp);
     assert_eq!(entry(&app), None, "its worktree removed: no entry");
+}
+
+/// The counts reads the root left for the shell, flattened.
+fn counts_reads(app: &mut micold_client::app::State) -> Vec<SessionLocation> {
+    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
+        match effect {
+            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
+            Effect::ReadCounts { entry, .. } => out.push(entry),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(effect) = app.take_changes_effect() {
+        flat(effect, &mut out);
+    }
+    out
+}
+
+/// Feature 1126 H7 (T045): the header's follow reads the counts of a newly shown location once,
+/// none for another session of the same location or with nothing shown; an answer for an earlier
+/// location is dropped; a change on disk rereads both the open view's list and the header's.
+#[test]
+fn the_header_reads_the_counts_of_the_location_it_follows() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::context_header::ChangeSummary;
+
+    let (mut app, [a1_id, a2_id, b_id]) = two_worktrees_app();
+    let at = |dir: &str| SessionLocation::Worktree(dir.into());
+
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    assert_eq!(counts_reads(&mut app), vec![at("feat-a")], "one read of it");
+    let changes::Load::Loading { seq: old, .. } = app.changes.header.load else {
+        panic!("a's read is under way");
+    };
+    app.update(Message::Session(SessionMsg::Selected(a2_id)));
+    assert_eq!(counts_reads(&mut app), vec![], "same location: no read");
+    app.update(Message::Session(SessionMsg::Selected(b_id)));
+    assert_eq!(counts_reads(&mut app), vec![at("feat-b")]);
+
+    // The shell hands a read's answer to the reducer (`shell::changes::update`).
+    let before = app.changes.header.clone();
+    app.update_changes(Msg::HeaderCountsRead {
+        seq: old,
+        result: Ok(ChangeSummary {
+            files: 9,
+            added: 9,
+            removed: 9,
+        }),
+    });
+    assert_eq!(app.changes.header, before, "a's late answer is dropped");
+
+    // The view open on feat-a while the header is on feat-b: a change reads both.
+    app.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-a")),
+    ));
+    let Some(Effect::ReadList { seq: list_seq, .. }) = app.take_changes_effect() else {
+        panic!("the view reads its list");
+    };
+    app.update_changes(Msg::ListRead {
+        seq: list_seq,
+        result: Ok(list(&["a.rs"])),
+    });
+    let changes::Load::Loading { seq, .. } = app.changes.header.load else {
+        panic!("b's read is under way");
+    };
+    app.update_changes(Msg::HeaderCountsRead {
+        seq,
+        result: Ok(ChangeSummary::default()),
+    });
+    assert_eq!(
+        app.changes.header.load,
+        changes::Load::Ready(ChangeSummary::default())
+    );
+    let effect = changes::update(&mut app.changes, Msg::Changed);
+    let Effect::Batch(reads) = effect else {
+        panic!("both lists are read, got {effect:?}");
+    };
+    assert!(
+        reads
+            .iter()
+            .any(|e| matches!(e, Effect::ReadList { entry, .. } if *entry == at("feat-a"))),
+        "the view's list: {reads:?}"
+    );
+    assert!(
+        reads
+            .iter()
+            .any(|e| matches!(e, Effect::ReadCounts { entry, .. } if *entry == at("feat-b"))),
+        "the header's counts: {reads:?}"
+    );
+
+    app.worktree.worktrees.clear();
+    app.update(Message::NoOp);
+    assert_eq!(app.changes.header.entry, None, "worktree gone: no entry");
+    assert_eq!(counts_reads(&mut app), vec![], "and no read");
+}
+
+/// Feature 1126 T050 (R6): the header's location is watched while it is shown and the Overview is
+/// closed, and not a second time while the Changes view is open on it.
+#[test]
+fn the_header_watches_its_location_unless_the_view_does() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+
+    let (mut app, [a1_id, _, _]) = two_worktrees_app();
+    let at = |dir: &str| SessionLocation::Worktree(dir.into());
+    assert_eq!(app.header_watch_entry(), None, "nothing shown: no watch");
+    app.update(Message::Session(SessionMsg::Selected(a1_id)));
+    assert_eq!(app.header_watch_entry(), Some(&at("feat-a")));
+    app.overview.open = true;
+    assert_eq!(
+        app.header_watch_entry(),
+        None,
+        "the Overview open: no watch"
+    );
+    app.overview.open = false;
+    app.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-a")),
+    ));
+    assert_eq!(
+        app.header_watch_entry(),
+        None,
+        "the view's watch serves both"
+    );
+    app.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-b")),
+    ));
+    assert_eq!(app.header_watch_entry(), Some(&at("feat-a")));
 }
