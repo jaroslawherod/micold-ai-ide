@@ -33,6 +33,22 @@ merged. #1269 (R0: Review as a tab) may change where the header sits (a tab rath
 that replaces the terminal). The source control belongs to the review's own header wherever that
 header is drawn.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: How does the Files option combine with the shown source (Story 3 s2)? → A: As today (option b):
+  Files is an on/off mode over the shown source. Picking **Files** turns it on (or off, when on)
+  and closes the list. It stays on when the reviewer picks Working tree, a pull request or a chip;
+  the tree and the browsed file are then read again at the new source and **Back** is forgotten,
+  as in 1150. The closed label reads `Files · ` before the source's label (`Files · Working tree`,
+  `Files · #<number> · <title>`); the kinds suffix is left out, since the tree lists every file.
+  **Open diff** shows the diff in the same source and leaves Files on. _(agent-resolved:
+  docs/user-guide/reviewing-changes.md#Browsing the repository;
+  specs/1150-diff-full-file-view/spec.md#Edge Cases (switching PR or source while browsing);
+  crates/micold-client/src/features/changes.rs `FilesPaneToggled`, `reread_after_source_change`;
+  this spec's Story 3 "no new behaviour", FR-006, FR-007, SC-004)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pick the source from one header control (Priority: P1)
@@ -109,8 +125,8 @@ so. On the Default entry, check that **Committed** is unavailable and the note s
 
 **Files** is the third option of the source control. Picking it puts the repository tree and the
 **Open file by path** picker in the left column, as the **Files** toggle did (1150). Whole file,
-Back and Open diff work as before. How the Files option combines with the shown source (today an
-independent mode) is the open question in scenario 2.
+Back and Open diff work as before. Files stays what it is today: an on/off mode over the shown
+source, which picking a source does not turn off.
 
 **Why this priority**: Repository browsing exists. Its toggle leaves the left column with the
 others, so it needs a new place, but no new behaviour.
@@ -122,24 +138,21 @@ control's label tracks the mode.
 **Acceptance Scenarios**:
 
 1. **Given** the working tree is shown, **When** the reviewer picks **Files**, **Then** the left
-   column shows the repository tree and the path picker for the working tree's files, and the
-   control's label says Files is on (its form per scenario 2's answer).
+   column shows the repository tree and the path picker for the working tree's files, the list
+   closes, and the control reads `Files · Working tree`.
 2. **Given** a pull request is shown, **When** the reviewer picks **Files**, **Then** the tree
-   lists the files of that pull request's head, as **Files** did with a pull request shown (1150).
-   [NEEDS CLARIFICATION: how does the Files option combine with the shown source? Options:
-   (a) Files is a mode over the shown source, the label reads `Files · Working tree` or
-   `Files · #<n>`, and picking Working tree or a pull request leaves Files (scenario 4 holds);
-   (b) as today, Files stays on across source picks, picking a pull request re-reads the browsed
-   file at its head, and Files is left only by picking it again (scenario 4 is dropped);
-   (c) Files always browses the working tree, and PR-head browsing is dropped or moves to the PR
-   header.]
+   lists the files of that pull request's head, as **Files** did with a pull request shown (1150),
+   and the control reads `Files · #<number> · <title>`.
 3. **Given** a browsed file, **When** the reviewer presses **Back** or **Open diff**, **Then** they
-   behave as in 1150. **Open diff** shows the file's diff in the source being browsed and switches
-   the control back to that source.
-4. **Given** **Files** is shown, **When** the reviewer picks **Working tree** or a pull request,
-   **Then** the left column shows that source's changed files again (holds under option (a) of
-   scenario 2's question; replaced by its answer otherwise).
-5. **Given** any diff, **When** the reviewer toggles **Whole file**, **Then** it works as in 1150.
+   behave as in 1150. **Open diff** shows the file's diff in the shown source; the source and
+   Files stay as they were.
+4. **Given** **Files** is on, **When** the reviewer picks another source (**Working tree**, a pull
+   request, or a Working-tree chip while a pull request is shown), **Then** Files stays on, the tree and the browsed file are read again at the
+   new source (a path it lacks says so), and **Back** forgets where it led, as in 1150. The label
+   changes to `Files · ` and the new source.
+5. **Given** **Files** is on, **When** the reviewer picks **Files** again, **Then** it turns off,
+   the list closes, and the left column shows the shown source's changed files.
+6. **Given** any diff, **When** the reviewer toggles **Whole file**, **Then** it works as in 1150.
 
 ---
 
@@ -200,12 +213,14 @@ the diff column against the window and check the file column has the fixed width
 
 - **FR-001**: The review header MUST have one source control whose closed label names the shown
   source and whether Files is on: **Working tree** (with the shown kinds per Story 2 s4),
-  `#<number> · <title>` for a pull request, and the Files form the Story 3 s2 answer sets.
+  `#<number> · <title>` for a pull request, and, with Files on, `Files · ` before the source's
+  label (`Files · Working tree`, `Files · #<number> · <title>`, with no kinds suffix).
 - **FR-002**: Opening the control MUST list, in this order, **Working tree**, the worktree's pull
   requests newest first (state mark, check mark, `#number`, title), and **Files**, with the shown
   source (and Files, when on) marked. Picking Working tree or a pull request MUST show that source
-  and close the list. Picking Files MUST show the repository tree, combined with the source as
-  Story 3 s2 is answered. Changing a Working-tree chip MUST keep the list open.
+  and close the list, leaving Files on or off as it was. Picking Files MUST turn Files on (or off,
+  when on) over the shown source and close the list. Changing a Working-tree chip MUST keep the
+  list open.
 - **FR-003**: The left column MUST NOT contain the Pull requests section, or the Committed,
   Uncommitted or Files toggles. It MUST contain only the changed-file list of the shown source,
   its empty or loading state, or (with **Files**) the repository tree and path picker.
@@ -222,8 +237,9 @@ the diff column against the window and check the file column has the fixed width
   previous/next, last pick wins, falling back to the working tree when a PR disappears, and the
   per-entry memory of the choice.
 - **FR-007**: **Whole file**, the **Files** option, **Back** and **Open diff** MUST keep
-  their 1150 behaviour. **Open diff** from a browsed file MUST show the diff and set the control to
-  the source of that diff, with Files on or off as the Story 3 s2 answer sets.
+  their 1150 behaviour, including Files staying on across a source change with the tree and browsed
+  file read again at the new source. **Open diff** from a browsed file MUST show the diff in the
+  shown source and leave the source and Files unchanged.
 - **FR-008**: Once #1270 has removed the review panel's column, the review body MUST be two
   columns: a file column of fixed width (about 260 px) and the diff filling the rest. Until then
   the columns keep today's proportions. At 1280×800
@@ -244,7 +260,7 @@ the diff column against the window and check the file column has the fixed width
   request (number, title, state, checks), or Files. Each has whether it is available and whether it
   is the shown source.
 - **Source control label**: the closed control's text, derived from the shown source and the
-  working-tree kinds.
+  working-tree kinds, prefixed `Files · ` while Files is on.
 - **Working-tree kinds**: the Committed and Uncommitted on/off pair, per open review, as today.
 
 ## Success Criteria *(mandatory)*
