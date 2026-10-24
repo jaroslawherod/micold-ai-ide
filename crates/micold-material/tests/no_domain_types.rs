@@ -67,6 +67,13 @@ fn core_modules() -> Vec<(String, String)> {
                 );
                 found.push((key, module));
             }
+            // An alias (`use micold_core as core;`) would hide every later path from the scan.
+            assert!(
+                !line.contains("micold_core as "),
+                "{}:{} aliases `micold_core`; name its modules by their full path",
+                path.display(),
+                n + 1
+            );
             assert!(
                 !line.contains("micold_client"),
                 "{}:{} names the client crate",
