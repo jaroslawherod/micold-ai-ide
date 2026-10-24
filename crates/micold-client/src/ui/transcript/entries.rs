@@ -20,7 +20,8 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{
-    footer_figures, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript, TurnFooter,
+    footer_figures, CommandChip, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript,
+    TurnFooter,
 };
 use micold_core::tokens::{spacing, Roles};
 use std::hash::{Hash, Hasher};
@@ -193,6 +194,55 @@ pub fn model_changed_text(model: &str, refused: Option<&str>) -> String {
     }
 }
 
+/// What a turn from before a `/clear` is marked with (#943 FR-005, US1 scenario 5).
+pub const BEFORE_THE_CLEAR: &str = "Before the clear";
+
+/// What heads a built-in command's answer (#943 FR-006).
+pub const COMMAND_OUTPUT_TITLE: &str = "Command output";
+
+/// What a command chip says with no description behind it (#943 FR-003).
+pub const NO_COMMAND_DESCRIPTION: &str = "The session's command list gave no description";
+
+/// [`BEFORE_THE_CLEAR`] for an entry of an earlier conversation than the transcript's latest
+/// (#943 FR-005): the turns above a `/clear` stay, marked.
+pub fn era_tag(entry_era: u32, latest_era: u32) -> Option<&'static str> {
+    (entry_era < latest_era).then_some(BEFORE_THE_CLEAR)
+}
+
+/// A command chip's header: the command as the user typed it (#943 FR-003), never the
+/// instructions the CLI expanded it into.
+pub fn command_chip_title(chip: &CommandChip) -> String {
+    let args = chip.invocation.args.trim();
+    if args.is_empty() {
+        format!("/{}", chip.invocation.name)
+    } else {
+        format!("/{} {args}", chip.invocation.name)
+    }
+}
+
+/// What stands behind a command chip: the description the session's command list gave when the
+/// command was sent, with its argument hint (#943 FR-003, decision 4).
+pub fn command_chip_description(chip: &CommandChip) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    parts.extend(
+        chip.description
+            .as_deref()
+            .map(str::trim)
+            .filter(|d| !d.is_empty()),
+    );
+    parts.extend(
+        chip.argument_hint
+            .as_deref()
+            .map(str::trim)
+            .filter(|h| !h.is_empty()),
+    );
+    if parts.is_empty() {
+        NO_COMMAND_DESCRIPTION.to_owned()
+    } else {
+        parts.join(" · ")
+    }
+}
+
 /// What a notice of sub-agent messages naming no card says (FR-024).
 pub fn subagent_notice_text(count: u64) -> String {
     format!("{} not shown", subagent_count(count))
@@ -228,6 +278,15 @@ fn status_label(status: Status, roles: Roles) -> IconLabel<'static, TranscriptMs
     match status.tone {
         Tone::Muted => label.muted(),
         Tone::Error => label.tint(roles.error).label_tint(roles.error),
+    }
+}
+
+/// What heads a user turn: [`USER_LABEL`], and [`BEFORE_THE_CLEAR`] for a turn from before a
+/// `/clear` (#943 FR-005).
+fn user_label(entry: &Entry, scope: Scope<'_>) -> String {
+    match era_tag(entry.era(), scope.latest_era) {
+        Some(tag) => format!("{USER_LABEL} · {tag}"),
+        None => USER_LABEL.to_owned(),
     }
 }
 
@@ -275,6 +334,9 @@ pub(super) struct Scope<'a> {
     pub session: SessionId,
     /// The session's main transcript, which says which threads have no card (FR-017).
     pub main: &'a Transcript,
+    /// The conversation the transcript's latest entry belongs to: an entry of an earlier one is
+    /// from before a `/clear` (#943 FR-005).
+    pub latest_era: u32,
     pub insights: Option<InsightsCtx<'a>>,
 }
 
@@ -304,12 +366,32 @@ pub(super) fn entry(
             parts.extend(cwd.iter().cloned());
             caption(parts.join(" · "), roles)
         }
-        // A command turn is its text as typed, `/name args` (#943 FR-003).
+        // A command turn is its text as typed, `/name args`, with the command list's description
+        // behind it (#943 FR-003).
         EntryKind::UserMessage {
-            text, attachments, ..
+            text,
+            attachments,
+            command,
         } => {
+            if let Some(chip) = command {
+                // Folded, the description is one line, cut when the pane is narrow; open, it is
+                // the whole of what the command list said of the command (#943 FR-003).
+                let description = command_chip_description(chip);
+                let mut card = DisclosureCard::new(command_chip_title(chip), toggle(), roles)
+                    .summary(description.clone())
+                    .open(open);
+                if open {
+                    card = card.body(caption(description, roles));
+                }
+                let mut turn =
+                    column![caption(user_label(entry, scope), roles), card].spacing(spacing::XS);
+                if let Some(line) = attachments_line(attachments) {
+                    turn = turn.push(caption(line, roles));
+                }
+                return turn.into();
+            }
             let mut message = column![
-                caption(USER_LABEL, roles),
+                caption(user_label(entry, scope), roles),
                 Text::new(plain_text(text), TypeRole::Body, roles)
                     .wrapping(Wrapping::WordOrGlyph)
                     .width(Length::Fill),
@@ -329,31 +411,62 @@ pub(super) fn entry(
             },
             ctx,
         ),
-        // #943: the window's disclosure cards for these come in its M8 (T058) and M9 (T064).
-        EntryKind::CommandOutput { text } => (renderers.assistant_text)(
-            &AssistantText {
-                block: block(false),
-                text,
-            },
-            ctx,
-        ),
+        // A command's answer is markdown the user asked for, so it is behind its own card rather
+        // than in the middle of the conversation (#943 FR-006).
+        EntryKind::CommandOutput { text } => {
+            let card = DisclosureCard::new(COMMAND_OUTPUT_TITLE, toggle(), roles)
+                .summary(first_line(text).to_owned())
+                .open(open);
+            if open {
+                card.body((renderers.assistant_text)(
+                    &AssistantText {
+                        block: block(false),
+                        text,
+                    },
+                    ctx,
+                ))
+                .into()
+            } else {
+                card.into()
+            }
+        }
+        // The compaction's summary is long and was not asked for: folded behind its marker
+        // (#943 FR-004, US1 scenario 4).
         EntryKind::Compacted { trigger, summary } => {
-            let mut marker =
-                column![caption(compacted_text(trigger.as_deref()), roles)].spacing(spacing::XS);
-            if let Some(summary) = summary {
-                marker = marker.push((renderers.assistant_text)(
+            let marker = compacted_text(trigger.as_deref());
+            let Some(summary) = summary else {
+                return caption(marker, roles);
+            };
+            let card = DisclosureCard::new(marker, toggle(), roles)
+                .summary(first_line(summary).to_owned())
+                .open(open);
+            if open {
+                card.body((renderers.assistant_text)(
                     &AssistantText {
                         block: block(false),
                         text: summary,
                     },
                     ctx,
-                ));
+                ))
+                .into()
+            } else {
+                card.into()
             }
-            marker.into()
         }
         EntryKind::Cleared => caption(CLEARED, roles),
+        // A refusal is said in words; the error role only adds to them (FR-012).
         EntryKind::ModelChanged { model, refused } => {
-            caption(model_changed_text(model, refused.as_deref()), roles)
+            let text = Text::new(
+                model_changed_text(model, refused.as_deref()),
+                TypeRole::Caption,
+                roles,
+            )
+            .wrapping(Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+            match refused {
+                Some(_) => text.tint(roles.error).into(),
+                None => text.muted().into(),
+            }
         }
         EntryKind::TerminalPeriod => caption(TERMINAL_PERIOD, roles),
         EntryKind::Thinking { text, streaming } => {
@@ -786,6 +899,55 @@ mod tests {
             model_changed_text("x", Some("Model 'x' not found")),
             "Model x was refused: Model 'x' not found"
         );
+    }
+
+    fn chip(description: Option<&str>, hint: Option<&str>, args: &str) -> CommandChip {
+        CommandChip {
+            invocation: micold_core::structured::commands::CommandInvocation {
+                name: "speckit-plan".to_owned(),
+                args: args.to_owned(),
+            },
+            description: description.map(str::to_owned),
+            argument_hint: hint.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn a_command_chip_is_headed_as_the_user_typed_it() {
+        assert_eq!(command_chip_title(&chip(None, None, "")), "/speckit-plan");
+        assert_eq!(
+            command_chip_title(&chip(None, None, " #943 ")),
+            "/speckit-plan #943"
+        );
+    }
+
+    #[test]
+    fn a_command_chips_description_joins_what_the_list_gave() {
+        assert_eq!(
+            command_chip_description(&chip(Some("Plan a feature"), Some("<issue>"), "")),
+            "Plan a feature · <issue>"
+        );
+        assert_eq!(
+            command_chip_description(&chip(Some("Plan a feature"), None, "")),
+            "Plan a feature"
+        );
+        assert_eq!(
+            command_chip_description(&chip(None, Some("  "), "")),
+            NO_COMMAND_DESCRIPTION
+        );
+    }
+
+    #[test]
+    fn a_turn_from_an_earlier_conversation_is_marked_before_the_clear() {
+        assert_eq!(era_tag(0, 1), Some(BEFORE_THE_CLEAR));
+        assert_eq!(era_tag(1, 1), None);
+        assert_eq!(era_tag(2, 1), None, "no entry is newer than the latest");
+    }
+
+    #[test]
+    fn a_commands_answer_is_headed_as_its_own_output() {
+        assert_eq!(COMMAND_OUTPUT_TITLE, "Command output");
+        assert!(!NO_COMMAND_DESCRIPTION.is_empty());
     }
 
     #[test]

@@ -7,10 +7,11 @@
 use iced::widget::text_editor::{Action, Edit};
 use iced::Task;
 use micold_client::app::{Editor, EditorAction, Message};
-use micold_client::features::command_palette::{palette_key, SendIntent};
+use micold_client::features::command_palette::{palette_key, PaletteKey, SendIntent};
 use micold_client::features::composer::Msg;
 use micold_client::features::composer::{composer_key, transcript_key, KeyIntent, NOT_CONNECTED};
 use micold_client::features::session::SwitchRequest;
+use micold_client::ui::composer::{composer_field, model_picker_field};
 use micold_core::protocol::messages::{ClientMsg, TurnPhase};
 use micold_core::session::SessionId;
 use micold_core::structured::model::ModelChoice;
@@ -21,6 +22,8 @@ use crate::App;
 /// Run one composer message.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let session = session_of(&msg);
+    let picker_was_open = app.core.composers.palette.picker(session).is_some();
+    let mut follow = false;
     match msg {
         Msg::Key {
             session,
@@ -31,7 +34,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             let palette = app.core.composers.palette.palette(session);
             if let Some(key) = palette_key(palette, &press).filter(|_| !composing) {
                 app.core.palette_key(session, key);
-                return Task::none();
+                // The arrows move the highlight: scroll the list to follow it.
+                return if matches!(key, PaletteKey::Up | PaletteKey::Down) {
+                    micold_client::ui::picker_highlight_into_view()
+                } else {
+                    Task::none()
+                };
             }
             let editor = editor(app, session);
             let (caret, lines) = (editor.caret(), editor.line_count());
@@ -121,6 +129,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 set_model(app, session, choice);
             }
         }
+        Msg::ModelPickerMoved { session, direction } => {
+            app.core.model_picker_moved(session, direction);
+            follow = true;
+        }
         Msg::ModelPickerClosed(session) => app.core.composers.palette.close_picker(session),
         Msg::SwitchRequested { session, to } => {
             if let Some(request) = app.core.switch_requested(session, to) {
@@ -137,6 +149,19 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     }
     // The palette follows the draft, whoever changed it (#943 FR-007).
     app.core.composer_edited(session);
+    // The model picker opening, from the view or by `/model`, takes the keyboard; closing it
+    // gives the keyboard back to the composer, so typing goes on where it left off (FR-014).
+    let picker_open = app.core.composers.palette.picker(session).is_some();
+    if picker_open != picker_was_open {
+        return iced::widget::operation::focus(if picker_open {
+            model_picker_field(session)
+        } else {
+            composer_field(session)
+        });
+    }
+    if follow {
+        return micold_client::ui::picker_highlight_into_view();
+    }
     Task::none()
 }
 
@@ -154,6 +179,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::Dropped { session, .. }
         | Msg::PaletteClicked { session, .. }
         | Msg::ModelPickerTyped { session, .. }
+        | Msg::ModelPickerMoved { session, .. }
         | Msg::ModelPicked { session, .. }
         | Msg::SwitchRequested { session, .. } => *session,
         Msg::SendRequested(session)

@@ -346,6 +346,11 @@ pub enum Msg {
         session: SessionId,
         item: Option<usize>,
     },
+    /// The arrows in the model picker.
+    ModelPickerMoved {
+        session: SessionId,
+        direction: micold_core::typeahead::Direction,
+    },
     /// The model picker left without a pick.
     ModelPickerClosed(SessionId),
     /// **Open in terminal** / **Open in structured view** chosen (#943 US4 scenarios 3, 4).
@@ -839,6 +844,11 @@ impl crate::app::State {
         self.composers
             .palette
             .open_picker(session, &reported, &current);
+    }
+
+    /// The arrows in `session`'s picker.
+    pub fn model_picker_moved(&mut self, session: SessionId, direction: Direction) {
+        self.composers.palette.picker_step(session, direction);
     }
 
     /// The name typed into `session`'s picker.

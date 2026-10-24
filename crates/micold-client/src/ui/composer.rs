@@ -7,6 +7,10 @@
 //! (`AttachmentChip`), #943's completion slot (I-4), and the text area beside #942's control,
 //! **Send** and, while busy, **Stop**. Everything it shows is `features::composer`'s; every control sends a
 //! `composer::Msg` for the shell to carry out.
+//!
+//! #943 fills two of its places: the completion slot with the command palette while a `/` is
+//! typed ([`palette`]), and the status row with the session's model, which opens the model picker
+//! (`Typeahead`) in its place (FR-007, FR-013, FR-014).
 
 use iced::widget::text_editor::{Binding, KeyPress, Status};
 use iced::widget::{column, container, row, Row, Space};
@@ -16,6 +20,7 @@ use micold_core::session::SessionId;
 use micold_core::tokens::{spacing, Roles};
 
 use crate::app::{EditorAction, Message, State};
+use crate::features::command_palette::{palette_key, PaletteLine, PaletteState};
 use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
 use crate::features::window::{FieldId, Msg as WindowMsg};
 use crate::keymap::KeyInput;
@@ -23,8 +28,8 @@ use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, QueueRow, Scrollable, Text, TextArea, TextField,
-    TypeRole,
+    AttachmentChip, BusyIndicator, Button, CommandPalette, QueueRow, Scrollable, Text, TextArea,
+    TextField, TypeRole, Typeahead, TypeaheadRow,
 };
 
 /// The height the text area stops growing at, its lines then scrolling inside it (FR-008):
@@ -47,6 +52,23 @@ pub const WAITING: &str = "Waiting for you";
 pub const ON_HOLD: &str = "Queue on hold";
 /// What the empty text area shows.
 pub const PLACEHOLDER: &str = "Message Claude";
+
+/// What the model picker's field says while empty (#943 FR-014).
+pub const MODEL_PLACEHOLDER: &str = "Model name";
+
+/// The model picker's width in the status row: room for a model's full name.
+pub const MODEL_PICKER_WIDTH: f32 = 280.0;
+
+/// The model picker's field of `session`, which the shell focuses as the picker opens. One per
+/// session: two panes side by side each draw their own.
+pub fn model_picker_field(session: SessionId) -> iced::widget::Id {
+    iced::widget::Id::from(format!("composer-model-picker-{session}"))
+}
+
+/// `session`'s text area, which the shell focuses again when its model picker closes.
+pub fn composer_field(session: SessionId) -> iced::widget::Id {
+    iced::widget::Id::from(format!("composer-area-{session}"))
+}
 
 /// What the composer's later issues put into it (plan I-1, I-4): empty in #941.
 #[derive(Default)]
@@ -208,9 +230,12 @@ fn status_row<'a>(
         TurnPhase::Idle => (READY, false),
         TurnPhase::NotRunning => (NOT_RUNNING, false),
     };
-    let mut status = row![BusyIndicator::new(label, roles).busy(busy)]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
+    let mut status = row![
+        BusyIndicator::new(label, roles).busy(busy),
+        model_control(state, session, roles)
+    ]
+    .spacing(spacing::SM)
+    .align_y(Alignment::Center);
     if let Some(overdue) = composers.overdue_notice(session) {
         status = status
             .push(Text::new(overdue, TypeRole::Caption, roles).width(Length::Fill))
@@ -225,6 +250,103 @@ fn status_row<'a>(
     status.into()
 }
 
+/// The session's model as the CLI last reported it and whose choice it is, pressed to open the
+/// model picker in its place (#943 FR-013, FR-014).
+fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Element<'a, Message> {
+    let Some(picker) = state.composers.palette.picker(session) else {
+        return Button::text(state.model_header(session), roles)
+            .on_press(send(Msg::ModelPickerRequested(session)))
+            .into();
+    };
+    let rows = picker.rows();
+    let items: Vec<Option<usize>> = rows.iter().map(|r| r.item).collect();
+    let rows = rows
+        .into_iter()
+        .map(|r| row_with_details(r.label, Vec::new(), r.details))
+        .collect();
+    let typeahead = Typeahead::new(
+        picker.typed(),
+        rows,
+        move |text| send(Msg::ModelPickerTyped { session, text }),
+        roles,
+    )
+    .id(model_picker_field(session))
+    .placeholder(MODEL_PLACEHOLDER)
+    .open(true)
+    .highlighted(picker.enter_row())
+    .selected(picker.current_row())
+    .on_move(move |direction| send(Msg::ModelPickerMoved { session, direction }))
+    .on_pick(move |row| {
+        send(Msg::ModelPicked {
+            session,
+            item: items.get(row).copied().flatten(),
+        })
+    })
+    .on_dismiss(send(Msg::ModelPickerClosed(session)));
+    container(typeahead)
+        .width(Length::Fixed(MODEL_PICKER_WIDTH))
+        .into()
+}
+
+/// A picker row labelled `label`, its `spans` emphasised, with `details` under it when there are
+/// any: the one place the palette and the model picker build a row.
+fn row_with_details(
+    label: String,
+    spans: Vec<std::ops::Range<usize>>,
+    details: Option<String>,
+) -> TypeaheadRow {
+    let row = TypeaheadRow::new(label, spans);
+    match details {
+        Some(details) => row.details(details, Vec::new()),
+        None => row,
+    }
+}
+
+/// `session`'s command palette while a `/` is typed (#943 FR-007, FR-008): the composer's
+/// completion slot.
+pub fn palette<'a>(
+    state: &'a State,
+    session: SessionId,
+    roles: Roles,
+) -> Option<Element<'a, Message>> {
+    let open = state.composers.palette.palette(session)?;
+    Some(palette_of(open, roles, move |row| {
+        send(Msg::PaletteClicked { session, row })
+    }))
+}
+
+/// `open` drawn as a [`CommandPalette`], a click on row `n` sending `on_pick(n)`.
+pub fn palette_of<'a, M: Clone + 'a>(
+    open: &PaletteState,
+    roles: Roles,
+    on_pick: impl Fn(usize) -> M + 'a,
+) -> Element<'a, M> {
+    let mut palette = CommandPalette::new(roles)
+        .highlighted(open.highlight())
+        .on_pick(on_pick);
+    if let Some(note) = open.source_note() {
+        palette = palette.note(note);
+    }
+    if let Some(none) = open.no_match_note() {
+        palette = palette.empty_message(none);
+    }
+    for line in open.lines() {
+        palette = match line {
+            PaletteLine::Group(title) => palette.group(title),
+            PaletteLine::Command {
+                label,
+                matched,
+                details,
+            } => palette.command(row_with_details(
+                label,
+                matched.into_iter().collect(),
+                details,
+            )),
+        };
+    }
+    palette.into()
+}
+
 /// The text area beside #942's control, **Send** and, while busy, **Stop** (FR-004, FR-012).
 fn input_row<'a>(
     state: &'a State,
@@ -236,8 +358,10 @@ fn input_row<'a>(
     let composers = &state.composers;
     let editor = composers.editor(session);
     let (caret, lines) = (editor.caret(), editor.line_count());
+    let palette = composers.palette.palette(session);
     let area = TextArea::new(editor.content(), roles)
         .placeholder(PLACEHOLDER)
+        .id(composer_field(session))
         .max_height(MAX_HEIGHT)
         .on_action(move |action| {
             send(Msg::Edited {
@@ -245,7 +369,7 @@ fn input_row<'a>(
                 action: EditorAction(action),
             })
         })
-        .key_binding(move |press| key_binding(session, press, caret, lines, phase))
+        .key_binding(move |press| key_binding(session, press, caret, lines, phase, palette))
         .track_focus(FieldId::Composer(session), None);
     let mut controls = row![container(area).width(Length::Fill)]
         .spacing(spacing::SM)
@@ -301,14 +425,17 @@ fn queue_edit<'a>(
 
 /// What a key press in `session`'s composer does: the composer's keys (send, new line, history,
 /// interrupt) go to the shell as `Msg::Key`, decided again there on the editor's own caret; every
-/// other key is the editor's default (FR-002, FR-012, FR-023). An IME composition reaches the
-/// editor as input-method events, never as key presses, so a press is never composing.
+/// other key is the editor's default (FR-002, FR-012, FR-023). While the command palette is open
+/// (`palette`), the keys it takes (arrows, Tab, Enter, Escape) go to the shell too, which
+/// gives them to the palette first (#943 FR-008a). An IME composition reaches the editor as
+/// input-method events, never as key presses, so a press is never composing.
 pub fn key_binding(
     session: SessionId,
     press: KeyPress,
     caret: (usize, usize),
     lines: usize,
     phase: TurnPhase,
+    palette: Option<&PaletteState>,
 ) -> Option<Binding<Message>> {
     if !matches!(press.status, Status::Focused { .. }) {
         return Binding::from_key_press(press);
@@ -321,8 +448,9 @@ pub fn key_binding(
     ) else {
         return Binding::from_key_press(press);
     };
+    let to_palette = palette_key(palette, &input).is_some();
     match composer_key(&input, caret, lines, false, phase) {
-        KeyIntent::Edit => Binding::from_key_press(press),
+        KeyIntent::Edit if !to_palette => Binding::from_key_press(press),
         _ => Some(Binding::Custom(send(Msg::Key {
             session,
             press: input,

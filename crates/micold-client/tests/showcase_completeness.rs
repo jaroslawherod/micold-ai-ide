@@ -918,9 +918,10 @@ fn the_rich_transcript_components_are_posed() {
     }
 }
 
-/// Feature 941 (research R10, T048): the composer's shared parts each have an entry posing what
-/// they draw — the text area at its height limit, a chip with its preview, a queue row with its
-/// actions and without Move to composer, and the busy indicator busy and idle.
+/// Feature 941 (research R10, T048) and #943 (T055): the composer's shared parts each have an
+/// entry posing what they draw — the text area at its height limit, a chip with its preview, a
+/// queue row with its actions and without Move to composer, the busy indicator busy and idle, and
+/// the command palette grouped, fallback and empty.
 #[test]
 fn the_composer_components_are_posed() {
     for (module, component, poses) in [
@@ -947,6 +948,15 @@ fn the_composer_components_are_posed() {
             "material/busy_indicator.rs",
             "BusyIndicator",
             &["busy", "idle"][..],
+        ),
+        (
+            "material/command_palette.rs",
+            "CommandPalette",
+            &[
+                "the session's commands, grouped",
+                "the fallback list, with its note",
+                "nothing matches",
+            ][..],
         ),
     ] {
         let entry = COMPONENTS

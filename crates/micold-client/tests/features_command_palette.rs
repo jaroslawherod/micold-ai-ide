@@ -9,8 +9,8 @@ mod support;
 
 use micold_client::app::State as Window;
 use micold_client::features::command_palette::{
-    model_header, palette_key, row_tag, PaletteKey, SendIntent, FALLBACK_NOTE, NO_MATCH,
-    OPENS_IN_TERMINAL,
+    group_title, model_header, palette_key, row_details, row_match, row_tag, use_typed, PaletteKey,
+    PaletteLine, SendIntent, DEFAULT_MODEL, FALLBACK_NOTE, NO_MATCH, OPENS_IN_TERMINAL,
 };
 use micold_client::features::composer::{composer_key, KeyIntent};
 use micold_client::keymap::{Key, KeyInput, Mods, NamedKey, PhysicalKey};
@@ -21,6 +21,7 @@ use micold_core::structured::model::{ModelChoice, ModelName, MODEL_SHORTCUTS};
 use micold_core::structured::{
     parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
 };
+use micold_core::typeahead::Direction;
 
 fn press(named: NamedKey) -> KeyInput {
     KeyInput {
@@ -457,4 +458,137 @@ fn the_header_says_the_reported_model_and_whose_choice_it_is() {
         true,
     );
     assert_eq!(w.model_header(s), "claude-haiku-4-5 · your choice: haiku");
+}
+
+// ---- T056, T057: what the window draws (M8) ----
+
+fn lines(w: &Window, s: SessionId) -> Vec<PaletteLine> {
+    w.composers.palette.palette(s).expect("open").lines()
+}
+
+#[test]
+fn an_empty_name_lists_each_group_under_its_header() {
+    let (mut w, s) = window(Some(started(vec![])));
+    typed(&mut w, s, "/");
+    let headers: Vec<&str> = lines(&w, s)
+        .iter()
+        .filter_map(|l| match l {
+            PaletteLine::Group(title) => Some(*title),
+            PaletteLine::Command { .. } => None,
+        })
+        .collect();
+    assert_eq!(
+        headers,
+        [
+            group_title(CommandKind::Skill),
+            group_title(CommandKind::Custom),
+            group_title(CommandKind::BuiltIn),
+            group_title(CommandKind::App),
+        ],
+        "one header per group, in the palette's order"
+    );
+    assert_eq!(group_title(CommandKind::Skill), "Skills");
+    assert_eq!(group_title(CommandKind::Custom), "Custom commands");
+    assert_eq!(group_title(CommandKind::BuiltIn), "Built-in commands");
+    assert_eq!(group_title(CommandKind::App), "In this app");
+    let first = lines(&w, s).into_iter().nth(1).expect("a command");
+    assert_eq!(
+        first,
+        PaletteLine::Command {
+            label: "/speckit-plan".into(),
+            matched: None,
+            details: Some("What speckit-plan does".into()),
+        }
+    );
+}
+
+#[test]
+fn a_typed_name_lists_its_matches_without_headers_and_marks_the_match() {
+    let (mut w, s) = window(Some(started(vec![])));
+    typed(&mut w, s, "/SPEC");
+    let lines = lines(&w, s);
+    assert!(lines
+        .iter()
+        .all(|l| matches!(l, PaletteLine::Command { .. })));
+    let PaletteLine::Command { label, matched, .. } = &lines[0] else {
+        unreachable!()
+    };
+    assert_eq!(label, "/speckit-plan");
+    assert_eq!(matched.clone(), Some(1..5), "the typed name, past the `/`");
+    assert_eq!(row_match("my-review", "rev"), Some(3..6));
+    assert_eq!(
+        row_match("respec-spec", "spec"),
+        Some(7..11),
+        "the word's start, as core's filter ranked it"
+    );
+    assert_eq!(row_match("my-review", "view"), Some(5..9), "mid-word");
+    assert_eq!(row_match("review", "x"), None);
+}
+
+#[test]
+fn a_terminal_only_row_says_so_before_its_description() {
+    let (mut w, s) = window(Some(started(vec![])));
+    typed(&mut w, s, "/mcp");
+    let mcp = w
+        .composers
+        .palette
+        .palette(s)
+        .and_then(|p| p.rows().next().cloned())
+        .expect("mcp listed");
+    let details = row_details(&mcp).expect("details");
+    assert!(
+        details.starts_with(OPENS_IN_TERMINAL),
+        "the words come first, so a cut description never takes them: {details}"
+    );
+    let list = w.command_list(s);
+    let review = list
+        .commands()
+        .iter()
+        .find(|c| c.name == "review")
+        .expect("listed");
+    assert_eq!(row_details(review).as_deref(), Some("What review does"));
+}
+
+#[test]
+fn the_picker_rows_end_with_the_typed_name_and_enter_takes_the_highlight_or_it() {
+    let (mut w, s) = window(Some(started(reported_models())));
+    set_choice(&mut w, s, named("haiku"));
+    w.open_model_picker(s);
+    let picker = w.composers.palette.picker(s).expect("open");
+    let labels: Vec<String> = picker.rows().into_iter().map(|r| r.label).collect();
+    assert_eq!(labels, [DEFAULT_MODEL, "OPUS", "HAIKU"]);
+    assert_eq!(
+        picker.current_row(),
+        Some(2),
+        "the current choice is marked"
+    );
+    assert_eq!(
+        picker.enter_row(),
+        None,
+        "nothing highlighted, nothing typed"
+    );
+
+    w.model_picker_typed(s, "claude-opus-4-1".into());
+    let picker = w.composers.palette.picker(s).expect("open");
+    let rows = picker.rows();
+    assert_eq!(rows.len(), 4);
+    assert_eq!(rows[3].label, use_typed("claude-opus-4-1"));
+    assert_eq!(rows[3].item, None, "the typed name is no item");
+    assert_eq!(rows[1].item, Some(1));
+    assert_eq!(picker.enter_row(), Some(3), "Enter takes the typed name");
+    assert_eq!(use_typed("x"), "Use x");
+
+    w.model_picker_moved(s, Direction::Next);
+    let picker = w.composers.palette.picker(s).expect("open");
+    assert_eq!(picker.enter_row(), Some(0), "the arrows highlight an item");
+    for _ in 0..3 {
+        w.model_picker_moved(s, Direction::Next);
+    }
+    let picker = w.composers.palette.picker(s).expect("open");
+    assert_eq!(
+        picker.enter_row(),
+        Some(3),
+        "the arrows reach the typed row too"
+    );
+    assert_eq!(w.model_picked(s, None), Some(named("claude-opus-4-1")));
 }

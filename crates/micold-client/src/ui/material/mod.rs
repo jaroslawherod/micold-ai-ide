@@ -31,6 +31,7 @@ mod card_grid;
 mod checkbox;
 mod choice_list;
 mod code_block;
+mod command_palette;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
 /// role was enumerated for. The first check here that reads a **composition** rather than the
 /// token set (BUG-009).
@@ -201,6 +202,7 @@ pub use card_grid::{CardGrid, Zoom};
 pub use checkbox::Checkbox;
 pub use choice_list::{ChoiceList, OTHER as CHOICE_OTHER, OTHER_PLACEHOLDER};
 pub use code_block::CodeBlock;
+pub use command_palette::CommandPalette;
 pub use connection_banner::ConnectionBanner;
 pub use diff_view::{
     DiffLayout, DiffView, MARKER_WIDTH as DIFF_MARKER_WIDTH, ROW_HEIGHT as DIFF_ROW_HEIGHT,

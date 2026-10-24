@@ -52,6 +52,7 @@ pub struct TextArea<'a, M> {
     key_binding: Option<KeyBindingFn<'a, M>>,
     max_height: Option<f32>,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
+    id: Option<iced::widget::Id>,
 }
 
 /// What a key press does, as `.key_binding(…)` decides it.
@@ -69,6 +70,7 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
             key_binding: None,
             max_height: None,
             on_focus_change: None,
+            id: None,
         }
     }
 
@@ -103,6 +105,13 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
     /// the focus back on the first key (feature 941, `KeyboardElsewhere`).
     pub fn on_focus_change(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
         self.on_focus_change = Some(Box::new(f));
+        self
+    }
+
+    /// Name the area, so an operation can put the keyboard on it (#943 FR-014: the model picker
+    /// gives the keyboard back to the composer).
+    pub fn id(mut self, id: iced::widget::Id) -> Self {
+        self.id = Some(id);
         self
     }
 
@@ -158,6 +167,9 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
             });
         if let Some(f) = area.on_action {
             editor = editor.on_action(f);
+        }
+        if let Some(id) = area.id {
+            editor = editor.id(id);
         }
         Element::new(Chrome {
             editor: editor.into(),

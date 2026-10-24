@@ -1250,8 +1250,8 @@ the background service keeps the events it reports. It is Claude Code only.
   Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.
 - **A turn you interrupted** ends with **You interrupted this turn** instead of a footer, and a
   message you sent with pictures names them under it (**Attached:** and the file names).
-- **It does not do yet** what the rest of this work adds: slash commands and switching a session
-  between kinds ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
+- **It does not do yet** what the rest of this work adds: switching a session between a structured
+  view and a terminal ([#943](https://github.com/jaroslawherod/micold-ai-ide/issues/943)).
 - **Across a restart.** While [Save terminal history](./settings.md#terminal) is on, the events are
   kept across a restart of the background service; with it off they live in the service's memory
   only.
@@ -1297,6 +1297,49 @@ above it. A terminal session's pane has no composer and works as before.
   and the caret are where you left them. A message the service could not take — not connected, the
   session stopped, the connection lost before it confirmed — comes back into the composer with
   the reason, nothing lost.
+
+#### Commands and the model
+
+Skills and slash commands work in a structured session as they do in the terminal: type the
+command into the composer and send it. The transcript shows the command as you typed it, not the
+instructions Claude Code expanded it into.
+
+- **The palette.** Type `/` at the start of an empty draft and the session's commands are listed
+  above the composer, grouped under **Skills**, **Custom commands**, **Built-in commands** and
+  **In this app**, each with the description the session reported. Type more to narrow the list:
+  the closest match is selected first. Up and Down move the selection, Tab or Enter (or a click)
+  fills `/<name> ` into the draft without sending it — a second Enter sends it — and Escape closes
+  the palette, leaving the draft as it is and the turn running. Deleting the `/`, or moving the
+  caret out of the name, closes it too. When nothing matches, the palette says so and Enter still
+  sends what you typed.
+- **Commands that open in the terminal.** A few Claude Code commands cannot run in a structured
+  session (they draw their own terminal screen). They are listed all the same, with **opens in
+  terminal** in words beside them, and sending one offers to open the session in a terminal
+  instead of sending it.
+- **Before the session has started.** A session that has not run since the app opened lists the
+  commands Claude Code always has, and says its own commands appear once it starts.
+- **The model.** The composer's status row shows the model the session reported and whether it is
+  **Default** or **your choice**. Press it to open the model picker: **Default** plus the models
+  Claude Code reported for the session (the names it accepts as shortcuts, when it reports none),
+  the current one marked, and a field for a name it did not list. Sending `/model` opens the same
+  picker and nothing reaches Claude Code; `/model <name>` picks that model straight away.
+- **When the change takes effect.** An idle session answers the next turn with the new model, and
+  its process keeps running — the conversation is kept. Pick during a turn and the turn in hand
+  finishes on the model it started with; the new one answers from the next turn. The transcript
+  marks the point with the model answering from there on, and a model Claude Code refuses (one it
+  does not know, or one your account cannot use) is marked with its reason, the session running on
+  as before. The choice is kept with the session, across restarts.
+- **A model changed inside the terminal is not seen here.** Changing the model with `/model` in a
+  terminal session, or inside a terminal Claude Code, changes it for that process only: the app
+  shows the model the structured session last reported, and the choice it keeps is the one picked
+  here.
+- **What a command leaves in the transcript.** A command you sent is a card headed as you typed
+  it, with its description behind it; `/compact` is marked where the conversation was compacted,
+  its summary folded behind the marker, and the turns above stay; `/clear` is marked too, the turns
+  above it kept and headed **Before the clear**, and everything after continues the cleared
+  conversation — which is also the one a later restart resumes. A command that answers with text
+  and no reply from Claude (`/context` and the like) puts its answer behind a **Command output**
+  card.
 
 ### Sessions on Codex and OpenCode
 

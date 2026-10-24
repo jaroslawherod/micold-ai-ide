@@ -197,7 +197,7 @@ pub(super) const EXIT: Duration = Duration::from_millis(duration::SHORT_2);
 /// Expressed in rows and multiplied by the density scale's menu-item height, rather than as a pixel
 /// number that happens to be about eight rows today — a density step that changed the row height
 /// would otherwise silently change how many rows fit.
-const MAX_ROWS_BEFORE_SCROLL: f32 = 8.0;
+pub(super) const MAX_ROWS_BEFORE_SCROLL: f32 = 8.0;
 
 /// The widget `Id` of the highlighted row, and of no other (feature 038, FR-007).
 ///
