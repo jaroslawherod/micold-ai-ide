@@ -280,7 +280,10 @@ fn the_library_is_excluded_because_it_owns_the_composite() {
     // asserted — the slot's other child is `b.content`, an already-built `Element`, so `button.rs`
     // would not trip the full rule anyway. What matters is that the leading slot is still a row
     // here; if it stops being one, this exemption is protecting nothing and should be re-examined.
-    let button = fs::read_to_string(ui_dir().join("material/button.rs")).expect("read button.rs");
+    let button = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-material/src/button.rs"),
+    )
+    .expect("read button.rs");
     let code = strip_comments_keep_lines(&button);
     assert!(
         composites(&code)

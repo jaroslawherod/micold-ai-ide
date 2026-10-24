@@ -36,7 +36,7 @@ fn strip_rules_source() -> String {
 
 /// `ui/material/tab.rs`, comment-stripped — the component half.
 fn tab_source() -> String {
-    source_of("src/ui/material/tab.rs")
+    source_of("../micold-material/src/tab.rs")
 }
 
 /// A source file with `//` and `/* */` comments stripped, so the doc comments on the very code

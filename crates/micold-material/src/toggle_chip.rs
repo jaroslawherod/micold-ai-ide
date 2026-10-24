@@ -1,0 +1,273 @@
+//! `ToggleChip` — a reusable on/off pill control (Constitution Principle VIII).
+//!
+//! Promoted out of `src/ui/sidebar.rs`'s private `filter_chip()` when feature 014 needed the same
+//! look for a second control. Copying those thirty lines of button styling next
+//! to their original is precisely the accretion the Component-reuse gate exists to prevent, so the
+//! primitive moved here and both call sites consume it.
+//!
+//! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
+
+use crate::style;
+use crate::{Text, TypeRole};
+use iced::widget::button;
+use iced::{Background, Border, Color, Element};
+use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
+
+/// The text a chip renders, given its label and the quantity it stands in front of (feature 029,
+/// FR-025/FR-025a).
+///
+/// Zero returns the label unchanged, which is what keeps every un-counted call site pixel-identical
+/// and makes "hiding nothing" indistinguishable from "not counting" — the right reading, because a
+/// control withholding nothing has nothing to report.
+///
+/// Public and separate from the widget so the rule can be asserted without rendering: a chip is an
+/// `Element`, and an assertion about pixels would be an assertion about iced.
+pub fn chip_label(label: &str, count: usize) -> String {
+    if count == 0 {
+        label.to_string()
+    } else {
+        format!("{label} \u{00b7} {count}")
+    }
+}
+
+/// A pill-shaped on/off chip: filled in its accent while active, outlined while inactive.
+/// Pressing it emits `on_press`.
+///
+/// Builder form: `ToggleChip::new(label, on_press, roles).active(b).accent(fill, on).into()`.
+/// Carries no visual state of its own — `active` is supplied by the caller, never latched here.
+pub struct ToggleChip<M> {
+    label: String,
+    on_press: M,
+    roles: Roles,
+    active: bool,
+    accent: Option<(Rgb, Rgb)>,
+    count: usize,
+    disabled: bool,
+}
+
+impl<M> ToggleChip<M> {
+    /// A chip showing `label`, emitting `on_press` when pressed, themed by `roles`. Inactive by
+    /// default, with the [`chip_neutral_accent`].
+    pub fn new(label: impl Into<String>, on_press: M, roles: Roles) -> Self {
+        Self {
+            label: label.into(),
+            on_press,
+            roles,
+            active: false,
+            accent: None,
+            count: 0,
+            disabled: false,
+        }
+    }
+
+    /// Whether the chip reads as on (filled) or off (outlined).
+    pub fn active(mut self, active: bool) -> Self {
+        self.active = active;
+        self
+    }
+
+    /// A quantity the chip is standing in front of, rendered as a trailing `· N` (feature 029,
+    /// FR-025).
+    ///
+    /// **Zero renders nothing**, so a chip that never sets a count and a chip whose count happens
+    /// to be zero are the same pixels. That is what lets this be a step on the shared builder
+    /// rather than a second chip type: every existing call site keeps its exact appearance without
+    /// being touched, and the one caller that wants a number gets it by naming it.
+    ///
+    /// The number joins the label in one text node rather than sitting beside it as a second
+    /// widget — a chip is one 32dp pill with one centred line box (§7.6), and a second node would
+    /// have to re-derive that alignment and the 12dp padding to look like it belonged.
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = count;
+        self
+    }
+
+    /// Whether the chip refuses presses (feature 034). A disabled chip emits nothing, does not
+    /// ripple, and takes Material's disabled treatment: content at 38%, and — when active — its
+    /// container at 12% (`tokens::state`).
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    /// The message a press emits, or `None` while disabled.
+    fn press(&self) -> Option<M>
+    where
+        M: Clone,
+    {
+        (!self.disabled).then(|| self.on_press.clone())
+    }
+
+    /// The `(fill, on_fill)` pair used while active — e.g. a worktree type's tag color. Defaults
+    /// to [`chip_neutral_accent`].
+    pub fn accent(mut self, fill: Rgb, on_fill: Rgb) -> Self {
+        self.accent = Some((fill, on_fill));
+        self
+    }
+}
+
+/// The `(fill, on_fill)` a chip with no accent of its own takes while active: a neutral fill with
+/// the muted `on_surface_variant` label.
+///
+/// The fill is `surface_container_high`. It was `surface_variant`, which clears AA at rest and
+/// fails it pressed in the dark scheme — the label drawn at 10% over the fill measured 4.47:1 — and
+/// FR-004b's remedy for a pair like that is to move the host, not the label (BUG-011).
+pub fn chip_neutral_accent(r: Roles) -> (Rgb, Rgb) {
+    (r.surface_container_high, r.on_surface_variant)
+}
+
+impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
+    fn from(chip: ToggleChip<M>) -> Self {
+        let r = chip.roles;
+        let (fill, on) = chip.accent.unwrap_or_else(|| chip_neutral_accent(r));
+        // The ripple takes a token role rather than a resolved colour, so keep the `Rgb` before
+        // these are shadowed by their `Color` forms.
+        let ripple_tint = if chip.active {
+            on
+        } else {
+            r.on_surface_variant
+        };
+        let (fill, on) = (style::color(fill), style::color(on));
+        let muted = style::color(r.on_surface_variant);
+        let outline = style::color(r.outline);
+        let active = chip.active;
+        let disabled = chip.disabled;
+        let on_press = chip.press();
+        // §7.6 gives a chip `label_large`. It was `SidebarTag` (`label_small`, 11dp), which was
+        // right while the chip had no height of its own — but T060 gave it §7.6's 32dp, and an 11dp
+        // word in a 32dp pill leaves so much empty height that a short label renders as a circle
+        // rather than a chip. The height and the label role are one decision, not two.
+        //
+        // `Tag` keeps `sidebar_tag`: the contract's own row for the worktree tag says `label_small`
+        // *in the sidebar*, and those sit inside 36dp dense rows where 32dp chips would not fit.
+        let label = chip_label(&chip.label, chip.count);
+        let chip_button = button(
+            Text::new(label, TypeRole::Action, r)
+                // §7.6's label alignment (FR-030a), and the whole of BUG-001. A chip is 32dp and
+                // its label is a 20dp line box, so 12dp of slack exists by construction and
+                // *something* has to place it. Two defaults were placing it, neither chosen: the
+                // button lays its content out under `limits.height(Fixed(32))`, which sets the
+                // minimum with the maximum and stretches this node to the full height, and a text
+                // widget draws its glyphs at the top of whatever node it is given. The label read
+                // 6dp high of centre while every constant in §7.6 was correct.
+                //
+                // Both halves are stated rather than inherited: `Fill` says the node is the pill's
+                // height on purpose, `Center` says where the line box sits inside it.
+                .height(iced::Length::Fill)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        // §7.6: a chip is 32dp tall with 12dp of horizontal padding. There is no vertical padding
+        // because the height is set outright — which is precisely why the alignment above is not
+        // optional. Zero vertical padding means "size me by my label" only while a component has
+        // no height of its own.
+        .padding(iced::Padding {
+            top: 0.0,
+            bottom: 0.0,
+            left: anatomy::chip::PADDING,
+            right: anatomy::chip::PADDING,
+        })
+        .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
+        .on_press_maybe(on_press)
+        .style(move |_theme: &iced::Theme, status| {
+            let border = |color: Color| Border {
+                color,
+                width: if active { 0.0 } else { anatomy::chip::OUTLINE },
+                radius: shape::FULL.into(),
+            };
+            if disabled {
+                // Material's disabled treatment, from the state tokens rather than a literal.
+                let content = |c: Color| Color {
+                    a: state::DISABLED_CONTENT,
+                    ..c
+                };
+                let text = if active { on } else { muted };
+                return iced::widget::button::Style {
+                    background: Some(Background::Color(if active {
+                        Color {
+                            a: state::DISABLED_CONTAINER,
+                            ..fill
+                        }
+                    } else {
+                        Color::TRANSPARENT
+                    })),
+                    text_color: content(text),
+                    border: border(if active {
+                        Color::TRANSPARENT
+                    } else {
+                        Color {
+                            a: state::DISABLED_CONTAINER,
+                            ..outline
+                        }
+                    }),
+                    ..Default::default()
+                };
+            }
+            // The chip responds to the pointer. It used to ignore `status` entirely, so a
+            // filter chip was the one interactive thing in the sidebar that gave no
+            // feedback at all — FR-021 applies the state-layer set to *every* interactive
+            // surface, not to buttons alone, and a chip that never reacts reads as
+            // decoration rather than as a control.
+            //
+            // The layer is the content colour over the container, exactly as everywhere
+            // else: over the fill when the chip is on, over what it sits on when it is off.
+            let opacity = match status {
+                iced::widget::button::Status::Hovered => state::HOVER,
+                iced::widget::button::Status::Pressed => state::PRESSED,
+                _ => 0.0,
+            };
+            let background = if active {
+                Some(Background::Color(style::state_layer(fill, on, opacity)))
+            } else if opacity > 0.0 {
+                Some(Background::Color(style::state_fill(muted, opacity)))
+            } else {
+                Some(Background::Color(Color::TRANSPARENT))
+            };
+            iced::widget::button::Style {
+                background,
+                text_color: if active { on } else { muted },
+                border: border(if active { fill } else { outline }),
+                ..Default::default()
+            }
+        });
+        // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
+        // in its own text colour: the accent when on, the muted role when off.
+        // A disabled chip cannot be pressed, so a ripple would report a press that never happens.
+        if disabled {
+            return chip_button.into();
+        }
+        super::Ripple::new(chip_button, ripple_tint, shape::FULL).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens::{contrast, over, roles};
+
+    /// An active neutral chip's label clears AA with the press layer — its own colour at
+    /// `state::PRESSED` — composited over its fill, in both schemes (FR-004b, BUG-011).
+    #[test]
+    fn a_neutral_chip_label_clears_aa_pressed() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let (fill, on) = chip_neutral_accent(roles(scheme));
+            let pressed = over(on, state::PRESSED as f64, fill);
+            let ratio = contrast(on, pressed);
+            assert!(
+                ratio >= 4.5,
+                "{scheme:?}: a neutral chip's label measures {ratio:.2}:1 pressed, below AA"
+            );
+        }
+    }
+
+    /// A disabled chip has nowhere to send a press, and an enabled one does (feature 034, U64):
+    /// the GitHub issue chip is disabled while the repository has no GitHub remote, and a press
+    /// that still arrived would choose a source that cannot load.
+    #[test]
+    fn a_disabled_chip_emits_no_press() {
+        let r = roles(ColorScheme::Light);
+        assert_eq!(ToggleChip::new("x", 7, r).press(), Some(7));
+        assert_eq!(ToggleChip::new("x", 7, r).disabled(false).press(), Some(7));
+        assert_eq!(ToggleChip::new("x", 7, r).disabled(true).press(), None);
+    }
+}

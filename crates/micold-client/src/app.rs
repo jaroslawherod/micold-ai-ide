@@ -474,21 +474,7 @@ pub struct State {
     pub notifications: crate::features::notifications::State,
 }
 
-/// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.
-///
-/// Whole pixels because [`State`] derives `Eq`, and an `f32` field would take that from every type
-/// that holds one. Nothing is lost — the bar asks only whether anything is under it at all.
-///
-/// Clamped at zero because an overscroll bounce reports *past* the origin, and treating that as
-/// "scrolled" would raise the bar for a gesture that moved content the wrong way. A non-finite
-/// reading is treated the same: it means the viewport has not settled, not that the list moved.
-pub fn scroll_offset_px(reported: f32) -> u32 {
-    if reported.is_finite() && reported > 0.0 {
-        reported.round() as u32
-    } else {
-        0
-    }
-}
+pub use micold_material::scrollable::scroll_offset_px;
 
 impl State {
     /// The directory a session started at `location` would run in, in the active project — `None`

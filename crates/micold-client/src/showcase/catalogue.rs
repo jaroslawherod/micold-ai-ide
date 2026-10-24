@@ -829,11 +829,10 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/connection_banner.rs",
         component: "ConnectionBanner",
-        // Not `variants`: `Info`/`Error` are `app::NoticeLevel`, which the library does not declare.
-        // The completeness check is right to refuse them, and they are posed states all the same.
-        variants: &[],
+        // `Info`/`Error` are `style::NoticeLevel`, which the Material crate declares (feature 1262).
+        variants: &["Info", "Error"],
         density: &[],
-        posed: &["Info", "Error", "with an action"],
+        posed: &["with an action"],
         live: &["hover and press the action"],
         interactive: true,
         section: Section::Components,
@@ -1256,7 +1255,7 @@ ring on one entry, the panel the same size",
         render: sections::floating::menu_trigger,
     },
     Entry {
-        module: "material/mod.rs",
+        module: "material/lib.rs",
         component: "Tooltip",
         // `TooltipPosition` is `cdk::tooltip::Position`, a library enum since 029 BUG-001, so each
         // side is posed as a variant.
@@ -1370,6 +1369,21 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/keyboard_focus.rs",
+        component: "TakesTheKeyboard",
+        reason: "the focus ring every focusable component wraps itself in: it is public only so the \
+                 client's own components (overview card, tree view, code block) can compose it across \
+                 the Material crate's boundary (feature 1262), and every ring it draws is posed by \
+                 their entries.",
+    },
+    Exemption {
+        module: "material/line_clamp.rs",
+        component: "LineClamped",
+        reason: "the line-limited label inside the tooltip and the overview card's title: it is \
+                 public only so the client's card and review row can compose it across the Material \
+                 crate's boundary (feature 1262), and every line it draws is posed by their entries.",
+    },
+    Exemption {
         module: "material/key_value_list.rs",
         component: "KeyValueList",
         reason: "a `TextArea` with the placeholder `key=value` and a row parser: it draws nothing \
@@ -1468,7 +1482,7 @@ pub const EXEMPTIONS: &[Exemption] = &[
         reason: "a behaviour-layer wrapper, for the same reason as `Picker`: it decides which side \
                  of its trigger a hover label floats on — the other side when the asked-for one has \
                  no room (029 BUG-001) — and names no colour, size or spacing. Its panel arrives \
-                 already drawn; what it looks like is `material/mod.rs`'s `Tooltip`, which the \
+                 already drawn; what it looks like is `material/lib.rs`'s `Tooltip`, which the \
                  gallery poses on each of its four sides.",
     },
     Exemption {

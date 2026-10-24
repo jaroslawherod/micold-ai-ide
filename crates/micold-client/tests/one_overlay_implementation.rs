@@ -90,7 +90,7 @@ const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[
 
 /// Every `.rs` file under `src/ui/`, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
-    sources_under(&[ui_dir()])
+    sources_under(&[ui_dir(), source_scan::material_src_dir()])
 }
 
 /// Whether `line` *calls* `widget`, as opposed to mentioning it.

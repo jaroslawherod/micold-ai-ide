@@ -54,34 +54,7 @@ pub struct State {
     pub queue: notify::Queue,
 }
 
-/// How prominently a notification is presented.
-///
-/// The banner's vocabulary, deliberately narrower than [`notify::Level`]: it chooses a fill, not a
-/// duration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoticeLevel {
-    /// Something happened that the user should know about, but nothing failed.
-    Info,
-    /// An action the user asked for could not be completed.
-    Error,
-}
-
-impl NoticeLevel {
-    /// Every level, so a gate that reads the set cannot silently miss one added later.
-    pub const ALL: [NoticeLevel; 2] = [NoticeLevel::Info, NoticeLevel::Error];
-
-    /// The queue level this severity corresponds to.
-    ///
-    /// The one place the banner's vocabulary meets the core's. Written as a method on the source
-    /// type so a new variant cannot be added without the compiler pointing here — the previous
-    /// inline `match` in the reducer would have been just as exhaustive, but far less findable.
-    pub fn to_queue_level(self) -> notify::Level {
-        match self {
-            NoticeLevel::Info => notify::Level::Info,
-            NoticeLevel::Error => notify::Level::Error,
-        }
-    }
-}
+pub use micold_material::style::NoticeLevel;
 
 /// A failure worth telling the user about, as an outcome (T067a, group E).
 ///

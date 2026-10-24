@@ -20,7 +20,9 @@ use std::path::{Path, PathBuf};
 
 fn library_dirs() -> Vec<PathBuf> {
     let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
-    vec![ui.join("material"), ui.join("cdk")]
+    let material = source_scan::material_src_dir();
+    // Feature 1262: the generic half of both layers lives in the Material crate.
+    vec![ui.join("material"), material.join("cdk"), material]
 }
 
 fn library_sources() -> BTreeMap<String, String> {
@@ -29,11 +31,12 @@ fn library_sources() -> BTreeMap<String, String> {
         for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
             let path = entry.expect("dir entry").path();
             if path.extension().is_some_and(|e| e == "rs") {
-                let key = format!(
-                    "{}/{}",
-                    dir.file_name().unwrap().to_string_lossy(),
-                    path.file_name().unwrap().to_string_lossy()
-                );
+                let layer = if dir == source_scan::material_src_dir() {
+                    "material".into()
+                } else {
+                    dir.file_name().unwrap().to_string_lossy()
+                };
+                let key = format!("{}/{}", layer, path.file_name().unwrap().to_string_lossy());
                 out.insert(key, fs::read_to_string(&path).expect("read source"));
             }
         }

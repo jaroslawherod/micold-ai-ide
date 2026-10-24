@@ -497,9 +497,9 @@ fn nothing_points_at_the_removed_session_service_section() {
             "Session service diagnostics",
         ),
         ("src/ui/toolbar.rs", "Session service diagnostics"),
-        ("src/ui/material/menu.rs", "Session service"),
+        ("micold-material/src/menu.rs", "Session service"),
         // Comments recording how wide the old label was when it wrapped.
-        ("src/ui/material/section_list.rs", "Session service"),
+        ("micold-material/src/section_list.rs", "Session service"),
         // Negative assertions and the history of what they guard against.
         ("tests/icons.rs", "Session service"),
         ("tests/sandbox_limits.rs", "Session service"),
@@ -559,7 +559,7 @@ fn nothing_points_at_the_removed_session_service_section() {
 /// would ever inspect (FR-026a).
 #[test]
 fn the_section_rail_is_a_shared_component() {
-    let component = client_dir().join("src/ui/material/section_list.rs");
+    let component = client_dir().join("../micold-material/src/section_list.rs");
     assert!(
         component.exists(),
         "expected the section rail at {} — a rail built privately inside the settings surface is \

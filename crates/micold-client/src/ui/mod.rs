@@ -3,7 +3,7 @@
 pub(crate) mod about;
 pub(crate) mod attach_dialog;
 pub(crate) mod bind_daemon;
-pub mod cdk;
+pub use micold_material::cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
 pub mod compare;
@@ -43,7 +43,6 @@ pub mod quick_switcher;
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
-pub(crate) use focus::dialog_scope as focus_dialog_scope;
 pub use focus::{
     dialog_focus_move, dialog_focus_move_task, focus_move_task, focused_bounds,
     focused_bounds_task, into_view as focus_into_view, scroll_focused_into_view,

@@ -121,7 +121,7 @@ fn the_tooltips_wait_modes_and_options_are_four_chainable_steps() {
     let sources = inventory::library_sources();
     let (_, src) = sources
         .iter()
-        .find(|(module, _)| module.ends_with("material/mod.rs"))
+        .find(|(module, _)| module.ends_with("material/lib.rs"))
         .expect("the material module");
     let code = inventory::code_only(src);
     let start = code

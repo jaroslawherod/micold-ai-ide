@@ -39,10 +39,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The two library layers.
+/// The two library layers: the client's `ui/material/`, and the Material crate's components and
+/// its `cdk/` (feature 1262).
 pub fn library_dirs() -> Vec<PathBuf> {
     let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
-    vec![ui.join("material"), ui.join("cdk")]
+    let material = source_scan::material_src_dir();
+    vec![ui.join("material"), material.join("cdk"), material]
+}
+
+/// The layer a library directory is keyed by: `material` for the Material crate's `src/` as for the
+/// client's `ui/material/`, which it re-exports.
+fn layer_name(dir: &Path) -> String {
+    if dir == source_scan::material_src_dir() {
+        "material".to_string()
+    } else {
+        dir.file_name().unwrap().to_string_lossy().into_owned()
+    }
 }
 
 /// A directory under `src/`, for a caller holding a layer other than the library to the same rule.
@@ -68,10 +80,13 @@ pub fn sources_in(dirs: &[PathBuf]) -> BTreeMap<String, String> {
     for dir in dirs {
         for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
             let path = entry.expect("dir entry").path();
-            if path.extension().is_some_and(|e| e == "rs") {
+            // The icon vocabulary sits beside the Material crate's components but is data, not a
+            // component layer — it was `src/icons.rs` before feature 1262.
+            let icons = dir == &source_scan::material_src_dir() && path.ends_with("icons.rs");
+            if path.extension().is_some_and(|e| e == "rs") && !icons {
                 let key = format!(
                     "{}/{}",
-                    dir.file_name().unwrap().to_string_lossy(),
+                    layer_name(dir),
                     path.file_name().unwrap().to_string_lossy()
                 );
                 out.insert(key, fs::read_to_string(&path).expect("read source"));
@@ -93,17 +108,23 @@ pub fn sources_under(root: &Path) -> BTreeMap<String, String> {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut out = BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
+    // The whole client includes the Material crate it re-exports (feature 1262).
+    if root == src {
+        stack.push(source_scan::material_src_dir());
+    }
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
             let path = entry.expect("dir entry").path();
             if path.is_dir() {
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "rs") {
-                let key = path
-                    .strip_prefix(&src)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
+                let key = if path.starts_with(&src)
+                    || path.starts_with(source_scan::material_src_dir())
+                {
+                    source_scan::logical_key(&path)
+                } else {
+                    path.to_string_lossy().replace('\\', "/")
+                };
                 out.insert(key, fs::read_to_string(&path).expect("read source"));
             }
         }
@@ -325,6 +346,10 @@ pub struct EnumDecl {
 pub fn enums() -> Vec<EnumDecl> {
     let mut out = Vec::new();
     for (module, src) in library_sources() {
+        // The component tests' fixture, not a component: its `Message` has nothing to pose.
+        if module.ends_with("/test_support.rs") {
+            continue;
+        }
         let code = code_only(&src);
         let mut search = 0usize;
         while let Some(found) = code[search..].find("pub enum ") {

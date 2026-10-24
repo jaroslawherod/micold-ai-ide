@@ -20,7 +20,7 @@ use source_scan::{read_rs_under, strip_comments};
 use std::path::{Path, PathBuf};
 
 fn cdk_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/cdk")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-material/src/cdk")
 }
 
 /// Every `.rs` file under `ui/cdk/`, recursively, as `(display path, source)`.
