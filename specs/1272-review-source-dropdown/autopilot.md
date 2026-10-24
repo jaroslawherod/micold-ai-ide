@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
 - **Phase**: milestone M1
-- **Next step**: M1 gate and reviews (worktree /home/user/wt-1272-m1, branch m1272-m1, based on design PR head 41ea39bb; orchestrator moves the commits onto the run branch after #1355 merges)
+- **Next step**: M1 full gate on the final tree, then the orchestrator opens the PR (worktree /home/user/wt-1272-m1, branch m1272-m1, based on design PR head 41ea39bb; orchestrator moves the commits onto the run branch after #1355 merges)
 
 ## Pull requests
 
@@ -46,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 6f35131b36e2a60c6aab6421cd8d93d2789984e8:1ce7434bb25151d52292a1c7868132c7a0ef2313 | CLEAN: 3 MINOR (fixed, prose only: F1 `source_menu_stops` without a clock, F2 shared `show_working_tree`, F3 *The Default entry* in the M4 docs); dispatched by the orchestrator |
 | Tasks | 1 | bd07a428b03bf252be362cfcff0c9d6697890417:454bb4718cbe9cf836b80ff8eae4a20e85a5b483 | CHANGES: 2 MAJOR, 2 MINOR (F1 partly, F2–F4 fixed); speckit-analyze 0 CRITICAL/HIGH, 1 MEDIUM + 9 LOW (C1, C2, C3, I1, I2, U1, D1, T1 fixed; I3, U2 left) |
 | Tasks | 2 | 0f7ff1a9986747a18ac55db014ecf7046638b679:454bb4718cbe9cf836b80ff8eae4a20e85a5b483 | CLEAN: 2 MINOR (ledger wording; fixed, prose only) |
+| M1 A (code-review high, headless claude -p) | 1 | 11db4a7af4275acae7dd7700532cd0d8a5a89e28:48cb9959b134050aa6cb38dd873c65410e7fb795 | CLEAN: 3 MINOR, all fixed (F1 `List` with no pull request read as `Empty`, tested; F2 `files` prefix built only where used; F3 duplicate assert removed) |
+| M1 B (conformance, sonnet, headless) | 1 | 11db4a7af4275acae7dd7700532cd0d8a5a89e28:48cb9959b134050aa6cb38dd873c65410e7fb795 | CLEAN: 1 MINOR (Default-entry label row missing from data-model §6; fixed, prose only). Ran beside A, before the gate; reviewers could not run cargo, Verify output supplied by the implementer |
 
 ## Declined review findings
 
