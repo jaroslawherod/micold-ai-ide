@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1299
 - **Worktree branch**: claude/project-thread-vugbvf
 - **Started**: 2026-10-24
-- **Phase**: implement M1 (reviews done, PR open)
-- **Next step**: orchestrator waits on M1 PR CI and merges; then M2 (T012–T023). Visual pass deferred to the close unit
+- **Phase**: implement M2 (implemented, scoped gate green, awaiting reviews A and B)
+- **Next step**: reviews A and B of M2 (orchestrator-run); then full gate and the M2 PR. Visual pass deferred to the close unit
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1319 | design (spec, plan, tasks) | merged | 1f66380fd3092861e818531f9c3a308d08abd5c5 |
-| #1324 | M1 (T001–T011) | open | — |
+| #1324 | M1 (T001–T011) | merged | 92fe861ca11843a9f43ad66386360a75c31f0cf4 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | PR open, rebased onto main 763a59dc, gate green |
-| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | pending |
+| M1 | T001–T011 | full | Tab and arrows fade an Overview card's focus in and out over 150 ms; Reduce motion makes it instant | #1324 | merged |
+| M2 | T012–T023 | full | expanded card's shadow eases in and out, never cut while settling; showcase live pose; Reduce motion instant (12 tasks, kept whole: lift + shadow quad + draw order are one observable change) | — | implemented, T012–T023 ticked, scoped gate green |
 
 ## Decisions
 
@@ -36,6 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 4 | plan | FR-006: is the expanded card's growth animated? | No: height changes in one step; focus indication and shadow ease. Eased layout height reflows the grid every frame and the inner scrollable overflows (scrollbar shows, K4 Page Up/Down retarget mid-growth); a clipped reveal cuts corners and the ring's bottom edge; no collapse counterpart (card rebuilt collapsed). Post research R1's comment text on #1299 | agent | research.md R1; card_grid.rs layout, overview_card.rs expanded_body |
 | 5 | implement M1 | Two existing ring tests in overview_card.rs (pixel comparisons at full strength) gain a `frames(0, DONE, …)` line: may they change? | Yes: with the fade on, the ring reaches full only after 150 ms of frames; the line runs the fade to its end so the unchanged assertions still compare today's full ring (FR-010). The assertions themselves are untouched | agent | review B M1 F1; overview_card.rs ring tests |
 | 6 | implement M1 (rebase) | BUG-1298 (#1298, b561c81d..763a59dc) merged to main and conflicted with M1 in overview_card.rs: how to resolve? | Rebased onto origin/main 763a59dc keeping both sides: #1298's frame/header/body consts beside M1's `CARD_MOTION`, #1298's T050 design tests beside M1's fade tests. Mechanical only, no M1 logic changed; full gate green on the rebased tree | agent | overview_card.rs; scratchpad gate log GATE_EXIT=0 |
+| 7 | implement M2 | `Lifts::settling()` (data-model) cannot tell the expanded entry from a settling one without the expanded location: what signature? | `settling(expanded: Option<&SessionLocation>)`; `draw` passes the grid's expanded location, and skips settling when `instant` or zooming | agent | card_lift.rs, card_grid.rs `draw` |
+| 8 | implement M2 | A menu shadow (offset 2, blur 7) never reaches a card 16 px away: how does the draw-order test show it is not cut? | The 3×3 test grid uses spacing 0 and reads two frames into the collapse (strength ~0.9); confirmed it fails with the settling pass disabled | agent | card_grid.rs `a_settling_card_is_drawn_over_its_neighbours_and_nothing_moves` |
 
 ## Review rounds
 
@@ -48,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CHANGES (1 MAJOR, 3 MINOR, all fixed: F1 press snaps any fade > 0, not only a shown one, + test pressing mid fade-out; F2 grid's instant ORs with a card's own; F3 `Focus::hold` puts the fade at the handed-over shown state, + test; F4 FRAME_MS/DONE derived from cdk FRAME and CARD_MOTION) |
 | B M1 (conformance) | 1 | 5ccdd3607cb7cb51889bd26cda53d6820e01f56e:b0b8c38f3d52bb1dee3ecaf67845ca0937dab3e8 | CLEAN (3 MINOR, all fixed: F1 edited ring tests recorded as Decision 5; F2 dangling ledger line removed; F3 settings.md rewrapped, prose only) |
 | A M1 (code-review high) | 2 | 6555ce6bd5178312ab9515a006c8667c52aeeb67:97e8d0b62832fa53a3487bd777827b06d7ce1f8d | CLEAN (scoped, sonnet, orchestrator-run: all four round-1 findings fixed, no new bugs) |
+| A+B M2 | 1 | 7c125b3e7a5ca6506cf90291d6d64ee42db9855d:92fe861ca11843a9f43ad66386360a75c31f0cf4 | pending (orchestrator-run) |
 
 ## Declined review findings
 
@@ -64,4 +67,5 @@ None.
 
 ## Follow-ups not done
 
+- M2 visual pass (quickstart §B.1–§B.5, §B.8–§B.9: showcase *expand and collapse* pose, client hover/focus/Escape lift, Reduce motion): deferred to the close unit, no visual-pass skill or Agent tool in this unit.
 - M1 visual pass (quickstart §B.4 arrow half, §B.6, §B.7, §B.8 focus half; client Tab onto/away fade): deferred to the close unit, no visual-pass skill reachable in this session.

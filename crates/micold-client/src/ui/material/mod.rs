@@ -28,6 +28,7 @@ mod button;
 #[cfg(test)]
 mod button_anatomy;
 mod card_grid;
+mod card_lift;
 mod checkbox;
 mod choice_list;
 mod code_block;

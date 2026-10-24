@@ -107,7 +107,7 @@ A worktree named after a Jira key, such as `feat-mic-87_add-login`, shows the li
 
 ## Reading a card in full
 
-Rest the pointer on a card for a moment, or move the keyboard to it, and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. No other card moves. The expanded card shows, wrapped and with no ellipsis:
+Rest the pointer on a card for a moment, or move the keyboard to it, and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. The shadow eases in over 150 ms as the card expands and out as it collapses, while the card's height changes at once; with [Reduce motion](settings.md#reduce-motion) on the shadow appears and goes at once. No other card moves. The expanded card shows, wrapped and with no ellipsis:
 
 - the full **title**, and the location's name when it differs from the title;
 - the full **branch** name, when the title is not the branch;

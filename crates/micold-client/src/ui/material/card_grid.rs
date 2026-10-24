@@ -8,9 +8,10 @@
 use std::time::{Duration, Instant};
 
 use crate::ui::cdk::motion::{self, Progress};
+use crate::ui::material::card_lift::Lifts;
 use crate::ui::material::navigation_drawer::SLIDE;
 use crate::ui::material::overview_card::RestMessages;
-use crate::ui::material::{OverviewCard, Scrollable};
+use crate::ui::material::{style, OverviewCard, Scrollable};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Id, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
@@ -19,7 +20,7 @@ use iced::{window, Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::overview_expansion::EXPAND_REST;
 use micold_core::session::SessionLocation;
 use micold_core::tokens::motion::duration;
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{elevation, spacing, Roles};
 use micold_core::tooltip::ShowTimer;
 
 /// The narrowest a card is drawn.
@@ -271,6 +272,8 @@ struct ZoomState {
     part_rested: bool,
     /// The rest scope `resting` was seen in: another drops it (review A F2, M3 round 2).
     rest_scope: u64,
+    /// How far each lifted or settling card's shadow has eased in (feature 1299, D3).
+    lifts: Lifts,
 }
 
 impl ZoomState {
@@ -291,6 +294,7 @@ impl ZoomState {
             on_link: false,
             part_rested: false,
             rest_scope: 0,
+            lifts: Lifts::default(),
         }
     }
 
@@ -398,8 +402,8 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
         self
     }
 
-    /// *Reduce motion* (feature 1299, FR-007): every card's focus appears and goes at once.
-    /// Defaults to `false`.
+    /// *Reduce motion* (feature 1299, FR-007): every card's focus, and the expanded card's
+    /// shadow, appear and go at once. Defaults to `false`.
     pub fn instant(mut self, instant: bool) -> Self {
         self.instant = instant;
         self
@@ -416,6 +420,8 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             _ => (None, None),
         };
         Grid {
+            roles: self.roles,
+            instant,
             expanded,
             twin,
             rests: self.cards.iter().map(OverviewCard::rest_messages).collect(),
@@ -425,8 +431,9 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
                 .cards
                 .iter()
                 .map(|card| {
-                    // The grid's Reduce motion adds to a card's own; it never takes it away.
-                    let card = card.clone();
+                    // The grid's Reduce motion adds to a card's own; it never takes it away. The
+                    // grid draws the expanded card's shadow, eased (feature 1299, D3).
+                    let card = card.clone().shadow_by_owner();
                     Element::from(if instant { card.instant(true) } else { card })
                 })
                 .collect(),
@@ -459,6 +466,10 @@ struct Grid<'a, M> {
     on_window_blur: Option<M>,
     /// The cards' set, hashed: [`CardGrid::rest_scope`].
     rest_scope: u64,
+    /// The roles the expanded card's shadow is drawn in (feature 1299, D3).
+    roles: Roles,
+    /// *Reduce motion*: the shadow appears and goes at once ([`CardGrid::instant`]).
+    instant: bool,
 }
 
 /// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
@@ -553,6 +564,35 @@ impl<M: Clone> Grid<'_, M> {
 }
 
 impl<M> Grid<'_, M> {
+    /// The expanded card's location.
+    fn expanded_at(&self) -> Option<&SessionLocation> {
+        self.expanded
+            .and_then(|index| self.rests.get(index))
+            .map(|r| &r.at)
+    }
+
+    /// Card `index`'s shadow at `strength`, under a card drawn at `bounds` (feature 1299, D3):
+    /// a transparent quad of the card's radius, so the opaque card face drawn next covers its
+    /// inside.
+    fn draw_lift(&self, renderer: &mut iced::Renderer, bounds: Rectangle, strength: f32) {
+        use iced::advanced::Renderer as _;
+        if strength <= 0.0 {
+            return;
+        }
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds,
+                border: iced::Border {
+                    radius: super::overview_card::RADIUS.into(),
+                    ..iced::Border::default()
+                },
+                shadow: style::eased_shadow(self.roles, elevation::MENU, strength),
+                ..renderer::Quad::default()
+            },
+            iced::Color::TRANSPARENT,
+        );
+    }
+
     /// Whether `cursor` is on one of card `i`'s links (its issue link, a pull request number),
     /// laid out in `layout`: each link's bounds found by its id over the card's subtree, on screen
     /// and clipped to the expanded body's view (`ui::focus::ScreenBounds`, research R7; feature
@@ -625,7 +665,10 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(ZoomState::new(self.zoom.full_screen))
+        let mut state = ZoomState::new(self.zoom.full_screen);
+        // A card expanded when the grid appears is lifted already (feature 1299, R8).
+        state.lifts = Lifts::seeded(self.expanded_at());
+        tree::State::new(state)
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -906,6 +949,17 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         }
         let state = tree.state.downcast_mut::<ZoomState>();
         self.observe_rest(state, event, pointer, shell);
+        // The expanded card's shadow eases in, a collapsed one's out (feature 1299, D3); a zoom
+        // draws cards in pieces, so while one runs no card is left settling over them (C3).
+        let instant = self.instant || state.ends.is_some();
+        let rests = &self.rests;
+        state.lifts.step(
+            event,
+            self.expanded_at(),
+            |at| rests.iter().any(|r| &r.at == at),
+            instant,
+            shell,
+        );
     }
 
     fn mouse_interaction(
@@ -974,8 +1028,20 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         if self.expanded.is_some() {
             state.view.set(Some(*viewport));
         }
+        let instant = self.instant || state.ends.is_some();
+        // The cards whose shadow is fading out (feature 1299, D3): drawn whole after the others,
+        // so the cards after them in the grid do not cut their shadow.
+        let settling: Vec<usize> = if instant {
+            Vec::new()
+        } else {
+            state
+                .lifts
+                .settling(self.expanded_at())
+                .filter_map(|at| self.rests.iter().position(|r| &r.at == at))
+                .collect()
+        };
         for piece in &state.pieces {
-            if Some(piece.card) == self.expanded {
+            if Some(piece.card) == self.expanded || settling.contains(&piece.card) {
                 continue;
             }
             let card_layout = layout.child(piece.node);
@@ -1019,9 +1085,33 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
                 renderer.with_layer(view, |renderer| draw_card(renderer, &view));
             }
         }
-        // The expanded card last, in a layer of its own, over its neighbours (R4).
-        if let Some((index, drawn)) = self.expanded_layout(state, origin, *viewport) {
+        // Each settling card whole at its slot, after its shadow, over its neighbours (1299, D3).
+        for &index in &settling {
+            let Some(card_layout) = layout.children().nth(index) else {
+                continue;
+            };
+            let strength = state.lifts.strength(&self.rests[index].at, false, instant);
             renderer.with_layer(*viewport, |renderer| {
+                self.draw_lift(renderer, card_layout.bounds(), strength);
+                self.cards[index].as_widget().draw(
+                    &tree.children[index],
+                    renderer,
+                    theme,
+                    style,
+                    card_layout,
+                    cursor,
+                    viewport,
+                );
+            });
+        }
+        // The expanded card last, in a layer of its own, over its neighbours (R4), after its
+        // shadow (feature 1299, D3).
+        if let Some((index, drawn)) = self.expanded_layout(state, origin, *viewport) {
+            let strength = self
+                .expanded_at()
+                .map_or(1.0, |at| state.lifts.strength(at, true, instant));
+            renderer.with_layer(*viewport, |renderer| {
+                self.draw_lift(renderer, drawn.bounds(), strength);
                 self.cards[index].as_widget().draw(
                     &tree.children[index],
                     renderer,
@@ -3274,5 +3364,301 @@ mod tests {
         let next = m.frames(MIDWAY + 16, MIDWAY + 16, strengths);
         assert_eq!(next[0].1[0], 1.0);
         assert_eq!(next[0].2, RedrawRequest::Wait);
+    }
+
+    // --- Feature 1299: the expanded card's shadow eases (D3, D4) --------------------------------
+
+    use super::super::card_lift::Lifts;
+    use super::super::test_support::FRAME_MS;
+    use iced::widget::{column, container, Space};
+
+    /// The grid of `models`, card `index` (if any) expanded with its own model, `gap` apart.
+    fn lift_grid(
+        models: &[CardModel],
+        index: Option<usize>,
+        gap: f32,
+    ) -> CardGrid<'static, String> {
+        let mut cards = wired(models);
+        let grid = |cards: Vec<OverviewCard<'static, String>>| {
+            CardGrid::new(cards, roles()).min_width(280.0).spacing(gap)
+        };
+        match index {
+            Some(i) => {
+                cards[i] = cards[i].clone().expanded(true);
+                grid(cards).expanded(i, OverviewCard::new(&models[i], roles()))
+            }
+            None => grid(cards),
+        }
+    }
+
+    fn lifts<'m>(m: &'m Mounted<'_>) -> &'m Lifts {
+        &m.tree.state.downcast_ref::<ZoomState>().lifts
+    }
+
+    fn strength_of(m: &Mounted<'_>, models: &[CardModel], i: usize, expanded: bool) -> f32 {
+        lifts(m).strength(&models[i].location, expanded, false)
+    }
+
+    /// A frame tick `ms` after the rig's origin, the pointer away: the frame asked for next.
+    fn tick_at(m: &mut Mounted<'_>, ms: u64) -> RedrawRequest {
+        m.tick(
+            m.origin + std::time::Duration::from_millis(ms),
+            mouse::Cursor::Unavailable,
+        )
+        .1
+    }
+
+    /// The pixels of `buffer` (`width` wide) inside `area`, RGB.
+    fn pixels_in(buffer: &(Vec<u8>, u32), area: Rectangle) -> Vec<[u8; 3]> {
+        let (pixels, width) = buffer;
+        let mut out = Vec::new();
+        for y in area.y.ceil() as u32..(area.y + area.height).floor() as u32 {
+            for x in area.x.ceil() as u32..(area.x + area.width).floor() as u32 {
+                let i = ((y * width + x) * 4) as usize;
+                out.push([pixels[i], pixels[i + 1], pixels[i + 2]]);
+            }
+        }
+        out
+    }
+
+    fn backdrop() -> iced::Color {
+        crate::ui::material::style::color(roles().surface)
+    }
+
+    /// FR-010, R8: a grid created with a card expanded draws its shadow at full on its first
+    /// frame, and the pixels below and beside it are those of the card casting the menu shadow
+    /// itself (feature 1121).
+    #[test]
+    fn an_expanded_card_at_rest_paints_the_shadow_it_cast_itself() {
+        let models: Vec<CardModel> = (0..1).map(titled).collect();
+        let below = || Space::new().height(200.0);
+        let mut grid = Mounted::new_in(
+            column![lift_grid(&models, Some(0), GAP).unscrolled(), below()].width(Length::Fill),
+            Size::new(900.0, 4000.0),
+        );
+        let slot = grid.node.children()[0].children()[0].bounds();
+        let card = OverviewCard::<String>::new(&models[0], roles())
+            .on_press("open 0".to_string())
+            .on_secondary_press(|_| "menu 0".to_string())
+            .expanded(true);
+        let mut own = Mounted::new_in(
+            column![container(card).width(Length::Fixed(slot.width)), below()].width(Length::Fill),
+            Size::new(900.0, 4000.0),
+        );
+        // The grid's row is the collapsed twin's; the expanded card is drawn over what follows.
+        assert!(own.node.size().height >= grid.node.size().height);
+        let card = own.node.children()[0].bounds();
+        let (drawn, by_card) = (grid.drawn(backdrop()), own.drawn(backdrop()));
+        let shadowed = Rectangle {
+            y: card.y + card.height,
+            height: 10.0,
+            ..card
+        };
+        let plain = [backdrop().r, backdrop().g, backdrop().b].map(|c| (c * 255.0).round() as u8);
+        assert!(
+            pixels_in(&drawn, shadowed).iter().any(|p| *p != plain),
+            "no shadow below the card on the first frame"
+        );
+        assert!(
+            drawn.0 == by_card.0[..drawn.0.len()],
+            "the grid's shadow is not the card's own"
+        );
+    }
+
+    /// The 3×3 grid of the draw-order tests: cards with no gap, so a shadow reaches the next card.
+    const TIGHT: f32 = 0.0;
+
+    fn nine() -> Vec<CardModel> {
+        (0..9).map(titled).collect()
+    }
+
+    /// FR-003 draw order, SC-005, US2-5: collapsing the middle card of a 3×3 grid, part-way its
+    /// shadow shows over the card below it and the card to its right, it is drawn after every
+    /// other card, and on every tick of the expand and the collapse every slot is where it is with
+    /// nothing expanded.
+    #[test]
+    fn a_settling_card_is_drawn_over_its_neighbours_and_nothing_moves() {
+        let models = nine();
+        let mut m = mounted(lift_grid(&models, None, TIGHT), 900.0, 4000.0);
+        let rest_slots = slots(&m.node, 9);
+        let at_rest = m.drawn(backdrop());
+        m.rebuild(lift_grid(&models, Some(4), TIGHT).unscrolled());
+        let mut ms = 0;
+        while ms <= DONE {
+            tick_at(&mut m, ms);
+            // The expanded card's own node grows at once (feature 1121, D7); no other moves.
+            let (now, mut want) = (slots(&m.node, 9), rest_slots.clone());
+            want[4] = now[4];
+            assert_eq!(now, want, "expanding, at {ms} ms");
+            ms += FRAME_MS;
+        }
+        assert_eq!(strength_of(&m, &models, 4, true), 1.0);
+        m.rebuild(lift_grid(&models, None, TIGHT).unscrolled());
+        let start = ms + 100;
+        let mut ms = start;
+        while ms <= start + 2 * FRAME_MS {
+            tick_at(&mut m, ms);
+            assert_eq!(slots(&m.node, 9), rest_slots, "collapsing, at {ms} ms");
+            ms += FRAME_MS;
+        }
+        let mid = strength_of(&m, &models, 4, false);
+        assert!(0.0 < mid && mid < 1.0, "{mid}");
+        let settling = m.drawn(backdrop());
+        for neighbour in [5, 7] {
+            assert_ne!(
+                pixels_in(&settling, rest_slots[neighbour]),
+                pixels_in(&at_rest, rest_slots[neighbour]),
+                "card 4's shadow is cut by card {neighbour}"
+            );
+        }
+        let painted = m.painted_text();
+        let title = painted
+            .iter()
+            .position(|p| p.content == models[4].title)
+            .expect("card 4's title");
+        let last_other = painted
+            .iter()
+            .rposition(|p| (0..9).any(|i| i != 4 && p.content == models[i].title))
+            .expect("the other titles");
+        assert!(title > last_other, "{title} drawn before {last_other}");
+        while ms <= start + 2 * DONE {
+            tick_at(&mut m, ms);
+            assert_eq!(slots(&m.node, 9), rest_slots, "collapsing, at {ms} ms");
+            ms += FRAME_MS;
+        }
+        assert_eq!(strength_of(&m, &models, 4, false), 0.0);
+        assert!(
+            m.drawn(backdrop()).0 == at_rest.0,
+            "the settled grid is not the rest grid"
+        );
+    }
+
+    /// C3, R8: while a zoom runs a collapsing card's shadow ends at once, asking for no frame.
+    #[test]
+    fn a_zoom_ends_the_lifts_at_once() {
+        let models = nine();
+        let mut m = mounted(lift_grid(&models, Some(4), GAP), 900.0, 4000.0);
+        assert_eq!(strength_of(&m, &models, 4, true), 1.0, "seeded lifted");
+        m.rebuild(lift_grid(&models, None, GAP).unscrolled());
+        m.tree.state.downcast_mut::<ZoomState>().ends = Some((900.0, 1200.0));
+        assert_eq!(tick_at(&mut m, 0), RedrawRequest::Wait);
+        assert_eq!(strength_of(&m, &models, 4, false), 0.0);
+        assert_eq!(lifts(&m).settling(None).count(), 0);
+    }
+
+    /// US2-4, SC-001: Tab onto a card of a default grid, which the application answers by
+    /// expanding it: at ~75 ms its ring and its lift are both part-way, and both full by 150 ms
+    /// and a frame.
+    #[test]
+    fn focus_and_lift_ease_in_together() {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        let mut m = mounted(lift_grid(&models, None, GAP), 900.0, 4000.0);
+        m.focus_next();
+        m.rebuild(lift_grid(&models, Some(0), GAP).unscrolled());
+        let mut ms = 0;
+        while ms <= DONE {
+            tick_at(&mut m, ms);
+            let (ring, lift) = (strengths(&m.tree)[0], strength_of(&m, &models, 0, true));
+            if ms == MIDWAY {
+                assert!(0.0 < ring && ring < 1.0, "ring {ring}");
+                assert!(0.0 < lift && lift < 1.0, "lift {lift}");
+            }
+            if ms == DONE {
+                assert_eq!((ring, lift), (1.0, 1.0));
+            }
+            ms += FRAME_MS;
+        }
+    }
+
+    /// **The Reduce motion test** (FR-012, SC-002, US3-1, US3-2): in an `instant` grid, on the
+    /// first tick after gaining and after losing the keyboard focus the card's ring is full / none,
+    /// and after expanding and collapsing (by hover, by focus, by Escape: each is the application
+    /// rebuilding the grid with or without the card expanded) its shadow is full / none, each
+    /// tick asking for no next frame.
+    #[test]
+    fn reduce_motion_makes_card_focus_and_expansion_instant() {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        let build = |index| lift_grid(&models, index, GAP).instant(true).unscrolled();
+        let mut m = mounted(lift_grid(&models, None, GAP).instant(true), 900.0, 4000.0);
+        let mut ms = 0;
+        let mut first_tick = |m: &mut Mounted<'_>| {
+            let asked = tick_at(m, ms);
+            ms += FRAME_MS;
+            asked
+        };
+        // Focus onto card 0, and the application expands it (focus).
+        m.focus_next();
+        m.rebuild(build(Some(0)));
+        assert_eq!(first_tick(&mut m), RedrawRequest::Wait);
+        assert_eq!(
+            strengths(&m.tree)[0],
+            1.0,
+            "the ring after gaining the focus"
+        );
+        assert_eq!(
+            strength_of(&m, &models, 0, true),
+            1.0,
+            "the shadow after expanding"
+        );
+        let drawn_lifted = m.drawn(backdrop());
+        // Escape: collapsed, the focus kept.
+        m.rebuild(build(None));
+        assert_eq!(first_tick(&mut m), RedrawRequest::Wait);
+        assert_eq!(
+            strength_of(&m, &models, 0, false),
+            0.0,
+            "the shadow after Escape"
+        );
+        assert_eq!(lifts(&m).settling(None).count(), 0);
+        // Hover expands card 1; leaving collapses it.
+        m.rebuild(build(Some(1)));
+        assert_eq!(first_tick(&mut m), RedrawRequest::Wait);
+        assert_eq!(
+            strength_of(&m, &models, 1, true),
+            1.0,
+            "the shadow after a hover"
+        );
+        m.rebuild(build(None));
+        assert_eq!(first_tick(&mut m), RedrawRequest::Wait);
+        assert_eq!(
+            strength_of(&m, &models, 1, false),
+            0.0,
+            "the shadow after leaving"
+        );
+        // Focus away from card 0 (to card 1): its ring is none at once.
+        m.focus_next();
+        assert_eq!(first_tick(&mut m), RedrawRequest::Wait);
+        assert_eq!(
+            strengths(&m.tree)[..2],
+            [0.0, 1.0],
+            "the ring after losing the focus"
+        );
+        // The first drawn frame of an instant expansion is the full shadow: what a seeded,
+        // lifted grid draws.
+        let mut seeded = mounted(lift_grid(&models, Some(0), GAP), 900.0, 4000.0);
+        seeded.focus_next();
+        seeded.frames(0, DONE, strengths);
+        assert!(
+            drawn_lifted.0 == seeded.drawn(backdrop()).0,
+            "an instant lift is not full"
+        );
+    }
+
+    /// FR-008, US3-3: a grid mid-lift rebuilt `instant` (Reduce motion saved) draws the end
+    /// shadow on the next tick, and asks for no frame.
+    #[test]
+    fn reduce_motion_saved_mid_lift_ends_it_on_the_next_tick() {
+        let models: Vec<CardModel> = (0..3).map(titled).collect();
+        let mut m = mounted(lift_grid(&models, None, GAP), 900.0, 4000.0);
+        m.rebuild(lift_grid(&models, Some(0), GAP).unscrolled());
+        let mut ms = 0;
+        while ms <= MIDWAY {
+            tick_at(&mut m, ms);
+            ms += FRAME_MS;
+        }
+        assert!(strength_of(&m, &models, 0, true) < 1.0);
+        m.rebuild(lift_grid(&models, Some(0), GAP).instant(true).unscrolled());
+        assert_eq!(tick_at(&mut m, ms), RedrawRequest::Wait);
+        assert_eq!(strength_of(&m, &models, 0, true), 1.0);
     }
 }

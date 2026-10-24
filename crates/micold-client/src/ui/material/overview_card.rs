@@ -204,11 +204,13 @@ pub struct OverviewCard<'a, M> {
     on_pr_link_keyboard_focus: Option<Rc<dyn Fn(u64, bool) -> M + 'a>>,
     on_pr_link_menu: Option<ByNumber<'a, M>>,
     instant: bool,
+    own_shadow: bool,
     _marker: PhantomData<&'a M>,
 }
 
-/// The card's corner radius, shared by its fill and its focus ring.
-const RADIUS: f32 = 12.0;
+/// The card's corner radius, shared by its fill and its focus ring, and by the shadow a grid
+/// draws for it (feature 1299, D3).
+pub(crate) const RADIUS: f32 = 12.0;
 
 /// The opacity of the header's type word (BUG-1298 FR-022).
 const TYPE_WORD_ALPHA: f64 = 0.85;
@@ -265,6 +267,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             on_pr_link_keyboard_focus: None,
             on_pr_link_menu: None,
             instant: false,
+            own_shadow: true,
             _marker: PhantomData,
         }
     }
@@ -508,6 +511,13 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self.instant = instant;
         self
     }
+
+    /// The expanded card casts no shadow of its own: its owner draws it, eased (feature 1299,
+    /// D3, contract C2). A card on its own keeps casting the menu elevation's shadow.
+    pub(crate) fn shadow_by_owner(mut self) -> Self {
+        self.own_shadow = false;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
@@ -561,7 +571,7 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             collapsed_body(&card, p)
         };
         let targeted = card.targeted;
-        let shadow = if card.expanded {
+        let shadow = if card.expanded && card.own_shadow {
             style::elevation_shadow(roles, elevation::MENU)
         } else {
             iced::Shadow::default()
@@ -1843,6 +1853,45 @@ mod tests {
         let plain = [backdrop.r, backdrop.g, backdrop.b].map(|c| (c * 255.0).round() as u8);
         assert_eq!(below(false), plain, "the collapsed card casts a shadow");
         assert_ne!(below(true), plain, "the expanded card casts no shadow");
+    }
+
+    /// Feature 1299 C2: an expanded card whose owner draws its shadow paints nothing outside its
+    /// own bounds.
+    #[test]
+    fn an_expanded_card_shadowed_by_its_owner_paints_nothing_outside_it() {
+        let r = roles();
+        let backdrop = style::color(r.surface);
+        let m = model(CardState::Idle, "feat-a");
+        let mut card = Mounted::new_in(
+            container(
+                OverviewCard::<String>::new(&m, r)
+                    .on_press("open".to_string())
+                    .expanded(true)
+                    .shadow_by_owner(),
+            )
+            .padding(24)
+            .width(Length::Fixed(380.0)),
+            Size::new(380.0, 4000.0),
+        );
+        // A pixel the card's edge only partly covers is the card's (anti-aliasing).
+        let inner = card.node.children()[0].bounds().expand(1.0);
+        let (pixels, width) = card.drawn(backdrop);
+        let plain = [backdrop.r, backdrop.g, backdrop.b].map(|c| (c * 255.0).round() as u8);
+        let height = pixels.len() as u32 / 4 / width;
+        for y in 0..height {
+            for x in 0..width {
+                let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
+                if inner.contains(iced::Point::new(fx, fy)) {
+                    continue;
+                }
+                let i = ((y * width + x) * 4) as usize;
+                assert_eq!(
+                    pixels[i..i + 3],
+                    plain,
+                    "painted at ({x}, {y}), card {inner:?}"
+                );
+            }
+        }
     }
 
     /// Feature 1121 FR-011: the focus ring, the target mark and the ripple of an expanded card

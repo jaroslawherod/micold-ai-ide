@@ -772,8 +772,13 @@ fn card_model(
 }
 
 /// `OverviewCard` in each of the five states (in a `CardGrid`, so the even row height shows), the
-/// Default (project root) card and an orphan.
-pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+/// Default (project root) card and an orphan; a grid whose first card expands and collapses with
+/// its shadow easing (feature 1299).
+pub fn overview_card<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+    index: usize,
+) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
     let card = |m: micold_core::overview::CardModel| {
         // An inert press, so the ripple shows without closing anything (feature 971, FR-009).
@@ -1022,6 +1027,35 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         .unscrolled(),
     )
     .width(Length::Fill);
+    // Feature 1299 (FR-013, quickstart §B): the first card expands and collapses at a press, its
+    // shadow easing in and out over its neighbours; Tab onto a card fades its focus in. Eased:
+    // the showcase grids keep the default.
+    let lifted = showcase.shown(index);
+    let lift = iced::widget::column![
+        material::Button::text(if lifted { "Collapse" } else { "Expand" }, roles)
+            .on_press(Message::Reversed(index)),
+        iced::widget::container(Element::from({
+            let models = ["lifted", "beside", "below"]
+                .map(|name| card_model(name, T::Feature, S::Working, R::Working));
+            let cards = models
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    material::OverviewCard::<Message>::new(m, roles)
+                        .on_press(Message::NoOp)
+                        .expanded(lifted && i == 0)
+                })
+                .collect();
+            let grid = material::CardGrid::new(cards, roles).unscrolled();
+            if lifted {
+                grid.expanded(0, material::OverviewCard::<Message>::new(&models[0], roles))
+            } else {
+                grid
+            }
+        }))
+        .width(Length::Fill),
+    ]
+    .spacing(spacing::MD);
     arrange(
         vec![
             posed("with progress", card(with_progress), roles),
@@ -1041,6 +1075,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("issue link", issue_links, roles),
             posed("issue link, expanded", issue_expanded, roles),
             posed("pull request rows", pr_rows, roles),
+            posed("expand and collapse — press it", lift, roles),
         ],
         Layout::FullWidth,
     )
