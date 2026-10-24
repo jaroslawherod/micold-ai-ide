@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
 - **Phase**: milestone M1
-- **Next step**: M1 full gate on the final tree, then the orchestrator opens the PR (worktree /home/user/wt-1272-m1, branch m1272-m1, based on design PR head 41ea39bb; orchestrator moves the commits onto the run branch after #1355 merges)
+- **Next step**: orchestrator merges #1355, moves the M1 commits onto the run branch, pushes and opens the M1 PR (title/body in scratchpad m1/; full gate green at 703c8ff5; worktree /home/user/wt-1272-m1, branch m1272-m1, based on design PR head 41ea39bb; orchestrator moves the commits onto the run branch after #1355 merges)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | | implemented, in review |
+| M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | | done, gate green at 703c8ff5; PR to open |
 | M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | | pending |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | | pending |
 | M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | blocked on #1270 |
