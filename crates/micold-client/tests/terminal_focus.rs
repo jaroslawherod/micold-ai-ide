@@ -24,6 +24,9 @@ use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::{AiCli, SessionLocation};
 
+#[path = "support/mod.rs"]
+mod support;
+
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
 /// the same fact rather than a weaker one.
@@ -854,9 +857,6 @@ fn a_launch_that_restores_nothing_focuses_nothing() {
          separate rule needed for the empty case"
     );
 }
-
-#[path = "support/mod.rs"]
-mod support;
 
 /// Feature 1124 (FR-013, T010): the status bar holds no focusable widget, so mounting it under
 /// every body branch gives a traversal nothing new to land on and the terminal keeps the keyboard.

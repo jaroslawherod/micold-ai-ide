@@ -49,3 +49,35 @@ with `mise run screenshot <file>`. Record them under `specs/1124-bottom-status-b
 7. Resize to the minimum width (640 dp): key hints vanish first, then plan usage, then texts end in
    "…"; nothing overlaps.
 8. Open the ⋮ menu and the quick switcher: both draw over the bar. Repeat 1 in the dark scheme.
+
+## Results (close unit, 2026-10-24)
+
+**Part A.** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo test -p micold-client --all-targets` and `cargo test -p micold-core --all-targets` were run
+in the worktree. The orchestrator runs `mise run gate` before pushing. The first client run found
+one red, `feature_registration_cost::only_the_root_drives_a_feature` (an M4 test called
+`changes::update` directly). It was fixed in the close (tasks T040), and the client suite was
+re-run green. Core: 4 uid-0 permission tests fail when run as root, as in 943's audit; they are not
+this feature. The TDD audit is in [tdd/verification.md](tdd/verification.md).
+
+**Part B (T039).** The real client (`micold-ai-ide` and `micold-daemon`, pinned from one build of
+`m4-local`) ran on a private Xvfb display with `ICED_BACKEND=tiny-skia`, a private
+`XDG_DATA_HOME`/`HOME` and a seeded scratch git project. It was driven with `xdotool`, with ~12 s
+waits per frame. This is not a real display: it shows placement, words and colour, but not GPU
+rendering. Evidence is in `visual/t039-*.png`; earlier M1 evidence is in `visual/m1-*.png`.
+
+| § | Check | Result |
+|---|---|---|
+| 1 | Steady state, session view: nothing between app bar and body; green dot, "Daemon connected · local", "Sandbox off", "CLI: Claude Code", hints on the right | pass (`t039-1-session-light`, row 2 of `t039-2-bars-light`). Plan usage could not be shown live: a reading needs a signed-in Claude session. It is covered by `status-bar-usage` in the snapshot and overflow gate, and by `toolbar::the_app_bar_draws_no_usage_indicator` |
+| 2 | Project surface, Overview, full screen, Settings, Changes: the bar stays at the same height; CLI item only in the session view | pass (`t039-2-bars-light` rows 1, 3–5; `t039-3-bars-dark` row 2 = Changes) |
+| 3 | Two panes with different CLIs, focus follows | not run live: only Claude Code is installed here. Covered by `main_tests::panes::moving_pane_focus_changes_the_status_bars_cli` (MU4 caught) |
+| 4 | Sandbox bring-up: stage and busy ring, the body does not move | not reachable live: with no container runtime the bring-up failed within 1.5 s (every frame from launch already read "Sandbox failed"). The busy ring is in `m1-1-dark` (showcase), and the unmoved body in `sandbox_progress` (MU2 caught). The failed state was shown live: the banner with **Run without it for now**, the amber "Sandbox failed" item (`t039-5-sandbox-failed-dark`), and the failure reason in the item's tooltip (`t039-5-failed-tooltip-dark`, US2 s4). After **Run without it for now**: an amber "No sandbox" item and the **Try the sandbox again** banner (`t039-3-bars-dark` rows 4–5) |
+| 5 | Lost connection: red "Daemon disconnected · reconnecting…", no banner, green again after | pass: the pass's own daemon was paused with SIGSTOP. The bar turned red, no banner appeared and the body did not move (`t039-4-disconnected-dark`, `t039-3-bars-dark` row 3). After SIGCONT the item read connected again |
+| 6 | Second window: **Take over** banner and "Read-only · another window" | not run live: one window per pass here. Covered by the `status-bar-warnings` snapshot state and the model tests |
+| 7 | 640 dp: hints first, then usage, then "…" | pass at 640×480 (`t039-6-narrow-640-dark`): the client's own texts fit whole there, so nothing drops or shortens. That is the give-way pass working: it drops only when needed. The forced give-way order is held by `status_bar_fits` with long texts (MU6, MU7 caught), and the shortened look by `m1-5-overflow-dark` |
+| 8 | ⋮ menu and quick switcher over the bar; dark scheme | pass: the switcher's scrim covers the bar (`t039-7-switcher-over-bar-light`). The menu opens at the top and does not reach the bar. Dark scheme in `t039-3-bars-dark`, `t039-4`, `t039-5`, `t039-6` |
+
+SC-006 (connected and sandbox state readable from the bar alone): pass in every frame above.
+macOS flush corners and Cmd notation: not checked (Linux host). Under tiny-skia, the quick
+switcher's surface rendered black behind its field (`t039-7`). This was seen only in this backend
+and is not part of this feature, so it is left as a follow-up in the ledger.

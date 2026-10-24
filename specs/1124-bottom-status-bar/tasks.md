@@ -289,7 +289,7 @@ label, warning look, details) and not in the app bar; absent with no reading or 
 
 ## Phase 8: Polish
 
-- [ ] T039 Run quickstart Part B through the `visual-pass` skill and save the screenshots under
+- [x] T039 Run quickstart Part B through the `visual-pass` skill and save the screenshots under
   `specs/1124-bottom-status-bar/visual/` (light and dark, 640 dp, banners, bring-up)
 
 ---
@@ -391,3 +391,23 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 T039 (visual pass, no code) is left to the close unit (milestones rule 4); it records SC-006, the
 macOS flush-corner edge case and light/dark contrast.
+
+---
+
+## Phase 9: TDD remediation (close unit)
+
+From `tdd/verification.md` (verdict PASS_WITH_GAPS). Each task is done in the close PR; the
+command that proves it is in brackets.
+
+- [x] T040 Fix the gate M4 broke: `ui/status_bar.rs` test opened the Changes view through
+  `features::changes::update`; open it through `State::update_changes`
+  [`cargo test -p micold-client --test feature_registration_cost`]
+- [x] T041 S1: `banner_is_not_a_snackbar::a_lost_connection_raises_no_banner` through the window's
+  layout, with a banner premise [`cargo test -p micold-client --test banner_is_not_a_snackbar`]
+- [x] T042 S5: premise that the bar is drawn in `status_bar_fits::at_the_smallest_window_usage_drops_before_any_text_shortens`;
+  the implied assertion removed [`cargo test -p micold-client --test layout_snapshot status_bar_fits`]
+- [x] T043 S7: drop the `ALL.len() == 48` pin; `toolbar.rs` reads `anatomy::app_bar::HEIGHT`
+  [`cargo test -p micold-core --test tokens_anatomy`; `cargo test -p micold-client --test toolbar`]
+- [x] T044 S8, S9, S10: exact Copilot assertion in `main_tests`, `mod support;` at the top of
+  `features_window.rs` and `terminal_focus.rs`, the usage fixture's comment
+  [`cargo test -p micold-client --all-targets`]
