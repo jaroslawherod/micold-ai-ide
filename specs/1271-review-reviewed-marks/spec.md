@@ -56,6 +56,14 @@ updated." Labels: enhancement, flow:feature. This is slice R4 (item 1) of
 - **Progress**: *n of m reviewed*, where *m* is the number of files the list shows now and *n* the
   number of those whose review state is Reviewed.
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: Does the header read *n of m reviewed* (the issue) or *n/m reviewed* (the redesign mockup)? →
+  A: *n of m reviewed*, the issue's wording; the mockup's *12/30* is a sketch. _(agent-resolved:
+  issue #1271 body, quoted in this spec's Input; docs/development/review-redesign.md#Changes)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Mark a file reviewed and see my progress (Priority: P1)
