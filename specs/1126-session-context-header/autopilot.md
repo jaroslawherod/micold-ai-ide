@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1318 | design (spec, plan, tasks) | merged | f8eeaa43e5f151a08a2c20b055c5c9ce64bf9584 |
 | #1328 | M1 context header | merged | 127a817868d7b463ad78ea588b43a0339d483991 |
 | #1334 | M2 tab strip | merged | 25de2370813389d6ae82fcfb49ebce6cf15da226 |
-| #1337 | M3 Changes button | open; CI red once (layout snapshot), rebased and re-recorded | |
+| #1337 | M3 Changes button | open; CI red twice (layout snapshot, main moved under it), rebased and re-recorded each time | |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | context header above the terminal (title, state, branch, PR chips); bar unchanged | #1328 | merged |
 | M2 | T021–T042 | full | tab strip replaces the bar; chords and focus unchanged (US2 + US4) | #1334 | merged |
-| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | #1337 | rebased onto main after red CI, gate green at c8c3d32b, pushed |
+| M3 | T043–T055 | full | Changes button with counts opens/closes the Changes view | #1337 | rebased onto main after red CI, gate green at 5a0366da (on main c79dd7f0), pushed |
 
 ## Decisions
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 - M3 red CI (2026-10-24, PR #1337): `build + test (ubuntu-latest)` failed `layout_snapshot::the_layout_matches_the_committed_fixture` in `status-bar-warnings` (header 12 px taller). CI tests the merge with main, which had gained #1124 M3 (7b6639cb, re-recorded 706d1d52) with the new states `status-bar-disconnected` and `status-bar-warnings`, recorded without M3's Changes button; git merged the fixture text cleanly but stale. Rebased onto origin/main (no conflicts) and re-recorded. Diff vs main: only the states M3 already changed (session-area-*, session-transcript-*, status-bar-*) plus #1124's two new states, each the header's title row gaining the Changes button (+12 px, rows below shifted); #1124's own changes (error-daemon-disconnected, settings-view-rail-collapsed, status-bar-settings, status-bar-warnings-overview) are byte-identical to main. Not a layout regression.
+- M3 red CI 2 (2026-10-24, PR #1337 at bd4d521e): same test, first in `session-area-one-tab` (status-bar items at y 778 missing from the fixture). Main had gained #1124 M4 + M5 + close (CLI item follows the focused pane, Overview/Jump key hints, plan usage in the status bar, new state `status-bar-usage`, Settings wording) and #1260 close. Rebased onto origin/main c79dd7f0 (no conflicts), re-recorded. Check: for every state main→new differs in, the diff is byte-identical to the M3 diff before this rebase (12d38521→bd4d521e), except `status-bar-usage` (new on main; its diff equals `status-bar-steady`'s header change) and M3's own `session-area-changes-open` (gains only main's two key-hint items at y 778, matching main's `status-bar-changes`: no CLI item while the Changes view has focus). Every other state is byte-identical to main. Not a layout regression.
 
 ## Review rounds
 
@@ -85,6 +86,7 @@ None.
 
 ## Follow-ups not done
 
+- M3 red CI 2 gate: `micold-daemon` `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` failed the first gate run and 2 of 5 reruns (notice reached no window). Main's code: the branch changes nothing the daemon uses. A race in the test or in C14's focus fallback; the second full gate was green. Not fixed here.
 - M3 gate: `micold-daemon` `mcp_audit_log::every_successful_mutating_call_writes_one_info_line` failed once (paste refused: "no bracketed paste") and passed 3/3 on rerun; untouched by this feature, a flake to watch in CI.
 
 - M3: at 640×480 beside a 300 px sidebar the Changes button leaves the title little room (`fe…` with `Changes · 3 files · +42 −7`, visual pass B6); FR-013 allows it. A compact label for the narrowest window would give the title room back; not specified.
