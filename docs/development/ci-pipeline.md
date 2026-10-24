@@ -513,8 +513,7 @@ the CPU model explains the spread: it is run-to-run variation of the shared host
 
 **Conclusion** (issue 958 closed): no step-level change to the Windows leg reduced its time or
 spread. The remaining lever is compile work: the daemon's ~150 integration-test files each build
-their own test binary, recompiled on every run. Combining them into a few binaries is tracked in
-issue 1175.
+their own test binary, recompiled on every run. Combining them into a few binaries is issue 1175, done below.
 
 ## The daemon's integration tests are grouped into five binaries (issue 1175)
 
