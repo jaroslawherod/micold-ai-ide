@@ -370,7 +370,7 @@ pub const COMPONENTS: &[Entry] = &[
         live: &[],
         interactive: false,
         section: Section::Components,
-        layout: Layout::Inline,
+        layout: Layout::FullWidth,
         render: sections::review::menu_select,
     },
     Entry {

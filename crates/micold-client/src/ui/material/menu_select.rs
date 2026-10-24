@@ -260,15 +260,12 @@ fn option_element<'a, M: Clone + 'a>(
         body = body.push(Text::new(note, NOTE_ROLE, r).muted());
     }
     // The marker centred on the first line, not on the row, as a two-line picker row places it.
+    // Its box is the menu item's height less the padding, so it also holds the row at the least
+    // height a menu item is, as its touch target; taller content sets the height.
     let mark = container(marker(chosen, r))
         .height(Length::Fixed(density::MENU_ITEM_BASE - 2.0 * spacing::XS))
         .align_y(alignment::Vertical::Center);
-    // The menu item's height is the least the row is, as its touch target (see the picker's
-    // two-line row); a strut holds it, and taller content sets the height.
-    let strut = Space::new()
-        .width(Length::Shrink)
-        .height(Length::Fixed(density::MENU_ITEM_BASE - 2.0 * spacing::XS));
-    let content = row![strut, mark, body]
+    let content = row![mark, body]
         .spacing(spacing::SM)
         .align_y(alignment::Vertical::Top);
     let surface = button(content)
@@ -320,7 +317,7 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
             None => Space::new().width(Length::Fill).into(),
         };
         let label = row![
-            Text::new(s.fixed, TypeRole::Body, r),
+            Text::new(s.fixed, TypeRole::Body, r).tint(r.on_surface),
             elastic,
             Glyph::new(Icon::SelectChevron, TypeRole::Action, r).tint(r.on_surface_variant),
         ]

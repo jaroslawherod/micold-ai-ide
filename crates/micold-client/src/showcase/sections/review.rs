@@ -906,6 +906,9 @@ pub const MENU_SAMPLE_WIDTH: f32 = 360.0;
 /// The posed list's height before it scrolls: about five rows, so the many-pull-requests pose
 /// shows the cap.
 pub const MENU_LIST_HEIGHT: f32 = 240.0;
+/// What an open pose keeps beside its capped list: the trigger, the gap under it, the panel's
+/// padding and outline, and a margin before the next pose.
+const OPEN_POSE_ROOM: f32 = 96.0;
 /// The line under the control, which the open list floats over without moving.
 pub const MENU_BODY: &str = "The file list starts here";
 /// The long-title pose's pull request.
@@ -1126,7 +1129,7 @@ pub fn menu_select<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
                 sample
             } else {
                 container(sample)
-                    .height(Length::Fixed(MENU_LIST_HEIGHT + 96.0))
+                    .height(Length::Fixed(MENU_LIST_HEIGHT + OPEN_POSE_ROOM))
                     .into()
             };
         posed(label, sample, roles)
@@ -1144,6 +1147,6 @@ pub fn menu_select<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
             pose("open, many pull requests", MenuPose::Many),
             pose("open, the Default entry", MenuPose::DefaultEntry),
         ],
-        Layout::Inline,
+        Layout::FullWidth,
     )
 }
