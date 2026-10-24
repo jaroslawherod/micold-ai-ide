@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1260
 - **Worktree branch**: claude/project-thread-c0bgc0
 - **Started**: 2026-10-24
-- **Phase**: M3 PR pending
-- **Next step**: orchestrator opens the M3 PR (branch pushed) and merges; then the close unit (T028–T029). FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
+- **Phase**: close
+- **Next step**: close unit: tdd-verify, close review, gate, close PR. FR-007 still awaits the user's confirmation: if declined, revert commit `feat(1260): the terminal draws its cells in the bundled Fira Mono (FR-007)` and apply plan D4's decline list
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1316 | design (spec, plan, tasks) | merged (rebase) | 5d634edeb2db3f2be6f85e07df320623911e2c36 |
 | #1323 | M1 | merged (rebase, rebased onto main by orchestrator; gate re-run green) | 7afe5d296498e81f004074655ec19ee67a9e72ff |
 | #1329 | M2 | merged (rebase) | 55f6f5e5f714d3a57d0fdc299316fe5726f27cf7 |
+| #1332 | M3 | merged (rebase; orchestrator rebased onto main once after main's layout snapshot went red from other work, fixed by #1126 M2; full gate re-run green) | 12d38521a1c7dec7a8cb2ac56a07102f906509c9 |
 
 ## Milestones
 
@@ -26,9 +27,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | App and showcase draw all code (incl. terminal) in bundled Fira Mono; user guide says so | #1323 | done |
 | M2 | T016–T019 | light | Layout tests guard Regular+Bold through the shipped installer; one-copy test | #1329 | done |
-| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | pending (branch pushed) | done |
+| M3 | T020–T027 | full | deb, rpm, .app and Windows installer ship the font licence set | #1332 | done |
 
-Polish T028–T029 (quickstart §A/§C records, no code) is left to the close unit.
+Polish T028–T029 (quickstart §A/§C records, no code): done by the close unit, recorded in quickstart.md *Results*.
 
 ## Decisions
 
@@ -62,6 +63,7 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | M3 review A (re-review of the gate fix, sonnet) | 2 (not counted: red-gate fix) | a4e2a454193e1b96f10223d6484f5bebea8b23d7:a26592e980cd31343ae3b10e980eab4f5b1213f6 | CLEAN, no findings. Headless `claude -p --model sonnet` |
 | M3 gate | 2 | a26592e9 | green (`split-gate.sh`, GATE_EXIT=0) |
 | M3 review B (conformance, sonnet) | 1 | 3fe6623490317997fd5d70e5958074345582bb68:c47743b9062f038d9015d2d4032bdc94bb316491 | CLEAN (1 MINOR: T026 wording placed `iss_file_entries` beside `iss_file_sources` — tasks.md T026 amended, prose only). Headless `claude -p --model sonnet` |
+| Close: speckit-converge | 1 | 12d38521 + T028–T029 records | CONVERGED: all 11 FR and 5 SC built, each cited to code/test (e.g. FR-003 `mono.rs:128`, SC-004 `packaging_ships_font_licences.rs:88,100`). Run because M1 review B was CHANGES (declined). Headless `claude -p --model sonnet` (a first run returned a bare CONVERGED with no citations; re-run with a per-requirement evidence table) |
 
 ## Implementation notes
 
@@ -74,6 +76,10 @@ Polish T028–T029 (quickstart §A/§C records, no code) is left to the close un
 | design | speckit-analyze I1 | FR-007 is agent-resolved in spec but "pending" in plan/tasks; drop the decline branch | The orchestrator keeps FR-007 open for the user's confirmation; the decline branch (plan D4, T013) must stay droppable until they answer |
 | design | speckit-analyze D1, F3 (LOW) | terminal rule restated four times; T026 large | Taste; each restatement serves its section, and T026's parts share one file and one red test |
 | M1 | review B F1 (MAJOR) | T006/T007 have no red run before green (Constitution I) | Red is recorded by mutation in `tdd/cycle-log.md`, and the mutation is the reviewer's own suggested stub (Bold constant pointed at the Regular file, `remove_face` skipped): both tests FAILED, then passed on the restored source. Same evidence form the project accepts (specs/972 cycle log). T009 and T013 were run red before T010 |
+| close | tdd-verify finding 1 / T030 (HIGH) | T006, T007, T022 are test-after; re-prove red by reverting source | Same finding as M1 review B F1, declined there: the red is already proven by mutation and recorded in `tdd/cycle-log.md` (T006–T008 mutation row; T022 mutation of `windows_violations`). Re-running the same mutation adds no evidence |
+| close | tdd-verify finding 3 / T031 (MED) | No test pins the `install_monospace` calls in `startup.rs` and the showcase `main.rs` | The proposed fix (extract the call into one function and test that function) still passes when its call is deleted; only running the binary proves it, which the M1 visual pass did (B1, B4, B7). Glue, like the other `iced::application` setup lines |
+| close | tdd-verify finding 4 / T033 (LOW) | macOS source and destination checked on different lines | `macos-bundle.sh:128-129` copies the set in a loop to `$FONT_LICENCE_DIR`, so they cannot share a line; `scripts/tests/macos-bundle.test.sh` stages the bundle and checks each file at its destination (M3 review A MINOR, left for the same reason) |
+| close | tdd-verify finding 6 (LOW) | family/fixed-pitch checks in both `mono.rs` and `layout_apparatus` | Different layers: the unit tests guard the constants, the layout guard guards the shipped installer the layout tests measure with (FR-006) |
 
 ## Handover
 

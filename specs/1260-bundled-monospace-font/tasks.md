@@ -201,9 +201,9 @@ packaging_excludes_showcase`; `scripts/tests/macos-bundle.test.sh`.
 
 ## Phase 6: Polish (close unit)
 
-- [ ] T028 Quickstart §A: `sha256sum assets/fonts/FiraMono-*.ttf` equals `assets/fonts/PROVENANCE.md`;
+- [X] T028 Quickstart §A: `sha256sum assets/fonts/FiraMono-*.ttf` equals `assets/fonts/PROVENANCE.md`;
   `git ls-files | grep -i firamono` lists only `assets/fonts/`; record the results in quickstart.md
-- [ ] T029 Quickstart §C: record what CI's macOS and Windows runners proved (layout snapshot,
+- [X] T029 Quickstart §C: record what CI's macOS and Windows runners proved (layout snapshot,
   packaging tests) and what needs a host (the look, installed bundle contents) in quickstart.md
 
 ---
@@ -270,3 +270,31 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full (packaging manifests, installer script, Windows allow-list rule)
 
 Polish (T028–T029) changes no code: the close unit does it in the close PR.
+
+---
+
+## Phase 7: TDD remediation
+
+TDD verification (`tdd/verification.md`, verdict FAIL): the feature is not done until T030 is
+cleared.
+
+Close unit outcome: T030, T031 and T033 declined (reasons in `autopilot.md` *Declined review
+findings*); T030's red evidence is the mutation already recorded in `tdd/cycle-log.md`, the form
+M1 review B's declined F1 accepted. T032 and T034 done.
+
+- [ ] ~~T030~~ (declined) Finding 1 (HIGH): re-prove the red of T006, T007 and T022 and record it in
+  `tdd/cycle-log.md`. For each, revert only its source (`mono.rs:35-60` for T006/T007, the licence
+  allowance in `windows_violations` for T022) in a scratch run, record the failing test output, restore;
+  proven by `cargo test -p micold-client --lib -- mono` and
+  `cargo test -p micold-client --test packaging_excludes_showcase` green, `git diff --stat` empty
+- [ ] ~~T031~~ (declined) Finding 3 (MED): pin the real entry points. Extract the startup call
+  (`shell/startup.rs:88`, `showcase/main.rs:59`) into one function with a test that a fresh font
+  system resolves `Font::MONOSPACE` to the bundled face after it; proven by deleting the call and
+  seeing that test fail, then `cargo test -p micold-client --lib -- mono`
+- [X] T032 Finding 2 (MED): note in `tdd/cycle-log.md` that T013a and T016 landed after their enabling
+  change in history; no code change
+- [ ] ~~T033~~ (declined) [P] Finding 4 (LOW): in `packaging_ships_font_licences.rs:62` require the macOS source and
+  destination on one line or in one `cp` statement; proven by
+  `cargo test -p micold-client --test packaging_ships_font_licences`
+- [X] T034 [P] Finding 5 (LOW): add a test beside `mono.rs:187` that a character Fira Mono lacks
+  resolves to a non-Fira face; proven by `cargo test -p micold-client --lib -- mono`
