@@ -30,6 +30,10 @@ out a tree; this feature shares that tree layout rather than adding a second one
   files? → A: It keeps the tree; each sort orders the rows within each level (scenarios 4.2, 4.3,
   SC-004). _(agent-resolved: docs/development/review-redesign.md#Layout, item 2 "File tree, not flat
   list" names the sorts as options of the tree, and the mockup there shows folders only)_
+- Q: Until #1271's reviewed marks exist, how does **Unreviewed first** behave? → A: The option is
+  hidden (the control offers Path and Size); the core implements and unit-tests the unreviewed
+  ordering against a given reviewed set, so #1271 only turns the option on (scenario 4.3, FR-012).
+  _(recommended option, applied pending the user's answer on the open decision card)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -147,9 +151,9 @@ level for each sort.
    rows within each level and never flattens the list.
 3. **Given** sort **Unreviewed first**, **Then** at each level unreviewed files come before reviewed
    ones and folders holding any unreviewed file before folders holding none, ties in path order.
-   [NEEDS CLARIFICATION: reviewed marks come from #1271, which is not built yet. Until it lands, is
-   **Unreviewed first** hidden, shown disabled with a note, or offered with every file counted as
-   unreviewed (so it orders like Path)?]
+   Reviewed marks come from #1271: until they exist the sort control does not offer **Unreviewed
+   first** (Path and Size only); the shared core already orders by a reviewed set and is unit-tested
+   with one, so #1271 only turns the option on.
 4. **Given** a sort other than Path and a filter, **Then** the filtered tree is ordered by that sort.
 5. **Given** a chosen sort, **When** the change list is read again (the agent edits a file), **Then**
    the sort stays chosen and the new list is ordered by it.
@@ -231,8 +235,10 @@ level for each sort.
   restore the tree with the folders' collapsed state as it was before filtering.
 - **FR-011**: A filter that matches no file MUST show a sentence saying no changed file matches and a
   way to clear the filter.
-- **FR-012**: A sort control MUST offer **Path** (the default), **Size** and **Unreviewed first**,
-  ordering each level as acceptance scenarios 4.1–4.3 describe.
+- **FR-012**: A sort control MUST offer **Path** (the default) and **Size**, and **Unreviewed first**
+  once #1271's reviewed marks exist, ordering each level as acceptance scenarios 4.1–4.3 describe.
+  Until then the option MUST NOT be shown; the core's unreviewed ordering MUST still be implemented
+  and unit-tested against a given reviewed set.
 - **FR-013**: The filter text and the chosen sort MUST be kept for as long as the view is kept, across
   list re-reads and source switches, and MUST NOT be shared with other windows.
 - **FR-014**: When the change list is read again, the tree MUST keep the selection (if the file is
@@ -287,7 +293,7 @@ level for each sort.
   sit directly above the tree in whatever left column it leaves.
 - **Reviewed marks come from #1271.** This feature does not add reviewed marks, the `○ ● ✓` glyphs on
   rows, or the *n of m reviewed* count; it only orders by the reviewed state when it exists (see the
-  open question in scenario 4.3).
+  scenario 4.3; the option stays hidden until then).
 - **Reuses #1150's tree** (`tree_rows`, folder open state) rather than adding a second tree layout;
   the **Files** repository browser keeps its look and behaviour.
 - **Filter matching** is the matcher **Open file by path** already uses, applied to the full path of
