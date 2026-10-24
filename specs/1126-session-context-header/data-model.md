@@ -16,9 +16,10 @@ field, no wire message changes.
 
 ## CountsReading (new, `micold_core::context_header`)
 
-What the header knows of the counts: `Unknown` (no read answered yet, a read under way, or a read
-that failed or cannot run here) or `Known(ChangeSummary)`. Built by the client from
-`HeaderCounts.load`: `Ready(s)` → `Known(s)`; `Idle`, `Loading { .. }` (whatever `last` holds) and
+What the header knows of the counts: `Unknown` (no read answered yet, a first read under way or
+failed, or a read that cannot run here) or `Known(ChangeSummary)`. Built by the client from
+`HeaderCounts.load`: `Ready(s)` → `Known(s)`; `Loading { last: Some(s), .. }` → `Known(s)` (the
+last figure stays while a re-read runs, #1342); `Idle`, `Loading { last: None, .. }` and
 `Failed(_)` → `Unknown` (US3 scenario 4).
 
 ## PrChipInput (new, `micold_core::context_header`)
@@ -67,7 +68,7 @@ Transitions:
 | `HeaderFollowed { .., None }` | any | `entry: None`, `Idle` | none |
 | `HeaderFollowed` with the same entry | any | unchanged | none |
 | `HeaderCountsRead { seq, Ok(s) }`, `seq` current | `Loading` | `Ready(s)`; a queued `again` reads once more | `ReadCounts` if `again` |
-| `HeaderCountsRead { seq, Err(_) }`, `seq` current | `Loading` | `Failed`; a queued `again` reads once more | `ReadCounts` if `again` |
+| `HeaderCountsRead { seq, Err(_) }`, `seq` current | `Loading` | `Ready(last)` when a prior figure exists (a failed re-read keeps it, #1342), else `Failed`; a queued `again` reads once more | `ReadCounts` if `again` |
 | `HeaderCountsRead` with an old `seq` | any | unchanged (dropped) | none |
 | `Changed` | `Ready`/`Failed`/`Idle` with an entry | `Loading { last }` | `ReadCounts` (besides the view's own re-read) |
 | `Changed` | `Loading` | `again = true` | none |
