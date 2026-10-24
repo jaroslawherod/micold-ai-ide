@@ -540,13 +540,10 @@ mod tests {
         assert_eq!(cli_of(&s), None, "Overview");
 
         let mut s = base.clone();
-        let _ = crate::features::changes::update(
-            &mut s.changes,
-            crate::features::changes::Msg::Opened {
-                project: PathBuf::from(PROJECT),
-                entry: SessionLocation::Default,
-            },
-        );
+        let _ = s.update_changes(crate::features::changes::Msg::Opened {
+            project: PathBuf::from(PROJECT),
+            entry: SessionLocation::Default,
+        });
         assert!(s.changes.open.is_some());
         assert_eq!(cli_of(&s), None, "Changes");
 
