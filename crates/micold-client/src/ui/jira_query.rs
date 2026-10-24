@@ -21,7 +21,7 @@ use micold_core::tokens::{spacing, Roles};
 /// The query field's placeholder, and the prompt shown before any query has run (FR-004a).
 pub const PROMPT: &str = "Type a JQL query, then press Enter or Run";
 
-/// What an empty result says, distinct from an error (FR-012).
+/// What an empty result says in place of the rows, distinct from an error (FR-012).
 pub const NO_MATCH: &str = "No issue matches this query.";
 
 /// What a query Jira answered with 400 says until M4 shows Jira's own messages (FR-008).
@@ -62,7 +62,7 @@ pub fn picker<'a>(
 
     // The rows the form shows: the results once a query ran, the basic list before (US1 AS1).
     let (rows, selected) = super::worktree_form::issue_rows_with(form, board);
-    let mut field = material::Typeahead::new(
+    let field = material::Typeahead::new(
         &query.draft,
         rows,
         |text| message(QueryMsg::DraftChanged(text)),
@@ -78,9 +78,6 @@ pub fn picker<'a>(
     .on_move(|direction| message(QueryMsg::HighlightMoved(direction)))
     .on_dismiss(message(QueryMsg::Dismissed))
     .on_pick(|index| message(QueryMsg::RowPicked(index)));
-    if matches!(query.run, QueryRun::Loaded { .. }) {
-        field = field.empty_message(NO_MATCH);
-    }
     col = col.push(
         row![
             Element::from(field),

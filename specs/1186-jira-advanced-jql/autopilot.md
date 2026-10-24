@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (high) | 1 | e62354d4a4924fa030171958c744b15b81a486ae:5cdbf8a3e887c5d7851318adbee7eba5b87b7f7c | CLEAN (2 MINOR fixed: `IssueRetry` no longer loads a failed basic list while advanced mode shows; a pick's title is looked up in both lists, so the default prompt keeps it across a switch; tests added) |
 | M2 review B (sonnet) | 1 | e62354d4a4924fa030171958c744b15b81a486ae:5cdbf8a3e887c5d7851318adbee7eba5b87b7f7c | CLEAN; Verify: bin 709, jira_query_state 18, issue_source_state 49, jira_source_state 20, issues_are_requested… 3, jira_is_requested… 6 passed |
 | M3 review A (high) | 1 | 05b5792f2b197c5d37170e31d18c562fe1668d83:9e7ccfdb7909b15402e98a4f3ad95432920f3940 | CHANGES: 1 MAJOR (editing the query kept the row highlight, so Enter picked a stale row instead of running; fixed in `DraftChanged`, test `editing_the_query_drops_the_highlight`), 1 MINOR fixed |
+| M3 review A (high) | 2 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (sonnet, fix diff: F1, F2 hold) |
+| M3 review B (conformance, sonnet) | 1 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (1 MINOR fixed: an empty result said "No issue matches this query." twice; the list's empty message dropped, the caption kept) |
 
 ## Declined review findings
 
