@@ -474,6 +474,14 @@ struct Grid<'a, M> {
 
 /// The expanded card's layout where it is drawn: its slot's node moved up by `place` (K3) to lie
 /// inside `view`; a slot below the view stays where it is.
+/// The region a card's shadow at `strength` can paint: the card's `bounds` grown by the blur and
+/// the offset. It differs per strength, so each frame of an ease damages the last frame's reach
+/// and the next one's (issue 1336).
+fn lift_damage(roles: Roles, bounds: Rectangle, strength: f32) -> Rectangle {
+    let shadow = style::eased_shadow(roles, elevation::MENU, strength);
+    bounds.expand(shadow.blur_radius + shadow.offset.x.abs().max(shadow.offset.y.abs()))
+}
+
 fn placed<'n>(node: &'n layout::Node, origin: Point, view: Rectangle) -> Layout<'n> {
     let slot = node.bounds() + Vector::new(origin.x, origin.y);
     let dy = if slot.y < view.y + view.height {
@@ -574,6 +582,16 @@ impl<M> Grid<'_, M> {
         if strength <= 0.0 {
             return;
         }
+        // The software renderer damages a quad's bounds only, not its shadow, so a shadow that
+        // eases away would leave pixels outside the repainted region: an invisible quad over the
+        // shadow's reach, changing with every frame, damages it (issue 1336).
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: lift_damage(self.roles, bounds, strength),
+                ..renderer::Quad::default()
+            },
+            iced::Color::TRANSPARENT,
+        );
         renderer.fill_quad(
             renderer::Quad {
                 bounds,
@@ -3382,6 +3400,39 @@ mod tests {
     use super::super::card_lift::Lifts;
     use super::super::test_support::FRAME_MS;
     use iced::widget::{column, container, Space};
+
+    /// Issue 1336: the software renderer damages a quad's bounds, not its shadow, so the region a
+    /// card reports while its shadow eases must hold the shadow, and differ from frame to frame,
+    /// or the shadow's last pixels outside it are never repainted.
+    #[test]
+    fn a_lift_reports_damage_covering_its_shadow_at_every_strength() {
+        let card = Rectangle::new(Point::new(40.0, 50.0), Size::new(300.0, 200.0));
+        let mut last = None;
+        for step in 1..=10 {
+            let strength = step as f32 / 10.0;
+            let shadow = style::eased_shadow(roles(), elevation::MENU, strength);
+            let painted = Rectangle {
+                x: card.x + shadow.offset.x - shadow.blur_radius,
+                y: card.y + shadow.offset.y - shadow.blur_radius,
+                width: card.width + 2.0 * shadow.blur_radius,
+                height: card.height + 2.0 * shadow.blur_radius,
+            };
+            let damage = lift_damage(roles(), card, strength);
+            assert!(
+                damage.x <= painted.x + 0.01
+                    && damage.y <= painted.y + 0.01
+                    && damage.x + damage.width >= painted.x + painted.width - 0.01
+                    && damage.y + damage.height >= painted.y + painted.height - 0.01,
+                "strength {strength}: damage {damage:?} misses shadow {painted:?}"
+            );
+            assert_ne!(
+                Some(damage),
+                last,
+                "strength {strength}: damage did not change"
+            );
+            last = Some(damage);
+        }
+    }
 
     /// The grid of `models`, card `index` (if any) expanded with its own model, `gap` apart.
     fn lift_grid(
