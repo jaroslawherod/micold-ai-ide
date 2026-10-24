@@ -113,7 +113,7 @@ terminal — draws the bundled Fira Mono on every host, ahead of a host font of 
   longer uses the host's monospaced font (line 58: replace "The terminal keeps its monospaced
   font"; under a declined FR-007, keep that line and say code elsewhere uses Fira Mono).
   `docs/user-guide/worktrees-and-sessions.md` line 1125: "in a monospace font" names Fira Mono
-- [ ] T015 [US1] Visual pass, quickstart §B B1–B8 (B7 per T013), light and dark, through the
+- [x] T015 [US1] Visual pass, quickstart §B B1–B8 (B7 per T013), light and dark, through the
   `visual-pass` skill; evidence in `specs/1260-bundled-monospace-font/visual-pass/`
 
 **Checkpoint**: the app and the showcase draw code in Fira Mono; in-crate component tests measure it.
