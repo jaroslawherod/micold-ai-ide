@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #942
 - **Worktree branch**: claude/project-thread-tt60gq
 - **Started**: 2026-10-21
-- **Phase**: M9 implement
-- **Next step**: M9: implement T071, T072, T066, T073 and the M8 r3 follow-ups
+- **Phase**: M9 verify
+- **Next step**: M9: verify.md step 1 (scoped gate + Review A high on `origin/main...HEAD`)
 
 ## Pull requests
 
@@ -138,7 +138,30 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done** (M9 unit 1, context over 150k at the post-implement checkpoint): branch restarted from
+  origin/main e65993bc (#941 M6 in); PR #1309's merge SHA recorded. T071, T072, T066, T073 and both
+  M8 r3 follow-ups implemented and ticked, committed as 87804860 (not pushed; no PR yet). New
+  `ui/mode_control.rs`; `Seams::control` added to #941's `ui/composer.rs` (decision 21); core
+  `ModeConfirmed` arm; `confirm_mode` in `state_scan` MUTATORS; layout fixture accepted; user
+  guide updated (mode control, *Waiting for you*, the *does not do yet* line). Targeted tests green
+  (`layout_snapshot` 102, `--bin micold-ai-ide permission_prompts` 11,
+  `features_permission_prompts` 26, `feature_write_isolation` 8). No gate run yet.
+- **Visual pass (T073)**: done offscreen by the unit itself (tiny-skia after `layout::settle`, a
+  throwaway test, not committed; the visual-pass skill was not used): PASS light and dark —
+  *Waiting for you* replaces *Working* with a request pending, gone after withdrawal; the
+  **Permissions** `Select` beside the text area shows Default / Accept edits / Bypass as the
+  summary says, unclipped, before **Stop**/**Send**; the session bar's Bypass label with it;
+  *Run in Bypass?* over the composer after a Bypass pick; the refusal reason in the status row
+  after **Ready**. Not captured: the `Select`'s open list (the harness drew no list after a press;
+  the shared component's list has its own picker tests). Live steps 1, 5, 6, 8, 11 not run: no
+  logged-in `claude` here. Evidence `visual-pass/m9-*.png`.
+- **Next**: verify.md: step 1 scoped gate (`scripts/autopilot/scoped-gate.sh`) with Review A (high,
+  `claude -p`, diff inline) in its shadow; step 2 Review B (sonnet); visual pass counts as done
+  unless review fixes change what is drawn; step 3 full gate (`scripts/gate.sh` or
+  `bash /mnt/project-files/scripts/split-gate.sh`); then pr.md: push (prune the stale remote ref
+  first if needed), open the draft PR "#942: Structured session: permission prompts via
+  permission-prompt-tool — M9" via the GitHub MCP tools; do not merge.
+- **Open findings**: none.
 
 ## Open escalation
 
