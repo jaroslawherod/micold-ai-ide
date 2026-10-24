@@ -178,7 +178,9 @@ additive hunks.
 - **#1186 rebase**: both features edit `JiraCloud`'s list/search bodies and the Jira section of
   the form. Kept small by R1/R10 (no edits to `list_jql`, `search_jql`, `list_open`,
   `search_open`); whoever merges second composes `narrowed(...)` with #1186's JQL at that one
-  call site.
+  call site. T008's private `request` helper also moves the existing POST and the status
+  bisection in `jira_http.rs`: a known conflict point with #1186, resolved by whoever merges
+  second.
 - **`/user/viewissue/search` on sites with restricted user visibility** may answer users without
   `displayName` or none at all: such users are skipped and the own user stays offered (edge case).
 
