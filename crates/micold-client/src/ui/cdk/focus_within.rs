@@ -14,6 +14,10 @@
 //! it, `false` when none does. The reducer then holds the region as the focused field while no
 //! field inside it holds the keyboard itself.
 //!
+//! The walk runs on every event, not only on presses: a focus move is an operation (Tab's
+//! `focus_next`, a task focusing a field) that any later event, a redraw included, is the first
+//! to see. The region is the composer, a few dozen widgets.
+//!
 //! It holds no appearance and adds no layout node, which is why it lives in the `cdk`.
 
 use crate::ui::cdk::passthrough::forward_to_child;
