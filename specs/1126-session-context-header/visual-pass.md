@@ -68,3 +68,30 @@ closed again; an edit's wake (`Msg::Changed`) with its read under way; the next 
 In dark the selected button's fill is a low-contrast tonal layer, as on the Overview button whose
 pattern it follows; its label stays legible. At 640×480 the button leaves the title little room:
 noted in the ledger's follow-ups beside the wide-count case.
+
+## Close — the whole Part B on the final tree (T057)
+
+**How it was run.** On `main` at `9c1f758f` (M3 merged, with #1124's status bar and #1125's sidebar
+work beside it), the same way as M1–M3: `ui::view` drawn through tiny-skia from the fixture states
+(`strip_with`, pull request #1118 open with its checks failing, both sessions running), every frame
+in light and in dark, at 1280×800 and at 640×480 beside a 300 px sidebar. 40 frames were drawn;
+the ones below are committed. Live chains (presses, the watch, chords) stay held by the tests named
+in the M1–M3 sections; there is still no daemon or display in the cloud container.
+
+| # | Check | Result | Screenshot |
+|---|---|---|---|
+| B1 | Header, strip, terminal; nothing under it but the window's status bar | pass in both themes: title, `Idle`, `feat/short`, `PR #1118 · Open · checks failing`; Changes at the right; `claude · feat/short`, `1`, `2` (marked), "+", `claude · helper-1`, then *running*, New session and the splits | `visual-pass/close-b1-light-1280.png`, `visual-pass/close-b1-dark-1280.png` |
+| B2 | Helper's tab; main's AI tab | pass: the helper underlined with its own "+", main's shells gone, header unchanged; the AI tab underlined when marked | `visual-pass/close-b2-helper-dark-1280.png` |
+| B3 | "+", confirmation, confirm | pass: a third shell tab, marked, *starting…*; *Start another session?* names the new one a helper; the new helper last, selected | `visual-pass/close-b3-confirm-light-1280.png` |
+| B4 | Split side by side | pass: two panes with their own title rows; header and strip once above both | `visual-pass/close-b4-split-dark-1280.png` |
+| B5 | AI process stopped | pass: the stopped mark on the AI tab, *idle* and **restart** beside it | `visual-pass/close-b5-stopped-dark-1280.png` |
+| B6 | Changes pressed, pressed again | pass: the Changes view of *Short* under the header with no strip, the button filled; again, the terminal and strip back, the button outlined | `visual-pass/close-b6-closed-light-1280.png`, `visual-pass/close-b6-open-dark-1280.png` |
+| B7 | An edit | pass: `Changes` alone while the reread runs, then `Changes · 4 files · +51 −7`; `Changes · no changes` with nothing changed | `visual-pass/close-b7-after-dark-1280.png` |
+| B8 | Default entry's session | pass: title *Default*, *Idle*, no branch or pull request chip | `visual-pass/close-b8-default-light-1280.png`, `visual-pass/close-b8-default-dark-640.png` |
+| B9 | 640×480 beside a 300 px sidebar | pass: nothing overlaps or leaves the window; the pull request chip ends in `…`, the Changes button and splits whole, the tabs scroll; with counts the title gives way to `fe…` (as recorded at M3) | `visual-pass/close-b9-light-640.png`, `visual-pass/close-b9-dark-640.png` |
+| B10 | 12 members, the marked one beyond the edge | pass: the strip scrolls, the trailing fade takes the accent, status, New session and splits stay put | `visual-pass/close-b10-twelve-dark-1280.png` |
+| B11 | Chords | held by tests as at M2 (`keyboard`, `navigation`, `ui::app_chord_tests`, `terminal_focus`), green in the close gate | — |
+| B12 | Dark | pass: every frame above in dark is legible: title, chips, tab labels, status and the Changes label | the `-dark-` frames above |
+
+Nothing changed from M3's frames except what landed beside this feature (the status bar's key
+hints and usage items from #1124). Part B is complete.
