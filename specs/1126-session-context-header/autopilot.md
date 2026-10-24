@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, 2026-10-24. Done: plan.md, research.md (R1–R14), data-model.md, contracts/{context-header,session-area}.md, quickstart.md, committed 05558f7f. Next: plan review round 1 with rubrics/plan.md on snapshot 51263958474f497c08284a0df18662a4cf866d16:ceb78663833a922d96dfbaefd6548051373a2ac8 (this unit had no Agent tool to dispatch it), fix findings, then set Next step to `tasks unit`. No open findings, no PR.
 
 ## Open escalation
 
