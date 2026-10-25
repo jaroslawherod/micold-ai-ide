@@ -585,7 +585,11 @@ pub fn records_for(
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };
 
-    if under.settled && under.press_at.is_none() {
+    assert!(
+        !(under.settled && under.press_at.is_some()),
+        "a pressing state settles already: `settled` is for a list the state opens"
+    );
+    if under.settled {
         return resolve_settled(view_of(&under), renderer);
     }
     resolve_pressing(view_of(&under), renderer, under.press_at)

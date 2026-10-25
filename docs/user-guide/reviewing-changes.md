@@ -47,7 +47,7 @@ option to show it; the list closes. The arrow keys move through the options and 
 and `Esc`, `Tab` or a click outside the list closes it without changing anything. Hover the control
 to read its whole label and the base line. Below the header, the file list (or the Files tree) has
 a fixed-width column to itself, and the diff takes the rest of the width: a wider window widens
-only the diff. In a narrow window the base line ends in `…` before the control gives way.
+only the diff. In a narrow window the control keeps its width: the entry's column narrows and its base line ends in `…`.
 
 The Review tab carries two marks:
 
