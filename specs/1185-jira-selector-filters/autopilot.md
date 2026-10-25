@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1185
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
-- **Phase**: implement
+- **Phase**: verify
 - **Next step**: M5 (T047–T051, keyboard opening of the filter fields, found by the close unit's visual pass; ships with #1406 or after it); then a new close unit (re-run quickstart step 9 for T046, spec Status, close PR). D15 still awaits jaro
 
 ## Pull requests
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T023–T030 | full | Fix-version filter, AND with component | #1396 | done; merged d1bd9fe4 |
 | M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) + Filters panel (D15) | #1406 | done on 9177522b (rebased; #1397 merged, its guard no longer duplicated); visual B2/B3 black dialog = tiny-skia defect (D16), visual pass 2 on lavapipe passes; gate green at f89fa72f (rebased onto 9177522b, fixture auto-merged); pushed, PR pending |
 | M4 | T040–T045 | full | Label filter from loaded issues; all four in the Filters panel (D15) | #1406 | done on wip-1185-m4 (local, unpushed), prepared on top of the unmerged M3 (PR #1406 head 1d4c65cb, held for D15); `scripts/gate.sh` green at 459cf4b6; reviews A/B CLEAN; visual pass M4-1..3 PASS; PR text in scratchpad m4-pr-title.md / m4-pr-body.md; M4-4 panel keyboard fixed (`cdk::picker::Picker::panel`: Tab/Shift+Tab cycle button + fields, Escape returns the keyboard to the button), tests red before the fix |
-| M5 | T047–T051 | full | Keyboard opening of the filter fields: a Tab-reached Component / Fix version / Reporter field loads its choices and picks by Up/Down/Enter; its Enter stays in the dialog (FR-015, FR-006) | — | cut by the close unit (D17); not started |
+| M5 | T047–T051 | full | Keyboard opening of the filter fields: a Tab-reached Component / Fix version / Reporter field loads its choices and picks by Up/Down/Enter; its Enter stays in the dialog (FR-015, FR-006) | #1406 | implemented on wip-1185-m4 (local, unpushed, on 70190316): reducer `open_field` asks on the first opening by `Focused`/`QueryChanged`/`HighlightMoved`; `cdk::picker::Picker::open_from_keyboard` opens a closed keyboard-focused field on Down/Enter and captures the key; tests red before (picker ArrowDown published nothing; client: list not opened / NotRequested). T050's optional Tab-publishes-`on_focus` not done (would ask on Tab alone, FR-006): B9 focus-ring follow-up stays. Next: gate, reviews A/B, visual B9 |
 
 ## Decisions
 

@@ -378,27 +378,27 @@ The Label field works (its choices need no request).
 
 ### Tests (write first, must fail)
 
-- [ ] T047 [P] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
+- [x] T047 [P] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`: for Component, Fix
   version and Reporter, a field first opened without `Focused` — typed into (`QueryChanged`) or
   moved in (`HighlightMoved`) — asks for its choices once (FR-006: on first opening, never on
   dialog open or on Tab alone), shows them when they arrive, and a Down + Enter then picks one;
   a second keystroke asks nothing more.
-- [ ] T048 [P] Widget tests in `crates/micold-material/src/cdk/picker.rs`: in an open panel, a
+- [x] T048 [P] Widget tests in `crates/micold-material/src/cdk/picker.rs`: in an open panel, a
   field that gained the keyboard by the panel's Tab cycle opens on Down or Enter (publishing its
   focus/open message, so its choices load), and that Enter or Down is captured — it never reaches a
   widget outside the panel.
 
 ### Implementation
 
-- [ ] T049 In `crates/micold-client/src/features/worktree_form/jira_filters.rs` start the choices
+- [x] T049 In `crates/micold-client/src/features/worktree_form/jira_filters.rs` start the choices
   request on the first opening by any message (`QueryChanged`, `HighlightMoved`, as `Focused`
   does), through the same `start` and the one `jira_request` gate. Makes T047 pass.
-- [ ] T050 In `crates/micold-material/src/cdk/picker.rs` (`Picker::panel` and the field's closed
+- [x] T050 In `crates/micold-material/src/cdk/picker.rs` (`Picker::panel` and the field's closed
   key handling) open a closed, keyboard-focused field on Down or Enter and capture the key; the
   panel's Tab cycle may publish the reached field's `on_focus` (which would also give it its
   active indicator — the B9 follow-up). Makes T048 pass.
-- [ ] T051 [P] User guide keyboard paragraph in `docs/user-guide/worktrees-and-sessions.md`
+- [x] T051 [P] User guide keyboard paragraph in `docs/user-guide/worktrees-and-sessions.md`
   (filters section): Down or Enter opens a filter's list from the keyboard; check it still matches.
 
 **Checkpoint**: quickstart Part B step 9 passes in full by keyboard only.

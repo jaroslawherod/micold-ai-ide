@@ -276,3 +276,34 @@ fn labels_are_never_asked_of_jira() {
         assert_eq!(occurrences(needle), Vec::new(), "{needle}");
     }
 }
+
+/// Feature 1185 M5 (FR-006, FR-015): a filter field opened by the keyboard never sent the press
+/// that `Focused` comes from, so the first opening by any message — a focus, typed text, a move of
+/// the highlight — asks for its choices, all through one helper and the one first-request call.
+/// Opening the form and Tab alone send none of these, so they still ask nothing.
+#[test]
+fn a_filters_first_opening_asks_through_one_helper_from_each_opening_message() {
+    let first_requests: Vec<_> = occurrences(".start(kind, seq, false)");
+    assert_eq!(first_requests.len(), 1, "{first_requests:?}");
+    assert_eq!(
+        first_requests[0].0,
+        "crates/micold-client/src/features/worktree_form/jira_filters.rs"
+    );
+    let reducer = fs::read_to_string(
+        root().join("crates/micold-client/src/features/worktree_form/jira_filters.rs"),
+    )
+    .unwrap();
+    for arm in [
+        "FilterMsg::Focused(kind) =>",
+        "FilterMsg::QueryChanged(kind, text) =>",
+        "FilterMsg::HighlightMoved(kind, direction) =>",
+    ] {
+        let from = reducer.find(arm).unwrap_or_else(|| panic!("no arm {arm}"));
+        let rest = &reducer[from + arm.len()..];
+        let end = rest.find("FilterMsg::").unwrap_or(rest.len());
+        assert!(
+            rest[..end].contains("open_field("),
+            "{arm} opens the field without asking for its choices"
+        );
+    }
+}
