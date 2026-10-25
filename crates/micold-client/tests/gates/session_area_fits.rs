@@ -38,6 +38,7 @@ const SESSION_STATES: &[&str] = &[
     "session-area-six-tabs",
     "session-area-twelve-tabs",
     "status-bar-split-panes",
+    "session-area-review-hidden",
 ];
 
 /// A branch's worth of counts: more than `Changes` alone, within H10's three-digit bound.
@@ -187,9 +188,7 @@ fn assert_fits(name: &str, state: &State) {
 
 /// The width the header's Changes button asks for in `state`, laid out on its own with no bound.
 fn changes_button_request(state: &State) -> f32 {
-    let location = state
-        .current_session_location()
-        .expect("a session is shown");
+    let location = state.shown_location().expect("a location is shown");
     let label = micold_core::context_header::changes_label(
         micold_client::ui::session_area::counts_of(state, &location),
     );
@@ -326,58 +325,163 @@ fn a_long_title_and_a_pull_request_chip_still_fit() {
     assert_fits("long title with a pull request", &state);
 }
 
-/// T053 (R12, A1, H10): with the Changes view open the session area is the header, then the view;
-/// the header's title, chips and Changes button fit at both windows and themes, the button at the
-/// width it asks for.
+/// T053 (R12, A1, H10), feature 1269 T037 (U16): with a review shown the session area is the
+/// header, the strip, then the view; the header's title, chips and Changes button and the strip's
+/// controls fit at both windows and themes, the button at the width it asks for. A sessionless
+/// location's strip has no status words, so only its status may be empty.
 #[test]
-fn the_header_stands_over_the_open_changes_view() {
-    let covered = covered_states()
-        .iter()
-        .find(|s| s.name == "session-area-changes-open")
-        .expect("the covered state exists");
-    for theme in [ThemePreference::Light, ThemePreference::Dark] {
-        for window in [MIN_WINDOW_SIZE, WINDOW] {
-            let mut under = (covered.build)();
-            under.state.settings.theme_pref = theme;
-            under.state.sidebar.width = SIDEBAR;
-            let state = under.state.clone();
-            let records = records_of(under, window);
-            let what = format!("changes open {theme:?} {window:?}");
-            let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-            let children: Vec<Rectangle> = records
-                .iter()
-                .filter(|r| {
-                    r.path.len() == SESSION_AREA.len() + 1 && r.path.starts_with(SESSION_AREA)
-                })
-                .map(rect)
-                .collect();
-            assert_eq!(
-                children.len(),
-                2,
-                "{what}: the header, then the view: {children:?}"
-            );
-            assert!(
-                children[0].y + children[0].height <= children[1].y + TOLERANCE,
-                "{what}: the header {:?} is above the view {:?}",
-                children[0],
-                children[1]
-            );
-            let parts = header_parts(&records);
-            for (part, r) in &parts {
-                assert!(
-                    r.width > 0.0 && inside(r, &area),
-                    "{what}: the {part} {r:?} lies inside the session area {area:?}"
+fn the_header_and_the_strip_stand_over_the_shown_review() {
+    for name in [
+        "session-area-review-shown",
+        "session-area-review-sessionless",
+    ] {
+        let covered = covered_states()
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("the covered state {name} exists"));
+        for theme in [ThemePreference::Light, ThemePreference::Dark] {
+            for window in [MIN_WINDOW_SIZE, WINDOW] {
+                let mut under = (covered.build)();
+                under.state.settings.theme_pref = theme;
+                under.state.sidebar.width = SIDEBAR;
+                let state = under.state.clone();
+                let records = records_of(under, window);
+                let what = format!("{name} {theme:?} {window:?}");
+                let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+                let children: Vec<Rectangle> = records
+                    .iter()
+                    .filter(|r| {
+                        r.path.len() == SESSION_AREA.len() + 1 && r.path.starts_with(SESSION_AREA)
+                    })
+                    .map(rect)
+                    .collect();
+                assert_eq!(
+                    children.len(),
+                    3,
+                    "{what}: the header, the strip, then the view: {children:?}"
                 );
-            }
-            for (i, (a_name, a)) in parts.iter().enumerate() {
-                for (b_name, b) in &parts[i + 1..] {
+                assert!(
+                    children[0].y + children[0].height <= children[1].y + TOLERANCE
+                        && children[1].y + children[1].height <= children[2].y + TOLERANCE,
+                    "{what}: header, strip and view are not top to bottom: {children:?}"
+                );
+                let mut parts = header_parts(&records);
+                let strip = strip_parts(&records);
+                assert_eq!(
+                    strip.len(),
+                    4,
+                    "{what}: the strip's four children: {strip:?}"
+                );
+                for (part, r) in &strip {
                     assert!(
-                        !overlap(a, b),
-                        "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
+                        r.width > 0.0 || part == "strip status",
+                        "{what}: the {part} {r:?} is laid out"
                     );
                 }
+                parts.extend(strip.into_iter().filter(|(_, r)| r.width > 0.0));
+                for (part, r) in &parts {
+                    assert!(
+                        r.width > 0.0 && inside(r, &area),
+                        "{what}: the {part} {r:?} lies inside the session area {area:?}"
+                    );
+                }
+                for (i, (a_name, a)) in parts.iter().enumerate() {
+                    for (b_name, b) in &parts[i + 1..] {
+                        assert!(
+                            !overlap(a, b),
+                            "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
+                        );
+                    }
+                }
+                assert_button_unsqueezed(&what, &records, &state);
             }
-            assert_button_unsqueezed(&what, &records, &state);
+        }
+    }
+}
+
+/// The scrolling members' keyed row (`SESSION_STRIP_TABS`), under the session area.
+const STRIP_TABS: &[usize] = &[1, 0, 0, 0, 0, 0, 0];
+
+/// The immediate children of `parent` in `records`.
+fn children_of<'r>(records: &'r [LayoutRecord], parent: &[usize]) -> Vec<&'r LayoutRecord> {
+    records
+        .iter()
+        .filter(|r| r.path.len() == parent.len() + 1 && r.path.starts_with(parent))
+        .collect()
+}
+
+/// Feature 1269 T037 (U15, SC-006): the Review tab with a `99+` badge and the changed mark, and
+/// shown with its badge, at the smallest window and the layout window in both themes: its mark,
+/// label, badge and × are each laid out whole inside the tab, and none overlaps another.
+#[test]
+fn the_review_tab_holds_its_label_badge_mark_and_close_whole() {
+    let build = |name: &str| {
+        covered_states()
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("the covered state {name} exists"))
+            .build
+    };
+    for (name, marked) in [
+        ("session-area-review-hidden", true),
+        ("session-area-review-shown", false),
+    ] {
+        for theme in [ThemePreference::Light, ThemePreference::Dark] {
+            for window in [MIN_WINDOW_SIZE, WINDOW] {
+                let mut under = build(name)();
+                crate::support::covered_states::feat_short_drafts(&mut under.state, 150);
+                under.state.settings.theme_pref = theme;
+                under.state.sidebar.width = SIDEBAR;
+                let records = records_of(under, window);
+                let what = format!("{name} 99+ {theme:?} {window:?}");
+                let row = [SESSION_AREA, STRIP_TABS].concat();
+                let members = children_of(&records, &row);
+                let tab = *members.last().expect("the strip has members");
+                let tab_rect = rect(tab);
+                assert!(
+                    (tab_rect.width - micold_material::tab::REVIEW_WIDTH).abs() <= TOLERANCE,
+                    "{what}: the Review tab {tab_rect:?} is its fixed width"
+                );
+                // The tab's content row: the shallowest node inside it with three children — the
+                // mark's slot, the label and the ×'s slot (`material::Tab`).
+                let content = records
+                    .iter()
+                    .filter(|r| r.path.len() > tab.path.len() && r.path.starts_with(&tab.path))
+                    .filter(|r| children_of(&records, &r.path).len() == 3)
+                    .min_by_key(|r| r.path.len())
+                    .unwrap_or_else(|| panic!("{what}: the tab lays out its content row"));
+                let slots = children_of(&records, &content.path);
+                // The label's ceiling container holds the row of `Review` and its badge.
+                let mut label = children_of(&records, &slots[1].path);
+                while label.len() == 1 {
+                    label = children_of(&records, &label[0].path);
+                }
+                assert_eq!(label.len(), 2, "{what}: `Review` and its badge: {label:?}");
+                let mut parts: Vec<(&str, Rectangle)> = vec![
+                    ("label", rect(label[0])),
+                    ("badge", rect(label[1])),
+                    ("×", rect(slots[2])),
+                ];
+                if marked {
+                    let mark = children_of(&records, &slots[0].path);
+                    let mark = mark.first().map_or(rect(slots[0]), |m| rect(m));
+                    parts.push(("changed mark", mark));
+                }
+                for (part, r) in &parts {
+                    assert!(
+                        r.width > 0.0 && r.height > 0.0 && inside(r, &tab_rect),
+                        "{what}: the {part} {r:?} lies whole inside the tab {tab_rect:?}"
+                    );
+                }
+                for (i, (a_name, a)) in parts.iter().enumerate() {
+                    for (b_name, b) in &parts[i + 1..] {
+                        assert!(
+                            !overlap(a, b),
+                            "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
+                        );
+                    }
+                }
+            }
         }
     }
 }

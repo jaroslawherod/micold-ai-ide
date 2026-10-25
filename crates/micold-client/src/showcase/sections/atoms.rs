@@ -317,6 +317,30 @@ pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     arrange(instances, Layout::Inline)
 }
 
+/// `CountBadge` — a count on a filled pill (feature 1269, R11): one and two digits, the cap, with a
+/// tooltip, and beside it the section list's badge chip, which is the same pill around a word.
+pub fn count_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let count = |n| std::num::NonZeroUsize::new(n).expect("a count of one or more");
+    arrange(
+        vec![
+            posed("1", material::CountBadge::new(count(1), roles), roles),
+            posed("12", material::CountBadge::new(count(12), roles), roles),
+            posed("99+", material::CountBadge::new(count(150), roles), roles),
+            posed(
+                "with a tooltip",
+                material::CountBadge::new(count(2), roles).tooltip("Review · 2 drafts"),
+                roles,
+            ),
+            posed(
+                "the section list's badge chip",
+                material::count_badge::chip::<Message>("Sharing", roles.primary, roles.on_primary),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `UnreadMark` — on a session row, beside the same row without it, and on the switcher's button
 /// (feature 039, FR-030). The switcher's rows with their unread counts are `MenuOverlay`'s second
 /// opener, because a menu's rows exist only inside its panel.

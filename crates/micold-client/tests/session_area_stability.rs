@@ -112,7 +112,7 @@ fn builders() -> Vec<(&'static str, String)> {
             body_from(
                 &area,
                 "fn status_cluster<'a>(",
-                &["model.restart", ".on_press(restart)"],
+                &["model.restart", "then_some(restart)"],
             ),
         ),
         (
@@ -311,14 +311,22 @@ mod press_in_flight {
     use micold_client::app::{Message, State};
     use micold_client::features::session::Msg as SessionMsg;
     use micold_client::features::session_strip::{MemberKey, StripModel};
+    use micold_client::features::sidebar::Msg as SidebarMsg;
     use micold_core::pane_layout::PaneLayout;
 
     fn under(state: State) -> StateUnderTest {
         StateUnderTest::new(state).panes(PaneLayout::single())
     }
 
-    /// The centre of member `key` in `under`'s laid-out strip.
-    fn centre_of(node: &layout::Node, state: &State, key: MemberKey) -> Point {
+    /// Where on a member a press lands: its middle, or its trailing slot's (the ×).
+    #[derive(Clone, Copy)]
+    enum Spot {
+        Middle,
+        Close,
+    }
+
+    /// `spot` of member `key` in `under`'s laid-out strip.
+    fn spot_of(node: &layout::Node, state: &State, key: MemberKey, spot: Spot) -> Point {
         let model = StripModel::of(state).expect("a session is shown");
         let index = model
             .members
@@ -326,10 +334,30 @@ mod press_in_flight {
             .position(|m| m.key() == key)
             .expect("the member is in the strip");
         let path = [SESSION_STRIP_TABS, &[index]].concat();
-        let record = lay::walk(Layout::new(node), lay::Layer::Base)
-            .into_iter()
-            .find(|r| r.path == path)
-            .expect("the member is laid out");
+        let records = lay::walk(Layout::new(node), lay::Layer::Base);
+        let children = |of: &[usize]| {
+            records
+                .iter()
+                .filter(|r| r.path.len() == of.len() + 1 && r.path.starts_with(of))
+                .collect::<Vec<_>>()
+        };
+        let record = match spot {
+            Spot::Middle => records
+                .iter()
+                .find(|r| r.path == path)
+                .expect("the member is laid out"),
+            // The tab's content row is `[leading slot, label, trailing slot]` (`material::Tab`):
+            // the shallowest node inside the member with three children; the × is its last.
+            Spot::Close => {
+                let row = records
+                    .iter()
+                    .filter(|r| r.path.len() > path.len() && r.path.starts_with(&path))
+                    .filter(|r| children(&r.path).len() == 3)
+                    .min_by_key(|r| r.path.len())
+                    .expect("the member lays out its content row");
+                children(&row.path)[2]
+            }
+        };
         Point::new(
             record.x + record.width / 2.0,
             record.y + record.height / 2.0,
@@ -361,6 +389,11 @@ mod press_in_flight {
     /// Press member `key` in `before`, let the window change to `after` between the press and its
     /// release, and release over the member where it now is: what the strip published.
     fn press_across(before: State, after: State, key: MemberKey) -> Vec<Message> {
+        press_across_at(before, after, key, Spot::Middle)
+    }
+
+    /// [`press_across`] on `spot` of the member.
+    fn press_across_at(before: State, after: State, key: MemberKey, spot: Spot) -> Vec<Message> {
         let renderer = lay::renderer();
         let limits = layout::Limits::new(Size::ZERO, WINDOW);
         let origin = std::time::Instant::now();
@@ -384,7 +417,7 @@ mod press_in_flight {
         let node = element
             .as_widget_mut()
             .layout(&mut tree, &renderer, &limits);
-        let at = centre_of(&node, &before, key);
+        let at = spot_of(&node, &before, key, spot);
         dispatch(
             &mut element,
             &mut tree,
@@ -402,7 +435,7 @@ mod press_in_flight {
         let node = element
             .as_widget_mut()
             .layout(&mut tree, &renderer, &limits);
-        let at = centre_of(&node, &after, key);
+        let at = spot_of(&node, &after, key, spot);
         dispatch(
             &mut element,
             &mut tree,
@@ -423,7 +456,12 @@ mod press_in_flight {
         );
         published
             .into_iter()
-            .filter(|m| matches!(m, Message::Session(_)))
+            .filter(|m| {
+                matches!(
+                    m,
+                    Message::Session(_) | Message::Sidebar(_) | Message::Changes(_)
+                )
+            })
             .filter(|m| {
                 !matches!(
                     m,
@@ -537,13 +575,105 @@ mod press_in_flight {
             vec![Message::Session(SessionMsg::TerminalAiCliSelected(main))]
         );
     }
+
+    // ---- Feature 1269 T034 (U14, FR-015): the Review member ----
+
+    fn feat_short() -> micold_core::session::SessionLocation {
+        micold_core::session::SessionLocation::Worktree("feat-short".to_string())
+    }
+
+    /// `state` with `feat-short`'s Review tab made, then hidden by a session selection.
+    fn with_hidden_review(mut state: State) -> State {
+        use micold_client::features::changes::{self, Msg};
+        changes::update(
+            &mut state.changes,
+            Msg::Opened {
+                project: std::path::PathBuf::from("/fixture/project"),
+                entry: feat_short(),
+            },
+        );
+        changes::update(&mut state.changes, Msg::SessionSelected);
+        state
+    }
+
+    /// The Review tab's badge and changed mark appear between a press on it and its release: the
+    /// press still asks for the review.
+    #[test]
+    fn a_press_on_the_review_tab_survives_its_badge_and_mark_appearing() {
+        use super::support::covered_states::feat_short_drafts;
+        let before = with_hidden_review(strip_with(1, 1).state);
+        let mut after = before.clone();
+        feat_short_drafts(&mut after, 120);
+        let _ = after
+            .changes
+            .tabs
+            .files_changed(&(std::path::PathBuf::from("/fixture/project"), feat_short()));
+        assert_eq!(
+            press_across(before, after, MemberKey::Review),
+            vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+                feat_short()
+            ))],
+            "the press in flight on the Review tab must reach it"
+        );
+    }
+
+    /// A shell instance opens before the Review tab between a press on its × and the release: the
+    /// press still closes the review.
+    #[test]
+    fn a_press_on_the_review_tabs_close_survives_a_tab_opening_before_it() {
+        // No helper, so the moved Review tab's × is still inside the strip's viewport.
+        let before = with_hidden_review(strip_with(0, 0).state);
+        let main = before.active_sessions()[0].id;
+        let mut after = before.clone();
+        after
+            .workspace
+            .find_session_mut(main)
+            .expect("main")
+            .1
+            .open_shell_instance();
+        assert_eq!(
+            press_across_at(before, after, MemberKey::Review, Spot::Close),
+            vec![Message::Changes(
+                micold_client::features::changes::Msg::TabClosed {
+                    project: std::path::PathBuf::from("/fixture/project"),
+                    entry: feat_short(),
+                }
+            )]
+        );
+    }
+
+    /// The Review tab opens after the helper's tab between a press on it and the release: the press
+    /// still selects the helper.
+    #[test]
+    fn a_press_on_a_session_tab_survives_the_review_tab_opening() {
+        let before = strip_with(1, 1).state;
+        let (_, helper) = ids(&before);
+        let after = with_hidden_review(before.clone());
+        assert_eq!(
+            press_across(before, after, MemberKey::Session(helper)),
+            vec![Message::Session(SessionMsg::Selected(helper))]
+        );
+    }
+
+    /// The Review tab closes between a press on the helper's tab and its release: the press still
+    /// selects the helper.
+    #[test]
+    fn a_press_on_a_session_tab_survives_the_review_tab_closing() {
+        let after = strip_with(1, 1).state;
+        let (_, helper) = ids(&after);
+        let before = with_hidden_review(after.clone());
+        assert_eq!(
+            press_across(before, after, MemberKey::Session(helper)),
+            vec![Message::Session(SessionMsg::Selected(helper))]
+        );
+    }
 }
 
 // ---- T063, T065: pressing the rendered controls (US3 scenario 2, US2 scenario 5, FR-007) ----
 
 mod rendered_presses {
     use super::support::covered_states::{
-        changes_open_under_header, strip_with, SESSION_HEADER_CHANGES, SESSION_STRIP_ROW,
+        review_shown, strip_with, SESSION_HEADER_CHANGES, SESSION_STRIP_ROW,
     };
     use super::support::layout::{self as lay, StateUnderTest};
     use iced::advanced::widget::Tree;
@@ -597,7 +727,7 @@ mod rendered_presses {
     /// shown asks for it again, which leaves the tabs and the shown tab as they were.
     #[test]
     fn pressing_changes_with_the_review_shown_changes_nothing() {
-        let mut state = changes_open_under_header();
+        let mut state = review_shown().state;
         assert!(
             state.changes.tabs.shown().is_some(),
             "the premise: the review is shown"

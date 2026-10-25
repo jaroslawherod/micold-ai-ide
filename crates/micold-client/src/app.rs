@@ -1704,6 +1704,8 @@ pub fn interpret(
             let effect =
                 crate::features::changes::opened(&mut state.changes, project, entry, current);
             state.queue_changes_effect(effect);
+            // Feature 1269 (U15): the shown Review tab is scrolled into view, as a selected tab is.
+            state.session.pending_tab_reveal = true;
             return outcomes;
         }
         Outcome::ChangesClosedForCompare => {

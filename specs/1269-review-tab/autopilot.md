@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: milestone M3
-- **Next step**: orchestrator opens the M2 PR (`pr-title-m2.md`/`pr-body-m2.md`), then, once M2 merges and `1269-m3` is rebased on main, the M3 PR from branch `1269-m3` (title/body in the scratchpad as `pr-title-m3.md`/`pr-body-m3.md`); then milestone M4 (T032–T041)
+- **Phase**: milestone M4
+- **Next step**: M4 (branch `1269-m4`, stacked on `1269-m3`): T032–T040 implemented; reviews A/B, visual pass (T041) and full gate next
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | in CI |
 | M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | (M2 PR, opened by orchestrator) | review-ready |
 | M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | (M3 PR, opened by orchestrator) | review-ready |
-| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | — | todo |
+| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | (M4 PR, opened by orchestrator) | in progress |
 
 ## Decisions
 

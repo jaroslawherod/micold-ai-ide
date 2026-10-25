@@ -44,7 +44,7 @@ use iced::{touch, window, Alignment, Element, Event, Length, Rectangle, Size, Ve
 
 use super::keyboard_focus::Focus;
 use super::navigation_drawer::parked;
-use super::{Button, ButtonVariant, Glyph, Tag, Text, TypeRole};
+use super::{Button, ButtonVariant, Glyph, Text, TypeRole};
 use crate::cdk::motion::Progress;
 use crate::cdk::passthrough::forward_to_selected;
 use crate::icons::Icon;
@@ -473,9 +473,8 @@ fn destination_form<'a, M: Clone + 'a>(
     if parts.badge_chip {
         if let Some(badge) = &section.badge {
             content = content.push(
-                Tag::<M>::new(badge.clone(), badge_fill)
-                    .solid(badge_on_fill)
-                    .role(TypeRole::Caption),
+                // Feature 1269 (R11): the count badge's pill, around a word.
+                crate::count_badge::chip::<M>(badge.clone(), badge_fill, badge_on_fill),
             );
         }
     }

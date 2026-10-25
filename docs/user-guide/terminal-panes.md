@@ -39,6 +39,11 @@ to go back to the AI CLI. Nothing is drawn under the terminal.
   its tab wears the stopped mark and a **restart** control appears beside the status; press it to
   run the process again. Right-click the shown session's tab or a shell tab for its menu
   (*Restart* while it is stopped, *Close* on a shell tab); another session's tab has no menu.
+- **Review**: the worktree's [review](reviewing-changes.md#opening-the-changes-view), last among
+  the tabs, while one is open. Press it to show the review in place of the terminal; its **×**
+  closes the review. It carries a badge with the number of draft comments and, while you are on a
+  session tab, a dot when the worktree's files changed since you last looked at the review. While
+  it is shown, the status, its **restart** and the split buttons keep their place, greyed out.
 - **New session**: starts another session in the shown worktree, as the sidebar's *Start another
   session…* does, confirmation included. Cancel changes nothing; confirm adds the new helper's tab
   after the others and shows it.
@@ -88,6 +93,10 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
+
+With the **Review** tab shown, every chord acts as it did while the Changes view was open, and a
+session chord (or any session you select) shows that session's terminal and keeps the Review tab in
+the strip.
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. While a

@@ -114,6 +114,14 @@ pub fn tab<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message
                 session_tab("copilot · a-much-longer-session-name", false, true, roles),
                 roles,
             ),
+            // Feature 1269 (R11, T039): the strip's Review tab — shown, and hidden with a draft
+            // count and the changed mark — at its derived width, beside the session tabs.
+            posed("review, shown", review_tab(true, None, roles), roles),
+            posed(
+                "review, hidden with drafts and changed",
+                review_tab(false, std::num::NonZeroUsize::new(3), roles),
+                roles,
+            ),
         ],
         Layout::Inline,
     )
@@ -138,6 +146,46 @@ fn session_tab<'a>(
         stopped.then_some(material::BadgeEmphasis::Stopped),
         roles,
     ))
+    .on_press(Message::NoOp)
+}
+
+/// The Review tab as the strip draws one (`ui/session_area.rs::member`): the changed mark while
+/// hidden and changed (posed with the count), `Review` and its draft count, the ×.
+fn review_tab<'a>(
+    shown: bool,
+    drafts: Option<std::num::NonZeroUsize>,
+    roles: Roles,
+) -> material::Tab<'a, Message> {
+    let tint = material::tab_content_colour(shown, roles);
+    let mark: Element<'a, Message> = match drafts {
+        Some(_) => material::UnreadMark::new(roles).into(),
+        None => iced::widget::Space::new().into(),
+    };
+    let badge: Element<'a, Message> = match drafts {
+        Some(n) => material::CountBadge::new(n, roles).into(),
+        None => iced::widget::Space::new().into(),
+    };
+    material::Tab::new(
+        iced::widget::row![
+            material::Text::new("Review", material::TypeRole::Label, roles).tint(tint),
+            badge
+        ]
+        .spacing(micold_core::tokens::spacing::XS)
+        .align_y(iced::Alignment::Center),
+        roles,
+    )
+    .fixed_width(material::tab::REVIEW_WIDTH)
+    .edge(material::IndicatorEdge::Bottom)
+    .active(shown)
+    .leading(mark)
+    .trailing(
+        material::IconButton::new(crate::icons::Icon::Close, roles)
+            .size(material::TypeRole::Label)
+            .padding(micold_core::tokens::spacing::XS)
+            .circular()
+            .tint(tint)
+            .on_press(Message::NoOp),
+    )
     .on_press(Message::NoOp)
 }
 
