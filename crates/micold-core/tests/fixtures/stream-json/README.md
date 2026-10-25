@@ -93,4 +93,4 @@ that is a number, with no `usage` and no `modelUsage`, with `modelUsage` a list,
 (block and inline), an image, `javascript:`, relative and `file:` links, a reference defined in a
 later block, a CRLF paragraph and list (kept as written by its `-text` line in `.gitattributes`), an
 indented code block, an unclosed fence (last), unmatched `**` and a table without its separator
-row — beside every element of the subset.
+row — beside every element of the subset, including a `***bold italic***` run (1259).

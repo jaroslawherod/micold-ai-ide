@@ -98,7 +98,9 @@ rather than by where they sit on screen.
 **Emphasis is drawn in Roboto's own italic.** Emphasised words in agent replies (`*like this*` or
 `_like this_`) use the italic Roboto that ships with the application, at the weight of the text
 around them, so emphasis in a heading or a bold run stays as heavy as its surroundings and bold
-italic is exactly as bold as bold. Code inside emphasis stays upright.
+italic is exactly as bold as bold. Code inside emphasis stays upright, and so do characters
+Roboto has no italic for (Chinese, Japanese or Korean text, emoji): they draw in a system font, as
+they do outside emphasis.
 
 **Code is drawn in Fira Mono.** Code blocks, inline code, diffs, tool output and the terminal all
 use the bundled Fira Mono, so code and diff columns line up the same on Linux, macOS and Windows,

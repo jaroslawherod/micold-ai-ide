@@ -25,18 +25,11 @@ use iced::{Element, Font, Pixels, Rectangle, Size, Vector};
 /// that is reproducible and wrong. T002 said this asset "MUST NOT be committed twice" and it had
 /// been; pointing at the shipped files is what that requirement asked for.
 ///
-/// Every shipped weight is loaded because `TypeRole` resolves weight >= 500 to Medium and >= 600 to
-/// Semibold (`material/text.rs`). Loading Regular alone measured every Medium label with Regular metrics.
+/// This is the Regular face, which the apparatus guard reads metrics from. [`renderer`] registers
+/// every shipped Roboto face through `install_roboto`, as the application does: each role's weight,
+/// upright and italic, needs its own face, or it measures with another face's metrics.
 pub const REFERENCE_FONT_BYTES: &[u8] =
     include_bytes!("../../../../assets/fonts/Roboto-Regular.ttf");
-
-/// The medium face, for the type roles that ask for weight >= 500.
-pub const REFERENCE_FONT_MEDIUM_BYTES: &[u8] =
-    include_bytes!("../../../../assets/fonts/Roboto-Medium.ttf");
-
-/// The semibold face, for the Overview card's roles at weight 600 (BUG-1298).
-pub const REFERENCE_FONT_SEMIBOLD_BYTES: &[u8] =
-    include_bytes!("../../../../assets/fonts/Roboto-SemiBold.ttf");
 
 /// The icon face. **Every bit as load-bearing as the text faces**, and it was missing.
 ///
@@ -187,22 +180,14 @@ pub fn reference_font_at(weight: u16) -> Font {
 pub fn renderer() -> iced::Renderer {
     static LOADED: Once = Once::new();
     LOADED.call_once(|| {
-        // Every shipped Roboto face, upright and italic, registered as the application registers
-        // them (feature 1259). The `REFERENCE_FONT_*` constants stay for the apparatus guard.
-        micold_client::ui::install_roboto(
-            &mut iced::advanced::graphics::text::font_system()
-                .write()
-                .expect("the global font system lock was poisoned"),
-        );
-        iced::advanced::graphics::text::font_system()
+        // Every shipped Roboto face, upright and italic, the icon face and the bundled monospace
+        // faces, registered as the application registers them (features 1259, 1260).
+        let mut fonts = iced::advanced::graphics::text::font_system()
             .write()
-            .expect("the global font system lock was poisoned")
-            .load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
-        micold_client::ui::install_monospace(
-            &mut iced::advanced::graphics::text::font_system()
-                .write()
-                .expect("the global font system lock was poisoned"),
-        );
+            .expect("the global font system lock was poisoned");
+        micold_client::ui::install_roboto(&mut fonts);
+        fonts.load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
+        micold_client::ui::install_monospace(&mut fonts);
     });
 
     block_on(<iced::Renderer as Headless>::new(

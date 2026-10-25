@@ -36,8 +36,8 @@ const FACES: [(&str, &[u8], u16, bool); 6] = [
     ("Roboto-SemiBoldItalic.ttf", SEMIBOLD_ITALIC, 600, true),
 ];
 
-/// The family name the GUI selects the font with. Must match `src/main.rs`.
-const EXPECTED_FAMILY: &str = "Roboto";
+/// The family name the GUI selects the font with: the one `ui::ROBOTO` names.
+const EXPECTED_FAMILY: &str = micold_client::ui::ROBOTO_FAMILY;
 
 fn face<'a>(bytes: &'a [u8], what: &str) -> ttf_parser::Face<'a> {
     ttf_parser::Face::parse(bytes, 0).unwrap_or_else(|e| panic!("{what} must parse as a font: {e}"))
@@ -161,4 +161,34 @@ fn the_faces_are_not_the_same_file() {
             );
         }
     }
+}
+
+/// The faces the application registers (`ui::ROBOTO_FACES`, what `install_roboto` loads) are the
+/// six files checked above, one per weight and style, all in [`EXPECTED_FAMILY`]. A face added to
+/// `assets/fonts/` but not to the registered list, or registered twice, fails here.
+#[test]
+fn the_registered_faces_are_the_shipped_files_one_per_weight_and_style() {
+    let mut seen = std::collections::BTreeSet::new();
+    for bytes in micold_client::ui::ROBOTO_FACES {
+        let (file, _, weight, italic) = FACES
+            .iter()
+            .find(|(_, shipped, _, _)| *shipped == bytes)
+            .expect("a registered Roboto face is not one of the shipped files");
+        let f = face(bytes, file);
+        assert_eq!(family_of(&f).as_deref(), Some(EXPECTED_FAMILY), "{file}");
+        assert!(
+            seen.insert((*weight, *italic)),
+            "{file} is registered twice"
+        );
+    }
+    assert_eq!(
+        seen.len(),
+        FACES.len(),
+        "not every shipped face is registered"
+    );
+    assert_eq!(
+        micold_client::ui::ROBOTO_WEIGHTS,
+        [400, 500, 600],
+        "ROBOTO_WEIGHTS no longer names the shipped weights"
+    );
 }
