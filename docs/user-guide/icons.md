@@ -74,10 +74,10 @@ through to a blank box at runtime. To add one:
 
 1. Find the glyph's codepoint in the upstream
    [`.codepoints`](https://github.com/google/material-design-icons) manifest.
-2. Add an `Icon` variant and its codepoint in `crates/micold-material/src/icons.rs`, and add a row to the mapping
-   table in `PROVENANCE.md`.
-3. Extend the mapping assertion in `tests/icons.rs`. The font-integrity test
-   (`tests/icons_font.rs`) then verifies the glyph is present in the bundled font — which it
+2. Add an `Icon` variant and its codepoint in `crates/micold-material/src/icons.rs`, and add a
+   row to the mapping table in `assets/fonts/PROVENANCE.md`.
+3. Extend the mapping assertion in `crates/micold-client/tests/icons.rs`. The font-integrity test
+   (`crates/micold-client/tests/icons_font.rs`) then verifies the glyph is present in the bundled font — which it
    already is, since the font carries full upstream coverage.
 
 See [Appearance & Theming](appearance-theming.md) for how themes and colors work.
@@ -87,5 +87,7 @@ See [Appearance & Theming](appearance-theming.md) for how themes and colors work
 **Alignment**: 2026-07-20 — Spec/code alignment audit (spec 004 FR-013). The table advertised a
 "Help (question mark)" app-bar icon that no longer exists — the top app bar renders `Icon::Menu`
 — and listed 9 of the 21 icons the application defines. All rendered icons are now documented.
-`Icon::Help`, defined in `crates/micold-material/src/icons.rs`, now draws the overflow menu's
-**Session service diagnostics** item and is listed in the table.
+
+**Alignment**: 2026-10-25 (#1128). `Icon::Help` draws the overflow menu's **Session service
+diagnostics** item and is in the table. `Icon::DarkMode` and `Icon::AutoMode` are defined with no
+rendered call site since the overflow menu's theme toggle was removed, and are left out of it.
