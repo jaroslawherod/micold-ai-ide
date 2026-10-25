@@ -7,7 +7,7 @@
 ## Summary
 
 Ship three static Roboto italic instances (400, 500, 600) cut from the same Google Fonts upstream
-as the upright faces. A new `ui/material/roboto.rs`, the twin of feature 1260's `mono.rs`, lists the
+as the upright faces. A new `micold-material/src/roboto.rs`, the twin of feature 1260's `mono.rs`, lists the
 six Roboto faces once, loads them into iced's global font system and removes any host italic
 `Roboto` face, so an italic query can only land on the bundled bytes; the application, the showcase
 and both test renderers call it instead of keeping their own lists. `MarkdownView`'s existing italic
@@ -26,8 +26,8 @@ at implementation uses `uv run --with fonttools` (not a build dependency).
 
 **Storage**: none (compile-time assets)
 
-**Testing**: `mise run gate`: in-crate unit tests in `ui/material/roboto.rs` and
-`ui/material/link_text.rs`; client integration `tests/roboto_font.rs`, `tests/layout_snapshot.rs`,
+**Testing**: `mise run gate`: in-crate unit tests in `micold-material/src/roboto.rs` and
+`micold-material/src/link_text.rs`; client integration `tests/roboto_font.rs`, `tests/layout_snapshot.rs`,
 `tests/layout_apparatus.rs`; core `tests/markdown_subset.rs`; quickstart §B visual pass
 
 **Target Platform**: Linux, macOS, Windows desktop
@@ -78,9 +78,9 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 
 ### D2 — Registration and the pin — research R2, R3; FR-005, FR-006; contract C-1–C-3
 
-- New `crates/micold-client/src/ui/material/roboto.rs`: `ROBOTO`, `ROBOTO_FAMILY`, the six
+- New `crates/micold-material/src/roboto.rs`: `ROBOTO`, `ROBOTO_FAMILY`, the six
   `ROBOTO_*_BYTES`, `ROBOTO_FACES`, `pin_roboto_italics`, `install_roboto`. The upright constants
-  and `ROBOTO` move from `text.rs`; `material/mod.rs` and `ui/mod.rs` re-export the new names
+  and `ROBOTO` move from `text.rs`; `micold-material`'s `lib.rs` and the client's `ui/mod.rs` re-export the new names
   beside the moved ones, so existing `ui::ROBOTO_*` paths keep compiling.
 - Callers (contract C-3): `shell/startup.rs` and `showcase/main.rs` call `install_roboto` beside
   `install_monospace` and drop their three `.font(ROBOTO_*_BYTES)` lines (comments updated: the
@@ -146,8 +146,8 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 | Layer | Tests |
 |---|---|
 | Core (`micold-core/tests/markdown_subset.rs`) | `***bold italic***` parses to a span with `bold` and `italic` (FR-009) |
-| Client in-crate unit (`ui/material/roboto.rs`) | on a bare `fontdb::Database`: a file-loaded Roboto Italic (temp copy of `ROBOTO_ITALIC_BYTES`), a file-loaded upright Roboto Regular 400 and a file-loaded Roboto Bold 700 (SemiBold bytes with `usWeightClass` patched to 700), then the six bundled faces; `pin_roboto_italics` returns 2, the host 400 stays, weight-700 upright and weight-700 italic both resolve to bundled 600 faces, italic 400/500/600 resolve to the bundled italic twins, upright 400/500/600 resolve as before the pin, other families kept, second call returns 0. Through the global font system (`test_support::renderer`): `ROBOTO` italic at 400/500/600 and bold resolves to the bundled bytes |
-| Client in-crate unit (`ui/material/link_text.rs`) | `painted`: an italic span is `Slant::Italic`; bold+italic is `Weight::Bold` + italic; a code span inside emphasis is `Font::MONOSPACE` upright |
+| Client in-crate unit (`micold-material/src/roboto.rs`) | on a bare `fontdb::Database`: a file-loaded Roboto Italic (temp copy of `ROBOTO_ITALIC_BYTES`), a file-loaded upright Roboto Regular 400 and a file-loaded Roboto Bold 700 (SemiBold bytes with `usWeightClass` patched to 700), then the six bundled faces; `pin_roboto_italics` returns 2, the host 400 stays, weight-700 upright and weight-700 italic both resolve to bundled 600 faces, italic 400/500/600 resolve to the bundled italic twins, upright 400/500/600 resolve as before the pin, other families kept, second call returns 0. Through the global font system (`test_support::renderer`): `ROBOTO` italic at 400/500/600 and bold resolves to the bundled bytes |
+| Client in-crate unit (`micold-material/src/link_text.rs`) | `painted`: an italic span is `Slant::Italic`; bold+italic is `Weight::Bold` + italic; a code span inside emphasis is `Font::MONOSPACE` upright |
 | Client integration (`tests/`) | `roboto_font.rs` face guard for six faces (FR-008); `layout_snapshot.rs` geometry gate on three runners (FR-004, SC-001); `layout_apparatus.rs` unchanged |
 | Quickstart §B visual pass | B1–B7 on Linux: the glue in `startup.rs`/`showcase/main.rs`, the look, the host copy |
 
@@ -175,13 +175,15 @@ assets/fonts/
 ├── Roboto-MediumItalic.ttf      # new
 ├── Roboto-SemiBoldItalic.ttf    # new
 └── PROVENANCE.md                # Roboto section: italic faces
+crates/micold-material/         # the generic building blocks since #1262
+├── Cargo.toml                   # unicode-segmentation (D11 split)
+├── src/roboto.rs                # new (contract); absorbs ROBOTO + upright constants from text.rs
+├── src/text.rs                  # constants moved out
+├── src/lib.rs                   # re-exports (the client's ui::material re-exports the crate whole)
+├── src/link_text.rs             # painted: no slant on code
+└── src/test_support.rs
 crates/micold-client/
-├── src/ui/material/roboto.rs    # new (contract); absorbs ROBOTO + upright constants from text.rs
-├── src/ui/material/text.rs      # constants moved out
-├── src/ui/material/mod.rs       # re-exports
 ├── src/ui/mod.rs                # re-exports
-├── src/ui/material/link_text.rs # painted: no slant on code
-├── src/ui/material/test_support.rs
 ├── src/shell/startup.rs
 ├── src/showcase/main.rs
 └── tests/

@@ -32,7 +32,7 @@ Clarifications), so the 600 italic is the one bold-italic needs.
 
 ## R2 — How emphasis reaches the bundled bytes, even with a host Roboto
 
-**Decision**: a new `ui/material/roboto.rs`, the twin of `mono.rs`: `pin_roboto_italics(db)` removes
+**Decision**: a new `micold-material/src/roboto.rs`, the twin of `mono.rs`: `pin_roboto_italics(db)` removes
 every face of family `Roboto` whose source is not `fontdb::Source::Binary` and that is either not
 upright (a host italic or oblique copy) or upright at a weight the application does not ship (not
 400, 500 or 600: a host Bold, Black, Light…), and `install_roboto(fonts)` loads all six
@@ -75,7 +75,7 @@ upright 400/500/600 faces, where a host Roboto can still win the tie (`layout_ap
 
 **Decision**: `install_roboto` replaces the three `.font(ROBOTO_*_BYTES)` calls in
 `shell/startup.rs` and `showcase/main.rs`, the three `load_font` calls in
-`material/test_support.rs::renderer`, and the three Roboto `load_font` calls in
+`micold-material/src/test_support.rs::renderer`, and the three Roboto `load_font` calls in
 `tests/support/layout.rs::renderer`. The faces are listed once, in `ROBOTO_FACES`.
 
 **Rationale**: FR-005 requires emphasis to draw in the bundled italics in the application, the
