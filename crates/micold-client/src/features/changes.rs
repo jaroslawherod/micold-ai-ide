@@ -32,7 +32,7 @@ use micold_core::review::marks::{
     file_review, mark_block, progress, ChangeId, EntryMarks, FileReview, MarkBlock, ReviewMark,
     ReviewState, WholeChange,
 };
-use micold_core::review::pr_diff::PrDiff;
+use micold_core::review::pr_diff::{pr_change_ids, PrDiff};
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::source_menu::{self, MenuInput, Shown, Stop};
@@ -687,14 +687,22 @@ fn selected_key(view: &OpenView) -> Option<(SourceKey, RelPath)> {
 
 /// The kind the shown list gives `path`: the entry's changes, or the pull request's files.
 fn file_kind<'a>(view: &'a OpenView, path: &RelPath) -> Option<&'a ChangeKind> {
-    let files: &[ChangedFile] = match &view.source {
-        Source::Changes => &shown_list(view)?.files,
+    shown_files(view)?
+        .iter()
+        .find(|f| &f.path == path)
+        .map(|f| &f.kind)
+}
+
+/// The rows of the shown source: the entry's changes on screen, or the pull request's files once
+/// its diff is read.
+fn shown_files(view: &OpenView) -> Option<&[ChangedFile]> {
+    match &view.source {
+        Source::Changes => Some(&shown_list(view)?.files),
         Source::PullRequest(pr) => match &pr.diff {
-            PrDiffLoad::Ready { files, .. } => files,
-            _ => return None,
+            PrDiffLoad::Ready { files, .. } => Some(files),
+            _ => None,
         },
-    };
-    files.iter().find(|f| &f.path == path).map(|f| &f.kind)
+    }
 }
 
 /// Whether the selected file can have hidden lines revealed: it is listed with a text version on
@@ -4267,32 +4275,35 @@ fn shown_whole(view: &OpenView) -> Option<&WholeChange> {
 }
 
 /// The current change id of each file of the shown source that has one (feature 1271, R1): the
-/// working tree's from its whole change. A pull request's come with US4 (M5): none yet.
+/// working tree's from its whole change, a pull request's from its ready diff (US4).
 pub fn current_ids(view: &OpenView) -> BTreeMap<RelPath, ChangeId> {
-    if view.source != Source::Changes {
-        return BTreeMap::new();
+    match &view.source {
+        Source::Changes => shown_whole(view)
+            .into_iter()
+            .flat_map(|whole| whole.files.values())
+            .filter_map(|file| Some((file.path.clone(), file.id?)))
+            .collect(),
+        Source::PullRequest(pr) => match &pr.diff {
+            PrDiffLoad::Ready { files, patches } => pr_change_ids(files, patches),
+            _ => BTreeMap::new(),
+        },
     }
-    shown_whole(view)
-        .into_iter()
-        .flat_map(|whole| whole.files.values())
-        .filter_map(|file| Some((file.path.clone(), file.id?)))
-        .collect()
 }
 
-/// The review state of each listed file of the shown working tree (FR-001, FR-004): judged on the
-/// entry's marks and the current ids every time it is asked. Disconnected, the marks are not
-/// known, so only drafts count (FR-013). Empty while a pull request is shown (US4, M5).
+/// The review state of each listed file of the shown source (FR-001, FR-004, FR-006): judged on
+/// the entry's marks of that source and the current ids every time it is asked. Disconnected, the
+/// marks are not known, so only drafts count (FR-013). Empty while a pull request's diff is read.
 pub fn file_reviews(
     state: &State,
     view: &OpenView,
     connected: bool,
 ) -> BTreeMap<RelPath, FileReview> {
-    let Some(list) = shown_list(view).filter(|_| view.source == Source::Changes) else {
+    let Some(files) = shown_files(view) else {
         return BTreeMap::new();
     };
     let drafts = draft_counts(state, view);
     let ids = current_ids(view);
-    list.files
+    files
         .iter()
         .map(|file| {
             let review = judged(state, view, connected, &file.path, &ids, &drafts);
@@ -4301,8 +4312,8 @@ pub fn file_reviews(
         .collect()
 }
 
-/// `path`'s review state from its mark (known only while `connected`), its current id and its
-/// draft count.
+/// `path`'s review state from its mark in the shown source (known only while `connected`), its
+/// current id and its draft count.
 fn judged(
     state: &State,
     view: &OpenView,
@@ -4313,7 +4324,7 @@ fn judged(
 ) -> FileReview {
     let mark = review_of(state, view)
         .filter(|_| connected)
-        .and_then(|r| r.marks.get(Scope::WorkingTree, path));
+        .and_then(|r| r.marks.get(view_scope(view), path));
     let drafts = drafts.get(path).copied().unwrap_or(0);
     file_review(mark, ids.get(path), drafts)
 }
@@ -4350,12 +4361,12 @@ pub const MARK_REVIEWED: &str = "Mark reviewed";
 /// The control's label while the file is Reviewed.
 pub const REVIEWED: &str = "Reviewed";
 
-/// The selected file's mark control; `None` with no file of the working tree selected.
+/// The selected file's mark control; `None` with no listed file selected.
 pub fn mark_control(state: &State, view: &OpenView, connected: bool) -> Option<MarkControl> {
     let path = selected_file(view)?;
-    let list = shown_list(view).filter(|list| {
-        view.source == Source::Changes && list.files.iter().any(|f| &f.path == path)
-    })?;
+    if !shown_files(view)?.iter().any(|f| &f.path == path) {
+        return None;
+    }
     let ids = current_ids(view);
     let review = judged(
         state,
@@ -4374,12 +4385,19 @@ pub fn mark_control(state: &State, view: &OpenView, connected: bool) -> Option<M
     }
     let block = if !connected {
         Some(MarkBlock::Disconnected)
+    } else if view.source != Source::Changes {
+        // A pull request's file is its patch, whole whatever the toggles show (US4).
+        (!ids.contains_key(path)).then_some(MarkBlock::NotRead)
     } else if matches!(view.whole, Load::Failed(_)) {
         Some(MarkBlock::Unreadable)
     } else {
         match shown_whole(view).and_then(|whole| whole.files.get(path)) {
             Some(file) if file.id.is_none() => Some(MarkBlock::Unreadable),
-            file => mark_block(file.map(|file| file.origin), view.toggles, &list.scope),
+            file => mark_block(
+                file.map(|file| file.origin),
+                view.toggles,
+                &shown_list(view)?.scope,
+            ),
         }
     };
     Some(MarkControl {
@@ -4389,8 +4407,8 @@ pub fn mark_control(state: &State, view: &OpenView, connected: bool) -> Option<M
     })
 }
 
-/// *n of m reviewed* of the shown working tree's listed files (FR-008, FR-009): `None` with no
-/// files, while disconnected (FR-013), and while a pull request is shown (US4, M5).
+/// *n of m reviewed* of the shown source's listed files (FR-008, FR-009, US4): `None` with no
+/// files and while disconnected (FR-013).
 pub fn header_progress(state: &State, view: &OpenView, connected: bool) -> Option<Ratio> {
     reviews_progress(&file_reviews(state, view, connected), connected)
 }
@@ -4434,7 +4452,7 @@ fn mark_toggled(state: &mut State) -> Effect {
     review_edit(
         view,
         ReviewEditOp::SetReviewed {
-            scope: Scope::WorkingTree,
+            scope: view_scope(view),
             path: path.as_str().to_owned(),
             change,
         },

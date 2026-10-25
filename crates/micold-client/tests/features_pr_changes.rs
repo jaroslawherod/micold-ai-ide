@@ -2393,3 +2393,342 @@ mod source_menu {
         assert_eq!(menu(&state), SourceMenu::default());
     }
 }
+
+// ---- 1271 M5: a pull request's files have their own marks and progress (US4) ----
+
+mod reviewed_marks {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use micold_client::features::changes::{
+        file_reviews, header_progress, mark_control, MarkControl, MARK_REVIEWED, REVIEWED,
+    };
+    use micold_core::protocol::messages::ReviewEditOp;
+    use micold_core::review::base::{Base, ReviewScope};
+    use micold_core::review::changes::{
+        ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
+    };
+    use micold_core::review::comment::Scope;
+    use micold_core::review::marks::{
+        ChangeId, MarkBlock, ReviewMark, ReviewState, WholeChange, WholeFile,
+    };
+    use micold_core::review::pr_diff::pr_change_ids;
+    use micold_core::task_progress::Ratio;
+
+    const PR: u64 = 12;
+    const NEWER: &str = "fedcba9876543210fedcba9876543210fedcba98";
+    /// #12's diff after a new head commit that changes `a.rs`'s section and leaves `b.rs`'s.
+    const PUSHED: &str = "diff --git a/a.rs b/a.rs\nindex 1..4 100644\n--- a/a.rs\n+++ b/a.rs\n@@ -1,2 +1,2 @@\n keep\n-old\n+newer\n\
+diff --git a/b.rs b/b.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b/b.rs\n@@ -0,0 +1 @@\n+fresh\n";
+
+    fn path(p: &str) -> RelPath {
+        RelPath::from_native(p).unwrap()
+    }
+
+    /// The working tree's id of its own `a.rs`.
+    fn worktree_id() -> ChangeId {
+        ChangeId::parse(&"aa".repeat(20)).expect("an id")
+    }
+
+    /// Each file's id in pull request diff `raw`.
+    fn pr_id(raw: &str, p: &str) -> ChangeId {
+        let diff = split_pr_diff(raw);
+        let files: Vec<ChangedFile> = diff.files.iter().map(|f| f.file.clone()).collect();
+        let patches: BTreeMap<RelPath, Vec<u8>> = diff
+            .files
+            .into_iter()
+            .map(|f| (f.file.path, f.patch))
+            .collect();
+        pr_change_ids(&files, &patches)[&path(p)]
+    }
+
+    /// The view of `worktree()` with its own `a.rs` listed (id [`worktree_id`]), #12 listed and its
+    /// diff (`a.rs`, `b.rs`) shown.
+    fn showing_twelve() -> State {
+        let mut state = State::default();
+        changes::update(&mut state, Msg::PullRequestSettingChanged(true));
+        let Effect::ReadList { seq, .. } = changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree(),
+            },
+        ) else {
+            panic!("the list read comes first");
+        };
+        let a = ChangedFile {
+            path: path("a.rs"),
+            kind: ChangeKind::Modified,
+            content: Content::Text,
+            added: 1,
+            removed: 1,
+            large: false,
+            origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
+        };
+        let whole = WholeFile {
+            path: path("a.rs"),
+            kind: ChangeKind::Modified,
+            origin: Origin::Uncommitted,
+            id: Some(worktree_id()),
+        };
+        changes::update(
+            &mut state,
+            Msg::ListRead {
+                seq,
+                result: Ok(ChangeList {
+                    files: vec![a],
+                    scope: ReviewScope::Worktree {
+                        base: Base::MergeBase {
+                            branch: "main".into(),
+                            commit: "0123456789abcdef0123456789abcdef01234567".into(),
+                        },
+                    },
+                }),
+                whole: Ok(WholeChange {
+                    files: [(path("a.rs"), whole)].into_iter().collect(),
+                }),
+            },
+        );
+        listed(&mut state, vec![pr(PR, BranchPrState::Open)]);
+        chosen(&mut state, PR);
+        state
+    }
+
+    /// The service pushes the entry's `marks`.
+    fn pushed(state: &mut State, marks: &[(Scope, &str, ChangeId)]) {
+        changes::update(
+            state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                comments: Vec::new(),
+                sending: false,
+                marks: marks
+                    .iter()
+                    .map(|(scope, p, change)| ReviewMark {
+                        scope: *scope,
+                        path: path(p),
+                        change: *change,
+                    })
+                    .collect(),
+            },
+        );
+    }
+
+    fn states(state: &State) -> Vec<(String, ReviewState, bool)> {
+        let view = state.tabs.shown_view().expect("open");
+        file_reviews(state, view, true)
+            .into_iter()
+            .map(|(p, r)| (p.to_string(), r.state, r.changed_since))
+            .collect()
+    }
+
+    fn progress(state: &State) -> Option<Ratio> {
+        header_progress(state, state.tabs.shown_view().expect("open"), true)
+    }
+
+    fn control(state: &State, connected: bool) -> Option<MarkControl> {
+        mark_control(state, state.tabs.shown_view().expect("open"), connected)
+    }
+
+    fn ratio(done: u32, total: u32) -> Option<Ratio> {
+        Some(Ratio { done, total })
+    }
+
+    fn row(p: &str, s: ReviewState) -> (String, ReviewState, bool) {
+        (p.to_string(), s, false)
+    }
+
+    /// US4 s1, FR-006: #12's rows and *n of m* follow #12's marks on the ids of its ready diff; a
+    /// working-tree mark never shows there, and #12's never shows in the working tree.
+    #[test]
+    fn a_pull_requests_rows_and_progress_follow_its_own_marks() {
+        use ReviewState::{Reviewed, Unseen};
+        let mut state = showing_twelve();
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Unseen), row("b.rs", Unseen)],
+            "#12's files have rows of their own"
+        );
+        assert_eq!(progress(&state), ratio(0, 2), "0 of 2 for #12");
+
+        let a = pr_id(DIFF, "a.rs");
+        pushed(&mut state, &[(Scope::WorkingTree, "a.rs", a)]);
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Unseen), row("b.rs", Unseen)],
+            "the working tree's mark is not #12's, even on the same id"
+        );
+
+        pushed(&mut state, &[(Scope::PullRequest(PR), "a.rs", a)]);
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Reviewed), row("b.rs", Unseen)]
+        );
+        assert_eq!(progress(&state), ratio(1, 2), "s1: 1 of 2 for #12");
+
+        changes::update(&mut state, Msg::SourceChosen(None));
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Unseen)],
+            "s1: the working tree's a.rs is not marked by #12's mark"
+        );
+        assert_eq!(progress(&state), ratio(0, 1));
+        pushed(
+            &mut state,
+            &[
+                (Scope::PullRequest(PR), "a.rs", a),
+                (Scope::WorkingTree, "a.rs", worktree_id()),
+            ],
+        );
+        assert_eq!(states(&state), vec![row("a.rs", Reviewed)]);
+
+        chosen(&mut state, PR);
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Reviewed), row("b.rs", Unseen)],
+            "switching back shows #12's mark, still its own"
+        );
+    }
+
+    /// US4 s1: the control marks the selected file in #12's scope on the id of its patch, and
+    /// unmarks it there; nothing changes before `ReviewChanged`.
+    #[test]
+    fn the_mark_control_marks_in_the_pull_requests_scope() {
+        let mut state = showing_twelve();
+        changes::update(&mut state, Msg::FileSelected(path("a.rs")));
+        assert_eq!(
+            control(&state, true),
+            Some(MarkControl {
+                label: MARK_REVIEWED,
+                pressed: false,
+                block: None,
+            }),
+            "no toggle hides a part of a pull request's file"
+        );
+        assert_eq!(
+            control(&state, false).and_then(|c| c.block),
+            Some(MarkBlock::Disconnected)
+        );
+        let before = state.clone();
+        let a = pr_id(DIFF, "a.rs");
+        assert_eq!(
+            changes::update(&mut state, Msg::MarkToggled),
+            Effect::ReviewEdit {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                edit: ReviewEditOp::SetReviewed {
+                    scope: Scope::PullRequest(PR),
+                    path: "a.rs".into(),
+                    change: Some(a),
+                },
+            }
+        );
+        assert_eq!(state, before, "nothing changes before ReviewChanged");
+
+        pushed(&mut state, &[(Scope::PullRequest(PR), "a.rs", a)]);
+        assert_eq!(
+            control(&state, true),
+            Some(MarkControl {
+                label: REVIEWED,
+                pressed: true,
+                block: None,
+            })
+        );
+        let Effect::ReviewEdit {
+            edit: ReviewEditOp::SetReviewed { scope, change, .. },
+            ..
+        } = changes::update(&mut state, Msg::MarkToggled)
+        else {
+            panic!("an unmark is a SetReviewed");
+        };
+        assert_eq!((scope, change), (Scope::PullRequest(PR), None));
+    }
+
+    /// US4 s2, FR-016: a mark of #12 stays while #12 leaves the list, and shows again with its
+    /// diff once #12 is listed (here merged) and shown again.
+    #[test]
+    fn a_mark_is_kept_when_the_pull_request_leaves_the_list() {
+        let mut state = showing_twelve();
+        pushed(
+            &mut state,
+            &[(Scope::PullRequest(PR), "a.rs", pr_id(DIFF, "a.rs"))],
+        );
+        listed(&mut state, vec![pr(8, BranchPrState::Open)]);
+        assert_eq!(source(&state), &Source::Changes, "#12 left the list");
+        assert_eq!(states(&state), vec![row("a.rs", ReviewState::Unseen)]);
+
+        listed(&mut state, vec![pr(PR, BranchPrState::Merged)]);
+        chosen(&mut state, PR);
+        assert_eq!(
+            states(&state),
+            vec![
+                row("a.rs", ReviewState::Reviewed),
+                row("b.rs", ReviewState::Unseen)
+            ]
+        );
+        assert_eq!(progress(&state), ratio(1, 2));
+    }
+
+    /// US4 s3: a new head commit that changes `a.rs`'s diff makes it Changed since reviewed in
+    /// #12; `b.rs`, whose diff is the same, stays Reviewed.
+    #[test]
+    fn a_new_head_commit_drops_the_mark_of_a_file_whose_diff_changed() {
+        let mut state = showing_twelve();
+        pushed(
+            &mut state,
+            &[
+                (Scope::PullRequest(PR), "a.rs", pr_id(DIFF, "a.rs")),
+                (Scope::PullRequest(PR), "b.rs", pr_id(DIFF, "b.rs")),
+            ],
+        );
+        assert_eq!(progress(&state), ratio(2, 2));
+
+        let seq = seq_of(wanted(&mut state, Some("feat/a")));
+        let effect = changes::update(
+            &mut state,
+            Msg::PullRequestsRead {
+                seq,
+                read_at: 2,
+                result: Ok(vec![BranchPullRequest {
+                    head: NEWER.into(),
+                    ..pr(PR, BranchPrState::Open)
+                }]),
+            },
+        );
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq: diff_seq(effect, PR),
+                number: PR,
+                result: Ok(split_pr_diff(PUSHED)),
+            },
+        );
+        assert_eq!(
+            states(&state),
+            vec![
+                ("a.rs".to_string(), ReviewState::Unseen, true),
+                row("b.rs", ReviewState::Reviewed)
+            ],
+            "a.rs changed since reviewed; b.rs's diff is the same"
+        );
+        assert_eq!(progress(&state), ratio(1, 2));
+    }
+
+    /// Nothing is judged while #12's diff is read: no rows, no *n of m*, no control.
+    #[test]
+    fn nothing_is_judged_while_the_pull_requests_diff_is_read() {
+        let mut state = showing_twelve();
+        changes::update(&mut state, Msg::SourceChosen(None));
+        let effect = changes::update(&mut state, Msg::SourceChosen(Some(PR)));
+        diff_seq(effect, PR);
+        pushed(
+            &mut state,
+            &[(Scope::PullRequest(PR), "a.rs", pr_id(DIFF, "a.rs"))],
+        );
+        assert_eq!(states(&state), Vec::new());
+        assert_eq!(progress(&state), None);
+        assert_eq!(control(&state, true), None);
+    }
+}

@@ -153,6 +153,15 @@ GitHub will not diff a pull request above 300 files or 20 000 changed lines. The
 the pull request is too large to show here and offers **Open on GitHub**. A read that fails for
 another reason says so in the pane, with no notice; pick it again to retry.
 
+A pull request's files have their own marks and their own *n of m reviewed* (see [Marking files
+reviewed](#marking-files-reviewed)), apart from the working tree's: marking `src/a.rs` in a pull
+request leaves the working tree's `src/a.rs` as it was, and the other way round. A mark is made on
+the file's diff in that pull request. A new head commit that changes a file's diff drops the
+file's mark, with the dot at the end of its row, as an edit does in the working tree; a new head
+commit that leaves the file's diff the same keeps it reviewed. The marks stay when the pull request
+is merged, closed or no longer listed, and show again whenever its diff is shown; they go when you
+unmark them or the worktree is removed.
+
 ## Reading a diff
 
 Select a file to see its diff beside the list. Each changed region starts with a header row,

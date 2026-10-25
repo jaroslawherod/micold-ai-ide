@@ -3,9 +3,11 @@
 //! [`super::diff::parse_unified`] when the user selects it. Pure: nothing here reads a file.
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 use super::changes::{ChangeIdentity, ChangeKind, ChangedFile, Content, Origin};
+use super::marks::ChangeId;
 use super::{limits, RelPath};
 
 /// A pull request's files, in the order GitHub printed them.
@@ -119,6 +121,22 @@ fn read_section(section: &str) -> Option<PrFile> {
     })
 }
 
+/// The change id of each of a pull request's `files` that has a patch (feature 1271, research R1):
+/// [`ChangeId::of_patch`] over the file and its own section, so a new head commit moves a file's
+/// id only when it changes that file's section (US4 s3). A file without a patch has no id.
+pub fn pr_change_ids(
+    files: &[ChangedFile],
+    patches: &BTreeMap<RelPath, Vec<u8>>,
+) -> BTreeMap<RelPath, ChangeId> {
+    files
+        .iter()
+        .filter_map(|file| {
+            let patch = patches.get(&file.path)?;
+            Some((file.path.clone(), ChangeId::of_patch(file, patch)))
+        })
+        .collect()
+}
+
 /// A file's identity in a pull request (FR-001a): a hash of its section. Never stored, so it
 /// need not be stable across processes.
 fn patch_hash(section: &[u8]) -> u64 {
@@ -204,5 +222,93 @@ fn unquote(text: &str) -> String {
     match quoted_prefix(text) {
         Some((decoded, _)) => decoded,
         None => text.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One file's section: `path` modified, its one changed line now `line`.
+    fn section(path: &str, line: &str) -> String {
+        format!(
+            "diff --git a/{path} b/{path}\nindex 1..2 100644\n--- a/{path}\n+++ b/{path}\n\
+             @@ -1 +1 @@\n-old\n+{line}\n"
+        )
+    }
+
+    /// The ids of `raw`'s files, read as the client reads a pull request's diff.
+    fn ids_of(raw: &str) -> BTreeMap<RelPath, ChangeId> {
+        let diff = split_pr_diff(raw);
+        let files: Vec<ChangedFile> = diff.files.iter().map(|f| f.file.clone()).collect();
+        let patches = diff
+            .files
+            .into_iter()
+            .map(|f| (f.file.path, f.patch))
+            .collect();
+        pr_change_ids(&files, &patches)
+    }
+
+    fn path(text: &str) -> RelPath {
+        RelPath::from_git(text)
+    }
+
+    #[test]
+    fn pr_change_ids_gives_one_id_per_file_with_a_patch() {
+        let raw = format!("{}{}", section("a.rs", "x"), section("b.rs", "y"));
+        let (diff, ids) = (split_pr_diff(&raw), ids_of(&raw));
+        assert_eq!(
+            ids.keys().map(RelPath::as_str).collect::<Vec<_>>(),
+            ["a.rs", "b.rs"]
+        );
+        let a = &diff.files[0];
+        assert_eq!(
+            ids.get(&path("a.rs")),
+            Some(&ChangeId::of_patch(&a.file, &a.patch)),
+            "the id is the file's own section's"
+        );
+        assert_ne!(ids.get(&path("a.rs")), ids.get(&path("b.rs")));
+    }
+
+    /// US4 s3: a new head commit moves a file's id only when it changes that file's section.
+    #[test]
+    fn pr_change_ids_moves_only_with_the_files_own_patch() {
+        let before = ids_of(&format!("{}{}", section("a.rs", "x"), section("b.rs", "y")));
+        let after = ids_of(&format!(
+            "{}{}",
+            section("a.rs", "x2"),
+            section("b.rs", "y")
+        ));
+        assert_ne!(
+            before.get(&path("a.rs")),
+            after.get(&path("a.rs")),
+            "a.rs's diff changed"
+        );
+        assert_eq!(
+            before.get(&path("b.rs")),
+            after.get(&path("b.rs")),
+            "b.rs's diff is the same: its id holds"
+        );
+        let alone = ids_of(&section("b.rs", "y"));
+        assert_eq!(
+            alone.get(&path("b.rs")),
+            before.get(&path("b.rs")),
+            "another file joining or leaving the pull request does not move it"
+        );
+    }
+
+    #[test]
+    fn pr_change_ids_gives_a_file_without_a_patch_no_id() {
+        let diff = split_pr_diff(&format!("{}{}", section("a.rs", "x"), section("b.rs", "y")));
+        let files: Vec<ChangedFile> = diff.files.iter().map(|f| f.file.clone()).collect();
+        let patches: BTreeMap<RelPath, Vec<u8>> = diff
+            .files
+            .into_iter()
+            .filter(|f| f.file.path.as_str() == "a.rs")
+            .map(|f| (f.file.path, f.patch))
+            .collect();
+        let ids = pr_change_ids(&files, &patches);
+        assert!(ids.contains_key(&path("a.rs")));
+        assert_eq!(ids.get(&path("b.rs")), None, "b.rs has no patch");
     }
 }
