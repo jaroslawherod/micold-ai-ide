@@ -18,6 +18,10 @@ suite: 11185 passed, 0 failed, 18 ignored (workspace gate, GATE_EXIT=0)
 
 # TDD Verification: Jira selector filters (#1185)
 
+**M5 (T047–T051) is outside this audit**, which ran at `df6c4089` before M5 was cut. M5's evidence:
+`tdd/cycle-log.md` rows T047–T050 (real red before the fix for the behaviour tests; the guards and the review A F2 test written with their code), review A M5 and review B M5
+CLEAN, and the close-2 gate at `86f52c86` (11,192 passed, 0 failed). No mutants were run on M5.
+
 **Verdict: PASS_WITH_GAPS.** No HIGH smell, no weakened test, every criterion has a test and all 8 deliberate mutants
 were killed; the evidence of test-first is weaker than the rubric's `PROVEN` (red is reconstructed after the fact, and
 the M4 panel Tab fix has no log row at all).
