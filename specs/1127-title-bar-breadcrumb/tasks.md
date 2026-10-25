@@ -182,7 +182,8 @@ Test*.
 - [x] T022 [P] [US1] Make `context_header::branch_chip` `pub` in `crates/micold-core/src/context_header.rs`
   with a doc comment naming its second reader (the title bar's place segment); its existing tests
   stay green (R7)
-- [x] T028 [US1] Implement `Button::trailing(Icon)` in `lib/button.rs` (R4)
+- [x] T028 [US1] Implement `Button::trailing(Icon)` in `lib/button.rs` (R4), and `Button::tooltip(text)` so the
+  project segment's `Switch project` and the unread mark's words share one tooltip (contract C2)
 - [x] T029 [US1] Implement `Breadcrumb` in `lib/breadcrumb.rs` over `Button` (`.trailing`,
   `.trailing_mark`, `.selected`) and `Ellipsized`, reporting its two segments to the toolbar's
   planner as `Shorten(0)` (place) and `Shorten(1)` (project); `pub mod` / `pub use` in `lib/lib.rs`

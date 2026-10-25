@@ -28,6 +28,11 @@ pub enum Anchor {
     /// The panel's top-left corner sits at this window point. Cursor-anchored context menus; the
     /// caller is responsible for clamping the point so the panel cannot open off-screen.
     Point(Point),
+    /// The panel's top-left corner sits at `at`, a popover hung from the control that opened it,
+    /// and a panel with more to show than the room beneath is given that room less `bottom`, so it
+    /// stops short of the window's bottom edge as [`Anchor::TopEnd`] does (002 BUG-005, FR-011a;
+    /// feature 1127, R8). The caller clamps `at` sideways, as for [`Anchor::Point`].
+    Below { at: Point, bottom: f32 },
     /// Pinned to the top-right of the window, inset by `top` and `end` pixels. Trigger-attached
     /// popovers that hang below the app bar.
     ///
@@ -197,6 +202,15 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
                     left: point.x,
                     right: 0.0,
                     bottom: 0.0,
+                }),
+            Anchor::Below { at, bottom } => placed
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Top)
+                .padding(Padding {
+                    top: at.y,
+                    left: at.x,
+                    right: 0.0,
+                    bottom,
                 }),
             Anchor::TopEnd { top, end } => placed
                 .align_x(iced::alignment::Horizontal::Right)

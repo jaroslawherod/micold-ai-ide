@@ -28,16 +28,19 @@ const MANY: usize = 20;
 /// A catalog that fits in both lists.
 const FEW: usize = 3;
 
-/// The switcher panel's width and its inset from the window's trailing edge (`menu.rs`
-/// `PANEL_WIDTH`, and `spacing::SM` for the `TopEnd` anchor).
+/// The switcher panel's width (`menu.rs` `PANEL_WIDTH`), and how far short of the window's edge
+/// the clamp stops it (`spacing::SM`).
 const PANEL_WIDTH: f32 = 240.0;
 const PANEL_END_INSET: f32 = micold_core::tokens::spacing::SM;
 
 /// A line of text needs this much room above the window's bottom edge to be read, not glimpsed.
 const LINE: f32 = 16.0;
 
+/// Where the panel hangs with no reported corner, as these states open it: the project segment's
+/// leading edge, after the bar's padding, the app mark and the gap (feature 1127, R8).
 fn panel_left() -> f32 {
-    lay::WINDOW.width - PANEL_END_INSET - PANEL_WIDTH
+    use micold_core::tokens::anatomy::app_bar;
+    app_bar::PADDING + app_bar::MARK + app_bar::GAP
 }
 
 fn state(projects: usize, switcher_open: bool) -> State {
@@ -79,12 +82,12 @@ fn last_name(state: &State) -> String {
 }
 
 /// The open switcher panel's box: the outermost node exactly [`PANEL_WIDTH`] wide at the panel's
-/// trailing-edge position, and of those the one stacked last.
+/// leading-edge position, and of those the one stacked last.
 ///
-/// The closed overflow menu hangs from the same edge at the same width — it is laid out while
-/// closed, because it fades out rather than vanishing — and `ui::view` pushes it onto the overlay
-/// just before the switcher. Both are popovers, so the switcher is the later layer; no other
-/// surface is open in these states.
+/// Feature 1127 moved it from the window's trailing edge, where the closed overflow menu also
+/// hangs at the same width (laid out while closed, because it fades out rather than vanishing), to
+/// the project segment's edge; the last-stacked rule still picks the switcher should another
+/// surface ever share its place.
 fn panel_box(state: &State) -> Option<lay::LayoutRecord> {
     let panels: Vec<lay::LayoutRecord> = lay::resolve(view(state), &lay::renderer())
         .into_iter()
@@ -168,10 +171,10 @@ fn the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project() {
     // The bound alone held on `origin/main` too — the panel's node was clamped to its container and
     // the rows overflowed *inside* it — so the scroll below is what tells the fix apart. The inset
     // is the fix's own: a panel that meets the window's edge loses its rounded corners and its
-    // shadow there, so it stops as far short of the bottom edge as it hangs from the trailing one.
+    // shadow there, so it stops this inset short of the bottom edge.
     let panel = panel_box(&state)
         .map(|r| r.y + r.height)
-        .expect("the open switcher panel is laid out by the trailing edge");
+        .expect("the open switcher panel is laid out at the project segment's edge");
     assert!(
         panel <= lay::WINDOW.height - PANEL_END_INSET + 0.5,
         "the switcher panel's bottom edge is at {panel:.1}; it must stop {PANEL_END_INSET}dp short \
@@ -201,7 +204,7 @@ fn a_switcher_panel_that_fits_keeps_the_height_it_always_had() {
     let state = state(FEW, true);
     let tallest = panel_box(&state)
         .map(|r| r.height)
-        .expect("the open switcher panel is laid out by the trailing edge");
+        .expect("the open switcher panel is laid out at the project segment's edge");
     // The projects plus the trailing "Add project…" row, in `menu_panel_size`'s own terms: §7.5's
     // padding above the first item and below the last, and one item height per row.
     let estimate =
@@ -263,7 +266,7 @@ fn a_right_click_on_a_scrolled_switcher_row_reports_where_it_landed() {
 #[test]
 fn scrolling_the_body_list_closes_the_switcher_floating_over_it() {
     let mut state = state(MANY, true);
-    // Over the body's rows, clear of the switcher panel at the trailing edge.
+    // Over the body's rows, clear of the switcher panel at the project segment's edge.
     let wheel_at = Point::new(lay::WINDOW.width / 4.0, lay::WINDOW.height - 100.0);
     let published = lay::messages_after(
         view(&state),

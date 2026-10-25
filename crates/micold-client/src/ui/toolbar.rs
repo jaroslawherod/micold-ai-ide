@@ -193,7 +193,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     // Where the panel hangs from: the segment's own bottom-left corner, reported on the press
     // ahead of the toggle (BUG-1023). Only its `x` is kept: the panel's top is the bar's bottom
     // edge, and a keyboard press, which reports none, hangs it from the segment's computed edge
-    // (R8, `ui::switcher_hung_from`).
+    // (R8, `ui::switcher_fallback_x`).
     let switcher = ContextArea::new(crumb)
         .on_primary_bounds(|corner| Message::Project(ProjectMsg::SwitcherAnchored(corner)));
 
