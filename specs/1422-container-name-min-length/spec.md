@@ -46,7 +46,7 @@ While the daemon name is too short, the container name field does not offer it a
 
 A user types container name `x`. Docker would reject it just the same, so Save is refused with the same message instead of storing a daemon that cannot start.
 
-**Why this priority**: Same failure, same cause; refusing only defaulted names would leave the typed path broken. Marked for clarification below.
+**Why this priority**: Same failure, same cause; refusing only defaulted names would leave the typed path broken.
 
 **Independent Test**: Choose the container runtime, enter daemon name `build`, type container name `x`, Save. Save is refused with the minimum-length message on the container name field.
 
@@ -85,6 +85,13 @@ A daemon saved earlier with a one-character container name is not changed or hid
 - A legacy one-character daemon also cannot be saved for an unrelated edit (port, image) until its container name is fixed; this is intentional, and the user fixes the name in the same save. The user learns of it on Save, not at load.
 - Runtimes other than container (host, SSH, Kubernetes) have no container name and are unchanged.
 
+## Clarifications
+
+### Session 2026-10-25
+
+- Q: Are typed one-character names refused too, or defaulted names only? → A: Typed too; Docker rejects both alike, and the issue calls the unchecked typed path part of the defect. _(agent-resolved: specs/1422-container-name-min-length/spec.md#Assumptions, #User Story 3; specs/1116-container-name-default/spec.md#Clarifications — 1116 left typed names unchecked only for charset, and this issue reopens length)_
+- Q: Wording of the message and where it appears? → A: "A container name needs at least 2 characters.", on the container name field only, in the same sentence style as the other field messages. _(agent-resolved: crates/micold-client/src/features/daemons.rs `invalid_field`; 1116 reports on `container_name`)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -92,11 +99,11 @@ A daemon saved earlier with a one-character container name is not changed or hid
 - **FR-001**: Saving a container daemon whose resolved container name (defaulted or typed, trimmed) is non-empty and shorter than 2 characters MUST be refused with a message on the container name field, and MUST NOT create or change a daemon.
 - **FR-002**: The refusal message MUST state that the container name needs at least 2 characters.
 - **FR-003**: The default container name derived from a daemon name MUST be treated as unusable when it is shorter than 2 characters: Save refuses it per FR-001 and the placeholder (1116 FR-007) is hidden.
-- **FR-004**: A typed container name MUST be checked against the same minimum as a defaulted one. [NEEDS CLARIFICATION: typed names too, or defaulted names only? Recommended: typed too, same failure and same cause.]
+- **FR-004**: A typed container name MUST be checked against the same minimum as a defaulted one.
 - **FR-005**: The placeholder MUST be shown exactly when Save would accept the default as the container name.
 - **FR-006**: Daemons already stored with a one-character container name MUST load unchanged; the minimum applies only when saving.
 - **FR-007**: The minimum-length check MUST NOT change the outcome for names of 2 to 63 characters, nor for other runtimes (1116 FR-009 stays true).
-- **FR-008**: The message for a too-short name MUST be distinct from "Enter a container name." and name the minimum. [NEEDS CLARIFICATION: exact wording and whether a too-short daemon name is explained on the container name field only. Recommended: field only, "A container name needs at least 2 characters."]
+- **FR-008**: The message for a too-short name MUST be distinct from "Enter a container name." and name the minimum. The wording is "A container name needs at least 2 characters.", shown on the container name field only.
 
 ### Key Entities
 
