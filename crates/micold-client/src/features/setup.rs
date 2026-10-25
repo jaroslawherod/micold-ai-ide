@@ -24,7 +24,7 @@ pub type Key = (DaemonId, PathBuf, SessionLocation);
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
     /// The latest summary of each location that has a run record.
-    pub runs: BTreeMap<Key, SetupRunSummary>,
+    pub summaries: BTreeMap<Key, SetupRunSummary>,
     /// The failed runs this client has already posted a notification for (FR-017): one per run,
     /// whether it learned of the failure live or in the catch-up after an attach.
     pub notified: BTreeSet<(DaemonId, PathBuf, SessionLocation, RunId)>,
@@ -80,12 +80,12 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 state
                     .notified
                     .retain(|(d, p, l, _)| (d, p, l) != (&key.0, &key.1, &key.2));
-                state.runs.remove(&key);
+                state.summaries.remove(&key);
                 return Effect::None;
             };
             let id = summary.run.id();
             let notice = failure_notice(&names, summary.run.state());
-            state.runs.insert(key.clone(), summary);
+            state.summaries.insert(key.clone(), summary);
             match notice {
                 Some(text) if state.notified.insert((key.0, key.1, key.2, id)) => {
                     Effect::NotifyError(text)
@@ -104,7 +104,7 @@ impl State {
         project: &Path,
         location: &SessionLocation,
     ) -> Option<&SetupRunSummary> {
-        self.runs
+        self.summaries
             .get(&(daemon, project.to_path_buf(), location.clone()))
     }
 }

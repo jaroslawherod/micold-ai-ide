@@ -189,7 +189,7 @@ Operations, each under the state lock and with no I/O under it:
 
 | Field | Type | Notes |
 |---|---|---|
-| `runs` | `BTreeMap<(DaemonId, PathBuf, SessionLocation), SetupRunSummary>` | From `SetupChanged`. |
+| `summaries` | `BTreeMap<(DaemonId, PathBuf, SessionLocation), SetupRunSummary>` | From `SetupChanged`. Not `runs`: that name is the Run in parallel feature's state, and the write-isolation guard reads it so. |
 | `notified` | `BTreeSet<(DaemonId, PathBuf, SessionLocation, RunId)>` | FR-017: one notification per run per client. |
 | `view` | `Option<OutputView>` | `OutputView { key, run: RunId, first_line: u64, lines: Vec<String>, dropped: u64, follow: bool }` |
 
