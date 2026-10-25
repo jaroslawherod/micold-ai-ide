@@ -15741,6 +15741,11 @@ mod jira_query_run {
     /// Switch on, connected, token stored, the form open on a Jira-only project with the Issue
     /// source showing; the source answers one basic page and one query page.
     fn rig() -> Rig {
+        rig_with(|_| {})
+    }
+
+    /// [`rig`], with `prepare` run on the token directory before the form opens.
+    fn rig_with(prepare: impl FnOnce(&std::path::Path)) -> Rig {
         let dir = tempfile::tempdir().unwrap();
         let issue = |key: &str, number| {
             Issue::jira(
@@ -15780,6 +15785,7 @@ mod jira_query_run {
             "token",
         )
         .unwrap();
+        prepare(dir.path());
         let mut rig = Rig {
             app,
             source,
@@ -15828,6 +15834,169 @@ mod jira_query_run {
         query(&mut rig, QueryMsg::ModeChanged(QueryMode::Basic));
         assert_eq!(rig.source.calls().len(), 1);
         assert_eq!(rig.source.query_calls().len(), 1);
+    }
+
+    // ---- US3: the remembered mode and last run query (contracts/selector-source-and-storage.md §4)
+
+    fn query_file(rig: &Rig, project: &str) -> PathBuf {
+        micold_core::store::jira_query_path(rig._dir.path(), std::path::Path::new(project))
+    }
+
+    fn remembered(rig: &Rig) -> micold_core::jira_query::RememberedQuery {
+        let bytes = std::fs::read(query_file(rig, PROJECT)).unwrap_or_default();
+        micold_core::jira_query::RememberedQuery::from_json(&bytes)
+    }
+
+    fn shown(rig: &Rig) -> &micold_client::features::worktree_form::jira_query::JiraQuery {
+        &rig.app
+            .core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("form open")
+            .jira_query
+    }
+
+    fn write_remembered(dir: &std::path::Path, project: &str, json: &str) {
+        std::fs::write(
+            micold_core::store::jira_query_path(dir, std::path::Path::new(project)),
+            json,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn opening_restores_the_projects_query_and_runs_it_in_advanced_mode() {
+        let rig = rig_with(|dir| {
+            write_remembered(
+                dir,
+                PROJECT,
+                r#"{"mode":"advanced","query":"priority = High"}"#,
+            );
+        });
+        assert_eq!(shown(&rig).mode, QueryMode::Advanced);
+        assert_eq!(shown(&rig).draft, "priority = High");
+        assert!(
+            rig.source.calls().is_empty(),
+            "no basic list in advanced mode"
+        );
+        assert_eq!(
+            rig.source.query_calls(),
+            vec![(
+                "project = \"ABC\" AND (priority = High) ORDER BY updated DESC".to_string(),
+                None
+            )],
+            "run once as the Jira source showed (FR-004a)"
+        );
+    }
+
+    #[test]
+    fn another_project_never_gets_this_projects_query() {
+        let mut rig = rig_with(|dir| {
+            write_remembered(
+                dir,
+                PROJECT,
+                r#"{"mode":"advanced","query":"priority = High"}"#,
+            );
+        });
+        send(&mut rig, FormMsg::Cancelled);
+        let other = "/repo/other";
+        rig.app.core.workspace.active = Some(PathBuf::from(other));
+        rig.app.core.settings.jira_connections.insert(
+            connection_key(std::path::Path::new(other)),
+            JiraConnection::parse("https://acme.atlassian.net", "XYZ", "me@acme.com").unwrap(),
+        );
+        send(&mut rig, FormMsg::Opened);
+        assert_eq!(shown(&rig).mode, QueryMode::Basic);
+        assert_eq!(shown(&rig).draft, "");
+        assert_eq!(shown(&rig).last_run, "");
+    }
+
+    #[test]
+    fn a_missing_or_unreadable_file_opens_in_basic_with_an_empty_query() {
+        for prepare in [(|_: &std::path::Path| {}) as fn(&std::path::Path), |dir| {
+            write_remembered(dir, PROJECT, "{ not json")
+        }] {
+            let rig = rig_with(prepare);
+            assert_eq!(shown(&rig).mode, QueryMode::Basic);
+            assert_eq!(shown(&rig).draft, "");
+            assert_eq!(rig.source.calls().len(), 1, "the basic list loaded");
+            assert!(rig.source.query_calls().is_empty());
+        }
+    }
+
+    #[test]
+    fn a_switch_and_a_run_are_remembered_and_a_draft_is_not() {
+        let mut rig = rig();
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Advanced));
+        assert_eq!(remembered(&rig).mode, QueryMode::Advanced);
+        query(
+            &mut rig,
+            QueryMsg::DraftChanged("priority = Highest".into()),
+        );
+        assert_eq!(remembered(&rig).query, "", "typing writes nothing");
+        query(&mut rig, QueryMsg::Run);
+        assert_eq!(remembered(&rig).query, "priority = Highest");
+        query(&mut rig, QueryMsg::DraftChanged("status = Done".into()));
+
+        // Reopened: the last run query, not the draft (US3 AS5).
+        send(&mut rig, FormMsg::Cancelled);
+        send(&mut rig, FormMsg::Opened);
+        assert_eq!(shown(&rig).mode, QueryMode::Advanced);
+        assert_eq!(shown(&rig).draft, "priority = Highest");
+    }
+
+    #[test]
+    fn another_windows_write_leaves_the_open_forms_input_alone() {
+        let mut rig = rig_with(|dir| {
+            write_remembered(
+                dir,
+                PROJECT,
+                r#"{"mode":"advanced","query":"priority = High"}"#,
+            );
+        });
+        write_remembered(
+            rig._dir.path(),
+            PROJECT,
+            r#"{"mode":"advanced","query":"status = Done"}"#,
+        );
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Basic));
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Advanced));
+        assert_eq!(shown(&rig).draft, "priority = High");
+        assert_eq!(shown(&rig).last_run, "priority = High");
+        // Its write changed the mode only: the other window's query stands.
+        assert_eq!(remembered(&rig).query, "status = Done");
+    }
+
+    #[test]
+    fn a_failed_write_is_reported_without_the_query() {
+        let mut rig = rig();
+        // A non-empty directory where the file goes: the rename onto it fails.
+        let blocker = query_file(&rig, PROJECT);
+        std::fs::create_dir_all(blocker.join("in-the-way")).unwrap();
+        query(&mut rig, QueryMsg::ModeChanged(QueryMode::Advanced));
+        query(
+            &mut rig,
+            QueryMsg::DraftChanged("summary ~ \"secret plan\"".into()),
+        );
+        query(&mut rig, QueryMsg::Run);
+        let shown: Vec<String> = std::iter::from_fn(|| {
+            let visible = rig.app.core.notifications.queue.visible().cloned()?;
+            rig.app.core.notifications.queue.dismiss();
+            Some(visible.message)
+        })
+        .collect();
+        assert!(
+            shown
+                .iter()
+                .any(|m| m.starts_with("Couldn't remember the Jira query: ")),
+            "{shown:?}"
+        );
+        assert!(
+            shown.iter().all(|m| !m.contains("secret plan")),
+            "{shown:?}"
+        );
+        assert_eq!(rig.source.query_calls().len(), 1, "the run still ran");
     }
 }
 

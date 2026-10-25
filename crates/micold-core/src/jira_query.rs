@@ -267,6 +267,71 @@ pub enum QueryMode {
     Advanced,
 }
 
+/// The mode and the last run query a project remembers (FR-013, data-model §5), kept in its
+/// owner-only file beside the Jira token (`store::jira_query_path`). Never a draft: the query is a
+/// [`UserQuery::as_str`], set only by a run.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RememberedQuery {
+    /// The mode last used.
+    pub mode: QueryMode,
+    /// The last run query, cleaned; empty when none, or when the empty query ran (US3 AS4).
+    pub query: String,
+}
+
+/// One field of a [`RememberedQuery`] to change: the shell reads the file, applies it and writes
+/// the file back, so another window's write to the other field stands (Edge "Two windows").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RememberChange {
+    /// The switch moved to this mode.
+    Mode(QueryMode),
+    /// This query ran (cleaned).
+    Query(String),
+}
+
+impl RememberedQuery {
+    /// Read the file's bytes leniently (Edge "Remembered data unreadable"): JSON that does not
+    /// parse, an unknown mode or a query the checks refuse is the default, basic and empty.
+    pub fn from_json(bytes: &[u8]) -> RememberedQuery {
+        serde_json::from_slice::<RememberedQuery>(bytes)
+            .ok()
+            .and_then(|read| {
+                let query = UserQuery::parse(&read.query).ok()?;
+                Some(read.with_query(&query))
+            })
+            .unwrap_or_default()
+    }
+
+    /// The file's bytes: `{"mode":"advanced","query":"…"}`.
+    pub fn to_json(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("two plain fields always serialize")
+    }
+
+    /// The same, in `mode`.
+    pub fn with_mode(self, mode: QueryMode) -> RememberedQuery {
+        RememberedQuery { mode, ..self }
+    }
+
+    /// The same, with `query` as the last run query.
+    pub fn with_query(self, query: &UserQuery) -> RememberedQuery {
+        RememberedQuery {
+            query: query.as_str().to_string(),
+            ..self
+        }
+    }
+
+    /// The same with `change` applied; a query the checks refuse changes nothing.
+    pub fn with_change(self, change: &RememberChange) -> RememberedQuery {
+        match change {
+            RememberChange::Mode(mode) => self.with_mode(*mode),
+            RememberChange::Query(text) => match UserQuery::parse(text) {
+                Ok(query) => self.with_query(&query),
+                Err(_) => self,
+            },
+        }
+    }
+}
+
 /// List the issues `scoped` selects, page by page up to the load cap, through the paging rule both
 /// providers share (contracts/jql-rules.md §6). Only issues keyed `<project key>-<digits>` are
 /// kept, before the cap counts them (FR-008). Jira has no total, so `total_open` is the number

@@ -12,11 +12,14 @@ use micold_client::features::worktree_form::jira_query::{
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, JiraAvailability, JiraSite, Msg, WorktreeForm,
 };
+use micold_client::features::Outcome;
 use micold_core::git::GitRemote;
 use micold_core::github::{Issue, IssueListing, IssueLoadError};
 use micold_core::issue_types::default_mapping;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection, ProjectKey};
-use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
+use micold_core::jira_query::{
+    QueryFailure, QueryMode, QueryRefusal, RememberChange, RememberedQuery, ScopedQuery, UserQuery,
+};
 use micold_core::typeahead::Direction;
 
 fn connection() -> JiraConnection {
@@ -858,4 +861,204 @@ fn a_refused_query_keeps_the_draft_and_sends_nothing_even_after_a_failure() {
     assert_eq!(jq(&state).draft, "project = XYZ OR (a = b");
     assert_eq!(state.worktree_form.issue_request_seq, before);
     assert_eq!(state.worktree_form.awaited_jira_query(), None);
+}
+
+// ---- US3: the remembered mode and last run query (FR-004a, FR-013) ----
+
+fn remembered(mode: QueryMode, text: &str) -> RememberedQuery {
+    RememberedQuery::default()
+        .with_mode(mode)
+        .with_query(&UserQuery::parse(text).unwrap())
+}
+
+/// The Jira form opened with `restored` read from the project's file, the remotes answered.
+fn restored_form(restored: RememberedQuery) -> State {
+    let mut state = settings_with_jira();
+    send(&mut state, Msg::Opened);
+    query(&mut state, QueryMsg::Restored(restored));
+    send(&mut state, Msg::RemotesListed(Ok(Vec::new())));
+    state
+}
+
+/// What a form message asks the shell to remember, as the shell receives it.
+fn remembers(state: &mut State, msg: QueryMsg) -> Vec<Outcome> {
+    state.update_worktree_form_for_effects(Msg::JiraQuery(msg))
+}
+
+fn remember(change: RememberChange) -> Vec<Outcome> {
+    vec![Outcome::JiraQueryRemembered {
+        project: project(),
+        change,
+    }]
+}
+
+#[test]
+fn restoring_sets_the_mode_and_the_query_and_sends_nothing() {
+    let mut state = settings_with_jira();
+    send(&mut state, Msg::Opened);
+    let before = state.worktree_form.issue_request_seq;
+    let outcomes = remembers(
+        &mut state,
+        QueryMsg::Restored(remembered(QueryMode::Advanced, "priority = High")),
+    );
+    assert!(outcomes.is_empty(), "restoring is not a change to remember");
+    assert_eq!(jq(&state).mode, QueryMode::Advanced);
+    assert_eq!(jq(&state).draft, "priority = High");
+    assert_eq!(jq(&state).last_run, "priority = High");
+    assert_eq!(jq(&state).run, QueryRun::Idle);
+    assert_eq!(
+        state.worktree_form.issue_request_seq, before,
+        "nothing awaited"
+    );
+}
+
+#[test]
+fn opened_in_advanced_the_jira_source_showing_runs_the_restored_query_once() {
+    let mut state = restored_form(remembered(QueryMode::Advanced, "priority = High"));
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let (seq, jql) = running(&state);
+    assert_eq!(jql, scoped("priority = High"));
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "no basic load"
+    );
+
+    // Shown again with nothing changed: the run in flight stays the one run.
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    assert_eq!(running(&state).0, seq);
+}
+
+#[test]
+fn opened_in_advanced_with_no_query_shows_the_prompt_and_sends_nothing() {
+    let mut state = restored_form(remembered(QueryMode::Advanced, ""));
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    assert_eq!(jq(&state).run, QueryRun::Idle);
+    assert!(form(&state).shows_advanced());
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+}
+
+#[test]
+fn a_restored_query_jira_now_refuses_shows_its_messages_with_the_query_kept() {
+    let mut state = restored_form(remembered(QueryMode::Advanced, "asignee = me"));
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let (seq, _) = running(&state);
+    query(
+        &mut state,
+        QueryMsg::Ran {
+            seq,
+            result: Err(rejected()),
+        },
+    );
+    assert!(matches!(
+        jq(&state).run,
+        QueryRun::Failed {
+            failure: QueryFailure::Rejected(_),
+            ..
+        }
+    ));
+    assert_eq!(jq(&state).draft, "asignee = me");
+}
+
+#[test]
+fn opened_in_basic_switching_to_advanced_shows_the_query_without_running_it() {
+    let mut state = restored_form(remembered(QueryMode::Basic, "priority = High"));
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let seq = awaited_load(&state);
+    send(&mut state, basic_loaded(seq));
+    assert!(!form(&state).shows_advanced());
+
+    query(&mut state, QueryMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(jq(&state).draft, "priority = High");
+    assert_eq!(
+        jq(&state).run,
+        QueryRun::Idle,
+        "not run until the user does"
+    );
+}
+
+#[test]
+fn the_mode_is_remembered_at_each_switch_and_the_query_at_each_run() {
+    let mut state = basic_shown();
+    assert_eq!(
+        remembers(&mut state, QueryMsg::ModeChanged(QueryMode::Advanced)),
+        remember(RememberChange::Mode(QueryMode::Advanced))
+    );
+    // The mode already shown: nothing changed, nothing to remember.
+    assert!(remembers(&mut state, QueryMsg::ModeChanged(QueryMode::Advanced)).is_empty());
+
+    query(
+        &mut state,
+        QueryMsg::DraftChanged("  priority = High\n".into()),
+    );
+    assert_eq!(
+        remembers(&mut state, QueryMsg::Run),
+        remember(RememberChange::Query("priority = High".into())),
+        "the cleaned text"
+    );
+
+    // The empty query is remembered too (US3 AS4).
+    query(&mut state, QueryMsg::DraftChanged(String::new()));
+    assert_eq!(
+        remembers(&mut state, QueryMsg::Run),
+        remember(RememberChange::Query(String::new()))
+    );
+
+    assert_eq!(
+        remembers(&mut state, QueryMsg::ModeChanged(QueryMode::Basic)),
+        remember(RememberChange::Mode(QueryMode::Basic))
+    );
+}
+
+#[test]
+fn a_draft_is_never_remembered() {
+    let mut state = advanced_loaded("priority = High", basic_issues());
+    // Typing, a refused run, a retry and an answer remember nothing (US3 AS5, FR-013).
+    assert!(remembers(&mut state, QueryMsg::DraftChanged("status = Done".into())).is_empty());
+    assert!(remembers(&mut state, QueryMsg::DraftChanged("(open".into())).is_empty());
+    assert!(remembers(&mut state, QueryMsg::Run).is_empty());
+    assert_eq!(jq(&state).last_run, "priority = High");
+
+    let mut failed = advanced_failed(
+        "priority = High",
+        QueryFailure::Load(IssueLoadError::Other("down".into())),
+    );
+    assert!(remembers(&mut failed, QueryMsg::Retry).is_empty());
+    let (seq, _) = running(&failed);
+    assert!(remembers(
+        &mut failed,
+        QueryMsg::Ran {
+            seq,
+            result: Ok(listing(Vec::new()))
+        }
+    )
+    .is_empty());
+}
+
+#[test]
+fn a_run_in_flight_lands_nowhere_once_jira_is_off_or_disconnected() {
+    for jira in [
+        JiraAvailability::Off,
+        JiraAvailability::Connected(JiraSite::of(
+            &JiraConnection::parse("https://other.atlassian.net", "XYZ", "me@acme.com").unwrap(),
+        )),
+    ] {
+        let mut state = advanced_shown();
+        query(&mut state, QueryMsg::DraftChanged("priority = High".into()));
+        query(&mut state, QueryMsg::Run);
+        let (seq, _) = running(&state);
+        send(&mut state, Msg::JiraSettingsChanged(jira));
+        query(
+            &mut state,
+            QueryMsg::Ran {
+                seq,
+                result: Ok(listing(basic_issues())),
+            },
+        );
+        assert!(
+            !matches!(jq(&state).run, QueryRun::Loaded { .. }),
+            "the stale answer was applied: {:?}",
+            jq(&state).run
+        );
+    }
 }

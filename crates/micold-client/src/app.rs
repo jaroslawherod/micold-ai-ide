@@ -1104,6 +1104,22 @@ impl State {
         effects
     }
 
+    /// Apply a form message and hand back what it asks the project to remember (feature 1186,
+    /// FR-013): the shell owns that file, so it performs `JiraQueryRemembered` itself. Every other
+    /// outcome is drained exactly as [`Self::update`] drains it.
+    pub fn update_worktree_form_for_effects(
+        &mut self,
+        msg: crate::features::worktree_form::Msg,
+    ) -> Vec<crate::features::Outcome> {
+        use crate::features::Outcome;
+        let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
+            crate::features::worktree_form::update(self, msg)
+                .into_iter()
+                .partition(|o| matches!(o, Outcome::JiraQueryRemembered { .. }));
+        drain(rest, |outcome| interpret(self, outcome));
+        effects
+    }
+
     /// Answer the sandbox open confirmation, given whether the sandbox is still live (feature 031,
     /// FR-018a, contract link-opening §4).
     ///
@@ -1760,6 +1776,9 @@ pub fn interpret(
         Outcome::IssueSourceChosen { project, provider } => {
             state.workspace.issue_sources.insert(project, provider);
         }
+        // The shell's: it writes the project's remembered file (`shell::jira_query::remember`),
+        // reached through `State::update_worktree_form_for_effects`.
+        Outcome::JiraQueryRemembered { .. } => {}
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // Feature 940: the transcript's, handed to the shell in its `Effect`, never drained here.
         Outcome::ClipboardWriteChecked { .. } | Outcome::CopyConfirmTimer { .. } => {}

@@ -12,12 +12,19 @@
 //! last run query (FR-004a, FR-003a). Switching the mode and typing never run anything (FR-004).
 //! `tests/issues_are_requested_only_on_named_events.rs` counts the callers.
 //!
-//! Nothing here logs or notifies: the query leaves the form only as the request (FR-016).
+//! # What is remembered
+//!
+//! A switch and a run hand back `Outcome::JiraQueryRemembered`, which [`remember`] writes to the
+//! project's file beside the token (`shell/jira.rs`, FR-013). A failed write is a notification that
+//! names the OS error, never the query.
+//!
+//! Nothing here logs: the query leaves the form only as the request and that file (FR-016).
 
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
+use micold_client::features::Outcome;
 use micold_core::github::IssueLoadError;
 use micold_core::jira_query::{QueryFailure, ScopedQuery};
 
@@ -33,12 +40,30 @@ pub fn on_message(app: &mut App, msg: QueryMsg) -> Task<Message> {
     }
     let before = app.core.worktree_form.issue_request_seq;
     let before_query = app.core.worktree_form.awaited_jira_query();
-    app.core
-        .update(Message::WorktreeForm(FormMsg::JiraQuery(msg)));
+    let remembered = app
+        .core
+        .update_worktree_form_for_effects(FormMsg::JiraQuery(msg));
+    remember(app, remembered);
     Task::batch([
         on_basic_shown(app, before),
         run_if_newly_awaited(app, before_query),
     ])
+}
+
+/// Write what the form asked its project to remember (FR-013), each change a read-modify-write of
+/// one field. Without a data directory there is nowhere to keep it, and nothing to say.
+fn remember(app: &mut App, outcomes: Vec<Outcome>) {
+    let Some(dir) = app.caps.jira_token_dir().map(std::path::Path::to_path_buf) else {
+        return;
+    };
+    for outcome in outcomes {
+        if let Outcome::JiraQueryRemembered { project, change } = outcome {
+            if let Err(error) = crate::shell::jira::remember_query(&dir, &project, &change) {
+                app.core
+                    .notify_error(crate::shell::jira::remember_failed(&error));
+            }
+        }
+    }
 }
 
 /// Start the run the last message made the form await, comparing the awaited seq before it

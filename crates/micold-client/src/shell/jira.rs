@@ -5,14 +5,23 @@
 //! `owner_only::write` and read nowhere but here (FR-008). It never enters `Settings`, a wire
 //! frame or a log line; an error text built here names the operation, never the token.
 //!
+//! Feature 1186 keeps the selector's remembered mode and last run query beside it, in
+//! `<project id>.query.json` (contracts/selector-source-and-storage.md §4): written owner-only at
+//! each switch and run, read as the form opens, deleted with the token when the connection is
+//! removed (FR-013, FR-014). An error text built for it names the OS error, never the query
+//! (FR-016).
+//!
 //! Depends on `micold_core` and `std` alone, so the shell test includes this file by path.
 
 use std::io;
 use std::path::Path;
 
 use micold_core::jira::{ApiToken, ConnectionAction};
+use micold_core::jira_query::{RememberChange, RememberedQuery};
 use micold_core::settings::{JiraChange, JiraConnectionChange};
-use micold_core::store::{jira_token_file_name, jira_token_path};
+use micold_core::store::{
+    jira_query_file_name, jira_query_path, jira_token_file_name, jira_token_path,
+};
 
 /// Whether `project` has a token file in `dir`: the probe Settings runs on open and on
 /// `SettingsChanged` (contracts/jira-connection.md §4). The token is never read for it.
@@ -32,7 +41,38 @@ pub fn write_token(dir: &Path, project: &Path, token: &ApiToken) -> io::Result<(
 
 /// Delete the token file; a missing file is already what was asked for.
 pub fn remove_token(dir: &Path, project: &Path) -> io::Result<()> {
-    match std::fs::remove_file(jira_token_path(dir, project)) {
+    remove_if_present(&jira_token_path(dir, project))
+}
+
+/// The mode and last run query `project` remembers (feature 1186, FR-013): a missing or
+/// unreadable file is the default, basic and empty (Edge "Remembered data unreadable").
+pub fn read_query(dir: &Path, project: &Path) -> RememberedQuery {
+    std::fs::read(jira_query_path(dir, project))
+        .map(|bytes| RememberedQuery::from_json(&bytes))
+        .unwrap_or_default()
+}
+
+/// Remember one field: read the file, apply `change`, write it back owner-only through a temporary
+/// file and a rename, so a reader never sees half a file and another window's write to the other
+/// field stands (contracts/selector-source-and-storage.md §4).
+pub fn remember_query(dir: &Path, project: &Path, change: &RememberChange) -> io::Result<()> {
+    let next = read_query(dir, project).with_change(change);
+    micold_core::owner_only::write(dir, &jira_query_file_name(project), &next.to_json()).map(drop)
+}
+
+/// The notification a failed [`remember_query`] raises: the OS error, never the query (FR-016).
+pub fn remember_failed(error: &io::Error) -> String {
+    format!("Couldn't remember the Jira query: {error}")
+}
+
+/// Delete the remembered file; a missing file is already what was asked for.
+pub fn remove_query(dir: &Path, project: &Path) -> io::Result<()> {
+    remove_if_present(&jira_query_path(dir, project))
+}
+
+/// Remove `path`; a missing file is success.
+fn remove_if_present(path: &Path) -> io::Result<()> {
+    match std::fs::remove_file(path) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
@@ -67,6 +107,9 @@ pub fn apply(
             if let Some(dir) = dir {
                 remove_token(dir, project)
                     .map_err(|error| format!("couldn't delete the API token: {error}"))?;
+                remove_query(dir, project).map_err(|error| {
+                    format!("couldn't delete the remembered Jira query: {error}")
+                })?;
             }
             Ok(Some(JiraConnectionChange {
                 project: micold_core::jira::connection_key(project),

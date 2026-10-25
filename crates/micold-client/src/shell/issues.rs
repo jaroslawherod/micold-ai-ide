@@ -42,6 +42,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
+use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::{
     BranchSource, DescriptionRequest, DetailsRequest, JiraAvailability, Msg as FormMsg,
 };
@@ -51,6 +52,7 @@ use micold_core::github::{
 };
 use micold_core::issue_details::DETAILS_BOUND;
 use micold_core::jira::{connection_key, ApiToken, IssueProvider};
+use micold_core::jira_query::RememberedQuery;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::store::jira_token_path;
 
@@ -71,6 +73,11 @@ pub(crate) const NOT_CONNECTED: &str = "not connected to the session service";
 /// modal's scrim, unseen, and would call a read "a request that may not have taken effect".
 pub fn on_form_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    if let Some(remembered) = remembered_query(app) {
+        app.core.update(Message::WorktreeForm(FormMsg::JiraQuery(
+            QueryMsg::Restored(remembered),
+        )));
+    }
     let Some(project) = app.core.workspace.active.clone() else {
         app.core
             .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(
@@ -92,6 +99,20 @@ pub fn on_form_opened(app: &mut App) -> Task<Message> {
         move |req| ClientMsg::RemoteList { req, project },
     );
     Task::none()
+}
+
+/// The project's remembered mode and last run query, read as the form opens (feature 1186,
+/// FR-013), only when its Jira connection is in force: missing or unreadable, it is basic and
+/// empty. Read at each open and nowhere else, so another window's later write leaves an open form
+/// alone (Edge "Two windows").
+fn remembered_query(app: &App) -> Option<RememberedQuery> {
+    let form = app.core.worktree_form.form.as_ref()?;
+    if !matches!(form.jira, JiraAvailability::Connected(_)) {
+        return None;
+    }
+    let project = app.core.workspace.active.as_deref()?;
+    let dir = app.caps.jira_token_dir()?;
+    Some(crate::shell::jira::read_query(dir, project))
 }
 
 /// The branch source changed. Choosing the issue source starts a load when the reducer accepted

@@ -12,7 +12,9 @@
 
 use micold_core::github::{Issue, IssueListing};
 use micold_core::jira::ProjectKey;
-use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
+use micold_core::jira_query::{
+    QueryFailure, QueryMode, QueryRefusal, RememberChange, RememberedQuery, ScopedQuery, UserQuery,
+};
 use micold_core::typeahead::{move_highlight, Direction};
 
 use super::{BranchSource, IssueList, JiraSite, SearchState, WorktreeForm};
@@ -61,6 +63,9 @@ pub enum QueryRun {
 /// The selector's advanced messages (data-model §7), as `worktree_form::Msg::JiraQuery`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
+    /// The project's remembered mode and last run query, read as the form opened (FR-013). Sends
+    /// nothing by itself: the Jira source showing runs the query in advanced mode (FR-004a).
+    Restored(RememberedQuery),
     /// The Basic/Advanced switch was pressed (FR-001). Never runs anything (FR-004a).
     ModeChanged(QueryMode),
     /// The query input changed. Never runs anything (FR-004).
@@ -95,6 +100,17 @@ pub fn notice(site: &JiraSite) -> String {
 }
 
 impl JiraQuery {
+    /// Take the project's remembered mode and last run query (FR-013): the draft starts as the
+    /// last run query and nothing has run.
+    pub fn restore(&mut self, remembered: RememberedQuery) {
+        *self = JiraQuery {
+            mode: remembered.mode,
+            draft: remembered.query.clone(),
+            last_run: remembered.query,
+            ..JiraQuery::default()
+        };
+    }
+
     /// Whether advanced mode is the mode shown.
     pub fn is_advanced(&self) -> bool {
         self.mode == QueryMode::Advanced
@@ -227,11 +243,55 @@ impl JiraQuery {
     }
 }
 
-/// Apply `msg` to the open form (data-model §6 transitions). `true` when it started a run or a
-/// basic load under `next_seq`, or made one in flight stale, so the caller hands `next_seq` out.
-pub fn update(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> bool {
+/// What a message did to the form.
+#[derive(Debug, Default)]
+pub struct Applied {
+    /// It started a run or a basic load under `next_seq`, or made one in flight stale, so the
+    /// caller hands `next_seq` out.
+    pub handed_out: bool,
+    /// What the project is to remember (FR-013): the mode at a switch, the query at a run, never a
+    /// draft.
+    pub remember: Option<RememberChange>,
+}
+
+/// Apply `msg` to the open form (data-model §6 transitions).
+pub fn update(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> Applied {
     match msg {
-        Msg::ModeChanged(mode) => form.change_query_mode(mode, next_seq),
+        Msg::ModeChanged(mode) => {
+            let before = form.jira_query.mode;
+            let handed_out = form.change_query_mode(mode, next_seq);
+            Applied {
+                handed_out,
+                remember: (form.jira_query.mode != before).then_some(RememberChange::Mode(mode)),
+            }
+        }
+        Msg::Run => match form.jira_site().cloned() {
+            Some(site) if form.shows_advanced() => {
+                let started = form.jira_query.run_draft(&site, next_seq);
+                Applied {
+                    handed_out: started,
+                    remember: started
+                        .then(|| RememberChange::Query(form.jira_query.last_run.clone())),
+                }
+            }
+            _ => Applied::default(),
+        },
+        other => Applied {
+            handed_out: apply(form, other, next_seq),
+            remember: None,
+        },
+    }
+}
+
+/// [`update`] for the messages that remember nothing: `true` when `next_seq` was handed out.
+fn apply(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> bool {
+    match msg {
+        Msg::Restored(remembered) => {
+            form.jira_query.restore(remembered);
+            false
+        }
+        // Remembered: handled by `update`.
+        Msg::ModeChanged(_) | Msg::Run => false,
         Msg::DraftChanged(text) => {
             if form.shows_advanced() {
                 form.jira_query.draft = text;
@@ -241,10 +301,6 @@ pub fn update(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> bool {
             }
             false
         }
-        Msg::Run => match form.jira_site().cloned() {
-            Some(site) if form.shows_advanced() => form.jira_query.run_draft(&site, next_seq),
-            _ => false,
-        },
         Msg::Retry if form.shows_advanced() => form.jira_query.retry(next_seq),
         Msg::Retry => false,
         Msg::Ran { seq, result } => {

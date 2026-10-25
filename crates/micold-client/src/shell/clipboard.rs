@@ -85,6 +85,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::DaemonSessionsEnded { .. }
         | Outcome::DaemonBound { .. }
         | Outcome::IssueSourceChosen { .. }
+        | Outcome::JiraQueryRemembered { .. }
         | Outcome::RemoteReplaceRequested { .. }
         | Outcome::ContainerStopRequested { .. }
         | Outcome::RemoteRepositoryRequested { .. }
