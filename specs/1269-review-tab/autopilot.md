@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
 - **Phase**: done
-- **Next step**: handoff (the run ends when the close PR merges, after M4 #1394; branch `1269-close`, PR files `pr-title-close.md`/`pr-body-close.md` in the scratchpad)
+- **Next step**: handoff (the run ends when the close PR merges, M4 #1394 merged at 8d68d7f7)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1371 | M1 | merged | c475a975e3ef0377cb93b768084b0fa8dea9e642 |
 | #1384 | M2 | merged | 7844dde4e772ac4670ffa2f14dd3ee804e1128c6 |
 | #1387 | M3 | merged | f827c8222e3395b2347c6158a1dc1356e74e379d |
-| #1394 | M4 | open, in CI | — |
+| #1394 | M4 | merged | 8d68d7f7 |
 | (close PR, opened by orchestrator) | close | branch `1269-close`; full gate green at 8f110fa5 | — |
 
 ## Milestones
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | merged |
 | M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | #1384 | merged |
 | M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | #1387 | merged |
-| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | #1394 | open, in CI |
+| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | #1394 | merged |
 
 ## Decisions
 
