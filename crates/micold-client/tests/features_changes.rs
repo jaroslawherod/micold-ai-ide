@@ -6149,6 +6149,7 @@ mod tree_state {
             Msg::DiffRead {
                 seq,
                 result: Ok(text_diff()),
+                row: DiffRow::NotRead,
             },
         );
         state
