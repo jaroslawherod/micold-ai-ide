@@ -1,0 +1,206 @@
+# Tasks: Container sessions can build a mise project
+
+**Input**: Design documents from `specs/1439-container-dev-toolchain/`
+
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
+[data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md)
+
+**Before any milestone starts**: implementation waits until **#1435** (`gh`, `curl`, `jq` in the
+basic image) and **#1289** (per-project setup command, toolchain `PATH`, setup runner and its user
+guide section) have both merged into `main`. The design PR may merge before them. Each milestone's
+branch is rebased onto `main` with both present; on a conflict in a file research R11 lists, keep
+both sides and recompute `BASIC_IMAGE_CONTENT_HASH` (`scripts/basic-image-hash.sh`).
+
+**FR-007** is provisionally option A (the six X11/Wayland dev libraries in the basic image, ledger
+D3), awaiting the user's decision. Its work is milestone **M2** alone. Under option B, only M2 is rewritten,
+per plan D2 / research R7 (no apt layer; AS4 uses a test-built `fixture.pc`; T030's own-image
+example also adds the six packages); M1, M3 and M4 do not change.
+
+**Tests**: Constitution I: every behaviour has a failing test before its implementation, in the
+same milestone. What cannot be automated cheaply (the full gate in a container, the own-image
+example, size, Kubernetes) is quickstart Part B, run by hand and recorded in the ledger.
+
+**Documentation**: Constitution VII: each milestone that changes what a user sees updates the user
+guide in the same PR.
+
+**Cross-platform**: the image is built for `linux/amd64` and `linux/arm64` by `basic-image.yml`;
+daemon code (M3) is platform-neutral and tested on all three CI platforms.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an unfinished task)
+- **[Story]**: US1–US4 from spec.md
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Confirm #1435 and #1289 are merged (`git log origin/main` shows both), rebase the branch onto `origin/main`, and check their changes are present: `curl`, `jq`, `gh` in `packaging/basic/Containerfile`'s package step; `crates/micold-daemon/src/setup.rs` setup runner and `crates/micold-core/src/sandbox/toolchain_path.rs`. Record both merge SHAs in `specs/1439-container-dev-toolchain/autopilot.md`.
+- [ ] T002 Take the mise pin per plan D1a, before any file names a version: on a machine or `workflow_dispatch` job that reaches `github.com` (this cloud container cannot, research R1), download `SHASUMS256.txt`, `SHASUMS256.asc` and `SHASUMS256.txt.minisig` of the chosen release (the newest at the time); **verify step 2 against mise's docs as they stand then** (`docs/installing-mise.md`, `SECURITY.md` "Release gpg key" in jdx/mise; plan D1a quotes the GPG fingerprint `24853EC9F655CE80B48E6C3A8B81C9D17413A06D` and minisign key read on 2026-10-25 through GitHub code search, not yet run end to end): import the GPG key by fingerprint, `gpg --decrypt SHASUMS256.asc > signed.txt` (clearsigned) with a good signature by that fingerprint, `minisign -Vm SHASUMS256.txt -P <documented key>`, `cmp signed.txt SHASUMS256.txt`; extract exactly the two raw `mise-v<ver>-linux-x64` / `-linux-arm64` lines from `signed.txt`; cross-check each hash against the `mise` binary in `npm pack @jdxcode/mise-linux-{x64,arm64}@<ver>`. Any failure stops the milestone (escalate if no machine can reach GitHub). Record version, both hashes, GPG fingerprint, minisign key, npm result, who ran it and where in the ledger's *Decisions*.
+
+---
+
+## Phase 2: User Story 1, part 1 — the image carries mise, a C toolchain and python3 (Priority: P1) 🎯 MVP
+
+**Goal**: in a container on the basic image built from the branch, `mise` (pinned), `cc`/`c++`/`make`/`pkg-config` and `python3` work before any setup (AS1.1, AS1.6), checksum-verified at build (FR-002).
+
+**Independent test**: `mise run image && mise run test-sandbox` runs `sandbox_real_basic_image` green; `scripts/tests/basic-image-hash.test.sh` green.
+
+### Tests (write first, see them fail)
+
+- [ ] T003 [P] [US1] Add the guard cases of contract B4 to `scripts/tests/basic-image-hash.test.sh` (reuse its `copy_basic` helper): the real `Containerfile` downloads mise only in the same `RUN` as a `sha256sum -c` of `mise.sha256` (a temp copy with the check removed fails); `mise.sha256` has exactly two lines `<64 lowercase hex>  mise-v<version>-linux-x64` / `-linux-arm64` with one version (temp copies with three lines, uppercase hex, mixed versions each fail); `packaging/basic/README.md` names that version (a temp README without it fails); every existing refusal (key/token/`.ssh`/daemon `COPY`/`ADD`, `npm`/`npx`/`pnpm`/`yarn` install, `curl|wget … | sh`) still refuses.
+- [ ] T004 [P] [US1] Extend `crates/micold-core/tests/sandbox_real_basic_image.rs` (feature `sandbox-real-runtime`) per quickstart A5 without FR-007: add `mise`, `cc`, `c++`, `make`, `pkg-config`, `python3` to `PRESENT`; `mise --version` prints the version read from `packaging/basic/mise.sha256` (first field after `mise-v`, so a bump needs no Rust change); a C file compiles and links with `cc` and runs; `python3 -c 'print(1)'` prints `1`; the same checks as uid 10001 with `--read-only` and a writable `/data/home`; `ABSENT` unchanged (FR-006).
+
+### Implementation
+
+- [ ] T005 [US1] Create `packaging/basic/mise.sha256` from T002's two lines, in data-model's format ("exactly two lines, `sha256sum` format; one version on both lines; 64 lowercase hex").
+- [ ] T006 [US1] In `packaging/basic/Containerfile`, add `gcc g++ make libc6-dev pkgconf python3` to the existing `apt-get install` list (one layer, research R2/R3), with a comment naming #1439, FR-003 and FR-004 in the file's style.
+- [ ] T007 [US1] In `packaging/basic/Containerfile`, add the mise step of contract B3: `ARG TARGETARCH`; `COPY mise.sha256 /tmp/mise.sha256`; one `RUN` that maps `amd64`→`x64`, `arm64`→`arm64` (anything else exits non-zero), reads the version from `/tmp/mise.sha256` (not a build `ARG`), `curl -fsSLo` the release binary, `sha256sum -c --ignore-missing`, checks the file exists, `install -m 0755` to `/usr/local/bin/mise`, removes the temp files. Comment names #1439 and FR-001/FR-002.
+- [ ] T008 [US1] Update `packaging/basic/README.md` (plan D6): new contents (C toolchain, `pkg-config`, `python3`, `mise`), the pinned mise version and that `mise.sha256` holds its checksums, and an "Update mise" section repeating plan D1a's five steps, then write `mise.sha256`, recompute the content hash, publish, pin.
+- [ ] T009 [US1] Update the "Which image it runs on" section of `docs/user-guide/sandboxed-daemon.md`: the basic image now carries `mise`, a C/C++ toolchain with `pkg-config`, and `python3` (one sentence; the full building section is T030).
+- [ ] T010 [US1] Recompute `BASIC_IMAGE_CONTENT_HASH` in `crates/micold-core/src/sandbox/basic_image.rs` with `scripts/basic-image-hash.sh` (after T013 too, so it covers the entrypoint change).
+
+---
+
+## Phase 3: User Story 3 — what a session sees on PATH is what exists (Priority: P2)
+
+**Goal**: the sandbox home has `~/.local/bin` and the mise shims folder before the first session; existing contents untouched (FR-011, AS3.1–3.2).
+
+**Independent test**: `scripts/tests/basic-entrypoint.test.sh` green; `sandbox_real_toolchain_path` shows both folders in a fresh sandbox.
+
+### Tests (write first)
+
+- [ ] T011 [P] [US3] Add cases to `scripts/tests/basic-entrypoint.test.sh` (contract B5), each on a temp home: both folders created; shims folder follows `MISE_DATA_DIR`, else `XDG_DATA_HOME`, else `$HOME/.local/share/mise/shims` (empty counts as unset); a file already in each folder is unchanged; an unwritable home prints one line on stderr and the entrypoint carries on to its next step. The existing `MICOLD_HOME=/home/jaro` case keeps passing.
+- [ ] T012 [P] [US3] Extend `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`: in a new sandbox, before any setup, `test -d` succeeds for `~/.local/bin` and the shims folder (quickstart A6).
+
+### Implementation
+
+- [ ] T013 [US3] In `packaging/basic/entrypoint.sh`, after `export HOME` and before sshd starts, compute the shims folder by 1289's rule and `mkdir -p "$HOME/.local/bin" "<shims>"`, guarded so `set -e` does not stop the entrypoint; on failure one line to stderr (plan D3).
+- [ ] T014 [US3] In `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home", replace "Both home folders are on the `PATH` even when they do not exist yet" with: on the basic image both folders exist before the first session (an own image's entrypoint may not create them; they are still on `PATH`).
+- [ ] T015 Record quickstart B4 (a changed hex digit fails the build at the mise step) and B5 (compressed size per architecture vs the previous pin; over 250 MB is a blocker) in the ledger, and the size in `packaging/basic/README.md`.
+
+---
+
+## Phase 4: User Story 1, part 2 — pkg-config finds the gate's dev libraries (FR-007, provisional A)
+
+**Goal**: `pkg-config` finds the six X11/Wayland libraries; `pkg-config --libs x11` prints `-lX11` (AS1.4, contract B2).
+
+**Independent test**: `sandbox_real_basic_image` checks the six `.pc` files and `-lX11`.
+
+- [ ] T016 [US1] Test first: add `DEV_PKG_CONFIG = ["xkbcommon", "wayland-client", "x11", "xcursor", "xrandr", "xi"]` to `crates/micold-core/tests/sandbox_real_basic_image.rs`; `pkg-config --exists` succeeds for each, `pkg-config --libs x11` prints `-lX11`, also as uid 10001 `--read-only`.
+- [ ] T017 [US1] In `packaging/basic/Containerfile`, a separate `RUN apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev` layer after the mise step, its comment naming FR-007 and `ci.yml:270-272` (plan D2).
+- [ ] T018 [US1] One paragraph in `packaging/basic/README.md` and one sentence in `docs/user-guide/sandboxed-daemon.md` "Which image it runs on": the image carries the X11/Wayland development libraries this repository's tests link.
+- [ ] T019 [US1] Recompute `BASIC_IMAGE_CONTENT_HASH` in `crates/micold-core/src/sandbox/basic_image.rs`; re-measure B5 and update the README size and the ledger.
+
+---
+
+## Phase 5: User Story 1, part 3 — one setup at a time on a sandbox daemon (edge case "Concurrent setup", Principle II)
+
+**Goal**: setups on an app-owned sandbox daemon run one shell at a time, in order; a waiting run says so and can be stopped at once (contract setup-turn S1–S4).
+
+**Independent test**: `cargo test -p micold-daemon setup_turn` (quickstart A4).
+
+### Tests (write first; every test name contains `setup_turn`)
+
+- [ ] T020 [US1] In `crates/micold-daemon/src/state.rs`'s tests module (beside the `offered.json` tests near line 8457): `setup_turn` returns the turn when the daemon has an `offered.json` of its own and `None` without one (S1).
+- [ ] T021 [US1] In `crates/micold-daemon/src/setup.rs`'s `mod tests` (or a new `crates/micold-daemon/tests/setup_turn.rs` if the runner needs a full `DaemonState`): on a sandbox daemon two runs never overlap and the second starts after the first ends; three runs keep the order they asked; the second's output begins with `Waiting for another setup on this daemon to finish…` through the same buffer, log and `SetupOutput` path; a run that gets the turn at once prints nothing extra; on a host daemon two runs overlap (S2).
+- [ ] T022 [US1] Same file as T021: **Stop setup** on a waiting run ends it `Stopped` at once and never spawns; `stop_and_wait` (worktree delete) and a daemon stop end a waiting run `Stopped` / `Interrupted` at once; a waiting run stopped before its turn comes does not spawn; stopping the holder lets the first waiting run spawn; the turn is released after a failed, not-started and panicking run (S2, S3).
+
+### Implementation
+
+- [ ] T023 [US1] `crates/micold-daemon/src/state.rs`: `DaemonState` gains `setup_turn: Arc<tokio::sync::Mutex<()>>` and an accessor that returns it only when `offered_clis()` is `Some` (data model "Setup turn").
+- [ ] T024 [US1] `crates/micold-daemon/src/setup.rs`: `Entry` keeps a `watch` sender the stop paths signal; `SetupRuns` gains the operation that records the waiting line (same path as `push`, no I/O in `SetupRuns`); `spawn_run` takes the turn before `spawn_blocking(run_blocking …)`, on `try_lock` failure records the line and awaits the lock in a `select!` with the stop signal, a stopped waiting run goes straight to `finish` without spawning, and the guard lives until the run has ended. `SetupRuns::stop`, `stop_and_wait` and the daemon-stop path signal it (plan D4). No protocol or `SetupState` change.
+- [ ] T025 [US1] `docs/user-guide/worktrees-and-sessions.md`, the setup section 1289 added: one sentence: on a container or Kubernetes daemon one setup runs at a time; a waiting run's output says it waits for another setup; **Stop setup** on the running one lets the next start (plan D6).
+
+---
+
+## Phase 6: User Story 1, part 4 — a mise project's toolchain installs itself end to end (Priority: P1)
+
+**Goal**: setup `mise trust && mise install` installs a fixture project's Rust toolchain into the sandbox home; its C build script compiles; restart and a second worktree reuse it (AS1.2, AS1.3, AS1.5, FR-005, SC-003).
+
+- [ ] T026 [P] [US1] Create the fixture `crates/micold-daemon/tests/fixtures/mise-c-crate/` (`mise.toml` pinning rust with the minimal profile, `Cargo.toml` with no crates.io dependency, `build.rs` that runs `cc` on `hello.c` and links it, `src/main.rs` and one test calling the C function).
+- [ ] T027 [US1] Create `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support`) per quickstart A7: setup succeeds as the non-root session user, writing nothing outside the sandbox home and the worktree (FR-010); `cargo build` and `cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; still found after a container restart; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` runs the same setup command to success (edge case "Empty project"). Green after T005–T013 (needs the published or `:dev` image).
+
+---
+
+## Phase 7: User Story 2 — this repository's gate runs in a container session (Priority: P1)
+
+**Goal**: `mise install` alone provides every tool the gate and the instructions need; the setup command is documented; `mise run gate` exits 0 in a container (FR-008, FR-009, FR-010, SC-001, SC-002).
+
+- [ ] T028 [P] [US2] Test first: create `scripts/tests/mise-toolchain.test.sh` (quickstart A3): `mise.toml`'s `[tools]` declares `rust` with components `rustfmt`, `clippy`, `rust-analyzer`, and `uv`; a temp copy without `rust-analyzer` fails.
+- [ ] T029 [US2] `mise.toml`: `rust = { version = "stable", components = "rustfmt,clippy,rust-analyzer" }` (research R8); `uv`, `node`, `ffmpeg` unchanged. `CONTRIBUTING.md` "Set up": the container daemon setup command `mise trust && mise install`, the same one the sandbox page recommends (plan D5).
+
+---
+
+## Phase 8: User Story 4 — the user guide says what the basic image can build (Priority: P2)
+
+- [ ] T030 [US4] `docs/user-guide/sandboxed-daemon.md`: a "Building projects in the basic image" section under "Which image it runs on" (plan D6): what the image carries (contract B1, B2), the setup command `mise trust && mise install` for a mise project, installs land in the sandbox home and persist and are shared by the daemon's worktrees, one setup at a time per sandbox daemon, what it does not carry (a project's toolchain, other system libraries), and a complete own-image `Containerfile` `FROM` the basic image that adds `libpq-dev`.
+- [ ] T031 [US4] Run quickstart B3: build T030's example with `docker build` and `podman build` exactly as written; a daemon on it starts sessions and `pkg-config --libs libpq` prints `-lpq`. Record in the ledger.
+
+---
+
+## Phase 9: Polish (by hand, recorded; no code)
+
+- [ ] T032 Quickstart B1 on `micold-basic:dev` (or the pinned image after D7's pin PR): setup ends **Set up**, `command -v cargo rust-analyzer uv python3 gh` prints five paths, `mise run gate` exits 0, the `LSP` tool answers a `hover`; record wall times. A tool the gate needs that is missing goes into `mise.toml` (user-space) or escalates (system tool outside FR-003/FR-007), plan D5.
+- [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
+- [ ] T034 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
+
+---
+
+## Dependencies & Execution Order
+
+- T001 → T002 → everything else. #1435 and #1289 merged before T001.
+- Phase 2 (T003–T010) and Phase 3 (T011–T015) form M1; T010 runs last in M1 (hash covers the entrypoint).
+- Phase 4 (M2) needs M1's Containerfile. Phase 5 (M3) needs only T001 (daemon code), so M3 may run before M2 if FR-007 is still undecided.
+- Phases 6–8 (M4) need M1 (tools in the image) and M3 (concurrent setups are safe). T027 runs against `:dev` built with M1–M2.
+- Phase 9 needs M1–M4 merged; T034 after the last `packaging/basic/` change.
+
+### Parallel opportunities
+
+- T003 ∥ T004 ∥ T011 ∥ T012 (different files). T026 ∥ T028. T020 ∥ T021 (different files).
+
+## Implementation Strategy
+
+M1 first: once merged, a container on the branch's image has mise, a C toolchain and python3 and true `PATH` folders. Then M2 (FR-007, swappable for option B), M3 (setup turn), M4 (end-to-end proof, this repository, user guide). Quickstart Part B and the publish-and-pin follow-up go to the close unit.
+
+## Milestones
+
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
+
+### M1 — Pinned mise, C toolchain, python3 and home folders in the basic image 🎯 MVP
+
+- **Tasks**: T001–T015
+- **Deliverable**: a container started from the basic image built from `main` has the pinned `mise`, `cc`/`c++`/`make`/`pkg-config` and `python3` before any setup, as any uid and with `--read-only`, and the sandbox home's `~/.local/bin` and mise shims folder exist before the first session.
+- **Satisfies**: US1 AS1, AS6; US3 AS1–AS2; FR-001, FR-002, FR-003 (toolchain), FR-004, FR-006, FR-011, FR-013; edge case "checksum mismatch fails the build"
+- **Verify**: `scripts/tests/basic-image-hash.test.sh`; `scripts/tests/basic-entrypoint.test.sh`; `mise run image && mise run test-sandbox` (`sandbox_real_basic_image`, `sandbox_real_toolchain_path`); quickstart B4, B5 recorded in the ledger
+- **Depends on**: — (#1435, #1289 merged)
+- **Tier**: full
+
+### M2 — The gate's X11/Wayland dev libraries in the basic image (FR-007, provisional option A)
+
+- **Tasks**: T016–T019
+- **Deliverable**: in the basic image built from `main`, `pkg-config` finds the six libraries and `pkg-config --libs x11` prints `-lX11`.
+- **Satisfies**: US1 AS4 (image half); FR-003 (pkg-config finds image libraries), FR-007
+- **Verify**: `mise run image && mise run test-sandbox` (`sandbox_real_basic_image`, `DEV_PKG_CONFIG`); B5 re-measured
+- **Depends on**: M1
+- **Tier**: light (one apt layer, one test constant, the pattern of M1's T006/T004; plan D2 names where)
+
+### M3 — One setup at a time on a sandbox daemon
+
+- **Tasks**: T020–T025
+- **Deliverable**: on a container or Kubernetes daemon, a second setup waits for the first, says so in its output, and can be stopped at once; host daemons are unchanged.
+- **Satisfies**: edge case "Concurrent setup"; contract setup-turn S1–S4; Principle II
+- **Verify**: `cargo test -p micold-daemon setup_turn` (in `mise run gate`)
+- **Depends on**: — (code); after M1 in order of merge
+- **Tier**: full (concurrency in the daemon)
+
+### M4 — A mise project builds end to end; this repository and the user guide
+
+- **Tasks**: T026–T031
+- **Deliverable**: setup `mise trust && mise install` builds a fixture Rust crate with C code in a container sandbox and reuses the toolchain on restart and in a second worktree; this repository's `mise.toml` provides the gate's components; the sandbox page documents building in the basic image with an own-image example that builds.
+- **Satisfies**: US1 AS2, AS3, AS5; US2 (setup command, components); US4 AS1–AS2; FR-005, FR-008, FR-009 (documentation), FR-010, FR-012; SC-003, SC-005
+- **Verify**: `scripts/tests/mise-toolchain.test.sh`; `mise run test-sandbox` (`sandbox_real_mise_setup`); quickstart B3 recorded
+- **Depends on**: M1, M3 (M2 for this repository's gate in B1)
+- **Tier**: full
+
+Phase 9 (T032–T034) changes no code but the pin PR: quickstart B1, B2, B6 and the publish-and-pin follow-up are left to the close unit (US2 AS1–AS4, FR-009, SC-001, SC-002, SC-004).
