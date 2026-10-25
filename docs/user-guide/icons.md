@@ -12,10 +12,11 @@ status markers.
 | App mark (the application's icon) | Names the application on hover; not a button | Title bar, left end |
 | Menu (three dots) | Open the overflow menu | Title bar, right end |
 | Info | Open the About dialog | Overflow menu |
+| Help (question mark) | Open Session service diagnostics | Overflow menu |
 | Settings (gear) | Open Settings; drawn selected while Settings is open | Title bar, before the overflow menu, and the overflow menu |
-| Light mode (sun) | The theme is following light mode | Theme toggle in the overflow menu |
-| Dark mode (moon) | The theme is following dark mode | Theme toggle in the overflow menu |
-| Auto mode | The theme is following your operating system | Theme toggle in the overflow menu |
+| Light mode (sun) | The Appearance section | Settings rail, **Appearance** |
+| Dark mode (moon) | The theme is following dark mode | Not drawn: the overflow menu's theme toggle is gone; choose the theme in [Settings](settings.md#appearance) |
+| Auto mode | The theme is following your operating system | Not drawn: the overflow menu's theme toggle is gone; choose the theme in [Settings](settings.md#appearance) |
 | Open folder | Open or choose a project | Empty state, "Open another project", the known-projects **Open** button, the project switcher, and "Open this folder" in the selector |
 | Drop-down arrow | Opens a list to choose from | The title bar's project segment (it opens the project switcher), select fields |
 | Pencil | Rename a known project | Known-projects list, project right-click menu |
@@ -89,4 +90,5 @@ See [Appearance & Theming](appearance-theming.md) for how themes and colors work
 "Help (question mark)" app-bar icon that no longer exists — the top app bar renders `Icon::Menu`
 — and listed 9 of the 21 icons the application defines. All rendered icons are now documented.
 `Icon::Help` remains defined in `src/icons.rs` with zero call sites and is deliberately omitted
-here; it is tracked as orphaned code for removal.
+here; it is tracked as orphaned code for removal. (Since then the overflow menu's **Session
+service diagnostics** item draws it; see the table.)

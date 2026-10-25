@@ -25,11 +25,9 @@ The window is organised as a Material Design layout:
 
 ### Title bar
 
-A 44 px bar runs across the top of the window in every view. Its **Jump to location, session or
-project** field, in the middle, opens the [quick
-switcher](worktrees-and-sessions.md#interacting-with-the-terminal) as Ctrl+Shift+P (Cmd+Shift+P on
-macOS) does; the `project / place` **breadcrumb** at its left is where you switch projects. From
-the left, it holds:
+A 44 px bar runs across the top of the window in every view: its breadcrumb is where you switch
+projects, and its jump-to field opens the [quick
+switcher](worktrees-and-sessions.md#interacting-with-the-terminal). From the left, it holds:
 
 - **App mark** — the application's icon; hover it for the application's name. It is not a button.
 - **Breadcrumb** — the open project (press it to switch projects) and, after a `/` in a quieter
@@ -212,17 +210,15 @@ open in it, that session's terminal, and Settings:
 
 ## Choosing your theme
 
-Open the **overflow menu** (the three-dots icon at the right end of the [title bar](#title-bar)). Its first item
-is a **theme-mode toggle** showing the current mode with an icon; **each click cycles to the
-next mode**:
+Choose the theme under **Theme** in [Settings → Appearance](settings.md#appearance); the
+overflow menu no longer holds a theme toggle. There are three choices:
 
-- **Auto** (brightness-auto icon) — follow the OS preference (the default).
-- **Light** (sun icon) — always use the light theme, regardless of the OS.
-- **Dark** (moon icon) — always use the dark theme, regardless of the OS.
+- **Auto** — follow the OS preference (the default).
+- **Light** — always use the light theme, regardless of the OS.
+- **Dark** — always use the dark theme, regardless of the OS.
 
-The cycle order is Auto → Light → Dark → Auto. The menu stays open while you cycle so you can
-click again. Your choice takes effect immediately and is remembered across restarts. Cycling
-back to **Auto** resumes tracking your OS preference and switching live when it changes.
+Your choice takes effect when you press **Save** and is remembered across restarts. Going back to
+**Auto** resumes tracking your OS preference and switching live when it changes.
 
 <!-- media: theme-follow-light -->
 
