@@ -8,7 +8,7 @@ Record per [contracts/visual-pass-record.md](contracts/visual-pass-record.md); q
   M3's commits: the two whole-window covered states). M3 reaches main by rebase as #1431, which
   rewrites this SHA; `crates/*/src` here is byte-identical to main at
   `58ef1146da2e1cd31d7def7217c08b7132538dd3` (`git diff 58ef1146 ad1fc7b3 -- 'crates/*/src'` is
-  empty: M3 changed tests and specs only), so the frames are what that main draws, from #1431's
+  empty: M3 changed tests, specs and `docs/development/layout-snapshot.md`, no source), so the frames are what that main draws, from #1431's
   covered states.
 - **How it was run**: research R8's route. In the cloud container, with no daemon or GitHub, the
   application's own `ui::view` (`ui::view_with`, as the layout snapshot's `view_of` calls it) was
@@ -31,8 +31,10 @@ Record per [contracts/visual-pass-record.md](contracts/visual-pass-record.md); q
   `crates/micold-client/src/ui/material/composition_contrast.rs` that hold its text on its fill,
   and every region was also measured on the frames: per text, the glyph-core pixel with the most
   contrast against the most common colour of its box, the ratio from `micold_core::tokens::contrast`
-  in the scratchpad harness. The column gives the lowest ratio among the texts measured in the
-  region (titles, second lines, chips, annotations, band words, labels, hints); icons are not text.
+  in the scratchpad harness. Each cell names the measured texts with their ratios: the region's
+  lowest-reading texts among those sampled (titles, second lines, chips, annotations, band words,
+  labels, hints) and any a verdict names. The lowest ratio measured in a region is always in its
+  cell; a text not named was not sampled or read higher. Icons are not text.
   Fixture names (`project`, `feat/working`, *no daemon*, *Claude Code*) stand where the boards
   have `micold-ai-ide`, `fix/1117`, *local* and *Claude*; that is data, not a difference.
 
@@ -43,9 +45,9 @@ Frames: [visual-pass/](visual-pass/).
 | Region | Verdict | Reason | Contrast |
 |---|---|---|---|
 | Title bar | differs on purpose | App mark, breadcrumb `project ▾ / feat/working`, jump field with Ctrl+Shift+P, Settings, ⋯, as the board. No *Plan usage 62%*: plan usage stays in the status bar (`specs/1127-title-bar-breadcrumb/spec.md` Clarifications, after `specs/1124-bottom-status-bar/spec.md` Clarifications) | `the_breadcrumbs_words_are_legible_on_the_title_bar`, `the_jump_fields_words_and_edges_are_legible_on_the_title_bar`; measured 8.92:1 (location crumb), 7.25:1 (jump field) |
-| Sidebar | differs by defect | Region issue #1125. Two defects, follow-ups in the ledger's *Follow-ups not done*: the row chip *no daemon* reads 4.40:1 (`#625B71` on `#DAD3DC`), under 4.5:1; the Overview row's badge reads *1 need action*, the plural verb with a count of one. On purpose besides, per `specs/1125-sidebar-state-groups/visual-pass.md` B10: Done is a collapsed group, not a footer (research R8); ⋯ after add and hide (FR-015); the chips wrap, *untyped* on a second line (FR-016); second line is branch and sessions only (FR-011); *Default* first in Idle (FR-003); the row chips are today's (FR-013); the session rows under the expanded worktree are unchanged by #1125 | `a_sidebar_group_header_is_legible_on_the_sidebar`, `a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected`, `the_overview_row_and_its_badge_are_legible`; measured 8.48:1 (headers, second lines), 7.24:1 (selected row's annotation), **4.40:1 (*no daemon* chip)** |
+| Sidebar | differs by defect | Region issue #1125. Two defects, follow-ups in the ledger's *Follow-ups not done*: the row chip *no daemon* reads 4.40:1 (`#625B71` on `#DAD3DC`), under 4.5:1; the Overview row's badge reads *1 need action*, the plural verb with a count of one. On purpose besides, per `specs/1125-sidebar-state-groups/visual-pass.md` B10: Done is a collapsed group, not a footer (research R8); ⋯ after add and hide (FR-015); the chips wrap, *untyped* on a second line (FR-016); second line is branch and sessions only (FR-011); *Default* first in Idle (FR-003); the row chips are today's (FR-013); *Needs action · 2* counts `fix/checks`, whose card is Needs attention, while the badge counts Needs action cards only (`specs/1125-sidebar-state-groups/spec.md` Clarifications: Needs attention joins the Needs action group); the session rows under the expanded worktree are unchanged by #1125 | `a_sidebar_group_header_is_legible_on_the_sidebar`, `a_two_line_rows_text_is_legible_on_the_sidebar_and_when_selected`, `the_overview_row_and_its_badge_are_legible`; measured 8.48:1 (headers, second lines), 7.24:1 (selected row's annotation), **4.40:1 (*no daemon* chip)** |
 | Session area | differs on purpose | Header: title, state and branch chips, Changes at the right; the title is the branch because the fixture has no issue title, and there is no pull request chip or count because the fixture has none (title rule and chips: `specs/1126-session-context-header/spec.md` US1; counts: its M3). The strip holds one tab per session with the shown session's shells and "+" after its AI tab, then *running*, New session as "+", and the split buttons, where the board draws *New session* as a word tab (`specs/1126-session-context-header/spec.md` Clarifications). One pane, not the board's two; it reads *Starting…* (fixture) | No test holds the header and strip; measured 16.35:1 (title), 13.25:1 (state chip), 6.41:1 (branch chip), 8.92:1 (tab labels, *running*), 6.14:1 (Changes) |
-| Status bar | matches | Dot and connection, sandbox, CLI, then the Overview and Jump hints at the right, as the board. *Daemon connected · no daemon* is the connection, then where the shown worktree runs: the fixture's worktree is bound to none (`ui/status_bar.rs` `location`, feature 1124 research R6) | `the_status_bars_text_and_dots_are_legible_on_its_fill`; measured 8.04:1 |
+| Status bar | matches | Dot and connection, sandbox, CLI, then the Overview and Jump hints at the right, as the board. *Daemon connected · no daemon* is the connection, then where the shown worktree runs: the fixture's worktree is bound to none (`ui/status_bar.rs` `location`, which reads `state.shown_location()`) | `the_status_bars_text_and_dots_are_legible_on_its_fill`; measured 8.04:1 |
 | Whole window | matches | One title bar (43 px and its 1 px divider), the sidebar column to x 266 and the session area beside it, the status bar 28 px across the full width; no stacked chrome row; nothing overlaps | — |
 
 ## session-view, dark — [session-view-dark-1280.png](visual-pass/session-view-dark-1280.png)
