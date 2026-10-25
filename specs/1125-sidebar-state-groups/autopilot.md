@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M5
-- **Next step**: M5 verify (verify.md step 1: scoped gate + review A high)
+- **Next step**: M5 verify step 2 (review B, visual pass §B6, §B7), then full gate and PR
 
 ## Pull requests
 
@@ -88,6 +88,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M4 scoped gate | — | after rebase onto origin/main 5b5064bc | red twice, fixed: `layout_coverage_registry` ratchet needed `RevealingState` listed as empty (`EMPTY_KINDS`); `refresh_is_only_on_demand` allowlist re-pointed at `more_action_message` |
 | M4 visual pass | — | 3eedd2e8 | B1 chip-bar half, B5 (pointer and keyboard-opened ⋯ menu, Escape, attach chosen, type chip filters), B8 at 180 px PASS, light and dark: `visual-pass/m4-record.md` |
 | M4 full gate | — | e2cf702f | `scripts/gate.sh` green after rebasing onto origin/main 78c2fc22 |
+| M5 review A (code-review high) | 1 | fb59692ed13c4bbf9cdd355161af82462297c129:675c06a721ce7e292a6d3c005ac986ec9bf25113 | CHANGES: F1 `location_row`/`row_heights` counted folded-away sessions, so `hover_holds` failed for rows below a fold (fixed: count `session_rows()`, test `the_row_counts_skip_the_sessions_a_fold_hides`); F4 shadowed `at` (fixed, `entered`); F2, F3 MINOR declined. Scoped gate red: a missed `Hovered` call site in `sidebar_attention.rs`, and `anatomy_call_sites` (a `#[cfg(test)]` accessor in tree_view.rs read as a second test module; fixed: `pub(crate) key` field). Green on micold-client; micold-core `settings_refuses_save_over_failed_read` fails only as root (gate.sh runs it as a user) |
 
 ## Declined review findings
 
@@ -105,14 +106,12 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M4 | A r1 F4 | keyboard fallback anchor is arithmetic, not the trigger's bounds | MINOR; a key press has no point; checked in the visual pass; the menu is clamped into the window |
 | M4 | A r1 F5 | `more_menu_items` restates `can_refresh_worktrees` | `sidebar_state.rs` asserts the two agree (D19) |
 | M4 | A r1 F8 | a stale `more_anchor` could survive a close | every close path (toggle, Escape/outside/displacement via `cancelled_by: MoreMenuToggled`, choose) clears it |
+| M5 | A r1 F2 | the row-menu test passes without M5 code | MINOR; it is the Edge Case's regression test (T057: the menu keeps its anchor and location), which needs no new code |
+| M5 | A r1 F3 | the key-distinctness test has no run group or Default row | MINOR; `RowKey` hashes a variant tag with the id, so kinds cannot collide, and run ids are distinct `GroupId`s |
 
 ## Handover
 
-M5 implemented and committed (a1e6a42df), T052–T058 ticked; not yet gated or reviewed, not pushed.
-- Done: `TreeItem::key` + keyed layout via `cdk::Keyed::column` (tree_view.rs, tests `a_keyed_row_keeps_*`, red then green); sidebar keys every row (`RowKey`/`row_key` in ui/sidebar.rs, test `every_sidebar_row_has_a_distinct_key`); `worktree.hovered: Option<(String, usize)>`, `Hovered(String, usize)`, `sidebar::hover_holds` (tests `a_row_that_moves_group` in tests/sidebar_tree.rs, red by compile); `Hash` derived on `SessionLocation` and `RowRef`; user guide bullet "The keyboard follows the sidebar's order". T054 already done by 1126 (D22).
-- Passed locally: `cargo test -p micold-client --lib -- keyed tree_view transcript ui::sidebar`, `--test sidebar_tree --test sidebar_state --test features_worktree --test showcase_completeness`.
-- Next: verify.md from step 1 (scoped gate with review A `high`), review B, visual pass (quickstart §B6, §B7), `git fetch` + rebase if main moved, full gate `scripts/gate.sh`, then pr.md (push `--force-with-lease=claude/project-thread-22fhnj:`, title/body to scratchpad). Layout snapshot may need regenerating if row trees changed shape (Keyed is layout-transparent, so probably not).
-- No PR open; no open findings.
+None.
 
 ## Open escalation
 

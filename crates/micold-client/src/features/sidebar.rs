@@ -878,19 +878,27 @@ pub fn row_heights(rows: &[ListRow]) -> Vec<f32> {
         };
         match entry {
             SidebarEntry::Default(node) => {
-                location(&mut heights, node.sessions_shown(), node.sessions.len());
+                location(
+                    &mut heights,
+                    node.sessions_shown(),
+                    node.session_rows().len(),
+                );
             }
-            SidebarEntry::Worktree(node) => {
-                location(&mut heights, node.sessions_shown(), node.sessions.len())
-            }
+            SidebarEntry::Worktree(node) => location(
+                &mut heights,
+                node.sessions_shown(),
+                node.session_rows().len(),
+            ),
             SidebarEntry::Group(group) => {
                 heights.push(one_line);
                 if group.expanded {
                     for run in &group.runs {
                         match &run.row {
-                            RunRow::Worktree(node) => {
-                                location(&mut heights, node.sessions_shown(), node.sessions.len())
-                            }
+                            RunRow::Worktree(node) => location(
+                                &mut heights,
+                                node.sessions_shown(),
+                                node.session_rows().len(),
+                            ),
                             RunRow::NoWorktree => heights.push(one_line),
                         }
                     }
@@ -1060,15 +1068,23 @@ pub fn location_row(rows: &[ListRow], target: &SessionLocation) -> Option<usize>
         match entry {
             SidebarEntry::Default(node) => {
                 let at = SessionLocation::Default;
-                if let Some(found) = step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
-                {
+                if let Some(found) = step(
+                    &at,
+                    node.sessions_shown(),
+                    node.session_rows().len(),
+                    &mut row,
+                ) {
                     return Some(found);
                 }
             }
             SidebarEntry::Worktree(node) => {
                 let at = node.location();
-                if let Some(found) = step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
-                {
+                if let Some(found) = step(
+                    &at,
+                    node.sessions_shown(),
+                    node.session_rows().len(),
+                    &mut row,
+                ) {
                     return Some(found);
                 }
             }
@@ -1079,9 +1095,12 @@ pub fn location_row(rows: &[ListRow], target: &SessionLocation) -> Option<usize>
                         match &run.row {
                             RunRow::Worktree(node) => {
                                 let at = node.location();
-                                if let Some(found) =
-                                    step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
-                                {
+                                if let Some(found) = step(
+                                    &at,
+                                    node.sessions_shown(),
+                                    node.session_rows().len(),
+                                    &mut row,
+                                ) {
                                     return Some(found);
                                 }
                             }

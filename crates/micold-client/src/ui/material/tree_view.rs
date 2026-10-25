@@ -144,8 +144,8 @@ pub struct TreeItem<'a, M> {
     /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
     tab_stop: bool,
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
-    /// R13, [`TreeItem::key`]).
-    key: Option<u64>,
+    /// R13, [`TreeItem::key`]). Crate-visible so a host's tests can check every row has one.
+    pub(crate) key: Option<u64>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -218,12 +218,6 @@ impl<'a, M> TreeItem<'a, M> {
     pub fn key(mut self, key: u64) -> Self {
         self.key = Some(key);
         self
-    }
-
-    /// The row's [`key`](Self::key), for a host's tests to check every row has one.
-    #[cfg(test)]
-    pub(crate) fn key_of(&self) -> Option<u64> {
-        self.key
     }
 
     /// Make the row a stop in the Tab order while it has a press (feature 1125, the sidebar's

@@ -573,7 +573,7 @@ fn rows_toggled_and_hovered() -> (State, State) {
 
     for message in [
         Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
-        Message::Worktree(WorktreeMsg::Hovered(FEATURE_X.to_string())),
+        Message::Worktree(WorktreeMsg::Hovered(FEATURE_X.to_string(), 0)),
         Message::Worktree(WorktreeMsg::Unhovered(FEATURE_X.to_string())),
         Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(FEATURE_X.to_string())),
         Message::Sidebar(SidebarMsg::DefaultExpansionToggled),

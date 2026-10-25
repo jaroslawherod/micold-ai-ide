@@ -224,3 +224,46 @@ fn a_chord_still_steps_through_the_sessions_a_fold_hides() {
     assert_eq!(all, vec![u, c], "the step order keeps the hidden child");
     assert_eq!(n.listed_sessions().len(), 1);
 }
+
+/// Feature 1125 (M5 review A F1): the row counts behind hover and scrolling skip the sessions a
+/// fold hides, as the list does, so the location under a folded origin tree is where it is drawn.
+#[test]
+fn the_row_counts_skip_the_sessions_a_fold_hides() {
+    use micold_client::features::sidebar::{location_row, row_heights, row_index, RowRef};
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let child = session(&wt(), known(&user));
+    let u = user.id;
+    let mut state = state_with(vec![user, child]);
+    let mut below = state.worktree.worktrees[0].clone();
+    below.dir_name = "feat-b".to_string();
+    below.path = below.path.with_file_name("feat-b");
+    below.branch = Some("feat/b".to_string());
+    state.worktree.worktrees.push(Worktree {
+        status: WorktreeStatus::Valid,
+        ..below
+    });
+    state
+        .sidebar
+        .expanded
+        .insert(support::spawn_tree::DIR.to_string());
+    toggle(&mut state, u);
+    assert_eq!(
+        listed(&state),
+        vec![u],
+        "precondition: the child is folded away"
+    );
+
+    let list = state.sidebar_list();
+    let b = SessionLocation::Worktree("feat-b".to_string());
+    let drawn = row_index(&list, &RowRef::Location(b.clone()));
+    assert!(drawn.is_some(), "precondition: feat-b is drawn");
+    assert_eq!(location_row(&list, &b), drawn, "hover and the list agree");
+    let entries = list.len();
+    assert_eq!(
+        row_heights(&list).len(),
+        entries + 1,
+        "one session row under the folded origin, none for its hidden child"
+    );
+}
