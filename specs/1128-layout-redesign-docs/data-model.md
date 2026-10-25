@@ -46,12 +46,14 @@ removed. A banner inside a region that still ships is not a removed element.
 | gates | fixture (`layout_snapshot`), text overflow, containment, `gates/window_regions_fit.rs` (R6); both schemes |
 
 Invariants (SC-004): `title_bar` is the bar, not the container holding its hairline (R6);
-`title_bar.y = 0`, `title_bar.h = app_bar::HEIGHT` (44 after #1127), `title_bar.y +
-app_bar::BOTTOM_EDGE = shell.body.y` (the bar plus its 1 px hairline, `HEIGHT + DIVIDER`; just
-`HEIGHT` if #1127 drops the divider), `shell.body.y + shell.body.h = status_bar.y`, `status_bar.h =
-28`, `status_bar.y + status_bar.h = 800`, `sidebar.h = session.area.h = shell.body.h`, `sidebar.x +
-sidebar.w = session.area.x`. In `window-overview` (W5, on the `State`): the Overview is open and
-the sidebar's selected row is the Overview row.
+`title_bar.y = 0`, `title_bar.h = app_bar::HEIGHT` (43 as #1127 shipped it; the 44 px title bar
+is `BOTTOM_EDGE`), `title_bar.y + app_bar::BOTTOM_EDGE = shell.body.y` (the bar plus its 1 px
+hairline, `HEIGHT + DIVIDER`), `shell.body.y + shell.body.h = status_bar.y`, `status_bar.h = 28`,
+`status_bar.y + status_bar.h = 800`; the title bar, the body and the status bar span the window's
+width; `sidebar` and `session.area` share `shell.body`'s top and height, `sidebar.x =
+shell.body.x`, `sidebar.x + sidebar.w = session.area.x`, `session.area` ends at `shell.body`'s right
+edge. In `window-overview` (W5, on the `State`): the Overview is open, not full screen, with a
+project active, which is when the sidebar draws its Overview row selected.
 
 ## Visual-pass record
 

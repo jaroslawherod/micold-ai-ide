@@ -9,8 +9,9 @@
 //! - **W1** the title bar spans the window's top and is `app_bar::HEIGHT` tall (the bar, not the
 //!   container that also holds its hairline);
 //! - **W2** the status bar spans the window, `status_bar::HEIGHT` tall, ending at its bottom edge;
-//! - **W3** the body starts at the title bar's bottom edge, `app_bar::BOTTOM_EDGE` (the bar plus its
-//!   hairline, so 0 px between them), and ends where the status bar starts;
+//! - **W3** the body spans the window's width, starts at the title bar's bottom edge,
+//!   `app_bar::BOTTOM_EDGE` (the bar plus its hairline, so 0 px between them), and ends where the
+//!   status bar starts;
 //! - **W4** the sidebar and the session area (or the Overview in its place) each span the body from
 //!   top to bottom, the sidebar from its left edge and the session area to its right, and meet;
 //! - **W5** `window-overview`'s `State` has the Overview open, not full screen, and its sidebar row
@@ -44,9 +45,12 @@ impl Window {
     /// The base-layer record the anchor `name` points at.
     fn region(&self, name: &str) -> &LayoutRecord {
         lay::anchored(self.covered, self.records, name).unwrap_or_else(|| {
+            let declared = self.covered.anchors.iter().find(|a| a.name == name);
             panic!(
-                "{} ({:?}): anchor {name:?} names no record",
-                self.covered.name, self.scheme
+                "{} ({:?}): anchor {name:?} names no record (declared at {:?})",
+                self.covered.name,
+                self.scheme,
+                declared.map(|a| a.path)
             )
         })
     }
@@ -124,6 +128,8 @@ fn w3_the_body_fills_from_the_title_bars_bottom_edge_to_the_status_bar() {
             body.y + body.height,
             status.y,
         );
+        w.expect("shell.body left", body.x, 0.0);
+        w.expect("shell.body width", body.width, lay::WINDOW.width);
     }
 }
 
