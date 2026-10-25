@@ -1976,7 +1976,7 @@ where
                             ops::CreateFailure::NotARepository => DaemonMsg::OperationError {
                                 req,
                                 kind: ErrorKind::NotFound,
-                                message: "unknown project".into(),
+                                message: UNKNOWN_PROJECT.into(),
                                 detail: None,
                             },
                             ops::CreateFailure::Task(join) => {
@@ -2346,7 +2346,7 @@ where
                         Err(ops::DeleteFailure::NotARepository) => DaemonMsg::OperationError {
                             req,
                             kind: ErrorKind::NotFound,
-                            message: "unknown project".into(),
+                            message: UNKNOWN_PROJECT.into(),
                             detail: None,
                         },
                         Err(ops::DeleteFailure::Task(join)) => {
@@ -2922,6 +2922,11 @@ fn merged_branch_answer(
     containment(tip.as_deref(), &check.head, ancestor)
 }
 
+/// Why a project-scoped request names nothing: each daemon keeps its own catalog, so a project the
+/// client never added here (bug 1423) is unknown to this daemon whatever other daemons hold.
+const UNKNOWN_PROJECT: &str =
+    "unknown project: this daemon's catalog does not hold it (it was never added here)";
+
 /// Reply to a worktree RPC for a path that is not a known git-repo project. A missing project is
 /// `NotFound`; a known non-git project is `Refused` (worktrees need a repo).
 fn reject_non_repo(
@@ -2932,7 +2937,7 @@ fn reject_non_repo(
 ) {
     let (kind, message) = match state.project_repo(project) {
         Some((_, false)) => (ErrorKind::Refused, "project is not a git repository"),
-        _ => (ErrorKind::NotFound, "unknown project"),
+        _ => (ErrorKind::NotFound, UNKNOWN_PROJECT),
     };
     state.send(
         id,
