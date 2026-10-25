@@ -4478,6 +4478,19 @@ mod source_menu {
         rest
     }
 
+    /// FR-013. The filter and the sort stay across a switch to a pull request and back.
+    #[test]
+    fn a_source_switch_keeps_the_filter_and_the_sort() {
+        use micold_core::review::tree::TreeSort;
+        let mut state = with_prs();
+        changes::update(&mut state, Msg::TreeFilterChanged("a".into()));
+        changes::update(&mut state, Msg::TreeSortChosen(TreeSort::Size));
+        show_pr(&mut state, 7);
+        changes::update(&mut state, Msg::SourceChosen(None));
+        let tree = &view(&state).tree;
+        assert_eq!((tree.filter.as_str(), tree.sort), ("a", TreeSort::Size));
+    }
+
     /// Turn Files on and answer the tree read.
     fn files_on(state: &mut State) {
         let Effect::ReadTree { seq, .. } = changes::update(state, Msg::FilesPaneToggled) else {
@@ -5421,6 +5434,44 @@ mod reviewed_marks {
         Some(Ratio { done, total })
     }
 
+    /// The tree's file rows, in order.
+    fn tree_files(state: &State) -> Vec<String> {
+        use micold_core::review::tree::RowKind;
+        view(state)
+            .change_rows
+            .iter()
+            .filter(|row| matches!(row.kind, RowKind::File { .. }))
+            .map(|row| row.label.clone())
+            .collect()
+    }
+
+    /// US4 s3, FR-012, ledger decision 6. Once the entry's marks are known Unreviewed first is
+    /// offered and puts the files without a mark on their current change first; a mark that
+    /// changes lays the tree out again.
+    #[test]
+    fn unreviewed_first_follows_the_marks() {
+        use micold_client::features::changes::sort_offers;
+        use micold_core::review::tree::{Offer, TreeSort};
+        let mut state = opened(THREE);
+        let unreviewed = (TreeSort::UnreviewedFirst, Offer::Shown);
+        assert!(!sort_offers(&state, view(&state), true).contains(&unreviewed));
+        pushed(&mut state, &[], &[("a.rs", 1), ("b.rs", 9)]);
+        assert!(sort_offers(&state, view(&state), true).contains(&unreviewed));
+        assert!(
+            !sort_offers(&state, view(&state), false).contains(&unreviewed),
+            "FR-013: disconnected, the marks are not known"
+        );
+        changes::update(&mut state, Msg::TreeSortChosen(TreeSort::UnreviewedFirst));
+        assert_eq!(view(&state).tree.sort, TreeSort::UnreviewedFirst);
+        assert_eq!(
+            tree_files(&state),
+            ["b.rs", "c.rs", "a.rs"],
+            "b.rs is marked on another change"
+        );
+        pushed(&mut state, &[], &[("a.rs", 1), ("c.rs", 3)]);
+        assert_eq!(tree_files(&state), ["b.rs", "a.rs", "c.rs"]);
+    }
+
     /// US1 s1, s4, s5, s6; FR-001. ○ for none, ● with a draft, ✓ when the mark is on the current
     /// change (keeping the draft count), and a mark on another change is not Reviewed.
     #[test]
@@ -5834,7 +5885,7 @@ mod reviewed_marks {
 mod tree_state {
     use super::*;
     use changes::{tree_pane, TreePane};
-    use micold_core::review::tree::{RowKind, TreeChoices};
+    use micold_core::review::tree::{RowKind, TreeChoices, TreeSort};
 
     /// The rows as `depth:label` with `/` after an open folder and `/-` after a collapsed one.
     fn rows(state: &State) -> Vec<String> {
@@ -6079,6 +6130,142 @@ mod tree_state {
         answer(&mut state, seq, Ok(list(NESTED)));
         assert_eq!(rows(&state), ["0:src/-", "0:top.rs"]);
         assert_eq!(collapsed(&state), ["src"]);
+    }
+
+    fn filter(state: &mut State, text: &str) -> Effect {
+        changes::update(state, Msg::TreeFilterChanged(text.to_owned()))
+    }
+
+    fn sort(state: &mut State, sort: TreeSort) -> Effect {
+        changes::update(state, Msg::TreeSortChosen(sort))
+    }
+
+    /// `ready(..)` with the selected file's diff shown.
+    fn showing_diff(files: &[&str], selected: &str) -> State {
+        let mut state = ready(files);
+        let (seq, _) = select(&mut state, selected);
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(text_diff()),
+            },
+        );
+        state
+    }
+
+    const SCENARIO_3_1: &[&str] = &["docs/tests.md", "src/daemon/tests.rs", "src/lib.rs"];
+
+    /// US3 s1, s4, FR-009. A filter narrows the rows; the selected file filtered out keeps its
+    /// diff and is listed again once the filter clears; the bar scale does not follow the filter.
+    #[test]
+    fn a_filter_narrows_the_rows_and_keeps_the_selection_and_its_diff() {
+        let mut state = showing_diff(SCENARIO_3_1, "src/lib.rs");
+        let scale = view_of(&state).change_scale;
+        assert_eq!(filter(&mut state, "tests"), Effect::None);
+        assert_eq!(
+            rows(&state),
+            ["0:docs/", "1:tests.md", "0:src/daemon/", "1:tests.rs"]
+        );
+        let view = view_of(&state);
+        assert_eq!(view.selected, Some(path("src/lib.rs")));
+        assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
+        assert_eq!(view.change_scale, scale);
+        assert_eq!(tree_pane(view), TreePane::Rows);
+        changes::update(&mut state, Msg::TreeFilterCleared);
+        assert!(rows(&state).contains(&"1:lib.rs".to_owned()));
+    }
+
+    /// US3 s2, s6, FR-010. Clearing restores the folds made before the filter; folds made while
+    /// filtering are gone; clearing an empty filter changes nothing.
+    #[test]
+    fn clearing_the_filter_restores_the_folds_before_it() {
+        let mut state = ready(NESTED);
+        toggle(&mut state, &["src/ui"]);
+        filter(&mut state, "b.rs");
+        assert_eq!(
+            rows(&state),
+            ["0:src/ui/", "1:b.rs"],
+            "matches open their folders"
+        );
+        toggle(&mut state, &["src", "src/ui"]);
+        assert_eq!(rows(&state), ["0:src/ui/-"]);
+        assert_eq!(
+            collapsed(&state),
+            ["src/ui"],
+            "the reviewer's folds are untouched"
+        );
+        changes::update(&mut state, Msg::TreeFilterCleared);
+        assert_eq!(view_of(&state).tree.filter, "");
+        assert_eq!(rows(&state), ["0:src/", "1:ui/-", "1:a.rs", "0:top.rs"]);
+        let before = view_of(&state).tree.clone();
+        assert_eq!(
+            changes::update(&mut state, Msg::TreeFilterCleared),
+            Effect::None
+        );
+        assert_eq!(view_of(&state).tree, before);
+    }
+
+    /// US3 s3, FR-011. A filter matching nothing leaves no rows, says so, and keeps the diff.
+    #[test]
+    fn a_filter_matching_nothing_says_so_and_keeps_the_diff() {
+        let mut state = showing_diff(NESTED, "src/a.rs");
+        filter(&mut state, "zzz");
+        let view = view_of(&state);
+        assert!(view.change_rows.is_empty());
+        assert_eq!(tree_pane(view), TreePane::NoMatch);
+        assert_eq!(view.selected, Some(path("src/a.rs")));
+        assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
+    }
+
+    /// US4 s2, s4. Size orders each level by changed lines, largest first, filtered or not.
+    #[test]
+    fn size_orders_each_level_largest_first() {
+        let mut state = State::default();
+        let seq = open(&mut state, worktree());
+        let mut files = list(&["a/x.rs", "a/y.rs", "b/z.rs", "c.rs"]);
+        for (file, n) in files.files.iter_mut().zip([1, 5, 9, 2]) {
+            file.added = n;
+        }
+        answer(&mut state, seq, Ok(files));
+        assert_eq!(sort(&mut state, TreeSort::Size), Effect::None);
+        assert_eq!(
+            rows(&state),
+            ["0:b/", "1:z.rs", "0:a/", "1:y.rs", "1:x.rs", "0:c.rs"]
+        );
+        filter(&mut state, ".rs");
+        assert_eq!(rows(&state)[0], "0:b/");
+    }
+
+    /// FR-012. Unreviewed first is refused while no reviewed marks are known.
+    #[test]
+    fn unreviewed_first_is_refused_without_marks() {
+        let mut state = ready(NESTED);
+        sort(&mut state, TreeSort::UnreviewedFirst);
+        assert_eq!(view_of(&state).tree.sort, TreeSort::Path);
+    }
+
+    /// FR-013, FR-014, SC-005, US4 s5. A re-read keeps the filter, the sort and the folds, and
+    /// lays the new list out by them; choices made while the list is read or failed apply when it
+    /// returns.
+    #[test]
+    fn a_reread_keeps_filter_sort_and_folds() {
+        let mut state = ready(&["lib/c.rs", "src/a.rs", "src/b.rs"]);
+        toggle(&mut state, &["lib"]);
+        sort(&mut state, TreeSort::Size);
+        let seq = reread(&mut state);
+        filter(&mut state, "a.rs");
+        answer(&mut state, seq, Err("fatal".into()));
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Hidden);
+        let seq = reread(&mut state);
+        let mut files = list(&["lib/c.rs", "src/a.rs", "src/aa.rs"]);
+        files.files[2].added = 4;
+        answer(&mut state, seq, Ok(files));
+        let view = view_of(&state);
+        assert_eq!(view.tree.filter, "a.rs");
+        assert_eq!(view.tree.sort, TreeSort::Size);
+        assert_eq!(collapsed(&state), ["lib"]);
+        assert_eq!(rows(&state), ["0:src/", "1:aa.rs", "1:a.rs"]);
     }
 
     /// FR-013, edge case "Two windows on the same entry": each window's view keeps its own folds.

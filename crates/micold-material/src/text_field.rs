@@ -20,12 +20,16 @@
 //! widget, and the placeholder goes back to being what §7.7 says it is: a genuine example, never
 //! the field's name.
 
+use crate::cdk::focus::FocusOp;
+use crate::cdk::passthrough::forward_to_child;
 use crate::form_field::{field_text_builders, FieldText};
 use crate::icons::Icon;
 use crate::style;
 use crate::text::TypeRole;
+use iced::advanced::widget::{Tree, Widget};
+use iced::advanced::{mouse, Clipboard, Layout, Shell};
 use iced::widget::text_input;
-use iced::Element;
+use iced::{keyboard, Element, Event, Rectangle};
 use micold_core::tokens::Roles;
 
 /// A single-line text field. Builder form (Principle VIII):
@@ -41,6 +45,7 @@ pub struct TextField<'a, M> {
     trailing_action: Option<(Icon, M)>,
     on_input: Option<Box<dyn Fn(String) -> M + 'a>>,
     on_submit: Option<M>,
+    on_escape: Option<M>,
     text: FieldText,
     active: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
@@ -59,6 +64,7 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             trailing_action: None,
             on_input: None,
             on_submit: None,
+            on_escape: None,
             text: FieldText::default(),
             active: false,
             on_focus_change: None,
@@ -144,6 +150,67 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
         self.on_submit = Some(message);
         self
     }
+
+    /// The message emitted when the user presses Escape while the field holds the keyboard; the
+    /// key is captured there (feature 1273, research R5). An app-wide Escape never hears a key a
+    /// focused input already took, so a field that clears itself on Escape says so here.
+    pub fn on_escape(mut self, message: M) -> Self {
+        self.on_escape = Some(message);
+        self
+    }
+}
+
+/// Publishes `message` for an Escape press while a focusable inside `content` holds the keyboard,
+/// and captures the press; every other event goes to `content` (see [`TextField::on_escape`]).
+struct EscapeWhileFocused<'a, M> {
+    content: Element<'a, M>,
+    message: M,
+}
+
+impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for EscapeWhileFocused<'a, M> {
+    forward_to_child!(content, M, iced::Theme, iced::Renderer;
+        children, diff, size, layout, draw, mouse_interaction, operate, overlay);
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Escape),
+            ..
+        }) = event
+        {
+            let mut asks = FocusOp::asking();
+            self.content.as_widget_mut().operate(
+                &mut tree.children[0],
+                layout,
+                renderer,
+                &mut asks,
+            );
+            if asks.answer() {
+                shell.publish(self.message.clone());
+                shell.capture_event();
+                return;
+            }
+        }
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout,
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
+    }
 }
 
 impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
@@ -206,6 +273,47 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         if let Some((icon, message)) = f.trailing_action {
             field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));
         }
-        f.text.apply(field).into()
+        let element: Element<'a, M> = f.text.apply(field).into();
+        match f.on_escape {
+            Some(message) => Element::new(EscapeWhileFocused {
+                content: element,
+                message,
+            }),
+            None => element,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{named_key, roles, Mounted};
+    use iced::keyboard::key::Named;
+    use iced::mouse::Cursor;
+
+    fn field(value: &str) -> TextField<'_, String> {
+        TextField::new("Filter files…", value, roles())
+            .on_input(|text| format!("input {text}"))
+            .on_escape("escape".to_owned())
+    }
+
+    /// Research R5 (feature 1273, scenario 3.6): Escape in a focused field publishes the field's
+    /// message once and is captured there, so no app-wide handler hears it.
+    #[test]
+    fn escape_in_a_focused_field_publishes_its_message_and_is_captured() {
+        let mut m = Mounted::new(field("tests"));
+        m.focus_next();
+        let (messages, captured) = m.send_captured(named_key(Named::Escape), Cursor::Unavailable);
+        assert_eq!(messages, ["escape"]);
+        assert!(captured, "the field keeps the key");
+    }
+
+    /// Unfocused, Escape is not the field's: nothing is published and the key goes on.
+    #[test]
+    fn escape_outside_the_field_is_left_alone() {
+        let mut m = Mounted::new(field("tests"));
+        let (messages, captured) = m.send_captured(named_key(Named::Escape), Cursor::Unavailable);
+        assert!(messages.is_empty(), "{messages:?}");
+        assert!(!captured);
     }
 }
