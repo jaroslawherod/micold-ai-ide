@@ -31,6 +31,7 @@ use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::pull_request::BranchPrState;
 use crate::review::comment::{CommentId, Move, Outcome, PrAnchor, ReviewComment, Scope};
+use crate::review::marks::{ChangeId, ReviewMark};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::scoped_credential::{SecretToken, UnixTime};
@@ -1192,8 +1193,9 @@ pub enum DaemonMsg {
         /// The new settings.
         settings: DaemonSettings,
     },
-    /// An entry's review comments changed (feature 482): pushed to every client attached to
-    /// `project` after `Attached` and after every change, an empty list once they are gone.
+    /// An entry's review comments or reviewed marks changed (features 482, 1271): pushed to every
+    /// client attached to `project` after `Attached` and after every change, both lists empty once
+    /// they are gone.
     ReviewChanged {
         /// The project.
         project: PathBuf,
@@ -1203,6 +1205,9 @@ pub enum DaemonMsg {
         comments: Vec<ReviewComment>,
         /// A send is in progress for this entry: sending, editing and deleting are unavailable.
         sending: bool,
+        /// Every reviewed mark of the entry, of every source, by scope then path (feature 1271,
+        /// RM3).
+        marks: Vec<ReviewMark>,
     },
     /// A project's run groups changed (feature 483): the whole list, pushed to every client
     /// attached to `project` after `Attached` and after every change. Idempotent.
@@ -2093,6 +2098,16 @@ pub enum ReviewEditOp {
     Reanchor {
         /// The moves.
         moves: Vec<Move>,
+    },
+    /// Mark `path` in `scope` reviewed on `change`, replacing an earlier mark, or unmark it with
+    /// `None` (feature 1271, RM1). Changes no comment (RM6).
+    SetReviewed {
+        /// The source: the working tree or a pull request `n > 0`.
+        scope: Scope,
+        /// The file, relative to the entry root, `/`-separated.
+        path: String,
+        /// The file's change the mark is made on; `None` removes the mark.
+        change: Option<ChangeId>,
     },
 }
 

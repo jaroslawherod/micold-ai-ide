@@ -866,6 +866,7 @@ fn push(state: &mut State, dir: &str, comments: Vec<ReviewComment>) {
             worktree_dir: dir.into(),
             comments,
             sending: false,
+            marks: Vec::new(),
         },
     );
 }
@@ -1096,6 +1097,74 @@ fn a_review_push_replaces_only_that_entrys_comments() {
     );
 }
 
+/// Feature 1271 (T023, FR-006, FR-011): a push's marks land on its own entry, never another's, and
+/// a later push replaces them.
+#[test]
+fn a_review_push_holds_its_entrys_marks_and_a_later_push_replaces_them() {
+    use micold_core::review::comment::Scope;
+    use micold_core::review::marks::{ChangeId, EntryMarks, ReviewMark};
+
+    let mark = |scope: Scope, p: &str, n: u8| ReviewMark {
+        scope,
+        path: path(p),
+        change: ChangeId::parse(&format!("{n:02x}").repeat(20)).unwrap(),
+    };
+    let marked = |state: &mut State, dir: &str, marks: Vec<ReviewMark>| {
+        changes::update(
+            state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: dir.into(),
+                comments: Vec::new(),
+                sending: false,
+                marks,
+            },
+        );
+    };
+    let key = |dir: &str| (project(), dir.to_string());
+    let mut state = showing(commentable());
+    let a = vec![
+        mark(Scope::WorkingTree, "b.rs", 1),
+        mark(Scope::PullRequest(4), "b.rs", 2),
+    ];
+    let d = vec![mark(Scope::WorkingTree, "x.rs", 3)];
+    marked(&mut state, "feat-a", a.clone());
+    marked(&mut state, "", d.clone());
+    assert_eq!(
+        state.reviews.get(&key("feat-a")).map(|r| r.marks.clone()),
+        Some(EntryMarks::from_vec(a)),
+        "the entry holds its marks of both sources"
+    );
+    assert_eq!(
+        state.reviews.get(&key("")).map(|r| r.marks.clone()),
+        Some(EntryMarks::from_vec(d.clone())),
+        "and the other entry its own (FR-006)"
+    );
+    assert!(
+        !state.reviews.contains_key(&key("feat-b")),
+        "an entry that was pushed nothing holds no marks"
+    );
+
+    let later = vec![mark(Scope::WorkingTree, "c.rs", 4)];
+    marked(&mut state, "feat-a", later.clone());
+    assert_eq!(
+        state.reviews.get(&key("feat-a")).map(|r| r.marks.clone()),
+        Some(EntryMarks::from_vec(later)),
+        "a later push replaces the marks (FR-011)"
+    );
+    assert_eq!(
+        state.reviews.get(&key("")).map(|r| r.marks.clone()),
+        Some(EntryMarks::from_vec(d)),
+        "and leaves the other entry's alone"
+    );
+    marked(&mut state, "feat-a", Vec::new());
+    assert_eq!(
+        state.reviews.get(&key("feat-a")),
+        Some(&ReviewView::default()),
+        "a push of no marks leaves none"
+    );
+}
+
 /// L2. Each listed file has its pending-comment count; sent comments and other entries' do not
 /// count.
 #[test]
@@ -1192,6 +1261,7 @@ fn sending(state: &mut State, dir: &str, comments: Vec<ReviewComment>, on: bool)
             worktree_dir: dir.into(),
             comments,
             sending: on,
+            marks: Vec::new(),
         },
     );
 }

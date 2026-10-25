@@ -331,7 +331,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 67 → 68 for feature 1210's `worktree_guard_enabled` on `DaemonSettings` and `SettingsSet`
 /// (FR-008).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 68;
+///
+/// And 68 → 69 for feature 1271's `ReviewEditOp::SetReviewed` and `ReviewChanged.marks` (RM7).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 69;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

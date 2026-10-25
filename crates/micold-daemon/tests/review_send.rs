@@ -1572,3 +1572,75 @@ async fn us3_no_running_session_starts_one_that_receives_the_pull_request_batch(
         "its first input is the batch"
     );
 }
+
+/// Feature 1271 T021 (RM5, FR-007): a delivered send leaves the entry's reviewed marks as they
+/// were, in memory and in every push after it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn rm5_a_delivered_send_leaves_the_reviewed_marks() {
+    use micold_core::review::comment::Scope;
+    use micold_core::review::marks::{ChangeId, ReviewMark};
+    use micold_core::review::RelPath;
+
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.start(sid(1), false).await;
+    let mut client = window(&s.state, &project).await;
+
+    let change = ChangeId::parse(&"cd".repeat(20)).unwrap();
+    let (result, _) = request(
+        &mut client,
+        1,
+        ClientMsg::ReviewEdit {
+            req: 1,
+            project: project.clone(),
+            worktree_dir: "wt".into(),
+            edit: ReviewEditOp::SetReviewed {
+                scope: Scope::WorkingTree,
+                path: "src/a.rs".into(),
+                change: Some(change),
+            },
+        },
+    )
+    .await;
+    result.expect("marked");
+    add(
+        &mut client,
+        2,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &["fn a() {}"],
+        "Rename a.",
+    )
+    .await;
+    let (result, _) = send(&mut client, 3, &project, "wt").await;
+    assert!(result.is_ok(), "{result:?}");
+
+    let marks: Vec<(String, Vec<ReviewMark>)> = s
+        .state
+        .review_pushes_on_attach(&project)
+        .into_iter()
+        .filter_map(|msg| match msg {
+            DaemonMsg::ReviewChanged {
+                worktree_dir,
+                marks,
+                ..
+            } => Some((worktree_dir, marks)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        marks,
+        vec![(
+            "wt".to_owned(),
+            vec![ReviewMark {
+                scope: Scope::WorkingTree,
+                path: RelPath::from_native("src/a.rs").unwrap(),
+                change,
+            }]
+        )],
+        "the send left the mark (RM5)"
+    );
+}

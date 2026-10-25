@@ -12,7 +12,7 @@ change } }`.
 
 - `change: Some(id)` sets the mark of `path` in `scope` to `id` (a new mark, or a re-mark that
   replaces the old one); `None` removes it.
-- Refused `InvalidInput`, memory and file unchanged: an unknown entry (W2); `path` not a valid
+- Refused, memory and file unchanged: an unknown entry `NotFound` (W2); `InvalidInput` for `path` not a valid
   entry-relative `/` path (482's `checked_path`); `Scope::PullRequest(0)`; `Scope::PullRequest(_)`
   for the Default entry (`worktree_dir == ""`, as W18).
 - `ChangeId` is a type on the wire: a value that is not 40 hex characters fails to decode.

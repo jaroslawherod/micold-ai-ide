@@ -239,7 +239,10 @@
 ///
 /// And 67 → 68 for feature 1210's opt-out (FR-008): `worktree_guard_enabled` on `DaemonSettings`
 /// and `ClientMsg::SettingsSet`. An older peer would fail to decode either.
-pub const PROTOCOL_VERSION: u32 = 68;
+///
+/// And 68 → 69 for feature 1271's reviewed marks (RM7): `ReviewEditOp::SetReviewed` and `marks` on
+/// `DaemonMsg::ReviewChanged`.
+pub const PROTOCOL_VERSION: u32 = 69;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
