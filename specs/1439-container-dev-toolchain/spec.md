@@ -52,7 +52,7 @@ working.
 
 **Independent Test**: Start a fresh container daemon on the basic image built from the branch. Set
 the setup command of a small fixture project, whose `mise.toml` declares a Rust toolchain and whose
-crate links a C dependency through `pkg-config`, to `mise trust && mise install`. Create a worktree;
+crate compiles a C source file through a build script, to `mise trust && mise install`. Create a worktree;
 setup succeeds; in a session there, `cargo build` and `cargo test` succeed.
 
 **Acceptance Scenarios**:
@@ -62,12 +62,14 @@ setup succeeds; in a session there, `cargo build` and `cargo test` succeed.
 2. **Given** a project whose setup command is `mise trust && mise install`, **When** a worktree is
    created on a new container daemon on the basic image, **Then** setup succeeds and installs every
    tool the project's `mise.toml` declares into the sandbox home.
-3. **Given** setup has succeeded, **When** a session builds a Rust crate that compiles C code or
-   links a system library found through `pkg-config`, **Then** compiling and linking succeed.
-4. **Given** setup has succeeded once on a daemon, **When** the container restarts or a second
+3. **Given** setup has succeeded, **When** a session builds a Rust crate whose build script
+   compiles C code, **Then** compiling and linking succeed.
+4. **Given** a library with a `pkg-config` file that the image (or an own image built `FROM` it)
+   provides, **When** a session runs `pkg-config --libs` for it, **Then** `pkg-config` finds it.
+5. **Given** setup has succeeded once on a daemon, **When** the container restarts or a second
    worktree of the same project is created on that daemon, **Then** the installed tools are still
    found and the second setup does not download them again.
-5. **Given** a new container daemon on the basic image, before any setup has run, **When** a
+6. **Given** a new container daemon on the basic image, before any setup has run, **When** a
    session or one of the repository's hooks runs a `python3` script, **Then** `python3` is found
    and runs it.
 
@@ -96,7 +98,7 @@ which finishes with exit status 0.
    python3 gh`, **Then** each of the five resolves.
 3. **Given** setup has succeeded, **When** a session runs `mise run gate`, **Then** every step (fmt
    check, clippy, the workspace tests, the shell tests) runs and the gate exits 0 on a clean
-   checkout of `main`.
+   checkout of the branch that carries this feature (and of `main` after merge).
 4. **Given** setup has succeeded, **When** a session's `LSP` tool asks rust-analyzer about a Rust
    symbol in the worktree, **Then** rust-analyzer starts and answers.
 
@@ -157,7 +159,8 @@ example that builds with `docker build` or `podman build` as given.
   fails; no image is published with an unverified `mise`.
 - **Concurrent setup** (Principle II): two worktrees of the same or different projects on one daemon
   run `mise install` at the same time into the shared sandbox home; both succeed, and neither
-  leaves the other's tools broken (mise serialises writes to its own install folders).
+  leaves the other's tools broken (whether mise and rustup already guarantee this is an assumption
+  the plan verifies; if they do not, setup must serialise installs per daemon).
 - **Several sessions on one daemon** use the same toolchain from the shared home at once; one
   session's build does not disturb another's.
 - **Kubernetes daemons** (feature 686) start from the same basic image with a read-only root file
@@ -188,9 +191,10 @@ example that builds with `docker build` or `podman build` as given.
   repository when the image is built; a mismatch or failed download MUST fail the build. The
   image's guard test (`scripts/tests/basic-image-hash.test.sh`) MUST keep refusing keys, tokens,
   the daemon, AI CLIs and piped-script installs, and MUST accept this way of adding `mise`.
-- **FR-003**: The basic image MUST provide a C/C++ compiler, linker, `make` and `pkg-config`, so a
-  Rust toolchain installed by mise can compile and link crates with C code or system libraries
-  found through `pkg-config`.
+- **FR-003**: The basic image MUST provide a C/C++ compiler, linker, the C library headers, `make`
+  and `pkg-config`, so a Rust toolchain installed by mise can compile and link crates with C code,
+  and `pkg-config` finds the libraries that the image or an own image built `FROM` it provides.
+  Development libraries beyond these are FR-007's question.
 - **FR-004**: The basic image MUST provide `python3` on the default `PATH`, usable before any setup
   has run.
 - **FR-005**: Tools that a setup command installs with `mise` MUST land in the sandbox home, so they
@@ -214,7 +218,7 @@ example that builds with `docker build` or `podman build` as given.
 - **FR-009**: The repository MUST document its container setup command, and with it, on a new
   container daemon on the image FR-007 settles on, setup MUST succeed, `command -v cargo
   rust-analyzer uv python3 gh` MUST resolve all five, and `mise run gate` MUST exit 0 on a clean
-  checkout of `main`.
+  checkout of the branch that carries this feature (and of `main` after merge).
 - **FR-010**: Installing this repository's toolchain in a container session MUST NOT require root,
   `sudo` or writing outside the sandbox home and the worktree.
 
@@ -279,5 +283,8 @@ example that builds with `docker build` or `podman build` as given.
   Kubernetes (the pod's home volume).
 - A new basic image reaches users through the existing hash, publish and pin steps (feature 806);
   existing containers move to it on their next restart.
+- Two `mise install` runs into one sandbox home at the same time do not corrupt each other (mise
+  locks its install folders; rustup's behaviour under concurrent installs is less certain). The plan
+  verifies this and, if it does not hold, serialises setup's installs per daemon.
 - The 250 MB size budget is a starting estimate for a Debian compiler toolchain plus `python3`; the
   plan measures it.

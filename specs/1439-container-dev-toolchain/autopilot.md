@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
 - **Phase**: spec
-- **Next step**: orchestrator dispatches the spec review (rubrics/spec.md) on the snapshot in *Review rounds*; then clarify unit resolves FR-007
+- **Next step**: orchestrator dispatches the round-2 scoped spec re-review (snapshot diff from round 1); then clarify unit resolves FR-007
 
 ## Pull requests
 
@@ -33,7 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Review spec | 1 | 88a57bc11916cbc5c1b545009cfdd9cb331ed559:acefceb57addd2b636a783099b5c1664b60c8efe | not run: this unit has no Agent tool; orchestrator to dispatch |
+| Review spec | 1 | 88a57bc11916cbc5c1b545009cfdd9cb331ed559:acefceb57addd2b636a783099b5c1664b60c8efe | CHANGES: 1 MAJOR (F1 pkg-config fixture untestable), 2 MINOR — all fixed |
+| Review spec | 2 | 0dd79911c49382f93e7e6c046c4ab2dda6be0d1a:6da15512d5f7e13d3544e0ea3cc3c60143156e3a | pending (scoped re-review of the fix diff) |
 
 ## Declined review findings
 
