@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M1 implemented (T001–T011 ticked); docs gate and review A clean; awaiting review B
-- **Next step**: orchestrator dispatches review B for M1 (snapshot in *Review rounds*), then continues the M1 unit for the full gate and the M1 PR. M2–M4 wait for #1125 and #1127 to merge.
+- **Phase**: M2 implemented (T012–T020 ticked); scoped gate and review A (3 rounds) clean; awaiting review B
+- **Next step**: orchestrator dispatches review B for M2 (snapshot in *Review rounds*), then continues the M2 unit for the full gate and the M2 PR (`feat(1128): …` per pr.md; M2 is docs plus `site/`). M3 after M2 merges.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -19,14 +19,15 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1365 | Design (spec, plan, tasks) | merged (rebase) | f955fbea3ac738910219cb0daf5c61bdf6a03415 |
+| #1372 | M1 — status bar and session area in the user guide | merged (rebase) | 1c69ea8bb8e8b6b755b21c167d23307e43b6a46c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | — | full gate green at 150a0410 after rebase onto origin/main; pushed, PR to open |
-| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | blocked: #1125 and #1127 must merge |
-| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | blocked: #1125 and #1127 must merge; after M2 |
+| M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
+| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | implemented on claude/project-thread-bznqpy; review A clean; awaiting review B |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | after M2 (blockers #1125, #1127 merged) |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
 ## Decisions
@@ -54,6 +55,9 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M1 review A (code-review, high) | 2 | — (fix diff) | 8 findings, all wording precision in round-1 fixes: Cmd+C/Cmd+V (no Shift) on macOS, tab order when a helper is shown, restart only while stopped, "Both restart controls" ambiguity, "+" shown with no instance, layout bullet in appearance-theming.md, '+' bullet focus condition; all fixed; reflow declined again. |
 | M1 review A (code-review, high) | 3 | — (fix diff) | 9 findings, wording precision in round-2 fixes (tab placed after itself, other sessions' order main-then-helpers, focus qualifier scope, '+' anchor with no instances, "new terminal"/"unchanged" release-note wording at terminal-panes.md:94, conditional status-bar items, "a single tab" on a new session, how to get a stopped process for the restart); all fixed, prose only. Rated MINOR (no wrong placement of an element remains); not escalated; review B covers the final text. |
 | M1 review B (conformance) | 1 | `3740dabadc2d0749a908e15d2ceee93b291d0c05:67674781225eb24388b605834d6641c1e8e6794b` (Sonnet) | CLEAN; 3 MINORs: F1 fixed, prose only (appearance-theming.md notifications "a small bar" → "a small notification"); F2 declined (see Declined review findings); F3 fixed, prose only (settings.md recovery parenthesis dropped: the client has no general stop-session control, only **Stop session** while an interrupt is overdue). |
+| M2 review A (code-review, high) | 1 | — (`origin/main...d1e125b3`) | 9 findings: fixed — `Choosing your theme` described the removed overflow theme toggle (now Settings → Appearance), icons.md theme rows, `docs/README.md` "Help toolbar entry", help-about step 1 named one menu item, Overview first paragraph repeated the chord, Title bar intro repeated its bullets; declined — line reflow (as M1), quick-switcher link target. |
+| M2 review A (code-review, high) | 2 | — (fix diff `d1e125b3..bbbfc373`) | 9 findings: fixed — picker label is "Follow the system", the `theme-follow` clip showed and pressed the removed toggle (clip, `site/media.toml` entry and `site/capture/scenes/theme-follow.sh` removed), icons.md alignment note contradicted itself and named a wrong path, unrendered Dark/Auto rows dropped, history wording dropped, overview reflow, help-about links Settings and diagnostics. |
+| M2 review A (code-review, high) | 3 | — (fix diff `bbbfc373..55f70280`) | 7 findings, none from this diff at BLOCKER/MAJOR: fixed — icons.md contributor paths, alignment note dated separately and records the orphaned Dark/Auto icons; declined or follow-up — see below. Clean. |
 
 ## Declined review findings
 
@@ -61,6 +65,10 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 |---|---|---|---|
 | M1 | A rounds 1–3 | MINOR: reflow the paragraphs whose added links pushed lines past 100 columns | The pages are not wrapped consistently (hundreds of lines over 100 columns in each touched file); reflowing would widen the diff past FR-011's "that sentence only". |
 | M1 | B round 1 | F2 MINOR: worktrees-and-sessions.md "+" bullet restates the tab strip's "+" | Optional (FR-004 judgement call): the bullet is where that page explains opening instances, and it links to the tab-strip section rather than redescribing its layout. |
+| M2 | A round 1 | MINOR: reflow added lines past 100 columns | As M1: the pages are not wrapped consistently; reflowing whole paragraphs widens the diff past FR-011. |
+| M2 | A round 1 | MINOR: quick-switcher link lands on `#interacting-with-the-terminal`, not the bullet | That section holds the quick switcher's owning bullet (R2); a list item has no anchor, and `terminal-panes.md#keyboard-shortcuts` only lists the chord. |
+| M2 | A round 3 | `scene_menu_settings_y=145` measured with the theme item first | Pre-existing: the theme item was gone before this branch, and every scene coordinate predates the 44 px title bar and the tab strip; recorded as a follow-up, not caused by this diff. |
+| M2 | A round 3 | MINOR: `scene_start --preference` now unused; feature 028/006 tasks still name the theme-follow scene; Choosing your theme has no picture | Dead-option cleanup and a new picture are outside M2 (follow-ups); other features' tasks.md are historical records. |
 | — (design) | plan round 2 | MINOR: `contracts/covered-states.md:40` says each anchor is "held by W1–W4" under a W1–W5 table | W5 is a state-level assertion on the `State`, not on an anchor, so W1–W4 are the anchors' properties; the sentence is correct. |
 
 ## Handover
@@ -72,6 +80,11 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M2 (T012): #1127 kept plan usage in the status bar (its FR-002 and *Out of scope*), so FR-001 and FR-010 stand unchanged. Removed list as shipped: the title bar's Overview button and badge, the app-name title text, the switcher button next to the menu button (now the breadcrumb's project segment), the sidebar's filter button and tag-filter panel (now the chip bar and its ⋯ menu), type/issue chips on rows (now two-line rows). Owning sections: title bar → new `appearance-theming.md#title-bar` (#1127 wrote a bullet, not a section); breadcrumb → `project-selection.md#switching-projects-from-the-breadcrumb` (renamed; no inbound links to the old anchor); Overview row → `overview.md#opening-and-closing-it`; chip bar → `worktrees-and-sessions.md#filtering-worktrees-by-tag`; groups → `#browsing-worktrees`; two-line rows → `#reading-a-worktree-name--tags`. Spec Edge case *Project with no worktrees* and doc-edits S15 corrected to what #1125 shipped (Default under its state's group, chip bar with All, "No worktrees yet" hint).
+- M2 extra hits beyond S1–S15: `help-about.md` toolbar wording and its About steps, `docs/README.md` Help entry, the overflow theme toggle (removed before #1127: `toolbar.rs` module doc) in `appearance-theming.md#choosing-your-theme`, `settings.md` mode-button sentence and `icons.md` rows; the `theme-follow` clip, manifest entry and scene were removed with it.
+- M2: `site/capture/scenes/lib.sh` coordinates (overflow menu items, `scene_tab_y` "bottom bar", menu at y=32) predate the 44 px title bar and the tab strip; the capture needs re-measuring before the next release's screenshots. `scene_start --preference` is now unused. `Choosing your theme` could take a Settings → Appearance picture. `Icon::DarkMode`/`Icon::AutoMode` have no rendered call site.
+- M2 unit: `lychee` not installed, `gh` not authenticated, no Agent tool (review B not dispatched). Links checked with a local anchor script over `docs/user-guide/*.md` and `docs/README.md` (0 broken); `scoped-gate.sh` SCOPE none; `scripts/tests/*.test.sh` 28/28; `media-references` 11 entries ok; `git diff --stat origin/main -- 'crates/*/src'` empty (FR-020).
 
 - M1: the app's empty-pane text still says "Choose restart below to resume it." (`crates/micold-client/src/ui/terminal.rs` `empty_terminal_message`, test comment ~:1075 "the bar below"), while restart now sits in the tab strip above; FR-020 forbids the fix here — needs its own bug issue.
 - M1 PR unit: previous PR #1365 merged as f955fbea; rebased onto origin/main; `scripts/gate.sh` green (disk at 15 GB free; wiping `target-shared/` was refused by the permission classifier, gate passed on the existing cache). `gh` not authenticated: the orchestrator opens the PR.
