@@ -2173,3 +2173,26 @@ fn a_compaction_keeps_its_first_summary() {
         summary: Some("the summary".into()),
     }));
 }
+
+#[test]
+fn orphan_sub_agent_messages_after_a_clear_open_a_notice_in_the_new_era() {
+    let reset = StructuredEvent::ConversationReset {
+        trigger: Some("clear".to_string()),
+        raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.to_string(),
+    };
+    let transcript = built(&sequenced([
+        user_text("go"),
+        with_parent(assistant_block(text("elsewhere")), "toolu_other"),
+        reset,
+        with_parent(assistant_block(text("late elsewhere")), "toolu_other"),
+    ]));
+    let notices: Vec<_> = transcript
+        .entries()
+        .filter(|e| matches!(e.kind(), EntryKind::SubagentNotice { .. }))
+        .collect();
+    assert_eq!(notices.len(), 2, "one notice per era");
+    assert!(notices
+        .iter()
+        .all(|e| e.kind() == &EntryKind::SubagentNotice { count: 1 }));
+    assert!(notices[0].era() < notices[1].era());
+}

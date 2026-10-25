@@ -1488,7 +1488,7 @@ fn a_clear_empties_the_context_reading_until_the_next_response() {
 }
 
 #[test]
-fn a_clear_ends_the_running_tasks_of_the_old_conversation() {
+fn a_clear_ends_running_foreground_tasks_and_leaves_background_ones() {
     let events = numbered(
         [
             task_started("bg", "toolu_1", "local_bash", true),
@@ -1499,14 +1499,66 @@ fn a_clear_ends_the_running_tasks_of_the_old_conversation() {
     );
     let insights = built(0, &events);
     assert_eq!(
-        task_of(&insights, "bg").state,
-        TaskState::EndedWithoutReport
-    );
-    assert_eq!(
         task_of(&insights, "fg").state,
         TaskState::EndedWithoutReport
     );
-    assert_eq!(insights.running_background(true), 0);
+    assert_eq!(task_of(&insights, "bg").state, TaskState::Running);
+    assert_eq!(insights.running_background(true), 1);
+}
+
+#[test]
+fn a_background_task_listed_after_a_clear_is_still_running() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            conversation_reset(),
+            live_set(&["bg"]),
+        ],
+        0,
+    );
+    assert_eq!(built(0, &events).running_background(true), 1);
+}
+
+#[test]
+fn the_first_result_after_a_clear_is_measured_from_zero() {
+    let events = numbered(
+        [
+            result(
+                1.0,
+                Some(usage(1, 0, 0, 1)),
+                json!({ "a": model_usage(1, 1, 1.0, 1000) }),
+            ),
+            conversation_reset(),
+            // A CLI that wrote no zero result for the clear: its figures restart at zero.
+            result(
+                0.5,
+                Some(usage(1, 0, 0, 1)),
+                json!({ "a": model_usage(1, 1, 0.5, 1000) }),
+            ),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    let turn = insights.turn(2).expect("the turn after the clear");
+    assert_eq!(turn.cost_usd, Some(0.5));
+    assert!(!turn.restarted);
+    assert!((insights.totals().cost_usd - 1.5).abs() < 1e-9);
+}
+
+#[test]
+fn the_recorded_clear_keeps_each_turns_cost_and_the_totals() {
+    let events = fixture("command-clear");
+    let insights = built(0, &events);
+    let costs: Vec<f64> = result_seqs(&events)
+        .iter()
+        .map(|seq| insights.turn(*seq).and_then(|t| t.cost_usd).unwrap_or(-1.0))
+        .collect();
+    // The first turn, the clear's own zero result, then the first turn of the new conversation.
+    assert_eq!(costs.len(), 3);
+    assert!((costs[0] - 0.0370927).abs() < 1e-9);
+    assert!(costs[1].abs() < 1e-9);
+    assert!((costs[2] - 0.0374484).abs() < 1e-9);
+    assert!((insights.totals().cost_usd - (0.0370927 + 0.0374484)).abs() < 1e-9);
 }
 
 #[test]

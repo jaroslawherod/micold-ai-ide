@@ -191,6 +191,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
         }
         StructuredEvent::ConversationReset { .. } => {
             transcript.compaction = None;
+            transcript.subagent_notice = None;
             transcript.era += 1;
             transcript.open(at(0), seq, EntryKind::Cleared);
         }

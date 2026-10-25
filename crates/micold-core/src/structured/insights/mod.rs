@@ -167,7 +167,10 @@ impl SessionInsights {
             Digest::Init => self.tasks.init(),
             Digest::Reset => {
                 self.context.reset();
-                self.tasks.init();
+                self.usage.reset();
+                // Foreground work ended with the old conversation; background tasks are the CLI's
+                // to settle (`background_tasks_changed`, `task_updated`, `task_notification`).
+                self.tasks.turn_ended();
             }
             Digest::Task(event) => self.tasks.event(event),
             Digest::LiveSet(live) => self.tasks.live_set(live),
