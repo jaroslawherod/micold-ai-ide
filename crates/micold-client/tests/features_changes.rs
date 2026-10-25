@@ -3976,28 +3976,6 @@ fn review_again(app: &mut micold_client::app::State, entry: SessionLocation) {
 /// Feature 1269 T011, T021 (U2, U7, FR-005, SC-002): selecting another location's session hides
 /// the review and reads nothing for it; back on `feat-a` it is still hidden and nothing is read
 /// until it is shown, which reads it once and keeps its view.
-/// Feature 1275 (review A M4 F3): the window losing its focus ends a drag over the numbers as
-/// Esc does; the review stays shown.
-#[test]
-fn the_window_losing_focus_ends_a_drag_over_the_numbers() {
-    use micold_client::app::Message;
-    use micold_client::features::changes::DragState;
-    let (mut app, _) = reviewing_feat_a();
-    app.changes.tabs.shown_view_mut().expect("shown").drag = Some(DragState {
-        drag: micold_core::review::drag::Drag::press(Side::New, 1),
-        before_pick: None,
-        before_composer: None,
-    });
-    app.update(Message::WindowFocusChanged(true));
-    assert!(
-        app.changes.tabs.shown_view().unwrap().drag.is_some(),
-        "focus gained: kept"
-    );
-    app.update(Message::WindowFocusChanged(false));
-    let view = app.changes.tabs.shown_view().expect("still shown");
-    assert!(view.drag.is_none());
-}
-
 #[test]
 fn switching_location_and_back_keeps_the_review_and_rereads_it_when_shown() {
     use micold_client::app::Message;

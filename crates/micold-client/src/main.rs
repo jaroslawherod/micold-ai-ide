@@ -1484,8 +1484,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             // user made on purpose. `window_focus_changes_no_focus_term` in
             // `tests/terminal_focus.rs` fails if this arm starts writing one.
             shell::os_theme::redetect_on_focus(app, focused);
-            // The core's share: a drag over the Review tab's numbers ends with the focus (1275).
-            app.core.update(Message::WindowFocusChanged(focused));
             // Feature 1101 (FR-005): regaining focus refreshes the linked tickets' statuses when
             // the last read is over five minutes old.
             if focused {
