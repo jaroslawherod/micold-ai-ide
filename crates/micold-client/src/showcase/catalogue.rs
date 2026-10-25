@@ -1514,6 +1514,14 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/picker.rs",
+        component: "EmphasisedLabel",
+        reason: "the type-ahead row's label with its matched characters emphasised: public only so \
+                 the review's changed-file tree can highlight its filter's matches in the same \
+                 treatment (feature 1273, FR-009); every label it draws is posed by the type-ahead's \
+                 entries.",
+    },
+    Exemption {
         module: "material/keyboard_focus.rs",
         component: "TakesTheKeyboard",
         reason: "the focus ring every focusable component wraps itself in: it is public only so the \
