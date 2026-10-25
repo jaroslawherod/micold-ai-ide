@@ -3185,6 +3185,7 @@ pub fn review_marks() -> StateUnderTest {
                 removed: 1,
                 large: false,
                 origin: Origin::Uncommitted,
+                identity: micold_core::review::changes::ChangeIdentity::Unknown,
             })
             .collect(),
         scope: micold_core::review::base::ReviewScope::Worktree {
