@@ -3389,16 +3389,33 @@ fn the_header_follows_the_shown_location_through_the_root() {
         "another location's session moves it"
     );
     app.update(Message::Session(SessionMsg::Selected(a1_id)));
-    let before = app.changes.clone();
+    let mut before = app.changes.clone();
     app.update(Message::Session(SessionMsg::Selected(a2_id)));
+    // Feature 1269 (R4): only which session the location shows next.
+    before.tabs.remember(follows("feat-a").unwrap(), a2_id);
     assert_eq!(
         app.changes, before,
-        "a session of the same location changes nothing"
+        "a session of the same location changes nothing else"
     );
 
     app.worktree.worktrees.retain(|w| w.dir_name != "feat-a");
     app.update(Message::NoOp);
     assert_eq!(entry(&app), None, "its worktree removed: no entry");
+}
+
+/// The effects in `effect`, batches flattened.
+fn flat_effects(effect: Option<Effect>) -> Vec<Effect> {
+    fn flat(effect: Effect, out: &mut Vec<Effect>) {
+        match effect {
+            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
+            other => out.push(other),
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(effect) = effect {
+        flat(effect, &mut out);
+    }
+    out
 }
 
 /// The counts reads the root left for the shell, flattened.
@@ -3451,11 +3468,17 @@ fn the_header_reads_the_counts_of_the_location_it_follows() {
     });
     assert_eq!(app.changes.header, before, "a's late answer is dropped");
 
-    // The view open on feat-a while the header is on feat-b: a change reads both.
+    // Feature 1269 (R5): the review of feat-a takes the header back to feat-a, so its counts are
+    // read with its list; a change on disk then reads both.
     app.update(Message::Sidebar(
         micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-a")),
     ));
-    let Some(Effect::ReadList { seq: list_seq, .. }) = app.take_changes_effect() else {
+    let pending = app.take_changes_effect();
+    assert_eq!(counts_reads_in(pending.clone()), vec![at("feat-a")]);
+    let Some(Effect::ReadList { seq: list_seq, .. }) = flat_effects(pending)
+        .into_iter()
+        .find(|e| matches!(e, Effect::ReadList { .. }))
+    else {
         panic!("the view reads its list");
     };
     app.update_changes(Msg::ListRead {
@@ -3463,7 +3486,7 @@ fn the_header_reads_the_counts_of_the_location_it_follows() {
         result: Ok(list(&["a.rs"])),
     });
     let changes::Load::Loading { seq, .. } = app.changes.header.load else {
-        panic!("b's read is under way");
+        panic!("a's read is under way");
     };
     app.update_changes(Msg::HeaderCountsRead {
         seq,
@@ -3486,11 +3509,16 @@ fn the_header_reads_the_counts_of_the_location_it_follows() {
     assert!(
         reads
             .iter()
-            .any(|e| matches!(e, Effect::ReadCounts { entry, .. } if *entry == at("feat-b"))),
+            .any(|e| matches!(e, Effect::ReadCounts { entry, .. } if *entry == at("feat-a"))),
         "the header's counts: {reads:?}"
     );
 
+    // The worktrees gone, feat-a's Review tab goes with them (feature 1269, U9).
     app.worktree.worktrees.clear();
+    let _ = micold_client::app::interpret(
+        &mut app,
+        micold_client::features::Outcome::WorktreesReplaced(BTreeSet::new()),
+    );
     app.update(Message::NoOp);
     assert_eq!(app.changes.header.entry, None, "worktree gone: no entry");
     assert_eq!(counts_reads(&mut app), vec![], "and no read");
@@ -3513,9 +3541,7 @@ fn changes_requested_queues_its_read_beside_a_waiting_counts_read() {
         micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-b")),
     ));
 
-    let Some(Effect::Batch(reads)) = app.take_changes_effect() else {
-        panic!("the waiting counts read and the view's read are both left for the shell");
-    };
+    let reads = flat_effects(app.take_changes_effect());
     assert!(
         reads
             .iter()
@@ -3558,10 +3584,13 @@ fn the_header_watches_its_location_unless_the_view_does() {
         None,
         "the view's watch serves both"
     );
+    // Feature 1269 (R5): the review of feat-b takes the header with it; its watch serves both.
     app.update(Message::Sidebar(
         micold_client::features::sidebar::Msg::ReviewChangesRequested(at("feat-b")),
     ));
-    assert_eq!(app.header_watch_entry(), Some(&at("feat-a")));
+    assert_eq!(app.changes.header.entry, Some((project(), at("feat-b"))));
+    assert_eq!(app.header_watch_entry(), None);
+    assert_eq!(app.review_watch_entry(), Some(&at("feat-b")));
 }
 
 /// Review A M3 F1: while the Overview hides the header no watch sees its files, so the counts are
@@ -4042,4 +4071,142 @@ fn removal_drops_only_the_removed_locations_tabs() {
     app.update(Message::Project(ProjectMsg::ForgetConfirmed));
     let keys: Vec<_> = app.changes.tabs.iter().map(|(k, _)| k.clone()).collect();
     assert_eq!(keys, vec![(other, y)], "only the other project's");
+}
+
+/// `two_worktrees_app` with a third worktree, `feat-z`, that has no session.
+fn with_sessionless_worktree() -> (
+    micold_client::app::State,
+    [micold_core::session::SessionId; 3],
+) {
+    let (mut app, ids) = two_worktrees_app();
+    let mut z = app.worktree.worktrees[0].clone();
+    z.dir_name = "feat-z".into();
+    z.path = project().join(".claude/worktrees/feat-z");
+    z.branch = Some("feat/feat-z".into());
+    app.worktree.worktrees.push(z);
+    (app, ids)
+}
+
+/// Feature 1269 T026 (U3, FR-003, US2.5, US2.6): **Review changes** on another location's worktree
+/// makes it the shown location with its last-shown session current, else its main one, and its
+/// review shown (no session selection, which would hide it); on a sessionless worktree no session
+/// is current and the worktree is still the shown location, its header following it.
+#[test]
+fn review_changes_on_another_location_shows_it_with_its_last_shown_else_main_session() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    let feat_a = worktree();
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    let feat_z = SessionLocation::Worktree("feat-z".into());
+
+    let (mut app, [_, a2, b]) = with_sessionless_worktree();
+    app.update(Message::Session(SessionMsg::Selected(a2)));
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    review_again(&mut app, feat_a.clone());
+    assert_eq!(app.session.active, Some(a2), "feat-a's last-shown session");
+    assert_eq!(app.shown_location(), Some(feat_a.clone()));
+    assert_eq!(app.review_shown(), Some(&(project(), feat_a.clone())));
+    assert_eq!(
+        app.changes.header.entry,
+        Some((project(), feat_a.clone())),
+        "under feat-a's own header"
+    );
+
+    let (mut app, [a1, a2, b]) = with_sessionless_worktree();
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    review_again(&mut app, feat_a.clone());
+    let main = micold_core::occupancy::main_session(&app.active_sessions(), &feat_a);
+    assert!(
+        main == Some(a1) || main == Some(a2),
+        "feat-a has a main session"
+    );
+    assert_eq!(app.session.active, main, "none shown before: its main one");
+    assert_eq!(app.review_shown(), Some(&(project(), feat_a.clone())));
+
+    review_again(&mut app, feat_z.clone());
+    assert_eq!(app.session.active, None, "feat-z has no session");
+    assert_eq!(app.shown_location(), Some(feat_z.clone()));
+    assert_eq!(app.review_shown(), Some(&(project(), feat_z.clone())));
+    assert_eq!(
+        app.changes.header.entry,
+        Some((project(), feat_z.clone())),
+        "under feat-z's own header"
+    );
+    assert_eq!(app.changes.tabs.len(), 2, "feat-a's kept, hidden");
+
+    review_again(&mut app, feat_b.clone());
+    assert_eq!(app.session.active, Some(b), "feat-b's last-shown session");
+    assert_eq!(app.shown_location(), Some(feat_b));
+}
+
+/// Feature 1269 T026 (U7, R4): every way a session of a location is selected — the sidebar's row
+/// and the session tab (`SessionMsg::Selected`), a chord and the quick switcher (a navigation
+/// step) — makes it the session that location shows next.
+#[test]
+fn every_selection_route_updates_the_locations_last_shown_session() {
+    use micold_client::app::Message;
+    use micold_client::features::navigation::Step;
+    use micold_client::features::session::Msg as SessionMsg;
+    let (mut app, [a1, a2, b]) = two_worktrees_app();
+    let key = (project(), worktree());
+    let live = [a1, a2];
+    let shows = |app: &micold_client::app::State| app.changes.tabs.session_for(&key, &live, None);
+
+    app.update(Message::Session(SessionMsg::Selected(a2)));
+    assert_eq!(
+        shows(&app),
+        Some(a2),
+        "the sidebar's row or the session tab"
+    );
+    app.update(Message::Session(SessionMsg::Selected(a1)));
+    assert_eq!(shows(&app), Some(a1));
+    for target in [a2, a1] {
+        let step = Step::Session(target);
+        for message in app.apply_navigation(step.clone(), true) {
+            app.update(message);
+        }
+        app.finish_navigation(&step, true);
+        app.update(Message::NoOp);
+        assert_eq!(shows(&app), Some(target), "a chord or the quick switcher");
+    }
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    assert_eq!(
+        shows(&app),
+        Some(a1),
+        "another location's session leaves it"
+    );
+}
+
+/// Feature 1269 T027 (U8, R8): the current session closing when its location has a Review tab and
+/// no live session left shows that tab, under the location's header; with another session of the
+/// location left, no session is current and the tab stays hidden, as before.
+#[test]
+fn the_last_session_of_a_location_closing_shows_its_review() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::features::Outcome;
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    let (mut app, [a1, a2, b]) = reviewing_feat_a();
+    review_again(&mut app, feat_b.clone());
+    answer_pending(&mut app);
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    assert_eq!(app.review_shown(), None, "precondition: hidden");
+    let _ = micold_client::app::interpret(&mut app, Outcome::SessionsClosed(vec![b]));
+    app.update(Message::NoOp);
+    assert_eq!(app.session.active, None);
+    assert_eq!(
+        app.review_shown(),
+        Some(&(project(), feat_b.clone())),
+        "feat-b's review is shown"
+    );
+    assert_eq!(app.shown_location(), Some(feat_b.clone()));
+    assert_eq!(app.changes.header.entry, Some((project(), feat_b)));
+
+    app.update(Message::Session(SessionMsg::Selected(a1)));
+    let _ = micold_client::app::interpret(&mut app, Outcome::SessionsClosed(vec![a1]));
+    app.update(Message::NoOp);
+    assert_eq!(app.session.active, None, "no session current");
+    assert_eq!(app.review_shown(), None, "a2 is left: the tab stays hidden");
+    assert!(app.changes.tabs.has(&(project(), worktree())), "and kept");
+    let _ = a2;
 }

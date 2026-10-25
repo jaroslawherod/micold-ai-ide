@@ -31,3 +31,14 @@ reds below were proven by mutation once the tests compiled.
 | T017–T019 | U3 repeated opens one tab, `Created` reads, `Shown{false}`/`AlreadyShown` nothing; U12 `changes_press` → `(ReviewChangesRequested, ChangesButton::of)`, never a close | `pressing_changes_with_the_view_open…closes_it` and the H8 unit test asserted `Msg::Closed` (rewritten) | green |
 | T020–T022 | U5 hidden answers dropped, unwatched on hide with a read in flight, settle + one `ReadList` on show; U6 `Changed` marks the header location's hidden tab, `ReviewChanged` → `comments_changed` and reaches the kept view; U7 covered → `location_left`, uncover → one re-read; U11 `review_watch_entry` | mutation (hide never unwatches; `Changed` never marks): 3 failed — `a_hidden_view_reads_nothing_and_is_read_once_when_shown` (`Some(Fresh)` vs `Some(Unwatched)`), `a_change_marks_the_hidden_tab_of_the_headers_location`, `a_failed_reread_on_show_keeps_the_tab` (no re-read on show) | green after restoring |
 | T023, T024 | U10 focus, attention, Escape and the four session chords with the review shown/hidden; `terminal_focused`, `view_facts` on `review_shown()` | new cases built only on the new API | green; lib `app_chord_tests` unchanged |
+
+# TDD cycle log: 1269 (M3)
+
+Command: `cargo test -p micold-client --test features_changes`. `shown_location()` was first added
+as a stub answering `current_session_location()` (today's behaviour), so the reds are assertions.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T026, T028 | U3 **Review changes** on another location: its last-shown, else main, session current without a selection, its review shown under its own header; sessionless worktree: no session, `shown_location()` is it; U7 every selection route `remember`s | 2 failed: `review_changes_on_another_location…` (`left: Some(b)` `right: Some(a2)`: the session stayed), `every_selection_route…` (`left: None`: nothing remembered) | green; four 1126/M2 tests that opened a review of another location *under the current session's header* now expect the header to move with it (R5, clarification 2): `the_header_reads_the_counts…`, `changes_requested_queues…`, `the_header_watches…`, and `the_header_follows…` (a same-location selection now also remembers the session) |
+| T027, T029 | U8 the location's last session closing shows its Review tab; with a session left, none current and the tab hidden | 1 failed: `the_last_session_of_a_location…` (`left: None` `right: Some((P, feat-b))`) | 125 `features_changes` green |
+| T030 | `over_changes` → `over_review`, header of `shown_location()` | glue (quickstart B7, B8) | builds |

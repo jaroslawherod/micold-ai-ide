@@ -431,8 +431,8 @@ pub fn view_with<'a>(
             .and_then(|_| state.changes.tabs.shown_view())
         {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open;
-            // feature 1126 R12: under the header while a session is shown.
-            session_area::over_changes(state, changes::view(state, view, scheme, composer), scheme)
+            // feature 1126 R12, feature 1269 U16: under its own location's header.
+            session_area::over_review(state, changes::view(state, view, scheme, composer), scheme)
         } else if let Some(compare) = compare::view(state, scheme) {
             // Feature 483, C1: Compare stands there too; the Changes view sits over it.
             compare

@@ -254,31 +254,31 @@ session of a location closing shows its Review tab (US2.5, US2.6, edge case, R5,
 
 ### Tests for User Story 2 (write first, see them fail)
 
-- [ ] T026 [US2] Integration tests U3 (other location) and U7 (`remember`) in
+- [x] T026 [US2] Integration tests U3 (other location) and U7 (`remember`) in
   `client/tests/features_changes.rs`: with `X`'s session current, `ChangesRequested(W)` makes
   `shown_location() == Some(W)` with `W`'s last-shown session current (else main), without a
   `SessionMsg::Selected`; on a sessionless worktree `Z`, `session.active == None` and
   `shown_location() == Some(Z)`; selecting sessions of `W` via sidebar, session tab, chord and quick
   switcher messages updates which session `session_for` answers.
-- [ ] T027 [US2] Integration test U8 in `client/tests/features_changes.rs`, through
+- [x] T027 [US2] Integration test U8 in `client/tests/features_changes.rs`, through
   `SessionsClosed`: closing the current session when its location has a Review tab and no live
   session left shows that tab; with another session left, no current session and the tab stays
   hidden, as today.
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] In `client/src/app.rs`: `shown_location()` (the shown review's location, else
+- [x] T028 [US2] In `client/src/app.rs`: `shown_location()` (the shown review's location, else
   `current_session_location()`, R5); `follow_header` follows `shown_location()` and `remember`s the
   current session's location; `Outcome::ChangesRequested` calls
   `set_current_session(tabs.session_for(..))` when the location is not `shown_location()`, before
   `Opened` (R9). T026 green.
-- [ ] T029 [US2] `closed` in `client/src/features/session.rs` calls `show_if_present` for the
+- [x] T029 [US2] `closed` in `client/src/features/session.rs` calls `show_if_present` for the
   location whose last session closed and re-reads when it answers `Some(true)` (R8). T027 green.
-- [ ] T030 [US2] Rename `session_area::over_changes` to `over_review` in
+- [x] T030 [US2] Rename `session_area::over_changes` to `over_review` in
   `client/src/ui/session_area.rs`, drawing the header of `shown_location()` above the view (header
   only); `client/src/ui/mod.rs`'s Review branch calls it (U16). Glue, checked by quickstart B0 (M3:
   B7, B8).
-- [ ] T031 [P] [US2] `docs/user-guide/reviewing-changes.md`: **Review changes** on another worktree
+- [x] T031 [P] [US2] `docs/user-guide/reviewing-changes.md`: **Review changes** on another worktree
   shows that worktree with its last-shown session; on a worktree with no session, its review under
   its own header.
 
