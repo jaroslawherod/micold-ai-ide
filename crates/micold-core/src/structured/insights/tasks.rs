@@ -240,7 +240,8 @@ impl TaskTable {
         }
     }
 
-    /// The CLI process started or restarted: every running task ended without a report (FR-022).
+    /// The CLI process started or restarted, or the conversation was cleared: every running task
+    /// ended without a report (FR-022).
     pub(super) fn init(&mut self) {
         self.end_running(|_| true);
     }

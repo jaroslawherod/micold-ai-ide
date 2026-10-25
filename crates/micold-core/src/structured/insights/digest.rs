@@ -30,6 +30,9 @@ pub(super) enum Digest {
     /// The CLI process started or restarted (R6): an `init` line with `startup_timing`. The `init`
     /// the same process writes at the start of each later turn has none, and is no digest.
     Init,
+    /// The conversation started over (`/clear`): the old conversation's context and running tasks
+    /// no longer stand (#943 FR-005).
+    Reset,
     /// A `task_started`, `task_updated`, `task_progress` or `task_notification` line (R6).
     Task(TaskEvent),
     /// A `background_tasks_changed` line: the CLI's live set of background tasks (R6).
@@ -66,6 +69,7 @@ pub(super) fn digest(event: &StructuredEvent) -> Option<Digest> {
             ..
         } => Some(parented(parent, blocks)),
         StructuredEvent::TurnEndedWithoutResult => Some(Digest::TurnEndedWithoutResult),
+        StructuredEvent::ConversationReset { .. } => Some(Digest::Reset),
         StructuredEvent::Init { raw, .. } => process_start(raw).then_some(Digest::Init),
         StructuredEvent::Unrecognised { raw } if raw.contains("\"autocompact_state\"") => {
             autocompact(raw)

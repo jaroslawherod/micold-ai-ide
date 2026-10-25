@@ -74,6 +74,14 @@ impl ContextFold {
         self.refresh_window();
     }
 
+    /// A new conversation: no response yet. The windows the results listed and the compaction
+    /// threshold are the process's, not the conversation's, and stay.
+    pub(super) fn reset(&mut self) {
+        self.reading.used = None;
+        self.reading.model = None;
+        self.refresh_window();
+    }
+
     pub(super) fn windows(&mut self, windows: &[(String, u64)]) {
         for (model, window) in windows {
             self.windows.insert(model.clone(), *window);
