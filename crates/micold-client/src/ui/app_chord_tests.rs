@@ -30,42 +30,51 @@ fn the_overview_chord_toggles_the_overview() {
     ));
 }
 
-/// What the Overview chord does to the Overview's state, as the app applies it.
-fn press_the_overview_chord(overview: &mut crate::features::overview::State) {
-    let Some(Message::Overview(msg)) = app_chord(primary_shift("o", Code::KeyO)) else {
-        panic!("the Overview chord sends no Overview message");
+/// What the Overview chord does to the app's state, through the root reducer.
+fn press_the_overview_chord(state: &mut State) {
+    let Some(message) = app_chord(primary_shift("o", Code::KeyO)) else {
+        panic!("the Overview chord sends no message");
     };
-    crate::features::overview::update(overview, msg);
+    state.update(message);
+}
+
+/// A state with a project open, as the Overview needs one.
+fn with_project() -> State {
+    let mut state = State::default();
+    state.workspace.active = Some(std::path::PathBuf::from("/repo"));
+    state
 }
 
 /// Feature 1127 (T047, FR-016, O2, SC-006): with the top bar's button gone the chord is the
 /// Overview's keyboard way in and out. The message is a function of the keys alone, so it is the
-/// same from the session view (terminal focused) and from Changes; the Overview opens on the first press and
-/// closes on the second.
+/// same from the session view (terminal focused) and from Changes; the Overview opens on the first
+/// press and closes on the second.
 #[test]
 fn the_overview_chord_opens_and_closes_it() {
-    let mut overview = crate::features::overview::State::default();
-    assert!(!overview.open);
-    press_the_overview_chord(&mut overview);
-    assert!(overview.open, "opened");
-    press_the_overview_chord(&mut overview);
-    assert!(!overview.open, "closed");
+    let mut state = with_project();
+    assert!(!state.overview.open);
+    press_the_overview_chord(&mut state);
+    assert!(state.overview.open, "opened");
+    press_the_overview_chord(&mut state);
+    assert!(!state.overview.open, "closed");
 }
 
 /// Feature 1127 (T047, US3.4): in full screen the chord closes the Overview, and full screen with it.
 #[test]
 fn the_overview_chord_closes_the_full_screen_overview() {
-    let mut overview = crate::features::overview::State::default();
-    press_the_overview_chord(&mut overview);
-    crate::features::overview::update(
-        &mut overview,
+    let mut state = with_project();
+    press_the_overview_chord(&mut state);
+    state.update(Message::Overview(
         crate::features::overview::Msg::FullScreenToggled {
             settings_open: false,
         },
+    ));
+    assert!(state.overview.full_screen(), "full screen");
+    press_the_overview_chord(&mut state);
+    assert!(
+        !state.overview.open && !state.overview.full_screen(),
+        "closed"
     );
-    assert!(overview.full_screen(), "full screen");
-    press_the_overview_chord(&mut overview);
-    assert!(!overview.open && !overview.full_screen(), "closed");
 }
 
 /// Feature 970 (FR-001): the full-screen chord reaches the Overview; its update ignores it while
