@@ -83,6 +83,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M4 (in-process tiny-skia, 1280×800 and 640×480, both schemes) | 1 | — | 1 finding fixed: drawer rows ran under the list's scrollbar. Record: `visual-pass-m4.md` |
 | Review A M4 (code review high, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (a drawer composer was drawn nowhere while the drawer was closed or on the other tab; now on its card then, `composer_in_drawer`, test); F2 MINOR fixed (overflow items built once) |
 | Review B M4 (conformance, sonnet, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (the drawer's scroll was kept but never restored: `Effect::ScrollDrawer` when its list comes into view, test); F2 MINOR fixed, prose only (visual-pass-m4.md names where steps 4, 5, 7–9 are checked and how to regenerate); F3 MINOR = A F2 |
+| Review A M4 (scoped, sonnet, headless) | 2 | 2d4a173b876a71cc1210bdfdd42d2af8c0949533:75b826c75bba3fb940b4e5c34c768c76b7212b60 | CHANGES: F1 MAJOR fixed (a drawer composer of a comment in a file other than the selected one had no card to show on: a row's Edit / Answer… now jumps to the comment first, test `edit_or_answer_in_a_drawer_row_selects_the_comments_file`); F2 MINOR declined (an empty list's offset is 0) |
+| Review B M4 (scoped, sonnet, headless) | 2 | 2d4a173b876a71cc1210bdfdd42d2af8c0949533:75b826c75bba3fb940b4e5c34c768c76b7212b60 | CLEAN |
 
 ## Declined review findings
 
@@ -93,6 +95,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | Review A r1 | MINOR: `SEND_WIDTH = 176` is unmeasured | Provisional by design; T009 (M2) measures the widest label and sets it |
 | M1 | Review A r1 | MINOR: `SendButton::primary` duplicates `enabled` | Data model and contract B4 name the field; kept for the component's API |
 | M1 | Review A r1 | MINOR: Close/Escape on a closed drawer keep a pending watch | Intended: closing an already closed drawer is not a close; Esc must stay unused (returns false); pinned by `escape_on_a_closed_drawer_keeps_a_pending_watch` |
+| M4 | Review A r2 | MINOR: `ScrollDrawer` is not re-sent when the list first appears in an already open drawer | The list appears only when the tab gains its first row, and an empty list's offset is 0, which a new `Scrollable` already shows |
 | M1 | Review A r1 | MINOR: a reply ending in `\n` measures an extra line | A stored reply is trimmed (`Report::reply`), so it never ends in a newline |
 
 ## Handover
