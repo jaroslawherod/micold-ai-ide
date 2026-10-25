@@ -418,7 +418,7 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             .on_press(Message::NoOp)
             .into()
     };
-    // The Overview button as the app bar builds it: toggled, and with a tinted badge that carries
+    // The Overview button as the app bar built it (feature 813; now the sidebar's row): toggled, and with a tinted badge that carries
     // the state's icon and the count (feature 813, FR-012).
     let overview_button = |open: bool, glyph: Icon, tint: Rgb| -> Element<'a, Message> {
         material::Button::text("Overview", roles)

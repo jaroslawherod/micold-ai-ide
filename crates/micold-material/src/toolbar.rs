@@ -2,8 +2,8 @@
 //! B1–B6).
 //!
 //! A `surface` bar [`anatomy::app_bar::HEIGHT`] tall with a hairline beneath it at rest. From the
-//! leading end: the app mark, the leading child (the breadcrumb), the fixed leading items (the
-//! Overview button), then the centre child (the jump-to field) in the free space, then the trailing
+//! leading end: the app mark, the leading child (the breadcrumb), the fixed leading items (none in
+//! the app today), then the centre child (the jump-to field) in the free space, then the trailing
 //! actions. Any future top bar should reuse it rather than fork a bespoke bar.
 //!
 //! # It lays itself out

@@ -563,7 +563,7 @@ pub enum Tone {
     Warning,
 }
 
-/// What the Overview button shows beside its label, whether or not the Overview is open
+/// What the sidebar's Overview row shows as its badge, whether or not the Overview is open
 /// (FR-012).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Badge {

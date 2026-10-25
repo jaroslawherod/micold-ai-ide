@@ -149,7 +149,7 @@ pub enum Icon {
     /// A worktree with nothing in progress, or waiting for the next prompt (feature 905) —
     /// `pause`, two bars.
     StateIdle,
-    /// The top bar's Overview button (feature 813) — `dashboard`.
+    /// The Overview, on the sidebar's first row (feature 813, 1125) — `dashboard`.
     Overview,
     /// An Overview card that needs action (feature 813) — `priority_high`.
     CardNeedsAction,

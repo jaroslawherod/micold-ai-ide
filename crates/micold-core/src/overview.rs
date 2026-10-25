@@ -427,7 +427,7 @@ pub struct Attention {
     pub count: usize,
 }
 
-/// What the Overview button's badge shows: `None` unless some card needs action or attention
+/// What the Overview row's badge shows: `None` unless some card needs action or attention
 /// (FR-012).
 pub fn attention(cards: &[CardModel]) -> Option<Attention> {
     let worst = cards.iter().map(|card| card.state).min()?;

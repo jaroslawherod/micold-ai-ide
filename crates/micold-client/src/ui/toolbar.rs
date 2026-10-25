@@ -1,6 +1,6 @@
 //! The title bar, composed from reusable primitives (Principle VIII; feature 1127): the shared
-//! `Toolbar` with, from the leading end, the app mark, the `project / place` breadcrumb and the
-//! Overview button, the jump-to field centred in the free space, and at the trailing end a Settings
+//! `Toolbar` with, from the leading end, the app mark, the `project / place` breadcrumb, the
+//! jump-to field centred in the free space, and at the trailing end a Settings
 //! button and the overflow-menu trigger (three dots). No title text and no usage (FR-002). The menu's items float as an overlay (see
 //! [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 //!
@@ -196,8 +196,8 @@ fn location_segment(state: &State, location: &SessionLocation) -> Option<Segment
     })
 }
 
-/// Render the title bar (feature 1127, contract B2): the app mark, the breadcrumb, the Overview
-/// button, the jump-to field in the free space, then Settings and the overflow trigger at the
+/// Render the title bar (feature 1127, contract B2): the app mark, the breadcrumb, the
+/// jump-to field in the free space, then Settings and the overflow trigger at the
 /// trailing end. Every panel floats as an
 /// overlay from `ui::view`, so opening one never reflows the bar.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {

@@ -332,7 +332,7 @@ pub fn full_screen_icon(on: bool) -> Icon {
 }
 
 /// The Overview's header row: the full-screen toggle at its end (feature 970, plan D5). Settings
-/// open is filled as the top bar fills it for the Overview toggle; the update ignores it then.
+/// open is filled as the Overview row fills it; the update ignores it then.
 fn header<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
     let on = state.overview.full_screen();
     let settings_open = state.settings.settings_draft.is_some();
