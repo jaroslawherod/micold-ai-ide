@@ -58,6 +58,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::ChangesClosedForCompare
         | Outcome::ReviewHidden
         | Outcome::ProjectForgotten(_)
+        | Outcome::CurrentSessionGone
         | Outcome::RunInParallelRequested
         | Outcome::WorktreeCreated(_)
         | Outcome::LocationOpened(_)
