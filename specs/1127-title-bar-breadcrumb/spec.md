@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1357, #1376, #1409, #1416, the M4 PR and the close PR
 
 **Input**: User description: "Implement GitHub issue #1127: Layout: single 44px title bar with
 breadcrumb and jump-to field. Blocked by: #1125 (Overview moves into the sidebar first), #1124

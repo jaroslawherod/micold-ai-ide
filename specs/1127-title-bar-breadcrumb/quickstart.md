@@ -60,3 +60,15 @@ session in each; screenshots with `mise run screenshot <file>`, recorded under
 7. Repeat 1 and 6 in the dark scheme; on macOS the hint reads `Cmd+Shift+P`.
 8. After US3: the bar has no Overview button; the sidebar's Overview row and Ctrl+Shift+O open
    the Overview, also in full screen.
+
+## Results (close, 2026-10-25)
+
+Run on M4's head 13beef6d plus the close PR's test edits (1d992f44), in a cloud container.
+
+- Part A: `scripts/gate.sh` green (fmt, clippy core then workspace, `cargo test --workspace`: 11137
+  passed, 0 failed, 18 ignored; `scripts/tests/*.test.sh`). The layout snapshot was not re-recorded:
+  the close changes no layout. TDD audit: [tdd/verification.md](tdd/verification.md).
+- Part B: every step on a release build under Xvfb, light and dark, 640, 900 and 1280 wide —
+  [visual-pass/close/README.md](visual-pass/close/README.md), with the milestones' own passes in
+  `visual-pass/m1/`–`m4/`. Not driven: the macOS hint (step 7) and the keyboard open of step 2,
+  both test-covered.

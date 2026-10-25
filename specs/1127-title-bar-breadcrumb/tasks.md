@@ -308,8 +308,33 @@ Test*.
 
 ## Phase 6: Polish
 
-- [ ] T051 Run quickstart Part B through the `visual-pass` skill and save the screenshots under
+- [x] T051 Run quickstart Part B through the `visual-pass` skill and save the screenshots under
   `specs/1127-title-bar-breadcrumb/visual/` (light and dark, 640 and 1280 dp, every body branch)
+  — saved beside the milestones' passes, in `visual-pass/close/` (results in its README)
+
+---
+
+## Phase 7: TDD remediation
+
+From `tdd/verification.md` (close unit). Finding 1 (no red kept for fourteen behaviors) is history
+and has no task; finding 3 is kept with its ledger follow-up, finding 8 was a prose fix, and
+findings 9–11 are left as recorded.
+
+- [x] T052 Finding 2: `the_bar_has_no_overview_button_in_any_body_branch` in
+  `crates/micold-client/src/ui/toolbar.rs` builds no bars it does not assert on and is renamed
+  `the_bars_source_builds_no_overview_control`, the check it makes;
+  `scripts/build-lock.sh cargo test -p micold-client --lib ui::toolbar` passes
+- [x] T053 Finding 4: the session case of `the_jump_field_sends_the_chords_message_except_in_settings`
+  (`crates/micold-client/src/ui/toolbar.rs`) asserts the literal `terminal_had_focus: true`; same command
+- [x] T054 Finding 5: `without_a_press_it_is_disabled_and_no_tab_stop` in
+  `crates/micold-material/src/field_button.rs` asserts the field paints words before checking their
+  opacity; `scripts/build-lock.sh cargo test -p micold-material --lib field_button` passes
+- [x] T055 Finding 6: `every_app_bar_action_is_one_of_the_contracts_action_shapes` in
+  `crates/micold-client/tests/gates/sibling_parity.rs` reports a breadcrumb with no project segment
+  instead of skipping it; `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot` passes
+- [x] T056 Finding 7: `no_bar_control_publishes_an_overview_message` in
+  `crates/micold-client/tests/title_bar_keyboard.rs` asserts the bar's four Tab stops before pressing
+  them; `scripts/build-lock.sh cargo test -p micold-client --test title_bar_keyboard` passes
 
 ---
 
