@@ -22,8 +22,15 @@ You can also right-click a worktree in the sidebar and choose **Review changes**
 entry (the project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
 has a right-click menu too, with **Review changes** as its one item.
 
+**Review changes** on a worktree other than the one shown switches to that worktree: the session
+you last looked at there becomes the current one (else its main session), and its review is shown
+under that worktree's own header. On a worktree with no session, its review is shown under its own
+header, with no session current.
+
 The view takes the place of the terminal, with the header still above it and the **Changes**
-button drawn selected while it is shown. Its own header names the entry.
+button drawn selected while it is shown. Its own header names the entry. A review is always shown
+under its own worktree's header, never another's. When you close the last session of a worktree
+whose review you kept, its review is shown in the session's place.
 
 The review is kept while you work elsewhere. Selecting a session (in the sidebar, with a session
 chord or the quick switcher), switching to another worktree or project, or opening the Overview or

@@ -1755,6 +1755,18 @@ pub fn opened(
     }
 }
 
+/// Show the Review tab of `key` when it has one (feature 1269, U8, R8): its location's last
+/// session closed. A kept view whose location may have changed meanwhile is read again (T5, U5).
+pub fn show_if_present(state: &mut State, key: &EntryKey) -> Effect {
+    if state.tabs.shown_key().is_some_and(|shown| shown != key) && state.tabs.has(key) {
+        hide_shown(state);
+    }
+    match state.tabs.show_if_present(key) {
+        Some(true) => reread_shown(state),
+        Some(false) | None => Effect::None,
+    }
+}
+
 /// The view of `entry` of `project` as a first open makes it: both toggles on, nothing selected.
 fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
     OpenView {

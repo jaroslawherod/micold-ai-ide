@@ -1300,13 +1300,23 @@ impl State {
     /// itself, and asks for a newly followed worktree's issue title.
     pub fn follow_header(&mut self) {
         use crate::features::changes::{update, Effect, Msg};
-        let wanted = self
-            .current_session_location()
-            .and_then(|entry| Some((self.workspace.active.clone()?, entry)));
         // Feature 1269 (U7): a review of a project that is no longer active is hidden, kept.
         if self.changes.tabs.shown_key().is_some() && self.review_shown().is_none() {
             let _ = update(&mut self.changes, Msg::SessionSelected);
         }
+        // Feature 1269 (U7, R4): the current session is the one its location shows next.
+        if let (Some(project), Some(id), Some(entry)) = (
+            self.workspace.active.clone(),
+            self.session.active,
+            self.current_session_location(),
+        ) {
+            self.changes.tabs.remember((project, entry), id);
+        }
+        // Feature 1269 (R5): the shown review's location, which may have no session, else the
+        // current session's.
+        let wanted = self
+            .shown_location()
+            .and_then(|entry| Some((self.workspace.active.clone()?, entry)));
         let mut effect = Effect::None;
         if wanted != self.changes.header.entry {
             // No watch sees the location the header leaves: its hidden Review tab is read again
@@ -1340,6 +1350,36 @@ impl State {
             }
             None => {}
         }
+    }
+
+    /// The location the main area shows (feature 1269, R5): the shown review's, which may have
+    /// no session, else the current session's. The header follows it.
+    pub fn shown_location(&self) -> Option<micold_core::session::SessionLocation> {
+        match self.review_shown() {
+            Some((_, entry)) => Some(entry.clone()),
+            None => self.current_session_location(),
+        }
+    }
+
+    /// The live sessions of `entry` in the active project and its main session (feature 1269,
+    /// R4): what [`micold_core::review_tabs::ReviewTabs::session_for`] and `close` choose from.
+    fn sessions_at(
+        &self,
+        entry: &micold_core::session::SessionLocation,
+    ) -> (
+        Vec<micold_core::session::SessionId>,
+        Option<micold_core::session::SessionId>,
+    ) {
+        let live = self
+            .active_sessions()
+            .iter()
+            .filter(|s| &s.location == entry)
+            .map(|s| s.id)
+            .collect();
+        (
+            live,
+            crate::features::navigation::main_session_at(self, entry),
+        )
     }
 
     /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
@@ -1381,18 +1421,11 @@ impl State {
         entry: micold_core::session::SessionLocation,
     ) {
         let active = self.workspace.active.as_ref() == Some(&project);
-        let live: Vec<micold_core::session::SessionId> = if active {
-            self.active_sessions()
-                .iter()
-                .filter(|s| s.location == entry)
-                .map(|s| s.id)
-                .collect()
+        let (live, main) = if active {
+            self.sessions_at(&entry)
         } else {
-            Vec::new()
+            (Vec::new(), None)
         };
-        let main = active
-            .then(|| crate::features::navigation::main_session_at(self, &entry))
-            .flatten();
         let Some(closed) = self.changes.tabs.close(&(project, entry), &live, main) else {
             return;
         };
@@ -1617,15 +1650,22 @@ pub fn interpret(
             // Feature 813 (FR-023): the Changes view takes the main area from the Overview.
             state.overview.open = false;
             crate::features::worktree::close_menu(state);
-            // Feature 1269 (U3): the location's Review tab is made, or shown as it was left.
+            // Feature 1269 (U3, R9): another location becomes the shown one with its last-shown,
+            // else main, session current — set directly, as a session selection would hide the
+            // review; a sessionless one with none. Then its Review tab is made, or shown as left.
+            let project = state.workspace.active.clone().unwrap_or_default();
+            let mut outcomes = Vec::new();
+            if state.shown_location().as_ref() != Some(&entry) {
+                let (live, main) = state.sessions_at(&entry);
+                let key = (project.clone(), entry.clone());
+                let next = state.changes.tabs.session_for(&key, &live, main);
+                outcomes = state.set_current_session(next);
+            }
             let current = state.session.active;
-            let effect = crate::features::changes::opened(
-                &mut state.changes,
-                state.workspace.active.clone().unwrap_or_default(),
-                entry,
-                current,
-            );
+            let effect =
+                crate::features::changes::opened(&mut state.changes, project, entry, current);
             state.queue_changes_effect(effect);
+            return outcomes;
         }
         Outcome::ChangesClosedForCompare => {
             // Feature 813 (FR-023): Compare takes the main area from the Overview too; feature

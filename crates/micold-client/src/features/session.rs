@@ -1770,14 +1770,24 @@ pub fn tab_strip_viewport_resized(state: &mut crate::app::State, width: u32) {
 /// The pointer is cleared before the records are dropped, for the reason `remove_confirmed`
 /// records at length: feature 024 resolves the outgoing session's location by looking it up, and a
 /// record already removed has no location to find.
+///
+/// Feature 1269 (U8, R8): when the current session was its location's last, that location's
+/// Review tab, if it has one, is shown, so the location stays shown under its own header.
 pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
-    let outcomes = if state.session.active.is_some_and(|id| ids.contains(&id)) {
-        state.set_current_session(None)
+    let (outcomes, left) = if state.session.active.is_some_and(|id| ids.contains(&id)) {
+        let left = state.current_session_location();
+        (state.set_current_session(None), left)
     } else {
-        Vec::new()
+        (Vec::new(), None)
     };
     for list in state.workspace.sessions.values_mut() {
         list.retain(|s| !ids.contains(&s.id));
+    }
+    let last = left.filter(|entry| state.active_sessions().iter().all(|s| &s.location != entry));
+    if let (Some(entry), Some(project)) = (last, state.workspace.active.clone()) {
+        let effect =
+            crate::features::changes::show_if_present(&mut state.changes, &(project, entry));
+        state.queue_changes_effect(effect);
     }
     outcomes
 }

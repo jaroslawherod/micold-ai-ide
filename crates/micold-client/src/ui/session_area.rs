@@ -132,15 +132,16 @@ pub fn changes_press(state: &State, location: &SessionLocation) -> (Message, Cha
     )
 }
 
-/// The open Changes view under the header when a session is shown (R12, A1): the header stays,
-/// the strip does not (its tabs and splits act on panes that are not drawn). With no session
-/// shown, the view alone and no header (edge case *Empty*).
-pub fn over_changes<'a>(
+/// The shown review under its own location's header (R12, A1; feature 1269, U16): the header of
+/// `shown_location()`, so a sessionless worktree's review has its own header and no review is
+/// drawn under another location's. The strip is not drawn (its tabs and splits act on panes that
+/// are not drawn). With no location shown, the view alone and no header (edge case *Empty*).
+pub fn over_review<'a>(
     state: &'a State,
     changes: Element<'a, Message>,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
-    match state.current_session_location() {
+    match state.shown_location() {
         Some(location) => column![header(state, &location, scheme), changes].into(),
         None => changes,
     }
