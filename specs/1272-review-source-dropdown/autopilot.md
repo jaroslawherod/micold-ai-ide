@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 implement (T019–T026) on origin/main f49111a6 (#1270 merged, last PR #1408)
+- **Next step**: orchestrator opens the M4 PR from branch claude/project-thread-43e62l (title/body in the unit's scratchpad m4/), waits on CI and merges; then the close unit (T027)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | #1368 | done, gate green at 703c8ff5; PR open |
 | M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | #1383 | done; ported onto #1269's kept Review tabs (decision 5) |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | #1383 | done |
-| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | in progress (#1270 merged at f49111a6) |
+| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | (opened by orchestrator) | done; full gate (scripts/gate.sh) green at 88213c041; reviews A CLEAN, B CLEAN after round 2; visual pass `visual-pass/m4.md` |
 
 ## Decisions
 
@@ -71,6 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 rebase | re-review | F1 a cover (Overview, Settings, Compare) leaves an open source list open | outside data-model §8; before #1269 a cover did not rebuild the view either, so no behaviour change from the port |
 | M4 A (code-review high, headless claude -p) | 1 | 4ed429348b4db1097b235c5adc712c45ec44cf76:54e96fa1f10bdc3db5be51fe878787bfa97ac307 | CLEAN: 3 MINOR, all fixed (F1 guide said the control gives way, reworded; F2 decision 6 portions corrected to 3 : 2; F3 `settled` with `press_at` now asserts) |
 | M4 B (conformance, sonnet, headless) | 1 | 4c69174ba3f7be04e283d56d0ee47e6b5905a012:427bb4872a5865c2d78a5738e2ec39a5d354103b | CHANGES: F1 MAJOR scratch render test `tests/zz_vp_scratch.rs` committed by mistake (removed); F2 MINOR comment past 100 columns (re-wrapped). Verify output supplied by the implementer |
+| M4 B round 2 (scoped, sonnet, headless) | 2 | fix diff 427bb4872..88213c041 | CLEAN: F1 and F2 hold; visual-pass width change (360 px, 1 : 1) conforms |
 | M3 | A | F2 keyboard ring drawn on the disabled Committed chip | intended: a disabled stop stays reachable so the highlight can land on it (research R7, `source_menu::stops`); `Enter` there does nothing |
 
 ## Handover
