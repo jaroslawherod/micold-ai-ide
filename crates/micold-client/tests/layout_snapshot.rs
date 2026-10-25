@@ -383,7 +383,8 @@ fn an_unanchored_difference_is_named_by_path() {
 /// must not be reported as a change to the first state alone.
 #[test]
 fn a_difference_past_the_detailed_ones_still_names_its_state() {
-    let committed = std::fs::read_to_string(FIXTURE_PATH).expect("the committed fixture");
+    let renderer = lay::renderer();
+    let committed = lay::emit_fixture(covered_states(), &renderer, RECORDED_SCHEME);
     let mut lines: Vec<String> = committed.lines().map(str::to_string).collect();
     let is_record = |l: &str| l.starts_with("base") || l.starts_with("over");
     let move_line = |l: &mut String| {

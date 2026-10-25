@@ -27,14 +27,14 @@ cached records of both states in both schemes.
 
 | ID | Assertion | Requirement |
 |---|---|---|
-| W1 | `title_bar.y == 0` and `title_bar.h == anatomy::app_bar::HEIGHT` (44.0 after #1127); `title_bar` anchors the bar, not the container that also holds its hairline | SC-004, US3 s2 |
+| W1 | `title_bar.y == 0` and `title_bar.h == anatomy::app_bar::HEIGHT` (43.0 as #1127 shipped it: the 44 px title bar is `HEIGHT` + the 1 px `DIVIDER`, `BOTTOM_EDGE`); `title_bar` anchors the bar, not the container that also holds its hairline; the bar spans the window's width | SC-004, US3 s2 |
 | W2 | `status_bar.h == anatomy::status_bar::HEIGHT` (28.0) and `status_bar.y + status_bar.h == 800` | SC-004 |
 | W3 | `title_bar.y + anatomy::app_bar::BOTTOM_EDGE == shell.body.y` (the bar plus its 1 px hairline, `HEIGHT + DIVIDER`; 0 px gap below the hairline) and `shell.body.y + shell.body.h == status_bar.y` | SC-004, FR-001 |
-| W4 | `sidebar.h == shell.body.h`, `session.area.h == shell.body.h`, `sidebar.x + sidebar.w == session.area.x` | US3 s2–s3 |
-| W5 | in `window-overview`, asserted on the `State` the state builds (the records hold geometry, not style): the Overview is open and the sidebar's selected row is the Overview row, read through the field or accessor #1125 M3 ships (open until stage 2) | US3 s3 |
+| W4 | `sidebar` and `session.area` share `shell.body`'s top and height, `sidebar.x == shell.body.x`, `sidebar.x + sidebar.w == session.area.x`, `session.area` ends at `shell.body`'s right edge | US3 s2–s3 |
+| W5 | in `window-overview`, asserted on the `State` the state builds (the records hold geometry, not style): the Overview is open and the sidebar's selected row is the Overview row, read through `state.overview.open`, not full screen, with a project active: #1125 shipped no accessor, and `ui::sidebar` draws the Overview row selected exactly then and no other row (ledger D6) | US3 s3 |
 
 The hairline is the title bar's bottom edge (research R6): SC-004's 0 px gap is measured from
-`BOTTOM_EDGE`, its 44 px from `HEIGHT`. If #1127 drops the divider, W3 follows what ships
+`BOTTOM_EDGE`, and its 44 px title bar is `BOTTOM_EDGE` (#1127 shipped `HEIGHT` 43 + `DIVIDER` 1). If #1127 drops the divider, W3 follows what ships
 (`BOTTOM_EDGE == HEIGHT`, or `title_bar.y + title_bar.h` if the constant goes).
 
 Each anchor name above is held by W1–W4, which is its "property only its own element satisfies"

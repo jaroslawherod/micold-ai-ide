@@ -10,24 +10,12 @@
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
 use crate::support::covered_states::{covered_states, STRIP_MEMBERS};
-use crate::support::layout::{self as lay, LayoutRecord};
+use crate::support::layout::{self as lay, anchored as at, LayoutRecord};
 use micold_client::features::session_strip::StripModel;
 use micold_core::theme::ColorScheme;
 
 const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
-
-/// The record an anchor named `name` points at in a covered state.
-fn at<'r>(
-    covered: &lay::CoveredState,
-    records: &'r [LayoutRecord],
-    name: &str,
-) -> Option<&'r LayoutRecord> {
-    let anchor = covered.anchors.iter().find(|a| a.name == name)?;
-    records
-        .iter()
-        .find(|r| r.layer == lay::Layer::Base && r.path == anchor.path)
-}
 
 /// The immediate base children of `parent`.
 fn children<'r>(records: &'r [LayoutRecord], parent: &LayoutRecord) -> Vec<&'r LayoutRecord> {
