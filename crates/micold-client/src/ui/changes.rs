@@ -671,7 +671,9 @@ const NAME_ROLE: TypeRole = TypeRole::Action;
 /// The room a row's name has at depth 0 in a list `list_width` wide: the list less the row's
 /// padding and the review state's slot.
 pub fn name_room(list_width: f32) -> f32 {
-    list_width - 2.0 * anatomy::button::PADDING_TEXT - (TypeRole::Body.size() + spacing::SM)
+    list_width
+        - 2.0 * anatomy::button::PADDING_TEXT
+        - (Glyph::<Message>::extent(TypeRole::Body) + spacing::SM)
 }
 
 /// How many indentation steps a row may take in a list `list_width` wide, so a
