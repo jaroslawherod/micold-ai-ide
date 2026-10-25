@@ -2200,6 +2200,8 @@ fn hide_shown(state: &mut State) {
     };
     let unwatched =
         state.tabs.shown_view().is_some_and(reading) || state.header.entry.as_ref() != Some(&key);
+    // A drag over its numbers does not outlive the tab's showing either (review A M4 F3).
+    cancel_drag(state);
     // The bar's overflow menu is a popover of the shown tab: it does not outlive the tab's showing
     // (feature 1270, R8).
     if let Some(view) = state.tabs.shown_view_mut() {
@@ -2951,12 +2953,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::GutterDragReleased => gutter_drag_released(state),
         Msg::GutterDragCancelled => {
-            if let Some(view) = state.tabs.shown_view_mut() {
-                if let Some(drag) = view.drag.take() {
-                    view.pick = drag.before_pick;
-                    view.composer = drag.before_composer;
-                }
-            }
+            cancel_drag(state);
             Effect::None
         }
         Msg::SlotMeasured { side, line, height } => {
@@ -3395,6 +3392,17 @@ fn follow_pick(view: &mut OpenView, pick: Pick) {
 /// A drag ended with the button's release (feature 1275, contracts/quick-comment.md Q4–Q7): a
 /// click only picks; a range picks and opens a new comment's box under the line released on, or
 /// moves the open one keeping its text, and leaves an edit's or a note's box as it is.
+/// End the shown view's drag over the line numbers as **Esc** does, putting back the pick and box
+/// from before its press (FR-020): the window lost focus, or the tab is left (review A M4 F3).
+pub fn cancel_drag(state: &mut State) {
+    if let Some(view) = state.tabs.shown_view_mut() {
+        if let Some(drag) = view.drag.take() {
+            view.pick = drag.before_pick;
+            view.composer = drag.before_composer;
+        }
+    }
+}
+
 fn gutter_drag_released(state: &mut State) -> Effect {
     let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;

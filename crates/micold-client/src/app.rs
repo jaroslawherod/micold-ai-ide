@@ -1912,6 +1912,18 @@ pub fn on_escape(state: &State) -> Option<Message> {
         None if state.overview.open => {
             Some(Message::Overview(crate::features::overview::Msg::Closed))
         }
+        // Feature 1275 (Q8, review A M4 F2): a drag over the diff's numbers is cancelled first, and
+        // alone; the comments drawer under it stays open.
+        None if state
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(|view| view.drag.is_some()) =>
+        {
+            Some(Message::Changes(
+                crate::features::changes::Msg::GutterDragCancelled,
+            ))
+        }
         // Feature 1270 (FR-012, SC-003, R8): last, so every registered surface above the shown
         // Review tab's comments drawer closes first; a closed drawer leaves Esc unused.
         None => state

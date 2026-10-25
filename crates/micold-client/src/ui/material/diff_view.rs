@@ -232,12 +232,16 @@ type OnGutter<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>, bool) -> M + 'a>;
 /// What the cursor coming into a number cell during a drag sends: the row's old and new numbers.
 type OnGutterOver<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>) -> M + 'a>;
 
+/// What the left button's release after a press on a number cell sends (#1275, review A M4 F1).
+type OnGutterRelease<'a, M> = Rc<dyn Fn() -> M + 'a>;
+
 /// What the number cells need: the pick to fill, what a press sends and, while a drag is on, what
 /// the cursor coming into a cell sends (#1275, R7).
 struct Gutters<'a, M> {
     pick: Option<(Side, LineRange)>,
     on: Option<OnGutter<'a, M>>,
     over: Option<OnGutterOver<'a, M>>,
+    release: Option<OnGutterRelease<'a, M>>,
     dragging: bool,
     links: Option<Links<'a, M>>,
 }
@@ -248,6 +252,7 @@ impl<M> Clone for Gutters<'_, M> {
             pick: self.pick,
             on: self.on.clone(),
             over: self.over.clone(),
+            release: self.release.clone(),
             dragging: self.dragging,
             links: self.links.clone(),
         }
@@ -283,6 +288,7 @@ impl<M> Gutters<'_, M> {
             pick: None,
             on: None,
             over: None,
+            release: None,
             dragging: false,
             links: None,
         }
@@ -380,6 +386,14 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
     /// numbers, as [`Self::on_gutter`] reports them (#1275, FR-016).
     pub fn on_gutter_over(mut self, f: impl Fn(Option<u32>, Option<u32>) -> M + 'a) -> Self {
         self.gutters.over = Some(Rc::new(f));
+        self
+    }
+
+    /// What the left button's release sends after a press on a line's number, wherever the
+    /// pointer is then. The cell sees the press and the release in one batch of window events,
+    /// which a subscription made on the press's message cannot (#1275, review A M4 F1).
+    pub fn on_gutter_release(mut self, f: impl Fn() -> M + 'a) -> Self {
+        self.gutters.release = Some(Rc::new(f));
         self
     }
 
@@ -819,10 +833,12 @@ fn number<'a, M: 'a>(
                 }
                 _ => None,
             };
+            let on_release = gutters.release.clone();
             Element::new(Gutter {
                 content: cell,
                 on_press: Box::new(move |extend| on_press(old, new, extend)),
                 on_over,
+                on_release,
             })
         }
         _ => cell,
@@ -836,6 +852,7 @@ struct Gutter<'a, M> {
     content: Element<'a, M>,
     on_press: Box<dyn Fn(bool) -> M + 'a>,
     on_over: Option<Box<dyn Fn() -> M + 'a>>,
+    on_release: Option<OnGutterRelease<'a, M>>,
 }
 
 /// What a [`Gutter`] remembers between events.
@@ -845,6 +862,8 @@ struct GutterState {
     modifiers: keyboard::Modifiers,
     /// The cursor was over the cell at the last event: only coming into it reports `over`.
     inside: bool,
+    /// The left button went down on this cell and has not come up yet.
+    pressed: bool,
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
@@ -924,6 +943,17 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
                 shell.publish((self.on_press)(state.modifiers.shift()));
                 shell.capture_event();
+                state.pressed = true;
+            }
+            // Wherever the pointer is: this cell saw the press, so its release is the drag's end
+            // even when both came in one batch, before the press's message made the window-wide
+            // listener (review A M4 F1). Not captured: that listener may hear it too, and a
+            // second release finds no drag.
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.pressed => {
+                state.pressed = false;
+                if let Some(on_release) = &self.on_release {
+                    shell.publish(on_release());
+                }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) if inside && !state.inside => {
                 if let Some(on_over) = &self.on_over {
@@ -1437,6 +1467,7 @@ mod tests {
             format!("press {old:?} {new:?} shift={shift}")
         }));
         gutters.over = Some(Rc::new(|old, new| format!("over {old:?} {new:?}")));
+        gutters.release = Some(Rc::new(|| "release".to_string()));
         gutters.dragging = dragging;
         let mut element = number(Some(5), LIGHT, &gutters, Side::New, (Some(4), Some(5)));
         let renderer = super::super::test_support::renderer();
@@ -1504,6 +1535,39 @@ mod tests {
             gutter_messages(true, &[shift, press]),
             vec!["press Some(4) Some(5) shift=true"],
             "Shift still extends, and a press is no entry"
+        );
+    }
+
+    /// Review A M4 F1: a press and its release in one batch of window events, before any message
+    /// is handled, end the drag: the cell that saw the press publishes the release, wherever the
+    /// pointer is, once. A release without a press on this cell publishes nothing.
+    #[test]
+    fn a_number_cell_publishes_the_release_of_its_own_press() {
+        let inside = iced::Point::new(4.0, ROW_HEIGHT / 2.0);
+        let outside = iced::Point::new(4.0, ROW_HEIGHT * 3.0);
+        let press = (
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            inside,
+        );
+        let release = |at| {
+            (
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                at,
+            )
+        };
+        assert_eq!(
+            gutter_messages(false, &[press.clone(), release(inside)]),
+            vec!["press Some(4) Some(5) shift=false", "release"],
+            "a fast click in one batch"
+        );
+        assert_eq!(
+            gutter_messages(true, &[press.clone(), release(outside), release(outside)]),
+            vec!["press Some(4) Some(5) shift=false", "release"],
+            "released away from the cell, once"
+        );
+        assert!(
+            gutter_messages(false, &[release(inside)]).is_empty(),
+            "no press here, no release"
         );
     }
 

@@ -442,9 +442,10 @@ pressed — lines of the other side, hunk headers, hidden-lines rows, comment ca
 the pick, which ends at the last line of that side you passed. Letting go, even outside the diff or
 the window, picks the range and opens the comment box under the line you let go on (see below).
 Press **Esc** while dragging to cancel: the pick and the comment box go back to how they were
-before you pressed. A press and release on one number without moving to another line is a click,
-as above. Dragging works with a mouse and with a touchpad's press-and-drag; the diff does not
-scroll while you drag.
+before you pressed, and the comments drawer, if open, stays open. Switching to another window or
+leaving the Review tab while dragging cancels the same way. A press and release on one number
+without moving to another line is a click, as above, however quickly you click. Dragging works with
+a mouse and with a touchpad's press-and-drag.
 
 ### Writing a comment
 
