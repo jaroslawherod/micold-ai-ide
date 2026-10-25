@@ -238,7 +238,7 @@ fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh()
     );
 }
 
-/// Where a glyph is drawn, in window pixels, asserting it is the only one of its kind on screen.
+/// Where a glyph is drawn, in window pixels, asserting it is the only one of its kind below the title bar.
 ///
 /// [`start_glyph`]'s rule, generalised so the chevron can be found the same way: by what it paints
 /// rather than by a node path.
@@ -246,11 +246,16 @@ fn only_glyph(state: &State, icon: Icon) -> Point {
     let mut renderer = lay::renderer();
     let glyph = icon.glyph().to_string();
     let painted = lay::painted_text_settled(view(state), &mut renderer);
-    let drawn: Vec<&lay::Overflow> = painted.iter().filter(|t| t.content == glyph).collect();
+    // Below the title bar, whose project segment draws a `SelectChevron` of its own (feature 1127).
+    let below_bar = micold_core::tokens::anatomy::app_bar::BOTTOM_EDGE;
+    let drawn: Vec<&lay::Overflow> = painted
+        .iter()
+        .filter(|t| t.content == glyph && t.on_screen.y >= below_bar)
+        .collect();
     assert_eq!(
         drawn.len(),
         1,
-        "exactly one {icon:?} is expected on screen; painted: {:?}",
+        "exactly one {icon:?} is expected below the title bar; painted: {:?}",
         painted.iter().map(|t| &t.content).collect::<Vec<_>>()
     );
     drawn[0].origin

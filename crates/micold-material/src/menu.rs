@@ -494,8 +494,15 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 
         let (layer, anchor) = match (anchor, hung_from) {
             (Some(point), _) => (Layer::ContextMenu, Anchor::Point(point)),
-            // Hung from the control that opened it (BUG-1023).
-            (None, Some(point)) => (Layer::Popover, Anchor::Point(point)),
+            // Hung from the control that opened it (BUG-1023), and stopping as far short of the
+            // window's bottom edge as the trailing-edge panel below does (FR-011a).
+            (None, Some(point)) => (
+                Layer::Popover,
+                Anchor::Below {
+                    at: point,
+                    bottom: spacing::SM,
+                },
+            ),
             // Read, not restated: the bar's own height plus its divider (FR-029a). This was
             // `TOP_OFFSET = 52.0 // approx. toolbar height`, written against a content-sized bar in
             // feature 005 and left alone when §7.1 pinned the bar at 64 — so the panel opened 13dp
