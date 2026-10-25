@@ -1395,10 +1395,6 @@ mod tests {
         assert_eq!(NAME_SAMPLE.chars().count(), 24);
         let name = width_of(NAME_SAMPLE, NAME_ROLE);
         let cap = tree_indent_cap(FILE_LIST_WIDTH);
-        eprintln!(
-            "name {name} px, room {} px, cap {cap}",
-            name_room(FILE_LIST_WIDTH)
-        );
         assert!(cap >= 2, "the tree indents at the default width: cap {cap}");
         for depth in 0..20 {
             let levels = tree::indent_levels(depth, cap);
