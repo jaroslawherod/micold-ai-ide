@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D11 | M4 | Where do a failed run's lines and **Retry** sit, when the form has 5 px left before the app bar? | The lines (Jira's messages, or basic mode's notice) scroll in a one-line viewport (20 px) under the field, as the picked issue's details scroll (837); **Retry** sits in the field's row after **Run** | agent-resolved | panel_placement red with two message lines (dialog at y=60) and with Retry on its own row (y=48); containment exemption `QUERY_FAILURE_CONTENT`; contracts/selector-ui.md §1 updated |
 | D10 | M3 | Where does the Basic/Advanced switch sit? | At the top of the issue picker's column (XS gap), not as a dialog field after `provider_switch`: as a field it added 48 px and pushed every Jira dialog's card to y=60–64, inside the app bar (65); in the picker it adds 36 px and the card stays below the bar | agent-resolved | `the_query_mode_switch_keeps_the_panel_placement` red with the switch as a field; contracts/selector-ui.md §1 updated |
 | D9 | M2 | Where does the client's `jira_query` module live? | `features/worktree_form/jira_query.rs` (`features::worktree_form::jira_query`), a submodule of the form as `settings/github_tokens.rs` is of settings, not `features/jira_query.rs`: `tests/feature_registration_cost.rs` makes every file in `features/` a feature (own isolation test, own `update(&mut State, Msg)`, no naming of `worktree_form`), and this state is the form's, applied with the form's seq. Plan, data model, research and tasks paths updated (prose only) | agent-resolved | gate run 2: feature_registration_cost 3 FAILED (`jira_query` names `worktree_form`; no isolation test; no `update`) |
 | D8 | M2 | How does an advanced row pick reach `apply_pick` with the label mapping, which only the shell reads? | `jira_query::Msg::RowPicked(i)` is resolved by the shell exactly as `IssueRowPicked`: `State::issue_number_at` (now reading `shown_issues()`, the advanced results in advanced mode) gives the number, then `IssuePicked { number, mapping }`, whose reducer finds the issue in `shown_issues()` and calls `WorktreeForm::apply_pick`. One pick reducer for both modes, so FR-009's "exactly as basic" holds by construction | agent-resolved | contracts/selector-ui.md §5; tests/jira_query_state.rs `an_advanced_pick_fills_the_form_as_a_basic_pick_of_the_same_issue`; main_tests `jira_query_run` |
@@ -66,11 +67,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review A (high) | 2 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (sonnet, fix diff: F1, F2 hold) |
 | M3 review B (conformance, sonnet) | 1 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (1 MINOR fixed: an empty result said "No issue matches this query." twice; the list's empty message dropped, the caption kept) |
 | M3 visual pass (quickstart §B B1–B3, B7) | 1 | 1c12b691 binary | PASS all four (Xvfb, tiny-skia, fake_jira); not run: B1's GitHub-source variant (no remote in the scratch repo), B3 sort order (the fake ignores ORDER BY); the fake repeats its page because it always returns a next-page token, not a client defect |
+| M4 review A (high) | 1 | 42865ee4f31bfa39fa99f5e3d0f7d8f1dda6ed39:8d16ddb3ad093ec30a9d914d907c8e59c6c5514d | CLEAN (1 MINOR declined: a 400's body is read on every path, not only the query's) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M4 | A | `refusal_body` reads up to 64 KiB of every 400, also on the basic list and status bisection paths that drop it | T027 specifies `BadRequest(Vec<u8>)` read in `send`; a 400 body is a few hundred bytes and capped at 64 KiB, and a basic 400 is a failure path; splitting `send` per caller adds a second error shape for no observable gain |
 
 ## Handover
 

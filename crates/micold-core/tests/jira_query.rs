@@ -528,7 +528,7 @@ fn a_long_message_is_cut_at_300_chars_and_at_most_10_are_kept() {
     let exact = "x".repeat(300);
     assert_eq!(
         messages(&format!(r#"{{"errorMessages":["{exact}"]}}"#)),
-        [exact.clone()],
+        [exact],
         "300 chars is not cut"
     );
 

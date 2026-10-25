@@ -16,7 +16,7 @@ use crate::features::worktree_form::jira_query::{Msg as QueryMsg, QueryRun};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::WorktreeForm;
 use crate::ui::material::{self, Button, StageProgress, Text, ToggleChip, TypeRole};
-use iced::widget::{row, Column};
+use iced::widget::{container, row, Column};
 use iced::{Element, Length};
 use micold_core::format::group_digits;
 use micold_core::jira_query::{QueryFailure, QueryMode, NOT_VALID_JQL};
@@ -80,14 +80,21 @@ pub fn picker<'a>(
     .on_move(|direction| message(QueryMsg::HighlightMoved(direction)))
     .on_dismiss(message(QueryMsg::Dismissed))
     .on_pick(|index| message(QueryMsg::RowPicked(index)));
-    col = col.push(
-        row![
-            Element::from(field),
-            Button::text("Run", r).on_press(message(QueryMsg::Run)),
-        ]
-        .spacing(spacing::SM)
-        .width(Length::Fill),
-    );
+    let mut field_row = row![
+        Element::from(field),
+        Button::text("Run", r).on_press(message(QueryMsg::Run)),
+    ]
+    .spacing(spacing::SM)
+    .width(Length::Fill);
+    // FR-011: Retry beside Run, so a failure adds no row to the tallest dialog (decision D11).
+    if let QueryRun::Failed {
+        failure: QueryFailure::Load(_),
+        ..
+    } = &query.run
+    {
+        field_row = field_row.push(Button::text("Retry", r).on_press(message(QueryMsg::Retry)));
+    }
+    col = col.push(field_row);
 
     match &query.run {
         QueryRun::Idle if query.last_run.trim().is_empty() => {
@@ -100,30 +107,8 @@ pub fn picker<'a>(
         QueryRun::Running { .. } => {
             col = col.push(StageProgress::new(running(form), r));
         }
-        QueryRun::Failed {
-            failure: QueryFailure::Rejected(messages),
-            ..
-        } => {
-            // FR-010: Jira's messages in Jira's order, one line each, or the plain words.
-            if messages.is_empty() {
-                col = col.push(Text::new(NOT_VALID_JQL, TypeRole::Caption, r).tint(r.error));
-            }
-            for line in messages {
-                col = col.push(Text::new(line.as_str(), TypeRole::Caption, r).tint(r.error));
-            }
-        }
-        QueryRun::Failed {
-            failure: QueryFailure::Load(error),
-            ..
-        } => {
-            // FR-011: basic mode's notice and Retry (533 FR-018); Retry runs the same query.
-            let notice = form
-                .notice_source()
-                .map(|source| error.message(source))
-                .unwrap_or_default();
-            col = col
-                .push(Text::new(notice, TypeRole::Caption, r).tint(r.error))
-                .push(Button::text("Retry", r).on_press(message(QueryMsg::Retry)));
+        QueryRun::Failed { failure, .. } => {
+            col = col.push(failure_lines(form, failure, r));
         }
         QueryRun::Loaded { listing, .. } if listing.issues.is_empty() => {
             col = col.push(Text::new(NO_MATCH, TypeRole::Caption, r).muted());
@@ -148,4 +133,32 @@ fn running(form: &WorktreeForm) -> String {
         Some(site) => format!("Running the query on {}…", site.host),
         None => "Running the query…".to_string(),
     }
+}
+
+/// Height the failure lines take at most before they scroll: one caption line. The add-worktree
+/// dialog is the tallest and is centred, so a taller block would push it over the app bar in the
+/// panel-placement gate's 800 px window (decision D11).
+const FAILURE_MAX_HEIGHT: f32 = 20.0;
+
+/// A failed run's lines, error-tinted, scrolling past [`FAILURE_MAX_HEIGHT`]: Jira's messages in
+/// Jira's order, one line each, or the plain words when it gave none (FR-010); for any other
+/// failure, basic mode's notice (FR-011, 533 FR-018), whose **Retry** sits beside **Run**.
+fn failure_lines<'a>(
+    form: &'a WorktreeForm,
+    failure: &'a QueryFailure,
+    r: Roles,
+) -> Element<'a, Message> {
+    let line = |text: String| Text::new(text, TypeRole::Caption, r).tint(r.error);
+    let lines: Vec<String> = match failure {
+        QueryFailure::Rejected(messages) if messages.is_empty() => vec![NOT_VALID_JQL.to_string()],
+        QueryFailure::Rejected(messages) => messages.clone(),
+        QueryFailure::Load(error) => vec![form
+            .notice_source()
+            .map(|source| error.message(source))
+            .unwrap_or_default()],
+    };
+    let column = Column::with_children(lines.into_iter().map(|text| line(text).into()));
+    container(material::Scrollable::new(column, r).height(Length::Shrink))
+        .max_height(FAILURE_MAX_HEIGHT)
+        .into()
 }
