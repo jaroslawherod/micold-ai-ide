@@ -63,7 +63,7 @@ impl CountBadge {
     }
 
     /// The text drawn on the pill.
-    pub fn label(&self) -> String {
+    fn label(&self) -> String {
         text(self.count)
     }
 }

@@ -11,7 +11,7 @@ use micold_core::tokens::Roles;
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::state::{Message, Showcase};
-use crate::ui::material;
+use crate::ui::material::{self, TypeRole};
 use crate::ui::terminal::TermPalette;
 
 /// One pane at a given focus, at a height that shows the whole fabricated screen.
@@ -180,7 +180,7 @@ fn review_tab<'a>(
     .leading(mark)
     .trailing(
         material::IconButton::new(crate::icons::Icon::Close, roles)
-            .size(material::TypeRole::Label)
+            .size(TypeRole::Label)
             .padding(micold_core::tokens::spacing::XS)
             .circular()
             .tint(tint)

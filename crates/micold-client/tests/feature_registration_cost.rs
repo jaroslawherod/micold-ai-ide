@@ -84,6 +84,20 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "session_strip",
+        "changes",
+        "Msg::TabClosed, entry_dir, is_pending — the strip's Review tab reads the review's draft \
+         count through the changes feature's pure helpers and its × publishes the changes \
+         feature's own close message; it writes no review state (feature 1269, T034–T036)",
+    ),
+    (
+        "session_strip",
+        "sidebar",
+        "Msg::ReviewChangesRequested — pressing the Review tab publishes the same request the \
+         sidebar's Review changes item does, so the two cannot open a review differently; a \
+         message, never a write (feature 1269, T035)",
+    ),
+    (
         "overview",
         "pr_status",
         "State — `location_card_state` reads the pull request reading to derive a location's card \

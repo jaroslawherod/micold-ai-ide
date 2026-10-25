@@ -292,7 +292,7 @@ pub const COMPONENTS: &[Entry] = &[
         density: &[],
         posed: &["1", "12", "99+", "with a tooltip", "the section list's badge chip"],
         live: &["hover the badge with a tooltip"],
-        interactive: false,
+        interactive: true,
         section: Section::Components,
         layout: Layout::Inline,
         render: sections::atoms::count_badge,

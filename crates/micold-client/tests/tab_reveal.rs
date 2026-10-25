@@ -124,3 +124,34 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
         );
     }
 }
+
+/// Feature 1269 (visual pass): a press that moves the shown location — to another worktree's
+/// session here, to a review's location in the same way — reveals the new strip's marked tab from
+/// the strip's start, because the scroll offset held is the left strip's. A press within the
+/// location keeps measuring from that offset, so a strip the user scrolled by hand stays put.
+#[test]
+fn a_location_change_reveals_from_the_strips_start() {
+    let (mut s, _) = showing_a_terminal();
+    let elsewhere = Session::start_new(SessionLocation::Worktree("w".into()), AiCli::ClaudeCode);
+    let elsewhere_id = elsewhere.id;
+    let here = s.session.active.expect("displayed");
+    s.update(Message::Session(SessionMsg::Started(elsewhere)));
+    s.update(Message::Session(SessionMsg::Selected(here)));
+    s.session.pending_tab_reveal = false;
+    s.session.tab_reveal_from_start = false;
+
+    s.update(Message::Session(SessionMsg::TerminalAiCliSelected(here)));
+    assert!(s.session.pending_tab_reveal);
+    assert!(
+        !s.session.tab_reveal_from_start,
+        "a press within the location measures from the strip's own offset"
+    );
+
+    s.session.pending_tab_reveal = false;
+    s.update(Message::Session(SessionMsg::Selected(elsewhere_id)));
+    assert!(s.session.pending_tab_reveal);
+    assert!(
+        s.session.tab_reveal_from_start,
+        "another location's strip is drawn: the offset held is the left strip's"
+    );
+}

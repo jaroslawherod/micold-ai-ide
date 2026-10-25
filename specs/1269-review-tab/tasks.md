@@ -363,9 +363,14 @@ the changed mark and ×; × replaces the view's **Close**.
   session, shell and "+" members became pressable there for the first time, so (review A F1,
   US1.2, U2) `session::ai_cli_selected`, `shell_instance_selected` and
   `shell_instance_open_requested` now hide a shown review as `selected` does.
-- [ ] T041 Visual pass, quickstart Part B (B1–B13) at 1280×800 light and dark and at 640×480;
+- [x] T041 Visual pass, quickstart Part B (B1–B13) at 1280×800 light and dark and at 640×480;
   screenshots in `specs/1269-review-tab/visual-pass/`, results in
   `specs/1269-review-tab/visual-pass.md`.
+  *As built (M4)*: screenshots are in the project files (`issue-1269/m4-*.png`), listed in
+  `visual-pass.md`. The pass found two reveal faults, fixed here: a tab wider than the strip's
+  viewport is revealed at its leading edge (where its mark is), and a change of shown location
+  arms the reveal from the strip's start (`tab_reveal_from_start`), since the held offset is the
+  left strip's. B12 and B11's twelve tabs were left to their tests.
 
 **Checkpoint**: M4. Quickstart Part A and Part B pass.
 
