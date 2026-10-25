@@ -604,6 +604,9 @@ pub async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
 
     let worker = Arc::clone(state);
     let (marked, dropped) = tokio::task::spawn_blocking(move || {
+        // Feature 1289 (FR-019): a setup run in progress is recorded interrupted, and its process
+        // tree ended, before the catalog is flushed.
+        crate::setup::interrupt_all(&worker);
         // Feature 039, FR-008a: an `unread` set or cleared since the last supervisor tick is written
         // before the stop, so a session read just before it is not unread again after a restart.
         worker.persist_attention();
@@ -933,6 +936,11 @@ where
                                 sessions: state.sessions_for(&project),
                             },
                         );
+                        // Feature 1289 (FR-018): each location's last setup run, right after
+                        // `Attached`, so a window that was away sees where setup got to.
+                        for msg in state.setup_on_attach(&project) {
+                            state.send(id, msg);
+                        }
                         // Feature 483: the project's run groups, once, right after `Attached`.
                         // The first read of the file may clean up after an interrupted create (git, disk),
                         // so it runs off the connection loop.

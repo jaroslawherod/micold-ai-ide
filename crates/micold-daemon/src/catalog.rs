@@ -677,6 +677,15 @@ impl Catalog {
         }
     }
 
+    /// The files setup records, logs and the run id counter live in (feature 1289); `None` for the
+    /// ephemeral catalog and for stores that persist nothing.
+    pub fn setup_files(&self) -> Option<SetupFiles> {
+        self.project_store
+            .as_ref()
+            .filter(|store| store.store.setup_files().is_some())
+            .map(|store| SetupFiles(Arc::clone(store)))
+    }
+
     /// A project's run groups (feature 483); none for the ephemeral catalog.
     pub fn load_runs(&self, project: &Path) -> micold_core::runs::store::RunsFile {
         self.project_store
@@ -1610,6 +1619,12 @@ impl Catalog {
             if let Err(err) = store.store.remove_runs(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove the run groups");
             }
+            // Feature 1289 (T038): its setup records and logs go with it.
+            if let Some(files) = store.store.setup_files() {
+                if let Err(err) = files.remove_setup(path, None) {
+                    tracing::warn!(project = %path.display(), %err, "failed to remove the setup records");
+                }
+            }
         }
         Ok(ids)
     }
@@ -2082,6 +2097,21 @@ impl Catalog {
     /// Borrow the underlying workspace (read-only; mutation goes through typed methods / RPCs).
     pub fn workspace(&self) -> &Workspace {
         &self.workspace
+    }
+}
+
+/// A handle on the project store's setup files (feature 1289), held apart from the catalog so
+/// setup writes them without the state lock.
+#[derive(Clone)]
+pub struct SetupFiles(Arc<OrderedStore>);
+
+impl SetupFiles {
+    /// The store's setup files.
+    pub fn get(&self) -> &JsonFileStore {
+        self.0
+            .store
+            .setup_files()
+            .expect("a SetupFiles is only made over a store that has them")
     }
 }
 

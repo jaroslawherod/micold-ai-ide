@@ -174,3 +174,16 @@ fn a_cut_line_does_not_split_a_character() {
     assert_eq!(done, [whole], "the character at the cut stays whole");
     assert_eq!(lines(buffer.finish()), ["€y"]);
 }
+
+/// Feature 1289 M4 (T036): a buffer refilled from a log keeps its last `KEEP_LINES` lines and
+/// counts the rest as dropped.
+#[test]
+fn a_restored_buffer_keeps_the_logs_tail() {
+    let lines: Vec<String> = (0..KEEP_LINES + 5).map(|i| i.to_string()).collect();
+    let buffer = OutputBuffer::restored(3, lines);
+    assert_eq!(buffer.first_index(), 8);
+    assert_eq!(buffer.next_index(), 3 + KEEP_LINES as u64 + 5);
+    assert_eq!(buffer.since(0).1.first().map(String::as_str), Some("5"));
+    let small = OutputBuffer::restored(0, vec!["a".into()]);
+    assert_eq!(small.since(0), (0, vec!["a".to_owned()]));
+}

@@ -134,6 +134,11 @@ so the others keep their order.
   `setup_log_path(project, location)` and `remove_setup(project, Option<location>)` (NEW). The
   location file stem is `default` or `wt-<dir_name>`. Records use `write_atomic`, and a corrupt
   record is quarantined (`read_or_quarantine`), as reviews and runs are.
+- A log (`SetupLog`) is a header line `#micold-setup-log first_line=<N>`, the index of its first
+  line (so how many were dropped), then one line per output line; a log without the header starts
+  at line 0. The daemon appends each kept line and, past 20,000 lines, replaces the log with the
+  buffer's last `KEEP_LINES` (FR-021). The daemon reaches these files through
+  `ProjectStore::setup_files()` (`None`, the default, for stores that persist nothing).
 
 ## Core: process
 

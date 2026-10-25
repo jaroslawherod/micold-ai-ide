@@ -227,3 +227,36 @@ output is copied from the session's logs.
   `ops::create_worktree` calls `setup::start_in` with the created worktree's path (no red test: the
   refreshed-list miss cannot be provoked without fault injection) -> `-- setup` 8 passed
 
+
+## M4 cycle 1: setup records and logs in the store (T031, T035)
+
+- tests: `core/src/store.rs` `setup_store_tests` (paths by project and location, round trip of
+  record/log/counter, a header-less log starts at 0, `remove_setup` of one location or the
+  project, a corrupt record quarantined)
+- red: `cargo test -p micold-core --lib -- setup_store` -> `error[E0599]: no method named
+  setup_record_path found for struct JsonFileStore` (34 errors)
+- green: `JsonFileStore::setup_dir`, `setup_counter_path`, `setup_record_path`, `setup_log_path`,
+  `load_setup`, `save_setup_record`, `write_setup_log`, `append_setup_log`, `remove_setup`,
+  `load_setup_counter`/`save_setup_counter`, `SetupLog`, `StoredSetup`, trait
+  `ProjectStore::setup_files` -> 5 passed. `OutputBuffer::restored` and its test
+  `a_restored_buffer_keeps_the_logs_tail` were written together (no separate red run)
+
+## M4 cycle 2: restart, unwind, delete, attach (T032–T034, T036–T039)
+
+- tests: `daemon/tests/setup_run.rs` A11 `a_running_record_found_at_start_is_interrupted_with_its_output`,
+  `an_unwind_during_a_run_interrupts_it_and_ends_its_processes`,
+  `the_run_id_after_a_restart_is_past_every_record_and_the_counter`; A12
+  `deleting_a_worktree_stops_its_setup_first_and_forgets_it` (also delete -> recreate same
+  `dir_name` -> setup runs again, not Busy, fresh id: M3 review A-F3); A13
+  `attaching_later_gets_each_locations_last_run`
+- red (against M3's daemon): 5 FAILED — `setup_run.rs:154` output never arrives (nothing loaded),
+  `:759` no record after unwind, `:810` id after restart, `:833` no record file, `:928` the message
+  after `Attached` is not a `SetupChanged`
+- green: `SetupStore` (counter, record, log writes off both locks), `SetupRuns::loaded`,
+  `interrupt_all`, `stop_waiter`/`stop_and_wait`, `forget`, `forget_project`, `on_attach`;
+  `unwind` interrupts first; `delete_worktree` stops and waits before git, forgets after;
+  `Attach` sends the runs right after `Attached` -> `setup_run` 12 passed, daemon `-- setup` 10
+  passed
+- after green, unit tests `a_log_past_its_bound_is_cut_back_to_the_buffer` and
+  `after_an_interrupt_the_runs_own_end_is_dropped` pin the compaction and the dropped late end
+  (they passed on first run)

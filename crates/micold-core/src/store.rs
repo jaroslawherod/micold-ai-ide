@@ -168,6 +168,13 @@ pub trait ProjectStore {
     fn remove_runs(&self, _project_path: &Path) -> io::Result<()> {
         Ok(())
     }
+
+    /// The files setup records, logs and the run id counter are kept in (feature 1289,
+    /// data-model §settings and store). `None`, the default, for stores that persist nothing: the
+    /// daemon then keeps setup in memory only.
+    fn setup_files(&self) -> Option<&JsonFileStore> {
+        None
+    }
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
@@ -849,6 +856,80 @@ fn load_project_state(path: &Path) -> ProjectStateLoad {
     }
 }
 
+/// The file stem of `location`'s setup files: `default` or `wt-<dir_name>`.
+fn setup_stem(location: &SessionLocation) -> String {
+    match location {
+        SessionLocation::Default => "default".to_owned(),
+        SessionLocation::Worktree(dir) => format!("wt-{dir}"),
+    }
+}
+
+/// The location a setup file stem names; `None` for a stem that is neither.
+fn setup_location(stem: &str) -> Option<SessionLocation> {
+    match stem {
+        "default" => Some(SessionLocation::Default),
+        _ => stem
+            .strip_prefix("wt-")
+            .filter(|dir| !dir.is_empty())
+            .map(|dir| SessionLocation::Worktree(dir.to_owned())),
+    }
+}
+
+/// One location's setup output as kept on disk (feature 1289, FR-021): the index of its first
+/// line, which is also how many lines were dropped before it, and the lines.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SetupLog {
+    pub first_line: u64,
+    pub lines: Vec<String>,
+}
+
+/// The header line of a setup log, followed by the index of its first line.
+const SETUP_LOG_HEADER: &str = "#micold-setup-log first_line=";
+
+impl SetupLog {
+    /// Read a log: the header, when there is one, then a line per output line. A log with no
+    /// header starts at line 0.
+    #[must_use]
+    pub fn parse(text: &str) -> Self {
+        let mut lines = text.lines();
+        let mut first_line = 0;
+        let mut kept = Vec::new();
+        if let Some(head) = lines.next() {
+            match head
+                .strip_prefix(SETUP_LOG_HEADER)
+                .and_then(|n| n.parse().ok())
+            {
+                Some(n) => first_line = n,
+                None => kept.push(head.to_owned()),
+            }
+        }
+        kept.extend(lines.map(str::to_owned));
+        Self {
+            first_line,
+            lines: kept,
+        }
+    }
+
+    /// The log as written: the header, then each line.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let mut text = format!("{SETUP_LOG_HEADER}{}\n", self.first_line);
+        for line in &self.lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        text
+    }
+}
+
+/// One location's stored setup: its last run's record and output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredSetup {
+    pub location: SessionLocation,
+    pub run: crate::setup::SetupRun,
+    pub log: SetupLog,
+}
+
 /// The production [`ProjectStore`]: a JSON file in the per-user data directory, plus one sibling
 /// state file per known project (bugfix BUG-001).
 #[derive(Debug, Clone)]
@@ -1013,6 +1094,158 @@ impl JsonFileStore {
         }
     }
 
+    /// Directory holding every project's setup records and logs, and the run id counter
+    /// (feature 1289): `setup/` beside `runs/`.
+    pub fn setup_dir(&self) -> PathBuf {
+        match self.path.parent() {
+            Some(parent) => parent.join("setup"),
+            None => PathBuf::from("setup"),
+        }
+    }
+
+    /// The file holding the next setup run id, unique across the daemon (data-model §RunId).
+    pub fn setup_counter_path(&self) -> PathBuf {
+        self.setup_dir().join("next_run_id")
+    }
+
+    /// One project's setup folder, addressed by [`project_id`].
+    fn setup_project_dir(&self, project_path: &Path) -> PathBuf {
+        self.setup_dir().join(project_id(project_path))
+    }
+
+    /// The last setup run's record at `location`: `<stem>.json`, the stem `default` or
+    /// `wt-<dir_name>`.
+    pub fn setup_record_path(&self, project_path: &Path, location: &SessionLocation) -> PathBuf {
+        self.setup_project_dir(project_path)
+            .join(format!("{}.json", setup_stem(location)))
+    }
+
+    /// The last setup run's output at `location`: `<stem>.log`, one line per output line after a
+    /// header naming the first line's index ([`SetupLog`]).
+    pub fn setup_log_path(&self, project_path: &Path, location: &SessionLocation) -> PathBuf {
+        self.setup_project_dir(project_path)
+            .join(format!("{}.log", setup_stem(location)))
+    }
+
+    /// The next setup run id stored, `None` when there is none or it does not parse.
+    pub fn load_setup_counter(&self) -> Option<u64> {
+        std::fs::read_to_string(self.setup_counter_path())
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+    }
+
+    /// Store the next setup run id, atomically.
+    pub fn save_setup_counter(&self, next: u64) -> io::Result<()> {
+        std::fs::create_dir_all(self.setup_dir())?;
+        write_atomic(&self.setup_counter_path(), &next.to_string())
+    }
+
+    /// Every location of `project` with a setup record, with its record and log. Never fails: a
+    /// record that does not parse is kept aside as `<name>.corrupt` and skipped; a missing or
+    /// unreadable log is empty.
+    pub fn load_setup(&self, project_path: &Path) -> Vec<StoredSetup> {
+        let Ok(entries) = std::fs::read_dir(self.setup_project_dir(project_path)) else {
+            return Vec::new();
+        };
+        let mut stored = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() != Some(OsStr::new("json")) {
+                continue;
+            }
+            let Some(location) = path
+                .file_stem()
+                .and_then(OsStr::to_str)
+                .and_then(setup_location)
+            else {
+                continue;
+            };
+            let run: Option<crate::setup::SetupRun> =
+                read_or_quarantine(&path, |text| serde_json::from_str(text).map(Some));
+            if let Some(run) = run {
+                let log = std::fs::read_to_string(path.with_extension("log"))
+                    .map(|text| SetupLog::parse(&text))
+                    .unwrap_or_default();
+                stored.push(StoredSetup { location, run, log });
+            }
+        }
+        stored
+    }
+
+    /// Write the setup record at `location` atomically.
+    pub fn save_setup_record(
+        &self,
+        project_path: &Path,
+        location: &SessionLocation,
+        run: &crate::setup::SetupRun,
+    ) -> io::Result<()> {
+        let path = self.setup_record_path(project_path, location);
+        std::fs::create_dir_all(self.setup_project_dir(project_path))?;
+        let json = serde_json::to_string_pretty(run)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        write_atomic(&path, &json)
+    }
+
+    /// Replace the setup log at `location` with `log`, atomically (a new run, or a compaction).
+    pub fn write_setup_log(
+        &self,
+        project_path: &Path,
+        location: &SessionLocation,
+        log: &SetupLog,
+    ) -> io::Result<()> {
+        std::fs::create_dir_all(self.setup_project_dir(project_path))?;
+        write_atomic(&self.setup_log_path(project_path, location), &log.render())
+    }
+
+    /// Add `lines` at the end of the setup log at `location`.
+    pub fn append_setup_log(
+        &self,
+        project_path: &Path,
+        location: &SessionLocation,
+        lines: &[String],
+    ) -> io::Result<()> {
+        use std::io::Write;
+        std::fs::create_dir_all(self.setup_project_dir(project_path))?;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.setup_log_path(project_path, location))?;
+        let mut text = String::new();
+        for line in lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        file.write_all(text.as_bytes())
+    }
+
+    /// Delete the setup record and log at `location`, or, with `None`, the project's whole setup
+    /// folder (a worktree delete, a project removal). Already absent is success.
+    pub fn remove_setup(
+        &self,
+        project_path: &Path,
+        location: Option<&SessionLocation>,
+    ) -> io::Result<()> {
+        let absent_ok = |result: io::Result<()>| match result {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        };
+        match location {
+            Some(location) => {
+                absent_ok(std::fs::remove_file(
+                    self.setup_record_path(project_path, location),
+                ))?;
+                absent_ok(std::fs::remove_file(
+                    self.setup_log_path(project_path, location),
+                ))
+            }
+            None => absent_ok(std::fs::remove_dir_all(
+                self.setup_project_dir(project_path),
+            )),
+        }
+    }
+
     /// Delete a project's per-project state file when the project is forgotten (feature 014,
     /// FR-005). An already-absent file is success — forgetting a project that never had a state
     /// file (no sessions/overrides) is not an error, and the call is idempotent. Removing this
@@ -1033,6 +1266,10 @@ impl JsonFileStore {
 }
 
 impl ProjectStore for JsonFileStore {
+    fn setup_files(&self) -> Option<&JsonFileStore> {
+        Some(self)
+    }
+
     fn load_reviews(&self, project_path: &Path) -> ReviewFile {
         JsonFileStore::load_reviews(self, project_path)
     }
@@ -1712,5 +1949,146 @@ mod project_id_of_tests {
             file.file_stem().and_then(|s| s.to_str()),
             Some(project_id_of(&project).as_str())
         );
+    }
+}
+
+#[cfg(test)]
+mod setup_store_tests {
+    //! Feature 1289 (T031, data-model §settings and store): setup records and output logs.
+    use super::*;
+    use crate::setup::{RunId, SetupCommand, SetupRun, SetupState};
+
+    fn store_in(dir: &Path) -> JsonFileStore {
+        JsonFileStore::at(dir.join("projects.json"))
+    }
+
+    fn wt(dir: &str) -> SessionLocation {
+        SessionLocation::Worktree(dir.into())
+    }
+
+    fn run(id: u64) -> SetupRun {
+        SetupRun::start(RunId(id), SetupCommand::parse("true").unwrap(), 1)
+    }
+
+    #[test]
+    fn the_setup_paths_are_named_by_project_and_location() {
+        let store = JsonFileStore::at(PathBuf::from("/data/projects.json"));
+        let project = Path::new("/work/app");
+        assert_eq!(store.setup_dir(), PathBuf::from("/data/setup"));
+        assert_eq!(
+            store.setup_counter_path(),
+            PathBuf::from("/data/setup/next_run_id")
+        );
+        let record = store.setup_record_path(project, &SessionLocation::Default);
+        assert!(record.ends_with(format!("{}/default.json", project_id_of(project))));
+        assert!(store
+            .setup_log_path(project, &wt("x"))
+            .ends_with("wt-x.log"));
+        assert!(store
+            .setup_record_path(project, &wt("x"))
+            .ends_with("wt-x.json"));
+    }
+
+    #[test]
+    fn records_logs_and_the_counter_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let project = Path::new("/work/app");
+        assert_eq!(store.load_setup_counter(), None);
+        store.save_setup_counter(7).unwrap();
+        assert_eq!(store.load_setup_counter(), Some(7));
+        store.save_setup_record(project, &wt("x"), &run(3)).unwrap();
+        store
+            .write_setup_log(
+                project,
+                &wt("x"),
+                &SetupLog {
+                    first_line: 5,
+                    lines: vec!["a".into()],
+                },
+            )
+            .unwrap();
+        store
+            .append_setup_log(project, &wt("x"), &["b".into(), "c".into()])
+            .unwrap();
+        store
+            .save_setup_record(project, &SessionLocation::Default, &run(4))
+            .unwrap();
+        let mut loaded = store.load_setup(project);
+        loaded.sort_by_key(|s| s.run.id());
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].location, wt("x"));
+        assert_eq!(loaded[0].run, run(3));
+        assert_eq!(
+            loaded[0].log,
+            SetupLog {
+                first_line: 5,
+                lines: vec!["a".into(), "b".into(), "c".into()],
+            }
+        );
+        assert_eq!(loaded[1].location, SessionLocation::Default);
+        assert_eq!(loaded[1].log, SetupLog::default(), "no log yet");
+    }
+
+    #[test]
+    fn a_log_written_without_a_header_starts_at_line_zero() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let project = Path::new("/work/app");
+        store.save_setup_record(project, &wt("x"), &run(1)).unwrap();
+        std::fs::write(store.setup_log_path(project, &wt("x")), "one\ntwo\n").unwrap();
+        let loaded = store.load_setup(project);
+        assert_eq!(loaded[0].log.first_line, 0);
+        assert_eq!(loaded[0].log.lines, ["one", "two"]);
+    }
+
+    #[test]
+    fn remove_setup_removes_one_location_or_the_whole_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let project = Path::new("/work/app");
+        for location in [wt("x"), wt("y")] {
+            store
+                .save_setup_record(project, &location, &run(1))
+                .unwrap();
+            store
+                .append_setup_log(project, &location, &["l".into()])
+                .unwrap();
+        }
+        store.remove_setup(project, Some(&wt("x"))).unwrap();
+        assert!(!store.setup_record_path(project, &wt("x")).exists());
+        assert!(!store.setup_log_path(project, &wt("x")).exists());
+        assert!(store.setup_record_path(project, &wt("y")).exists());
+        assert!(store.setup_log_path(project, &wt("y")).exists());
+        store.remove_setup(project, Some(&wt("x"))).unwrap();
+        store.remove_setup(project, None).unwrap();
+        assert!(!store
+            .setup_record_path(project, &wt("y"))
+            .parent()
+            .unwrap()
+            .exists());
+        store.remove_setup(project, None).unwrap();
+    }
+
+    #[test]
+    fn a_corrupt_record_is_quarantined_and_does_not_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let project = Path::new("/work/app");
+        store.save_setup_record(project, &wt("x"), &run(1)).unwrap();
+        let path = store.setup_record_path(project, &wt("x"));
+        let ended = run(2).finish(SetupState::Succeeded, 3).unwrap();
+        store.save_setup_record(project, &wt("y"), &ended).unwrap();
+        std::fs::write(&path, "{ not json").unwrap();
+        let loaded = store.load_setup(project);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].location, wt("y"));
+        let mut aside = path.as_os_str().to_os_string();
+        aside.push(".corrupt");
+        assert!(
+            PathBuf::from(aside).exists(),
+            "the corrupt record is kept aside"
+        );
+        assert!(!path.exists());
     }
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M3
-- **Next step**: M3 PR #1393 rebased onto main (protocol 70) and force-pushed — wait on CI, merge (rebase)
+- **Phase**: M4
+- **Next step**: M4 review A (high) and review B round 1 on the pushed snapshot
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1347 | design (spec, plan, tasks) | merged | 86fcb6b28cfe72ea680999550251409cbfa0921f |
 | #1353 | M1 sandbox PATH | merged (rebase) | 31a863fd3191b73aaea8000c244864413a5a1ad2 |
 | #1385 | M2 setup core | merged (rebase) | 47997d190a6ee8533f9bf0c71d34185fc66276b2 |
-| #1393 | M3 daemon runs setup | open | — |
+| #1393 | M3 daemon runs setup (protocol 70) | merged (rebase) | 9177522b8a536a94336a72df7469658756093a44 |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | merged |
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
-| M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | PR open |
-| M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
+| M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | merged |
+| M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | in progress |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
 | M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
@@ -51,6 +51,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 12 | M3 | `create_worktree_with_session` "keeps its own return", but MCP needs its `SetupStart` | Its `Ok` gains the `SetupStart` as a third element; the app's handler ignores it | unit | C4 needs `setup` on a create with a session too |
 | 13 | M3 | Watchers inside `Entry` cannot hold a watch before the first run or across runs | `SetupRuns.watchers: (project, location) → {ClientId → next line}`; a watch with no record registers and sends nothing (there is no `RunId` to send). The reason line is stored as the output's last line, so a backlog after the end ends with it | unit | contract C1 "a new run on the same location keeps the watch" |
 | 14 | M3 | `Entry.done` / `stop_and_wait`; where setup runs for a worktree | `done` left to M4 with `stop_and_wait`, its only reader. The folder is the worktree's `path` from the catalog's last refresh (so an included worktree runs in its own folder), `Default` the project repo; unknown → `NotFound` *There is no <location> here.* | unit | data-model §Daemon; T036 |
+| 15 | M4 | How does a log keep its dropped-line count across a restart and a compaction? | A header line `#micold-setup-log first_line=N`; a log without it starts at 0. data-model §settings and store updated | unit | FR-021 "the view MUST say how many" |
+| 16 | M4 | How does the daemon reach the setup files without the state lock? | `ProjectStore::setup_files() -> Option<&JsonFileStore>` (default `None`), and `Catalog::setup_files()` hands out a `SetupFiles` clone of the store's `Arc`; `DaemonState.setup_store` writes outside both locks | unit | catalog.rs `OrderedStore` behind `Arc` |
+| 17 | M4 | Delete: forget the run when git's remove fails? | No: `stop_and_wait` runs before git, `forget` only on a successful (or partial) remove; a failed delete keeps the `Stopped` record | unit | FR-016 "kept … until the worktree is deleted" |
 
 ## Review rounds
 
@@ -83,7 +86,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. M3 rebase 1 (2026-10-25): onto af0d60077; `SessionLocation` derive conflict in session.rs (main `Hash`, M3 `Serialize, Deserialize`) — kept both.
+M4 implemented (2026-10-25) on 9177522b: T031–T039 ticked, `setup_run` 12/12, daemon `-- setup` 10/10, core `setup_store` 5/5, clippy core+daemon clean. Next: reviews A and B round 1, then the full gate (`scripts/gate.sh`), rebase, PR.
+
+Earlier: M3 rebase 1 (2026-10-25): onto af0d60077; `SessionLocation` derive conflict in session.rs (main `Hash`, M3 `Serialize, Deserialize`) — kept both.
 M3 rebase 2 (2026-10-25): onto 36459b958 (38 commits), then f92be5b68 (3 test/spec commits of 1116). Main's feature 1271 took protocol 69, so 1289 renumbered to 69 → 70: `PROTOCOL_VERSION`, `FEATURE_026_PROTOCOL_VERSION` (schema_hash.rs), `the_protocol_version_is_70` (protocol_roundtrip.rs), `the_setup_messages_bump_the_protocol_to_70` (messages.rs; the first gate run caught it), version.rs/schema_hash.rs history comments keep 1271's line and add 1289's; tasks.md, plan.md, research.md, contracts/wire-and-settings.md say 70. Conflicts only in those history comments; no shared logic. `cargo test -p micold-daemon -p micold-core -p micold-client --no-run` clean; full gate (scripts/gate.sh) green at ef699805f and force-pushed. Main then gained 6 commits (1270 M3, #1288 sandbox basic image): they touch none of M3's files, make no protocol bump, and `git merge-tree` merges them clean, so the PR is behind but not in conflict.
 
 ## Open escalation
@@ -92,6 +97,6 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 
 ## Follow-ups not done
 
-- M3 review A-F3: a setup run is keyed by (project, dir_name) and nothing stops or drops it on worktree delete, so a recreated same-name worktree gets Busy. M4 T038 (`stop_and_wait` + `forget` before `git worktree remove`) covers it.
+- ~~M3 review A-F3~~: done in M4 T038 (`stop_and_wait` before git, `forget` after); test `deleting_a_worktree_stops_its_setup_first_and_forgets_it` recreates the same `dir_name` and runs setup again.
 - Per-project sandbox image (spec Story 4, deferred by clarify Q2): needs its own issue.
 - M1 review A round 3 MINOR: an `offered.json` with `clis: []` cannot be told apart from the daemon's own, so a host daemon sharing the state dir would prepend home folders to its PATH. Fix: an ownership marker (`#[serde(default)] state: Option<PathBuf>` in `Offered`, filled by the writer; `offered_clis` returns None when Some and differs from `dir`).

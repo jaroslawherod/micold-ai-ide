@@ -108,6 +108,9 @@ pub struct DaemonState {
     /// Its own mutex, so a run's every output chunk and flush tick never takes `inner` (review
     /// A-F2). Lock order: `setup`, then `inner`; never take `setup` while holding `inner`.
     setup: Mutex<crate::setup::SetupRuns>,
+    /// Where setup's records, logs and run id counter are written (feature 1289, M4); `None` for
+    /// the ephemeral catalog and stores that persist nothing. Written without either lock.
+    setup_store: Option<crate::setup::SetupStore>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -1028,6 +1031,11 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 impl DaemonState {
     /// Build the shared state around an adopted [`Catalog`].
     pub fn new(catalog: Catalog) -> Self {
+        // Feature 1289 (M4, FR-018, FR-019): the setup runs the last daemon left on disk.
+        let setup_store = catalog.setup_files().map(crate::setup::SetupStore::new);
+        let setup_runs = setup_store.as_ref().map_or_else(Default::default, |store| {
+            store.load(catalog.workspace().projects.iter().map(|p| p.path.clone()))
+        });
         Self {
             inner: Mutex::new(Inner {
                 catalog,
@@ -1068,7 +1076,8 @@ impl DaemonState {
             // Armed from construction: a daemon spawned by a client that dies before handshaking
             // must not outlive the machine (G1).
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
-            setup: Mutex::new(crate::setup::SetupRuns::default()),
+            setup: Mutex::new(setup_runs),
+            setup_store,
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
@@ -3487,6 +3496,16 @@ impl DaemonState {
         result
     }
 
+    /// Where setup's files are written; `None` when nothing persists (feature 1289, M4).
+    pub(crate) fn setup_store(&self) -> Option<&crate::setup::SetupStore> {
+        self.setup_store.as_ref()
+    }
+
+    /// What a client attaching to `project` is sent about its setup runs (feature 1289, FR-018).
+    pub fn setup_on_attach(&self, project: &Path) -> Vec<DaemonMsg> {
+        self.setup(|runs, _| runs.on_attach(project))
+    }
+
     /// Replace `project`'s setup command (`ProjectSetupSet`, contract C1); `None` clears it. Never
     /// starts a run.
     pub fn set_setup_command(
@@ -5309,6 +5328,9 @@ impl DaemonState {
     /// Forget a known project, dropping its discovery cache and returning its live primaries so the
     /// caller can `kill()` them outside the lock (T053, feature 014). A no-op for an unknown path.
     pub fn forget_project(&self, path: &Path) -> io::Result<Vec<Arc<PtySession>>> {
+        // Feature 1289 (T038): its setup runs end and are forgotten before the catalog removes
+        // their files, so a late line finds no run to write for. Lock order: `setup`, then `inner`.
+        self.setup(|runs, out| runs.forget_project(path, out));
         let (ids, ptys) = {
             let mut inner = self.lock();
             let ids = inner.catalog.forget_project(path)?;

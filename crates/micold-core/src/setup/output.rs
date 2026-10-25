@@ -47,6 +47,18 @@ impl OutputBuffer {
         Self::default()
     }
 
+    /// A buffer holding `lines` whose first is line `first_index`, as read back from a log after a
+    /// restart: only the last [`KEEP_LINES`] are kept, and the ones before count as dropped.
+    #[must_use]
+    pub fn restored(first_index: u64, lines: Vec<String>) -> Self {
+        let over = lines.len().saturating_sub(KEEP_LINES);
+        Self {
+            first_index: first_index + over as u64,
+            lines: lines.into_iter().skip(over).collect(),
+            ..Self::default()
+        }
+    }
+
     /// Take `bytes` read from `stream`, and return the lines they completed, with their indices.
     pub fn push(&mut self, stream: Stream, bytes: &[u8]) -> Vec<(u64, String)> {
         let mut done = Vec::new();
