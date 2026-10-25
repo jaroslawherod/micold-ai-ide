@@ -42,3 +42,16 @@ failing checks), light then dark. Compare with the mockup board's sidebar
 
 Record screenshots under `specs/1125-sidebar-state-groups/visual-pass/` and the results in
 `visual-pass.md`.
+
+## Results (close, 2026-10-25, T059)
+
+Run on origin/main af0d6007 (M5 merged as 42c09604) plus the close PR's one test edit, in a cloud container.
+
+- Part A's commands: all green inside `scripts/gate.sh` (fmt, clippy core then workspace, `cargo test
+  --workspace`: 10789 passed, 0 failed, 18 ignored; `scripts/tests/*.test.sh`), run three times, the last
+  on the close PR's final tree. The targeted runs before it: core lib 1663; client lib 936,
+  `features_sidebar` 101, `sidebar_tree` 49, `sidebar_state` 46, `navigation_apply` 14.
+- FR-023: `grep -nE 'tracing::|log::|println!|eprintln!|dbg!' crates/micold-core/src/sidebar_groups.rs`
+  prints nothing, and the same pattern over the added lines of every `(1125)` commit on main
+  (the branch is merged, so `origin/main...HEAD` is empty) prints nothing.
+- Part B: [visual-pass.md](visual-pass.md).

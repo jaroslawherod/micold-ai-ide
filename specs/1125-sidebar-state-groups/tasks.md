@@ -211,8 +211,8 @@ accordion are gone (FR-014–FR-016).
 
 Code-free; done by the close unit in the close PR.
 
-- [ ] T059 Run quickstart §A (including `! grep -nE 'tracing::|log::|println!|eprintln!|dbg!' crates/micold-core/src/sidebar_groups.rs` and the same pattern over the feature's added lines, `git diff origin/main...HEAD -- crates/ | grep '^+' | grep -E 'tracing::|log::|println!|eprintln!|dbg!'` printing nothing, FR-023) and `mise run gate`; record the result in `specs/1125-sidebar-state-groups/quickstart.md`
-- [ ] T060 Run quickstart §B with the `visual-pass` skill against the mockup board's sidebar in both themes; save screenshots under `specs/1125-sidebar-state-groups/visual-pass/` and results in `specs/1125-sidebar-state-groups/visual-pass.md` (FR-022, SC-004, SC-005)
+- [x] T059 Run quickstart §A (including `! grep -nE 'tracing::|log::|println!|eprintln!|dbg!' crates/micold-core/src/sidebar_groups.rs` and the same pattern over the feature's added lines, `git diff origin/main...HEAD -- crates/ | grep '^+' | grep -E 'tracing::|log::|println!|eprintln!|dbg!'` printing nothing, FR-023) and `mise run gate`; record the result in `specs/1125-sidebar-state-groups/quickstart.md`
+- [x] T060 Run quickstart §B with the `visual-pass` skill against the mockup board's sidebar in both themes; save screenshots under `specs/1125-sidebar-state-groups/visual-pass/` and results in `specs/1125-sidebar-state-groups/visual-pass.md` (FR-022, SC-004, SC-005)
 
 ---
 
@@ -326,3 +326,12 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Phase 8 (T059–T060) changes no code: the close unit does it in the close PR.
+
+---
+
+## Phase 9: TDD remediation
+
+From `tdd/verification.md` (close unit). Finding 1 (no red kept for twelve behaviors) is history and
+has no task; findings 3–7 are MED/LOW and left as recorded.
+
+- [x] T061 Finding 2: `each_entrys_group_is_its_card_states` in `crates/micold-client/tests/sidebar_state.rs` counts the worktrees it checks and asserts all five, so an empty grouping fails it; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_state` passes

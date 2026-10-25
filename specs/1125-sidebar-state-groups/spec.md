@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1320, #1325, #1345, #1359, #1378, #1386 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1125: Layout: sidebar grouped by state with
 Overview as its first row. Blocked by: #1120 (title, short branch and counts text come from its core
