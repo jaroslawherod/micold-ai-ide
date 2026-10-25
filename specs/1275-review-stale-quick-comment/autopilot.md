@@ -160,3 +160,8 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
   only `changes-review-held` failed in `layout_snapshot`; re-recorded (15+/20-, toolbar children
   renumbered 3→2, 4→3, 5→4, search box now at x520.9). Ran `layout_snapshot`, `features_changes`,
   `features_pr_changes` and `micold-core --lib review`: green. Pushed, then full `scripts/gate.sh`.
+- Main moved again to d84e94860 (#1273 M3 tree state) before the push: rebased; conflicts in
+  `features/changes.rs` (imports: kept both `stale::Held` and #1273's `tree::{…}`) and
+  `tests/features_changes.rs` (both features append a module: kept #1273's `tree_state` then our
+  `hold`; #1273's two `Msg::DiffRead` initialisers gained `row: DiffRow::NotRead`). Layout fixture
+  unchanged by that move. Client lib + the three test targets + core `review` green.
