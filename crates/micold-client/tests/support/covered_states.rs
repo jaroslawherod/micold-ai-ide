@@ -1714,6 +1714,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 let mut draft = SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     github: Default::default(),
                     section: SettingsSection::Terminal,
@@ -1791,6 +1792,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 let mut draft = SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     github: Default::default(),
                     section: SettingsSection::Appearance,
@@ -2697,6 +2699,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.settings.settings_draft = Some(SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     github: Default::default(),
                     section: SettingsSection::Environment,
@@ -2753,6 +2756,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.settings.settings_draft = Some(SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     github: micold_client::features::settings::GithubDraft {
                         entries: vec![
@@ -2796,6 +2800,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.settings.settings_draft = Some(SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     section: SettingsSection::Jira,
                     ..SettingsDraft::default()
@@ -2817,6 +2822,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     .map(|project| project.path.clone());
                 let mut draft = SettingsDraft {
                     jira: Default::default(),
+                    project: Default::default(),
                     required: Default::default(),
                     section: SettingsSection::Jira,
                     ..SettingsDraft::default()

@@ -364,6 +364,7 @@ pub mod sandbox;
 pub mod session;
 pub mod session_strip;
 pub mod settings;
+pub mod setup;
 pub mod sidebar;
 pub mod structured_insights;
 pub mod structured_transcript;

@@ -23,6 +23,7 @@ pub use daemons::opener_id as daemon_opener_id;
 pub(crate) mod environment;
 pub(crate) mod github;
 pub(crate) mod jira;
+pub(crate) mod project;
 pub(crate) mod terminal;
 
 use crate::app::Message;

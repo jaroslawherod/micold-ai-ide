@@ -107,6 +107,10 @@ pub struct State {
     /// keyed as `jira_connections` is. The Overview's Jira issue links are built on the open
     /// project's entry.
     pub jira_base_urls: std::collections::BTreeMap<String, micold_core::jira::JiraBaseUrl>,
+    /// Each project's setup command (feature 1289, FR-009), as stored, keyed as `jira_base_urls`
+    /// is. The app owns it: loaded at start, changed by a save of Settings › Project, and handed to
+    /// each daemon that holds the project (contract C3).
+    pub setup_commands: std::collections::BTreeMap<String, micold_core::setup::SetupCommand>,
     /// Whether the GitHub issues integration is on, as the service last reported it (feature 1102,
     /// FR-008). On until told otherwise (FR-007), so a hand `Default` rather than a derived one.
     pub github_issues_enabled: bool,
@@ -175,6 +179,7 @@ impl Default for State {
             jira_enabled: false,
             jira_connections: Default::default(),
             jira_base_urls: Default::default(),
+            setup_commands: Default::default(),
             github_issues_enabled: true,
             github_tokens: Default::default(),
             settings_rail_collapsed: false,
@@ -240,6 +245,8 @@ pub enum SettingsSection {
     GithubIssues,
     /// The Jira integration's switch and the open project's connection (feature 533, FR-002).
     Jira,
+    /// The open project's own settings: its setup command (feature 1289, contract U1).
+    Project,
 }
 
 impl SettingsSection {
@@ -251,6 +258,7 @@ impl SettingsSection {
         SettingsSection::Daemons,
         SettingsSection::GithubIssues,
         SettingsSection::Jira,
+        SettingsSection::Project,
     ];
 
     /// The section's name, as the rail shows it.
@@ -262,6 +270,7 @@ impl SettingsSection {
             SettingsSection::Daemons => "Daemons",
             SettingsSection::GithubIssues => "GitHub",
             SettingsSection::Jira => "Jira",
+            SettingsSection::Project => "Project",
         }
     }
 
@@ -283,6 +292,8 @@ impl SettingsSection {
             SettingsSection::Daemons => Icon::Daemons,
             SettingsSection::GithubIssues => Icon::IssueMapping,
             SettingsSection::Jira => Icon::JiraIssues,
+            // The glyph the sidebar's project root row wears: this page is about that project.
+            SettingsSection::Project => Icon::ProjectRoot,
         }
     }
 
@@ -652,6 +663,63 @@ impl JiraDraft {
     }
 }
 
+/// The Project section (feature 1289, contract U1): the open project's setup command.
+///
+/// Follows the open project as [`JiraDraft`] does: switching projects with the page open reloads
+/// the field, and a refresh keeps text the user typed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProjectDraft {
+    /// The open project's path and display name, when one is open.
+    pub project: Option<(std::path::PathBuf, String)>,
+    /// The command stored for [`Self::project`], when there is one.
+    pub stored: Option<micold_core::setup::SetupCommand>,
+    /// **Setup command**, as typed.
+    pub setup_command: String,
+    /// The multi-line editor showing [`Self::setup_command`].
+    pub editor: crate::app::Editor,
+}
+
+impl ProjectDraft {
+    /// Point the field at `project` (its path and display name) and the command `commands` holds
+    /// for it. Typed text is kept unless the field still shows the stored value or the project
+    /// changed.
+    pub fn follow(
+        &mut self,
+        project: Option<(std::path::PathBuf, String)>,
+        commands: &std::collections::BTreeMap<String, micold_core::setup::SetupCommand>,
+    ) {
+        let stored = project
+            .as_ref()
+            .and_then(|(path, _)| crate::features::setup::command_for(commands, path))
+            .cloned();
+        let moved = self.project.as_ref().map(|(p, _)| p) != project.as_ref().map(|(p, _)| p);
+        let untouched = micold_core::setup::SetupCommand::parse(&self.setup_command) == self.stored;
+        if moved || untouched {
+            self.set_text(stored.as_ref().map_or("", |c| c.as_str()));
+        }
+        self.stored = stored;
+        self.project = project;
+    }
+
+    /// Replace the text, field and editor together.
+    fn set_text(&mut self, text: &str) {
+        self.editor = crate::app::Editor::new(text);
+        self.setup_command = text.to_owned();
+    }
+
+    /// What the save does to the open project's command: `None` with no project open or the value
+    /// unchanged; otherwise the typed text parsed, a blank one clearing the entry. Never refused:
+    /// any non-blank text is a command.
+    fn change(&self) -> Option<micold_core::settings::SetupCommandChange> {
+        let (path, _) = self.project.as_ref()?;
+        let command = micold_core::setup::SetupCommand::parse(&self.setup_command);
+        (command != self.stored).then(|| micold_core::settings::SetupCommandChange {
+            project: micold_core::jira::connection_key(path),
+            command,
+        })
+    }
+}
+
 /// The legacy daemon block the settings file still carries (feature 027, FR-028); no page edits it (804).
 ///
 /// The sandbox profile is held whole rather than field by field, so that a setting this section
@@ -803,6 +871,9 @@ pub struct ValidSettings {
     /// Jira: what the save does to the open project's base URL (feature 1122, D4); `None` leaves
     /// it as it is.
     pub jira_base_url: Option<micold_core::settings::JiraBaseUrlChange>,
+    /// Project: what the save does to the open project's setup command (feature 1289, U1); `None`
+    /// leaves it as it is.
+    pub setup_command: Option<micold_core::settings::SetupCommandChange>,
 }
 
 impl ValidSettings {
@@ -885,6 +956,8 @@ pub struct SettingsDraft {
     pub github: GithubDraft,
     /// Jira (feature 533).
     pub jira: JiraDraft,
+    /// The open project's setup command (feature 1289).
+    pub project: ProjectDraft,
     /// The last validation failure shown after a rejected save.
     pub error: Option<FieldError>,
     /// The settings the page was opened with, which a save compares against so that it changes
@@ -1231,6 +1304,7 @@ impl SettingsDraft {
             jira_enabled: self.jira.enabled,
             jira,
             jira_base_url,
+            setup_command: self.project.change(),
         })
     }
 
@@ -1243,7 +1317,10 @@ impl SettingsDraft {
     pub fn required_fields(&self, section: SettingsSection) -> Vec<(FieldId, Requirement)> {
         let text = |id, value: &str| (id, Requirement::text(true, value));
         match section {
-            SettingsSection::Appearance | SettingsSection::Daemons => Vec::new(),
+            // The setup command is optional: blank means none (feature 1289, U1).
+            SettingsSection::Appearance | SettingsSection::Daemons | SettingsSection::Project => {
+                Vec::new()
+            }
             SettingsSection::Terminal => {
                 vec![text(
                     FieldId::SettingsScrollback,
@@ -1603,6 +1680,14 @@ impl SettingsDraft {
                     stored_base_url: _,
                     base_url: _,
                 },
+            // Refreshed by `ProjectDraft::follow`, which knows the open project (feature 1289).
+            project:
+                ProjectDraft {
+                    project: _,
+                    stored: _,
+                    setup_command: _,
+                    editor: _,
+                },
             error: _,
             baseline: _,
             required: _,
@@ -1725,6 +1810,8 @@ impl SettingsDraft {
                 enabled: settings.jira_enabled,
                 ..JiraDraft::default()
             },
+            // Seeded by `ProjectDraft::follow`, which knows the open project.
+            project: ProjectDraft::default(),
             error: template_error,
             baseline: Some(settings.clone()),
             required: RequiredMarks::default(),
@@ -1819,6 +1906,8 @@ pub enum Msg {
     DefaultAiCliChanged(AiCli),
     /// The default prompt template editor received an action (feature 1161, FR-002).
     DefaultPromptTemplateAction(EditorAction),
+    /// The **Setup command** editor received an action (feature 1289, U1).
+    SetupCommandAction(EditorAction),
     /// The Settings **Pi activity component** switch was toggled (feature 029, FR-012e).
     PiActivityComponentToggled(bool),
     /// Terminal: the **Save terminal history** checkbox (feature 041, FR-026).
@@ -1961,6 +2050,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DefaultPromptTemplateAction(action) => {
             default_prompt_template_action(state, &action);
         }
+        Msg::SetupCommandAction(action) => edit(state, |draft| {
+            draft.project.setup_command = draft.project.editor.perform(&action);
+        }),
         Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::SaveTerminalHistoryToggled(on) => save_terminal_history_toggled(state, on),
         Msg::ToolServerToggled(on) => tool_server_toggled(state, on),

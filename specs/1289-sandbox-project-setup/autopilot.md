@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M4
-- **Next step**: orchestrator waits on #1407 CI and merges; then M5
+- **Phase**: M5
+- **Next step**: implement M5 (T040–T049)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1353 | M1 sandbox PATH | merged (rebase) | 31a863fd3191b73aaea8000c244864413a5a1ad2 |
 | #1385 | M2 setup core | merged (rebase) | 47997d190a6ee8533f9bf0c71d34185fc66276b2 |
 | #1393 | M3 daemon runs setup (protocol 70) | merged (rebase) | 9177522b8a536a94336a72df7469658756093a44 |
-| #1407 | M4 setup persistence and delete | open | — |
+| #1407 | M4 setup persistence and delete | merged (rebase) | 8a49a7780b9b3021fe4a41b6a56be18a067a8b0a |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | merged |
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
 | M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | merged |
-| M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | PR open |
-| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
+| M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | merged |
+| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | in progress |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
 | M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
 
@@ -91,6 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M5 implemented (2026-10-25) on 8a49a7780 (#1407 merged by rebase): T040–T049 ticked; features_setup 9, features_settings 155, setup_tag_geometry 3, settings_sections 24 passed; clippy client+material clean (cycle log § M5 cycle 1). Next: full client suite, push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
 M4 PR (2026-10-25): rebased onto main 8eceb3ad7 (1 commit, sandbox image pin; no conflict, protocol stays 70); full gate (scripts/gate.sh) green at ed8ecde5b on the 2nd run (1st: flaky `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, 5/5 green alone, untouched by M4); pushed; PR #1407 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M5.
 M4 review round 1 fixed (2026-10-25) at c311173c2: A-F1–A-F4, B-F1, B-F2 (cycle log M4 cycle 3); full gate (scripts/gate.sh) green and pushed. Next: review A round 2 (scoped) on 72c712a7:c311173c; then rebase onto main, PR.
 M4 implemented (2026-10-25) on 9177522b: T031–T039 ticked, `setup_run` 12/12, daemon `-- setup` 10/10, core `setup_store` 5/5, clippy core+daemon clean. Snapshot 5975a20d:facc3d6c. Unit context over 150k at this point: a fresh unit continues. Next: reviews A and B round 1, fix findings, then the full gate (`scripts/gate.sh`), rebase, PR.

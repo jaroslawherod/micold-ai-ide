@@ -3,7 +3,7 @@
 Open **Settings** with the gear button at the right of the title bar, or from the overflow menu
 (the three-dots button) beside it. While Settings is open the gear is drawn selected, and pressing
 it again does nothing. Settings fills the
-main area, with a rail down the left listing seven sections. The [title bar](appearance-theming.md#title-bar) and the
+main area, with a rail down the left listing eight sections. The [title bar](appearance-theming.md#title-bar) and the
 [status bar](appearance-theming.md#status-bar) stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
@@ -39,6 +39,7 @@ marked too. Port, User and Key file are optional and carry no mark.
 | [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and resources |
 | [GitHub](#github) | Whether worktrees show their pull request, which worktree type an issue's labels choose, and the GitHub access tokens that let sandboxes push |
 | [Jira](#jira) | Whether Jira issues can start worktrees, whether the open project is connected, and its Jira base URL for issue links |
+| [Project](#project) | The open project's setup command, run in each new worktree |
 
 <!-- media: settings-view-light -->
 
@@ -847,6 +848,27 @@ readable only by you, one per project, in the `jira` folder beside the settings 
 
 Removing the connection deletes the file, and with it the query and mode the issue selector
 remembers for that project (`<project id>.query.json` in the same folder).
+
+## Project
+
+The **Project** section holds settings of the project that is open. Its heading is the project's
+name, and it has one field, **Setup command**: a multi-line field in a monospace font, four lines
+tall, that grows to ten as you type. Under it: *Runs in each new worktree of this project, on the
+daemon it runs on. Leave empty for none.* With no project open, the section reads *Open a project
+to set its setup command.* and has no field.
+
+- The command runs in the shell of the worktree's daemon, in the new worktree's folder, every time
+  the app creates a worktree for this project, from the New worktree form or by an AI session's
+  `create_worktree` tool. Its typical use is installing the project's toolchain, for example
+  `mise trust && mise install`. See [Setup in a new worktree](worktrees-and-sessions.md#setup-in-a-new-worktree).
+- It is stored per project in this app's own `settings.json`, never in the repository, so cloning a
+  repository never runs a command you did not enter. Each project has its own; switching projects
+  with the page open shows the other project's.
+- Any text is a command, and nothing is checked when you save. Spaces around it are dropped. Clear
+  the field and press **Save** to remove it: the project then has no setup command.
+- On **Save**, every connected daemon that holds the project gets the new command at once; a daemon
+  that connects later gets it when it connects. A setup already running keeps the command it
+  started with.
 
 ## Where settings are stored
 
