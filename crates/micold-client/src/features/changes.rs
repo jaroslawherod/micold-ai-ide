@@ -288,6 +288,8 @@ pub enum PrDiffLoad {
         files: Vec<ChangedFile>,
         /// Each file's section of the diff.
         patches: BTreeMap<RelPath, Vec<u8>>,
+        /// Each file's change id (feature 1271, US4), worked out once when the diff is read.
+        ids: BTreeMap<RelPath, ChangeId>,
     },
     /// GitHub will not diff it: above 300 files or 20 000 changed lines.
     TooLarge,
@@ -3468,7 +3470,7 @@ pub fn card_model(comment: &ReviewComment, sending: bool) -> CardModel {
 /// waits for **Show diff** like a working-tree one. There are no full versions to show, so the
 /// diff carries no syntax colours and no context beyond its hunks.
 fn pr_file_diff(pr: &PullRequestView) -> Option<LoadedDiff> {
-    let PrDiffLoad::Ready { files, patches } = &pr.diff else {
+    let PrDiffLoad::Ready { files, patches, .. } = &pr.diff else {
         return None;
     };
     let path = pr.selected.as_ref()?;
@@ -3489,7 +3491,7 @@ fn pr_file_diff(pr: &PullRequestView) -> Option<LoadedDiff> {
     })
 }
 
-/// The ready state of a pull request's diff read: its rows and each file's patch.
+/// The ready state of a pull request's diff read: its rows, each file's patch and change id.
 fn pr_diff_ready(diff: PrDiff) -> PrDiffLoad {
     let mut files = Vec::with_capacity(diff.files.len());
     let mut patches = BTreeMap::new();
@@ -3497,7 +3499,12 @@ fn pr_diff_ready(diff: PrDiff) -> PrDiffLoad {
         patches.insert(file.file.path.clone(), file.patch);
         files.push(file.file);
     }
-    PrDiffLoad::Ready { files, patches }
+    let ids = pr_change_ids(&files, &patches);
+    PrDiffLoad::Ready {
+        files,
+        patches,
+        ids,
+    }
 }
 
 /// Whether the read diff of `pr` lists `path`.
@@ -4216,7 +4223,7 @@ fn judge_pr_comment(
     held: LineRange,
     moves: &mut Vec<Move>,
 ) -> Option<Anchor> {
-    let PrDiffLoad::Ready { files, patches } = &pr.diff else {
+    let PrDiffLoad::Ready { files, patches, .. } = &pr.diff else {
         return None;
     };
     if comment.pr.as_ref().map(|p| p.number) != Some(pr.number) {
@@ -4284,7 +4291,7 @@ pub fn current_ids(view: &OpenView) -> BTreeMap<RelPath, ChangeId> {
             .filter_map(|file| Some((file.path.clone(), file.id?)))
             .collect(),
         Source::PullRequest(pr) => match &pr.diff {
-            PrDiffLoad::Ready { files, patches } => pr_change_ids(files, patches),
+            PrDiffLoad::Ready { ids, .. } => ids.clone(),
             _ => BTreeMap::new(),
         },
     }
