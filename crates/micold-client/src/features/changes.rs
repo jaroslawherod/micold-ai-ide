@@ -166,6 +166,25 @@ pub fn source_menu_stops(view: &OpenView, enabled: bool) -> Vec<(Stop, bool)> {
     source_menu::stops(&source_menu::rows(&menu_input(view, enabled, None)))
 }
 
+/// The message a stop of the source control stands for: what `Enter` on it and a press on its row
+/// or chip send, so a pick has one implementation with the 1003 and 1150 behaviour (contract §2).
+pub fn stop_message(stop: Stop) -> Msg {
+    match stop {
+        Stop::WorkingTree => Msg::SourceChosen(None),
+        Stop::Kind(source_menu::Kind::Committed) => Msg::CommittedToggled,
+        Stop::Kind(source_menu::Kind::Uncommitted) => Msg::UncommittedToggled,
+        Stop::PullRequest(number) => Msg::SourceChosen(Some(number)),
+        Stop::Files => Msg::FilesPaneToggled,
+    }
+}
+
+/// The source control's tooltip for the view at `now`: its full label over the base line
+/// (FR-009).
+pub fn source_control_tooltip(view: &OpenView, enabled: bool, now: u64) -> String {
+    let input = source_menu_input(view, enabled, now);
+    source_menu::tooltip(base_line(view).as_deref(), &source_menu::label(&input))
+}
+
 /// The one builder of [`MenuInput`]: `now` decides the stale mark, and `None` never marks it.
 fn menu_input(view: &OpenView, enabled: bool, now: Option<u64>) -> MenuInput<'_> {
     let mut prs = section(view, enabled, now.unwrap_or_default());
@@ -2159,16 +2178,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             // Every pick goes through the message it stands for, so 1003 and 1150 behaviour has
             // one implementation (contract §2).
-            apply(
-                state,
-                match stop {
-                    Stop::WorkingTree => Msg::SourceChosen(None),
-                    Stop::Kind(source_menu::Kind::Committed) => Msg::CommittedToggled,
-                    Stop::Kind(source_menu::Kind::Uncommitted) => Msg::UncommittedToggled,
-                    Stop::PullRequest(number) => Msg::SourceChosen(Some(number)),
-                    Stop::Files => Msg::FilesPaneToggled,
-                },
-            )
+            apply(state, stop_message(stop))
         }
         Msg::SourceChosen(None) => {
             close_source_menu(state);

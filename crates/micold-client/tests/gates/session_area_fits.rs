@@ -13,7 +13,7 @@
 //!
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
-use crate::support::covered_states::covered_states;
+use crate::support::covered_states::{covered_states, review_source, SourcePose};
 use crate::support::layout::{self as lay, LayoutRecord, StateUnderTest, WINDOW};
 use iced::advanced::widget::Tree;
 use iced::advanced::{layout, Layout};
@@ -401,8 +401,9 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
     }
 }
 
-/// The Changes view's own header row, under the session area's view: its title column, then the
-/// progress slot (feature 1270 moved the panel toggle and the review buttons to the review bar).
+/// The Changes view's own header row, under the session area's view: its title column, the source
+/// control (feature 1272), then the progress slot (feature 1270 moved the panel toggle and the review
+/// buttons to the review bar).
 const VIEW_HEADER: &[usize] = &[2, 0, 0];
 /// The diff pane's header row: the layout and whole-file chips, then the mark control.
 const DIFF_HEADER: &[usize] = &[2, 1, 1, 0, 0, 0];
@@ -466,7 +467,7 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
             let part = |i: usize| {
                 rect(at(&records, &[header.as_slice(), &[i]].concat()).expect("a header part"))
             };
-            placed.push((what, part(1), part(0)));
+            placed.push((what, part(2), part(0)));
         }
     }
     let (first, slot, title) = &placed[0];
@@ -481,7 +482,7 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
 
 /// The progress slot's bar, under the view header: the slot's two containers, its row, then the
 /// bar after the *n of m reviewed* words.
-const PROGRESS_BAR: &[usize] = &[1, 0, 0, 1];
+const PROGRESS_BAR: &[usize] = &[2, 0, 0, 1];
 
 /// Feature 1271 (visual re-pass V2): the header's progress bar is drawn, at its full width where
 /// the slot has room for it beside its words. A `Fill` bar in the slot's `Shrink` row was laid out
@@ -518,7 +519,7 @@ fn the_progress_bar_has_its_width_beside_its_words() {
                     .unwrap_or_else(|| panic!("{theme:?}: the header part {path:?} is laid out")),
             )
         };
-        let (slot, words, bar) = (part(&[1]), part(&[1, 0, 0, 0]), part(PROGRESS_BAR));
+        let (slot, words, bar) = (part(&[2]), part(&[2, 0, 0, 0]), part(PROGRESS_BAR));
         assert!(
             (bar.width - micold_client::ui::PROGRESS_BAR_WIDTH).abs() <= TOLERANCE,
             "{theme:?}: the bar {bar:?} is {} px wide, not its {} beside {words:?}",
@@ -766,6 +767,190 @@ fn the_widest_counts_fit_at_the_layout_window() {
         assert!(
             inner <= one_line + TOLERANCE,
             "{what}: the button's label wraps ({inner} tall inside, one line is {one_line})"
+        );
+    }
+}
+
+/// The Changes view's body: the file column beside the diff area (feature 1272, R8).
+const VIEW_BODY: &[usize] = &[2, 1];
+/// The file column: the body's first child, a fixed-width container.
+const FILE_COLUMN: &[usize] = &[2, 1, 0];
+/// What the file column holds: the container's column.
+const FILE_COLUMN_CONTENT: &[usize] = &[2, 1, 0, 0];
+/// The diff area, the body's second child.
+const DIFF_AREA: &[usize] = &[2, 1, 1];
+/// The source control's slot in the view header.
+const SOURCE_CONTROL: &[usize] = &[2, 0, 0, 1];
+
+/// `pose` laid out in a window `window` large beside a 300 px sidebar in `theme`: what it painted
+/// and the boxes of both layers, entrances finished.
+fn painted_source(
+    pose: SourcePose,
+    theme: ThemePreference,
+    window: Size,
+) -> (Vec<lay::Overflow>, Vec<LayoutRecord>) {
+    let mut under = review_source(pose, false);
+    under.state.settings.theme_pref = theme;
+    under.state.sidebar.width = SIDEBAR;
+    let mut renderer = lay::renderer();
+    lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, window)
+}
+
+/// The base-layer box at `path` under the session area.
+fn part_at(records: &[LayoutRecord], path: &[usize], what: &str) -> Rectangle {
+    let path = [SESSION_AREA, path].concat();
+    rect(
+        records
+            .iter()
+            .find(|r| r.layer == lay::Layer::Base && r.path == path)
+            .unwrap_or_else(|| panic!("{what}: {path:?} is laid out")),
+    )
+}
+
+/// Whether `text` starts inside `area`.
+fn starts_inside(text: &lay::Overflow, area: &Rectangle) -> bool {
+    inside(
+        &Rectangle {
+            x: text.origin.x,
+            y: text.origin.y,
+            width: 0.0,
+            height: 0.0,
+        },
+        area,
+    )
+}
+
+/// Feature 1272 T019 (FR-003, SC-003, FR-001, FR-009): in every source state — the working tree
+/// with each pull-request list state, a pull request shown, Files on, the Default entry, the setting
+/// off — the left column holds one thing, starting at its top: the file list, its empty or loading
+/// state, or the Files pane. No Pull requests section, no Committed, Uncommitted or Files toggle and
+/// no Default-entry note is painted in it. The header holds the source control, which reads the
+/// shown source, and the control's tooltip carries the base line.
+#[test]
+fn the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_control() {
+    use micold_client::features::changes::{base_line, source_control_tooltip, source_menu_input};
+    use micold_core::review::source_menu::{label, DEFAULT_ENTRY_NOTE, FILES, PULL_REQUESTS};
+    // The chips' words, as `ui::source_menu` draws them.
+    const COMMITTED: &str = "Committed";
+    const UNCOMMITTED: &str = "Uncommitted";
+    for pose in SourcePose::ALL {
+        let under = review_source(pose, false);
+        let changes = &under.state.changes;
+        let view = changes.tabs.shown_view().expect("the review is shown");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        let fixed = label(&source_menu_input(view, changes.pr_enabled, now)).fixed;
+        if let Some(base) = base_line(view) {
+            let tooltip = source_control_tooltip(view, changes.pr_enabled, now);
+            assert!(
+                tooltip.contains(&base),
+                "{pose:?}: the tooltip {tooltip:?} carries the base line {base:?} (FR-009)"
+            );
+        }
+        for theme in [ThemePreference::Light, ThemePreference::Dark] {
+            let what = format!("{pose:?} {theme:?}");
+            let (painted, records) = painted_source(pose, theme, WINDOW);
+            let column = part_at(&records, FILE_COLUMN, &what);
+            let content_path = [SESSION_AREA, FILE_COLUMN_CONTENT].concat();
+            let content: Vec<Rectangle> = children_of(&records, &content_path)
+                .into_iter()
+                .filter(|r| r.layer == lay::Layer::Base)
+                .map(rect)
+                .collect();
+            let holder = part_at(&records, FILE_COLUMN_CONTENT, &what);
+            assert_eq!(
+                content.len(),
+                1,
+                "{what}: the left column holds only the list, its state or the Files pane: \
+                 {content:?}"
+            );
+            assert!(
+                (content[0].y - holder.y).abs() <= TOLERANCE,
+                "{what}: the list starts at the column's top {holder:?}: {content:?} (SC-003)"
+            );
+            for gone in [
+                PULL_REQUESTS,
+                COMMITTED,
+                UNCOMMITTED,
+                FILES,
+                DEFAULT_ENTRY_NOTE,
+            ] {
+                let found = painted.iter().find(|p| {
+                    p.layer == lay::Layer::Base && p.content == gone && starts_inside(p, &column)
+                });
+                assert!(
+                    found.is_none(),
+                    "{what}: `{gone}` is painted in the left column {column:?}: {found:?} (FR-003)"
+                );
+            }
+            let header = part_at(&records, VIEW_HEADER, &what);
+            let control = part_at(&records, SOURCE_CONTROL, &what);
+            assert!(
+                inside(&control, &header),
+                "{what}: the source control {control:?} lies in the header {header:?}"
+            );
+            assert!(
+                painted.iter().any(|p| p.layer == lay::Layer::Base
+                    && p.content == fixed
+                    && starts_inside(p, &control)),
+                "{what}: the control reads `{fixed}` (FR-001)"
+            );
+        }
+    }
+}
+
+/// Feature 1272 T020 (FR-008, SC-002, US4 s1–s2, Edge "Narrow window"): the body is the file column
+/// at its fixed width and the diff area; at 1280×800 the diff area is at least 70% of the body; at
+/// 1600 and 900 px wide the file column keeps its width; at 900 px the source control keeps its
+/// width inside the header while the title column gives way.
+#[test]
+fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
+    use micold_client::ui::{FILE_COLUMN_WIDTH, SOURCE_CONTROL_WIDTH};
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        let mut titles = Vec::new();
+        for width in [1280.0, 1600.0, 900.0] {
+            let window = Size::new(width, WINDOW.height);
+            let what = format!("{theme:?} {width}");
+            let (_, records) = painted_source(SourcePose::PullRequest, theme, window);
+            let body = part_at(&records, VIEW_BODY, &what);
+            let file = part_at(&records, FILE_COLUMN, &what);
+            let diff = part_at(&records, DIFF_AREA, &what);
+            assert_eq!(
+                children_of(&records, &[SESSION_AREA, VIEW_BODY].concat())
+                    .into_iter()
+                    .filter(|r| r.layer == lay::Layer::Base)
+                    .count(),
+                2,
+                "{what}: the body is two columns"
+            );
+            assert!(
+                (file.width - FILE_COLUMN_WIDTH).abs() <= TOLERANCE,
+                "{what}: the file column {file:?} is {FILE_COLUMN_WIDTH} px (US4 s2)"
+            );
+            assert!(
+                diff.x >= file.x + file.width && inside(&diff, &body),
+                "{what}: the diff area {diff:?} follows the file column {file:?} in {body:?}"
+            );
+            if width == 1280.0 {
+                assert!(
+                    diff.width >= 0.7 * body.width,
+                    "{what}: the diff area {diff:?} is under 70% of the body {body:?} (SC-002)"
+                );
+            }
+            let header = part_at(&records, VIEW_HEADER, &what);
+            let control = part_at(&records, SOURCE_CONTROL, &what);
+            assert!(
+                (control.width - SOURCE_CONTROL_WIDTH).abs() <= TOLERANCE
+                    && inside(&control, &header)
+                    && control.x + control.width <= width + TOLERANCE,
+                "{what}: the control {control:?} keeps its width in the header {header:?}"
+            );
+            titles.push(part_at(&records, &[2, 0, 0, 0], &what).width);
+        }
+        assert!(
+            titles[2] < titles[0],
+            "{theme:?}: the title column gives way first at 900 px: {titles:?}"
         );
     }
 }

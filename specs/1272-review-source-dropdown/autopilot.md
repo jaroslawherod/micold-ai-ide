@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1272
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
-- **Phase**: milestone M3
-- **Next step**: orchestrator waits on CI for #1383 (M2+M3, rebased onto #1269, full gate green at a5750fb0) and merges it; then M4 once #1270 has merged
+- **Phase**: milestone M4
+- **Next step**: M4 implement (T019–T026) on origin/main f49111a6 (#1270 merged, last PR #1408)
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1355 | Design PR: spec, plan, tasks | merged | db1c1bcf |
 | #1368 | M1: core `review::source_menu` model | merged | ae314336 |
-| #1383 | M2 + M3: reducer state and picks; shared `MenuSelect` | open; rebased onto #1269 (origin/main 7844dde4) | |
+| #1383 | M2 + M3: reducer state and picks; shared `MenuSelect` | merged | 3db9cc2f |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | #1368 | done, gate green at 703c8ff5; PR open |
 | M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | #1383 | done; ported onto #1269's kept Review tabs (decision 5) |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | #1383 | done |
-| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | blocked on #1270 |
+| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | in progress (#1270 merged at f49111a6) |
 
 ## Decisions
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | tasks | Milestones by story (milestones.md rules 1–2) or by layer? | By layer, per plan and decision 2: M1 ships the P1 stories' (US1, US2) core decisions and tests under milestones.md rule 6, M2 their reducer behaviour, both unreachable from the UI until M4; no story's UI can land before #1270, so a per-story cut would put every milestone behind it. T027 (Polish, no code) left to the close unit | agent | plan.md#Milestones and sequencing; tasks.md header note |
 | 4 | M3 | Where does the core `Row` → `MenuSelectRow` mapping live, given T018 needs it before T021? | `ui/source_menu.rs` (`menu_rows`, `control`), added in M3 for the showcase poses; T021 (M4) wires the header through it rather than writing its own | agent | review B M3 F1; Principle VIII (one mapping for header and showcase) |
 | 5 | M2 rebase | How does M2 sit on #1269's kept Review tabs? | Main's structure kept: `source_menu` built in `fresh_view`; every `state.open` use is `state.tabs.shown_view{,_mut}()`; since a kept tab is re-shown rather than rebuilt, `opened()` closes the source list so data-model §8 (a view opens with the list closed) still holds. #1269's tests unchanged | agent | `opening_a_view_resets_the_control`; M2 rebase review |
+| 6 | M4 | The plan's header `[title + subtitle] [MenuSelect] … [Close]` predates #1270/#1269: main's header is the entry, the base and #1271's progress slot, and Close is the Review tab's ×. Where does the control go? | `[title + ellipsized base line (FillPortion 2)] [MenuSelect Fixed(SOURCE_CONTROL_WIDTH = 280)] [progress slot (FillPortion 1)]`; the Edge "Narrow window" Close is the tab's ×, outside the header, so at 900 px the control keeps its width and the title column gives way. The list's cap is `MenuSelect`'s own (never past the room below the trigger) | agent | `the_file_column_keeps_its_width_and_the_diff_takes_the_rest`; `ui/changes.rs::view` on f49111a6 |
 
 ## Review rounds
 

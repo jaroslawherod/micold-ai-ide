@@ -20,23 +20,23 @@ use micold_core::typeahead::{match_one, Query};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
-    committed_available, composer_in_drawer, composer_placed, diff_body, discard_prompt,
-    drawer_counts, drawer_groups, drawer_rows, file_comments, file_diff_available, file_reviews,
-    list_body, mark_control, pending_counts, picker_matches, pr_header, progress_label, review_bar,
-    review_of, reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody,
-    ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, PrSection, ReviewBarModel,
-    Source, Step, TreeKind, WholeFile, DEFAULT_ENTRY_NOTE, WHOLE_FILE_UNAVAILABLE,
+    self as changes, adjacent, base_line, browse_body, can_go_back, card_model, composer_in_drawer,
+    composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups, drawer_rows,
+    file_comments, file_diff_available, file_reviews, list_body, mark_control, pending_counts,
+    picker_matches, pr_header, progress_label, review_bar, review_of, reviews_progress,
+    selected_file, source_control_tooltip, source_menu_input, stop_message, tree_rows, whole_file,
+    BrowseBody, ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel,
+    Source, Step, TreeKind, WholeFile, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::{
     menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
     CardState, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay, ProgressBar,
-    PullRequestIndicator, PullRequestRow, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable,
-    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip,
-    TooltipPosition, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark,
-    VirtualRows, REVIEW_BAR_COMMENTS as COMMENTS,
+    PullRequestIndicator, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable, SideSheet,
+    StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip, TooltipPosition,
+    TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark, VirtualRows,
+    REVIEW_BAR_COMMENTS as COMMENTS,
 };
 use micold_core::review::drawer::{DrawerEvent, DrawerTab, START_HINT};
 use micold_core::review::marks::{FileReview, ReviewState};
@@ -51,12 +51,6 @@ pub const NOT_IN_DIFF: &str = "Not in the current diff";
 pub const PR_TOO_LARGE: &str = "This pull request is too large to show here";
 /// A pull request whose diff could not be read; pressing its row again retries.
 pub const PR_UNREAD: &str = "The pull request's diff could not be read; select it again to retry";
-/// The section's wording, decided in core with the source control's (feature 1272, R2).
-pub use micold_core::review::source_menu::{
-    POSSIBLY_STALE, PRS_EMPTY, PRS_LOADING, PRS_UNAVAILABLE, WORKING_TREE,
-};
-/// The tallest the list of pull requests grows before it scrolls.
-const PRS_MAX_HEIGHT: f32 = 220.0;
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
@@ -64,10 +58,17 @@ pub const ROW_HEIGHT: f32 = 36.0;
 
 /// The header's *n of m reviewed* slot at its widest: laid out the same width shown or empty, so
 /// the header's other controls never move with it (feature 1271, FR-009). In a narrow header it
-/// takes a third of the room the title leaves, and its bar, then its words, give way first.
+/// takes two fifths of the room the title and the source control leave (feature 1272), and its bar, then its words, give way first.
 pub const PROGRESS_SLOT_WIDTH: f32 = 260.0;
 /// The progress bar's width in that slot at its widest (research R9).
 pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
+
+/// The file column's width, whatever the window's (feature 1272, FR-008, R8): the diff takes the
+/// rest.
+pub const FILE_COLUMN_WIDTH: f32 = 260.0;
+/// The header's source control's width: room for `Files · #12345 · ` and some of a title, kept at
+/// every window width while the title column gives way first (Edge "Narrow window").
+pub const SOURCE_CONTROL_WIDTH: f32 = 280.0;
 
 /// The diff's scroll viewport, by name: a panel jump scrolls it (feature 946, FR-017). A
 /// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
@@ -101,16 +102,23 @@ pub fn view<'a>(
 
     // V2: the entry and the base (or why there is none). FR-009: **Review (n)** and **Send
     // review** moved to the bar; feature 1269 (FR-007, U13): the Review tab's × closes the review.
+    // Feature 1272 (Edge "Narrow window"): the base line gives way with an ellipsis before the
+    // source control does; the control's tooltip holds it whole (FR-009).
     let mut heading = column![Text::new(title, TypeRole::Title, r)].spacing(spacing::XS);
     if let Some(line) = base_line(view) {
-        heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
+        heading = heading.push(Ellipsized::<Message>::at_role_spaced(
+            line,
+            TypeRole::Body,
+            r.on_surface_variant,
+        ));
     }
     // Feature 1271: the rows' review states, judged once for the list and the header, whose
     // *n of m reviewed* slot sits beside the heading (FR-008, FR-009).
     let reviews = file_reviews(&state.changes, view, connected);
     let header = container(
         row![
-            container(heading).width(Length::FillPortion(2)),
+            container(heading).width(Length::FillPortion(3)),
+            source_control(state, view, r),
             progress_slot(reviews_progress(&reviews, connected), r),
         ]
         .spacing(spacing::MD)
@@ -128,16 +136,16 @@ pub fn view<'a>(
             ..Padding::ZERO
         })
     ]
-    .width(Length::FillPortion(5))
+    .width(Length::Fill)
     .height(Length::Fill);
     if view.drawer.state.open {
         diff_area = diff_area.push(comments_drawer(state, view, composer, r));
     }
-    // SC-004: the file list keeps its share of the old three columns (2 of 2 + 3 + 2), and the
-    // diff area takes the rest — the old diff and review column together.
+    // Feature 1272 (FR-008, R8): two columns, the file column at its fixed width and the diff area
+    // taking the rest, so a wider or narrower window changes only the diff's width.
     let body = row![
         container(list_pane(state, view, reviews, r))
-            .width(Length::FillPortion(2))
+            .width(Length::Fixed(FILE_COLUMN_WIDTH))
             .padding(Padding {
                 left: spacing::LG,
                 bottom: spacing::LG,
@@ -156,6 +164,32 @@ pub fn view<'a>(
         tab = tab.push(bar_of(bar, r));
     }
     tab.into()
+}
+
+/// The review's source control (feature 1272, FR-001, R8): the shown source as its label, the
+/// working tree with its kind chips, the pull requests and Files in its list, the base line in its
+/// tooltip. A press on a row or chip sends what the stop stands for; the keyboard walks the stops.
+fn source_control<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+    let enabled = state.changes.pr_enabled;
+    let now = super::sidebar::unix_now();
+    let send = |msg: Msg| Message::Changes(msg);
+    let select = crate::ui::source_menu::control(
+        &source_menu_input(view, enabled, now),
+        view.source_menu.open,
+        view.source_menu.highlight,
+        crate::ui::source_menu::Control {
+            on_toggle: send(Msg::SourceMenuToggled),
+            on_dismiss: send(Msg::SourceMenuDismissed),
+            on_pick: send(Msg::SourceMenuPicked),
+        },
+        move |stop| send(stop_message(stop)),
+        move |direction| send(Msg::SourceMenuMoved(direction)),
+        source_control_tooltip(view, enabled, now),
+        r,
+    );
+    container(select)
+        .width(Length::Fixed(SOURCE_CONTROL_WIDTH))
+        .into()
 }
 
 /// *n of m reviewed* and its bar (feature 1271, FR-008), in a slot whose width follows the header's
@@ -186,7 +220,7 @@ fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
         .max_width(PROGRESS_SLOT_WIDTH)
         .align_x(iced::alignment::Horizontal::Right);
     container(slot)
-        .width(Length::FillPortion(1))
+        .width(Length::FillPortion(2))
         .align_x(iced::alignment::Horizontal::Right)
         .into()
 }
@@ -389,49 +423,15 @@ fn drawer_row<'a>(
     .into()
 }
 
-/// The left pane: the two toggles (L1) over the file list or its empty state (L2, L3).
+/// The left pane (feature 1272, FR-003): the file list or its empty state (L2, L3), or, with
+/// Files on, the repository's tree. The source and the kinds are picked in the header's control.
 fn list_pane<'a>(
     state: &'a State,
     view: &'a OpenView,
     reviews: BTreeMap<RelPath, FileReview>,
     r: Roles,
 ) -> Element<'a, Message> {
-    let available = committed_available(view);
-    let toggles = row![
-        ToggleChip::new("Committed", Message::Changes(Msg::CommittedToggled), r)
-            .active(available && view.toggles.committed)
-            .disabled(!available),
-        ToggleChip::new("Uncommitted", Message::Changes(Msg::UncommittedToggled), r)
-            .active(view.toggles.uncommitted),
-        ToggleChip::new("Files", Message::Changes(Msg::FilesPaneToggled), r)
-            .active(view.files.shown),
-    ]
-    .spacing(spacing::SM)
-    .wrap()
-    .vertical_spacing(spacing::SM);
-    // The toggles shape the entry's own list, which a shown pull request replaces.
-    let mut pane = column![]
-        .spacing(spacing::MD)
-        .width(Length::Fill)
-        .height(Length::Fill);
-    if view.source == Source::Changes {
-        pane = pane.push(toggles);
-    } else {
-        // A shown pull request replaces the entry's list, but its files are browsed all the same.
-        pane = pane.push(row![ToggleChip::new(
-            "Files",
-            Message::Changes(Msg::FilesPaneToggled),
-            r
-        )
-        .active(view.files.shown)]);
-    }
-    if let Some(section) = pull_request_section(view, state.changes.pr_enabled, r) {
-        pane = pane.push(section);
-    }
-    if !available && view.source == Source::Changes {
-        pane = pane.push(Text::new(DEFAULT_ENTRY_NOTE, TypeRole::Caption, r).muted());
-    }
-
+    let pane = column![].width(Length::Fill).height(Length::Fill);
     if view.files.shown {
         return pane.push(files_pane(view, r)).into();
     }
@@ -606,79 +606,6 @@ fn browsed_pane<'a>(
         .spacing(spacing::SM)
         .height(Length::Fill)
         .into()
-}
-
-/// The pull requests of the worktree's branches, above the file list (features 775, 1003): the
-/// loading, unavailable and empty lines, or the list; absent per `section(..)`.
-fn pull_request_section<'a>(
-    view: &'a OpenView,
-    enabled: bool,
-    r: Roles,
-) -> Option<Element<'a, Message>> {
-    let line = |text: &'static str, muted: bool| {
-        let text = Text::new(text, TypeRole::Body, r);
-        let text = if muted { text.muted() } else { text };
-        column![Text::new("Pull requests", TypeRole::Section, r), text].spacing(spacing::XS)
-    };
-    let (prs, stale) = match section(view, enabled, super::sidebar::unix_now()) {
-        PrSection::Absent => return None,
-        PrSection::Loading => return Some(line(PRS_LOADING, true).into()),
-        PrSection::Unavailable => return Some(line(PRS_UNAVAILABLE, true).into()),
-        PrSection::Empty => return Some(line(PRS_EMPTY, false).into()),
-        PrSection::List { prs, stale } => (prs, stale),
-    };
-    let shown = match &view.source {
-        Source::Changes => None,
-        Source::PullRequest(pr) => Some(pr.number),
-    };
-    let choice = |content: Element<'a, Message>, chosen: bool, msg: Msg| {
-        Button::with_content(
-            content,
-            if chosen {
-                ButtonVariant::Outlined
-            } else {
-                ButtonVariant::Text
-            },
-            r,
-        )
-        .width(Length::Fill)
-        .on_press(Message::Changes(msg))
-    };
-    let mut section = column![
-        Text::new("Pull requests", TypeRole::Section, r),
-        choice(
-            Text::new(WORKING_TREE, TypeRole::Body, r).into(),
-            shown.is_none(),
-            Msg::SourceChosen(None),
-        ),
-    ]
-    .spacing(spacing::XS);
-    if stale {
-        section = section.push(Text::new(POSSIBLY_STALE, TypeRole::Caption, r).muted());
-    }
-    let mut rows = column![].spacing(spacing::XS);
-    for pr in prs {
-        let mut row = PullRequestRow::<Message>::new(
-            pr.number,
-            pr.title.as_str(),
-            crate::features::changes::pr_mark(pr.state),
-            &r,
-        )
-        .selected(false);
-        if let Some(mark) = crate::features::changes::check_mark(pr.checks) {
-            row = row.checks(mark);
-        }
-        rows = rows.push(choice(
-            Element::from(row),
-            shown == Some(pr.number),
-            Msg::SourceChosen(Some(pr.number)),
-        ));
-    }
-    section = section.push(
-        container(crate::ui::material::Scrollable::new(rows, r).height(Length::Shrink))
-            .max_height(PRS_MAX_HEIGHT),
-    );
-    Some(section.into())
 }
 
 /// One file (L2): its review state (feature 1271, FR-001), path, kind tag, content tag when not

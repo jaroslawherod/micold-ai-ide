@@ -293,12 +293,13 @@ fn the_open_drawer_covers_the_right_of_the_diff_area_down_to_the_bar() {
     let area = at(&records, REVIEW_DIFF_AREA, "the diff area");
     let drawer = at(&records, REVIEW_DRAWER, "the drawer");
     let bar = at(&records, REVIEW_BAR, "the bar");
-    // At this window the diff area is under twice the drawer's 360, so the drawer takes half.
+    // The drawer is 360 wide, or half the diff area when that is narrower. Since feature 1272's
+    // fixed file column the area at this window is just over 720, so the drawer takes its 360.
     let full = micold_core::tokens::anatomy::comments_drawer::WIDTH;
-    assert!(area.width < 2.0 * full, "the area is under 720: {area:?}");
+    let wanted = full.min(area.width / 2.0);
     assert!(
-        (drawer.width - area.width / 2.0).abs() <= TOLERANCE,
-        "the drawer is half the area: {drawer:?} over {area:?}"
+        (drawer.width - wanted).abs() <= TOLERANCE,
+        "the drawer is {wanted} wide: {drawer:?} over {area:?}"
     );
     assert!(
         (drawer.x + drawer.width - (area.x + area.width)).abs() <= TOLERANCE,

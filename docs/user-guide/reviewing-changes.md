@@ -37,6 +37,18 @@ is shown, the status words and the split buttons keep their place in the strip, 
 act on the terminal, which is not shown. When you close the last session of a worktree whose review
 you kept, its review is shown in the session's place.
 
+The view's header names the entry over its base line, and beside them holds the **source
+control**: a button that reads what the view shows, **Working tree** when it opens. Press it (or
+focus it and press `Enter` or `Space`) to open its list: **Working tree**, with its **Committed**
+and **Uncommitted** chips (see [Committed and uncommitted](#committed-and-uncommitted)), then the
+worktree's [pull requests](#pull-requests), then **Files** (see
+[Browsing the repository](#browsing-the-repository)). What is shown now is marked as chosen. Pick an
+option to show it; the list closes. The arrow keys move through the options and chips, `Enter` picks,
+and `Esc`, `Tab` or a click outside the list closes it without changing anything. Hover the control
+to read its whole label and the base line. Below the header, the file list (or the Files tree) has
+a fixed-width column to itself, and the diff takes the rest of the width: a wider window widens
+only the diff. In a narrow window the base line ends in `…` before the control gives way.
+
 The Review tab carries two marks:
 
 - a **badge** with the number of draft comments waiting to be sent (`1`…`99`, then `99+`); with
@@ -48,7 +60,7 @@ The Review tab carries two marks:
 The review is kept while you work elsewhere. Selecting a session (in the sidebar, with a session
 chord or the quick switcher), switching to another worktree or project, or opening the Overview or
 Settings puts the review aside without losing anything: the selected file, both scroll positions,
-revealed lines, the whole-file and **Committed**/**Uncommitted** toggles, the comment you are
+revealed lines, the whole-file toggle and the **Committed**/**Uncommitted** chips, the comment you are
 writing, picked lines, the comments drawer, the chosen pull request and a browsed file all stay as
 you left them. Each location keeps its own review. Press the **Review** tab, **Changes** or
 **Review changes** to show it again exactly as left; while it is shown, pressing **Changes** or
@@ -83,8 +95,8 @@ While the list is read, the view says **Reading changes…**. With nothing to li
 ## Pull requests
 
 With **Show pull request status on worktrees** checked in [Settings →
-GitHub](settings.md#show-pull-request-status-on-worktrees), the list is preceded by a **Pull
-requests** section: every pull request this worktree produced, open, draft, merged and closed,
+GitHub](settings.md#show-pull-request-status-on-worktrees), the source control's list holds, under
+a **Pull requests** heading, every pull request this worktree produced, open, draft, merged and closed,
 newest first across all of them. Each row has the pull request's state mark, its check mark, its
 `#number` and its title. The marks are the ones the
 sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
@@ -101,33 +113,37 @@ was only checked out in this worktree but created elsewhere (in another worktree
 checkout, or on GitHub). Each worktree lists only its own branches, never another worktree's. When
 the session service runs on another computer, only the current branch is listed.
 
-The section is the same for a worktree with no session as for one with sessions, and it shows
+The list is the same for a worktree with no session as for one with sessions, and it shows
 only pull requests of this project's own repository. A pull request opened from a fork is not
 listed.
 
-The working-tree changes below it never wait for the section: they appear first, and the section
-joins when GitHub has answered. Until the first read finishes the section says **Reading pull
-requests…**. A worktree none of whose branches has a pull request says **No pull requests from this
+The working-tree changes never wait for the pull requests: they appear first, and the pull
+requests join the control's list when GitHub has answered. Until the first read finishes the list
+says **Reading pull requests…** under the heading. A worktree none of whose branches has a pull request says **No pull requests from this
 worktree yet**. When GitHub cannot be reached and no list has been read (no `gh`, not signed in, no
 GitHub remote, offline), it shows one muted line, **Pull requests can't be shown for this
-worktree**, and raises no error. The section is absent, with no line at all, when the switch is off
-and when the entry is the project root. While GitHub cannot be reached after a list was read, the
-last list and your selection stay. A long list scrolls inside the section.
+worktree**, and raises no error. The list has no pull-request part at all, neither heading nor line,
+when the switch is off and when the entry is the project root. While GitHub cannot be reached after
+a list was read, the last list and your selection stay; once that list is older than the sidebar's
+stale threshold, **Possibly stale** shows under the heading. A long list scrolls inside the
+control's list, which never grows past the room below the header.
 
 ### Reading a pull request's diff
 
-Click a pull request row to read its diff. The file list, the diff and the base line then show
-the pull request: **Pull request #N: base ... head**, as GitHub computes it, where *head* is that
+Pick a pull request in the source control to read its diff: two actions from the working tree,
+open the control and pick. The control then reads `#N · <title>`; a long title ends in `…`, while
+the number stays whole and the full title is in the tooltip. The file list, the diff and the base
+line show the pull request: **Pull request #N: base ... head**, as GitHub computes it, where *head* is that
 pull request's own branch. Select a file as
 usual; comments are kept per file and line as for any other diff. While the pull request is
 chosen, the working-tree changes are not read, and nothing reads them behind your back.
 
 Above the diff, a header names the pull request you are reading: its state and checks, its
 number and title, and the base line. The **previous** and **next** buttons beside it step through
-the list in the order it is shown; each is greyed out at its end of the list. Pressing a row or
-a button while a diff is still loading shows the last one you chose, never an earlier one's diff.
+the list in the order it is shown, and the control's label follows; each is greyed out at its end
+of the list. Picking a pull request or pressing a button while a diff is still loading shows the last one you chose, never an earlier one's diff.
 
-Click the **Working tree** row to go back. Each entry remembers its own choice while the window is
+Pick **Working tree** to go back, to the file and scroll position you left. Each entry remembers its own choice while the window is
 open, so switching to another worktree and back returns to the pull request you were reading.
 
 A pull request whose branch was merged and deleted still shows its diff: GitHub keeps it. If the
@@ -135,7 +151,7 @@ pull request is no longer listed after a refresh, the view returns to the workin
 
 GitHub will not diff a pull request above 300 files or 20 000 changed lines. The pane then says
 the pull request is too large to show here and offers **Open on GitHub**. A read that fails for
-another reason says so in the pane, with no notice; click the row again to retry.
+another reason says so in the pane, with no notice; pick it again to retry.
 
 ## Reading a diff
 
@@ -241,8 +257,9 @@ to read and show the whole diff. The view remembers the choice for that file unt
 
 ### Browsing the repository
 
-Press **Files** beside the Committed and Uncommitted toggles to list every file of the worktree
-instead of the changed ones: tracked and untracked files, but not ignored ones. Open a folder to see
+Pick **Files** in the source control to list every file of the worktree instead of the changed
+ones; the control then reads `Files · Working tree`, and picking **Files** again returns to the
+changed files. Files lists tracked and untracked files, but not ignored ones. Open a folder to see
 its files, then press a file to read it in the right pane, with line numbers and syntax colouring.
 Type in **Open file by path** to narrow the list and pick a match; a path you type that is ignored
 by git but exists in the worktree opens too.
@@ -262,7 +279,8 @@ repository's file list, which the view reads when it shows a diff; with a pull r
 name the files of its head commit. Following a name to a definition inside a file is not available.
 
 With a pull request shown, **Files** stays available and lists the files of the pull request's head
-commit, including the ones it does not change; untracked and ignored files of the worktree are never
+commit (the control reads `Files · #N · <title>`); picking a pull request while Files is on keeps it
+on, including the ones it does not change; untracked and ignored files of the worktree are never
 listed. A file you open is the pull request's version, read from your repository when it has the
 commit and from GitHub otherwise. When GitHub lists only part of a very large tree, a note says so;
 a path you type still opens. Choosing another pull request, or the working tree, reads the file you
@@ -316,11 +334,11 @@ without one only uncommitted changes are listed, so a committed file leaves the 
 starts unreviewed: its change is the one under its new name.
 
 The view's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
-the list shows, so it follows the **Committed** and **Uncommitted** toggles, and *n* how many of
+the list shows, so it follows the **Committed** and **Uncommitted** chips, and *n* how many of
 them are reviewed. With no files listed, or while marks are unavailable, the header shows neither,
 and nothing else in it moves.
 
-A mark covers the file's whole change, committed and uncommitted together, whatever the toggles
+A mark covers the file's whole change, committed and uncommitted together, whatever the chips
 show. **Mark reviewed** is unavailable, with a tooltip saying why, when:
 
 - **Committed** or **Uncommitted** is off and the file has changes of the hidden kind: turn both
@@ -688,16 +706,21 @@ When there is no such point, the line says why instead, and only uncommitted cha
 
 ## Committed and uncommitted
 
-Two toggles choose what is listed, and both are on when the view opens:
+Two chips inside the source control's **Working tree** option choose what is listed, and both are
+on when the view opens:
 
 - **Committed** — the commits on the worktree's branch since the base;
 - **Uncommitted** — what is in the worktree's files but not committed yet, including files git
   does not track.
 
-Turn one off to see only the other kind of change. They reset each time the view opens.
+Turn one off to see only the other kind of change: the list stays open, so you can turn the other
+back on, and the closed control reads **Working tree · uncommitted** (or **· committed**, or **·
+nothing shown** with both off). Pressing a chip while a pull request is shown returns to the working
+tree with the new kinds. They reset each time the view opens.
 
 ## The Default entry
 
 The project root has no branch of its own to compare with the default branch, so for the
-**Default** entry the **Committed** toggle is unavailable and a note beside it says so: only the
-uncommitted changes in the project root are listed.
+**Default** entry the **Committed** chip in the source control's **Working tree** option is
+unavailable, and a note under the chips says so: only the uncommitted changes in the project root are
+listed. The control reads **Working tree**, and its list has no pull requests.
