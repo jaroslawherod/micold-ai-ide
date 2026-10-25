@@ -2655,7 +2655,7 @@ mod desktop_notifications_wire_tests {
 
 #[cfg(test)]
 mod setup_wire_tests {
-    //! Feature 1289, contracts C1–C2 (version 69): the setup messages travel as written (A15).
+    //! Feature 1289, contracts C1–C2 (version 70): the setup messages travel as written (A15).
 
     use super::*;
     use crate::protocol::version::PROTOCOL_VERSION;
@@ -2748,7 +2748,7 @@ mod setup_wire_tests {
     }
 
     #[test]
-    fn the_setup_messages_bump_the_protocol_to_69() {
-        assert_eq!(PROTOCOL_VERSION, 69);
+    fn the_setup_messages_bump_the_protocol_to_70() {
+        assert_eq!(PROTOCOL_VERSION, 70);
     }
 }
