@@ -333,6 +333,8 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
     Settings {
         theme: app.core.settings.theme_pref,
         reduce_motion: app.core.settings.reduce_motion,
+        // Not on the Settings page until #1275 M5: keep what is stored.
+        suggestion_chips: stored.suggestion_chips,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
@@ -403,12 +405,14 @@ fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Op
 /// The diff layout is never set: the form does not hold it (feature 482, which the service owns).
 /// Nor are the plan-usage settings: the service owns them, and they reach it as `SettingsSet`
 /// (feature 490, W3).
+/// Nor is **Suggestion chips** (#1275): the form does not hold it until M5.
 /// The destructuring is there so that a field added to `Settings` fails to compile here until a save
 /// says what it does with it.
 fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
     let Settings {
         theme: _,
         reduce_motion: _,
+        suggestion_chips: _,
         scrollback_lines: _,
         env_include_enabled: _,
         env_include_script_path: _,
@@ -1209,6 +1213,7 @@ mod tests {
             },
             long_task_threshold_secs: 120,
             reduce_motion: false,
+            suggestion_chips: false,
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,
