@@ -19,8 +19,8 @@ once per milestone that changes the image, and once at the end, with results rec
 | A3 | `scripts/tests/mise-toolchain.test.sh` | `mise.toml` declares rust with `rustfmt`, `clippy`, `rust-analyzer`, and `uv` (FR-008) |
 | A4 | `cargo test -p micold-daemon setup_turn` (in `mise run gate`) | S1–S3: one shell at a time on a sandbox daemon, order kept, stop/delete/daemon stop of a waiting run, stopping the holder lets the next waiting run spawn, host daemon not serialised |
 | A5 | `mise run test-sandbox` → `sandbox_real_basic_image` | B1, B2 in the built image: `mise --version` = pinned version, `cc`/`c++`/`make`/`pkg-config`/`python3` present, a C file compiles and links, `pkg-config --libs x11` = `-lX11`, the six `.pc` files found; the same as uid 10001 with `--read-only` and a writable `/data/home` (FR-001, FR-003, FR-004, FR-006, FR-007, FR-010) |
-| A6 | `mise run test-sandbox` → `sandbox_real_toolchain_path` | the two home folders exist in a new sandbox before any setup (FR-011, AS3.1) |
-| A7 | `mise run test-sandbox` → `sandbox_real_mise_setup` (new, needs network) | Story 1 on a fixture project (rust pinned, minimal profile; a `build.rs` that runs `cc` on a C file and links it, no crates.io dependency): setup `mise trust && mise install` succeeds; `cargo build`/`cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; after a container restart still found; a second worktree's setup ends in under 60 s and its output shows no download (AS1.1–AS1.5, FR-005, SC-003) |
+| A6 | `mise run test-sandbox` → `sandbox_real_toolchain_path` | the two home folders exist in a new sandbox before any setup (FR-011, AS3.1); a `mise` in `~/.local/bin` wins over `/usr/local/bin/mise` on `PATH` (edge case) |
+| A7 | `mise run test-sandbox` → `sandbox_real_mise_setup` (new, needs network) | Story 1 on a fixture project (rust pinned, minimal profile; a `build.rs` that runs `cc` on a C file and links it, no crates.io dependency): setup `mise trust && mise install` succeeds; `cargo build`/`cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; after a container restart still found; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` sets up; a setup stopped mid-download is followed by a rerun that succeeds (AS1.1–AS1.5, FR-005, SC-003; edge cases "Empty project", "Network failure during setup") |
 
 ## Part B — by hand
 
@@ -38,7 +38,7 @@ once per milestone that changes the image, and once at the end, with results rec
 **B2. Concurrent setup (Principle II, contract S2).** On a fresh daemon, create two worktrees of
 this repository within a few seconds. Expected: the second's output starts with
 `Waiting for another setup on this daemon to finish…`, both end **Set up**, and
-`rustup component list --installed` lists `rustfmt`, `clippy` and `rust-analyzer`. Press
+`rustup component list --installed` lists `rustfmt`, `clippy` and `rust-analyzer`. Run `cargo build` in a session of each worktree at the same time: both succeed (edge case "Several sessions on one daemon"; cargo's own locks guard the shared `~/.cargo` registry and each worktree has its own `target`). Press
 **Stop setup** on a third, waiting run: it ends **Stopped** at once.
 
 **B3. The user guide's own-image example (Story 4, FR-012, SC-005, AS4 second half).** First read

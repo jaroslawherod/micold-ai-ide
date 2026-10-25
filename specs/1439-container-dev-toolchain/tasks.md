@@ -71,7 +71,7 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 ### Tests (write first)
 
 - [ ] T011 [P] [US3] Add cases to `scripts/tests/basic-entrypoint.test.sh` (contract B5), each on a temp home: both folders created; shims folder follows `MISE_DATA_DIR`, else `XDG_DATA_HOME`, else `$HOME/.local/share/mise/shims` (empty counts as unset); a file already in each folder is unchanged; an unwritable home prints one line on stderr and the entrypoint carries on to its next step. The existing `MICOLD_HOME=/home/jaro` case keeps passing.
-- [ ] T012 [P] [US3] Extend `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`: in a new sandbox, before any setup, `test -d` succeeds for `~/.local/bin` and the shims folder (quickstart A6).
+- [ ] T012 [P] [US3] Extend `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`: in a new sandbox, before any setup, `test -d` succeeds for `~/.local/bin` and the shims folder (quickstart A6); and with an executable `mise` stub placed in `~/.local/bin`, a session's `command -v mise` resolves to the stub, not `/usr/local/bin/mise` (edge case "A `mise` already in `~/.local/bin`": #1289's `PATH` order keeps the user's copy first).
 
 ### Implementation
 
@@ -119,7 +119,7 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 **Goal**: setup `mise trust && mise install` installs a fixture project's Rust toolchain into the sandbox home; its C build script compiles; restart and a second worktree reuse it (AS1.2, AS1.3, AS1.5, FR-005, SC-003).
 
 - [ ] T026 [P] [US1] Create the fixture `crates/micold-daemon/tests/fixtures/mise-c-crate/` (`mise.toml` pinning rust with the minimal profile, `Cargo.toml` with no crates.io dependency, `build.rs` that runs `cc` on `hello.c` and links it, `src/main.rs` and one test calling the C function).
-- [ ] T027 [US1] Create `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support`) per quickstart A7: setup succeeds as the non-root session user, writing nothing outside the sandbox home and the worktree (FR-010); `cargo build` and `cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; still found after a container restart; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` runs the same setup command to success (edge case "Empty project"). Green after T005–T013 (needs the published or `:dev` image).
+- [ ] T027 [US1] Create `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support`) per quickstart A7: setup succeeds as the non-root session user, writing nothing outside the sandbox home and the worktree (FR-010); `cargo build` and `cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; still found after a container restart; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` runs the same setup command to success (edge case "Empty project"); a setup stopped with **Stop setup** while the toolchain downloads leaves a home in which the next setup run of the same worktree succeeds (edge case "Network failure during setup": the failure report itself is #1289's, this proves a partial install does not break the rerun). Green after T005–T013 (needs the published or `:dev` image).
 
 ---
 
@@ -139,10 +139,16 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 ---
 
-## Phase 9: Polish (by hand, recorded; no code)
+## Phase 9: User Story 2 — this repository's gate in a container, by hand (Priority: P1; in M4)
+
+**Goal**: US2 AS1–AS4, FR-009, SC-001, SC-002 proved on `micold-basic:dev` built with M1–M2 (quickstart B1), and concurrent setups of this repository (B2) and a Kubernetes pod (B6) checked. Results recorded in the ledger.
 
 - [ ] T032 Quickstart B1 on `micold-basic:dev` (or the pinned image after D7's pin PR): setup ends **Set up**, `command -v cargo rust-analyzer uv python3 gh` prints five paths, `mise run gate` exits 0, the `LSP` tool answers a `hover`; record wall times. A tool the gate needs that is missing goes into `mise.toml` (user-space) or escalates (system tool outside FR-003/FR-007), plan D5.
-- [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
+- [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, `cargo build` in both sessions at once succeeds (edge case "Several sessions on one daemon"), Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
+---
+
+## Phase 10: Publish and pin (follow-up PR; close unit)
+
 - [ ] T034 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
 
 ---
@@ -152,8 +158,8 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 - T001 → T002 → everything else. #1435 and #1289 merged before T001.
 - Phase 2 (T003–T010) and Phase 3 (T011–T015) form M1; T010 runs last in M1 (hash covers the entrypoint).
 - Phase 4 (M2) needs M1's Containerfile. Phase 5 (M3) needs only T001 (daemon code), so M3 may run before M2 if FR-007 is still undecided.
-- Phases 6–8 (M4) need M1 (tools in the image) and M3 (concurrent setups are safe). T027 runs against `:dev` built with M1–M2.
-- Phase 9 needs M1–M4 merged; T034 after the last `packaging/basic/` change.
+- Phases 6–9 (M4) need M1 (tools in the image), M2 (the gate's dev libraries, for T032) and M3 (concurrent setups are safe). T027, T032 and T033 run against `:dev` built with M1–M2; T032 runs after T029 (the components it checks).
+- Phase 10 (T034) after M4 merges, the last `packaging/basic/` change being M2's.
 
 ### Parallel opportunities
 
@@ -161,7 +167,7 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 ## Implementation Strategy
 
-M1 first: once merged, a container on the branch's image has mise, a C toolchain and python3 and true `PATH` folders. Then M2 (FR-007, swappable for option B), M3 (setup turn), M4 (end-to-end proof, this repository, user guide). Quickstart Part B and the publish-and-pin follow-up go to the close unit.
+M1 first: once merged, a container on the branch's image has mise, a C toolchain and python3 and true `PATH` folders. Then M2 (FR-007, swappable for option B), M3 (setup turn), M4 (end-to-end proof, this repository and its gate in a container, user guide). Only the publish-and-pin follow-up (T034) goes to the close unit.
 
 ## Milestones
 
@@ -171,7 +177,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T001–T015
 - **Deliverable**: a container started from the basic image built from `main` has the pinned `mise`, `cc`/`c++`/`make`/`pkg-config` and `python3` before any setup, as any uid and with `--read-only`, and the sandbox home's `~/.local/bin` and mise shims folder exist before the first session.
-- **Satisfies**: US1 AS1, AS6; US3 AS1–AS2; FR-001, FR-002, FR-003 (toolchain), FR-004, FR-006, FR-011, FR-013; edge case "checksum mismatch fails the build"
+- **Satisfies**: US1 AS1, AS6; US3 AS1–AS2; FR-001, FR-002, FR-003 (toolchain), FR-004, FR-006, FR-011, FR-013; edge cases "checksum mismatch fails the build", "A `mise` already in `~/.local/bin`"
 - **Verify**: `scripts/tests/basic-image-hash.test.sh`; `scripts/tests/basic-entrypoint.test.sh`; `mise run image && mise run test-sandbox` (`sandbox_real_basic_image`, `sandbox_real_toolchain_path`); quickstart B4, B5 recorded in the ledger
 - **Depends on**: — (#1435, #1289 merged)
 - **Tier**: full
@@ -196,11 +202,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M4 — A mise project builds end to end; this repository and the user guide
 
-- **Tasks**: T026–T031
-- **Deliverable**: setup `mise trust && mise install` builds a fixture Rust crate with C code in a container sandbox and reuses the toolchain on restart and in a second worktree; this repository's `mise.toml` provides the gate's components; the sandbox page documents building in the basic image with an own-image example that builds.
-- **Satisfies**: US1 AS2, AS3, AS5; US2 (setup command, components); US4 AS1–AS2; FR-005, FR-008, FR-009 (documentation), FR-010, FR-012; SC-003, SC-005
-- **Verify**: `scripts/tests/mise-toolchain.test.sh`; `mise run test-sandbox` (`sandbox_real_mise_setup`); quickstart B3 recorded
-- **Depends on**: M1, M3 (M2 for this repository's gate in B1)
+- **Tasks**: T026–T033
+- **Deliverable**: setup `mise trust && mise install` builds a fixture Rust crate with C code in a container sandbox and reuses the toolchain on restart and in a second worktree; this repository's documented setup command makes `mise run gate` exit 0 in a container session on the basic image built from `main` (`:dev`), with `cargo`, `rust-analyzer`, `uv`, `python3`, `gh` found; the sandbox page documents building in the basic image with an own-image example that builds.
+- **Satisfies**: US1 AS2, AS3, AS5; US2 AS1–AS4; US4 AS1–AS2; FR-005, FR-008, FR-009, FR-010, FR-012; SC-001, SC-002, SC-003, SC-005; edge cases "Empty project", "Network failure during setup", "Several sessions on one daemon", "Kubernetes daemons"
+- **Verify**: `scripts/tests/mise-toolchain.test.sh`; `mise run test-sandbox` (`sandbox_real_mise_setup`); quickstart B1 (setup ends Set up, five tools resolve, `mise run gate` exits 0, `LSP` answers), B2, B3, B6 recorded in the ledger
+- **Depends on**: M1, M2 (the gate links the six dev libraries), M3
 - **Tier**: full
 
-Phase 9 (T032–T034) changes no code but the pin PR: quickstart B1, B2, B6 and the publish-and-pin follow-up are left to the close unit (US2 AS1–AS4, FR-009, SC-001, SC-002, SC-004).
+Phase 10 (T034, publish and pin per D7) is the only task outside the milestones: the close unit opens the pin PR after M4 merges. SC-004 is measured in M1 (T015) and M2 (T019).

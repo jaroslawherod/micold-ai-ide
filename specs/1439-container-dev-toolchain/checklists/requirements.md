@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,10 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker (FR-007: whether the default image carries this repository's
-  GUI development libraries, or they come from an own image / dev variant) is left for the clarify
-  unit.
+- The one `[NEEDS CLARIFICATION]` marker (FR-007: whether the default image carries this
+  repository's GUI development libraries, or they come from an own image / dev variant) was resolved
+  provisionally as option A (the basic image carries the six CI packages; ledger D3), awaiting the
+  user's decision. Under option B or C only FR-007 and milestone M2 change.
 - The feature is about the contents of a container image, so naming the tools the image must carry
   (`mise`, a C toolchain, `pkg-config`, `python3`) is the requirement itself, not an implementation
   choice. How they are added (packages, download step) is left to the plan.

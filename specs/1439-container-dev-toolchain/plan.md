@@ -206,6 +206,9 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | FR-012 | D6 | docs CI (links); quickstart B3 (example builds) |
 | FR-013 | D6 | shell A1 (README names the pinned version) |
 | Edge: concurrent setup | D4; [setup-turn.md](contracts/setup-turn.md) | daemon tests A4; quickstart B2 |
+| Edge: network failure during setup | #1289 reports the failure; mise/rustup resume a partial install | real-runtime A7 (a setup stopped mid-download, then a rerun succeeds) |
+| Edge: several sessions on one daemon | read-only use of the shared toolchain; cargo's file locks guard `~/.cargo`, each worktree has its own `target` | quickstart B2 (`cargo build` in two sessions at once) |
+| Edge: a `mise` already in `~/.local/bin` | #1289's `PATH` order | real-runtime A6 (a stub in `~/.local/bin` wins) |
 | SC-001 | D5, D7 | quickstart B1 (after the documented setup command ends Set up, `mise run gate` exits 0 with no manual install step) |
 | SC-002 | D1, D5 | quickstart B1 (`command -v cargo rust-analyzer uv python3 gh` prints five paths in each session opened) |
 | SC-003 | D4 | real-runtime A7 (< 60 s, no download) |
