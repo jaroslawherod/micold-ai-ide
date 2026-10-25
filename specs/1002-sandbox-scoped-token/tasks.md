@@ -564,3 +564,9 @@ Verdict `FAIL` (`tdd/verification.md`, audited at 8b2d4b38): the feature is not 
 - [ ] T063 (follow-up, ledger *Follow-ups not done*; CI runs the test through `cargo test --workspace`) Finding 7: make the FR-014 container test run under `mise run test-core` (enable `kube-fake` for it or move it). Done when `cargo test -p micold-core --all-targets -- a_container_start_up` reports 1 passed.
 - [x] T064 Finding 8: make the FR-014 environment check use the environment the client actually builds for a container start, without `std::env::set_var`. Done when a pass-through of `GH_TOKEN` added to the client's container env fails the test.
 - [x] T065 (all but two parts: the grant test stays one sequence and the `GIT_CREDENTIAL_ROOT` pin stays, ledger *Declined review findings*) Findings 9-13 (MED/LOW): assert git's refusal reason in `scoped_git_credential.rs:468`; split `git_credential_grant.rs:196`; drop the duplicate string pin `mod.rs:549` and the literal-equals-constant tests (`mod.rs:556`, `helper.rs:142`); remove the silent `if let Ok` and the no-op calls (`sandbox_credentials.rs`, `schedule.rs:698`, `scoped_git_credential.rs:411`). Done when `mise run gate` is green.
+
+## Phase 11: Bugfix #1438 (BUG-1438)
+
+- [x] T066 [US2] Test: `container_git_edits` (`crates/micold-daemon/src/supervisor.rs`) gives a container session `GIT_CONFIG_COUNT`, a helper given as an absolute path and `GIT_CONFIG_GLOBAL` for the identity; nothing outside a container or, for the identity, without the shared copy. Done when `cargo test -p micold-daemon --lib container_git` is green and red with `container_git_edits_here` removed from `env_hygiene`.
+- [x] T067 [US2] Apply the edits at every session spawn through `env_hygiene`, shell-quote the helper path, log the variable names once per spawn. Done when T066 is green.
+- [x] T068 Record the `HOME` question as a follow-up (BUG-1438, #1434). Done when `bugs/BUG-1438.md` has the Follow-up section.

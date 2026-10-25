@@ -279,7 +279,76 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
     #[cfg(windows)]
     edits.extend(prefer_process_path(target));
     edits.extend(strip_inherited_terminal_identity(target));
+    edits.extend(container_git_edits_here());
     edits
+}
+
+/// [`container_git_edits`] for this process: its own data directory variable, executable and
+/// state directory. Logs once per spawn which variables a container session was given (names
+/// only, never values).
+fn container_git_edits_here() -> Vec<EnvEdit> {
+    let data_dir = std::env::var(micold_core::paths::DATA_DIR_ENV).ok();
+    let exe = std::env::current_exe().ok();
+    let identity_exists = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
+        .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
+        .is_file();
+    let edits = container_git_edits(data_dir.as_deref(), exe.as_deref(), identity_exists);
+    if !edits.is_empty() {
+        let names: Vec<String> = edits
+            .iter()
+            .filter_map(|e| match e {
+                EnvEdit::Set(key, _) => Some(key.to_string_lossy().into_owned()),
+                EnvEdit::Remove(_) => None,
+            })
+            .collect();
+        tracing::info!(variables = %names.join(","), "container session: git credential env applied");
+    }
+    edits
+}
+
+/// The git environment a session in a container needs (#1438, specs/1002 FR-004, FR-007).
+///
+/// sshd builds each login's environment afresh, so the `-e` values set at `create` reach only the
+/// entrypoint's daemon, never the daemon the client starts over SSH or its sessions. Without them
+/// git has no credential helper, no HTTPS rewrite and no identity. The helper is this daemon's own
+/// absolute path (it is not on `PATH`, and a build path would go stale); the identity is the
+/// sanitized copy, present only when *Git configuration* is shared. Empty outside a container.
+pub(crate) fn container_git_edits(
+    data_dir: Option<&str>,
+    exe: Option<&std::path::Path>,
+    identity_exists: bool,
+) -> Vec<EnvEdit> {
+    if data_dir != Some(micold_core::ssh::argv::CONTAINER_DATA_DIR) {
+        return Vec::new();
+    }
+    let mut edits = Vec::new();
+    if let Some(exe) = exe.and_then(std::path::Path::to_str) {
+        let helper = shell_word(exe);
+        edits.extend(
+            micold_core::scoped_credential::git_env_with_helper(
+                micold_core::scoped_credential::GITHUB_BASE,
+                &helper,
+            )
+            .into_iter()
+            .map(|(k, v)| EnvEdit::Set(k.into(), v.into())),
+        );
+    }
+    if identity_exists {
+        let copy = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
+            .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE);
+        edits.push(EnvEdit::Set("GIT_CONFIG_GLOBAL".into(), copy.into()));
+    }
+    edits
+}
+
+/// `word` as one shell word: unchanged when it holds only safe characters, else single-quoted.
+fn shell_word(word: &str) -> String {
+    let safe = |c: char| c.is_ascii_alphanumeric() || "/._-+=:@%,".contains(c);
+    if !word.is_empty() && word.chars().all(safe) {
+        word.to_string()
+    } else {
+        format!("'{}'", word.replace('\'', r"'\''"))
+    }
 }
 
 /// Apply [`env_hygiene`] to `target`.
@@ -800,6 +869,61 @@ impl Dimensions for TermSizeShim {
     }
     fn columns(&self) -> usize {
         self.cols
+    }
+}
+
+#[cfg(test)]
+mod container_git_tests {
+    use super::*;
+    use std::path::Path;
+
+    const DATA: &str = micold_core::ssh::argv::CONTAINER_DATA_DIR;
+    const EXE: &str = "/home/node/.micold/remote/0.18.0-x/micold-daemon";
+
+    fn set(edits: &[EnvEdit]) -> std::collections::BTreeMap<String, String> {
+        edits
+            .iter()
+            .filter_map(|e| match e {
+                EnvEdit::Set(k, v) => Some((
+                    k.to_string_lossy().into_owned(),
+                    v.to_string_lossy().into_owned(),
+                )),
+                EnvEdit::Remove(_) => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_container_session_gets_the_git_env_with_an_absolute_helper_and_the_identity() {
+        let env = set(&container_git_edits(Some(DATA), Some(Path::new(EXE)), true));
+        assert_eq!(env["GIT_CONFIG_COUNT"], "5");
+        assert_eq!(env["GIT_CONFIG_VALUE_0"], "");
+        assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
+        assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
+        assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
+    }
+
+    #[test]
+    fn no_shared_git_config_means_no_identity_source() {
+        let env = set(&container_git_edits(
+            Some(DATA),
+            Some(Path::new(EXE)),
+            false,
+        ));
+        assert!(env.contains_key("GIT_CONFIG_COUNT"));
+        assert!(!env.contains_key("GIT_CONFIG_GLOBAL"));
+    }
+
+    #[test]
+    fn outside_a_container_nothing_is_added() {
+        assert!(container_git_edits(None, Some(Path::new(EXE)), true).is_empty());
+        assert!(container_git_edits(Some("/x"), Some(Path::new(EXE)), true).is_empty());
+    }
+
+    #[test]
+    fn a_helper_path_with_a_space_is_one_shell_word() {
+        assert_eq!(shell_word("/a b/it's"), r"'/a b/it'\''s'");
+        assert_eq!(shell_word(EXE), EXE);
     }
 }
 
