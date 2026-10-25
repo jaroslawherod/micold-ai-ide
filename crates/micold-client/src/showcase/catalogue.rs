@@ -1322,14 +1322,16 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/menu.rs",
         component: "MenuOverlay",
-        // `Anchor::TopEnd` — a trigger-attached popover hangs below the app bar.
-        variants: &["TopEnd"],
+        // `Anchor::TopEnd` — a trigger-attached popover hangs below the app bar. `Anchor::Below` —
+        // the project switcher hangs from its segment's edge and stops short of the window's
+        // bottom edge (feature 1127, R8).
+        variants: &["TopEnd", "Below"],
         density: &[],
         posed: &[
             "open, anchored to the window's top-right — it hangs below the app bar in the \
 application, so in this page it opens away from the trigger",
-            "the project switcher's list: the same panel, with an active row, a running count, \
-unread counts and an unavailable row",
+            "the project switcher's list: the same panel hung from the project segment's edge, \
+with an active row, a running count, unread counts and an unavailable row",
             "an item keyboard-highlighted (the card menu's Up and Down): the focus state layer and \
 ring on one entry, the panel the same size",
         ],

@@ -122,11 +122,16 @@ pub fn surfaces<'a>(
     }
 
     // The project switcher's list — the same `MenuOverlay` above, carrying the switcher's rows
-    // instead of the overflow menu's. Posed under the same entry for that reason.
+    // instead of the overflow menu's. Posed under the same entry for that reason, and hung as the
+    // application hangs it: from the project segment's leading edge under the bar, stopping short
+    // of the window's bottom edge (`Anchor::Below`; feature 1127, R8).
     if open == Some(Floating::ProjectSwitcher) {
+        let edge = anatomy::app_bar::PADDING + anatomy::app_bar::MARK + anatomy::app_bar::GAP;
         out.push(
             material::MenuOverlay::new(project_rows(roles), Message::Dismissed, roles)
                 .open(true)
+                .hung_from(Some(iced::Point::new(edge, anatomy::app_bar::BOTTOM_EDGE)))
+                .short_of_bottom()
                 .into(),
         );
     }
