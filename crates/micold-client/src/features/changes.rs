@@ -4690,6 +4690,7 @@ mod tests {
                 project: project(),
                 worktree_dir: "w".into(),
                 comments: Vec::new(),
+                marks: Vec::new(),
                 sending: false,
             },
         );
@@ -4763,6 +4764,7 @@ mod tests {
                 project: project(),
                 worktree_dir: "w".into(),
                 comments: Vec::new(),
+                marks: Vec::new(),
                 sending: true,
             },
         );

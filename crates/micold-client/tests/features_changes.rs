@@ -4071,6 +4071,7 @@ fn closing_the_review_tab_shows_the_session_and_starts_fresh_next_time() {
         worktree_dir: "feat-a".into(),
         comments: vec![comment("a.rs", Side::New, 1, 1, CommentState::Draft)],
         sending: false,
+        marks: Vec::new(),
     });
     app.changes.remembered.insert((project(), worktree()), 7);
     let (reviews, remembered) = (app.changes.reviews.clone(), app.changes.remembered.clone());
