@@ -80,6 +80,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 (scoped, sonnet, headless) | 2 | 9505ca1c084428ed4c4d85434218a2d50d5f49a1:5358a2b738b38a662427bc2c18fe3fb4cc6b93d9 | CLEAN (fix diff of r1; re-run with JSON output: 4 turns) |
 | Review B M3 (conformance, sonnet, headless) | 1 | 9505ca1c084428ed4c4d85434218a2d50d5f49a1:5358a2b738b38a662427bc2c18fe3fb4cc6b93d9 | CLEAN: 2 MINOR — F1 fixed, prose only (cycle-log names the third `review_send` test, not run red); F2 recorded as D24 |
 | Visual pass M3 (in-process tiny-skia, 1280×800, both schemes) | 1 | — | 1 finding fixed: "No review comments yet" said twice in an empty panel. Record: `visual-pass-m3.md` |
+| Visual pass M4 (in-process tiny-skia, 1280×800 and 640×480, both schemes) | 1 | — | 1 finding fixed: drawer rows ran under the list's scrollbar. Record: `visual-pass-m4.md` |
+| Review A M4 (code review high, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (a drawer composer was drawn nowhere while the drawer was closed or on the other tab; now on its card then, `composer_in_drawer`, test); F2 MINOR fixed (overflow items built once) |
+| Review B M4 (conformance, sonnet, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (the drawer's scroll was kept but never restored: `Effect::ScrollDrawer` when its list comes into view, test); F2 MINOR fixed, prose only (visual-pass-m4.md names where steps 4, 5, 7–9 are checked and how to regenerate); F3 MINOR = A F2 |
 
 ## Declined review findings
 

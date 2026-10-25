@@ -4,8 +4,20 @@
 variants of them (a 40-line diff of `src/lib.rs` read in, a send error, the smallest window),
 rendered in process by iced's CPU rasteriser (tiny-skia) at 1280×800 (and 640×480 for step 11),
 light and dark, entrance animations settled and the overlay drawn; a scratch test, not committed.
-Quickstart §B steps that need a live session (5, 6's timing, 7, 9) are covered by M3's client-state
-tests, not re-run here.
+Steps checked elsewhere, not drawn here: 5, 6's timing and 7 need a live session and are M3's
+client-state tests (send, watch, auto-open once); 8's "left of the drawer's edge" is the geometry
+gate (`review_bar_fixed`, FR-017: the drawer's left edge is at or right of the diff area's middle);
+4's and 9's survival (edit text across Esc and reopen, drawer tab and scroll across switching) are
+`features_changes` tests (`the_drawer_and_its_composer_text_survive_switching_and_go_with_the_tab`,
+`a_drawer_composer_is_in_its_row_while_shown_and_on_its_card_otherwise`,
+`showing_the_drawers_list_scrolls_it_back_to_the_tabs_offset`).
+
+To regenerate: a test binary in `crates/micold-client/tests/` with `mod support;` that builds each
+state from `support::covered_states` (`review_shown`, `review_overflow`, `drawer_drafts`,
+`drawer_replies`, with a diff read in as `gates/review_bar_fixed.rs`'s `with_diff` does), lays
+`support::layout::view_of` out at the window, settles it (`support::layout::settle`), draws the
+base and the overlay with the theme of `state.settings.theme_pref`, and writes
+`renderer.screenshot(..)` per state and scheme.
 
 | Quickstart §B | Check | Result | Evidence |
 |---|---|---|---|

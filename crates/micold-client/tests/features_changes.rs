@@ -3795,7 +3795,8 @@ fn a_hidden_review_comes_back_exactly_as_left() {
     assert!(state.tabs.shown().is_none(), "hidden");
     assert_eq!(
         changes::update(&mut state, opened_msg(worktree())),
-        Effect::None,
+        // The drawer was left open: its list scrolls back to its offset (feature 1270, FR-019).
+        Effect::Batch(vec![Effect::ScrollDrawer { offset: 0 }]),
         "shown as left: nothing read"
     );
     assert_eq!(kept(&state), before, "the view compared whole");
@@ -3818,7 +3819,8 @@ fn two_reviews_keep_their_own_views() {
 
     assert_eq!(
         changes::update(&mut state, opened_msg(worktree())),
-        Effect::None,
+        // The drawer was left open: its list scrolls back to its offset (feature 1270, FR-019).
+        Effect::Batch(vec![Effect::ScrollDrawer { offset: 0 }]),
         "feat-a was watched while hidden: nothing to read"
     );
     assert_eq!(kept(&state), first, "feat-a's view, untouched by feat-b's");
@@ -4942,6 +4944,83 @@ fn the_drawer_and_its_composer_text_survive_switching_and_go_with_the_tab() {
         "dropped with the tab"
     );
     assert!(state.tabs.shown_view().unwrap().composer.is_none());
+}
+
+/// Review A M4 F1, D6, Edge Cases "Unsaved text in the drawer". A composer opened from the drawer
+/// is drawn in its row while that row is shown (the drawer open on its tab), and on its card
+/// otherwise, so its text is never out of sight; the place it was opened from is kept.
+#[test]
+fn a_drawer_composer_is_in_its_row_while_shown_and_on_its_card_otherwise() {
+    let mut state = showing(commentable());
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let waiting = comment("b.rs", Side::New, 3, 3, CommentState::Sent { at: 5 });
+    push(&mut state, "feat-a", vec![draft.clone(), waiting.clone()]);
+    let in_drawer = |s: &State| changes::composer_in_drawer(s.tabs.shown_view().unwrap());
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    changes::update(&mut state, Msg::DrawerEdit(draft.id));
+    assert!(in_drawer(&state), "open on Drafts: in the draft's row");
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Close));
+    assert!(!in_drawer(&state), "drawer closed: on the card");
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    assert!(in_drawer(&state), "reopened: back in the row");
+    changes::update(
+        &mut state,
+        Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies)),
+    );
+    assert!(!in_drawer(&state), "the draft's row is not on Replies");
+    changes::update(&mut state, Msg::DrawerAnswer(waiting.id));
+    assert!(in_drawer(&state), "an answer's row is on Replies");
+    changes::update(&mut state, Msg::AnswerComment(waiting.id));
+    assert!(!in_drawer(&state), "a card's composer stays on the card");
+}
+
+/// Review B M4 F1, FR-019, US3 #8. Whenever the drawer's list comes into view — the drawer
+/// opened, its tab switched, or its Review tab shown again — the list is scrolled back to that
+/// tab's kept offset; a scroll report or a closed drawer scrolls nothing.
+#[test]
+fn showing_the_drawers_list_scrolls_it_back_to_the_tabs_offset() {
+    fn scrolls(effect: &Effect) -> Vec<u32> {
+        match effect {
+            Effect::ScrollDrawer { offset } => vec![*offset],
+            Effect::Batch(all) => all.iter().flat_map(scrolls).collect(),
+            _ => Vec::new(),
+        }
+    }
+    let mut state = showing(commentable());
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![draft]);
+    let effect = changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    assert_eq!(scrolls(&effect), vec![0], "opened");
+    let scrolled = |state: &mut State, tab, offset| {
+        changes::update(
+            state,
+            Msg::DrawerScrolled {
+                tab,
+                offset,
+                viewport: 200,
+            },
+        )
+    };
+    assert!(scrolls(&scrolled(&mut state, DrawerTab::Drafts, 120)).is_empty());
+    let effect = changes::update(&mut state, Msg::Drawer(DrawerEvent::Close));
+    assert!(scrolls(&effect).is_empty(), "closed");
+    let effect = changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    assert_eq!(scrolls(&effect), vec![120], "reopened on Drafts");
+    let effect = changes::update(
+        &mut state,
+        Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies)),
+    );
+    assert_eq!(scrolls(&effect), vec![0], "Replies' own offset");
+    scrolled(&mut state, DrawerTab::Replies, 24);
+    changes::update(&mut state, Msg::SessionSelected);
+    let effect = changes::update(
+        &mut state,
+        Msg::Opened {
+            project: project(),
+            entry: worktree(),
+        },
+    );
+    assert_eq!(scrolls(&effect), vec![24], "the Review tab shown again");
 }
 
 /// T032. Edit and Answer… on a card open the composer on the card.
