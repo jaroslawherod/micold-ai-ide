@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: M2 implemented (T022–T033 ticked) on local branch wip/1127-m2 over M1's d9c7278b; reviews, visual pass and gate next
+- **Next step**: orchestrator moves wip/1127-m2 (397d8d8d, over M1's d9c7278b) onto the PR branch after #1376 merges and opens the M2 PR (title and body in the unit's scratchpad), then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | PR open, CI running |
-| M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | implementing (wip/1127-m2) |
+| M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | gated on wip/1127-m2, PR to open |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
 
@@ -70,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review B (conformance, sonnet) | 1 | e8c78225c8584beabccb86e975eff6a0147783ca:a485c8a6050390406b0ce134367f06fa9503f935 (+ A's minor fixes, uncommitted) | CLEAN (3 MINOR: Verify logs pending the scoped gate — rerun; stale `ui::switcher_hung_from` comment — fixed, prose only; `Button::tooltip` named in T028 — fixed, prose only) |
 | M2 visual pass | — | b5961ecd | pass: `micold-ai-ide ▾ ● 3 / fix/1117`; panel at y 44, x 48 by pointer; Overview, full screen, Review and Settings places; 640 px place shortens first; tooltips (specs/1127-title-bar-breadcrumb/visual-pass/m2/). Keyboard open and no-project not driven (test-covered) |
 | M2 scoped gate | — | 81c5abab | red, fixed: model test called `changes::update` outside the root (SC-002 gate); `known_projects_overflow` read the switcher at the trailing edge, and a hung popover lost FR-011a's bottom inset (new overlay `Anchor::Below`); `session_start_press` counted the bar's chevron |
+| M2 gate (`scripts/gate.sh`) | — | 397d8d8d2079be2bc90fffb62e28ee6201c3983d | pass (after the known `attention_error_notice` flake, rerun); on the way: overlay inventory and showcase pose `Anchor::Below` |
 
 ## Declined review findings
 
