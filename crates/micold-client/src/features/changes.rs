@@ -26,6 +26,7 @@ use micold_core::review::diff::{
     parse_unified, plain_file, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines,
     LoadedDiff, SideLines, SideRow, Spans, UnifiedRow,
 };
+use micold_core::review::drag::{gutter_line, Drag, Release};
 use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::marks::{
@@ -432,6 +433,9 @@ pub struct OpenView {
     pub diff_viewport: u32,
     /// The gutter selection (C1).
     pub pick: Option<Pick>,
+    /// A drag over the line numbers under way (feature 1275, US2): `Some` from a press where
+    /// picking is allowed until the release or **Esc**.
+    pub drag: Option<DragState>,
     /// The comment being written or edited (C2); survives a refresh (C4).
     pub composer: Option<Composer>,
     /// The diff's slots (comment cards, the composer) as last measured, in whole pixels, keyed by
@@ -1342,6 +1346,32 @@ impl Pick {
     }
 }
 
+/// A drag over the line numbers (feature 1275, data-model § Client): the gesture, and the pick
+/// and composer from before its press, which **Esc** puts back (FR-020).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DragState {
+    /// The gesture so far.
+    pub drag: Drag,
+    /// The pick before the press.
+    pub before_pick: Option<Pick>,
+    /// The composer before the press.
+    pub before_composer: Option<Composer>,
+}
+
+impl Pick {
+    /// The pick a drag shows: from the line pressed to the last line of its side passed.
+    fn of_drag(drag: Drag) -> Self {
+        match drag.release() {
+            Release::Click { side, line } => Pick {
+                side,
+                anchor: line,
+                head: line,
+            },
+            Release::Range { side, anchor, head } => Pick { side, anchor, head },
+        }
+    }
+}
+
 /// What the composer writes (C2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComposerTarget {
@@ -1598,6 +1628,18 @@ pub enum Msg {
         /// Shift was held: extend the pick on the same side.
         extend: bool,
     },
+    /// During a drag, the cursor came into a row's number: the row's old and new numbers
+    /// (feature 1275, FR-016).
+    GutterDragOver {
+        /// Its number in the old version.
+        old: Option<u32>,
+        /// Its number in the new version.
+        new: Option<u32>,
+    },
+    /// The mouse button was released anywhere in the window during a drag (FR-015, FR-018).
+    GutterDragReleased,
+    /// **Esc** during a drag (FR-020).
+    GutterDragCancelled,
     /// A slot under line `line` of `side` was laid out `height` pixels tall.
     SlotMeasured {
         /// The side of the line it hangs under.
@@ -1837,6 +1879,8 @@ pub enum Effect {
         /// The pull request's address, which names its repository.
         address: String,
     },
+    /// Put the keyboard in the composer's text area (feature 1275, FR-015).
+    FocusComposer,
     /// Scroll the diff to this offset, in pixels (a panel jump).
     ScrollDiff {
         /// The offset.
@@ -2114,6 +2158,7 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         diff_offset: 0,
         diff_viewport: 0,
         pick: None,
+        drag: None,
         composer: None,
         slot_heights: BTreeMap::new(),
         anchors: BTreeMap::new(),
@@ -2373,6 +2418,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::SourceChosen(None) => {
             close_source_menu(state);
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.chose_gone = false;
+            }
             let from_pr = state
                 .tabs
                 .shown_view()
@@ -2386,6 +2434,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::SourceChosen(Some(number)) => {
             close_source_menu(state);
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.chose_gone = false;
+            }
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
@@ -2863,11 +2914,15 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::GutterPressed { old, new, extend } => {
             if let Some(view) = state.tabs.shown_view_mut().filter(|v| pick_allowed(v)) {
                 // C1: a context line has both numbers and counts as the new side.
-                let (side, line) = match (old, new) {
-                    (_, Some(n)) => (Side::New, n),
-                    (Some(o), None) => (Side::Old, o),
-                    (None, None) => return Effect::None,
+                let Some((side, line)) = gutter_line(old, new) else {
+                    return Effect::None;
                 };
+                // Feature 1275 (FR-018): a plain press starts a drag; Shift-click only extends.
+                view.drag = (!extend).then(|| DragState {
+                    drag: Drag::press(side, line),
+                    before_pick: view.pick,
+                    before_composer: view.composer.clone(),
+                });
                 let pick = match view.pick {
                     Some(p) if extend && p.side == side => Pick { head: line, ..p },
                     _ => Pick {
@@ -2882,6 +2937,25 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     if let ComposerTarget::New(_) = composer.target {
                         composer.target = ComposerTarget::New(pick);
                     }
+                }
+            }
+            Effect::None
+        }
+        Msg::GutterDragOver { old, new } => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                if let Some(drag) = view.drag.as_mut() {
+                    drag.drag.over(old, new);
+                    view.pick = Some(Pick::of_drag(drag.drag));
+                }
+            }
+            Effect::None
+        }
+        Msg::GutterDragReleased => gutter_drag_released(state),
+        Msg::GutterDragCancelled => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                if let Some(drag) = view.drag.take() {
+                    view.pick = drag.before_pick;
+                    view.composer = drag.before_composer;
                 }
             }
             Effect::None
@@ -3299,9 +3373,42 @@ pub fn composer_placed(view: &OpenView) -> Option<Pick> {
     }
 }
 
+/// A drag ended with the button's release (feature 1275, contracts/quick-comment.md Q4–Q7): a
+/// click only picks; a range picks and opens a new comment's box under the line released on, or
+/// moves the open one keeping its text, and leaves an edit's or a note's box as it is.
+fn gutter_drag_released(state: &mut State) -> Effect {
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return Effect::None;
+    };
+    let Some(DragState { drag, .. }) = view.drag.take() else {
+        return Effect::None;
+    };
+    let Release::Range { side, anchor, head } = drag.release() else {
+        return Effect::None;
+    };
+    let pick = Pick { side, anchor, head };
+    view.pick = Some(pick);
+    match view.composer.as_mut() {
+        Some(Composer {
+            target: ComposerTarget::Edit(_) | ComposerTarget::Answer(_),
+            ..
+        }) => return Effect::None,
+        Some(composer) => composer.target = ComposerTarget::New(pick),
+        None => {
+            view.composer = Some(Composer {
+                target: ComposerTarget::New(pick),
+                text: String::new(),
+                place: ComposerPlace::Card,
+            });
+        }
+    }
+    Effect::FocusComposer
+}
+
 /// Close a new comment's composer: the file it was picked in is no longer shown.
 fn close_new(view: &mut OpenView) {
     view.pick = None;
+    view.drag = None;
     if matches!(
         view.composer,
         Some(Composer {
@@ -4258,9 +4365,16 @@ fn request_user_read(state: &mut State) -> Effect {
         } else {
             view.apply_next = true;
         }
-        view.held = None;
+        forget_hold(view);
     }
     request_read(state)
+}
+
+/// Drop the held read, and with it that the user chose the selection while it was gone: the
+/// selection is judged afresh against the next hold (US1 AS11, H1).
+fn forget_hold(view: &mut OpenView) {
+    view.held = None;
+    view.chose_gone = false;
 }
 
 /// Read `seq` ended: show its answer unless a newer read replaced it, then run a queued read. A
@@ -4308,7 +4422,7 @@ fn list_read(
             _ => Effect::Batch(effects),
         };
     }
-    view.held = None;
+    forget_hold(view);
     view.list = match result {
         Ok(list) => Load::Ready(list),
         Err(message) => {

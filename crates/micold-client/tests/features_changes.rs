@@ -6724,6 +6724,36 @@ mod hold {
         );
     }
 
+    // M3 review MINOR: the user's own read clears the hold, so it clears "chose a gone file" too:
+    // a later background read dropping that file again keeps its diff (H1), as for a file the
+    // user did not just choose.
+    #[test]
+    fn a_users_read_forgets_that_the_chosen_file_was_gone() {
+        let mut state = reading_a();
+        background(&mut state, list(&["a.rs"]));
+        changes::update(&mut state, Msg::FileSelected(path("b.rs")));
+        assert!(
+            no_longer_changed(view(&state)),
+            "fixture: b.rs chosen while gone"
+        );
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled)
+        else {
+            panic!("a toggle reads the list");
+        };
+        let effect = answer(&mut state, seq, Ok(list(&["a.rs", "b.rs"])));
+        let Effect::ReadDiff { seq, .. } = effect else {
+            panic!("b.rs is listed again, so its diff is read: {effect:?}");
+        };
+        diff_read(&mut state, seq, DiffRow::NotRead);
+        assert!(matches!(diff_body(view(&state)), DiffBody::Diff(_)));
+        background(&mut state, list(&["a.rs"]));
+        assert!(changed_since_you_looked(view(&state), &path("b.rs")));
+        assert!(
+            matches!(diff_body(view(&state)), DiffBody::Diff(_)),
+            "b.rs dropped out of a background read while open: its diff stays"
+        );
+    }
+
     // H10: with nothing held a working-tree row is written into the shown list.
     #[test]
     fn with_nothing_held_the_read_row_updates_the_list() {
@@ -6785,5 +6815,226 @@ mod hold {
             DiffRow::from_read(Ok(listing(vec![renamed.clone()])), &a),
             DiffRow::Row(renamed)
         );
+    }
+}
+
+/// Feature 1275, US2 (M4): drag over line numbers to comment (contracts/quick-comment.md Q1–Q9).
+mod drag {
+    use super::*;
+    use micold_client::features::changes::{Composer, ComposerPlace, OpenView};
+
+    fn view(state: &State) -> &OpenView {
+        state.tabs.shown_view().expect("the view is open")
+    }
+
+    fn composer(state: &State) -> Option<Composer> {
+        view(state).composer.clone()
+    }
+
+    fn press(state: &mut State, new: u32) -> Effect {
+        gutter(state, None, Some(new), false)
+    }
+
+    fn over(state: &mut State, old: Option<u32>, new: Option<u32>) -> Effect {
+        changes::update(state, Msg::GutterDragOver { old, new })
+    }
+
+    fn release(state: &mut State) -> Effect {
+        changes::update(state, Msg::GutterDragReleased)
+    }
+
+    fn new_pick(anchor: u32, head: u32) -> Option<Pick> {
+        Some(Pick {
+            side: Side::New,
+            anchor,
+            head,
+        })
+    }
+
+    /// `b.rs`'s diff shown with new line 1 picked and a new comment's box open holding `kept`.
+    fn writing() -> State {
+        let mut state = showing(commentable());
+        press(&mut state, 1);
+        release(&mut state);
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("kept".into()));
+        state
+    }
+
+    // Q1: a press where picking is allowed starts a drag remembering what was there before, and
+    // picks the pressed line as a click does.
+    #[test]
+    fn a_press_starts_a_drag_that_remembers_the_pick_and_box_before_it() {
+        let mut state = writing();
+        let (before_pick, before_composer) = (pick(&state), composer(&state));
+        press(&mut state, 2);
+        let drag = view(&state).drag.as_ref().expect("a drag starts");
+        assert_eq!(drag.before_pick, before_pick);
+        assert_eq!(drag.before_composer, before_composer);
+        assert_eq!(pick(&state), new_pick(2, 2));
+    }
+
+    // Q1, FR-021: where a click picks nothing, a drag picks nothing.
+    #[test]
+    fn a_drag_where_picking_is_not_allowed_picks_nothing() {
+        let mut state = showing(loaded(FileDiff::Binary));
+        press(&mut state, 1);
+        assert!(view(&state).drag.is_none(), "no drag starts");
+        over(&mut state, None, Some(2));
+        release(&mut state);
+        assert_eq!(pick(&state), None);
+        assert_eq!(composer(&state), None);
+    }
+
+    // Q2, FR-018: Shift-click extends the pick as today and starts no drag.
+    #[test]
+    fn shift_click_extends_the_pick_and_starts_no_drag() {
+        let mut state = showing(commentable());
+        press(&mut state, 1);
+        release(&mut state);
+        gutter(&mut state, None, Some(3), true);
+        assert!(view(&state).drag.is_none());
+        assert_eq!(pick(&state), new_pick(1, 3));
+    }
+
+    // Q3, FR-016, FR-017: the pick follows each row passed on the pressed side; rows without a
+    // number on that side leave it.
+    #[test]
+    fn the_pick_follows_the_pointer_on_the_pressed_side_only() {
+        let mut state = showing(commentable());
+        press(&mut state, 1);
+        over(&mut state, Some(2), None);
+        assert_eq!(
+            pick(&state),
+            new_pick(1, 1),
+            "an old-side row changes nothing"
+        );
+        over(&mut state, None, Some(2));
+        assert_eq!(pick(&state), new_pick(1, 2));
+        over(&mut state, Some(3), Some(3));
+        assert_eq!(
+            pick(&state),
+            new_pick(1, 3),
+            "a context line counts on the new side"
+        );
+        over(&mut state, None, None);
+        assert_eq!(
+            pick(&state),
+            new_pick(1, 3),
+            "a row without numbers changes nothing"
+        );
+        over(&mut state, None, Some(2));
+        assert_eq!(pick(&state), new_pick(1, 2), "back up line by line");
+    }
+
+    // Q4, FR-018, US2 AS4: press and release on one line is today's click.
+    #[test]
+    fn a_release_on_the_pressed_line_only_picks_it() {
+        let mut state = showing(commentable());
+        press(&mut state, 2);
+        assert_eq!(release(&mut state), Effect::None);
+        assert_eq!(pick(&state), new_pick(2, 2));
+        assert_eq!(
+            composer(&state),
+            None,
+            "Add comment is offered, no box opens"
+        );
+        assert!(view(&state).drag.is_none());
+    }
+
+    // Q5, FR-015, US2 AS1, SC-003: a range release picks the range and opens an empty box under
+    // the line released on, which the shell focuses.
+    #[test]
+    fn a_range_release_opens_the_box_under_the_released_line_and_focuses_it() {
+        let mut state = showing(commentable());
+        press(&mut state, 4);
+        over(&mut state, Some(3), Some(3));
+        over(&mut state, None, Some(2));
+        assert_eq!(release(&mut state), Effect::FocusComposer);
+        let picked = new_pick(4, 2);
+        assert_eq!(pick(&state), picked);
+        assert_eq!(
+            composer(&state),
+            Some(Composer {
+                target: ComposerTarget::New(picked.unwrap()),
+                text: String::new(),
+                place: ComposerPlace::Card,
+            })
+        );
+        assert!(view(&state).drag.is_none());
+    }
+
+    // Q6, FR-019, US2 AS5: an open new comment's box moves to the dragged range with its text.
+    #[test]
+    fn a_range_release_moves_an_open_new_box_and_keeps_its_text() {
+        let mut state = writing();
+        press(&mut state, 2);
+        over(&mut state, None, Some(4));
+        assert_eq!(release(&mut state), Effect::FocusComposer);
+        let open = composer(&state).expect("the box stays open");
+        assert_eq!(open.target, ComposerTarget::New(new_pick(2, 4).unwrap()));
+        assert_eq!(open.text, "kept");
+    }
+
+    // Q7, FR-019: an edit's box and its text stay; only the pick changes.
+    #[test]
+    fn a_range_release_keeps_an_edit_box_and_its_text() {
+        let mut state = showing(commentable());
+        let c = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+        let id = c.id;
+        push(&mut state, "feat-a", vec![c]);
+        changes::update(&mut state, Msg::EditComment(id));
+        changes::update(&mut state, Msg::ComposerEdited("half an edit".into()));
+        let before = composer(&state);
+        press(&mut state, 1);
+        over(&mut state, Some(3), Some(3));
+        release(&mut state);
+        assert_eq!(pick(&state), new_pick(1, 3));
+        assert_eq!(composer(&state), before);
+    }
+
+    // Q8, FR-020, US2 AS6: Esc mid-drag puts back the pick and the box from before the press.
+    #[test]
+    fn esc_restores_the_pick_and_box_from_before_the_press() {
+        let mut state = writing();
+        let (before_pick, before_composer) = (pick(&state), composer(&state));
+        press(&mut state, 3);
+        over(&mut state, None, Some(4));
+        assert_eq!(
+            changes::update(&mut state, Msg::GutterDragCancelled),
+            Effect::None
+        );
+        assert_eq!(pick(&state), before_pick);
+        assert_eq!(composer(&state), before_composer);
+        assert!(view(&state).drag.is_none());
+        assert_eq!(
+            release(&mut state),
+            Effect::None,
+            "the release after Esc does nothing"
+        );
+        assert_eq!(pick(&state), before_pick);
+    }
+
+    // Q9, Edge *Drag leaves the diff*: a release away from the numbers ends at the last line
+    // passed, and nothing scrolls.
+    #[test]
+    fn a_release_away_from_the_numbers_ends_at_the_last_line_passed() {
+        let mut state = showing(commentable());
+        let offset = view(&state).diff_offset;
+        press(&mut state, 1);
+        over(&mut state, None, Some(2));
+        over(&mut state, Some(3), Some(3));
+        assert_eq!(release(&mut state), Effect::FocusComposer);
+        assert_eq!(pick(&state), new_pick(1, 3));
+        assert_eq!(view(&state).diff_offset, offset);
+    }
+
+    // A file change mid-drag (the keyboard can select another file) ends the drag.
+    #[test]
+    fn selecting_another_file_mid_drag_ends_it() {
+        let mut state = showing(commentable());
+        press(&mut state, 1);
+        changes::update(&mut state, Msg::FileSelected(path("a.rs")));
+        assert!(view(&state).drag.is_none());
     }
 }

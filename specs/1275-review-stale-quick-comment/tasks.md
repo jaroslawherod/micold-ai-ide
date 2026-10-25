@@ -245,27 +245,31 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
 **Independent test**: Q1–Q9 in `features_changes.rs`; the gutter's message test; quickstart §B
 steps 2–4.
 
-- [ ] T026 [P] [US2] Write a failing in-crate test in
+- [x] T026 [P] [US2] Write a failing in-crate test in
   `crates/micold-client/src/ui/material/diff_view.rs`: the `Gutter` publishes a press as today
   (Shift extends) and publishes `over` on cursor entry only while `.dragging(true)`.
-- [ ] T027 [P] [US2] Write failing tests Q1–Q9 in `crates/micold-client/tests/features_changes.rs`
+- [x] T027 [P] [US2] Write failing tests Q1–Q9 in `crates/micold-client/tests/features_changes.rs`
   (contracts/quick-comment.md).
-- [ ] T028 [US2] Extend `DiffView` in `crates/micold-client/src/ui/material/diff_view.rs` with
+- [x] T028 [US2] Extend `DiffView` in `crates/micold-client/src/ui/material/diff_view.rs` with
   `.on_gutter_drag(press, over)` and `.dragging(bool)`; the `Gutter` widget (`diff_view.rs:800`)
   publishes `over(old, new)` when the cursor enters it during a drag (research R7).
-- [ ] T029 [US2] Implement the drag in `crates/micold-client/src/features/changes.rs`:
+  *Deviation (M4)*: the press keeps its existing `.on_gutter(press)`; the over is a separate
+  `.on_gutter_over(over)` beside `.dragging(bool)`, so the click and Shift-click path is untouched.
+- [x] T029 [US2] Implement the drag in `crates/micold-client/src/features/changes.rs`:
   `OpenView.drag: Option<DragState { drag: Drag, before_pick: Option<Pick>, before_composer:
   Option<Composer> }>`; `GutterPressed { extend: false }` uses core `review::drag::gutter_line`
   (replacing the client's own C1 code) and starts a drag where picking is allowed;
   `Msg::GutterDragOver`, `GutterDragReleased` (click → pick only; range → open or move a `New`
   composer, keep an `Edit`/`Answer` one), `GutterDragCancelled` (restore `before_pick` and
   `before_composer`).
-- [ ] T030 [US2] Add the window-wide release and **Esc** listener, active only while `OpenView.drag`
+  *Deviation (M4)*: a range release returns a new `Effect::FocusComposer` (Q5's "the shell focuses
+  its text area" is then a reducer assertion); a file change mid-drag ends the drag (`close_new`).
+- [x] T030 [US2] Add the window-wide release and **Esc** listener, active only while `OpenView.drag`
   is `Some`, in `crates/micold-client/src/shell/subscriptions.rs`, and focus the composer's text
   area after a range release in `crates/micold-client/src/shell/changes.rs`.
-- [ ] T031 [US2] Wire `.on_gutter_drag(..)` and `.dragging(..)` in
+- [x] T031 [US2] Wire `.on_gutter_drag(..)` and `.dragging(..)` in
   `crates/micold-client/src/ui/changes.rs` (glue).
-- [ ] T032 [US2] Update *Picking lines* and *Writing a comment* in
+- [x] T032 [US2] Update *Picking lines* and *Writing a comment* in
   `docs/user-guide/reviewing-changes.md`: drag over line numbers, Esc cancels, click and Shift-click
   as before.
 - [ ] T033 [US2] Run `crates/micold-client/tests/layout_snapshot.rs`; the drag adds no static

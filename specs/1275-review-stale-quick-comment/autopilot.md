@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: implement M3
-- **Next step**: CI on #1424 after the red-CI fix (rebase on main bb931624b, `changes-review-held` fixture re-recorded), then merge M3.
+- **Phase**: implement M4
+- **Next step**: M4 (T026–T034) implement, gate, push; reviews by the orchestrator.
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
 | #1380 | M1 | merged | 8c0711181531461916b4e025a22d3da0b615f577 |
 | #1413 | M2 | merged | 055754352429f96b08c2b5df561b32d6a34d764d |
-| #1424 | M3 | open; CI red (layout snapshot drift from main), fixed by rebase on bb931624b + re-recorded `changes-review-held` | |
+| #1424 | M3 | merged | b582c2563adbebd6e31ba41bc274124e7939b49b |
 
 ## Milestones
 
@@ -34,8 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
-| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | red-CI fix pushed at 892c6760b (main bb931624b), full gate green; CI pending |
-| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
+| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
+| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | in progress |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
 
@@ -43,7 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| 1 | clarify | FR-014: hold the whole view or only the open diff? | A, whole-view hold (decided by user 2026-10-25, decision card) | orchestrator (recommended; user not yet answered) | docs/development/review-redesign.md item 8 |
+| 1 | clarify | FR-014: hold the whole view or only the open diff? | A, whole-view hold (decided by user 2026-10-25, decision card) | user (decision card, 2026-10-25) | docs/development/review-redesign.md item 8 |
 
 ## Review rounds
 
@@ -165,3 +165,4 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
   `tests/features_changes.rs` (both features append a module: kept #1273's `tree_state` then our
   `hold`; #1273's two `Msg::DiffRead` initialisers gained `row: DiffRow::NotRead`). Layout fixture
   unchanged by that move. Client lib + the three test targets + core `review` green.
+- Full `scripts/gate.sh` on pushed 2f0606e03 (main d84e94860): exit 0.

@@ -86,6 +86,11 @@ pub const SOURCE_CONTROL_WIDTH: f32 = 360.0;
 pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
     std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-diff"));
 
+/// The composer's text area, by name: a drag's release puts the keyboard in it (feature 1275,
+/// FR-015). One composer is open at a time.
+pub static COMPOSER_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-composer"));
+
 /// The comments drawer's list viewport, by name: shown again, it is scrolled back to its tab's
 /// offset (feature 1270, FR-019).
 pub static DRAWER_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
@@ -1190,9 +1195,12 @@ fn diff_pane_body<'a>(
                 .references(|text| changes::references_in(view, text))
                 .on_reference(|path, line| Message::Changes(Msg::ReferenceActivated(path, line)));
             if changes::pick_allowed(view) {
-                diff = diff.on_gutter(|old, new, extend| {
-                    Message::Changes(Msg::GutterPressed { old, new, extend })
-                });
+                diff = diff
+                    .on_gutter(|old, new, extend| {
+                        Message::Changes(Msg::GutterPressed { old, new, extend })
+                    })
+                    .on_gutter_over(|old, new| Message::Changes(Msg::GutterDragOver { old, new }))
+                    .dragging(view.drag.is_some());
             }
             if let Some(pick) = view.pick {
                 diff = diff.pick(pick.side, pick.range());
@@ -1384,6 +1392,7 @@ fn composer_box<'a>(
     let area: Element<'a, Message> = match editor {
         Some(content) => {
             let mut area = TextArea::new(content, r)
+                .id(COMPOSER_ID.clone())
                 .placeholder(placeholder)
                 .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))));
             if has_text {

@@ -436,11 +436,26 @@ other side starts a new pick. An unchanged line counts as part of the new versio
 side layout, click the number on the side you mean. Binary, non-text and large files that are not
 shown cannot be commented on.
 
+To pick a range in one gesture, press on a line's number and drag over the numbers of the lines you
+want, up or down; the pick follows the pointer line by line. Rows without a number on the side you
+pressed — lines of the other side, hunk headers, hidden-lines rows, comment cards — do not change
+the pick, which ends at the last line of that side you passed. Letting go, even outside the diff or
+the window, picks the range and opens the comment box under the line you let go on (see below).
+Press **Esc** while dragging to cancel: the pick and the comment box go back to how they were
+before you pressed. A press and release on one number without moving to another line is a click,
+as above. Dragging works with a mouse and with a touchpad's press-and-drag; the diff does not
+scroll while you drag.
+
 ### Writing a comment
 
 With lines picked, press **Add comment** under them. A text box opens under the last picked line;
 write the comment and press **Save** (or **Ctrl+Enter**, **Cmd+Enter** on macOS). **Cancel** closes
 it without saving. **Save** stays unavailable while the box is empty.
+
+Dragging over line numbers opens the box by itself: when you let go, it is open under the line you
+let go on with the cursor in it, so you can type at once. If a new comment's box is already open,
+the drag moves it to the new lines and keeps what you wrote. While you are editing a comment or
+writing a note, a drag changes only the pick; that box and its text stay.
 
 The comment then shows as a card under its last line, marked **Draft** until it is sent. The text you are
 writing is kept while the list or the diff is read again.
