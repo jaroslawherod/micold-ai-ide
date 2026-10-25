@@ -550,7 +550,8 @@ fn session_member(
 /// count of the location's comments (`None` while unknown) and its freshness; shown while it is
 /// the shown review.
 fn review_member(state: &State) -> Option<Member> {
-    let project = state.workspace.active.clone()?;
+    // No active project reads as the empty path, as `review_shown` and `ChangesRequested` do.
+    let project = state.workspace.active.clone().unwrap_or_default();
     let entry = state.shown_location()?;
     let key = (project, entry);
     let tab = state.changes.tabs.get(&key)?;
@@ -1658,6 +1659,33 @@ pub(crate) mod tests {
         );
         assert_eq!(review.menu_tab(), None, "no menu: nothing to restart");
         assert!(!review.stopped());
+    }
+
+    /// Review A M4 F1 (US1.2, U2): with the Review tab shown, pressing the current session's tab,
+    /// one of its shell tabs or the "+" shows the terminal: the review is hidden, kept.
+    #[test]
+    fn a_session_shell_or_plus_press_hides_a_shown_review() {
+        let (state, [m, _, _]) = with_review(0, false);
+        let model = StripModel::of(&state).expect("shown");
+        for key in [
+            MemberKey::Session(m),
+            MemberKey::Shell(m, shells_of(&state, m)[0]),
+            MemberKey::Plus,
+        ] {
+            let mut pressed = state.clone();
+            assert!(pressed.review_shown().is_some(), "the premise");
+            let member = model
+                .members
+                .iter()
+                .find(|x| x.key() == key)
+                .expect("member");
+            pressed.update(member.press());
+            assert_eq!(pressed.review_shown(), None, "{key:?} hides the review");
+            assert!(
+                pressed.changes.tabs.has(&review_key()),
+                "{key:?} keeps the Review tab"
+            );
+        }
     }
 
     fn review_member_with(drafts: Option<usize>, freshness: Freshness) -> Member {
