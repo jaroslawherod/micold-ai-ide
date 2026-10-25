@@ -90,6 +90,9 @@ fn expected(icon: Icon) -> char {
         Icon::TaskDone => '\u{e834}',
         Icon::TaskOpen => '\u{e835}',
         Icon::MoreHorizontal => '\u{e5d3}',
+        Icon::ReviewUnseen => '\u{ef4a}',
+        Icon::ReviewDrafts => '\u{e39e}',
+        Icon::ReviewDone => '\u{e876}',
     }
 }
 
@@ -136,8 +139,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `progress_activity`, `check_circle`, `error`, `do_not_disturb_on`, `arrow_downward`), +2 for
     // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`), +2 for
     // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`), +1 for
-    // feature 1125's sidebar more menu (`more_horiz`; `more_vert` is `Menu`'s).
-    assert_eq!(Icon::ALL.len(), 82, "curated set size");
+    // feature 1125's sidebar more menu (`more_horiz`; `more_vert` is `Menu`'s), +3 for feature
+    // 1271's review row states (`circle`, `adjust`, `done`).
+    assert_eq!(Icon::ALL.len(), 85, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -281,6 +285,27 @@ fn the_subagent_and_background_task_icons_are_pinned_and_unique() {
     for (icon, glyph) in [
         (Icon::Subagent, '\u{f06c}'),
         (Icon::BackgroundTask, '\u{f1bb}'),
+    ] {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+        for &other in Icon::ALL.iter().filter(|&&other| other != icon) {
+            assert_ne!(
+                icon.glyph(),
+                other.glyph(),
+                "{icon:?} and {other:?} share a codepoint"
+            );
+        }
+    }
+}
+
+/// Feature 1271 (research R9): the three review row states are pinned, in `Icon::ALL`, and share a
+/// codepoint with no other icon.
+#[test]
+fn the_review_state_icons_are_pinned_and_unique() {
+    for (icon, glyph) in [
+        (Icon::ReviewUnseen, '\u{ef4a}'),
+        (Icon::ReviewDrafts, '\u{e39e}'),
+        (Icon::ReviewDone, '\u{e876}'),
     ] {
         assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
         assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");

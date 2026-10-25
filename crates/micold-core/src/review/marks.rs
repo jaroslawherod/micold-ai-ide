@@ -12,6 +12,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 
+use super::base::{Base, ReviewScope, Toggles};
 use super::changes::{ChangeKind, ChangedFile, NameStatus, Origin};
 use super::comment::Scope;
 use super::RelPath;
@@ -398,9 +399,71 @@ pub fn progress(files: impl IntoIterator<Item = FileReview>) -> Option<Ratio> {
     (total > 0).then_some(Ratio { done, total })
 }
 
+/// Why **Mark reviewed** is unavailable (FR-002, FR-013). Unmarking is never blocked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkBlock {
+    /// The session service is not connected, so no mark can be kept (research R6).
+    Disconnected,
+    /// The file's change has not been read yet: there is no id to mark it on.
+    NotRead,
+    /// The file's change could not be read (its whole-change read or its hash failed): there is
+    /// no id to mark it on until a later read succeeds.
+    Unreadable,
+    /// A Committed or Uncommitted toggle hides part of the file's change (D4, provisional A).
+    HiddenKind,
+}
+
+/// [`MarkBlock::HiddenKind`]'s tooltip (research R7).
+pub const HIDDEN_KIND_TOOLTIP: &str =
+    "Turn on Committed and Uncommitted to see this file's whole change";
+/// [`MarkBlock::Disconnected`]'s tooltip (research R6).
+pub const DISCONNECTED_TOOLTIP: &str = "The session service is not connected";
+/// [`MarkBlock::NotRead`]'s tooltip.
+pub const NOT_READ_TOOLTIP: &str = "This file's change is still being read";
+/// [`MarkBlock::Unreadable`]'s tooltip.
+pub const UNREADABLE_TOOLTIP: &str = "This file's change could not be read";
+
+impl MarkBlock {
+    /// Its tooltip.
+    pub fn tooltip(self) -> &'static str {
+        match self {
+            Self::Disconnected => DISCONNECTED_TOOLTIP,
+            Self::NotRead => NOT_READ_TOOLTIP,
+            Self::Unreadable => UNREADABLE_TOOLTIP,
+            Self::HiddenKind => HIDDEN_KIND_TOOLTIP,
+        }
+    }
+}
+
+/// Whether a file of `origin` (`None`: its change has no id yet) can be marked under `toggles` in
+/// `scope` (D4, provisional A; research R7): `HiddenKind` when a toggle hides a kind of change the
+/// file has. An entry without a base has one kind only, which no toggle hides from marking.
+/// `Disconnected` is the client's to decide.
+pub fn mark_block(
+    origin: Option<Origin>,
+    toggles: Toggles,
+    scope: &ReviewScope,
+) -> Option<MarkBlock> {
+    let origin = match origin {
+        None => return Some(MarkBlock::NotRead),
+        Some(origin) => origin,
+    };
+    let based = matches!(
+        scope,
+        ReviewScope::Worktree {
+            base: Base::MergeBase { .. }
+        }
+    );
+    let has_committed = matches!(origin, Origin::Committed | Origin::Both);
+    let has_uncommitted = matches!(origin, Origin::Uncommitted | Origin::Both);
+    let hidden = (!toggles.committed && has_committed) || (!toggles.uncommitted && has_uncommitted);
+    (based && hidden).then_some(MarkBlock::HiddenKind)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::review::base::BaseUnavailable;
     use crate::review::changes::{ChangeIdentity, Content};
 
     fn p(path: &str) -> RelPath {
@@ -888,5 +951,98 @@ mod tests {
             progress([reviewed, reviewed]),
             Some(Ratio { done: 2, total: 2 })
         );
+    }
+
+    fn worktree_with_base() -> ReviewScope {
+        ReviewScope::Worktree {
+            base: Base::MergeBase {
+                branch: "main".to_owned(),
+                commit: OLD.to_owned(),
+            },
+        }
+    }
+
+    fn toggles(committed: bool, uncommitted: bool) -> Toggles {
+        Toggles {
+            committed,
+            uncommitted,
+        }
+    }
+
+    /// D4 (provisional A), research R7: one group for the one rule.
+    #[test]
+    fn mark_block_answers_not_read_hidden_kind_or_none() {
+        let based = worktree_with_base();
+        let all = [Origin::Committed, Origin::Uncommitted, Origin::Both];
+        for shown in [
+            toggles(true, true),
+            toggles(true, false),
+            toggles(false, true),
+        ] {
+            assert_eq!(
+                mark_block(None, shown, &based),
+                Some(MarkBlock::NotRead),
+                "no id yet is not read, under {shown:?}"
+            );
+        }
+        for origin in all {
+            assert_eq!(
+                mark_block(Some(origin), toggles(true, true), &based),
+                None,
+                "{origin:?} with both kinds shown can be marked"
+            );
+        }
+        let cases = [
+            (toggles(false, true), Origin::Committed, true),
+            (toggles(false, true), Origin::Both, true),
+            (toggles(false, true), Origin::Uncommitted, false),
+            (toggles(true, false), Origin::Uncommitted, true),
+            (toggles(true, false), Origin::Both, true),
+            (toggles(true, false), Origin::Committed, false),
+        ];
+        for (shown, origin, hidden) in cases {
+            assert_eq!(
+                mark_block(Some(origin), shown, &based),
+                hidden.then_some(MarkBlock::HiddenKind),
+                "{origin:?} under {shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn without_a_base_the_only_kind_is_never_hidden() {
+        let unbased = [
+            ReviewScope::RootUncommitted,
+            ReviewScope::Worktree {
+                base: Base::Unavailable(BaseUnavailable::NoDefaultBranch),
+            },
+        ];
+        for scope in &unbased {
+            for shown in [
+                toggles(true, true),
+                toggles(true, false),
+                toggles(false, true),
+            ] {
+                assert_eq!(
+                    mark_block(Some(Origin::Uncommitted), shown, scope),
+                    None,
+                    "{scope:?} under {shown:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn each_block_has_its_tooltip() {
+        assert_eq!(MarkBlock::HiddenKind.tooltip(), HIDDEN_KIND_TOOLTIP);
+        assert_eq!(MarkBlock::Disconnected.tooltip(), DISCONNECTED_TOOLTIP);
+        assert_eq!(MarkBlock::NotRead.tooltip(), NOT_READ_TOOLTIP);
+        assert_eq!(MarkBlock::Unreadable.tooltip(), UNREADABLE_TOOLTIP);
+        assert_eq!(UNREADABLE_TOOLTIP, "This file's change could not be read");
+        assert_eq!(
+            HIDDEN_KIND_TOOLTIP,
+            "Turn on Committed and Uncommitted to see this file's whole change"
+        );
+        assert_eq!(DISCONNECTED_TOOLTIP, "The session service is not connected");
     }
 }

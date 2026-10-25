@@ -7,7 +7,7 @@
 use micold_core::review::comment::Scope;
 use std::collections::BTreeMap;
 
-use iced::widget::{column, container, row, text_editor, Space};
+use iced::widget::{column, container, row, text_editor, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
 use micold_core::review::comment::{ReviewComment, Status};
@@ -22,19 +22,24 @@ use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
     committed_available, composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups,
-    drawer_rows, file_comments, file_diff_available, list_body, pending_counts, picker_matches,
-    pr_header, review_bar, review_of, section, selected_file, tree_rows, whole_file, BrowseBody,
-    ComposerTarget, DiffBody, ListBody, Load, Msg, OpenView, PrSection, Source, Step, TreeKind,
-    WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
+    drawer_rows, file_comments, file_diff_available, file_reviews, list_body, mark_control,
+    pending_counts, picker_matches, pr_header, progress_label, review_bar, review_of,
+    reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody, ComposerTarget,
+    DiffBody, ListBody, Load, Msg, OpenView, PrSection, Source, Step, TreeKind, WholeFile,
+    DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
 };
-use crate::icons::Icon;
+use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::{
-    BrowseBar, Button, ButtonVariant, CardState, DiffView, IconButton, PullRequestIndicator,
-    PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag, Text, TextArea,
-    ToggleChip, Tooltip, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, VirtualRows,
+    BrowseBar, Button, ButtonVariant, CardState, DiffView, Ellipsized, Glyph, IconButton,
+    ProgressBar, PullRequestIndicator, PullRequestRow, ReviewCommentCard, ReviewPanelRow,
+    StageProgress, Tag, Text, TextArea, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    Typeahead, TypeaheadRow, VirtualRows,
 };
 use micold_core::review::bar::{counts_text, CountsForm};
 use micold_core::review::drawer::{DrawerEvent, DrawerTab};
+use micold_core::review::marks::{FileReview, ReviewState};
+use micold_core::review::RelPath;
+use micold_core::task_progress::Ratio;
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
 pub const NOT_IN_DIFF: &str = "Not in the current diff";
@@ -55,6 +60,13 @@ pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines t
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
 pub const ROW_HEIGHT: f32 = 36.0;
 
+/// The header's *n of m reviewed* slot at its widest: laid out the same width shown or empty, so
+/// the header's other controls never move with it (feature 1271, FR-009). In a narrow header it
+/// takes a third of the room the title leaves, and its bar, then its words, give way first.
+pub const PROGRESS_SLOT_WIDTH: f32 = 260.0;
+/// The progress bar's width in that slot at its widest (research R9).
+pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
+
 /// One review panel row's height.
 const PANEL_ROW_HEIGHT: f32 = crate::ui::material::PANEL_ROW_HEIGHT;
 
@@ -64,12 +76,14 @@ pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
     std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-diff"));
 
 /// The Changes view of `view`'s entry. `composer` is the review composer's editor, which only the
-/// binary holds; without it an open composer shows its text read-only.
+/// binary holds; without it an open composer shows its text read-only. `connected`: the session
+/// service that keeps the marks is reachable (feature 1271, FR-013).
 pub fn view<'a>(
     state: &'a State,
     view: &'a OpenView,
     scheme: ColorScheme,
     composer: Option<&'a text_editor::Content>,
+    connected: bool,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let title = match &view.entry {
@@ -82,8 +96,13 @@ pub fn view<'a>(
     if let Some(line) = base_line(view) {
         heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
     }
+    // Feature 1271: the rows' review states, judged once for the list and the header.
+    let reviews = file_reviews(&state.changes, view, connected);
     // S1: Send review (n), "Sending…" while a send of this entry is open in any window.
-    let mut header = row![container(heading).width(Length::Fill)];
+    let mut header = row![
+        container(heading).width(Length::FillPortion(2)),
+        progress_slot(reviews_progress(&reviews, connected), r),
+    ];
     // FR-016: the toolbar toggle that closes and reopens the review panel, which draws the
     // comments drawer's state until feature 1270's bar and drawer replace it (M4).
     let bar = review_bar(&state.changes);
@@ -106,8 +125,9 @@ pub fn view<'a>(
     let header = header.spacing(spacing::MD).align_y(Alignment::Center);
 
     let mut body = row![
-        container(list_pane(state, view, r)).width(Length::FillPortion(2)),
-        container(diff_pane(state, view, scheme, composer)).width(Length::FillPortion(3)),
+        container(list_pane(state, view, reviews, r)).width(Length::FillPortion(2)),
+        container(diff_pane(state, view, scheme, composer, connected))
+            .width(Length::FillPortion(3)),
     ]
     .spacing(spacing::LG)
     .height(Length::Fill);
@@ -124,6 +144,39 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+/// *n of m reviewed* and its bar (feature 1271, FR-008), in a slot whose width follows the header's
+/// only, laid out empty when there is no progress to show (FR-009).
+fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
+    let content: Element<'a, Message> = match ratio {
+        Some(ratio) => row![
+            Ellipsized::<Message>::at_role_spaced(
+                progress_label(ratio),
+                TypeRole::Body,
+                r.on_surface_variant
+            )
+            .shrink(),
+            // Fixed, not Fill: this row is Shrink, where a Fill bar is laid out at zero width
+            // (1271 visual re-pass V2). Laid out after the words, a fixed length still gives way
+            // to them: it is clamped to what they leave.
+            container(ProgressBar::new(ratio, r).width(Length::Fill))
+                .width(Length::Fixed(PROGRESS_BAR_WIDTH)),
+        ]
+        .width(Length::Shrink)
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center)
+        .into(),
+        None => Space::new().into(),
+    };
+    let slot = container(content)
+        .width(Length::Fill)
+        .max_width(PROGRESS_SLOT_WIDTH)
+        .align_x(iced::alignment::Horizontal::Right);
+    container(slot)
+        .width(Length::FillPortion(1))
+        .align_x(iced::alignment::Horizontal::Right)
+        .into()
 }
 
 /// **Clear sent**, **Discard drafts…** and **Send review (n)**, each with the availability 482
@@ -257,7 +310,12 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
 }
 
 /// The left pane: the two toggles (L1) over the file list or its empty state (L2, L3).
-fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+fn list_pane<'a>(
+    state: &'a State,
+    view: &'a OpenView,
+    reviews: BTreeMap<RelPath, FileReview>,
+    r: Roles,
+) -> Element<'a, Message> {
     let available = committed_available(view);
     let toggles = row![
         ToggleChip::new("Committed", Message::Changes(Msg::CommittedToggled), r)
@@ -268,9 +326,14 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
         ToggleChip::new("Files", Message::Changes(Msg::FilesPaneToggled), r)
             .active(view.files.shown),
     ]
-    .spacing(spacing::SM);
+    .spacing(spacing::SM)
+    .wrap()
+    .vertical_spacing(spacing::SM);
     // The toggles shape the entry's own list, which a shown pull request replaces.
-    let mut pane = column![].spacing(spacing::MD).height(Length::Fill);
+    let mut pane = column![]
+        .spacing(spacing::MD)
+        .width(Length::Fill)
+        .height(Length::Fill);
     if view.source == Source::Changes {
         pane = pane.push(toggles);
     } else {
@@ -323,7 +386,8 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
                 move |index| {
                     let file = &files[index];
                     let pending = counts.get(&file.path).copied().unwrap_or(0);
-                    file_row(file, selected == Some(&file.path), pending, r)
+                    let review = reviews.get(&file.path).map(|review| review.state);
+                    file_row(file, selected == Some(&file.path), pending, review, r)
                 },
                 r,
             )
@@ -537,20 +601,37 @@ fn pull_request_section<'a>(
     Some(section.into())
 }
 
-/// One file (L2): path, kind tag, content tag when not text, `+a −r`, and its pending comments.
+/// One file (L2): its review state (feature 1271, FR-001), path, kind tag, content tag when not
+/// text, `+a −r`, and its pending comments.
 fn file_row(
     file: &ChangedFile,
     selected: bool,
     pending: usize,
+    review: Option<ReviewState>,
     r: Roles,
 ) -> Element<'static, Message> {
     let (kind, accent) = kind_tag(&file.kind, r);
-    let mut line = row![
-        container(Text::new(file.path.to_string(), TypeRole::Body, r)).width(Length::Fill),
-        Tag::new(kind, accent),
-    ]
-    .spacing(spacing::SM)
-    .align_y(Alignment::Center);
+    let variant = if selected {
+        ButtonVariant::Outlined
+    } else {
+        ButtonVariant::Text
+    };
+    let mut line = row![].spacing(spacing::SM).align_y(Alignment::Center);
+    if let Some(state) = review {
+        line = line.push(review_glyph(state, r));
+    }
+    let mut line = line
+        // One line, cut from the directory side where the row's tags leave too little room, so
+        // the file name stays while it fits (1271 V1).
+        .push(
+            Ellipsized::<Message>::at_role_spaced(
+                file.path.to_string(),
+                TypeRole::Body,
+                variant.content(r, None),
+            )
+            .path(),
+        )
+        .push(Tag::new(kind, accent));
     match file.content {
         Content::Text => {}
         Content::Binary => line = line.push(Tag::new("Binary", r.secondary)),
@@ -567,19 +648,30 @@ fn file_row(
     if pending > 0 {
         line = line.push(Tag::new(pending_label(pending), r.tertiary));
     }
-    let variant = if selected {
-        ButtonVariant::Outlined
-    } else {
-        ButtonVariant::Text
-    };
     container(
+        // The row's inset is the list's, not the variant's: selecting a row outlines it without
+        // taking 24 px from its path (1271 visual re-pass V1).
         Button::with_content(line, variant, r)
+            .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
             .width(Length::Fill)
             .on_press(Message::Changes(Msg::FileSelected(file.path.clone()))),
     )
     .height(Length::Fixed(ROW_HEIGHT))
     .width(Length::Fill)
     .into()
+}
+
+/// A row's review state: ○, ● or ✓ (feature 1271, research R9). Reviewed reads in the label's
+/// own role, the other two quieter, as badges.
+fn review_glyph(state: ReviewState, r: Roles) -> Element<'static, Message> {
+    let (icon, surface) = match state {
+        ReviewState::Unseen => (Icon::ReviewUnseen, IconSurface::Badge),
+        ReviewState::HasDrafts => (Icon::ReviewDrafts, IconSurface::Badge),
+        ReviewState::Reviewed => (Icon::ReviewDone, IconSurface::AppBarAction),
+    };
+    Glyph::new(icon, TypeRole::Body, r)
+        .tint(icon_role(surface, r))
+        .into()
 }
 
 /// The kind's label and accent (L2). An untracked file is new to the reviewer: Added.
@@ -599,8 +691,9 @@ fn diff_pane<'a>(
     view: &'a OpenView,
     scheme: ColorScheme,
     composer: Option<&'a text_editor::Content>,
+    connected: bool,
 ) -> Element<'a, Message> {
-    let body = diff_pane_body(state, view, scheme, composer);
+    let body = diff_pane_body(state, view, scheme, composer, connected);
     let Some(header) = pull_request_header(view, tokens::roles(scheme)) else {
         return body;
     };
@@ -659,6 +752,7 @@ fn diff_pane_body<'a>(
     view: &'a OpenView,
     scheme: ColorScheme,
     composer: Option<&'a text_editor::Content>,
+    connected: bool,
 ) -> Element<'a, Message> {
     let layout = state.changes.layout;
     let r = tokens::roles(scheme);
@@ -666,42 +760,61 @@ fn diff_pane_body<'a>(
         return browsed_pane(view, body, layout, scheme, r);
     }
     // D1, FR-006: the layout is a setting, so its choice shows whatever the pane holds.
-    let layouts = row![
+    let mut layouts: Vec<Element<'a, Message>> = vec![
         ToggleChip::new(
             "Unified",
             Message::Changes(Msg::LayoutChosen(DiffLayout::Unified)),
-            r
+            r,
         )
-        .active(layout == DiffLayout::Unified),
+        .active(layout == DiffLayout::Unified)
+        .into(),
         ToggleChip::new(
             "Side by side",
             Message::Changes(Msg::LayoutChosen(DiffLayout::SideBySide)),
-            r
+            r,
         )
-        .active(layout == DiffLayout::SideBySide),
-    ]
-    .spacing(spacing::SM);
+        .active(layout == DiffLayout::SideBySide)
+        .into(),
+    ];
     // FR-004: the file's whole-file toggle sits with the layout choice.
-    let layouts: Element<'a, Message> = match whole_file(view) {
-        WholeFile::Hidden => layouts.into(),
-        WholeFile::Unavailable => row![
-            layouts,
+    match whole_file(view) {
+        WholeFile::Hidden => {}
+        WholeFile::Unavailable => layouts.push(
             Tooltip::new(
                 ToggleChip::new("Whole file", Message::Changes(Msg::WholeFileToggled), r)
                     .disabled(true),
                 WHOLE_FILE_UNAVAILABLE,
                 r,
-            ),
-        ]
+            )
+            .into(),
+        ),
+        WholeFile::Available { on } => layouts.push(
+            ToggleChip::new("Whole file", Message::Changes(Msg::WholeFileToggled), r)
+                .active(on)
+                .into(),
+        ),
+    }
+    // Feature 1271 (FR-002): the selected file's mark control, beside **Whole file**.
+    if let Some(control) = mark_control(&state.changes, view, connected) {
+        layouts.push(
+            Tooltip::new(
+                // Cut, not wrapped, where the pane is narrower than the label (1271 re-pass V3).
+                ToggleChip::new(control.label, Message::Changes(Msg::MarkToggled), r)
+                    .one_line()
+                    .active(control.pressed)
+                    .disabled(control.block.is_some()),
+                control.tooltip(),
+                r,
+            )
+            .into(),
+        );
+    }
+    // A narrow pane takes the chips onto a second line rather than squeezing one (1271 V2).
+    let layouts: Element<'a, Message> = Row::with_children(layouts)
         .spacing(spacing::SM)
-        .into(),
-        WholeFile::Available { on } => row![
-            layouts,
-            ToggleChip::new("Whole file", Message::Changes(Msg::WholeFileToggled), r).active(on),
-        ]
-        .spacing(spacing::SM)
-        .into(),
-    };
+        .wrap()
+        .vertical_spacing(spacing::SM)
+        .into();
     let content: Element<'a, Message> = match diff_body(view) {
         DiffBody::NoSelection => Text::new("Select a file", TypeRole::Body, r).muted().into(),
         DiffBody::Loading => StageProgress::new("Loading diff…", r).into(),

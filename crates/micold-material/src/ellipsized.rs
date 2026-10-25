@@ -41,6 +41,10 @@ pub struct Ellipsized<M> {
     color: Rgb,
     /// `Fill` unless a call site asked for [`Self::shrink`].
     width: Length,
+    /// Cut a path from its directory side, keeping the file name ([`Self::path`]).
+    path: bool,
+    /// Draw in the host's foreground rather than `color` ([`Self::inherit_color`]).
+    inherit: bool,
     marker: PhantomData<M>,
 }
 
@@ -58,6 +62,8 @@ impl<M> Ellipsized<M> {
             line_height: text::LineHeight::default(),
             color,
             width: Length::Fill,
+            path: false,
+            inherit: false,
             marker: PhantomData,
         }
     }
@@ -103,6 +109,22 @@ impl<M> Ellipsized<M> {
         self.width = Length::Shrink;
         self
     }
+
+    /// A `/`-separated path: what does not fit is cut from the front, so the file name stays and
+    /// the directory gives way (`…rc/b.rs`); only a file name too long on its own is cut at its end
+    /// (feature 1271: a changed file's row).
+    pub fn path(mut self) -> Self {
+        self.path = true;
+        self
+    }
+
+    /// Draw in the foreground the host gives its content — a button's label colour, which moves
+    /// with its state — as an un-tinted [`crate::Text`] does, rather than in the fixed colour
+    /// (feature 1271: a [`crate::ToggleChip`]'s one-line label).
+    pub fn inherit_color(mut self) -> Self {
+        self.inherit = true;
+        self
+    }
 }
 
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
@@ -117,6 +139,7 @@ struct Shaped {
     size: f32,
     font: Font,
     line_height: text::LineHeight,
+    path: bool,
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Ellipsized<Message>
@@ -169,6 +192,7 @@ where
             size: self.size,
             font,
             line_height: self.line_height,
+            path: self.path,
         };
         if !state.holds(&key) {
             let measure = |candidate: &str| {
@@ -176,7 +200,11 @@ where
                     .min_bounds()
                     .width
             };
-            let fitted = fit(&self.content, available, measure);
+            let fitted = if self.path {
+                fit_path(&self.content, available, measure)
+            } else {
+                fit(&self.content, available, measure)
+            };
             let paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
             state.store(paragraph, fitted, key);
         }
@@ -189,7 +217,7 @@ where
         tree: &Tree,
         renderer: &mut Renderer,
         _theme: &Theme,
-        _style: &renderer::Style,
+        style: &renderer::Style,
         layout: Layout<'_>,
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
@@ -197,13 +225,12 @@ where
         let state = tree
             .state
             .downcast_ref::<State<Renderer::Paragraph, Shaped>>();
-        draw_paragraph(
-            renderer,
-            &state.paragraph,
-            layout,
-            viewport,
-            super::style::color(self.color),
-        );
+        let color = if self.inherit {
+            style.text_color
+        } else {
+            super::style::color(self.color)
+        };
+        draw_paragraph(renderer, &state.paragraph, layout, viewport, color);
     }
 }
 
@@ -236,6 +263,39 @@ fn fit(content: &str, available: f32, measure: impl Fn(&str) -> f32) -> String {
             low = mid;
         } else {
             high = mid - 1;
+        }
+    }
+    shortened(low)
+}
+
+/// [`fit`] for a path: the longest tail of `content` that fits after an ellipsis, as long as the
+/// tail holds the whole file name (what follows the last `/`). A file name that does not fit even
+/// behind a bare ellipsis is cut at its end instead, as [`fit`] cuts any label.
+fn fit_path(content: &str, available: f32, measure: impl Fn(&str) -> f32) -> String {
+    let name_at = content.rfind('/').map_or(0, |slash| slash + 1);
+    if name_at == 0 || measure(content) <= available {
+        return fit(content, available, measure);
+    }
+    // Byte offsets where the front may be cut: every character boundary up to the file name.
+    let cuts: Vec<usize> = content[..name_at]
+        .char_indices()
+        .map(|(at, _)| at)
+        .skip(1)
+        .chain(std::iter::once(name_at))
+        .collect();
+    let shortened = |cut: usize| format!("{ELLIPSIS}{}", &content[cuts[cut]..]);
+    let last = cuts.len() - 1;
+    if measure(&shortened(last)) > available {
+        return fit(&content[name_at..], available, measure);
+    }
+    // Smallest cut that fits. Monotone — dropping more of the front never widens the label.
+    let (mut low, mut high) = (0usize, last);
+    while low < high {
+        let mid = low + (high - low) / 2;
+        if measure(&shortened(mid)) <= available {
+            high = mid;
+        } else {
+            low = mid + 1;
         }
     }
     shortened(low)
@@ -386,6 +446,25 @@ mod tests {
         assert_eq!(fit("main", 180.0, shaped), "main");
     }
 
+    /// Feature 1271 (visual re-pass V1): a changed file's path gives way from its directory side,
+    /// so the file name stays readable as long as it fits at all.
+    #[test]
+    fn a_path_keeps_its_file_name_and_cuts_the_directory() {
+        assert_eq!(fit_path("src/b.rs", 8.0, monospace), "src/b.rs");
+        assert_eq!(fit_path("src/b.rs", 7.0, monospace), "…c/b.rs");
+        assert_eq!(fit_path("src/b.rs", 5.0, monospace), "…b.rs");
+        // Not even "…b.rs": the name alone, cut at its end only when it does not fit either.
+        assert_eq!(fit_path("src/b.rs", 4.0, monospace), "b.rs");
+        assert_eq!(fit_path("src/b.rs", 3.0, monospace), "b.…");
+        assert_eq!(fit_path("a/b/longname.rs", 12.0, monospace), "…longname.rs");
+        // No directory: the ordinary cut.
+        assert_eq!(
+            fit_path("main.rs", 5.0, monospace),
+            fit("main.rs", 5.0, monospace)
+        );
+        assert_eq!(fit_path("日本/語.rs", 6.0, monospace), "…/語.rs");
+    }
+
     const INK: Rgb = Rgb::hex(0xFFFFFF);
 
     /// BUG-001. A role is a size *and a face*, and this widget used to take only the number.
@@ -447,6 +526,7 @@ mod tests {
             size: 12.0,
             font,
             line_height: text::LineHeight::default(),
+            path: false,
         };
         assert!(
             shaped(regular) != shaped(medium),

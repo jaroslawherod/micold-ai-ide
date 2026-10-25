@@ -237,3 +237,21 @@ fn the_subagent_and_background_task_icons_have_distinct_glyphs_in_the_bundled_fo
         .collect();
     assert_ne!(ids[0], ids[1], "the two icons draw the same glyph");
 }
+
+/// Feature 1271 (research R9): the review row states have three different glyphs in the font, so
+/// the shape alone tells Unseen, Has drafts and Reviewed apart.
+#[test]
+fn the_review_state_icons_have_three_distinct_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let glyphs: Vec<_> = [Icon::ReviewUnseen, Icon::ReviewDrafts, Icon::ReviewDone]
+        .into_iter()
+        .map(|icon| {
+            face.glyph_index(icon.glyph())
+                .unwrap_or_else(|| panic!("{icon:?} has no glyph in the shipped font"))
+        })
+        .collect();
+    assert!(
+        glyphs[0] != glyphs[1] && glyphs[1] != glyphs[2] && glyphs[0] != glyphs[2],
+        "three states, three glyphs: {glyphs:?}"
+    );
+}

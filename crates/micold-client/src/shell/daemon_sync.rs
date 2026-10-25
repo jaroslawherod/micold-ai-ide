@@ -262,6 +262,9 @@ pub enum PendingOp {
     /// A `ReviewEdit` (feature 482): the result arrives as `ReviewChanged`; this exists so a
     /// refusal or a failed write reaches the user.
     ReviewEdit,
+    /// A `ReviewEdit` of `SetReviewed` (feature 1271, research R6): a refusal or a failed write
+    /// says "Couldn't save the reviewed mark"; the state changes only when `ReviewChanged` arrives.
+    ReviewMark,
     /// A `ReviewSend` (feature 482, S2) of `count` pending comments: the answer names the session
     /// that received them, for the success snackbar. The entry's key routes a failure to the
     /// view that sent (feature 1270, R10).
@@ -336,6 +339,7 @@ impl PendingOp {
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
             PendingOp::ReviewEdit => "save the review comment".into(),
+            PendingOp::ReviewMark => "save the reviewed mark".into(),
             PendingOp::ReviewSend { .. } => "send the review comments".into(),
             PendingOp::AttachDiscover { .. } => "list the worktrees to attach".into(),
             PendingOp::AttachOfferDiscover { .. } => "look for worktrees to attach".into(),
@@ -6643,5 +6647,79 @@ pub(crate) mod tests {
             let view = app.core.changes.tabs.shown_view().expect("shown");
             assert_eq!(view.send_error, None);
         }
+    }
+
+    /// Feature 1271 (Edge Cases: a failed mark request, research R6): a refused `SetReviewed`
+    /// notifies where review edit failures appear and changes no mark: the state follows
+    /// `ReviewChanged` only.
+    #[test]
+    fn a_refused_reviewed_mark_notifies_and_changes_no_mark() {
+        use micold_core::protocol::messages::{ErrorKind, ReviewEditOp};
+        use micold_core::review::comment::Scope;
+        use micold_core::review::marks::{ChangeId, EntryMarks, ReviewMark};
+        use micold_core::review::RelPath;
+
+        let project = PathBuf::from("/repo/here");
+        let (mut app, mut rx) = connected_app();
+        app.core.workspace.active = Some(project.clone());
+        let marked = micold_client::features::changes::ReviewView {
+            marks: EntryMarks::from_vec(vec![ReviewMark {
+                scope: Scope::WorkingTree,
+                path: RelPath::from_native("src/a.rs").expect("a relative path"),
+                change: ChangeId::parse(&"ab".repeat(20)).expect("an id"),
+            }]),
+            ..Default::default()
+        };
+        app.core
+            .changes
+            .reviews
+            .insert((project.clone(), "feat-a".into()), marked);
+        let before = app.core.changes.reviews.clone();
+
+        send_op(&mut app, PendingOp::ReviewMark, |req| {
+            ClientMsg::ReviewEdit {
+                req,
+                project: project.clone(),
+                worktree_dir: "feat-a".into(),
+                edit: ReviewEditOp::SetReviewed {
+                    scope: Scope::WorkingTree,
+                    path: "src/a.rs".into(),
+                    change: None,
+                },
+            }
+        });
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        let [ClientMsg::ReviewEdit { req, .. }] = sent.as_slice() else {
+            panic!("one ReviewEdit is sent, got {sent:?}");
+        };
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::OperationError {
+                req: *req,
+                kind: ErrorKind::Refused,
+                message: "the review file could not be written".into(),
+                detail: None,
+            },
+        );
+
+        let visible = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("the failure is told");
+        assert_eq!(
+            visible.message,
+            "Couldn't save the reviewed mark: the review file could not be written"
+        );
+        assert_eq!(
+            app.core.changes.reviews, before,
+            "no mark changed: the state follows ReviewChanged only"
+        );
+        assert!(app.pending_ops.is_empty(), "the op is resolved");
     }
 }

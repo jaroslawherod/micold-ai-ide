@@ -64,6 +64,8 @@ from the app.
 
 One row per changed file:
 
+- its review state: ○ not reviewed yet, ◉ not reviewed and with draft comments, ✓ reviewed (see
+  [Marking files reviewed](#marking-files-reviewed));
 - the file's path, relative to the worktree;
 - what happened to it: **Added**, **Modified**, **Deleted**, **Renamed from** `<old path>` or
   **Mode** (only its permissions changed). A file git does not track yet counts as **Added**;
@@ -295,6 +297,37 @@ its files may have changed meanwhile (they changed while its location was shown,
 not shown, or the Overview or Settings covered it), so it never shows an older read as current;
 the selected file, scroll positions, comment text and picked lines are kept as any refresh keeps
 them.
+
+## Marking files reviewed
+
+Once you have read a file's diff, press **Mark reviewed** in the diff header, beside **Whole
+file**. The file's row turns to ✓ and the control reads **Reviewed**, shown pressed; press it
+again to take the mark back. A file with draft comments shows ◉ until you mark it; marking it keeps
+its drafts and their count on the row.
+
+A mark is made on the file's change as it is now. When the file changes again (an edit, a new
+commit that alters it), it is no longer reviewed and shows ○ or ◉ until you mark it again;
+committing or staging it unaltered keeps it reviewed.
+
+The view's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
+the list shows, so it follows the **Committed** and **Uncommitted** toggles, and *n* how many of
+them are reviewed. With no files listed, or while marks are unavailable, the header shows neither,
+and nothing else in it moves.
+
+A mark covers the file's whole change, committed and uncommitted together, whatever the toggles
+show. **Mark reviewed** is unavailable, with a tooltip saying why, when:
+
+- **Committed** or **Uncommitted** is off and the file has changes of the hidden kind: turn both
+  on to see its whole change first. **Reviewed** stays pressable, so you can always take a mark
+  back;
+- the file's change has not been read yet, or could not be read (it can be marked once a later
+  read succeeds);
+- the session service is not connected. Rows then show ○ and ◉ only and the header shows no
+  progress; comments keep working.
+
+Marks are kept by the session service, beside the entry's comments: every window on the project
+shows the same marks, and they are still there after a restart. They are removed with the
+worktree.
 
 ## Commenting on lines
 

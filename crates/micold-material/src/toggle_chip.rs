@@ -8,7 +8,7 @@
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
 use crate::style;
-use crate::{Text, TypeRole};
+use crate::{Ellipsized, Text, TypeRole};
 use iced::widget::button;
 use iced::{Background, Border, Color, Element};
 use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
@@ -43,6 +43,7 @@ pub struct ToggleChip<M> {
     accent: Option<(Rgb, Rgb)>,
     count: usize,
     disabled: bool,
+    one_line: bool,
 }
 
 impl<M> ToggleChip<M> {
@@ -57,6 +58,7 @@ impl<M> ToggleChip<M> {
             accent: None,
             count: 0,
             disabled: false,
+            one_line: false,
         }
     }
 
@@ -87,6 +89,14 @@ impl<M> ToggleChip<M> {
     /// container at 12% (`tokens::state`).
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Keep the label on one line, ending in an ellipsis where the chip is given less than its
+    /// width, rather than wrapping a two-word label inside the 32dp pill (feature 1271: **Mark
+    /// reviewed** in a narrow diff pane).
+    pub fn one_line(mut self) -> Self {
+        self.one_line = true;
         self
     }
 
@@ -141,7 +151,17 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         // `Tag` keeps `sidebar_tag`: the contract's own row for the worktree tag says `label_small`
         // *in the sidebar*, and those sit inside 36dp dense rows where 32dp chips would not fit.
         let label = chip_label(&chip.label, chip.count);
-        let chip_button = button(
+        let content: Element<'a, M> = if chip.one_line {
+            // The same line box, centred the same way, but cut rather than wrapped.
+            iced::widget::container(
+                Ellipsized::<M>::at_role_spaced(label, TypeRole::Action, r.on_surface_variant)
+                    .inherit_color()
+                    .shrink(),
+            )
+            .height(iced::Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .into()
+        } else {
             Text::new(label, TypeRole::Action, r)
                 // §7.6's label alignment (FR-030a), and the whole of BUG-001. A chip is 32dp and
                 // its label is a 20dp line box, so 12dp of slack exists by construction and
@@ -154,81 +174,83 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                 // Both halves are stated rather than inherited: `Fill` says the node is the pill's
                 // height on purpose, `Center` says where the line box sits inside it.
                 .height(iced::Length::Fill)
-                .align_y(iced::alignment::Vertical::Center),
-        )
-        // §7.6: a chip is 32dp tall with 12dp of horizontal padding. There is no vertical padding
-        // because the height is set outright — which is precisely why the alignment above is not
-        // optional. Zero vertical padding means "size me by my label" only while a component has
-        // no height of its own.
-        .padding(iced::Padding {
-            top: 0.0,
-            bottom: 0.0,
-            left: anatomy::chip::PADDING,
-            right: anatomy::chip::PADDING,
-        })
-        .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
-        .on_press_maybe(on_press)
-        .style(move |_theme: &iced::Theme, status| {
-            let border = |color: Color| Border {
-                color,
-                width: if active { 0.0 } else { anatomy::chip::OUTLINE },
-                radius: shape::FULL.into(),
-            };
-            if disabled {
-                // Material's disabled treatment, from the state tokens rather than a literal.
-                let content = |c: Color| Color {
-                    a: state::DISABLED_CONTENT,
-                    ..c
+                .align_y(iced::alignment::Vertical::Center)
+                .into()
+        };
+        let chip_button = button(content)
+            // §7.6: a chip is 32dp tall with 12dp of horizontal padding. There is no vertical padding
+            // because the height is set outright — which is precisely why the alignment above is not
+            // optional. Zero vertical padding means "size me by my label" only while a component has
+            // no height of its own.
+            .padding(iced::Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: anatomy::chip::PADDING,
+                right: anatomy::chip::PADDING,
+            })
+            .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
+            .on_press_maybe(on_press)
+            .style(move |_theme: &iced::Theme, status| {
+                let border = |color: Color| Border {
+                    color,
+                    width: if active { 0.0 } else { anatomy::chip::OUTLINE },
+                    radius: shape::FULL.into(),
                 };
-                let text = if active { on } else { muted };
-                return iced::widget::button::Style {
-                    background: Some(Background::Color(if active {
-                        Color {
-                            a: state::DISABLED_CONTAINER,
-                            ..fill
-                        }
-                    } else {
-                        Color::TRANSPARENT
-                    })),
-                    text_color: content(text),
-                    border: border(if active {
-                        Color::TRANSPARENT
-                    } else {
-                        Color {
-                            a: state::DISABLED_CONTAINER,
-                            ..outline
-                        }
-                    }),
+                if disabled {
+                    // Material's disabled treatment, from the state tokens rather than a literal.
+                    let content = |c: Color| Color {
+                        a: state::DISABLED_CONTENT,
+                        ..c
+                    };
+                    let text = if active { on } else { muted };
+                    return iced::widget::button::Style {
+                        background: Some(Background::Color(if active {
+                            Color {
+                                a: state::DISABLED_CONTAINER,
+                                ..fill
+                            }
+                        } else {
+                            Color::TRANSPARENT
+                        })),
+                        text_color: content(text),
+                        border: border(if active {
+                            Color::TRANSPARENT
+                        } else {
+                            Color {
+                                a: state::DISABLED_CONTAINER,
+                                ..outline
+                            }
+                        }),
+                        ..Default::default()
+                    };
+                }
+                // The chip responds to the pointer. It used to ignore `status` entirely, so a
+                // filter chip was the one interactive thing in the sidebar that gave no
+                // feedback at all — FR-021 applies the state-layer set to *every* interactive
+                // surface, not to buttons alone, and a chip that never reacts reads as
+                // decoration rather than as a control.
+                //
+                // The layer is the content colour over the container, exactly as everywhere
+                // else: over the fill when the chip is on, over what it sits on when it is off.
+                let opacity = match status {
+                    iced::widget::button::Status::Hovered => state::HOVER,
+                    iced::widget::button::Status::Pressed => state::PRESSED,
+                    _ => 0.0,
+                };
+                let background = if active {
+                    Some(Background::Color(style::state_layer(fill, on, opacity)))
+                } else if opacity > 0.0 {
+                    Some(Background::Color(style::state_fill(muted, opacity)))
+                } else {
+                    Some(Background::Color(Color::TRANSPARENT))
+                };
+                iced::widget::button::Style {
+                    background,
+                    text_color: if active { on } else { muted },
+                    border: border(if active { fill } else { outline }),
                     ..Default::default()
-                };
-            }
-            // The chip responds to the pointer. It used to ignore `status` entirely, so a
-            // filter chip was the one interactive thing in the sidebar that gave no
-            // feedback at all — FR-021 applies the state-layer set to *every* interactive
-            // surface, not to buttons alone, and a chip that never reacts reads as
-            // decoration rather than as a control.
-            //
-            // The layer is the content colour over the container, exactly as everywhere
-            // else: over the fill when the chip is on, over what it sits on when it is off.
-            let opacity = match status {
-                iced::widget::button::Status::Hovered => state::HOVER,
-                iced::widget::button::Status::Pressed => state::PRESSED,
-                _ => 0.0,
-            };
-            let background = if active {
-                Some(Background::Color(style::state_layer(fill, on, opacity)))
-            } else if opacity > 0.0 {
-                Some(Background::Color(style::state_fill(muted, opacity)))
-            } else {
-                Some(Background::Color(Color::TRANSPARENT))
-            };
-            iced::widget::button::Style {
-                background,
-                text_color: if active { on } else { muted },
-                border: border(if active { fill } else { outline }),
-                ..Default::default()
-            }
-        });
+                }
+            });
         // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
         // in its own text colour: the accent when on, the muted role when off.
         // A disabled chip cannot be pressed, so a ripple would report a press that never happens.
