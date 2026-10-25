@@ -10,7 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
-use crate::jira_filter::JiraFilters;
+use crate::jira_filter::{JiraFilters, VersionChoice};
 use crate::jira_query::{QueryFailure, ScopedQuery};
 use crate::jira_status::{KeyedStatus, TicketStatus};
 use crate::settings::Settings;
@@ -691,6 +691,15 @@ pub trait JiraSource: Send + Sync {
     ) -> Result<Vec<String>, IssueLoadError> {
         Ok(Vec::new())
     }
+
+    /// The connected project's unarchived fix versions, unreleased first (feature 1185).
+    fn versions(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Vec<VersionChoice>, IssueLoadError> {
+        Ok(Vec::new())
+    }
 }
 
 /// What a source that cannot filter answers a filtered request with (research R10).
@@ -743,6 +752,8 @@ pub enum FilteredAsk {
 pub enum ChoiceCall {
     /// The project's components.
     Components,
+    /// The project's fix versions.
+    Versions,
 }
 
 fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -766,6 +777,7 @@ pub struct FakeJiraSource {
     query_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
     filtered_calls: std::sync::Mutex<Vec<(Vec<String>, FilteredAsk)>>,
     components: Script<Vec<String>>,
+    versions: Script<Vec<VersionChoice>>,
     choice_calls: std::sync::Mutex<Vec<ChoiceCall>>,
 }
 
@@ -846,6 +858,17 @@ impl FakeJiraSource {
     /// Answer the next unanswered `components` call, after construction.
     pub fn script_components(&self, result: Result<Vec<String>, IssueLoadError>) {
         locked(&self.components).push_back(result);
+    }
+
+    /// Answer the next unanswered `versions` call with `result`.
+    pub fn with_versions(self, result: Result<Vec<VersionChoice>, IssueLoadError>) -> Self {
+        self.script_versions(result);
+        self
+    }
+
+    /// Answer the next unanswered `versions` call, after construction.
+    pub fn script_versions(&self, result: Result<Vec<VersionChoice>, IssueLoadError>) {
+        locked(&self.versions).push_back(result);
     }
 
     /// Every choice request so far.
@@ -943,6 +966,19 @@ impl JiraSource for FakeJiraSource {
         locked(&self.components).pop_front().unwrap_or_else(|| {
             Err(IssueLoadError::Other(
                 "FakeJiraSource: no components scripted for this call".into(),
+            ))
+        })
+    }
+
+    fn versions(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Vec<VersionChoice>, IssueLoadError> {
+        locked(&self.choice_calls).push(ChoiceCall::Versions);
+        locked(&self.versions).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no versions scripted for this call".into(),
             ))
         })
     }

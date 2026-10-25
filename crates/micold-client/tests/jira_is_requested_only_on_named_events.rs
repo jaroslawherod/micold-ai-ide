@@ -222,9 +222,15 @@ fn filter_choices_and_filtered_loads_start_only_from_their_handlers() {
         choices[0].0,
         "crates/micold-client/src/shell/jira_filters.rs"
     );
-    let starters: Vec<_> = occurrences("start_components(")
+    let versions: Vec<_> = occurrences(".versions(connection, token)");
+    assert_eq!(versions.len(), 1, "{versions:?}");
+    assert_eq!(
+        versions[0].0,
+        "crates/micold-client/src/shell/jira_filters.rs"
+    );
+    let starters: Vec<_> = occurrences("start_choices(")
         .into_iter()
-        .filter(|(_, line)| !line.starts_with("fn start_components("))
+        .filter(|(_, line)| !line.starts_with("fn start_choices("))
         .collect();
     assert_eq!(starters.len(), 1, "{starters:?}");
     let loads: Vec<_> = occurrences("start_jira_load(")

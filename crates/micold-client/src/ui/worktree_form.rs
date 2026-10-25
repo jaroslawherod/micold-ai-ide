@@ -10,7 +10,7 @@
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
-use crate::features::worktree_form::jira_filters::{shows_filters, FilterMsg, RowText, OFFERED};
+use crate::features::worktree_form::jira_filters::{shows_filters, FilterMsg, OFFERED};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
     BranchSource, IssueDetailsState, IssueList, ResolutionState, SearchState, SessionChoice,
@@ -513,6 +513,11 @@ fn issue_row(issue: &Issue, spans: &[std::ops::Range<usize>], board: &StatusBoar
         .tooltip(issue.description())
 }
 
+/// The share of the issue picker's main row its own control (the issue search, the loading line,
+/// an empty list's words) takes beside the Jira filter fields, which take one share each
+/// (feature 1185, ledger D9, D14).
+const PICKER_MAIN: Length = Length::FillPortion(1);
+
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
 fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> Element<'a, Message> {
@@ -557,8 +562,10 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     };
     // Feature 1185: the Jira filters ride on the picker's main row, trailing, whatever the list's
     // state but unasked: beside the search, the Retry or the loading line. A row of their own took
-    // a line the tallest dialog does not have (`gates/panel_placement.rs`; ledger D9).
-    // A failed listing seats none: see its arm below.
+    // a line the tallest dialog does not have (`gates/panel_placement.rs`; ledger D9). The main
+    // control and each field share the row equally ([`PICKER_MAIN`]): narrower, a field's text
+    // input does not fit its icon and clear action (`gates/containment.rs`). A failed listing
+    // seats none: see its arm below.
     let failed = matches!(form.issues, IssueList::Failed { .. });
     let mut filters = (shows_filters(form) && !failed).then(|| jira_filter_row(form, source, r));
     let mut seat = |main: Element<'a, Message>, width: Length| -> Element<'a, Message> {
@@ -594,10 +601,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 Some(site) => format!("Loading issues from {}…", site.host),
                 None => "Loading issues from GitHub…".to_string(),
             };
-            col = col.push(seat(
-                StageProgress::new(loading, r).into(),
-                Length::FillPortion(2),
-            ));
+            col = col.push(seat(StageProgress::new(loading, r).into(), PICKER_MAIN));
             col = col.extend(active(None));
         }
         // A failed listing seats no filter field: a field is taller than Retry, and the form has
@@ -623,7 +627,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             let empty = form.filtered_empty_text().unwrap_or_default();
             col = col.push(seat(
                 Text::new(empty, TypeRole::Caption, r).muted().into(),
-                Length::FillPortion(2),
+                PICKER_MAIN,
             ));
             col = col.extend(active(None));
         }
@@ -638,7 +642,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             };
             col = col.push(seat(
                 Text::new(empty, TypeRole::Caption, r).muted().into(),
-                Length::FillPortion(2),
+                PICKER_MAIN,
             ));
             col = col.extend(active(None));
         }
@@ -662,7 +666,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 .on_dismiss(Message::WorktreeForm(FormMsg::IssueDismissed))
                 .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index)))
                 .into(),
-                Length::FillPortion(2),
+                PICKER_MAIN,
             ));
             // FR-004: say the list is capped rather than presenting a part as the whole. With
             // filters chosen it follows the active line in one paragraph (1185, D9, D12).
@@ -722,12 +726,14 @@ fn jira_filter_row<'a>(
             .iter()
             .map(|row| {
                 let label = row.label(kind, Some(source));
-                let built = match &row.text {
-                    // A failure's cause is the row's second line, wrapped in full: the list is as
-                    // narrow as its field, and a cut cause says nothing (FR-012).
-                    RowText::Failed(_) => TypeaheadRow::new(row.label(kind, None), Vec::new())
-                        .details(label, Vec::new()),
-                    _ => TypeaheadRow::new(label.clone(), row.spans.clone())
+                let built = match row.summary(kind) {
+                    // A failure's cause, or why there is nothing to choose, is the row's second
+                    // line, wrapped in full: the list is as narrow as its field, and a cut reason
+                    // says nothing (FR-012; spec Edge Cases, "Empty choices").
+                    Some(summary) => {
+                        TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new())
+                    }
+                    None => TypeaheadRow::new(label.clone(), row.spans.clone())
                         .single_line()
                         .tooltip(label),
                 };

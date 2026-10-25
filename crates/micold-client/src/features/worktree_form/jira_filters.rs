@@ -14,7 +14,7 @@
 
 use crate::features::worktree_form::{IssueList, WorktreeForm, WorktreeFormStatus};
 use micold_core::github::{Issue, IssueLoadError, NoticeSource};
-use micold_core::jira_filter::{FilterKind, JiraFilters};
+use micold_core::jira_filter::{FilterKind, JiraFilters, VersionChoice};
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 
 /// A filter's choices, from never asked to loaded (data-model §6).
@@ -29,6 +29,46 @@ pub enum ChoiceLoad<T> {
     Failed { error: IssueLoadError },
     /// The choices, in the order they are offered.
     Loaded(Vec<T>),
+}
+
+impl<T> ChoiceLoad<T> {
+    /// Put the choices in flight under `seq`: a first request when never asked (`retry` false), a
+    /// Retry when failed (`retry` true). `true` when they were put in flight.
+    fn start(&mut self, seq: u64, retry: bool) -> bool {
+        let due = match self {
+            ChoiceLoad::NotRequested => !retry,
+            ChoiceLoad::Failed { .. } => retry,
+            ChoiceLoad::Loading { .. } | ChoiceLoad::Loaded(_) => false,
+        };
+        if due {
+            *self = ChoiceLoad::Loading { seq };
+        }
+        due
+    }
+
+    /// Take the answer to the request awaited under `seq`; `false` (unchanged) for another seq.
+    fn answer(&mut self, seq: u64, result: Result<Vec<T>, IssueLoadError>) -> bool {
+        if !matches!(self, ChoiceLoad::Loading { seq: awaited } if *awaited == seq) {
+            return false;
+        }
+        *self = match result {
+            Ok(choices) => ChoiceLoad::Loaded(choices),
+            Err(error) => ChoiceLoad::Failed { error },
+        };
+        true
+    }
+
+    /// The same state with each choice named by `name`: what the field ranks and shows.
+    fn named(&self, name: impl Fn(&T) -> String) -> ChoiceLoad<String> {
+        match self {
+            ChoiceLoad::NotRequested => ChoiceLoad::NotRequested,
+            ChoiceLoad::Loading { seq } => ChoiceLoad::Loading { seq: *seq },
+            ChoiceLoad::Failed { error } => ChoiceLoad::Failed {
+                error: error.clone(),
+            },
+            ChoiceLoad::Loaded(choices) => ChoiceLoad::Loaded(choices.iter().map(name).collect()),
+        }
+    }
 }
 
 /// One filter field's typeahead: its own typed text, ranked matches, highlight and open list.
@@ -51,6 +91,8 @@ pub struct FilterState {
     pub chosen: JiraFilters,
     /// The project's components.
     pub components: ChoiceLoad<String>,
+    /// The project's unarchived fix versions, unreleased first.
+    pub versions: ChoiceLoad<VersionChoice>,
     /// Each filter's field, in [`FilterKind::ALL`] order.
     fields: [FilterField; 4],
     /// The picked issue as it was when a filter change reloaded the list, so the form keeps its
@@ -58,8 +100,8 @@ pub struct FilterState {
     pub kept_pick: Option<Issue>,
 }
 
-/// The filters this build offers in the row, in order (M1: the component).
-pub const OFFERED: [FilterKind; 1] = [FilterKind::Component];
+/// The filters this build offers in the row, in order (M2: the component and the fix version).
+pub const OFFERED: [FilterKind; 2] = [FilterKind::Component, FilterKind::FixVersion];
 
 /// The position of `kind` in [`FilterKind::ALL`].
 fn slot(kind: FilterKind) -> usize {
@@ -128,6 +170,17 @@ impl FilterRow {
         self.action != RowAction::Inert
     }
 
+    /// A short first line for a row whose words wrap under it, for `kind`: "Couldn't load the
+    /// versions." over a failure's cause, "No versions" over why there are none. `None` for a row
+    /// that is its own one line.
+    pub fn summary(&self, kind: FilterKind) -> Option<String> {
+        match self.text {
+            RowText::Failed(_) => Some(format!("Couldn't load the {}.", plural(kind))),
+            RowText::Empty => Some(format!("No {}", plural(kind))),
+            _ => None,
+        }
+    }
+
     /// The row's words for `kind`; a failure is named for `source`.
     pub fn label(&self, kind: FilterKind, source: Option<NoticeSource<'_>>) -> String {
         match &self.text {
@@ -136,7 +189,7 @@ impl FilterRow {
             RowText::Loading => format!("Loading {}…", plural(kind)),
             RowText::Failed(error) => match source {
                 Some(source) => error.message(source),
-                None => format!("Couldn't load the {}.", plural(kind)),
+                None => self.summary(kind).unwrap_or_default(),
             },
             RowText::Retry => "Retry".to_string(),
             RowText::Empty => format!("This project has no {}", plural(kind)),
@@ -165,36 +218,43 @@ impl FilterState {
         &mut self.fields[slot(kind)]
     }
 
-    /// `kind`'s choice load, for the filters that ask Jira for their choices.
-    pub fn choices(&self, kind: FilterKind) -> Option<&ChoiceLoad<String>> {
+    /// `kind`'s choice load with each choice by the name it shows and sends, for the filters that
+    /// ask Jira for their choices.
+    pub fn choices(&self, kind: FilterKind) -> Option<ChoiceLoad<String>> {
         match kind {
-            FilterKind::Component => Some(&self.components),
-            _ => None,
+            FilterKind::Component => Some(self.components.clone()),
+            FilterKind::FixVersion => Some(self.versions.named(|v| v.name().to_owned())),
+            FilterKind::Reporter | FilterKind::Label => None,
         }
     }
 
-    fn choices_mut(&mut self, kind: FilterKind) -> Option<&mut ChoiceLoad<String>> {
+    /// Put `kind`'s choices in flight under `seq` ([`ChoiceLoad::start`]); `false` for a filter
+    /// whose choices are not asked of Jira.
+    fn start(&mut self, kind: FilterKind, seq: u64, retry: bool) -> bool {
         match kind {
-            FilterKind::Component => Some(&mut self.components),
-            _ => None,
+            FilterKind::Component => self.components.start(seq, retry),
+            FilterKind::FixVersion => self.versions.start(seq, retry),
+            FilterKind::Reporter | FilterKind::Label => false,
         }
     }
 
-    /// The seq of the choice request now awaited, with its filter.
+    /// The newest choice request awaited, with its filter: the one a focus or a Retry just put in
+    /// flight, even while another filter's request is still out.
     pub fn awaited_choices(&self) -> Option<(FilterKind, u64)> {
         OFFERED
             .into_iter()
-            .find_map(|kind| match self.choices(kind)? {
-                ChoiceLoad::Loading { seq } => Some((kind, *seq)),
+            .filter_map(|kind| match self.choices(kind)? {
+                ChoiceLoad::Loading { seq } => Some((kind, seq)),
                 _ => None,
             })
+            .max_by_key(|(_, seq)| *seq)
     }
 
     /// The rows of `kind`'s list: "Any <filter>" first, then the matching choices, or the state the
     /// choices are in (contracts/filter-ui.md §2).
     pub fn rows(&self, kind: FilterKind) -> Vec<FilterRow> {
         let mut rows = vec![FilterRow::new(RowText::Any, RowAction::Any)];
-        match self.choices(kind) {
+        match &self.choices(kind) {
             None | Some(ChoiceLoad::NotRequested) | Some(ChoiceLoad::Loading { .. }) => {
                 rows.push(FilterRow::new(RowText::Loading, RowAction::Inert));
             }
@@ -249,7 +309,7 @@ impl FilterState {
     fn rematch(&mut self, kind: FilterKind) {
         let chosen = self.chosen.shown(kind);
         let choices: Vec<String> = match self.choices(kind) {
-            Some(ChoiceLoad::Loaded(choices)) => choices.clone(),
+            Some(ChoiceLoad::Loaded(choices)) => choices,
             _ => Vec::new(),
         };
         let field = self.field_mut(kind);
@@ -324,6 +384,11 @@ pub enum FilterMsg {
         seq: u64,
         result: Result<Vec<String>, IssueLoadError>,
     },
+    /// The project's fix versions answered. Applies only while they are awaited under `seq`.
+    VersionsLoaded {
+        seq: u64,
+        result: Result<Vec<VersionChoice>, IssueLoadError>,
+    },
 }
 
 /// Whether the open form shows the filters: the Jira source is showing, its list asked for.
@@ -346,14 +411,15 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
     match msg {
         FilterMsg::ComponentsLoaded { seq, result } => {
             let filters = &mut form.jira_filters;
-            if filters.components != (ChoiceLoad::Loading { seq }) {
-                return;
+            if filters.components.answer(seq, result) {
+                filters.rematch(FilterKind::Component);
             }
-            filters.components = match result {
-                Ok(names) => ChoiceLoad::Loaded(names),
-                Err(error) => ChoiceLoad::Failed { error },
-            };
-            filters.rematch(FilterKind::Component);
+        }
+        FilterMsg::VersionsLoaded { seq, result } => {
+            let filters = &mut form.jira_filters;
+            if filters.versions.answer(seq, result) {
+                filters.rematch(FilterKind::FixVersion);
+            }
         }
         // Closing a list is never refused: a list left open behind a prompt would reappear.
         FilterMsg::Dismissed(kind) => {
@@ -365,12 +431,7 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
         FilterMsg::Focused(kind) => {
             let filters = &mut form.jira_filters;
             filters.field_mut(kind).open = true;
-            if let Some(load @ ChoiceLoad::NotRequested) = filters.choices_mut(kind) {
-                *load = ChoiceLoad::Loading {
-                    seq: next_filter_seq,
-                };
-                asked = true;
-            }
+            asked = filters.start(kind, next_filter_seq, false);
             filters.rematch(kind);
         }
         FilterMsg::QueryChanged(kind, text) => {
@@ -400,7 +461,7 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
                 }
                 RowAction::Choice(choice) => {
                     let Some(value) = (match filters.choices(kind) {
-                        Some(ChoiceLoad::Loaded(choices)) => choices.get(choice).cloned(),
+                        Some(ChoiceLoad::Loaded(choices)) => choices.into_iter().nth(choice),
                         _ => None,
                     }) else {
                         return;
@@ -448,14 +509,11 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
 
 /// Ask for `kind`'s choices again when they failed; `true` when a request was handed `seq`.
 fn retry(filters: &mut FilterState, kind: FilterKind, seq: u64) -> bool {
-    match filters.choices_mut(kind) {
-        Some(load @ ChoiceLoad::Failed { .. }) => {
-            *load = ChoiceLoad::Loading { seq };
-            filters.rematch(kind);
-            true
-        }
-        _ => false,
+    let asked = filters.start(kind, seq, true);
+    if asked {
+        filters.rematch(kind);
     }
+    asked
 }
 
 #[cfg(test)]

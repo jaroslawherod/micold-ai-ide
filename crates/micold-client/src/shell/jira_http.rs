@@ -24,7 +24,9 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage};
 use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
-use micold_core::jira_filter::{narrowed, parse_components, JiraFilters};
+use micold_core::jira_filter::{
+    narrowed, parse_components, parse_versions, JiraFilters, VersionChoice,
+};
 use micold_core::jira_query::{rejection_messages, QueryFailure, ScopedQuery};
 use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
 
@@ -344,6 +346,15 @@ impl JiraSource for JiraCloud {
     ) -> Result<Vec<String>, IssueLoadError> {
         let path = format!("/rest/api/3/project/{}/components", conn.project_key);
         parse_components(&self.get(conn, token, &path, &[])?)
+    }
+
+    fn versions(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+    ) -> Result<Vec<VersionChoice>, IssueLoadError> {
+        let path = format!("/rest/api/3/project/{}/versions", conn.project_key);
+        parse_versions(&self.get(conn, token, &path, &[])?)
     }
 }
 

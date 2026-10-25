@@ -15,10 +15,11 @@ use micold_core::git::GitRemote;
 use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::issue_types::default_mapping;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
-use micold_core::jira_filter::FilterKind;
+use micold_core::jira_filter::{FilterKind, VersionChoice};
 use micold_core::typeahead::Direction;
 
 const COMPONENT: FilterKind = FilterKind::Component;
+const FIX_VERSION: FilterKind = FilterKind::FixVersion;
 
 fn connection() -> JiraConnection {
     JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap()
@@ -620,7 +621,9 @@ fn assert_reset(state: &State, why: &str) {
     let filters = &form(state).jira_filters;
     assert!(filters.chosen.is_empty(), "{why}");
     assert_eq!(filters.components, ChoiceLoad::NotRequested, "{why}");
+    assert_eq!(filters.versions, ChoiceLoad::NotRequested, "{why}");
     assert_eq!(filters.field(COMPONENT).query, "", "{why}");
+    assert_eq!(filters.field(FIX_VERSION).query, "", "{why}");
 }
 
 #[test]
@@ -786,4 +789,324 @@ fn a_filter_list_closes_even_behind_a_running_create() {
         state.worktree_form.issue_request_seq, before,
         "a pick waits for editing"
     );
+}
+
+// Feature 1185 M2: the fix-version filter (US1 AS3, AS5; FR-003; SC-001).
+
+fn version(name: &str, released: bool) -> VersionChoice {
+    VersionChoice::new(name, released).expect("usable name")
+}
+
+/// What Jira's versions parse to for the fake project: 2.4 unreleased, 2.3 released, 1.0 archived
+/// (dropped by `parse_versions`).
+fn versions() -> Vec<VersionChoice> {
+    vec![version("2.4", false), version("2.3", true)]
+}
+
+fn version_seq(state: &State) -> u64 {
+    match &form(state).jira_filters.versions {
+        ChoiceLoad::Loading { seq } => *seq,
+        other => panic!("expected versions in flight, found {other:?}"),
+    }
+}
+
+/// Focus Fix version and answer its request with `result`.
+fn focus_versions(state: &mut State, result: Result<Vec<VersionChoice>, IssueLoadError>) {
+    filter(state, FilterMsg::Focused(FIX_VERSION));
+    let seq = version_seq(state);
+    filter(state, FilterMsg::VersionsLoaded { seq, result });
+}
+
+fn labels_of(state: &State, kind: FilterKind) -> Vec<String> {
+    form(state)
+        .jira_filters
+        .rows(kind)
+        .iter()
+        .map(|row| row.label(kind, Some(source())))
+        .collect()
+}
+
+fn pick_in(state: &mut State, kind: FilterKind, label: &str) {
+    let labels = labels_of(state, kind);
+    let index = labels
+        .iter()
+        .position(|l| l == label)
+        .unwrap_or_else(|| panic!("no row {label:?} in {labels:?}"));
+    filter(state, FilterMsg::Picked(kind, index));
+}
+
+/// Payments chosen and answered, then fix version 2.4 chosen and answered.
+fn both() -> State {
+    let mut state = filtered();
+    focus_versions(&mut state, Ok(versions()));
+    pick_in(&mut state, FIX_VERSION, "2.4");
+    let seq = awaited(&state);
+    answer(
+        &mut state,
+        seq,
+        Ok(listing(vec![issue("ABC-3", 3, "Refund button", &[])], true)),
+    );
+    state
+}
+
+#[test]
+fn focusing_fix_version_asks_once_and_offers_unreleased_first_without_archived() {
+    let mut state = loaded();
+    assert_eq!(form(&state).jira_filters.versions, ChoiceLoad::NotRequested);
+    let before = state.worktree_form.filter_request_seq;
+    filter(&mut state, FilterMsg::Focused(FIX_VERSION));
+    assert!(form(&state).jira_filters.field(FIX_VERSION).open);
+    assert_eq!(version_seq(&state), before + 1);
+    assert_eq!(
+        *components(&state),
+        ChoiceLoad::NotRequested,
+        "only the focused filter asks"
+    );
+    assert_eq!(
+        labels_of(&state, FIX_VERSION),
+        ["Any fix version", "Loading versions…"]
+    );
+    let seq = version_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(versions()),
+        },
+    );
+    assert_eq!(
+        labels_of(&state, FIX_VERSION),
+        ["Any fix version", "2.4", "2.3"]
+    );
+    filter(&mut state, FilterMsg::Dismissed(FIX_VERSION));
+    filter(&mut state, FilterMsg::Focused(FIX_VERSION));
+    assert_eq!(
+        state.worktree_form.filter_request_seq,
+        before + 1,
+        "a second focus asks nothing"
+    );
+}
+
+#[test]
+fn a_versions_answer_for_another_seq_or_to_the_components_is_dropped() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::Focused(FIX_VERSION));
+    let seq = version_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq: seq + 7,
+            result: Ok(versions()),
+        },
+    );
+    assert_eq!(version_seq(&state), seq);
+    filter(
+        &mut state,
+        FilterMsg::ComponentsLoaded {
+            seq,
+            result: Ok(names()),
+        },
+    );
+    assert_eq!(
+        version_seq(&state),
+        seq,
+        "a components answer fills nothing here"
+    );
+    assert_eq!(*components(&state), ChoiceLoad::NotRequested);
+}
+
+#[test]
+fn a_component_and_a_fix_version_load_with_both_clauses_anded() {
+    let mut state = filtered();
+    focus_versions(&mut state, Ok(versions()));
+    let before = state.worktree_form.issue_request_seq;
+    pick_in(&mut state, FIX_VERSION, "2.4");
+    assert_eq!(state.worktree_form.issue_request_seq, before + 1);
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"component = "Payments""#, r#"fixVersion = "2.4""#]
+    );
+    assert_eq!(form(&state).jira_filters.field(FIX_VERSION).query, "2.4");
+    assert_eq!(
+        form(&state).jira_filters.active_line().as_deref(),
+        Some("Filtered by component Payments, fix version 2.4")
+    );
+    let seq = awaited(&state);
+    answer(
+        &mut state,
+        seq,
+        Ok(listing(vec![issue("ABC-3", 3, "Refund button", &[])], true)),
+    );
+    assert_eq!(shown_keys(&state), ["ABC-3"]);
+}
+
+#[test]
+fn clearing_one_filter_keeps_the_other() {
+    let mut state = both();
+    let before = state.worktree_form.issue_request_seq;
+    filter(&mut state, FilterMsg::Cleared(COMPONENT));
+    assert_eq!(state.worktree_form.issue_request_seq, before + 1);
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"fixVersion = "2.4""#]
+    );
+    assert_eq!(
+        form(&state).jira_filters.active_line().as_deref(),
+        Some("Filtered by fix version 2.4")
+    );
+
+    let mut state = both();
+    filter(&mut state, FilterMsg::Focused(FIX_VERSION));
+    pick_in(&mut state, FIX_VERSION, "Any fix version");
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"component = "Payments""#]
+    );
+    assert_eq!(form(&state).jira_filters.field(FIX_VERSION).query, "");
+
+    let mut state = both();
+    filter(&mut state, FilterMsg::ClearedAll);
+    assert!(state.worktree_form.jira_filters().is_empty());
+    assert_eq!(form(&state).jira_filters.field(COMPONENT).query, "");
+    assert_eq!(form(&state).jira_filters.field(FIX_VERSION).query, "");
+}
+
+#[test]
+fn a_versions_failure_shows_its_cause_and_retry_on_that_filter_only() {
+    let mut state = loaded();
+    focus_and_answer(&mut state, Ok(names()));
+    focus_versions(&mut state, Err(IssueLoadError::TimedOut));
+    assert_eq!(
+        labels_of(&state, FIX_VERSION),
+        [
+            "Any fix version".to_string(),
+            IssueLoadError::TimedOut.message(source()),
+            "Retry".to_string()
+        ]
+    );
+    assert_eq!(
+        labels_of(&state, COMPONENT),
+        ["Any component", "Payments", "Auth", "Ä \"quoted\" \\ name"],
+        "the component filter keeps working"
+    );
+    pick(&mut state, "Payments");
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"component = "Payments""#]
+    );
+    let before = state.worktree_form.filter_request_seq;
+    pick_in(&mut state, FIX_VERSION, "Retry");
+    assert_eq!(version_seq(&state), before + 1);
+    assert_eq!(*components(&state), ChoiceLoad::Loaded(names()));
+    let seq = version_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(versions()),
+        },
+    );
+    assert_eq!(labels_of(&state, FIX_VERSION).len(), 3);
+
+    let mut state = loaded();
+    focus_versions(&mut state, Err(IssueLoadError::NoAccess));
+    let before = state.worktree_form.filter_request_seq;
+    filter(&mut state, FilterMsg::ChoicesRetry(FIX_VERSION));
+    assert_eq!(
+        version_seq(&state),
+        before + 1,
+        "the Retry message asks too"
+    );
+}
+
+#[test]
+fn a_project_without_versions_says_so() {
+    let mut state = loaded();
+    focus_versions(&mut state, Ok(vec![]));
+    assert_eq!(
+        labels_of(&state, FIX_VERSION),
+        ["Any fix version", "This project has no versions"]
+    );
+}
+
+#[test]
+fn typing_in_fix_version_narrows_its_choices() {
+    let mut state = loaded();
+    focus_versions(&mut state, Ok(versions()));
+    filter(
+        &mut state,
+        FilterMsg::QueryChanged(FIX_VERSION, "2.3".into()),
+    );
+    assert_eq!(labels_of(&state, FIX_VERSION), ["Any fix version", "2.3"]);
+}
+
+/// SC-001: from the dialog opened on Jira, four interactions (focus Component, pick, focus Fix
+/// version, pick) reach the listing of one component and one fix version, with no typing. The
+/// shell's answers are fed between them; they are not interactions.
+#[test]
+fn four_interactions_reach_the_two_clause_listing() {
+    let mut state = loaded();
+    let mut interactions = 0;
+    let mut act = |state: &mut State, msg: FilterMsg| {
+        interactions += 1;
+        filter(state, msg);
+    };
+    act(&mut state, FilterMsg::Focused(COMPONENT));
+    let seq = choice_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::ComponentsLoaded {
+            seq,
+            result: Ok(names()),
+        },
+    );
+    act(&mut state, FilterMsg::Picked(COMPONENT, 1));
+    act(&mut state, FilterMsg::Focused(FIX_VERSION));
+    let seq = version_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(versions()),
+        },
+    );
+    act(&mut state, FilterMsg::Picked(FIX_VERSION, 1));
+    assert_eq!(interactions, 4);
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"component = "Payments""#, r#"fixVersion = "2.4""#]
+    );
+    assert!(matches!(form(&state).issues, IssueList::Loading { .. }));
+    assert_eq!(form(&state).issue_query, "", "nothing typed");
+}
+
+#[test]
+fn a_focus_while_another_filters_choices_are_out_awaits_its_own() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::Focused(COMPONENT));
+    let components_seq = choice_seq(&state);
+    filter(&mut state, FilterMsg::Focused(FIX_VERSION));
+    let versions_seq = version_seq(&state);
+    assert!(versions_seq > components_seq);
+    assert_eq!(
+        state.worktree_form.awaited_choices(),
+        Some((FIX_VERSION, versions_seq)),
+        "the shell starts the request just put in flight"
+    );
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq: versions_seq,
+            result: Ok(versions()),
+        },
+    );
+    filter(
+        &mut state,
+        FilterMsg::ComponentsLoaded {
+            seq: components_seq,
+            result: Ok(names()),
+        },
+    );
+    assert_eq!(labels_of(&state, FIX_VERSION).len(), 3);
+    assert_eq!(labels_of(&state, COMPONENT).len(), 4);
 }

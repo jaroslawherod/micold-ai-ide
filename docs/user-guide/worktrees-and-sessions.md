@@ -764,7 +764,8 @@ project key, the search text you typed, the filters you choose and your credenti
 and API token), and nothing else from your project. The dialog says so above the list: *Reads open
 issues of project KEY from `https://…`. Sends the project key, your search text, the filters you
 choose and your credentials, …*; while a filter is chosen, the line under the issue search names
-what is sent: *Filtered by component Payments.*
+what is sent: *Filtered by component Payments,
+fix version 2.4.*
 
 **GitHub or Jira.** A project with a Jira connection and no GitHub remote lists Jira and shows no
 choice. A project with both shows a **GitHub / Jira** choice under the branch chips; GitHub is the
@@ -782,21 +783,26 @@ loaded and offers **Retry**. Pick an issue
 with the pointer or with the arrow keys and Enter; a pick replaces the ticket and name, which stay
 editable.
 
-**Filters.** Beside **Issue** sits a **Component** field. Focus it and it offers the project's
-components, read from the Jira site the first time you open it in the dialog; its first row,
-**Any component**, clears the filter. Pick a component and the list reloads from Jira with only that
-component's open issues, most recently updated first and up to 1,000, and typing in **Issue** then
-narrows within them (a search on the Jira site carries the filter too). While a filter is chosen, a
-line under the field names it, for example *Filtered by component Payments*, and a **Clear
-filters** button beside **Basic / Advanced** restores the unfiltered list. If the list fails to
-load, the field steps aside and the line naming the filter sits beside **Retry**. When no open issue has the chosen component the
-list says *No open issue matches the filters.*; a search with no match says *No open issue matches
-the search and filters.* A long component name is cut with an ellipsis in the list and shown whole
-when you rest the pointer on it. The field works from the keyboard too: Tab to it, use the arrow
-keys and Enter to pick, Escape to close the list without changing the filter. If the components
-can't be read, the list shows why and a **Retry** row; the issue list, the search and creating a
-worktree by hand keep working. The filter is forgotten when you switch the source to GitHub, leave
-**Issue** or close the dialog.
+**Filters.** Beside **Issue** sit a **Component** and a **Fix version** field. Focus one and it
+offers the project's components, or its fix versions, read from the Jira site the first time you
+open that field in the dialog; its first row, **Any component** or **Any fix version**, clears that
+filter. **Fix version** lists the versions that are not archived: unreleased ones first, in the
+project's order, then released ones, newest first. Pick a component and the list reloads from Jira
+with only that component's open issues, most recently updated first and up to 1,000, and typing in
+**Issue** then narrows within them (a search on the Jira site carries the filters too). Pick a fix
+version as well and the list holds only the issues that have both. While a filter is chosen, a line
+under the fields names the chosen ones, for example *Filtered by component Payments, fix version
+2.4*, and a **Clear filters** button beside **Basic / Advanced** restores the unfiltered list;
+clearing one field keeps the other. If the list fails to load, the fields step aside and the line
+naming the filters sits beside **Retry**. When no open issue matches the chosen filters the list
+says *No open issue matches the filters.*; a search with no match says *No open issue matches the
+search and filters.* A long name is cut with an ellipsis in the list and shown whole when you rest
+the pointer on it. The fields work from the keyboard too: Tab to one, use the arrow keys and Enter
+to pick, Escape to close the list without changing the filter. If a field's choices can't be read,
+its list shows why and a **Retry** row; a project with none says so (*This project has no
+versions*). The other field, the issue list, the search and creating a worktree by hand keep
+working. The filters are forgotten when you switch the source to GitHub, leave **Issue** or close
+the dialog.
 
 **Status.** Each issue in the list, and in search results, shows its current Jira status as a chip
 beside the key. The chip's tint follows Jira's status group (To Do, In Progress, Done); the name is
