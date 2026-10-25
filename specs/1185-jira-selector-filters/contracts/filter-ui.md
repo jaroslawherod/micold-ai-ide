@@ -1,12 +1,14 @@
 # Contract: Jira filters in the create-worktree dialog
 
-Reducer: `crates/micold-client/src/features/jira_filters.rs` (render-free). Shell:
+Reducer: `crates/micold-client/src/features/worktree_form/jira_filters.rs` (render-free). Shell:
 `crates/micold-client/src/shell/issues.rs` (+ `jira_filters` helpers). View:
 `crates/micold-client/src/ui/worktree_form.rs`.
 
 ## 1. When filters show
 - Shown only while `form.jira_site().is_some()` and `form.source == BranchSource::Issue`, for every
   `IssueList` state but `NotRequested` (filters stay during a load or after a failure, FR-013).
+  *As built (ledger D12):* after a failed listing the fields are not seated (a field is taller
+  than **Retry**); the chosen filters stay, named beside **Retry**, with **Clear filters** above.
 - Never shown for GitHub; never shown with Jira off or unconnected (no request either, 533 FR-020).
 - Leaving Jira, leaving the Issue source, a Jira availability change, or opening the form resets
   `FilterState` (FR-016).
@@ -17,6 +19,14 @@ Reducer: `crates/micold-client/src/features/jira_filters.rs` (render-free). Shel
 Filtered by component Payments, fix version 2.4   [Clear filters]   ← only while any is chosen
 [Issue search typeahead …]
 Showing the 1,000 most recently updated open issues matching the filters.   ← cap caption
+```
+*As built (ledger D9, D12):* beside feature 1186's Basic / Advanced switch, the dialog has no line
+to spare, so the layout is
+```
+[Basic] [Advanced]                                         [Clear filters]   ← while any is chosen
+Reads open issues of project KEY from ORIGIN. Sends …       ← statement, unchanged by filters
+[Issue search typeahead …]          [Component ▾] …        ← fields trail the main row
+Filtered by component Payments. Showing the 1,000 most recently updated.   ← one line
 ```
 - Field label = filter name; field text = chosen value's label (reporter: "You (name)" for the own
   user, else the display name), else the typed text, else empty with the label resting.
@@ -47,4 +57,6 @@ Showing the 1,000 most recently updated open issues matching the filters.   ← 
 project key, your search text, the filters you choose, the name you type to find a reporter and
 your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked
 to, to show their status." While filters are chosen, followed by "Filters sent: <same list as the
-active line>."
+active line>." *As built (ledger D12):* no suffix; the statement says it sends "the filters you
+choose" and the active line under the issue search names the values sent, so a fourth line of
+statement does not push the tallest dialog over the app bar.

@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1185
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
-- **Phase**: tasks
-- **Next step**: design PR open/merge, then M1 (T001–T022)
+- **Phase**: implement
+- **Next step**: orchestrator updates PR #1381 (addendum for D12 in the unit's scratchpad), waits on CI, merges; then M2 (T023–T030)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1344 | Design (spec, plan, tasks) | merged (rebase) | 4e204fd4b00deed3feaa8a30d519b5ad7b03cc48 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | — | pending |
+| M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | #1381 | done; rebased onto #1186 M3, refit (D12), gate passed at aa3b2c52 |
 | M2 | T023–T030 | full | Fix-version filter, AND with component | — | pending |
 | M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) | — | pending |
 | M4 | T040–T045 | full | Label filter from loaded issues; all four in one row | — | pending |
@@ -38,31 +39,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | plan | How do the filter clauses compose with #1186's JQL work? | Separate `micold_core::jira_filter` (`clauses`, `narrowed`); `list_jql`/`search_jql`/`list_open`/`search_open` unchanged; additive `JiraSource` methods with defaults | agent-resolved | research.md#R1, #R10 |
 | D7 | plan | Filter controls in the 520 px, tallest dialog? | One row of four `Typeahead`s (Any row clears), one "Filtered by … / Clear filters" line while active; no new widget | agent-resolved | research.md#R8; SC-001 |
 | D8 | tasks | US1 split? M1 over the ~800-line guide | Split US1 along AS3: M1 = mechanism + component, M2 = fix version; the mechanism has no smaller observable slice. T046 (quickstart, no code) left to the close unit | agent-resolved | tasks.md#Notes; milestones.md rule 3, 4 |
+| D9 | M1 implement | The planned filter row (and its fallback, placeholders for labels) overflowed the 800 px panel-placement gate by 7 px with no filter chosen: a label adds no height to a `Typeahead` | The filter fields ride on the picker's main row, trailing (beside the issue search, the Retry or the loading line, FillPortion 2 : 1 per filter); the active line + **Clear filters** stays under it, and a capped list's caption joins the active line's paragraph while a filter is chosen. Every FR kept; contracts/filter-ui.md §2 layout deviated. M2–M4 add fields to that row and must re-check width and height (`gates/jira_filters_fit.rs`, `panel_placement`) | agent-resolved | ui/worktree_form.rs `issue_picker`; layout fixture `add-worktree-dialog-jira-filtered` 664 px |
+| D10 | M1 implement | T011 says "through `App` messages over `FakeJiraSource`", but `tests/` reaches only the library `State`, not the binary's shell | Split: reducer behaviour in `tests/jira_filters_picker.rs` (State messages, answers fed as the shell's messages); requests over `FakeJiraSource` in `main_tests.rs::jira_filter_shell` (first focus asks once, clauses on load and search, Retry, switch off) | agent-resolved | crates/micold-client/src/main_tests.rs |
+| D11 | M1 gate | `feature_registration_cost` counts each `features/*.rs` file as a feature, so `features/jira_filters.rs` failed it as an unregistered feature | The filter reducer is part of the New worktree form: it lives at `features/worktree_form/jira_filters.rs`, declared in `features/worktree_form.rs`; tasks.md, plan.md, data-model.md, contracts/filter-ui.md, quickstart.md paths updated | agent-resolved | gate-2 failure; review B M1 F2 |
+| D12 | M1 rebase | After rebasing onto #1186's M3 (Basic/Advanced switch above the picker, 32 px), `panel_placement` failed: `jira-filtered` panel y=50 (15 px into the app bar), `jira-credentials-refused` y=62 (3 px). Not #1186's: origin/main 5a5bc7e1's fixture has `credentials-refused` at y=70 | Fit M1 beside the switch, #1186 untouched: (1) **Clear filters** trails the switch's row (+8 px: a button is 40, the chips 32); (2) the active line is text only and carries the values sent — the statement no longer appends "Filters sent: …" (a 4th line, +16 px); FR-014 amended in spec.md (clarification entry) to say so: the statement says the filters are sent, the active line names the values (review D12 r1 F1); (3) a filtered cap caption reads "Showing the N most recently updated." so "Filtered by … . Showing …" keeps one line; (4) a failed listing seats no filter field (a field is 56, Retry 40) and names the chosen filters beside **Retry** (FR-013: filters left in place to retry or clear). Result: filtered y=66, refused y=70. Plan's placeholder fallback rejected: a label adds no height (D9). contracts/filter-ui.md §1, §2, §4, tasks T011/T012, plan FR-014 row, user guide updated | agent-resolved | layout fixture re-recorded for the Jira states only (loading, credentials-refused, loaded, no-open-issues, filtered); `gates/jira_filters_fit.rs` |
 
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec review | 1 | faf2dbc7e88487e7ed788cc777e08ac3a01f4774:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CHANGES: 1 MAJOR (FR-010 trim/cut vs exact match), 2 MINOR (SC-003 wording, Debug redaction + me-lookup failure); all fixed |
-| Spec review | 2 | 2450b706dff7ee9368b016e9a03188feaffe296b:0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 | CLEAN (2 MINOR: FR-006 Debug wording, SC-003 control-char clause; fixed, prose only) |
-| Plan review | 1 | 82673589e84328975ec6437b6506b889ef2b6dcd:93883c9e001cea6910868956ff2d695bd1be1984 | CHANGES: 1 MAJOR (search_jql edited or not: contradiction); fixed, search_jql untouched |
-| Plan review | 2 | 8caad6fb6b5b539a182b4c5d336b8e96b8a4debe:93883c9e001cea6910868956ff2d695bd1be1984 | CLEAN (sonnet) |
-| speckit-analyze | 1 | 6f737a62 (pre-commit) | 0 CRITICAL/HIGH; MEDIUM E1–E3, I1, C1 + LOW F1, F2, U3: fixed E1–E3, I1 (FR-005 + data-model: superseded unfiltered load still fills labels), F1, F2 (plan risk note), U3; C1 kept (D8) |
-| Tasks review | 1 | e22fd7f4b0f6066b28246a739c039a36bd4e1947:6f737a6239967d54bf0130d88162883a91b9b26e | CLEAN (3 MINOR: checklist tick, gate extensions and statement test moved into test tasks; fixed, prose only) |
+| Review A M1 | 1 | 41e5337948f133936bb4c5e99334bf44890ac799:4fdb308aa493ee31abef392f5d915366916fc5e1 | CHANGES: 5 fixed (re-search after a filtered reload, kept pick's prompt, stale choice index, Dismissed while not editing, Reporter `choose(Some)`), 5 declined |
+| Review A M1 | 2 | 1d2dd0e37d2c4daaade2f729fad8b5aae7cba2b4:f9a90c3782fde89d27f8951426a6e9e1e801827c | CLEAN |
+| Review B M1 | 1 | 1d2dd0e37d2c4daaade2f729fad8b5aae7cba2b4:f9a90c3782fde89d27f8951426a6e9e1e801827c | CHANGES: 1 MAJOR (no `tdd/cycle-log.md`: written, red by compile against origin/main and by mutation), 1 MINOR (module path: D11) |
+| Review B M1 | 2 | dfd5e253b878efc359c1e9c76793dcd58968503c:edc2a5116bad0aa9239c823766a42908bc1ef694 | CLEAN (1 MINOR: stale module path in contracts/filter-ui.md and quickstart.md — fixed, prose only) |
+| Review D12 (rebase refit) | 1 | 77331c1c96849947b4c6c4e6e3992c9564f9efbe:430fd19f9e0dd48c9db0ca2f20cfdd8281cab5a1 | CHANGES: 1 MAJOR (FR-014 weakened through the ledger alone: spec.md FR-014 amended with a clarification entry, prose only), 2 MINOR (stale test name: renamed, active line asserted; one-line check: declined) |
+| Review D12 (rebase refit) | 2 | 29a873c6ed917df301be9eae8a12fc99b2ce6d61:aa3b2c523957f19728557c4fc7bf3a5cabe84df2 | CLEAN |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-
-## Handover
-
-None.
-
-## Open escalation
-
-None.
+| M1 | A r1 | `load_filtered` / `JiraCloud::list_filtered` duplicate `load` / `list_open`; route the old through the new | research.md#R10 keeps `load`, `list_jql`, `search_jql`, `list_open`, `search_open` unedited so #1186 (built in parallel on the same functions) rebases cleanly; fold them after both land (follow-up) |
+| M1 | A r1 | `on_filter` calls `start_jira_load` directly, bypassing `start_issue_load` | The load still runs through the one `jira_request` gate (switch, connection, token); filters exist only for the Jira source, so the provider dispatch has nothing to choose; pinned by `filter_choices_and_filtered_loads_start_only_from_their_handlers` |
+| M1 | A r1 | A filtered reload opens the issue list | Same as the first load and Retry: the answer shows the list it was asked for (FR-009); the filter list closed on the pick, so nothing is covered |
+| M1 | A r1 | `rows()` clones / `rematch` clone; `seat` closure style | MINOR (taste, per-keystroke cost of a few dozen components) |
+| M1 | A r1 | Highlight lands on inert rows | MINOR; same behaviour as the existing issue and session pickers' Typeahead |
+| M1 | D12 r1 F3 | The one-line check compares the active line's height with "Clear filters"'s, which might be the 40 px button | `Overflow::natural_height` is the painted paragraph, not the node: the label is one 20 px line, two caption lines are 32 px, so a wrap fails it |
 
 ## Follow-ups not done
 
-None.
+- After #1185 and #1186 both merge: implement `JiraSource::load`/`JiraCloud::list_open`/`search_open` through their filtered forms with empty filters (review A M1, declined for R10).
+- M2–M4 add fields to the picker's main row (D9) and values to the one-line active line (D12: the filtered form is at y=66, 1 px of slack; a second line of "Filtered by …" pushes it over the app bar): re-check `gates/jira_filters_fit.rs` and `panel_placement`. The visual pass of M1 found the Component field ~153 px wide, so a chosen value scrolls in a 35 px text area beside the search icon and the clear action (the active line under it names it in full); the four-field row M4 builds has to give each field room or move the fields to a row of their own.

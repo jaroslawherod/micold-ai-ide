@@ -17,6 +17,11 @@
 //! (key, a category of `new`, `indeterminate` or `done`, then the name) changes one, which the
 //! next refresh shows. A key listed as `missing ABC-9` is not returned, as Jira does for a ticket
 //! it cannot show.
+//!
+//! Feature 1185 (quickstart Part B): `GET /rest/api/3/project/{key}/components` answers the
+//! components `Payments`, `Auth` and `Ä "quoted" \ name`, and a search whose JQL holds a
+//! `component = "…"` clause is answered with that component's share of the page: every third
+//! issue, starting at the component's place in that list; an unknown component has none.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -69,6 +74,44 @@ fn status_answer(body: &str, tickets: &Tickets) -> Option<String> {
     Some(serde_json::json!({ "issues": issues, "isLast": true }).to_string())
 }
 
+/// The components the fake project has, in Jira's order (feature 1185).
+const COMPONENTS: [&str; 3] = ["Payments", "Auth", "Ä \"quoted\" \\ name"];
+
+/// The value of the JQL's `component = "…"` clause, unescaped, if it has one.
+fn component_clause(jql: &str) -> Option<String> {
+    let rest = jql.split_once("component = \"")?.1;
+    let mut value = String::new();
+    let mut chars = rest.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => value.push(chars.next()?),
+            '"' => return Some(value),
+            other => value.push(other),
+        }
+    }
+    None
+}
+
+/// The page narrowed to `component`'s share, when the request's JQL names one.
+fn component_answer(body: &str) -> Option<String> {
+    let json: serde_json::Value = serde_json::from_str(body).ok()?;
+    let component = component_clause(json["jql"].as_str()?)?;
+    let mut page: serde_json::Value = serde_json::from_str(PAGE).ok()?;
+    let issues = page["issues"].as_array()?.clone();
+    let kept: Vec<serde_json::Value> = match COMPONENTS.iter().position(|c| *c == component) {
+        Some(place) => issues
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| i % COMPONENTS.len() == place)
+            .map(|(_, issue)| issue)
+            .collect(),
+        None => Vec::new(),
+    };
+    page["issues"] = serde_json::Value::from(kept);
+    page["isLast"] = serde_json::Value::from(true);
+    Some(page.to_string())
+}
+
 fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
     let mut seen = Vec::new();
     let mut chunk = [0u8; 4096];
@@ -97,7 +140,16 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
     }
     let request = String::from_utf8_lossy(&seen).to_string();
     let request_body = request.split_once("\r\n\r\n").map_or("", |(_, b)| b);
-    let status_page = status_answer(request_body, &tickets.lock().expect("tickets"));
+    let status_page = status_answer(request_body, &tickets.lock().expect("tickets"))
+        .or_else(|| component_answer(request_body));
+    let components = request.starts_with("GET ") && request.contains("/components ");
+    let component_list = serde_json::Value::from(
+        COMPONENTS
+            .iter()
+            .map(|name| serde_json::json!({ "name": name }))
+            .collect::<Vec<_>>(),
+    )
+    .to_string();
     if mode == OK {
         if let Some(jql) = serde_json::from_str::<serde_json::Value>(request_body)
             .ok()
@@ -114,6 +166,7 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
         REFUSE => ("401 Unauthorized", "application/json", "{}"),
         HTML => ("200 OK", "text/html", LOGIN_PAGE),
         BAD_JQL => ("400 Bad Request", "application/json", BAD_JQL_BODY),
+        _ if components => ("200 OK", "application/json", component_list.as_str()),
         _ => match &status_page {
             Some(page) => ("200 OK", "application/json", page.as_str()),
             None => ("200 OK", "application/json", PAGE),

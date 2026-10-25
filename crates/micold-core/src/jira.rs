@@ -10,6 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
+use crate::jira_filter::JiraFilters;
 use crate::jira_query::{QueryFailure, ScopedQuery};
 use crate::jira_status::{KeyedStatus, TicketStatus};
 use crate::settings::Settings;
@@ -649,7 +650,51 @@ pub trait JiraSource: Send + Sync {
             "this Jira source cannot run a query".into(),
         )))
     }
+
+    /// One page of open issues narrowed by `filters` (feature 1185). A source that does not
+    /// filter answers [`JiraSource::list_open`] while no filter is chosen and refuses otherwise.
+    fn list_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        filters: &JiraFilters,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        if filters.is_empty() {
+            self.list_open(conn, token, cursor)
+        } else {
+            Err(IssueLoadError::Other(FILTERS_UNSUPPORTED.into()))
+        }
+    }
+
+    /// Open issues matching `text` narrowed by `filters` (feature 1185); defaults as
+    /// [`JiraSource::list_filtered`].
+    fn search_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        text: &str,
+        filters: &JiraFilters,
+    ) -> Result<Vec<Issue>, IssueLoadError> {
+        if filters.is_empty() {
+            self.search_open(conn, token, text)
+        } else {
+            Err(IssueLoadError::Other(FILTERS_UNSUPPORTED.into()))
+        }
+    }
+
+    /// The connected project's component names, in Jira's order (feature 1185).
+    fn components(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Vec<String>, IssueLoadError> {
+        Ok(Vec::new())
+    }
 }
+
+/// What a source that cannot filter answers a filtered request with (research R10).
+pub const FILTERS_UNSUPPORTED: &str = "filters are not supported by this source";
 
 /// Load a project's open issues page by page up to the load cap, through the paging rule GitHub
 /// shares. Jira has no total, so `total_open` is the number held and the listing is `complete`
@@ -668,6 +713,37 @@ pub fn load(
 }
 
 type Script<T, E = IssueLoadError> = std::sync::Mutex<std::collections::VecDeque<Result<T, E>>>;
+/// [`load`] over [`JiraSource::list_filtered`]: the same paging and cap, narrowed by `filters`
+/// (FR-007).
+pub fn load_filtered(
+    source: &dyn JiraSource,
+    conn: &JiraConnection,
+    token: &ApiToken,
+    filters: &JiraFilters,
+) -> Result<IssueListing, IssueLoadError> {
+    let paged = load_pages(|cursor| source.list_filtered(conn, token, filters, cursor))?;
+    Ok(IssueListing {
+        total_open: paged.issues.len() as u64,
+        complete: paged.exhausted,
+        issues: paged.issues,
+    })
+}
+
+/// What a filtered request of [`FakeJiraSource`] asked beyond its clauses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilteredAsk {
+    /// A listing page, from this cursor.
+    List(Option<String>),
+    /// A search for this text.
+    Search(String),
+}
+
+/// A choice request [`FakeJiraSource`] received (feature 1185).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChoiceCall {
+    /// The project's components.
+    Components,
+}
 
 fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
@@ -688,6 +764,9 @@ pub struct FakeJiraSource {
     status_calls: std::sync::Mutex<Vec<Vec<String>>>,
     queries: Script<IssuePage, QueryFailure>,
     query_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+    filtered_calls: std::sync::Mutex<Vec<(Vec<String>, FilteredAsk)>>,
+    components: Script<Vec<String>>,
+    choice_calls: std::sync::Mutex<Vec<ChoiceCall>>,
 }
 
 impl FakeJiraSource {
@@ -751,6 +830,28 @@ impl FakeJiraSource {
     pub fn query_calls(&self) -> Vec<(String, Option<String>)> {
         locked(&self.query_calls).clone()
     }
+
+    /// Every `list_filtered` / `search_filtered` call so far, as its clauses and what it asked.
+    /// Each also counts as the `list_open` / `search_open` call it is answered as.
+    pub fn filtered_calls(&self) -> Vec<(Vec<String>, FilteredAsk)> {
+        locked(&self.filtered_calls).clone()
+    }
+
+    /// Answer the next unanswered `components` call with `result`.
+    pub fn with_components(self, result: Result<Vec<String>, IssueLoadError>) -> Self {
+        self.script_components(result);
+        self
+    }
+
+    /// Answer the next unanswered `components` call, after construction.
+    pub fn script_components(&self, result: Result<Vec<String>, IssueLoadError>) {
+        locked(&self.components).push_back(result);
+    }
+
+    /// Every choice request so far.
+    pub fn choice_calls(&self) -> Vec<ChoiceCall> {
+        locked(&self.choice_calls).clone()
+    }
 }
 
 impl JiraSource for FakeJiraSource {
@@ -804,6 +905,45 @@ impl JiraSource for FakeJiraSource {
             Err(QueryFailure::Load(IssueLoadError::Other(
                 "FakeJiraSource: no query scripted for this call".into(),
             )))
+        })
+    }
+
+    fn list_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        filters: &JiraFilters,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        locked(&self.filtered_calls).push((
+            filters.clauses(),
+            FilteredAsk::List(cursor.map(str::to_owned)),
+        ));
+        self.list_open(conn, token, cursor)
+    }
+
+    fn search_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        text: &str,
+        filters: &JiraFilters,
+    ) -> Result<Vec<Issue>, IssueLoadError> {
+        locked(&self.filtered_calls)
+            .push((filters.clauses(), FilteredAsk::Search(text.to_owned())));
+        self.search_open(conn, token, text)
+    }
+
+    fn components(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Vec<String>, IssueLoadError> {
+        locked(&self.choice_calls).push(ChoiceCall::Components);
+        locked(&self.components).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no components scripted for this call".into(),
+            ))
         })
     }
 }

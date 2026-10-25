@@ -1269,6 +1269,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             cursor,
             result,
         }) => shell::issues::on_issue_descriptions_loaded(app, seq, cursor, result),
+        // Feature 1185: a filter message; a first focus or Retry asks Jira for the filter's choices,
+        // and a change of the chosen filters reloads the listing with them.
+        Message::WorktreeForm(FormMsg::JiraFilter(msg)) => shell::jira_filters::on_filter(app, msg),
         Message::Session(SessionMsg::StartRequested {
             location,
             provider,

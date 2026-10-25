@@ -192,13 +192,18 @@ pub fn on_issue_query_changed(app: &mut App, text: String) -> Task<Message> {
         .pending_issue_search()
         .filter(|seq| *seq > before)
     {
-        // Built inside the future: the timer needs the runtime the task runs on.
-        Some(seq) => Task::perform(
-            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
-            move |()| Message::WorktreeForm(FormMsg::IssueSearchDue { seq }),
-        ),
+        Some(seq) => search_after_pause(seq),
         None => Task::none(),
     }
+}
+
+/// Wait out the debounce, then say the search pending under `seq` is due.
+fn search_after_pause(seq: u64) -> Task<Message> {
+    // Built inside the future: the timer needs the runtime the task runs on.
+    Task::perform(
+        async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
+        move |()| Message::WorktreeForm(FormMsg::IssueSearchDue { seq }),
+    )
 }
 
 /// The debounce ended: search, when this was still the pending keystroke's.
@@ -273,14 +278,20 @@ pub fn on_issues_loaded(
     if let Some((cwd, snapshot)) = resolved_env {
         app.env_include_cache.entry(cwd).or_insert(snapshot);
     }
-    update_then_follow(
+    let work = update_then_follow(
         app,
         FormMsg::IssuesLoaded {
             seq,
             result,
             resolved_env: None,
         },
-    )
+    );
+    // Feature 1185 (FR-009): a Jira list reloaded with text typed searches beyond it again; the
+    // reducer left that search pending under the load's seq.
+    match app.core.worktree_form.pending_issue_search() {
+        Some(pending) if pending == seq => Task::batch([work, search_after_pause(seq)]),
+        _ => work,
+    }
 }
 
 /// Feed the form one message, then start the description read it newly awaits, if any.
@@ -444,9 +455,10 @@ impl JiraRequest {
     }
 }
 
-/// Read the connected project's open Jira issues on a blocking thread, answering
-/// `IssuesLoaded { seq }`.
-fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
+/// Read the connected project's open Jira issues, narrowed by the form's filters (feature 1185,
+/// FR-007), on a blocking thread, answering `IssuesLoaded { seq }`.
+pub(crate) fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
+    let filters = app.core.worktree_form.jira_filters();
     let request = match jira_request(app) {
         Ok(request) => request,
         Err(why) => {
@@ -458,8 +470,8 @@ fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
         }
     };
     Task::perform(
-        request.run(|source, connection, token| {
-            micold_core::jira::load(source, connection, token)
+        request.run(move |source, connection, token| {
+            micold_core::jira::load_filtered(source, connection, token, &filters)
                 .map(|listing| (listing, PathBuf::new()))
         }),
         move |joined| {
@@ -477,9 +489,15 @@ fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
     )
 }
 
-/// Search the connected Jira project beyond the loaded issues on a blocking thread, answering
-/// `IssueSearched { seq }` (FR-012). Behind the same gate as the load.
-fn start_jira_search(app: &mut App, seq: u64, text: String) -> Task<Message> {
+/// Search the connected Jira project beyond the loaded issues, with the form's filters (feature
+/// 1185, FR-009), on a blocking thread, answering `IssueSearched { seq }` (FR-012). Behind the same
+/// gate as the load.
+fn start_jira_search(
+    app: &mut App,
+    seq: u64,
+    text: String,
+    filters: micold_core::jira_filter::JiraFilters,
+) -> Task<Message> {
     let request = match jira_request(app) {
         Ok(request) => request,
         Err(why) => {
@@ -490,7 +508,9 @@ fn start_jira_search(app: &mut App, seq: u64, text: String) -> Task<Message> {
         }
     };
     Task::perform(
-        request.run(move |source, connection, token| source.search_open(connection, token, &text)),
+        request.run(move |source, connection, token| {
+            source.search_filtered(connection, token, &text, &filters)
+        }),
         move |joined| {
             let result = joined.unwrap_or_else(|stopped| {
                 Err(IssueLoadError::Other(format!(
@@ -581,8 +601,8 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
 ///
 /// The source runs the `gh` the load located: a search never looks for `gh` again (research R3).
 fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
-    if let Some(text) = app.core.worktree_form.jira_search_text() {
-        return start_jira_search(app, seq, text);
+    if let Some((text, filters)) = app.core.worktree_form.jira_search_request() {
+        return start_jira_search(app, seq, text, filters);
     }
     let Some((repo, text, gh)) = app.core.worktree_form.issue_search_request() else {
         return Task::none();

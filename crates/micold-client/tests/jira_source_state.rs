@@ -135,7 +135,7 @@ fn a_project_without_a_github_remote_lists_jira_and_offers_no_source_choice() {
     assert!(form(&state).issue_source_ready());
     assert_eq!(
         form(&state).source_caption().as_deref(),
-        Some("Reads open issues of project ABC from https://acme.atlassian.net. Sends the project key, your search text and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.")
+        Some("Reads open issues of project ABC from https://acme.atlassian.net. Sends the project key, your search text, the filters you choose and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.")
     );
 }
 

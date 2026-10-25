@@ -15830,3 +15830,217 @@ mod jira_query_run {
         assert_eq!(rig.source.query_calls().len(), 1);
     }
 }
+
+// ---- Feature 1185: the Jira filters' shell half, over `FakeJiraSource` ----
+
+mod jira_filter_shell {
+    use super::*;
+    use micold_client::features::worktree_form::jira_filters::{ChoiceLoad, FilterMsg};
+    use micold_client::features::worktree_form::{BranchSource, IssueList, Msg as FormMsg};
+    use micold_core::github::{Issue, IssueLoadError, IssuePage};
+    use micold_core::jira::{
+        connection_key, ChoiceCall, FakeJiraSource, FilteredAsk, JiraConnection,
+    };
+    use micold_core::jira_filter::FilterKind;
+    use std::sync::Arc;
+
+    const PROJECT: &str = "/repo/demo";
+    const PAYMENTS: &str = r#"component = "Payments""#;
+
+    struct Rig {
+        app: App,
+        source: Arc<FakeJiraSource>,
+        _dir: tempfile::TempDir,
+    }
+
+    fn page(keys: &[u64], more: bool) -> IssuePage {
+        IssuePage {
+            issues: keys
+                .iter()
+                .map(|n| {
+                    Issue::jira(
+                        &format!("ABC-{n}"),
+                        *n,
+                        format!("Refund {n}"),
+                        Vec::new(),
+                        "2026-10-01T00:00:00Z".to_string(),
+                    )
+                })
+                .collect(),
+            total_open: keys.len() as u64,
+            next_cursor: more.then(|| "more".to_string()),
+        }
+    }
+
+    /// Switch on, connected, a token stored, the form open on a Jira-only project.
+    fn rig(source: FakeJiraSource) -> Rig {
+        let dir = tempfile::tempdir().unwrap();
+        let source = Arc::new(source);
+        let mut app = base_app();
+        app.caps = app
+            .caps
+            .clone()
+            .with_jira(source.clone(), dir.path().to_path_buf());
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        app.core.settings.jira_enabled = true;
+        app.core.settings.jira_connections.insert(
+            connection_key(std::path::Path::new(PROJECT)),
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+        );
+        std::fs::write(
+            micold_core::store::jira_token_path(dir.path(), std::path::Path::new(PROJECT)),
+            "token",
+        )
+        .unwrap();
+        let mut rig = Rig {
+            app,
+            source,
+            _dir: dir,
+        };
+        send(&mut rig.app, FormMsg::Opened);
+        send(&mut rig.app, FormMsg::RemotesListed(Ok(Vec::new())));
+        rig
+    }
+
+    fn send(app: &mut App, msg: FormMsg) {
+        let work = update_inner(app, Message::WorktreeForm(msg));
+        settle(app, work);
+    }
+
+    fn filter(app: &mut App, msg: FilterMsg) {
+        send(app, FormMsg::JiraFilter(msg));
+    }
+
+    fn form(app: &App) -> &micold_client::features::worktree_form::WorktreeForm {
+        app.core.worktree_form.form.as_ref().expect("form open")
+    }
+
+    #[test]
+    fn showing_jira_asks_no_choice_and_the_first_focus_asks_once() {
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2], false))
+            .with_components(Ok(vec!["Payments".into()])));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(matches!(form(&rig.app).issues, IssueList::Loaded { .. }));
+        assert!(
+            rig.source.choice_calls().is_empty(),
+            "nothing on open or show"
+        );
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        assert_eq!(rig.source.choice_calls(), [ChoiceCall::Components]);
+        assert_eq!(
+            form(&rig.app).jira_filters.components,
+            ChoiceLoad::Loaded(vec!["Payments".into()])
+        );
+        filter(&mut rig.app, FilterMsg::Dismissed(FilterKind::Component));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        assert_eq!(
+            rig.source.choice_calls(),
+            [ChoiceCall::Components],
+            "a second focus asks nothing"
+        );
+    }
+
+    #[test]
+    fn a_pick_loads_the_listing_with_the_component_clause_and_a_search_carries_it() {
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2, 3], false))
+            .with_components(Ok(vec!["Payments".into(), "Auth".into()]))
+            .with_page(page(&[1, 3], true))
+            // The same cursor again: the load stops there, the listing incomplete.
+            .with_page(page(&[5], true))
+            .with_search(Ok(Vec::new())));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        filter(&mut rig.app, FilterMsg::Picked(FilterKind::Component, 1));
+        let IssueList::Loaded { listing, .. } = &form(&rig.app).issues else {
+            panic!("the filtered listing loaded");
+        };
+        assert_eq!(listing.issues.len(), 3);
+        send(&mut rig.app, FormMsg::IssueQueryChanged("refund x".into()));
+        let calls = rig.source.filtered_calls();
+        assert_eq!(
+            calls,
+            [
+                (vec![], FilteredAsk::List(None)),
+                (vec![PAYMENTS.to_string()], FilteredAsk::List(None)),
+                (
+                    vec![PAYMENTS.to_string()],
+                    FilteredAsk::List(Some("more".into()))
+                ),
+                (
+                    vec![PAYMENTS.to_string()],
+                    FilteredAsk::Search("refund x".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn text_typed_before_a_pick_is_searched_again_under_the_filter() {
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2], true))
+            .with_page(page(&[3], true))
+            .with_search(Ok(Vec::new()))
+            .with_components(Ok(vec!["Payments".into()]))
+            .with_page(page(&[1], true))
+            .with_page(page(&[4], true))
+            .with_search(Ok(Vec::new())));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        send(&mut rig.app, FormMsg::IssueQueryChanged("ABC-1500".into()));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        filter(&mut rig.app, FilterMsg::Picked(FilterKind::Component, 1));
+        let searches: Vec<_> = rig
+            .source
+            .filtered_calls()
+            .into_iter()
+            .filter(|(_, ask)| matches!(ask, FilteredAsk::Search(_)))
+            .collect();
+        assert_eq!(
+            searches,
+            [
+                (vec![], FilteredAsk::Search("ABC-1500".into())),
+                (
+                    vec![PAYMENTS.to_string()],
+                    FilteredAsk::Search("ABC-1500".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failed_choice_request_retries_and_the_picker_keeps_working() {
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2], false))
+            .with_components(Err(IssueLoadError::TimedOut))
+            .with_components(Ok(vec!["Auth".into()])));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        assert_eq!(
+            form(&rig.app).jira_filters.components,
+            ChoiceLoad::Failed {
+                error: IssueLoadError::TimedOut
+            }
+        );
+        assert!(matches!(form(&rig.app).issues, IssueList::Loaded { .. }));
+        filter(&mut rig.app, FilterMsg::ChoicesRetry(FilterKind::Component));
+        assert_eq!(rig.source.choice_calls().len(), 2);
+        assert_eq!(
+            form(&rig.app).jira_filters.components,
+            ChoiceLoad::Loaded(vec!["Auth".into()])
+        );
+    }
+
+    #[test]
+    fn with_the_switch_off_a_choice_request_asks_nothing() {
+        let mut rig = rig(FakeJiraSource::new().with_page(page(&[1], false)));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        rig.app.core.settings.jira_enabled = false;
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        assert!(rig.source.choice_calls().is_empty());
+        assert!(matches!(
+            form(&rig.app).jira_filters.components,
+            ChoiceLoad::Failed { .. }
+        ));
+    }
+}

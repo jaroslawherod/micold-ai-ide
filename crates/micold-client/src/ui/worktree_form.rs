@@ -10,6 +10,7 @@
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
+use crate::features::worktree_form::jira_filters::{shows_filters, FilterMsg, RowText, OFFERED};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
     BranchSource, IssueDetailsState, IssueList, ResolutionState, SearchState, SessionChoice,
@@ -520,8 +521,30 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     // rather than a field of its own: the form is the tallest dialog, and a field's gap would push
     // it over the app bar (`gates/issue_rows_show_all_text.rs`). Advanced mode has a body of its
     // own; the basic one below is untouched.
-    if form.offers_query_modes() {
-        col = col.push(super::jira_query::mode_switch(form, r));
+    // Feature 1185 (FR-002, ledger D12): **Clear filters** trails the switch's row, which has the
+    // width to spare, so the chosen filters cost the tallest dialog no line of their own.
+    let clear =
+        (!form.shows_advanced() && shows_filters(form) && !form.jira_filters.chosen.is_empty())
+            .then(|| {
+                Button::text("Clear filters", r).on_press(Message::WorktreeForm(
+                    FormMsg::JiraFilter(FilterMsg::ClearedAll),
+                ))
+            });
+    match (form.offers_query_modes(), clear) {
+        (true, Some(clear)) => {
+            col = col.push(
+                row![
+                    super::jira_query::mode_switch(form, r),
+                    iced::widget::Space::new().width(Length::Fill),
+                    clear,
+                ]
+                .spacing(spacing::SM)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        (true, None) => col = col.push(super::jira_query::mode_switch(form, r)),
+        (false, Some(clear)) => col = col.push(clear),
+        (false, None) => {}
     }
     if form.shows_advanced() {
         return super::jira_query::picker(col, form, board, r);
@@ -531,6 +554,31 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     }
     let Some(source) = form.notice_source() else {
         return col.into();
+    };
+    // Feature 1185: the Jira filters ride on the picker's main row, trailing, whatever the list's
+    // state but unasked: beside the search, the Retry or the loading line. A row of their own took
+    // a line the tallest dialog does not have (`gates/panel_placement.rs`; ledger D9).
+    // A failed listing seats none: see its arm below.
+    let failed = matches!(form.issues, IssueList::Failed { .. });
+    let mut filters = (shows_filters(form) && !failed).then(|| jira_filter_row(form, source, r));
+    let mut seat = |main: Element<'a, Message>, width: Length| -> Element<'a, Message> {
+        let Some(fields) = filters.take() else {
+            return main;
+        };
+        row![
+            iced::widget::container(main).width(width),
+            iced::widget::container(fields).width(Length::FillPortion(OFFERED.len() as u16)),
+        ]
+        .spacing(spacing::SM)
+        .align_y(iced::Alignment::Center)
+        .into()
+    };
+    // The line naming the chosen filters under the main row (FR-014, FR-015).
+    let active = |caption: Option<String>| {
+        form.jira_filters
+            .active_line()
+            .filter(|_| shows_filters(form))
+            .map(|line| active_filters_line(line, caption, r))
     };
     let jira = form.jira_site();
     let placeholder = if jira.is_some() {
@@ -546,14 +594,38 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 Some(site) => format!("Loading issues from {}…", site.host),
                 None => "Loading issues from GitHub…".to_string(),
             };
-            col = col.push(StageProgress::new(loading, r));
+            col = col.push(seat(
+                StageProgress::new(loading, r).into(),
+                Length::FillPortion(2),
+            ));
+            col = col.extend(active(None));
         }
+        // A failed listing seats no filter field: a field is taller than Retry, and the form has
+        // no line to spare under a two-line cause (`gates/panel_placement.rs`). The chosen filters
+        // stay, named beside Retry, so the user can retry or clear them (FR-013; ledger D12).
         IssueList::Failed { error } => {
-            col = col
-                .push(Text::new(error.message(source), TypeRole::Caption, r).tint(r.error))
-                .push(
-                    Button::text("Retry", r).on_press(Message::WorktreeForm(FormMsg::IssueRetry)),
-                );
+            let retry =
+                Button::text("Retry", r).on_press(Message::WorktreeForm(FormMsg::IssueRetry));
+            col = col.push(Text::new(error.message(source), TypeRole::Caption, r).tint(r.error));
+            col = match active(None) {
+                Some(line) => col.push(
+                    row![retry, line]
+                        .spacing(spacing::SM)
+                        .align_y(iced::Alignment::Center),
+                ),
+                None => col.push(retry),
+            };
+        }
+        // Feature 1185 (FR-011): the filters chose nothing; the active line above clears them.
+        IssueList::Loaded { listing, .. }
+            if listing.issues.is_empty() && form.filtered_empty_text().is_some() =>
+        {
+            let empty = form.filtered_empty_text().unwrap_or_default();
+            col = col.push(seat(
+                Text::new(empty, TypeRole::Caption, r).muted().into(),
+                Length::FillPortion(2),
+            ));
+            col = col.extend(active(None));
         }
         IssueList::Loaded { listing, .. } if listing.issues.is_empty() => {
             let empty = match jira {
@@ -564,11 +636,15 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                         .map_or_else(String::new, ToString::to_string)
                 ),
             };
-            col = col.push(Text::new(empty, TypeRole::Caption, r).muted());
+            col = col.push(seat(
+                Text::new(empty, TypeRole::Caption, r).muted().into(),
+                Length::FillPortion(2),
+            ));
+            col = col.extend(active(None));
         }
         IssueList::Loaded { .. } => {
             let (rows, selected) = issue_rows_with(form, board);
-            col = col.push(
+            col = col.push(seat(
                 material::Typeahead::new(
                     &form.issue_query,
                     rows,
@@ -580,15 +656,23 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 .open(form.issue_list_open)
                 .highlighted(form.issue_highlight)
                 .selected(selected)
-                .empty_message("No open issue matches.")
+                .empty_message(form.issue_no_match_text())
                 .on_focus(Message::WorktreeForm(FormMsg::IssueFocused))
                 .on_move(|a0| Message::WorktreeForm(FormMsg::IssueHighlightMoved(a0)))
                 .on_dismiss(Message::WorktreeForm(FormMsg::IssueDismissed))
-                .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index))),
-            );
-            // FR-004: say the list is capped rather than presenting a part as the whole.
-            if let Some(caption) = form.issue_cap_caption() {
-                col = col.push(Text::new(caption, TypeRole::Caption, r).muted());
+                .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index)))
+                .into(),
+                Length::FillPortion(2),
+            ));
+            // FR-004: say the list is capped rather than presenting a part as the whole. With
+            // filters chosen it follows the active line in one paragraph (1185, D9, D12).
+            match active(form.issue_cap_caption()) {
+                Some(line) => col = col.push(line),
+                None => {
+                    if let Some(caption) = form.issue_cap_caption() {
+                        col = col.push(Text::new(caption, TypeRole::Caption, r).muted());
+                    }
+                }
             }
             // FR-005a: the search beyond the cap, running or failed. A failure leaves the loaded
             // matches above in place and offers Retry, as a failed load does (FR-007).
@@ -619,6 +703,84 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         col = col.push(details);
     }
     col.into()
+}
+
+/// The Jira filter fields, one per offered filter, side by side at equal widths (feature 1185,
+/// contracts/filter-ui.md §2), seated by `issue_picker` at the end of the picker's main row. Each is a typeahead whose first row is "Any <filter>"; a row cut
+/// short by the field's width carries its full text as a tooltip. The choices' state (loading,
+/// failed with Retry, none) stands in the list as rows, so it adds no line to the dialog.
+fn jira_filter_row<'a>(
+    form: &'a WorktreeForm,
+    source: micold_core::github::NoticeSource<'_>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let filters = &form.jira_filters;
+    let fields = OFFERED.into_iter().map(|kind| {
+        let field = filters.field(kind);
+        let rows: Vec<TypeaheadRow> = filters
+            .rows(kind)
+            .iter()
+            .map(|row| {
+                let label = row.label(kind, Some(source));
+                let built = match &row.text {
+                    // A failure's cause is the row's second line, wrapped in full: the list is as
+                    // narrow as its field, and a cut cause says nothing (FR-012).
+                    RowText::Failed(_) => TypeaheadRow::new(row.label(kind, None), Vec::new())
+                        .details(label, Vec::new()),
+                    _ => TypeaheadRow::new(label.clone(), row.spans.clone())
+                        .single_line()
+                        .tooltip(label),
+                };
+                if row.enabled() {
+                    built
+                } else {
+                    built.disabled()
+                }
+            })
+            .collect();
+        let filter = move |msg: FilterMsg| Message::WorktreeForm(FormMsg::JiraFilter(msg));
+        let typeahead: Element<'a, Message> = material::Typeahead::new(
+            &field.query,
+            rows,
+            move |text| filter(FilterMsg::QueryChanged(kind, text)),
+            r,
+        )
+        .placeholder(kind.title())
+        .label(kind.title())
+        .open(field.open)
+        .highlighted(field.highlight)
+        .selected(filters.selected_row(kind))
+        .on_focus(filter(FilterMsg::Focused(kind)))
+        .on_move(move |direction| filter(FilterMsg::HighlightMoved(kind, direction)))
+        .on_dismiss(filter(FilterMsg::Dismissed(kind)))
+        .on_pick(move |index| filter(FilterMsg::Picked(kind, index)))
+        .into();
+        iced::widget::container(typeahead)
+            .width(Length::FillPortion(1))
+            .into()
+    });
+    iced::widget::Row::with_children(fields)
+        .spacing(spacing::SM)
+        .into()
+}
+
+/// The line naming the active filters (feature 1185, FR-014, FR-015): the values sent to Jira,
+/// in full where the fields are too narrow to show them. A capped list's caption follows the line
+/// in the same paragraph rather than taking a line of its own; **Clear filters** trails the
+/// switch's row above (ledger D12).
+fn active_filters_line<'a>(
+    line: String,
+    caption: Option<String>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let text = match caption {
+        Some(caption) => format!("{line}. {caption}"),
+        None => line,
+    };
+    Text::new(text, TypeRole::Caption, r)
+        .muted()
+        .width(Length::Fill)
+        .into()
 }
 
 /// The width the label column of the picked issue's details takes: "Closing pull requests" at the

@@ -1271,6 +1271,13 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },
+        // Feature 1185: a component chosen over a capped Jira list: the filter row, the active
+        // line with Clear filters and the cap caption, the tallest Jira form.
+        CoveredState {
+            name: "add-worktree-dialog-jira-filtered",
+            build: || StateUnderTest::new(super::jira_picker::jira_filtered(with_project())),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         // Rows, a long title, and the cap caption: more open issues than the load holds.
         CoveredState {
             name: "add-worktree-dialog-issue-loaded",

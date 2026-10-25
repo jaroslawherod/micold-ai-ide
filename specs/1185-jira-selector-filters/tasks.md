@@ -27,10 +27,10 @@ are never edited; `crates/micold-core/tests/jira_jql.rs` stays green unchanged.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create empty modules with their module docs and register them:
+- [x] T001 Create empty modules with their module docs and register them:
   `crates/micold-core/src/jira_filter.rs` as `pub mod jira_filter` in
-  `crates/micold-core/src/lib.rs`; `crates/micold-client/src/features/jira_filters.rs` in
-  `crates/micold-client/src/features/mod.rs`; `crates/micold-client/src/shell/jira_filters.rs` in
+  `crates/micold-core/src/lib.rs`; `crates/micold-client/src/features/worktree_form/jira_filters.rs` in
+  `crates/micold-client/src/features/worktree_form.rs` (ledger D11); `crates/micold-client/src/shell/jira_filters.rs` in
   `crates/micold-client/src/shell/mod.rs`
 
 ---
@@ -41,7 +41,7 @@ are never edited; `crates/micold-core/tests/jira_jql.rs` stays green unchanged.
 
 ### Tests (write first, must fail)
 
-- [ ] T002 [P] Core tests in `crates/micold-core/tests/jira_filter_clauses.rs` (NEW):
+- [x] T002 [P] Core tests in `crates/micold-core/tests/jira_filter_clauses.rs` (NEW):
   `jql_string` = `"` + value with `\` → `\\`, then `"` → `\"` + `"`, "never trimmed, cut or
   case-changed"; a corpus of ≥20 values with `"`, `\`, edge spaces, >100 characters and non-Latin
   text each yields exactly one quoted string (SC-003); `JiraFilters` setters `set_reporter`,
@@ -53,7 +53,7 @@ are never edited; `crates/micold-core/tests/jira_jql.rs` stays green unchanged.
   examples verbatim, clauses inserted before the last ` ORDER BY `, appended when there is none;
   `search_jql` still cuts the search text to 100 characters while a filter value of 150 characters
   is sent whole (FR-010). Reporter values built with `AccountId::parse`.
-- [ ] T003 [P] Core tests in `crates/micold-core/tests/jira_filter_choices.rs` (NEW):
+- [x] T003 [P] Core tests in `crates/micold-core/tests/jira_filter_choices.rs` (NEW):
   `AccountId::parse` accepts only "non-empty, no control characters"; `Debug` prints
   `AccountId(<redacted>)` and `JiraUser(<redacted>)`, and `format!("{:?}", filters)` with a
   reporter chosen contains neither the display name nor the account id (FR-006); `JiraUser`
@@ -65,7 +65,7 @@ are never edited; `crates/micold-core/tests/jira_jql.rs` stays green unchanged.
   `IssueLoadError::Other("filters are not supported by this source")` otherwise (research R10);
   for each of the 16 filter combinations, `load_filtered` over a `FakeJiraSource` scripted per
   clause set lists exactly the issues scripted for that set (SC-002).
-- [ ] T004 [P] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs` (extend):
+- [x] T004 [P] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs` (extend):
   `JiraCloud::list_filtered` and `search_filtered` POST `/rest/api/3/search/jql` with
   `jql = narrowed(list_jql(key), f)` / `narrowed(search_jql(key, text)?, f)` (50 results), to the
   connection's site only, with `Authorization`, `Accept`, `User-Agent`, `Content-Type`, no
@@ -74,20 +74,20 @@ are never edited; `crates/micold-core/tests/jira_jql.rs` stays green unchanged.
 
 ### Implementation
 
-- [ ] T005 Implement in `crates/micold-core/src/jira_filter.rs`: `AccountId` (built only by
+- [x] T005 Implement in `crates/micold-core/src/jira_filter.rs`: `AccountId` (built only by
   parsing; redacted `Debug`; no `Serialize`), `JiraUser { account, name, is_me }` (redacted
   `Debug`, equality by `account`), `FilterKind` (`Reporter | Label | Component | FixVersion`),
   `JiraFilters` (private `Option` fields, setters, `clear_all`, `is_empty`, `active`, `clauses`),
   `jql_string`, `narrowed` (data-model §1, §2, §5; contract §1). Makes T002 and the type parts of
   T003 pass.
-- [ ] T006 In `crates/micold-core/src/jira.rs` add `JiraSource::list_filtered` and
+- [x] T006 In `crates/micold-core/src/jira.rs` add `JiraSource::list_filtered` and
   `search_filtered` with the R10 defaults, and `load_filtered(source, conn, token, filters)` that
   reuses `load`'s paging and 1,000 cap over `list_filtered`; leave `list_jql`, `search_jql`,
   `load`, `list_open`, `search_open` unedited.
-- [ ] T007 In `crates/micold-core/src/jira.rs` implement `list_filtered` / `search_filtered` on
+- [x] T007 In `crates/micold-core/src/jira.rs` implement `list_filtered` / `search_filtered` on
   `FakeJiraSource`: record `(filters.clauses(), cursor | text)`, answer from the existing page and
   search scripts; add `filtered_calls()`. Makes the rest of T003 pass.
-- [ ] T008 In `crates/micold-client/src/shell/jira_http.rs` add one private
+- [x] T008 In `crates/micold-client/src/shell/jira_http.rs` add one private
   `request(method, path, query, body)` that builds every request (headers, 10 s
   `REQUEST_TIMEOUT`, no redirect, outcome through `classify`), move the existing POST and the
   status bisection onto it, and implement `list_filtered` / `search_filtered`. Makes T004 pass.
@@ -110,15 +110,15 @@ unfiltered list.
 
 #### Tests (write first, must fail)
 
-- [ ] T009 [P] [US1] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
+- [x] T009 [P] [US1] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
   `parse_components` on `[{"name": …}, …]` returns names in Jira's order, drops duplicates (first
   kept), skips empty and control-character names, and answers `IssueLoadError::NotJiraCloud` for a
   body of another shape (contract §4); `FakeJiraSource::with_components` answers and
   `choice_calls()` records the request.
-- [ ] T010 [P] [US1] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`:
+- [x] T010 [P] [US1] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`:
   `components` sends `GET /rest/api/3/project/{key}/components` to the connection's site only with
   the contract §3 headers; 401, 403, 404, timeout and offline are classified as for the search.
-- [ ] T011 [P] [US1] Client integration tests in `crates/micold-client/tests/jira_filters_picker.rs`
+- [x] T011 [P] [US1] Client integration tests in `crates/micold-client/tests/jira_filters_picker.rs`
   (NEW), through `App` messages over `FakeJiraSource`:
   - the filter row shows only while the Jira source shows (any `IssueList` state but
     `NotRequested`), never for GitHub, never with Jira off or unconnected (FR-001, filter-ui §1);
@@ -145,20 +145,20 @@ unfiltered list.
     reopening the form all start with no filter and no choices (FR-016);
   - picking an issue from a filtered list fills ticket, name and type as an unfiltered pick
     (FR-017);
-  - the cap caption with filters reads "Showing the 1,000 most recently updated open issues
-    matching the filters." (FR-007);
+  - the cap caption with filters reads "Showing the 1,000 most recently updated." after the
+    active line, in its paragraph (FR-007; ledger D12);
   - two `App`s: a filter chosen in one leaves the other's list and choices unchanged (Principle II).
-- [ ] T012 [P] [US1] Unit tests in the test modules of
-  `crates/micold-client/src/features/jira_filters.rs` and
+- [x] T012 [P] [US1] Unit tests in the test modules of
+  `crates/micold-client/src/features/worktree_form/jira_filters.rs` and
   `crates/micold-client/src/features/worktree_form.rs`: a `ChoiceLoad` result whose seq is not the
   awaited one is dropped (data-model §6); the active line reads "Filtered by component Payments";
-  `WorktreeForm::jira_notice` names "the filters you choose" and, while a filter is chosen, ends
-  with "Filters sent: component Payments." (FR-014, filter-ui §4 without the reporter clause,
-  which T039 adds).
-- [ ] T013 [P] [US1] Extend `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`:
+  `WorktreeForm::jira_notice` names "the filters you choose" and, while a filter is chosen, stays
+  as it is: the active line names the values sent (FR-014, filter-ui §4 as built, ledger D12;
+  without the reporter clause, which T039 adds).
+- [x] T013 [P] [US1] Extend `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`:
   opening the form and showing Jira makes no choice request; the first focus of Component makes
   exactly one `components` request, a second focus none (FR-006, FR-014).
-- [ ] T014 [P] [US1] Geometry gates: `crates/micold-client/tests/gates/jira_filters_fit.rs` (NEW,
+- [x] T014 [P] [US1] Geometry gates: `crates/micold-client/tests/gates/jira_filters_fit.rs` (NEW,
   registered in `crates/micold-client/tests/layout_snapshot.rs`): the filter row fits the 520 px
   dialog, the Component list anchors under its field, the active line with **Clear filters** fits
   one line; a scenario in `crates/micold-client/tests/gates/panel_placement.rs` with the Jira
@@ -167,12 +167,12 @@ unfiltered list.
 
 #### Implementation
 
-- [ ] T015 [US1] In `crates/micold-core/src/jira_filter.rs` implement `parse_components`; in
+- [x] T015 [US1] In `crates/micold-core/src/jira_filter.rs` implement `parse_components`; in
   `crates/micold-core/src/jira.rs` add `JiraSource::components` (default `Ok(vec![])`) and
   `FakeJiraSource::with_components` / `choice_calls()`. Makes T009 pass.
-- [ ] T016 [US1] In `crates/micold-client/src/shell/jira_http.rs` implement `components` through
+- [x] T016 [US1] In `crates/micold-client/src/shell/jira_http.rs` implement `components` through
   `request`. Makes T010 pass.
-- [ ] T017 [US1] In `crates/micold-client/src/features/jira_filters.rs` implement `ChoiceLoad<T>`
+- [x] T017 [US1] In `crates/micold-client/src/features/worktree_form/jira_filters.rs` implement `ChoiceLoad<T>`
   (`NotRequested | Loading { seq } | Failed { error } | Loaded(Vec<T>)`), `FilterState`
   (`chosen`, `components`, per-kind `queries` / `matches` / `highlight` / `open` ranked with
   `typeahead::rank` and `clamp_highlight`), `FilterMsg` (`Focused`, `QueryChanged`,
@@ -181,27 +181,27 @@ unfiltered list.
   `ClearedAll` that change `chosen` bump `issue_request_seq` and set `IssueList::Loading { seq }`
   (research R6); list rows and choice-state rows per filter-ui §2; the active-line text. Add
   `filter_request_seq: u64` beside `issue_request_seq` on `features::worktree_form::State`.
-- [ ] T018 [US1] In `crates/micold-client/src/features/worktree_form.rs`: `jira_filters:
+- [x] T018 [US1] In `crates/micold-client/src/features/worktree_form.rs`: `jira_filters:
   FilterState` on `WorktreeForm`; `FormMsg::JiraFilter(FilterMsg)`; reset to
   `FilterState::default()` at the four reset points (data-model §7); `jira_search_request()`
   returns text and filters; the filtered empty, no-match and cap texts; the `jira_notice` statement
   (T012). Makes T012 pass.
-- [ ] T019 [US1] In `crates/micold-client/src/shell/issues.rs` make `start_jira_load` /
+- [x] T019 [US1] In `crates/micold-client/src/shell/issues.rs` make `start_jira_load` /
   `start_jira_search` call `load_filtered` / `search_filtered` with the form's filters; in
   `crates/micold-client/src/shell/jira_filters.rs` add the `on_filter_*` handlers (first focus →
   `components` on a blocking thread with a new filter seq; Retry; a changed filter → Jira load with
   the new `issue_request_seq`); route `FormMsg::JiraFilter` in `crates/micold-client/src/main.rs`
   beside the other `shell::issues` form routes. Makes T011 and T013 pass.
-- [ ] T020 [US1] In `crates/micold-client/src/ui/worktree_form.rs` draw, in the Jira issue
+- [x] T020 [US1] In `crates/micold-client/src/ui/worktree_form.rs` draw, in the Jira issue
   section above the issue picker, the filter row (one `material::Typeahead` per implemented filter,
   Component here, equal widths), the active line with a **Clear filters** text button, choice-state
   rows and full-text row tooltips (`PickerRow::tooltip`); no new widget, GitHub layout untouched.
   If `panel_placement` fails, take the plan's fallback (placeholders instead of field labels) and
   record it in the ledger. Makes T014 pass.
-- [ ] T021 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve components `Payments`,
+- [x] T021 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve components `Payments`,
   `Auth` and `Ä "quoted" \ name`, and answer filtered searches by the `component` clause
   (quickstart Part B).
-- [ ] T022 [P] [US1] User guide: the Filters paragraph (component, **Clear filters**, the active
+- [x] T022 [P] [US1] User guide: the Filters paragraph (component, **Clear filters**, the active
   line, the empty state) and the new statement text in "From a Jira issue" of
   `docs/user-guide/worktrees-and-sessions.md`; what is sent for filters and component choices in
   the Jira section of `docs/user-guide/settings.md`.
@@ -235,7 +235,7 @@ unfiltered list.
 - [ ] T027 [US1] In `crates/micold-client/src/shell/jira_http.rs` implement `versions` through
   `request`. Makes T024 pass.
 - [ ] T028 [US1] Add the FixVersion filter: `versions: ChoiceLoad<VersionChoice>` and
-  `VersionsLoaded { seq, result }` in `crates/micold-client/src/features/jira_filters.rs`, its
+  `VersionsLoaded { seq, result }` in `crates/micold-client/src/features/worktree_form/jira_filters.rs`, its
   focus/retry handler in `crates/micold-client/src/shell/jira_filters.rs`, its field in the row in
   `crates/micold-client/src/ui/worktree_form.rs`. Makes T025 pass.
 - [ ] T029 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve versions `2.4`
@@ -292,7 +292,7 @@ person reported, identified by account, not name.
   `project_users` through `request`, query values set with `.query()`. Makes T032 pass.
 - [ ] T037 [US2] Add the Reporter filter: `me` / `people: ChoiceLoad<JiraUser>`,
   `people_pending`, `PeopleSearchDue { seq }`, `MeLoaded`, `PeopleLoaded` in
-  `crates/micold-client/src/features/jira_filters.rs`; the debounced search and handlers in
+  `crates/micold-client/src/features/worktree_form/jira_filters.rs`; the debounced search and handlers in
   `crates/micold-client/src/shell/jira_filters.rs`; the field ("You (name)" for the own user) in
   `crates/micold-client/src/ui/worktree_form.rs`. Makes T033 and T034 pass.
 - [ ] T038 [P] [US2] In `crates/micold-client/examples/fake_jira.rs` serve `/myself` and a user
@@ -338,7 +338,7 @@ type a summary word and the results narrow within them.
   partial }` and `label_choices`. Makes T040 pass.
 - [ ] T043 [US3] Add the Label filter: `labels: LabelSource` (`Waiting { seq } | Failed |
   Ready(LabelChoices)`) taken from the unfiltered Jira load of that seq, even when superseded, in
-  `crates/micold-client/src/features/jira_filters.rs` and
+  `crates/micold-client/src/features/worktree_form/jira_filters.rs` and
   `crates/micold-client/src/features/worktree_form.rs`; its field in
   `crates/micold-client/src/ui/worktree_form.rs`. Makes T041 pass.
 - [ ] T044 [P] [US3] In `crates/micold-client/examples/fake_jira.rs` answer the `labels` clause.
@@ -364,7 +364,7 @@ type a summary word and the results narrow within them.
   US2 (T031–T039) → US3 (T040–T045) → Polish (T046).
 - US2 and US3 depend only on Foundational and US1 Part A (the filter row, reducer and shell
   wiring); they do not depend on each other, but share `jira_filters_picker.rs`,
-  `features/jira_filters.rs` and `ui/worktree_form.rs`, so they run in sequence.
+  `features/worktree_form/jira_filters.rs` and `ui/worktree_form.rs`, so they run in sequence.
 - Within each part: tests first (fail), then core, adapter, reducer, shell, view, example, docs.
 
 ## Parallel Example: User Story 1 Part A

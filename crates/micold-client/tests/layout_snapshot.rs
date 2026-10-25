@@ -152,6 +152,13 @@ mod picker_row_tooltip_clears_its_row;
 #[path = "gates/issue_rows_show_all_text.rs"]
 mod issue_rows_show_all_text;
 
+// --- The Jira filters fit gate (1185, T014) -------------------------------------------------------
+
+// Here because it reads a covered state, the filtered Jira form, and asks where the filter row,
+// its open list and the active line with Clear filters were painted in the 520 px dialog.
+#[path = "gates/jira_filters_fit.rs"]
+mod jira_filters_fit;
+
 // --- The notification-kind rows gate (613, T075) -------------------------------------------------
 
 // Here because it reads a covered state, the Environment page, from the shared record cache, and
