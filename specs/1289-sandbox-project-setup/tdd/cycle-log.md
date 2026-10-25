@@ -211,3 +211,19 @@ output is copied from the session's logs.
   T026 `ops::create_worktree` starts setup and returns `SetupStart`, T027/T028 the five handlers and
   the disconnect unwatch, T029 the `setup` field -> `setup_run` 7 passed, `mcp_create_worktree_setup`
   2 passed; `mcp_create_worktree` 43 passed after its exact-row expectations gained `"setup": "none"`
+
+## M3 cycle 3: review A round 1 fixes (A-F1, A-F2, A-F4)
+
+- tests: `daemon/src/setup.rs` `a_backlog_bigger_than_a_frame_goes_out_in_several_encodable_batches`
+  (A-F1: 5,000 × 4,000-byte lines, a flush and a watch from 0 each send several contiguous
+  `SetupOutput`s, every one under `MAX_FRAME_LENGTH`); `daemon/src/state.rs`
+  `setup_lock_tests::keeping_setup_output_does_not_wait_on_the_state_lock` (A-F2: a push while the
+  state lock is held finishes within 2 s)
+- red: `cargo test -p micold-daemon --lib -- setup` -> 2 FAILED (`setup.rs:547` the frame-size
+  assertion; `state.rs:8801` "the push waited on the state lock")
+- green: `send_from` splits a backlog or flush into batches of at most `BATCH_BYTES` (1 MiB) of line
+  bytes; `SetupRuns` behind its own `DaemonState.setup` mutex (order `setup` → `inner`; `inner`
+  only when there is something to send; `deregister` unwatches after releasing `inner`); A-F4
+  `ops::create_worktree` calls `setup::start_in` with the created worktree's path (no red test: the
+  refreshed-list miss cannot be provoked without fault injection) -> `-- setup` 8 passed
+
