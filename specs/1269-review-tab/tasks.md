@@ -378,9 +378,25 @@ the changed mark and ×; × replaces the view's **Close**.
 
 ## Phase 10: Polish & cross-cutting
 
-- [ ] T042 Run quickstart Part A on `main` after M4 and record the results in
+- [x] T042 Run quickstart Part A on `main` after M4 and record the results in
   `specs/1269-review-tab/quickstart.md`.
-- [ ] T043 Tick finished tasks and check every FR in plan.md's requirement map against its test.
+- [x] T043 Tick finished tasks and check every FR in plan.md's requirement map against its test.
+
+  *Done (close PR)*: T001–T041 were ticked with their milestones; every FR-001–FR-017 and
+  SC-001–SC-006 maps to a test that exists and ran green — table in `tdd/verification.md`
+  §Traceability.
+
+## Phase 11: TDD remediation (from `tdd/verification.md`, close PR)
+
+- [x] T044 Finding 1: give every assertion in `crates/micold-core/src/review_tabs.rs`'s tests a
+  rule message, naming the case in `t3_close_…` and `t5_files_changed_…`. Proof:
+  `cargo test -p micold-core --lib review_tabs` (28 passed).
+- [x] T045 Finding 2: `crates/micold-client/tests/gates/session_area_fits.rs` requires the changed
+  mark's child instead of falling back to its slot. Proof:
+  `cargo test -p micold-client --test layout_snapshot the_review_tab_holds` (1 passed).
+- [x] T046 Finding 3: rename `selecting_a_session_closes_the_view` and
+  `the_entry_leaving_the_catalog_closes_the_view` (`features_changes.rs`) to what they assert.
+  Proof: `cargo test -p micold-client --test features_changes` (129 passed).
 
 ---
 

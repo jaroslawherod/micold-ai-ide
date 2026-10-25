@@ -482,15 +482,27 @@ mod tests {
             calls.set(calls.get() + 1);
             7
         });
-        assert_eq!(opened, Opened::Created);
-        assert_eq!(calls.get(), 1);
-        assert_eq!(tabs.shown_key(), Some(&worktree("p", "w")));
+        assert_eq!(
+            opened,
+            Opened::Created,
+            "a new location gets a freshly made tab"
+        );
+        assert_eq!(calls.get(), 1, "make runs once for a new tab");
+        assert_eq!(
+            tabs.shown_key(),
+            Some(&worktree("p", "w")),
+            "the new tab is the shown one"
+        );
         let tab = tabs.shown().expect("shown tab");
-        assert_eq!(tab.view, 7);
-        assert_eq!(tab.freshness(), Freshness::Fresh);
-        assert_eq!(tab.return_to(), Some(session(1)));
-        assert_eq!(tabs.len(), 1);
-        assert!(!tabs.is_empty());
+        assert_eq!(tab.view, 7, "the view is the one make built");
+        assert_eq!(tab.freshness(), Freshness::Fresh, "a new tab starts fresh");
+        assert_eq!(
+            tab.return_to(),
+            Some(session(1)),
+            "the tab remembers the session to return to"
+        );
+        assert_eq!(tabs.len(), 1, "one tab exists after the first open");
+        assert!(!tabs.is_empty(), "a map holding a tab is not empty");
     }
 
     #[test]
@@ -499,11 +511,23 @@ mod tests {
         let opened = tabs.open_or_show(worktree("p", "w"), Some(session(2)), || {
             panic!("make must not be called for an existing tab")
         });
-        assert_eq!(opened, Opened::Shown { reread: false });
-        assert_eq!(tabs.shown_key(), Some(&worktree("p", "w")));
+        assert_eq!(
+            opened,
+            Opened::Shown { reread: false },
+            "showing a hidden fresh tab needs no reread"
+        );
+        assert_eq!(
+            tabs.shown_key(),
+            Some(&worktree("p", "w")),
+            "the opened tab is the shown one"
+        );
         let tab = tabs.shown().expect("shown tab");
-        assert_eq!(tab.view, 0);
-        assert_eq!(tab.return_to(), Some(session(2)));
+        assert_eq!(tab.view, 0, "an existing tab keeps its view");
+        assert_eq!(
+            tab.return_to(),
+            Some(session(2)),
+            "reopening updates the session to return to"
+        );
     }
 
     #[test]
@@ -511,25 +535,44 @@ mod tests {
         let key = worktree("p", "w");
         let mut changed = with_hidden(std::slice::from_ref(&key));
         changed.files_changed(&key);
-        assert_eq!(changed.get(&key).unwrap().freshness(), Freshness::Changed);
+        assert_eq!(
+            changed.get(&key).unwrap().freshness(),
+            Freshness::Changed,
+            "files_changed marks a hidden tab Changed"
+        );
         assert_eq!(
             changed.open_or_show(key.clone(), None, || 9),
-            Opened::Shown { reread: true }
+            Opened::Shown { reread: true },
+            "a hidden changed tab is reread when shown"
         );
-        assert_eq!(changed.get(&key).unwrap().freshness(), Freshness::Fresh);
+        assert_eq!(
+            changed.get(&key).unwrap().freshness(),
+            Freshness::Fresh,
+            "rereading makes the tab fresh"
+        );
 
         let mut unwatched = with_hidden(std::slice::from_ref(&key));
         unwatched.location_left(&key);
         assert_eq!(
             unwatched.get(&key).unwrap().freshness(),
-            Freshness::Unwatched
+            Freshness::Unwatched,
+            "leaving the location marks a hidden tab Unwatched"
         );
         assert_eq!(
             unwatched.open_or_show(key.clone(), None, || 9),
-            Opened::Shown { reread: true }
+            Opened::Shown { reread: true },
+            "an unwatched hidden tab is reread when shown"
         );
-        assert_eq!(unwatched.get(&key).unwrap().freshness(), Freshness::Fresh);
-        assert_eq!(unwatched.get(&key).unwrap().view, 0);
+        assert_eq!(
+            unwatched.get(&key).unwrap().freshness(),
+            Freshness::Fresh,
+            "rereading makes the tab fresh"
+        );
+        assert_eq!(
+            unwatched.get(&key).unwrap().view,
+            0,
+            "a reread keeps the tab's view; it is not remade"
+        );
     }
 
     #[test]
@@ -542,7 +585,11 @@ mod tests {
         let opened = tabs.open_or_show(key.clone(), Some(session(2)), || {
             panic!("make must not be called for the shown tab")
         });
-        assert_eq!(opened, Opened::AlreadyShown);
+        assert_eq!(
+            opened,
+            Opened::AlreadyShown,
+            "opening the shown tab answers AlreadyShown"
+        );
         assert_eq!(tabs, before, "not return_to, not freshness");
     }
 
@@ -555,9 +602,17 @@ mod tests {
             if n % 2 == 0 {
                 tabs.hide();
             }
-            assert_eq!(tabs.len(), 1);
+            assert_eq!(
+                tabs.len(),
+                1,
+                "one tab per location however often it is opened"
+            );
         }
-        assert_eq!(tabs.get(&key).unwrap().view, 0);
+        assert_eq!(
+            tabs.get(&key).unwrap().view,
+            0,
+            "the first view is kept across repeated opens"
+        );
     }
 
     #[test]
@@ -565,16 +620,29 @@ mod tests {
         let (w, x) = (worktree("p", "w"), worktree("p", "x"));
         let mut tabs = ReviewTabs::default();
         tabs.open_or_show(w.clone(), None, || 1);
-        assert_eq!(tabs.open_or_show(x.clone(), None, || 2), Opened::Created);
-        assert_eq!(tabs.shown_key(), Some(&x));
-        assert_eq!(tabs.len(), 2);
-        assert!(tabs.has(&w));
-        assert_eq!(tabs.get(&w).unwrap().view, 1);
+        assert_eq!(
+            tabs.open_or_show(x.clone(), None, || 2),
+            Opened::Created,
+            "a second location gets its own new tab"
+        );
+        assert_eq!(
+            tabs.shown_key(),
+            Some(&x),
+            "the newly opened tab is the shown one"
+        );
+        assert_eq!(tabs.len(), 2, "the first tab is kept");
+        assert!(tabs.has(&w), "the hidden tab is still present");
+        assert_eq!(
+            tabs.get(&w).unwrap().view,
+            1,
+            "the hidden tab keeps its view"
+        );
         assert_eq!(
             tabs.iter()
                 .map(|(k, t)| (k.clone(), t.view))
                 .collect::<Vec<_>>(),
-            vec![(w, 1), (x, 2)]
+            vec![(w, 1), (x, 2)],
+            "tabs iterate in key order with their views"
         );
     }
 
@@ -588,15 +656,15 @@ mod tests {
         tabs.open_or_show(x.clone(), Some(session(2)), || 2);
         tabs.files_changed(&w);
         let before: Vec<_> = tabs.iter().map(|(k, t)| (k.clone(), t.clone())).collect();
-        assert!(tabs.hide());
-        assert_eq!(tabs.shown_key(), None);
-        assert!(tabs.shown().is_none());
+        assert!(tabs.hide(), "hide reports that a tab was shown");
+        assert_eq!(tabs.shown_key(), None, "no tab is shown after hide");
+        assert!(tabs.shown().is_none(), "shown() is none after hide");
         let after: Vec<_> = tabs.iter().map(|(k, t)| (k.clone(), t.clone())).collect();
-        assert_eq!(after, before);
+        assert_eq!(after, before, "hide changes no tab");
 
         let hidden = tabs.clone();
-        assert!(!tabs.hide());
-        assert_eq!(tabs, hidden);
+        assert!(!tabs.hide(), "hide reports false when nothing was shown");
+        assert_eq!(tabs, hidden, "hiding with none shown changes nothing");
     }
 
     // ---- T3. Close with × -------------------------------------------------------------
@@ -607,9 +675,13 @@ mod tests {
         let before = tabs.clone();
         assert_eq!(
             tabs.close(&worktree("p", "x"), &[session(1)], Some(session(1))),
-            None
+            None,
+            "closing a location with no tab answers None"
         );
-        assert_eq!(tabs, before);
+        assert_eq!(
+            tabs, before,
+            "closing a location with no tab changes nothing"
+        );
     }
 
     #[test]
@@ -630,21 +702,40 @@ mod tests {
                 view: 5,
                 was_shown: true,
                 show: Some(s2)
-            }
+            },
+            "return-to live: closing the shown tab shows its return-to session"
         );
-        assert_eq!(tabs.shown_key(), None);
-        assert!(!tabs.has(&key));
-        assert!(tabs.is_empty());
+        assert_eq!(
+            tabs.shown_key(),
+            None,
+            "return-to live: closing the shown tab leaves none shown"
+        );
+        assert!(!tabs.has(&key), "return-to live: the closed tab is removed");
+        assert!(
+            tabs.is_empty(),
+            "return-to live: closing the only tab empties the map"
+        );
 
         let mut tabs = open();
-        assert_eq!(tabs.close(&key, &[s1], Some(s1)).unwrap().show, Some(s1));
+        assert_eq!(
+            tabs.close(&key, &[s1], Some(s1)).unwrap().show,
+            Some(s1),
+            "else main: a dead return-to falls back to the main session"
+        );
 
         let mut tabs = open();
-        assert_eq!(tabs.close(&key, &[], None).unwrap().show, None);
+        assert_eq!(
+            tabs.close(&key, &[], None).unwrap().show,
+            None,
+            "else none: no live return-to and no main shows nothing"
+        );
 
         let mut tabs = open();
         tabs.hide();
-        assert!(!tabs.close(&key, &[s2], None).unwrap().was_shown);
+        assert!(
+            !tabs.close(&key, &[s2], None).unwrap().was_shown,
+            "hidden close: closing a hidden tab is not was_shown"
+        );
     }
 
     #[test]
@@ -655,10 +746,22 @@ mod tests {
         tabs.open_or_show(x.clone(), None, || 2);
         let other = tabs.get(&w).cloned();
         tabs.close(&x, &[], None);
-        assert_eq!(tabs.get(&w).cloned(), other);
-        assert_eq!(tabs.len(), 1);
-        assert_eq!(tabs.open_or_show(x.clone(), None, || 3), Opened::Created);
-        assert_eq!(tabs.get(&x).unwrap().view, 3);
+        assert_eq!(
+            tabs.get(&w).cloned(),
+            other,
+            "closing one tab leaves another untouched"
+        );
+        assert_eq!(tabs.len(), 1, "one tab remains after the close");
+        assert_eq!(
+            tabs.open_or_show(x.clone(), None, || 3),
+            Opened::Created,
+            "a closed location reopens as a new tab"
+        );
+        assert_eq!(
+            tabs.get(&x).unwrap().view,
+            3,
+            "the reopened tab holds the new view, no kept view"
+        );
 
         // Closing a hidden tab leaves the shown one shown.
         tabs.open_or_show(w.clone(), None, || 0);
@@ -673,17 +776,33 @@ mod tests {
         let (w, x) = (worktree("p", "w"), worktree("p", "x"));
         let mut tabs = with_hidden(std::slice::from_ref(&w));
         let before = tabs.clone();
-        assert_eq!(tabs.show_if_present(&x), None);
-        assert_eq!(tabs, before);
+        assert_eq!(
+            tabs.show_if_present(&x),
+            None,
+            "show_if_present answers None for a location with no tab"
+        );
+        assert_eq!(tabs, before, "no tab means no change");
 
-        assert_eq!(tabs.show_if_present(&w), Some(false));
-        assert_eq!(tabs.shown_key(), Some(&w));
+        assert_eq!(
+            tabs.show_if_present(&w),
+            Some(false),
+            "showing a fresh hidden tab needs no reread"
+        );
+        assert_eq!(tabs.shown_key(), Some(&w), "the shown tab is the one shown");
 
         tabs.hide();
         tabs.files_changed(&w);
-        assert_eq!(tabs.show_if_present(&w), Some(true));
-        assert_eq!(tabs.get(&w).unwrap().freshness(), Freshness::Fresh);
-        assert_eq!(tabs.len(), 1);
+        assert_eq!(
+            tabs.show_if_present(&w),
+            Some(true),
+            "a changed hidden tab is reread when shown"
+        );
+        assert_eq!(
+            tabs.get(&w).unwrap().freshness(),
+            Freshness::Fresh,
+            "rereading makes the tab fresh"
+        );
+        assert_eq!(tabs.len(), 1, "showing makes no new tab");
     }
 
     #[test]
@@ -698,7 +817,7 @@ mod tests {
             Some(false),
             "as T1's AlreadyShown"
         );
-        assert_eq!(tabs, before);
+        assert_eq!(tabs, before, "showing the shown tab changes nothing");
         assert!(
             tabs.uncovered(&key),
             "the covered tab still reads on uncover"
@@ -729,24 +848,47 @@ mod tests {
         let removed = tabs.drop_gone_worktrees(&project("p"), &names(&["x"]));
         assert_eq!(removed, vec![pw.clone()]);
         assert_eq!(tabs.shown_key(), None, "the removed tab was shown");
-        assert!(!tabs.has(&pw));
-        assert!(tabs.has(&pd) && tabs.has(&px) && tabs.has(&qx));
-        assert_eq!(tabs.session_for(&pw, &[session(1)], None), None);
+        assert!(!tabs.has(&pw), "the removed worktree's tab is gone");
+        assert!(
+            tabs.has(&pd) && tabs.has(&px) && tabs.has(&qx),
+            "other tabs of the project and of other projects stay"
+        );
+        assert_eq!(
+            tabs.session_for(&pw, &[session(1)], None),
+            None,
+            "the removed tab's remembered session goes with it"
+        );
         assert_eq!(
             tabs.session_for(&worktree("p", "y"), &[session(1)], None),
             None,
             "a gone worktree's last session goes with it, tab or not"
         );
-        assert_eq!(tabs.session_for(&px, &[session(1)], None), Some(session(1)));
-        assert_eq!(tabs.session_for(&qx, &[session(1)], None), Some(session(1)));
+        assert_eq!(
+            tabs.session_for(&px, &[session(1)], None),
+            Some(session(1)),
+            "a kept worktree keeps its remembered session"
+        );
+        assert_eq!(
+            tabs.session_for(&qx, &[session(1)], None),
+            Some(session(1)),
+            "another project's remembered session is kept"
+        );
 
         // Every worktree gone: Default stays.
         assert_eq!(
             tabs.drop_gone_worktrees(&project("p"), &names(&[])),
-            vec![px.clone()]
+            vec![px.clone()],
+            "with no worktrees left, every worktree tab goes"
         );
-        assert!(tabs.has(&pd) && tabs.has(&qx));
-        assert_eq!(tabs.session_for(&pd, &[session(1)], None), Some(session(1)));
+        assert!(
+            tabs.has(&pd) && tabs.has(&qx),
+            "Default tabs and other projects' tabs stay"
+        );
+        assert_eq!(
+            tabs.session_for(&pd, &[session(1)], None),
+            Some(session(1)),
+            "Default's remembered session stays"
+        );
     }
 
     #[test]
@@ -756,9 +898,14 @@ mod tests {
         tabs.open_or_show(px.clone(), None, || 1);
         assert_eq!(
             tabs.drop_gone_worktrees(&project("p"), &names(&["x"])),
-            vec![pw]
+            vec![pw],
+            "only the missing worktree's tab is removed"
         );
-        assert_eq!(tabs.shown_key(), Some(&px));
+        assert_eq!(
+            tabs.shown_key(),
+            Some(&px),
+            "a shown tab that is not removed stays shown"
+        );
     }
 
     #[test]
@@ -772,14 +919,31 @@ mod tests {
         // In key order: a worktree sorts before Default.
         assert_eq!(
             tabs.drop_project(&project("p")),
-            vec![pw.clone(), pd.clone()]
+            vec![pw.clone(), pd.clone()],
+            "every key of the project is removed, in key order"
         );
-        assert_eq!(tabs.shown_key(), None);
-        assert_eq!(tabs.len(), 1);
-        assert!(tabs.has(&qx));
-        assert_eq!(tabs.session_for(&pd, &[session(1)], None), None);
-        assert_eq!(tabs.session_for(&qx, &[session(2)], None), Some(session(2)));
-        assert_eq!(tabs.drop_project(&project("p")), Vec::<EntryKey>::new());
+        assert_eq!(
+            tabs.shown_key(),
+            None,
+            "the removed tab was the shown one, so none is shown"
+        );
+        assert_eq!(tabs.len(), 1, "only the other project's tab remains");
+        assert!(tabs.has(&qx), "the other project's tab is kept");
+        assert_eq!(
+            tabs.session_for(&pd, &[session(1)], None),
+            None,
+            "the project's remembered session goes with it"
+        );
+        assert_eq!(
+            tabs.session_for(&qx, &[session(2)], None),
+            Some(session(2)),
+            "the other project's remembered session stays"
+        );
+        assert_eq!(
+            tabs.drop_project(&project("p")),
+            Vec::<EntryKey>::new(),
+            "dropping an absent project removes nothing"
+        );
     }
 
     #[test]
@@ -839,7 +1003,11 @@ mod tests {
             Freshness::Unwatched => tabs.location_left(key),
         }
         tabs.open_or_show(worktree("other", "o"), None, || 0);
-        assert_eq!(freshness(&tabs, key), state);
+        assert_eq!(
+            freshness(&tabs, key),
+            state,
+            "the helper builds the requested freshness"
+        );
         tabs
     }
 
@@ -848,19 +1016,39 @@ mod tests {
         let key = worktree("p", "w");
         let mut tabs = ReviewTabs::default();
         tabs.open_or_show(key.clone(), None, || 1);
-        assert_eq!(tabs.files_changed(&key), Change::Reread);
-        assert_eq!(freshness(&tabs, &key), Freshness::Fresh);
+        assert_eq!(
+            tabs.files_changed(&key),
+            Change::Reread,
+            "shown reread: a change to the shown tab is reread"
+        );
+        assert_eq!(
+            freshness(&tabs, &key),
+            Freshness::Fresh,
+            "shown reread: the reread tab is fresh"
+        );
 
         for state in [Freshness::Fresh, Freshness::Changed, Freshness::Unwatched] {
             let mut tabs = hidden_in(&key, state);
-            assert_eq!(tabs.files_changed(&key), Change::Marked, "{state:?}");
-            assert_eq!(freshness(&tabs, &key), Freshness::Changed, "{state:?}");
+            assert_eq!(
+                tabs.files_changed(&key),
+                Change::Marked,
+                "hidden marked: {state:?}"
+            );
+            assert_eq!(
+                freshness(&tabs, &key),
+                Freshness::Changed,
+                "hidden marked: {state:?}"
+            );
         }
 
         let mut tabs = with_hidden(std::slice::from_ref(&key));
         let before = tabs.clone();
-        assert_eq!(tabs.files_changed(&worktree("p", "x")), Change::Nothing);
-        assert_eq!(tabs, before);
+        assert_eq!(
+            tabs.files_changed(&worktree("p", "x")),
+            Change::Nothing,
+            "no tab ignored: a change to a location with no tab does nothing"
+        );
+        assert_eq!(tabs, before, "no tab ignored: no tab means no change");
     }
 
     #[test]
@@ -868,12 +1056,20 @@ mod tests {
         let key = worktree("p", "w");
         let mut hidden = hidden_in(&key, Freshness::Fresh);
         hidden.location_left(&key);
-        assert_eq!(freshness(&hidden, &key), Freshness::Unwatched);
+        assert_eq!(
+            freshness(&hidden, &key),
+            Freshness::Unwatched,
+            "location_left unwatches a hidden fresh tab"
+        );
 
         let mut shown = ReviewTabs::default();
         shown.open_or_show(key.clone(), None, || 1);
         shown.location_left(&key);
-        assert_eq!(freshness(&shown, &key), Freshness::Unwatched);
+        assert_eq!(
+            freshness(&shown, &key),
+            Freshness::Unwatched,
+            "location_left unwatches the shown fresh tab"
+        );
         assert_eq!(
             shown.shown_key(),
             Some(&key),
@@ -882,12 +1078,19 @@ mod tests {
 
         let mut changed = hidden_in(&key, Freshness::Changed);
         changed.location_left(&key);
-        assert_eq!(freshness(&changed, &key), Freshness::Changed);
+        assert_eq!(
+            freshness(&changed, &key),
+            Freshness::Changed,
+            "location_left keeps a changed mark"
+        );
 
         let mut none = with_hidden(std::slice::from_ref(&key));
         let before = none.clone();
         none.location_left(&worktree("p", "x"));
-        assert_eq!(none, before);
+        assert_eq!(
+            none, before,
+            "location_left on a location with no tab changes nothing"
+        );
     }
 
     #[test]
@@ -895,17 +1098,25 @@ mod tests {
         let key = worktree("p", "w");
         let mut hidden = hidden_in(&key, Freshness::Fresh);
         hidden.comments_changed(&key);
-        assert_eq!(freshness(&hidden, &key), Freshness::Unwatched);
+        assert_eq!(
+            freshness(&hidden, &key),
+            Freshness::Unwatched,
+            "comments_changed unwatches a hidden fresh tab"
+        );
 
         let mut changed = hidden_in(&key, Freshness::Changed);
         changed.comments_changed(&key);
-        assert_eq!(freshness(&changed, &key), Freshness::Changed);
+        assert_eq!(
+            freshness(&changed, &key),
+            Freshness::Changed,
+            "comments_changed keeps a changed mark"
+        );
 
         let mut shown = ReviewTabs::default();
         shown.open_or_show(key.clone(), None, || 1);
         let before = shown.clone();
         shown.comments_changed(&key);
-        assert_eq!(shown, before);
+        assert_eq!(shown, before, "comments_changed leaves the shown tab alone");
     }
 
     #[test]
@@ -915,9 +1126,14 @@ mod tests {
             let mut tabs = hidden_in(&key, state);
             assert_eq!(
                 tabs.open_or_show(key.clone(), None, || 0),
-                Opened::Shown { reread: true }
+                Opened::Shown { reread: true },
+                "a changed or unwatched tab is reread when shown"
             );
-            assert_eq!(freshness(&tabs, &key), Freshness::Fresh);
+            assert_eq!(
+                freshness(&tabs, &key),
+                Freshness::Fresh,
+                "the reread makes the tab fresh"
+            );
             tabs.hide();
             assert_eq!(
                 tabs.open_or_show(key.clone(), None, || 0),
@@ -926,9 +1142,17 @@ mod tests {
             );
 
             let mut tabs = hidden_in(&key, state);
-            assert_eq!(tabs.show_if_present(&key), Some(true));
+            assert_eq!(
+                tabs.show_if_present(&key),
+                Some(true),
+                "the first show of a changed tab rereads"
+            );
             tabs.hide();
-            assert_eq!(tabs.show_if_present(&key), Some(false));
+            assert_eq!(
+                tabs.show_if_present(&key),
+                Some(false),
+                "a second show with no change needs no reread"
+            );
         }
     }
 
@@ -939,8 +1163,15 @@ mod tests {
         tabs.open_or_show(key.clone(), None, || 1);
         assert!(!tabs.uncovered(&key), "never covered");
         tabs.location_left(&key);
-        assert!(tabs.uncovered(&key));
-        assert_eq!(freshness(&tabs, &key), Freshness::Fresh);
+        assert!(
+            tabs.uncovered(&key),
+            "uncovered is true after location_left on the shown tab"
+        );
+        assert_eq!(
+            freshness(&tabs, &key),
+            Freshness::Fresh,
+            "uncovering does not alter freshness"
+        );
         assert!(!tabs.uncovered(&key), "once");
         assert!(!tabs.uncovered(&worktree("p", "x")), "no tab");
     }
@@ -974,7 +1205,11 @@ mod tests {
         assert_eq!(tabs.session_for(&key, &[], None), None, "sessionless");
 
         tabs.remember(key.clone(), s2);
-        assert_eq!(tabs.session_for(&key, &[s1, s2], Some(s1)), Some(s2));
+        assert_eq!(
+            tabs.session_for(&key, &[s1, s2], Some(s1)),
+            Some(s2),
+            "a live remembered session wins over main"
+        );
         assert_eq!(
             tabs.session_for(&key, &[s1], Some(s1)),
             Some(s1),
@@ -995,7 +1230,11 @@ mod tests {
         let mut tabs = ReviewTabs::<u32>::default();
         tabs.remember(key.clone(), s2);
         tabs.remember(key.clone(), s3);
-        assert_eq!(tabs.session_for(&key, &[s1, s2, s3], Some(s1)), Some(s3));
+        assert_eq!(
+            tabs.session_for(&key, &[s1, s2, s3], Some(s1)),
+            Some(s3),
+            "remember overwrites the earlier session"
+        );
     }
 
     // ---- T8. Faces ----------------------------------------------------------------------
@@ -1055,20 +1294,27 @@ mod tests {
     #[test]
     fn t8_a_changed_tab_with_no_drafts_says_only_that_it_changed() {
         let face = ReviewTabFace::of(Some(0), Freshness::Changed, false);
-        assert_eq!(face.badge, None);
-        assert!(face.changed);
-        assert_eq!(face.tooltip, "Review\nChanged since you looked");
+        assert_eq!(face.badge, None, "no drafts means no badge");
+        assert!(face.changed, "a changed tab is marked changed");
+        assert_eq!(
+            face.tooltip, "Review\nChanged since you looked",
+            "a changed tab with no drafts says only that it changed"
+        );
     }
 
     #[test]
     fn t8_badge_text_caps_at_99_plus_and_keeps_the_count() {
         let text = |n| ReviewTabFace::of(Some(n), Freshness::Fresh, false).badge_text();
-        assert_eq!(text(0), None);
-        assert_eq!(text(1).as_deref(), Some("1"));
-        assert_eq!(text(99).as_deref(), Some("99"));
-        assert_eq!(text(100).as_deref(), Some("99+"));
+        assert_eq!(text(0), None, "zero drafts has no badge text");
+        assert_eq!(text(1).as_deref(), Some("1"), "one draft shows its count");
+        assert_eq!(text(99).as_deref(), Some("99"), "99 drafts show as 99");
+        assert_eq!(text(100).as_deref(), Some("99+"), "100 drafts cap at 99+");
         let face = ReviewTabFace::of(Some(120), Freshness::Fresh, false);
-        assert_eq!(face.badge_text().as_deref(), Some("99+"));
+        assert_eq!(
+            face.badge_text().as_deref(),
+            Some("99+"),
+            "120 drafts cap at 99+"
+        );
         assert_eq!(face.badge, badge(120), "the count is kept");
     }
 

@@ -276,7 +276,7 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
 
 /// V2, feature 1269 T011 (U2, FR-004): selecting a session hides the review and keeps it.
 #[test]
-fn selecting_a_session_closes_the_view() {
+fn selecting_a_session_hides_the_review_and_keeps_it() {
     let mut state = ready(&["a.rs"]);
     let before = state.tabs.shown_view().cloned();
     changes::update(&mut state, Msg::SessionSelected);
@@ -294,7 +294,7 @@ fn selecting_a_session_closes_the_view() {
 
 /// V3, feature 1269 U9. The Review tab of a worktree that leaves the list is dropped; others stay.
 #[test]
-fn the_entry_leaving_the_catalog_closes_the_view() {
+fn the_entry_leaving_the_catalog_drops_its_review_tab() {
     let listed = |names: &[&str]| Msg::WorktreesListed {
         project: project(),
         names: names.iter().map(|n| n.to_string()).collect::<BTreeSet<_>>(),

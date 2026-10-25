@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1361 (design), #1371 (M1), #1384 (M2), #1387 (M3), #1394 (M4) and the close PR
 
 **Input**: User description: "Implement GitHub issue #1269: Review UI: Review as a per-worktree tab
 that keeps its state. Blocked by: #1126 (worktree header and session tab strip), #1124, #1125, #1127

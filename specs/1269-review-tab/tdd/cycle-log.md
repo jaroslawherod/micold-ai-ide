@@ -64,3 +64,14 @@ first reds are build errors against it.
 | T041 finding 1 | a member wider than the viewport is revealed at its leading edge | written with the fix (extends `a_member_beyond_either_edge_scrolls_just_into_view`) | 25 `session_strip` unit tests green |
 | gate | `feature_registration_cost`: `session_strip` names `changes` and `sidebar` | the full gate's run caught it | `ALLOWED_CROSS_FEATURE_NAMES` entries with reasons (the strip publishes their messages and reads pure helpers) |
 | gate | `material_boundary` (raw size `material::TypeRole` in the showcase's Review tab × call), `material_builder_api` (`CountBadge::label` public but not a builder step), `showcase_captions` (CountBadge names a live state but was not interactive) | the full gate's run caught them | `TypeRole` imported; `label` private; the entry is interactive |
+
+# TDD cycle log: 1269 (close)
+
+The close unit's audit (`tdd/verification.md`) recorded the reds M4 left unrecorded, by mutation,
+each restored and re-run green: `cargo test -p micold-client --lib session_strip`.
+
+| Row | Mutant | Red |
+|---|---|---|
+| M4 review A F1 | `shows_the_terminal` without `Outcome::ReviewHidden` | `a_session_shell_or_plus_press_hides_a_shown_review` FAILED (25 passed, 1 failed) |
+| M4 T041 finding 1 | `scroll_into_view` without the `trailing - leading > viewport` arm | `a_member_beyond_either_edge_scrolls_just_into_view` FAILED (25 passed, 1 failed) |
+| T044–T046 | test messages, a required mark child, two renames | no behaviour; the targets stay green |
