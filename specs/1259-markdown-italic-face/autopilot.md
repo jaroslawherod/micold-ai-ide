@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M1 review round 1 fixed, re-review pending
-- **Next step**: orchestrator dispatches review A round 2 (scoped, sonnet) on the fix diff (snapshot in *Review rounds*), then the M1 PR is opened
+- **Phase**: M1 reviewed (round 2 CLEAN), PR opening
+- **Next step**: orchestrator waits on CI for the M1 PR and merges; then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | — | implementing |
+| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | — | PR opening |
 | M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | — | planned |
 
 ## Decisions
@@ -52,12 +52,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | 73cdce2dbb41cb29369c478080c14350bb320212:d20f1b50e27026933493e4e4d962f14aadbb3a33 | CLEAN (orchestrator; also covered speckit-analyze: all FR/SC covered, paths verified); 3 MINOR applied: F1 C-3 pin joins in M2 + T007 host-Roboto note, F2 D9 M1-size note, F3 Verify adds `mise run gate` |
 | M1 review A + B | 1 | 9d4252ee3fb689d755244756853ea3ec0e6e73fa:e4c4ba50ea9a87862bd9f149d94fd1a3abbc9655 | A (code-review high): CHANGES — F1 MAJOR site/stage.sh OFL text names only the uprights → fixed (lists every `Roboto-*.ttf`); F2 MINOR roboto_font.rs guard ignores `ui::ROBOTO_FACES` → fixed (new test over `ROBOTO_FACES`, family from `ROBOTO_FAMILY`); F3 MINOR layout.rs dead constants, wrong doc, three locks → fixed; F4 MINOR roboto.rs host-dependent test, copied query helper → fixed (skips when the host has its own Roboto; shared `test_support::query`). B (conformance): CHANGES — F1 MAJOR no tdd/cycle-log.md → added (red not recorded in unit 1 says so; red shown by mutation in unit 2); F2 MINOR fixture README → fixed |
 | M1 visual pass T018 | 1 | e4c4ba50 (worker, evidence in visual-pass/) | FAIL B1, B3 (bold italic in DejaVu Sans Mono Bold Oblique), B6 (italic 漢字 boxes); B2, B4, B7 PASS → fixed by D10, D11; re-run by the M1 unit: B1/B3 bold italic and B6 PASS (visual-pass/results.md *Re-run*) |
-| M1 review A | 2 | 9596267dc307630eff98da28bee82557759a16d3:468b460804a33c78d42ce9d7f39bb150035773de | pending (orchestrator dispatches, scoped on the fix diff from round 1's snapshot); full gate (scripts/gate.sh, CARGO_INCREMENTAL=0, dev/test debuginfo 0 after a disk-full wipe of target-shared) green at 468b4608; layout snapshot unchanged |
+| M1 review A | 2 | 9596267dc307630eff98da28bee82557759a16d3:468b460804a33c78d42ce9d7f39bb150035773de | CLEAN (scoped re-review of A and B, sonnet): all round-1 findings fixed; D10 and D11 confirmed against cosmic-text 0.15.0 source. 2 MINOR declined (see below); no code change, so no new gate. Full gate (scripts/gate.sh) green at 468b4608; layout snapshot unchanged |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A round 2 | F1 MINOR: the italic split runs on every view build | Cost is small; revisit only if profiling shows it |
+| M1 | A round 2 | F2 MINOR: whitespace the italic cmap lacks could split into upright fragments | Harmless visually |
 
 ## Handover
 
