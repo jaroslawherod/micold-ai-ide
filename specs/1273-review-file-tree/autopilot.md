@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M3)
-- **Next step**: M3 implemented (T019–T023 ticked); review A, scoped gate, review B, full gate, then PR (title/body in the unit's scratchpad; the orchestrator opens it). Then M4 (T024–T030)
+- **Next step**: M3 implemented (T019–T023 ticked), scoped gate green; review A, review B, full gate, then PR (title/body in the unit's scratchpad; the orchestrator opens it). Then M4 (T024–T030)
 
 ## Pull requests
 
@@ -78,7 +78,16 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 
 ## Handover
 
-None.
+M3 unit handed over at checkpoint (CONTEXT 159k > 150k). Done: T019–T023 implemented and ticked
+(commits d9a9889e red tests, 67a2a040 implementation, c8e2a566 fmt), branch not pushed;
+`features_changes` 173 passed, `features_pr_changes` 92 passed; scoped gate green at c8e2a566;
+review snapshot before fmt 0603f0fb…:67a2a040. Next: review A (code-review high, origin/main...HEAD)
+— run it in a fresh context, not in the unit; review B (conformance, sonnet) via
+`claude -p --agent autopilot-reviewer` with the diff inline; then, right before the full gate,
+`git fetch origin main && git rebase origin/main`, layout snapshot re-record check (M3 draws
+nothing new, so the fixture should not change), `scripts/gate.sh`, then PR title/body to the
+orchestrator's scratchpad (`#1273: Review UI: file tree, filter and sort — M3 tree state`, body
+ends `Refs #1273`). Open findings: none yet. Decisions 6–10 recorded above.
 
 ## Open escalation
 
