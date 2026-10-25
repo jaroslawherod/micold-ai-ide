@@ -165,6 +165,8 @@ fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
         // A click on the session's sub-row: `Selected` opens its location's row and reveals it.
         EntryKey::Session(id) => Some(Step::Session(*id)),
         EntryKey::Project(path) => Some(Step::Project(path.clone())),
+        // Review entries are not listed yet (#1274 M4), so the `listed` check above refuses them.
+        EntryKey::ReviewFile(_) | EntryKey::ReviewComment(_) => None,
     }
 }
 
@@ -266,6 +268,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
             candidate: Candidate {
                 key: EntryKey::Location(location.clone()),
                 name: name.clone(),
+                detail: None,
                 parent: None,
                 selectable: true,
             },
@@ -277,6 +280,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
             candidate: Candidate {
                 key: EntryKey::Session(session.id),
                 name: session.label.display().to_owned(),
+                detail: None,
                 parent: Some(parent),
                 selectable: true,
             },
@@ -302,6 +306,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
                     candidate: Candidate {
                         key: EntryKey::Project(project.path),
                         name: project.label,
+                        detail: None,
                         parent: None,
                         selectable: project.available,
                     },
