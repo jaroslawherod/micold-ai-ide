@@ -168,10 +168,15 @@ pub async fn create_worktree(
     })
     .await;
     match result {
-        Ok(Ok(_worktree)) => {
+        Ok(Ok(worktree)) => {
             refresh_worktrees_and_broadcast(state, project.clone()).await;
-            // The refresh just listed the worktree, so it is known; were it not, no run starts.
-            Ok(crate::setup::start(state, &project, location).unwrap_or(SetupStart::NotConfigured))
+            // In the folder just made, not looked up again in the refreshed list (review A-F4).
+            Ok(crate::setup::start_in(
+                state,
+                &project,
+                location,
+                worktree.path,
+            ))
         }
         Ok(Err(e)) => Err(CreateFailure::Create(e)),
         Err(join) => Err(CreateFailure::Task(join.to_string())),

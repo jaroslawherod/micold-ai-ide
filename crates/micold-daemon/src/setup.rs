@@ -1,7 +1,7 @@
 //! A project's setup command, run in each worktree the app creates (feature 1289, data-model
 //! §Daemon, contracts C1–C2).
 //!
-//! [`SetupRuns`] lives in the daemon's state, under its lock: the commands the app sent with
+//! [`SetupRuns`] lives in the daemon's state, under its own lock (not the daemon-wide one): the commands the app sent with
 //! `ProjectSetupSet`, one record and output buffer per location that has run setup, and who watches
 //! each location's output. Its operations do no I/O; what they would send goes into an
 //! [`Outgoing`] list that [`DaemonState::setup`] delivers while it still holds the lock, so pushes
@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use micold_core::process::{ExitKind, Stream, StreamingChild, Terminator};
+use micold_core::protocol::envelope::MAX_FRAME_LENGTH;
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::SessionLocation;
 use micold_core::setup::output::OutputBuffer;
@@ -30,6 +31,12 @@ use crate::state::{ClientId, DaemonState};
 
 /// How often a running setup's new lines go out to its watchers (contract C2).
 pub const BATCH_EVERY: Duration = Duration::from_millis(250);
+
+/// The most line bytes one `SetupOutput` carries. The buffer can hold far more than a frame
+/// ([`MAX_FRAME_LENGTH`], 16 MiB), so a backlog or a flush goes out as several messages; this
+/// budget leaves room for escaping and the envelope (review A-F1).
+const BATCH_BYTES: usize = 1024 * 1024;
+const _: () = assert!(BATCH_BYTES * 8 < MAX_FRAME_LENGTH);
 
 /// A run's place: the project as this daemon's catalog holds it, and the location in it.
 type Key = (PathBuf, SessionLocation);
@@ -191,7 +198,7 @@ impl SetupRuns {
         };
         for (conn, next) in watchers.iter_mut() {
             if *next < entry.output.next_index() {
-                out.push((To::One(*conn), batch(key, entry, *next)));
+                send_from(key, entry, *next, *conn, out);
                 *next = entry.output.next_index();
             }
         }
@@ -266,7 +273,7 @@ impl SetupRuns {
         let next = match self.runs.get(&key) {
             Some(entry) => {
                 let from = from_line.max(entry.output.first_index());
-                out.push((To::One(conn), batch(&key, entry, from)));
+                send_from(&key, entry, from, conn, out);
                 entry.output.next_index()
             }
             None => from_line,
@@ -307,17 +314,35 @@ fn changed(key: &Key, run: Option<SetupRunSummary>) -> DaemonMsg {
     }
 }
 
-/// The lines of `entry` from `from` on.
-fn batch(key: &Key, entry: &Entry, from: u64) -> DaemonMsg {
-    let (first_line, lines) = entry.output.since(from);
-    DaemonMsg::SetupOutput {
+/// Send `conn` the lines of `entry` from `from` on, in batches of at most [`BATCH_BYTES`] line
+/// bytes (a longer line goes alone). Always at least one message, so a watch with nothing to catch
+/// up on still learns the run and what was dropped.
+fn send_from(key: &Key, entry: &Entry, from: u64, conn: ClientId, out: &mut Outgoing) {
+    let (mut first_line, lines) = entry.output.since(from);
+    let message = |first_line, lines| DaemonMsg::SetupOutput {
         project: key.0.clone(),
         location: key.1.clone(),
         run: entry.record.id(),
         first_line,
         lines,
         dropped: entry.output.first_index(),
+    };
+    let mut batch = Vec::new();
+    let mut bytes = 0;
+    for line in lines {
+        if !batch.is_empty() && bytes + line.len() > BATCH_BYTES {
+            let sent = batch.len() as u64;
+            out.push((
+                To::One(conn),
+                message(first_line, std::mem::take(&mut batch)),
+            ));
+            first_line += sent;
+            bytes = 0;
+        }
+        bytes += line.len();
+        batch.push(line);
     }
+    out.push((To::One(conn), message(first_line, batch)));
 }
 
 /// Start `project`'s setup command at `location` (FR-010, FR-022). `None` when this daemon does
@@ -328,16 +353,27 @@ pub fn start(
     location: SessionLocation,
 ) -> Option<SetupStart> {
     let dir = state.setup_dir(project, &location)?;
+    Some(start_in(state, project, location, dir))
+}
+
+/// Start `project`'s setup command at `location`, in `dir`, a folder the caller already knows (a
+/// create has the worktree it just made, so it does not look it up again: review A-F4).
+pub fn start_in(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    location: SessionLocation,
+    dir: PathBuf,
+) -> SetupStart {
     let begun = state.setup(|runs, out| {
         runs.start(project, &location, micold_core::unix_time::unix_secs(), out)
     });
-    Some(match begun {
+    match begun {
         Ok((id, command)) => {
             spawn_run(state, (project.to_path_buf(), location), dir, id, command);
             SetupStart::Started(id)
         }
         Err(why) => why.into(),
-    })
+    }
 }
 
 /// Run `command` in `dir` for run `id`, sending its output to the watchers every
@@ -514,5 +550,49 @@ mod tests {
         assert_eq!(lines, ["one", "two", "Exited with status 2."]);
         runs.unwatch_all(7);
         assert!(runs.watchers.is_empty());
+    }
+
+    /// Review A-F1: the buffer holds more than one frame can carry, so a backlog or a flush goes
+    /// out as several `SetupOutput`s, each encodable, contiguous, with every line once.
+    #[test]
+    fn a_backlog_bigger_than_a_frame_goes_out_in_several_encodable_batches() {
+        use micold_core::protocol::envelope::MAX_FRAME_LENGTH;
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let (id, _) = runs
+            .start(Path::new("/p"), &key("a").1, 1, &mut out)
+            .unwrap();
+        runs.watch(7, Path::new("/p"), &key("a").1, 0, &mut out);
+        let line = format!("{}\n", "x".repeat(4000));
+        for _ in 0..5000 {
+            runs.push(&key("a"), id, Stream::Stdout, line.as_bytes());
+        }
+        let check = |out: &Outgoing, conn: ClientId| {
+            let mut next = 0;
+            let mut sent = 0;
+            for (to, msg) in out {
+                let DaemonMsg::SetupOutput {
+                    first_line, lines, ..
+                } = msg
+                else {
+                    continue;
+                };
+                if *to != To::One(conn) || lines.is_empty() {
+                    continue;
+                }
+                assert!(serde_json::to_vec(msg).unwrap().len() < MAX_FRAME_LENGTH);
+                assert_eq!(*first_line, next, "batches are contiguous");
+                next += lines.len() as u64;
+                sent += 1;
+            }
+            assert_eq!(next, 5000, "every line is sent once");
+            assert!(sent > 1);
+        };
+        out.clear();
+        runs.flush(&key("a"), id, &mut out);
+        check(&out, 7);
+        out.clear();
+        runs.watch(8, Path::new("/p"), &key("a").1, 0, &mut out);
+        check(&out, 8);
     }
 }
