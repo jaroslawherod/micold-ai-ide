@@ -13,7 +13,7 @@ How to show the feature works. Rules: [contracts/keys.md](./contracts/keys.md),
 | Milestone | Command | Expect |
 |---|---|---|
 | M1 | `mise run test-core` | `review::keys`, `review::navigate`, `review::jump`, `review::diff::header_rows` and `quick_switch` tests green; 968's existing `quick_switch` tests unchanged and green |
-| M2 | `mise run test-core` | `review::keys` (incl. `single_keys` off, `sheet_rows`, `key_hint`) and `settings` (`review_single_keys` default, missing key, round trip) tests green; `tests/settings_issue_mapping.rs` lists the new field |
+| M2 | `mise run gate` | `review::keys` (incl. `single_keys` off, `sheet_rows`, `key_hint`) and `settings` (`review_single_keys` default, missing key, round trip) tests green; `tests/settings_issue_mapping.rs` lists the new field |
 | M3–M5 | `mise run gate` | `tests/keymap.rs`, `tests/review_keys.rs` (new), `tests/quick_switch.rs`, `tests/overlay_registry.rs`, docs test, layout snapshot and its gates green |
 
 ## §B — Recorded pass on Linux (visual-pass, 1280×800, light and dark)
@@ -37,7 +37,7 @@ reviewed, and comments on `a.rs:3`, `a.rs:20`, `c.rs:7` plus one outdated commen
 | B12 | hover previous/next hunk, **Mark reviewed**, **Send review** | tooltips name `p`/`n`, `v`, the chord |
 | B13 | focus the tree filter and type `jk` | text in the filter, selection unchanged |
 | B14 | (M5) jump-to field: empty query; `tests`; a comment word; choose each | review files and comments after locations/sessions, before projects; file selected; card shown |
-| B15 | layout snapshot states `review-current-hunk` and `review-shortcut-sheet` | recorded and reviewed (FR-021) |
+| B15 | layout snapshot states `review-current-hunk`, `review-shortcut-sheet` and `review-shortcut-sheet-single-keys-off` | recorded and reviewed (FR-021) |
 | B16 | Settings → Appearance: clear **Single-key shortcuts in the Review tab**, Save; in the Review tab press `j`, `v`; hover **Mark reviewed**; restart | (M3) `j` and `v` do nothing, the tooltip names no key, still off after restart; (M4) also `?` does nothing, Ctrl+Shift+Enter with a draft sends, overflow → **Keyboard shortcuts** lists only the two chords and "Single-key shortcuts are off (Settings → Appearance)" |
 
 ## §C — macOS and Windows

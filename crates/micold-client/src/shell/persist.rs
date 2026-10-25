@@ -461,6 +461,9 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         diff_layout: _,
         // Written by its own toggle in the sidebar, never by a save of the form (feature 551).
         folded_origins: _,
+        // Not in the form yet: the Settings → Appearance row that saves it comes with the review
+        // keys (feature 1274, T064). Until then a save leaves the stored value as it is.
+        review_single_keys: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
         daemons: _,
         next_daemon_id: _,
@@ -1218,6 +1221,7 @@ mod tests {
             next_daemon_id: 0,
             legacy_default_daemon: None,
             folded_origins: [micold_core::session::SessionId::new()].into(),
+            review_single_keys: false,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

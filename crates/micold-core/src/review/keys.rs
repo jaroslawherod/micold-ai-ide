@@ -1,8 +1,9 @@
 //! The Review tab's key map (#1274): the one table of review keys, [`REVIEW_KEYS`], and how a key
 //! press is decided against it, [`resolve`]. The client builds a [`Press`] and says who holds the
 //! keyboard ([`Holder`]); it never matches a key by hand, so the `?` sheet, tooltips, the user
-//! guide (#1276) and the bindings all read this table. Contract:
-//! `specs/1274-review-keyboard-map/contracts/keys.md` (K1–K4).
+//! guide (#1276) and the bindings all read this table. The single-key switch (FR-022) is a plain
+//! `single_keys` argument: [`resolve`], [`sheet_rows`] and [`key_hint`] filter on it and the table
+//! never changes. Contract: `specs/1274-review-keyboard-map/contracts/keys.md` (K1–K4a).
 
 /// What a review key does (FR-001, FR-010): the closed set the Review tab's reducer acts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,6 +67,12 @@ pub struct ReviewKey {
 }
 
 impl ReviewKey {
+    /// Whether the row is a single key (no primary modifier), which the single-key switch turns off
+    /// (FR-022). The send and save-comment chords are not.
+    pub fn is_single(&self) -> bool {
+        !self.mods.primary
+    }
+
     /// The row's key as `(Linux/Windows form, macOS form)`, as the sheet, tooltips and user guide
     /// write it (contract K4).
     pub fn labels(&self) -> (String, String) {
@@ -190,12 +197,14 @@ pub enum Holder {
 }
 
 /// What `press` does while `holder` has the keyboard (contract K2, K3); `None` leaves the press to
-/// whatever has the keyboard.
-pub fn resolve(press: &Press, holder: Holder) -> Option<ReviewAction> {
+/// whatever has the keyboard. With `single_keys` false (the Settings switch, FR-022) no single key
+/// acts under any holder; the send chord still does.
+pub fn resolve(press: &Press, holder: Holder, single_keys: bool) -> Option<ReviewAction> {
     let action = REVIEW_KEYS
         .iter()
         .find(|row| matches(row, press))
-        .filter(|row| row.repeats || !press.repeat)?
+        .filter(|row| row.repeats || !press.repeat)
+        .filter(|row| single_keys || !row.is_single())?
         .action?;
     let heard = match holder {
         Holder::Review => true,
@@ -204,6 +213,23 @@ pub fn resolve(press: &Press, holder: Holder) -> Option<ReviewAction> {
         Holder::Other => false,
     };
     heard.then_some(action)
+}
+
+/// The sheet's line while the single-key switch is off (FR-022, contract K4a).
+pub const SINGLE_KEYS_OFF_NOTE: &str = "Single-key shortcuts are off (Settings → Appearance)";
+
+/// The rows the `?` sheet lists, in table order (contract K4a): every row while `single_keys` is on,
+/// only the chords while it is off.
+pub fn sheet_rows(single_keys: bool) -> impl Iterator<Item = &'static ReviewKey> {
+    REVIEW_KEYS
+        .iter()
+        .filter(move |row| single_keys || !row.is_single())
+}
+
+/// The row a tooltip names for `action` (FR-013, contract K4a); `None` for a single key while
+/// `single_keys` is off, so a tooltip never names a key that does nothing.
+pub fn key_hint(action: ReviewAction, single_keys: bool) -> Option<&'static ReviewKey> {
+    sheet_rows(single_keys).find(|row| row.action == Some(action))
 }
 
 /// Whether `press` is `row`'s key (contract K3).
@@ -468,7 +494,7 @@ mod tests {
     fn every_row_with_an_action_resolves_to_it_while_the_review_has_the_keyboard() {
         for row in REVIEW_KEYS.iter().filter(|r| r.action.is_some()) {
             assert_eq!(
-                resolve(&press_for(row), Holder::Review),
+                resolve(&press_for(row), Holder::Review, true),
                 row.action,
                 "`{}` acts while the review holds the keyboard",
                 row.sheet
@@ -480,7 +506,7 @@ mod tests {
     fn nothing_resolves_while_something_else_has_the_keyboard() {
         for row in &REVIEW_KEYS {
             assert_eq!(
-                resolve(&press_for(row), Holder::Other),
+                resolve(&press_for(row), Holder::Other, true),
                 None,
                 "`{}` reaches the focused field or dialog (FR-002)",
                 row.sheet
@@ -491,7 +517,7 @@ mod tests {
     #[test]
     fn the_sheet_hears_only_a_fresh_unmodified_question_mark() {
         assert_eq!(
-            resolve(&char_press('?'), Holder::Sheet),
+            resolve(&char_press('?'), Holder::Sheet, true),
             Some(ReviewAction::ToggleSheet),
             "`?` closes the sheet"
         );
@@ -500,7 +526,7 @@ mod tests {
             ..char_press('?')
         };
         assert_eq!(
-            resolve(&repeated, Holder::Sheet),
+            resolve(&repeated, Holder::Sheet, true),
             None,
             "`?` does not repeat"
         );
@@ -510,13 +536,13 @@ mod tests {
             ..char_press('?')
         };
         assert_eq!(
-            resolve(&with_ctrl, Holder::Sheet),
+            resolve(&with_ctrl, Holder::Sheet, true),
             None,
             "Ctrl+? is not `?`"
         );
         for row in REVIEW_KEYS.iter().filter(|r| r.key != KeyName::Char('?')) {
             assert_eq!(
-                resolve(&press_for(row), Holder::Sheet),
+                resolve(&press_for(row), Holder::Sheet, true),
                 None,
                 "`{}` does nothing while the sheet is open (FR-012)",
                 row.sheet
@@ -527,7 +553,7 @@ mod tests {
     #[test]
     fn the_composer_hears_only_a_fresh_send_chord() {
         assert_eq!(
-            resolve(&send_chord(), Holder::Composer),
+            resolve(&send_chord(), Holder::Composer, true),
             Some(ReviewAction::Send),
             "the chord sends from the composer (FR-010)"
         );
@@ -536,12 +562,12 @@ mod tests {
             ..send_chord()
         };
         assert_eq!(
-            resolve(&repeated, Holder::Composer),
+            resolve(&repeated, Holder::Composer, true),
             None,
             "the chord does not repeat"
         );
         assert_eq!(
-            resolve(&char_press('j'), Holder::Composer),
+            resolve(&char_press('j'), Holder::Composer, true),
             None,
             "`j` is typed into the comment (US1 s6)"
         );
@@ -583,7 +609,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                resolve(&held, Holder::Review),
+                resolve(&held, Holder::Review, true),
                 None,
                 "{what}+j is not `j` (FR-015)"
             );
@@ -595,7 +621,7 @@ mod tests {
             ..char_press('[')
         };
         assert_eq!(
-            resolve(&altgr, Holder::Review),
+            resolve(&altgr, Holder::Review, true),
             Some(ReviewAction::PrevComment),
             "Ctrl+Alt without logo is AltGr, so `[` typed with AltGr acts"
         );
@@ -608,7 +634,7 @@ mod tests {
             ..char_press('?')
         };
         assert_eq!(
-            resolve(&question, Holder::Review),
+            resolve(&question, Holder::Review, true),
             Some(ReviewAction::ToggleSheet),
             "`?` needs Shift on most layouts and still acts"
         );
@@ -616,13 +642,17 @@ mod tests {
             shift: true,
             ..char_press('J')
         };
-        assert_eq!(resolve(&capital, Holder::Review), None, "`J` is not bound");
+        assert_eq!(
+            resolve(&capital, Holder::Review, true),
+            None,
+            "`J` is not bound"
+        );
     }
 
     #[test]
     fn a_press_with_no_text_resolves_to_nothing() {
         assert_eq!(
-            resolve(&press(PressKey::Other), Holder::Review),
+            resolve(&press(PressKey::Other), Holder::Review, true),
             None,
             "a dead key or a composing input method produces no text"
         );
@@ -637,7 +667,7 @@ mod tests {
             };
             let expected = if row.repeats { row.action } else { None };
             assert_eq!(
-                resolve(&repeated, Holder::Review),
+                resolve(&repeated, Holder::Review, true),
                 expected,
                 "holding `{}` acts once per repeat only if it steps (FR-015)",
                 row.sheet
@@ -672,25 +702,113 @@ mod tests {
         };
         for holder in [Holder::Review, Holder::Composer] {
             assert_eq!(
-                resolve(&no_primary, holder),
+                resolve(&no_primary, holder, true),
                 None,
                 "Shift+Enter alone does not send"
             );
-            assert_eq!(resolve(&with_alt, holder), None, "Alt refuses the chord");
             assert_eq!(
-                resolve(&mac_with_ctrl, holder),
+                resolve(&with_alt, holder, true),
+                None,
+                "Alt refuses the chord"
+            );
+            assert_eq!(
+                resolve(&mac_with_ctrl, holder, true),
                 None,
                 "Ctrl and Cmd together are not the chord"
             );
             assert_eq!(
-                resolve(&mac_chord, holder),
+                resolve(&mac_chord, holder, true),
                 Some(ReviewAction::Send),
                 "Cmd+Shift+Enter is the macOS form"
             );
             assert_eq!(
-                resolve(&no_shift, holder),
+                resolve(&no_shift, holder, true),
                 None,
                 "primary+Enter is the composer's save, never resolved here"
+            );
+        }
+    }
+
+    const HOLDERS: [Holder; 4] = [
+        Holder::Review,
+        Holder::Sheet,
+        Holder::Composer,
+        Holder::Other,
+    ];
+
+    #[test]
+    fn with_the_switch_off_no_single_key_resolves_under_any_holder() {
+        for row in REVIEW_KEYS.iter().filter(|row| row.is_single()) {
+            for holder in HOLDERS {
+                assert_eq!(
+                    resolve(&press_for(row), holder, false),
+                    None,
+                    "`{}` is off under {holder:?} (FR-022)",
+                    row.sheet
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn with_the_switch_off_the_send_chord_still_sends() {
+        for holder in [Holder::Review, Holder::Composer] {
+            assert_eq!(
+                resolve(&send_chord(), holder, false),
+                Some(ReviewAction::Send),
+                "the chord is not a single key (FR-022) under {holder:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_ten_char_rows_are_single_keys() {
+        let singles: Vec<_> = REVIEW_KEYS
+            .iter()
+            .filter(|row| row.is_single())
+            .map(|row| row.key)
+            .collect();
+        let chars: Vec<_> = "jknp][vgc?".chars().map(KeyName::Char).collect();
+        assert_eq!(singles, chars, "the single keys of FR-001, in table order");
+    }
+
+    #[test]
+    fn the_sheet_lists_every_row_when_on_and_only_the_chords_when_off() {
+        let on: Vec<_> = sheet_rows(true).collect();
+        assert_eq!(on.len(), REVIEW_KEYS.len(), "on: every row (SC-004)");
+        assert!(
+            on.iter().zip(REVIEW_KEYS.iter()).all(|(a, b)| a == &b),
+            "on: in table order"
+        );
+        let off: Vec<_> = sheet_rows(false).map(|row| row.sheet).collect();
+        assert_eq!(
+            off,
+            ["Send review", "Save comment"],
+            "off: the two chords, in table order (FR-022)"
+        );
+        assert_eq!(
+            SINGLE_KEYS_OFF_NOTE,
+            "Single-key shortcuts are off (Settings → Appearance)"
+        );
+    }
+
+    #[test]
+    fn a_tooltip_names_a_single_key_only_while_the_switch_is_on() {
+        assert_eq!(
+            key_hint(ReviewAction::NextHunk, true).map(|row| row.key),
+            Some(KeyName::Char('n'))
+        );
+        assert_eq!(
+            key_hint(ReviewAction::ToggleReviewed, true).map(|row| row.key),
+            Some(KeyName::Char('v'))
+        );
+        assert_eq!(key_hint(ReviewAction::NextHunk, false), None);
+        assert_eq!(key_hint(ReviewAction::ToggleReviewed, false), None);
+        for on in [true, false] {
+            assert_eq!(
+                key_hint(ReviewAction::Send, on).map(|row| row.sheet),
+                Some("Send review"),
+                "the chord is named either way"
             );
         }
     }

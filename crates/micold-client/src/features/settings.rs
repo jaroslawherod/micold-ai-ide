@@ -826,6 +826,9 @@ impl ValidSettings {
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
             diff_layout: micold_core::settings::DiffLayout::Unified,
+            // Not in the form yet (feature 1274, T064 adds the Appearance row): `set_changed`
+            // skips it, so the save keeps the stored value.
+            review_single_keys: true,
             // Not in the form (feature 491): the registry is service-owned; a save sets only
             // the changed fields on the stored settings (`set_changed`) and keeps the registry.
             daemons: Vec::new(),

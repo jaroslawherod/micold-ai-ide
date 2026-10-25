@@ -363,7 +363,8 @@ selected. Then type a word from a comment and choose it; its card is shown.
   lists of `specs/803-keyboard-navigation/spec.md#FR-006`) or an existing app chord.
 - **FR-012**: `?` and the review bar overflow's **Keyboard shortcuts** item MUST open the shortcut
   sheet: a panel over the Review tab listing every review key, the save-comment chord, and what
-  each does, with keys in the current platform's form. Escape, `?` or a click outside MUST close
+  each does, with keys in the current platform's form. Escape, `?` (while the single keys are on,
+  FR-022) or a click outside MUST close
   it, returning the keyboard to the Review tab. While it is open, no other review key MUST act.
 - **FR-013**: The controls that a key duplicates (the diff header's previous/next hunk controls,
   **Mark reviewed**, **Send review (n)**) MUST name their key in their tooltip, in the platform's
