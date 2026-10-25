@@ -1493,6 +1493,26 @@ async fn rm1_a_refused_set_reviewed_stores_and_pushes_nothing() {
             set_reviewed(Scope::WorkingTree, "", None),
         ),
         (
+            "a `.` segment",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "./src/a.rs", Some(1)),
+        ),
+        (
+            "a `..` segment",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "src/../a.rs", Some(1)),
+        ),
+        (
+            "an empty segment",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "src//a.rs", Some(1)),
+        ),
+        (
+            "a trailing `/`",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "src/a.rs/", None),
+        ),
+        (
             "pull request 0",
             "feat",
             set_reviewed(Scope::PullRequest(0), "src/a.rs", Some(1)),
@@ -1534,6 +1554,39 @@ async fn rm1_a_refused_set_reviewed_stores_and_pushes_nothing() {
         marks,
         vec![("feat".to_owned(), seed.marks["feat"].clone())],
         "memory is unchanged"
+    );
+}
+
+#[tokio::test]
+async fn rm1_a_pull_request_mark_the_file_holds_on_the_default_entry_can_be_removed() {
+    let f = Fixture::new();
+    let mut seed = ReviewFile::default();
+    seed.marks.insert(
+        String::new(),
+        vec![a_mark(Scope::PullRequest(3), "src/a.rs", 1)],
+    );
+    f.files().save_reviews(&f.project(), &seed).unwrap();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let (result, seen) = edit(
+        &mut a,
+        1,
+        &f.project(),
+        "",
+        set_reviewed(Scope::PullRequest(3), "src/a.rs", None),
+    )
+    .await;
+    result.expect("an unmark on the Default entry is answered Ack");
+    assert!(
+        f.on_disk().marks.get("").is_none_or(Vec::is_empty),
+        "the mark is gone from the file"
+    );
+    assert_eq!(
+        seen.last().map(|p| p.marks.is_empty()),
+        Some(true),
+        "the window is pushed the entry without it"
     );
 }
 

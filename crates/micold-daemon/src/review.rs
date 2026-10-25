@@ -189,7 +189,9 @@ impl Reviews {
                             "a pull request's number starts at 1",
                         ))
                     }
-                    Scope::PullRequest(_) if dir.is_empty() => {
+                    // An unmark is let through, so a pull request mark a file holds on the
+                    // Default entry can still be removed.
+                    Scope::PullRequest(_) if dir.is_empty() && change.is_some() => {
                         return Err(Refusal::new(
                             ErrorKind::InvalidInput,
                             "the project root has no pull request to mark files of",
@@ -197,7 +199,7 @@ impl Reviews {
                     }
                     Scope::WorkingTree | Scope::PullRequest(_) => {}
                 }
-                if !edited.set_reviewed(scope, checked_path(&path)?, change) {
+                if !edited.set_reviewed(scope, canonical_path(&path)?, change) {
                     return Ok(None);
                 }
             }
@@ -490,15 +492,32 @@ fn checked_path(path: &str) -> Result<RelPath, Refusal> {
     if path.contains('\\') {
         return Err(Refusal::new(
             ErrorKind::InvalidInput,
-            "a comment's path is `/`-separated and has no `\\`",
+            "a path is `/`-separated and has no `\\`",
         ));
     }
     RelPath::from_native(path).ok_or_else(|| {
         Refusal::new(
             ErrorKind::InvalidInput,
-            "a comment's path is relative to the entry and not empty",
+            "a path is relative to the entry and not empty",
         )
     })
+}
+
+/// RM1: a [`checked_path`] in the one spelling a mark is matched by, so `./a.rs`, `src//a.rs`
+/// and `src/a.rs/` are refused rather than kept as marks no file's row ever finds.
+fn canonical_path(path: &str) -> Result<RelPath, Refusal> {
+    let checked = checked_path(path)?;
+    if checked
+        .as_str()
+        .split('/')
+        .any(|segment| matches!(segment, "" | "." | ".."))
+    {
+        return Err(Refusal::new(
+            ErrorKind::InvalidInput,
+            "a path has no `.`, `..` or empty segment and no trailing `/`",
+        ));
+    }
+    Ok(checked)
 }
 
 fn changed(project: &Path, dir: &str, review: &EntryReview) -> DaemonMsg {
