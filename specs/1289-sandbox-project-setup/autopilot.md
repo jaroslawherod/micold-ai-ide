@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M5
-- **Next step**: implement M5 (T040–T049)
+- **Next step**: orchestrator waits on CI for #1414 and merges; then M6 (T050–T055)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1385 | M2 setup core | merged (rebase) | 47997d190a6ee8533f9bf0c71d34185fc66276b2 |
 | #1393 | M3 daemon runs setup (protocol 70) | merged (rebase) | 9177522b8a536a94336a72df7469658756093a44 |
 | #1407 | M4 setup persistence and delete | merged (rebase) | 8a49a7780b9b3021fe4a41b6a56be18a067a8b0a |
+| #1414 | M5 setup settings and state | open | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
 | M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | merged |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | merged |
-| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | in progress |
+| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | #1414 | PR open |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
 | M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
 
@@ -99,7 +100,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 review A round 2 (2026-10-25): CLEAN, no findings. Next: rebase onto origin/main, full gate, PR.
+M5 PR (2026-10-25): review A round 2 CLEAN; rebased onto main 81b3eb543 (11 commits, no conflicts, protocol stays 70, layout snapshot passes unchanged, no SettingsDraft fixes needed); full gate (scripts/gate.sh) green at a03ae147f; pushed; PR #1414 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M6.
 M5 review round 1 fixed (2026-10-25): A-F1–A-F5, B-F1, V-F2 (cycle log M5 cycle 3); V-F1 kept as the existing pattern; full gate (scripts/gate.sh) green. Next: review A round 2 (scoped, sonnet) on the new snapshot; then rebase onto main, PR.
 M5 ready for review (2026-10-25): pushed 6cf38804d; snapshot 476492d0:6cf38804; full `cargo test -p micold-client -p micold-material` green after cycle 2 (guards, layout fixture). Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings, then full gate (`scripts/gate.sh`), rebase on origin/main, PR.
 M5 implemented (2026-10-25) on 8a49a7780 (#1407 merged by rebase): T040–T049 ticked; features_setup 9, features_settings 155, setup_tag_geometry 3, settings_sections 24 passed; clippy client+material clean (cycle log § M5 cycle 1). Next: full client suite, push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
