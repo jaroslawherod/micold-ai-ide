@@ -2064,13 +2064,46 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         // --- Feature 1273: the changed files as a tree (T028, FR-001–FR-007) -------------------
         //
-        // `feat-short`'s review listing five files in folders: the nested `crates/core/src/review`
-        // chained into one row, `tests` collapsed, a binary file in `assets`, a Mode change in
-        // `scripts`, `build.rs` at the top level; `tree.rs` selected. Eight rows, so the list
-        // fits the 800 px window's column without scrolling.
+        // `feat-short`'s review listing five files: the nested `crates/core/src/review` chained
+        // into one row, `tests` collapsed, and at the top level `build.rs`, a binary `logo.png`
+        // and a Mode change `run.sh`; `tree.rs` selected. Six rows, so the list fits under the
+        // filter box and the sort chips in the 800 px window's column without scrolling.
         CoveredState {
             name: "changes-tree-collapsed",
             build: review_tree_collapsed,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
+        // The same review filtered by `tree`, sorted by Size (T037, FR-009, FR-012): the two
+        // `tree.rs` files listed with their matched characters highlighted, the collapsed `tests`
+        // shown open while the filter holds text.
+        CoveredState {
+            name: "changes-tree-filter",
+            build: || review_tree_filtered("tree", true),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
+        // A filter matching no file (T037, FR-011): the line saying so and **Clear filter**, the
+        // selected file's diff still shown.
+        CoveredState {
+            name: "changes-tree-no-match",
+            build: || review_tree_filtered("zzz", false),
             anchors: &[
                 Anchor {
                     name: "shell.root",
@@ -3645,7 +3678,7 @@ pub fn review_tree_collapsed() -> StateUnderTest {
     let list = ChangeList {
         files: vec![
             file("build.rs", ChangeKind::Modified, text, 3, 1),
-            file("assets/logo.png", ChangeKind::Added, Content::Binary, 0, 0),
+            file("logo.png", ChangeKind::Added, Content::Binary, 0, 0),
             file(
                 "crates/core/src/review/tree.rs",
                 ChangeKind::Modified,
@@ -3653,7 +3686,7 @@ pub fn review_tree_collapsed() -> StateUnderTest {
                 120,
                 30,
             ),
-            file("scripts/run.sh", ChangeKind::ModeOnly, text, 0, 0),
+            file("run.sh", ChangeKind::ModeOnly, text, 0, 0),
             file("tests/tree.rs", ChangeKind::Modified, text, 14, 6),
         ],
         scope: micold_core::review::base::ReviewScope::Worktree {
@@ -3680,6 +3713,21 @@ pub fn review_tree_collapsed() -> StateUnderTest {
         changes,
         Msg::FileSelected(path("crates/core/src/review/tree.rs")),
     );
+    under
+}
+
+/// [`review_tree_collapsed`] with `filter` typed into the tree's filter box, sorted by Size when
+/// `by_size` (feature 1273, T037).
+pub fn review_tree_filtered(filter: &str, by_size: bool) -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::tree::TreeSort;
+
+    let mut under = review_tree_collapsed();
+    let changes = &mut under.state.changes;
+    if by_size {
+        changes::update(changes, Msg::TreeSortChosen(TreeSort::Size));
+    }
+    changes::update(changes, Msg::TreeFilterChanged(filter.into()));
     under
 }
 

@@ -24,25 +24,26 @@ use crate::features::changes::{
     changed_since_you_looked, composer_in_drawer, composer_placed, diff_body, discard_prompt,
     drawer_counts, drawer_groups, drawer_rows, file_comments, file_diff_available, file_reviews,
     list_body, mark_control, pending_counts, picker_matches, pr_header, progress_label, review_bar,
-    review_of, reviews_progress, selected_file, source_control_tooltip, source_menu_input,
-    stale_notice, stop_message, tree_pane, tree_rows, whole_file, BrowseBody, ComposerTarget,
-    DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel, Source, Step, TreeKind,
-    TreePane, WholeFile, NO_LONGER_CHANGED, WHOLE_FILE_UNAVAILABLE,
+    review_of, reviews_progress, selected_file, sort_label, sort_offers, source_control_tooltip,
+    source_menu_input, stale_notice, stop_message, tree_pane, tree_rows, whole_file, BrowseBody,
+    ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel, Source,
+    Step, TreeKind, TreePane, WholeFile, NO_LONGER_CHANGED, TREE_CLEAR_FILTER,
+    TREE_FILTER_PLACEHOLDER, TREE_NO_MATCH, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::shaped_text::width_of;
 use crate::ui::material::{
     menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
-    CardState, ChangeBar, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay,
-    ProgressBar, PullRequestIndicator, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable,
-    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip,
-    TooltipPosition, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark,
-    VirtualRows, CHANGE_BAR_WIDTH, REVIEW_BAR_COMMENTS as COMMENTS,
+    CardState, ChangeBar, DiffView, Ellipsized, EmphasisedLabel, Glyph, IconButton, MenuItem,
+    MenuOverlay, ProgressBar, PullRequestIndicator, ReviewBar, ReviewCommentCard, ReviewPanelRow,
+    Scrollable, SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, TextField,
+    ToggleChip, Tooltip, TooltipPosition, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow,
+    UnreadMark, VirtualRows, CHANGE_BAR_WIDTH, REVIEW_BAR_COMMENTS as COMMENTS,
 };
 use micold_core::review::drawer::{DrawerEvent, DrawerTab, START_HINT};
 use micold_core::review::marks::{FileReview, ReviewState};
-use micold_core::review::tree::{self, BarParts, RowKind};
+use micold_core::review::tree::{self, BarParts, Offer, RowKind};
 use micold_core::review::RelPath;
 use micold_core::task_progress::Ratio;
 
@@ -157,7 +158,7 @@ pub fn view<'a>(
     // Feature 1272 (FR-008, R8): two columns, the file column at its fixed width and the diff area
     // taking the rest, so a wider or narrower window changes only the diff's width.
     let body = row![
-        container(list_pane(state, view, reviews, r))
+        container(list_pane(state, view, reviews, connected, r))
             .width(Length::Fixed(FILE_COLUMN_WIDTH))
             .padding(Padding {
                 left: FILE_COLUMN_INSET,
@@ -442,6 +443,7 @@ fn list_pane<'a>(
     state: &'a State,
     view: &'a OpenView,
     reviews: BTreeMap<RelPath, FileReview>,
+    connected: bool,
     r: Roles,
 ) -> Element<'a, Message> {
     let pane = column![].width(Length::Fill).height(Length::Fill);
@@ -471,9 +473,22 @@ fn list_pane<'a>(
             lines.into()
         }
         ListBody::Files(files) => match tree_pane(view) {
-            // M5 draws the no-match line; nothing of the tree shows unless it has rows (FR-016).
-            TreePane::Hidden | TreePane::NoMatch => Space::new().into(),
-            TreePane::Rows => change_tree(state, view, files, reviews, r),
+            // The filter box and the sort chips show only over a listed change (FR-016).
+            TreePane::Hidden => Space::new().into(),
+            shown => {
+                let body = match shown {
+                    TreePane::NoMatch => no_match(r),
+                    _ => change_tree(state, view, files, reviews, r),
+                };
+                column![
+                    filter_box(view, r),
+                    sort_chips(state, view, connected, r),
+                    body
+                ]
+                .spacing(spacing::SM)
+                .height(Length::Fill)
+                .into()
+            }
         },
     };
     pane.push(list).into()
@@ -607,6 +622,71 @@ fn browsed_pane<'a>(
         .into()
 }
 
+/// The tree's filter box (feature 1273, FR-009, FR-010, contract §2.1): its clear control shows
+/// while it holds text, and `Esc` in it empties it as that control does (scenario 3.6).
+fn filter_box(view: &OpenView, r: Roles) -> Element<'_, Message> {
+    let clear = Message::Changes(Msg::TreeFilterCleared);
+    let mut field = TextField::new(TREE_FILTER_PLACEHOLDER, &view.tree.filter, r)
+        .leading_icon(Icon::Search)
+        .on_input(|text| Message::Changes(Msg::TreeFilterChanged(text)))
+        .on_escape(clear.clone());
+    if !view.tree.filter.is_empty() {
+        field = field.trailing_action(Icon::Close, clear);
+    }
+    field.into()
+}
+
+/// The tree's sort control (FR-012, contract §2.2, research R11): a chip per offered sort, the
+/// chosen one active; a disabled one says why in its tooltip, a hidden one is not drawn.
+fn sort_chips<'a>(
+    state: &State,
+    view: &OpenView,
+    connected: bool,
+    r: Roles,
+) -> Element<'a, Message> {
+    let chips = sort_offers(&state.changes, view, connected)
+        .into_iter()
+        .filter_map(|(sort, offer)| {
+            let chip = ToggleChip::new(
+                sort_label(sort),
+                Message::Changes(Msg::TreeSortChosen(sort)),
+                r,
+            )
+            .one_line()
+            .active(view.tree.sort == sort);
+            match offer {
+                Offer::Hidden => None,
+                Offer::Shown => Some(chip.into()),
+                Offer::Disabled(reason) => {
+                    Some(Tooltip::new(chip.disabled(true), reason, r).into())
+                }
+            }
+        });
+    Row::with_children(chips).spacing(spacing::SM).wrap().into()
+}
+
+/// The list when the filter matches no changed file (FR-011, scenario 3.3): the line saying so and
+/// **Clear filter**; the diff pane keeps what it shows.
+fn no_match(r: Roles) -> Element<'static, Message> {
+    column![
+        Text::new(TREE_NO_MATCH, TypeRole::Body, r).muted(),
+        Button::text(TREE_CLEAR_FILTER, r).on_press(Message::Changes(Msg::TreeFilterCleared)),
+    ]
+    .spacing(spacing::SM)
+    .into()
+}
+
+/// A row's label on one line, ellipsised at its end; with a filter, its matched characters
+/// highlighted (FR-009, scenario 3.5).
+fn row_label(row: &tree::Row, role: TypeRole, base: Rgb, r: Roles) -> Element<'static, Message> {
+    if row.spans.is_empty() {
+        Ellipsized::<Message>::at_role(row.label.clone(), role, base).into()
+    } else {
+        EmphasisedLabel::<Message>::new(row.label.clone(), row.spans.clone(), role, base, r.primary)
+            .into()
+    }
+}
+
 /// The changed files as a tree (feature 1273, contract §2.3): [`OpenView::change_rows`] on
 /// `VirtualRows`, so only the rows on screen are built (FR-015).
 fn change_tree<'a>(
@@ -646,7 +726,7 @@ fn change_tree<'a>(
                         dot: RowDot::of(review, changed_since_you_looked(view, &file.path)),
                         bar,
                     };
-                    file_row(file, &row.label, levels, facts, r)
+                    file_row(file, row, levels, facts, r)
                 }
             }
         },
@@ -730,7 +810,7 @@ fn folder_row(
         Icon::ChevronRight
     };
     let text = column![
-        Ellipsized::<Message>::at_role(row.label.clone(), TypeRole::Body, r.on_surface),
+        row_label(row, TypeRole::Body, r.on_surface, r),
         counts_caption(folder.added, folder.removed, r),
     ];
     let line = row![
@@ -776,7 +856,7 @@ struct FileFacts {
 /// counted lines, and its pending comments. The full path is on hover.
 fn file_row(
     file: &ChangedFile,
-    name: &str,
+    tree_row: &tree::Row,
     levels: u16,
     facts: FileFacts,
     r: Roles,
@@ -792,11 +872,7 @@ fn file_row(
     }
     // One line, ellipsised at its end: the name keeps the row's room before the indentation
     // grows (SC-006), and a longer one is cut where the tags below cannot reach it.
-    let title = title.push(Ellipsized::<Message>::at_role(
-        name.to_owned(),
-        NAME_ROLE,
-        variant.content(r, None),
-    ));
+    let title = title.push(row_label(tree_row, NAME_ROLE, variant.content(r, None), r));
     let mut details = row![].spacing(spacing::SM).align_y(Alignment::Center);
     if let Some((kind, accent)) = kind_tag(&file.kind, r) {
         details = details.push(Tag::new(kind, accent).one_line());
