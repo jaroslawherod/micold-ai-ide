@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1422
 - **Worktree branch**: feat/1422_container-name-enforce-a-minimum-length-docker
 - **Started**: 2026-10-25
-- **Phase**: clarify
-- **Next step**: plan unit (clarify done: FR-004 typed too, FR-008 wording fixed)
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -49,3 +49,5 @@ None.
 ## Follow-ups not done
 
 None.
+
+- plan review round 1 (snapshot 01753217e849eb44dd1aaa33bae1e7f99bf2ef49:f853de0a598b491abae7626493d6ee444c72c3ec): CLEAN, 3 MINORs fixed, prose only
