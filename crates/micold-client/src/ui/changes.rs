@@ -680,13 +680,20 @@ fn no_match(r: Roles) -> Element<'static, Message> {
 }
 
 /// A row's label on one line, ellipsised at its end; with a filter, its matched characters
-/// highlighted (FR-009, scenario 3.5).
+/// highlighted (FR-009, scenario 3.5) in the tertiary role: a file's name is already drawn in the
+/// primary one, where a primary highlight would show only as weight (T039 visual pass).
 fn row_label(row: &tree::Row, role: TypeRole, base: Rgb, r: Roles) -> Element<'static, Message> {
     if row.spans.is_empty() {
         Ellipsized::<Message>::at_role(row.label.clone(), role, base).into()
     } else {
-        EmphasisedLabel::<Message>::new(row.label.clone(), row.spans.clone(), role, base, r.primary)
-            .into()
+        EmphasisedLabel::<Message>::new(
+            row.label.clone(),
+            row.spans.clone(),
+            role,
+            base,
+            r.tertiary,
+        )
+        .into()
     }
 }
 

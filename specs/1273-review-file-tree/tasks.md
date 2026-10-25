@@ -146,7 +146,7 @@ snapshot and showcase completeness tests.
 - [x] T036 [US3] Draw above the tree in `crates/micold-client/src/ui/changes.rs` per contract §2.1, §2.2, §2.4: the filter `TextField` (placeholder `Filter files…`, leading search icon, trailing clear action when non-empty, `.on_escape(Msg::TreeFilterCleared)`), one `ToggleChip` per `sort_options(marks)` entry (T034) (`Shown` active when chosen, `Disabled(reason)` disabled inside a `Tooltip`, `Hidden` not drawn; research R11), matched spans highlighted in row labels, and when `tree_pane` is `NoMatch` the line `No changed file matches the filter` with a **Clear filter** text button; filter box and chips drawn only when `tree_pane` is not `Hidden` (FR-016)
 - [x] T037 [US3] Add covered states `changes-tree-filter` (matches highlighted, Size chosen) and `changes-tree-no-match` in `crates/micold-client/tests/support/covered_states.rs` and record them; `crates/micold-client/tests/layout_snapshot.rs` passes
 - [x] T038 [US3] Add the filter box (matching as **Open file by path**, highlights, `Esc` and the clear control, the no-match line) and the sort control (Path, Size; **Unreviewed first** once reviewed marks exist) to *What the list shows* in `docs/user-guide/reviewing-changes.md`
-- [ ] T039 [US3] Run the visual pass (quickstart Part B steps 3, 5, 7; 1280×800, light and dark) and save its evidence in `specs/1273-review-file-tree/visual-pass/`
+- [x] T039 [US3] Run the visual pass (quickstart Part B steps 3, 5, 7; 1280×800, light and dark) and save its evidence in `specs/1273-review-file-tree/visual-pass/`
 
 **Checkpoint**: `mise run gate` passes; all four stories work in the Review view.
 
