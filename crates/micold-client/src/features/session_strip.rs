@@ -7,10 +7,12 @@
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
 use crate::ui::material::{tab, TAB_WIDTH};
+use micold_core::review_tabs::ReviewTabFace;
 use micold_core::session::{
     SessionId, SessionLifecycle, SessionLocation, ShellInstanceId, ShellLifecycle, TerminalMode,
 };
 use micold_core::tokens::spacing;
+use std::path::PathBuf;
 
 pub(crate) fn session_title(state: &State, id: SessionId) -> String {
     state
@@ -210,7 +212,8 @@ pub(crate) fn overflowing(offset: f32, viewport: f32, content: f32) -> Beyond {
 
 /// One member of the tab strip above the terminal, in order (feature 1126, data-model
 /// *StripModel*, contract S1): a session tab per session of the shown location, and right after
-/// the shown session's own tab its shell tabs and the "+".
+/// the shown session's own tab its shell tabs and the "+"; last, the location's Review tab when it
+/// has one (feature 1269, U13).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Member {
     /// A session's tab: `<command> · <session name>`; the shown session's tab is its AI
@@ -233,6 +236,15 @@ pub enum Member {
     },
     /// Open another shell instance of the shown session.
     Plus,
+    /// The shown location's Review tab (feature 1269, U13, R10): `Review`, its draft count and
+    /// changed mark, and its ×.
+    Review {
+        project: PathBuf,
+        entry: SessionLocation,
+        face: ReviewTabFace,
+        /// The review is what the main area shows; then it is the marked member.
+        shown: bool,
+    },
 }
 
 /// The key a member's widget state is kept under in the strip's keyed row (R10): a press in flight
@@ -242,6 +254,8 @@ pub enum MemberKey {
     Session(SessionId),
     Shell(SessionId, ShellInstanceId),
     Plus,
+    /// The Review tab: a strip shows one location, so it holds at most one (feature 1269, U14).
+    Review,
 }
 
 /// The "+" member's width: its icon button's touch target (R8).
@@ -256,6 +270,7 @@ impl Member {
                 session, instance, ..
             } => MemberKey::Shell(*session, *instance),
             Self::Plus => MemberKey::Plus,
+            Self::Review { .. } => MemberKey::Review,
         }
     }
 
@@ -263,6 +278,7 @@ impl Member {
     pub fn marked(&self) -> bool {
         match self {
             Self::Session { marked, .. } | Self::Shell { marked, .. } => *marked,
+            Self::Review { shown, .. } => *shown,
             Self::Plus => false,
         }
     }
@@ -271,26 +287,34 @@ impl Member {
     pub fn stopped(&self) -> bool {
         match self {
             Self::Session { stopped, .. } | Self::Shell { stopped, .. } => *stopped,
-            Self::Plus => false,
+            Self::Plus | Self::Review { .. } => false,
         }
     }
 
-    /// What a primary press sends (S5).
+    /// What a primary press sends (S5; feature 1269, U14: the Review tab asks for its location's
+    /// review, as **Review changes** does, which shows the kept view).
     pub fn press(&self) -> Message {
-        Message::Session(match self {
+        let session = |msg| Message::Session(msg);
+        match self {
             Self::Session {
                 id, shown: true, ..
-            } => SessionMsg::TerminalAiCliSelected(*id),
+            } => session(SessionMsg::TerminalAiCliSelected(*id)),
             // As its sidebar row does: the session is shown, its terminal takes the keyboard.
-            Self::Session { id, .. } => SessionMsg::Selected(*id),
+            Self::Session { id, .. } => session(SessionMsg::Selected(*id)),
             Self::Shell {
-                session, instance, ..
-            } => SessionMsg::ShellInstanceSelected(*session, *instance),
-            Self::Plus => SessionMsg::ShellInstanceOpenRequested,
-        })
+                session: id,
+                instance,
+                ..
+            } => session(SessionMsg::ShellInstanceSelected(*id, *instance)),
+            Self::Plus => session(SessionMsg::ShellInstanceOpenRequested),
+            Self::Review { entry, .. } => Message::Sidebar(
+                crate::features::sidebar::Msg::ReviewChangesRequested(entry.clone()),
+            ),
+        }
     }
 
-    /// What its close control sends: shell tabs only (S5).
+    /// What its close control sends: shell tabs (S5) and the Review tab, whose × closes it
+    /// (feature 1269, U4, U14).
     pub fn close(&self) -> Option<Message> {
         match self {
             Self::Shell {
@@ -298,6 +322,12 @@ impl Member {
             } => Some(Message::Session(SessionMsg::ShellInstanceCloseRequested(
                 *session, *instance,
             ))),
+            Self::Review { project, entry, .. } => {
+                Some(Message::Changes(crate::features::changes::Msg::TabClosed {
+                    project: project.clone(),
+                    entry: entry.clone(),
+                }))
+            }
             _ => None,
         }
     }
@@ -313,10 +343,12 @@ impl Member {
         }
     }
 
-    /// Its fixed width (R8): a session tab's, a shell tab's, or the "+"'s.
+    /// Its fixed width (R8): a session tab's, a shell tab's, the "+"'s, or the Review tab's
+    /// (feature 1269, U15), whatever its badge or mark.
     pub fn width(&self) -> f32 {
         match self {
             Self::Session { .. } => tab::SESSION_WIDTH,
+            Self::Review { .. } => tab::REVIEW_WIDTH,
             Self::Shell { .. } => TAB_WIDTH,
             Self::Plus => PLUS_WIDTH,
         }
@@ -337,9 +369,31 @@ pub struct StripModel {
 }
 
 impl StripModel {
-    /// The strip for the shown session; `None` without one.
+    /// The strip for the shown location (feature 1269, U13): its sessions' members as for the shown
+    /// session, then its Review tab when it has one; a sessionless location's shown review alone.
+    /// `None` with neither a session nor a review shown.
     pub fn of(state: &State) -> Option<Self> {
-        let shown = state.session.active?;
+        let review = review_member(state);
+        let review_shown = review.as_ref().is_some_and(Member::marked);
+        // A shown review of another location than the current session's (a sessionless one)
+        // draws no session member: the strip is that location's.
+        let shown = state.session.active.filter(|id| {
+            !review_shown
+                || state
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .map(|s| &s.location)
+                    == state.review_shown().map(|(_, entry)| entry)
+        });
+        let Some(shown) = shown else {
+            return review.map(|review| Self {
+                members: vec![review],
+                status: String::new(),
+                restart: None,
+                location: state.shown_location(),
+            });
+        };
         let location = state.current_session_location();
         let node = location
             .as_ref()
@@ -352,8 +406,10 @@ impl StripModel {
             .map(|n| n.unfolded_sessions().iter().map(|s| s.id).collect())
             .filter(|ids: &Vec<SessionId>| ids.contains(&shown))
             .unwrap_or_else(|| vec![shown]);
-        let marked = marked_tab(state, shown);
-        let mut members = Vec::with_capacity(order.len() + 2);
+        // Feature 1269 (U13): while the review is shown it is the marked member, and no session or
+        // shell member is.
+        let marked = (!review_shown).then(|| marked_tab(state, shown));
+        let mut members = Vec::with_capacity(order.len() + 3);
         for id in order {
             let is_shown = id == shown;
             members.push(session_member(
@@ -374,12 +430,13 @@ impl StripModel {
                     session: id,
                     instance,
                     label: instance.0.to_string(),
-                    marked: marked == StripTab::Instance(instance),
+                    marked: marked == Some(StripTab::Instance(instance)),
                     stopped: process_stopped(state, id, StripTab::Instance(instance)),
                 }));
                 members.push(Member::Plus);
             }
         }
+        members.extend(review);
         Some(Self {
             members,
             status: session_status(state, shown),
@@ -387,6 +444,14 @@ impl StripModel {
                 .then(|| restart_message(state, shown)),
             location,
         })
+    }
+
+    /// Whether the strip's Review tab is the shown one (feature 1269, U15): the status cluster and
+    /// the split buttons then keep their place, disabled.
+    pub fn review_shown(&self) -> bool {
+        self.members
+            .iter()
+            .any(|m| matches!(m, Member::Review { shown: true, .. }))
     }
 
     /// Where the marked member sits in [`Self::members`].
@@ -452,7 +517,7 @@ fn session_member(
     id: SessionId,
     shown: bool,
     main: bool,
-    marked: StripTab,
+    marked: Option<StripTab>,
 ) -> Member {
     let (provider, kind) = state
         .active_sessions()
@@ -476,9 +541,38 @@ fn session_member(
         label,
         tooltip,
         shown,
-        marked: shown && marked == StripTab::Ai,
+        marked: shown && marked == Some(StripTab::Ai),
         stopped: process_stopped(state, id, StripTab::Ai),
     }
+}
+
+/// The shown location's Review tab, if it has one (feature 1269, U13): its face from the draft
+/// count of the location's comments (`None` while unknown) and its freshness; shown while it is
+/// the shown review.
+fn review_member(state: &State) -> Option<Member> {
+    let project = state.workspace.active.clone()?;
+    let entry = state.shown_location()?;
+    let key = (project, entry);
+    let tab = state.changes.tabs.get(&key)?;
+    let drafts = state
+        .changes
+        .reviews
+        .get(&(key.0.clone(), crate::features::changes::entry_dir(&key.1)))
+        .map(|review| {
+            review
+                .comments
+                .iter()
+                .filter(|c| crate::features::changes::is_pending(c))
+                .count()
+        });
+    let shown = state.review_shown() == Some(&key);
+    let (project, entry) = key;
+    Some(Member::Review {
+        project,
+        entry,
+        face: ReviewTabFace::of(drafts, tab.freshness(), shown),
+        shown,
+    })
 }
 
 /// The marked member's position in the shown session's strip, or `None` without a session.
@@ -1327,5 +1421,279 @@ pub(crate) mod tests {
                 "the bar must name the budget this give-up actually spent — a spawn that failed                  once reads as three attempts the moment this is a constant ({attempts} spent,                  got {status:?})"
             );
         }
+    }
+
+    // ---- Feature 1269 (M4): the Review tab in the strip (U13–U15) ----
+
+    use crate::features::sidebar::Msg as SidebarMsg;
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    use micold_core::review::{LineRange, RelPath, Side};
+    use micold_core::review_tabs::Freshness;
+
+    /// The S1 fixture with its location's Review tab made with session `shown` current, then hidden
+    /// by selecting that session again when `hide`.
+    fn with_review(shown: usize, hide: bool) -> (State, [SessionId; 3]) {
+        let (mut state, ids) = strip_fixture(shown);
+        state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+            SessionLocation::Default,
+        )));
+        let _ = state.take_changes_effect();
+        if hide {
+            state.update(Message::Session(SessionMsg::Selected(ids[shown])));
+        }
+        (state, ids)
+    }
+
+    fn review_key() -> micold_core::review_tabs::EntryKey {
+        (std::path::PathBuf::from("/repo"), SessionLocation::Default)
+    }
+
+    /// The strip's Review member, if any.
+    fn review_of(model: &StripModel) -> Option<(ReviewTabFace, bool)> {
+        model.members.iter().find_map(|m| match m {
+            Member::Review { face, shown, .. } => Some((face.clone(), *shown)),
+            _ => None,
+        })
+    }
+
+    fn comment(state: CommentState) -> ReviewComment {
+        ReviewComment {
+            id: CommentId::new(),
+            path: RelPath::from_native("src/lib.rs").expect("relative path"),
+            side: Side::New,
+            range: LineRange::new(1, 1).expect("a range"),
+            quote: vec!["line 1".into()],
+            text: "about it".into(),
+            state,
+            created: 1,
+            pr: None,
+        }
+    }
+
+    /// T033 (U13, FR-001): with the Review tab hidden it is the last member, after the sessions,
+    /// the shown session's shells and "+", and the session's own member stays marked.
+    #[test]
+    fn a_hidden_review_tab_is_the_last_member_and_marks_nothing() {
+        let (state, [m, h1, h2]) = with_review(0, true);
+        assert_eq!(
+            state.review_shown(),
+            None,
+            "the premise: the review is hidden"
+        );
+        let shells = shells_of(&state, m);
+        let model = StripModel::of(&state).expect("a session is shown");
+        assert_eq!(
+            keys(&model),
+            vec![
+                MemberKey::Session(m),
+                MemberKey::Shell(m, shells[0]),
+                MemberKey::Shell(m, shells[1]),
+                MemberKey::Plus,
+                MemberKey::Session(h1),
+                MemberKey::Session(h2),
+                MemberKey::Review,
+            ]
+        );
+        let marked: Vec<_> = model
+            .members
+            .iter()
+            .filter(|x| x.marked())
+            .map(Member::key)
+            .collect();
+        assert_eq!(marked, vec![MemberKey::Session(m)]);
+        assert_eq!(review_of(&model).map(|(_, shown)| shown), Some(false));
+        assert!(!model.review_shown());
+    }
+
+    /// T033 (U13): with the Review tab shown the members are the same, the Review member is the
+    /// one marked, and the current session's member is still its shown one.
+    #[test]
+    fn a_shown_review_tab_is_the_one_marked_member() {
+        let (state, [m, _, _]) = with_review(0, false);
+        assert!(
+            state.review_shown().is_some(),
+            "the premise: the review is shown"
+        );
+        let mut hidden = state.clone();
+        hidden.update(Message::Session(SessionMsg::Selected(m)));
+        assert_eq!(hidden.review_shown(), None);
+        let model = StripModel::of(&state).expect("a session is current");
+        assert_eq!(
+            keys(&model),
+            keys(&StripModel::of(&hidden).expect("shown")),
+            "showing the tab changes no member"
+        );
+        let marked: Vec<_> = model
+            .members
+            .iter()
+            .filter(|x| x.marked())
+            .map(Member::key)
+            .collect();
+        assert_eq!(
+            marked,
+            vec![MemberKey::Review],
+            "no session or shell member"
+        );
+        assert!(matches!(
+            model.members[0],
+            Member::Session {
+                shown: true,
+                marked: false,
+                ..
+            }
+        ));
+        assert_eq!(model.marked_index(), Some(model.members.len() - 1));
+        assert!(model.review_shown());
+        assert_eq!(model.status, "running", "the status keeps its place");
+    }
+
+    /// T033 (U13, US2.6): a sessionless worktree's shown review is the strip's only member, with no
+    /// status and no restart; New session still starts one there.
+    #[test]
+    fn a_sessionless_locations_strip_is_its_review_alone() {
+        let (mut state, _) = strip_fixture(0);
+        state.worktree.worktrees = vec![micold_core::worktree::Worktree {
+            dir_name: "z".into(),
+            path: "/repo/.claude/worktrees/z".into(),
+            branch: Some("z".into()),
+            status: micold_core::worktree::WorktreeStatus::Valid,
+            included: false,
+        }];
+        let z = SessionLocation::Worktree("z".into());
+        state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+            z.clone(),
+        )));
+        let _ = state.take_changes_effect();
+        assert_eq!(
+            state.shown_location(),
+            Some(z.clone()),
+            "the premise: Z's review is shown"
+        );
+        let model = StripModel::of(&state).expect("the review's strip");
+        assert_eq!(keys(&model), vec![MemberKey::Review]);
+        assert!(model.members[0].marked());
+        assert_eq!(model.status, "");
+        assert_eq!(model.restart, None);
+        assert_eq!(model.location, Some(z));
+    }
+
+    /// T033 (U13, FR-009): the badge counts the location's drafts, sent comments not; `None` while
+    /// its comments are unknown.
+    #[test]
+    fn the_badge_counts_the_locations_drafts_and_none_while_unknown() {
+        let (mut state, _) = with_review(0, true);
+        let badge = |state: &State| {
+            review_of(&StripModel::of(state).expect("shown")).and_then(|(face, _)| face.badge)
+        };
+        assert_eq!(badge(&state), None, "comments unknown");
+        state.changes.reviews.insert(
+            (std::path::PathBuf::from("/repo"), String::new()),
+            crate::features::changes::ReviewView {
+                comments: vec![
+                    comment(CommentState::Draft),
+                    comment(CommentState::Draft),
+                    comment(CommentState::Sent { at: 1 }),
+                ],
+                sending: false,
+            },
+        );
+        assert_eq!(badge(&state).map(|n| n.get()), Some(2));
+        state.changes.reviews.insert(
+            (std::path::PathBuf::from("/repo"), "elsewhere".into()),
+            crate::features::changes::ReviewView {
+                comments: vec![comment(CommentState::Draft); 5],
+                sending: false,
+            },
+        );
+        assert_eq!(
+            badge(&state).map(|n| n.get()),
+            Some(2),
+            "never another location's drafts"
+        );
+    }
+
+    /// T033 (U13, FR-010): a hidden tab whose files changed carries the changed mark; a shown one
+    /// never does.
+    #[test]
+    fn only_a_hidden_review_tab_carries_the_changed_mark() {
+        let changed = |state: &State| {
+            review_of(&StripModel::of(state).expect("shown")).map(|(face, _)| face.changed)
+        };
+        let (mut shown, _) = with_review(0, false);
+        let _ = shown.changes.tabs.files_changed(&review_key());
+        assert_eq!(changed(&shown), Some(false), "shown: re-read, no mark");
+        let (mut hidden, _) = with_review(0, true);
+        let _ = hidden.changes.tabs.files_changed(&review_key());
+        assert_eq!(
+            hidden
+                .changes
+                .tabs
+                .get(&review_key())
+                .map(|t| t.freshness()),
+            Some(Freshness::Changed)
+        );
+        assert_eq!(changed(&hidden), Some(true));
+    }
+
+    /// T034 (U14, US5.4): the Review tab's press asks for its location's review; its × closes it.
+    #[test]
+    fn the_review_tab_presses_review_changes_and_its_close_closes_it() {
+        let (state, _) = with_review(0, true);
+        let model = StripModel::of(&state).expect("shown");
+        let review = model
+            .members
+            .iter()
+            .find(|m| m.key() == MemberKey::Review)
+            .expect("the Review member");
+        assert_eq!(
+            review.press(),
+            Message::Sidebar(SidebarMsg::ReviewChangesRequested(SessionLocation::Default))
+        );
+        assert_eq!(
+            review.close(),
+            Some(Message::Changes(crate::features::changes::Msg::TabClosed {
+                project: std::path::PathBuf::from("/repo"),
+                entry: SessionLocation::Default,
+            }))
+        );
+        assert_eq!(review.menu_tab(), None, "no menu: nothing to restart");
+        assert!(!review.stopped());
+    }
+
+    fn review_member_with(drafts: Option<usize>, freshness: Freshness) -> Member {
+        Member::Review {
+            project: std::path::PathBuf::from("/repo"),
+            entry: SessionLocation::Default,
+            face: ReviewTabFace::of(drafts, freshness, false),
+            shown: false,
+        }
+    }
+
+    /// T034 (U15, FR-015): the Review member is `REVIEW_WIDTH` wide whatever its badge or mark, and
+    /// the offsets and the reveal count it.
+    #[test]
+    fn the_review_member_has_one_width_and_the_offsets_and_reveal_count_it() {
+        for member in [
+            review_member_with(None, Freshness::Fresh),
+            review_member_with(Some(1), Freshness::Fresh),
+            review_member_with(Some(150), Freshness::Fresh),
+            review_member_with(Some(150), Freshness::Changed),
+        ] {
+            assert_eq!(member.width(), tab::REVIEW_WIDTH, "{member:?}");
+        }
+        let mut members = twelve();
+        members.push(review_member_with(Some(150), Freshness::Changed));
+        let offsets = member_offsets(&members);
+        let (before, last) = (offsets[11], offsets[12]);
+        assert!(
+            (last.0 - (before.1 + spacing::SM)).abs() <= EDGE_TOLERANCE
+                && (last.1 - last.0 - tab::REVIEW_WIDTH).abs() <= EDGE_TOLERANCE,
+            "{last:?} after {before:?}"
+        );
+        assert_eq!(
+            scroll_into_view(12, 0.0, 340.0, &members),
+            Some(last.1 - 340.0),
+            "showing it brings it into view"
+        );
     }
 }

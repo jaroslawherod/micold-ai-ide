@@ -11,8 +11,8 @@ use crate::icons::Icon;
 use crate::ui::cdk::keyed::Keyed;
 use crate::ui::material::{
     self, card_palette, card_state_icon, tab, tab_content_colour, ActivityBadge, BadgeEmphasis,
-    Ellipsized, Glyph, IconButton, IndicatorEdge, PullRequestIndicator, SurfaceKind, Tab, Tag,
-    Text, Tooltip, TooltipPosition, TypeRole,
+    CountBadge, Ellipsized, Glyph, IconButton, IndicatorEdge, PullRequestIndicator, SurfaceKind,
+    Tab, Tag, Text, Tooltip, TooltipPosition, TypeRole, UnreadMark,
 };
 use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
@@ -132,19 +132,23 @@ pub fn changes_press(state: &State, location: &SessionLocation) -> (Message, Cha
     )
 }
 
-/// The shown review under its own location's header (R12, A1; feature 1269, U16): the header of
-/// `shown_location()`, so a sessionless worktree's review has its own header and no review is
-/// drawn under another location's. The strip is not drawn (its tabs and splits act on panes that
-/// are not drawn). With no location shown, the view alone and no header (edge case *Empty*).
+/// The shown review under its own location's header and strip (R12, A1; feature 1269, U16): the
+/// header of `shown_location()`, so a sessionless worktree's review has its own header and no
+/// review is drawn under another location's, then that location's strip with its Review tab shown
+/// (U13), then the view. With no location shown, the view alone (edge case *Empty*).
 pub fn over_review<'a>(
     state: &'a State,
     changes: Element<'a, Message>,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
-    match state.shown_location() {
-        Some(location) => column![header(state, &location, scheme), changes].into(),
-        None => changes,
-    }
+    let Some(location) = state.shown_location() else {
+        return changes;
+    };
+    let strip: Element<'a, Message> = match StripModel::of(state) {
+        Some(model) => strip(state, &model, None, scheme),
+        None => container(Space::new()).into(),
+    };
+    column![header(state, &location, scheme), strip, changes].into()
 }
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
@@ -284,7 +288,10 @@ pub(crate) fn strip<'a>(
         r,
     )
     .position(TooltipPosition::Left);
+    // Feature 1269 (U15): while the Review tab is shown the split buttons keep their place,
+    // disabled, as they act on panes that are not drawn.
     let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
+        _ if model.review_shown() => crate::ui::panes::split_buttons_disabled(r),
         Some(pane) => crate::ui::panes::split_buttons(pane, r),
         None => container(Space::new()).into(),
     };
@@ -299,7 +306,8 @@ pub(crate) fn strip<'a>(
 
 /// The shown session's status words, cut under [`STATUS_MAX_WIDTH`] with the full words on hover,
 /// and while its marked process is stopped the restart as the cluster's last child, so its coming
-/// and going moves no other control (R9, US2 sc. 5 and 6).
+/// and going moves no other control (R9, US2 sc. 5 and 6). While the Review tab is shown the
+/// restart keeps its place, disabled (feature 1269, U15).
 fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Message> {
     let words = Tooltip::new(
         container(
@@ -324,14 +332,15 @@ fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Messa
                 r,
             )
             .padding(spacing::SM)
-            .on_press(restart),
+            .on_press_maybe((!model.review_shown()).then_some(restart)),
         );
     }
     cluster.into()
 }
 
 /// One strip member (S5, S7): a session tab at [`tab::SESSION_WIDTH`], a shell tab at
-/// [`tab::WIDTH`] with its close control, or the "+". Indicators on the bottom edge: the strip sits
+/// [`tab::WIDTH`] with its close control, the "+", or the Review tab at [`tab::REVIEW_WIDTH`]
+/// (feature 1269). Indicators on the bottom edge: the strip sits
 /// above the panes it selects (feature 012 FR-004b's rule, inverted with the strip's position).
 fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
     let mark =
@@ -392,6 +401,43 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
                 )
                 .on_press(m.press());
             with_menu(tab).into()
+        }
+        Member::Review { face, shown, .. } => {
+            // Feature 1269 (U13, R11): the changed mark in the leading slot, `Review` and its
+            // draft count as the label, the × in the trailing slot. Every slot is drawn whether or
+            // not it has something to show, so a badge or mark appearing moves nothing.
+            let tint = tab_content_colour(*shown, r);
+            let changed: Element<'a, Message> = match face.changed {
+                true => UnreadMark::new(r).into(),
+                false => Space::new().into(),
+            };
+            let badge: Element<'a, Message> = match face.badge {
+                Some(count) => CountBadge::new(count, r).into(),
+                None => Space::new().into(),
+            };
+            let label = row![Text::new(face.label, TypeRole::Label, r).tint(tint), badge]
+                .spacing(spacing::XS)
+                .align_y(Alignment::Center);
+            let mut close = IconButton::new(Icon::Close, r)
+                .size(TypeRole::Label)
+                .padding(spacing::XS)
+                .circular()
+                .tint(tint);
+            if let Some(message) = m.close() {
+                close = close.on_press(message);
+            }
+            let tab = Tab::new(label, r)
+                .fixed_width(tab::REVIEW_WIDTH)
+                .edge(IndicatorEdge::Bottom)
+                .active(*shown)
+                .leading(changed)
+                .trailing(
+                    Tooltip::new(close, "Close the review", r).position(TooltipPosition::Bottom),
+                )
+                .on_press(m.press());
+            Tooltip::new(tab, face.tooltip.clone(), r)
+                .position(TooltipPosition::Bottom)
+                .into()
         }
         Member::Plus => Tooltip::new(
             IconButton::new(Icon::AddTerminalInstance, r)

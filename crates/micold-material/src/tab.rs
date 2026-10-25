@@ -127,6 +127,17 @@ pub const SESSION_WIDTH: f32 = SLOT_WIDTH // the leading slot
     + spacing::XS
     + SLOT_WIDTH; // the trailing slot, reserved and empty
 
+/// The Review tab's width in the session strip (feature 1269, R10, U15): [`WIDTH`]'s anatomy with
+/// the label's ceiling as its label share, which holds the word "Review" and a draft count of up to
+/// `99+` beside it; the leading slot holds the changed mark and the trailing slot the ×. Fixed and
+/// derived like [`SESSION_WIDTH`], so a badge or a mark coming and going never moves a neighbour
+/// and the strip's offsets stay derived from its members.
+pub const REVIEW_WIDTH: f32 = SLOT_WIDTH // the leading slot: the changed mark
+    + spacing::XS
+    + LABEL_MAX_WIDTH // "Review" and its count badge
+    + spacing::XS
+    + SLOT_WIDTH; // the trailing slot: the ×
+
 /// A tab's own inset: **none**.
 ///
 /// Named rather than left as a literal `0.0` at the call site, for the reason [`indicator_colour`]
@@ -640,6 +651,18 @@ mod tests {
             "a session tab holds the two slots, the two gaps and the label's ceiling"
         );
         assert_eq!(SESSION_WIDTH - WIDTH, LABEL_MAX_WIDTH - LABEL_MIN_WIDTH);
+    }
+
+    /// Feature 1269 R10 (U15): the Review tab's width is derived like [`SESSION_WIDTH`] — restated
+    /// term by term, so a literal or a dropped term fails here.
+    #[test]
+    fn the_review_tab_width_is_derived_not_literal() {
+        assert_eq!(
+            REVIEW_WIDTH,
+            2.0 * anatomy::button::MIN_TOUCH_TARGET + 2.0 * spacing::XS + LABEL_MAX_WIDTH,
+            "the mark's slot, the two gaps, the label's ceiling for \"Review\" and its badge, and \
+             the ×'s slot"
+        );
     }
 
     /// FR-004b, and what the user meets: the indicator spans the **whole** tab, edge to edge.

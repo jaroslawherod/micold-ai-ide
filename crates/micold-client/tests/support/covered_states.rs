@@ -455,6 +455,9 @@ const fn strip_member(n: usize) -> [usize; 12] {
 const SESSION_STRIP_TAB_ACTIVE: [usize; 12] = strip_member(2);
 const SESSION_STRIP_TAB_EXITED: [usize; 12] = strip_member(3);
 const SESSION_STRIP_TAB_SESSION: [usize; 12] = strip_member(0);
+/// The Review tab of [`review_shown`] and [`review_hidden`]: after the main session, its shell,
+/// the "+" and the helper (feature 1269).
+const SESSION_STRIP_TAB_REVIEW: [usize; 12] = strip_member(4);
 
 /// The session area's context header (feature 1126, A1): the session area's first child, above
 /// the pane area, which moved one level down with it.
@@ -1869,13 +1872,17 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
-        // --- Feature 1126: the header over the open Changes view (T053, R12, H9) -----------------
+        // --- Feature 1269: the Review tab in the strip (T038, U13, U16) ---------------------------
         //
-        // The view opened on the shown worktree from the header, so its Changes button shows the
-        // view open, its label with counts read: the header stays above the view, the strip goes.
+        // `feat-short`'s main session (one shell) and a helper, with the location's Review tab:
+        // shown, the header and the strip above the Changes view, the Review tab marked and the
+        // split buttons disabled in place; hidden, the panes under the strip and the tab carrying a
+        // badge of 3 drafts and the changed mark; and a sessionless worktree's review, whose strip
+        // is its Review tab alone beside New session. They replace feature 1126's
+        // `session-area-changes-open`, which drew the header alone over the view.
         CoveredState {
-            name: "session-area-changes-open",
-            build: || StateUnderTest::new(changes_open_under_header()),
+            name: "session-area-review-shown",
+            build: review_shown,
             anchors: &[
                 Anchor {
                     name: "shell.root",
@@ -1892,6 +1899,108 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.header.changes",
                     path: SESSION_HEADER_CHANGES,
+                },
+                Anchor {
+                    name: "session.strip",
+                    path: SESSION_STRIP,
+                },
+                Anchor {
+                    name: "session.strip.tabs",
+                    path: SESSION_STRIP_TABS,
+                },
+                Anchor {
+                    name: "session.strip.tabs.review",
+                    path: &SESSION_STRIP_TAB_REVIEW,
+                },
+                Anchor {
+                    name: "session.strip.new_session",
+                    path: SESSION_STRIP_NEW_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.split",
+                    path: SESSION_STRIP_SPLIT,
+                },
+            ],
+        },
+        CoveredState {
+            name: "session-area-review-hidden",
+            build: review_hidden,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "session.header.changes",
+                    path: SESSION_HEADER_CHANGES,
+                },
+                Anchor {
+                    name: "session.strip",
+                    path: SESSION_STRIP,
+                },
+                Anchor {
+                    name: "session.strip.tabs",
+                    path: SESSION_STRIP_TABS,
+                },
+                Anchor {
+                    name: "session.strip.tabs.review",
+                    path: &SESSION_STRIP_TAB_REVIEW,
+                },
+                Anchor {
+                    name: "session.strip.new_session",
+                    path: SESSION_STRIP_NEW_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.split",
+                    path: SESSION_STRIP_SPLIT,
+                },
+            ],
+        },
+        // No status words (no session), so `session.strip` is not anchored: the fixed-controls
+        // gate reads every anchored strip's children as pressable, and empty words are not.
+        CoveredState {
+            name: "session-area-review-sessionless",
+            build: review_sessionless,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "toolbar.title",
+                    path: TOOLBAR_TITLE,
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "session.header.changes",
+                    path: SESSION_HEADER_CHANGES,
+                },
+                Anchor {
+                    name: "session.strip.tabs",
+                    path: SESSION_STRIP_TABS,
+                },
+                Anchor {
+                    name: "session.strip.tabs.review",
+                    path: &SESSION_STRIP_TAB_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.new_session",
+                    path: SESSION_STRIP_NEW_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.split",
+                    path: SESSION_STRIP_SPLIT,
                 },
             ],
         },
@@ -2809,12 +2918,9 @@ fn with_active_session() -> State {
     state
 }
 
-/// The shown worktree `feat-short` with the Changes view open on it and the header's counts read
-/// (feature 1126, `session-area-changes-open`).
-pub fn changes_open_under_header() -> State {
+/// `state` with `entry`'s Review tab made and shown, the header following it with its counts read.
+fn with_review_of(mut state: State, entry: SessionLocation) -> State {
     use micold_client::features::changes::{self, Load, Msg};
-    let mut state = with_active_session();
-    let entry = SessionLocation::Worktree("feat-short".to_string());
     changes::update(
         &mut state.changes,
         Msg::Opened {
@@ -2831,12 +2937,75 @@ pub fn changes_open_under_header() -> State {
     state
 }
 
+/// The worktree `feat-short` with its main session (one shell) and a helper, its Review tab shown
+/// (feature 1269, `session-area-review-shown`).
+pub fn review_shown() -> StateUnderTest {
+    let mut under = strip_with(1, 1);
+    under.state = with_review_of(
+        under.state,
+        SessionLocation::Worktree("feat-short".to_string()),
+    );
+    under
+}
+
+/// `drafts` draft comments of `feat-short`, as the service pushes them.
+pub fn feat_short_drafts(state: &mut State, drafts: usize) {
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    use micold_core::review::{LineRange, RelPath, Side};
+    let comment = || ReviewComment {
+        id: CommentId::new(),
+        path: RelPath::from_native("src/lib.rs").expect("a relative path"),
+        side: Side::New,
+        range: LineRange::new(1, 1).expect("a range"),
+        quote: vec!["line 1".into()],
+        text: "about it".into(),
+        state: CommentState::Draft,
+        created: 1,
+        pr: None,
+    };
+    state.changes.reviews.insert(
+        (PathBuf::from(PROJECT), "feat-short".to_string()),
+        micold_client::features::changes::ReviewView {
+            comments: (0..drafts).map(|_| comment()).collect(),
+            sending: false,
+        },
+    );
+}
+
+/// [`review_shown`] with the main session shown again, so the Review tab is hidden, and since then
+/// the worktree's files changed and three drafts wait (feature 1269, `session-area-review-hidden`).
+pub fn review_hidden() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    let mut under = review_shown();
+    changes::update(&mut under.state.changes, Msg::SessionSelected);
+    let _ = under.state.changes.tabs.files_changed(&(
+        PathBuf::from(PROJECT),
+        SessionLocation::Worktree("feat-short".to_string()),
+    ));
+    feat_short_drafts(&mut under.state, 3);
+    under
+}
+
+/// The sessionless worktree `fix-a-bug`'s review shown, under its own header (feature 1269,
+/// `session-area-review-sessionless`).
+pub fn review_sessionless() -> StateUnderTest {
+    let mut under = strip_with(1, 1);
+    under.state.session.active = None;
+    under.state = with_review_of(
+        under.state,
+        SessionLocation::Worktree("fix-a-bug".to_string()),
+    );
+    under
+}
+
 /// How many strip members (tabs and the "+") each strip state's keyed row holds (feature 1126,
 /// S9): read by `gates/containment.rs` and `gates/strip_controls_hold_their_size.rs`.
 pub const STRIP_MEMBERS: &[(&str, usize)] = &[
     ("session-area-one-tab", 2),
     ("session-area-six-tabs", 7),
     ("session-area-twelve-tabs", 13),
+    ("session-area-review-shown", 5),
+    ("session-area-review-hidden", 5),
 ];
 
 /// The main session of `feat-short` with `shells` shell instances (the second marked, the third

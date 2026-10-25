@@ -300,15 +300,15 @@ the changed mark and ×; × replaces the view's **Close**.
 
 ### Tests (write first, see them fail)
 
-- [ ] T032 [P] [US4] Test the new `CountBadge` in `client/src/ui/material/count_badge.rs` tests
+- [x] T032 [P] [US4] Test the new `CountBadge` in `client/src/ui/material/count_badge.rs` tests
   (text `1`, `99`, `99+`; `new(count: NonZeroUsize, roles)`); `client/src/ui/material/section_list.rs`
   badge tests stay green once its chip is built on it.
-- [ ] T033 [US1] Client unit tests U13 in `client/src/features/session_strip.rs` tests: the four
+- [x] T033 [US1] Client unit tests U13 in `client/src/features/session_strip.rs` tests: the four
   member lists of U13 (with a tab hidden, shown, sessionless `[Review(shown, marked)]` with empty
   `status` and `restart: None`, no tab = today's members); `face.badge` from the pending comments of
   `reviews[(project, entry_dir(entry))]`, `None` while unknown; a shown Review member is never
   `changed`.
-- [ ] T034 [US5] Tests U14 and U15: in `client/src/features/session_strip.rs` tests, the Review
+- [x] T034 [US5] Tests U14 and U15: in `client/src/features/session_strip.rs` tests, the Review
   tab's press is `Sidebar(ReviewChangesRequested(location))` and its × `Changes(TabClosed { project,
   entry })`; `Member::Review.width() == tab::REVIEW_WIDTH` with badge `1`, `99+` and the mark;
   `member_offsets` and `scroll_into_view` include it. In `client/tests/session_area_stability.rs`, a
@@ -317,33 +317,49 @@ the changed mark and ×; × replaces the view's **Close**.
 
 ### Implementation
 
-- [ ] T035 [US4] Add `client/src/ui/material/count_badge.rs` (`CountBadge::new(count:
+- [x] T035 [US4] Add `client/src/ui/material/count_badge.rs` (`CountBadge::new(count:
   NonZeroUsize, roles)`, `.tooltip(..)`, `From<CountBadge> for Element`, colours from `Roles`),
   export it in `client/src/ui/material/mod.rs`, move `section_list.rs`'s badge chip onto it, and
   show it in `client/src/showcase/sections/atoms.rs` (registered in `client/src/showcase/catalogue.rs`)
   (R11). T032 green.
-- [ ] T036 [US1] In `client/src/features/session_strip.rs`: `Member::Review { project, entry, face:
+- [x] T036 [US1] In `client/src/features/session_strip.rs`: `Member::Review { project, entry, face:
   ReviewTabFace, shown }`, unit `MemberKey::Review`, `StripModel::of` from `shown_location()` incl.
   the sessionless strip, the marked rule, presses and `width`; `tab::REVIEW_WIDTH` in
   `client/src/ui/material/tab.rs`; `over_review` in `client/src/ui/session_area.rs` adds the strip
   (the Review member is `material::Tab` with `.trailing` ×, `CountBadge` and `UnreadMark`); remove
   the view's **Close** from `client/src/ui/changes.rs` (U13). T033, T034 green.
-- [ ] T037 [US5] Geometry gates `client/tests/gates/session_area_fits.rs`,
+- [x] T037 [US5] Geometry gates `client/tests/gates/session_area_fits.rs`,
   `client/tests/gates/tab_children_fit.rs` and `client/tests/gates/strip_controls_hold_their_size.rs`
   gain the Review member (badge `99+` and mark) at 640×480 and 1280×800, light and dark: label,
   badge, mark and × whole, nothing overlapping or clipped (U15, SC-006).
-- [ ] T038 [US1] Covered states in `client/tests/support/covered_states.rs`:
+- [x] T038 [US1] Covered states in `client/tests/support/covered_states.rs`:
   `session-area-review-shown`, `session-area-review-hidden` (badge `3`, changed mark) and
   `session-area-review-sessionless` replace `session-area-changes-open` (line 1611); after rebasing
   on `origin/main`, regenerate `client/tests/fixtures/layout_snapshot.txt` with
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` (only session-area
   states may change).
-- [ ] T039 [P] [US1] The showcase shows the Review tab hidden with badge and dot in
+- [x] T039 [P] [US1] The showcase shows the Review tab hidden with badge and dot in
   `client/src/showcase/sections/terminal.rs` beside the strip's tabs (R11).
-- [ ] T040 [P] [US1] Docs: `docs/user-guide/reviewing-changes.md` (the Review tab, badge, changed
+- [x] T040 [P] [US1] Docs: `docs/user-guide/reviewing-changes.md` (the Review tab, badge, changed
   mark, × in place of **Close**), `docs/user-guide/terminal-panes.md` (the strip's Review tab;
   chords with it shown), `docs/user-guide/worktrees-and-sessions.md` (where it describes the strip),
   `docs/development/layout-snapshot.md` *What is covered* (the three states) (FR-017, R14).
+
+  *As built (M4)*: feature 1262 moved the generic components into the `micold-material` crate, so
+  `CountBadge` is `crates/micold-material/src/count_badge.rs` and `REVIEW_WIDTH` is in
+  `crates/micold-material/src/tab.rs` (re-exported through `ui/material`). The section list's badge
+  is a word, not a count, so it does not take a `CountBadge`; both draw one pill,
+  `count_badge::chip` (filled `primary`/`on_primary`, caption role), so they cannot drift apart. In
+  the Review member the changed mark is in the tab's leading slot (where a session tab's stopped
+  mark sits), `Review` and its badge are the label, and the × is the trailing slot: the trailing
+  slot is one touch target wide, too narrow for badge, mark and ×. `REVIEW_WIDTH` takes the
+  label's ceiling as its label share. While the Review tab is shown the split buttons are drawn
+  disabled (sessionless strip included, so the strip's children never vary) and the restart is
+  disabled in place. `tab_children_fit` and `strip_controls_hold_their_size` reach the Review member
+  through the new covered states' anchors and `STRIP_MEMBERS`; `session_area_fits` gains
+  `the_review_tab_holds_its_label_badge_mark_and_close_whole` (`99+` and the mark, both windows and
+  themes) and `the_header_and_the_strip_stand_over_the_shown_review`. Showing a Review tab sets
+  `pending_tab_reveal`, so it is scrolled into view.
 - [ ] T041 Visual pass, quickstart Part B (B1–B13) at 1280×800 light and dark and at 640×480;
   screenshots in `specs/1269-review-tab/visual-pass/`, results in
   `specs/1269-review-tab/visual-pass.md`.

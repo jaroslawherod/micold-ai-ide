@@ -1869,7 +1869,9 @@ instances as you need, side by side.
 In the [tab strip above the terminal](./terminal-panes.md#the-tab-strip-above-the-terminal) a session's group starts with its own
 tab, which is its AI conversation, then one numbered tab per open Regular Terminal instance in the
 order you opened them, then the "+". The worktree's other sessions have a tab each, the main
-session first, then its helpers. How the group's tabs behave is below.
+session first, then its helpers, and its **Review** tab comes last while its
+[review](./reviewing-changes.md) is open. A worktree with no session whose review is shown has a
+strip of its Review tab alone. How the group's tabs behave is below.
 
 **Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
 the strip tells you where you are without your having to press anything. Click a tab to bring that

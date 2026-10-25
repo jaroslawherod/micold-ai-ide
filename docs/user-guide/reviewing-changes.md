@@ -27,21 +27,36 @@ you last looked at there becomes the current one (else its main session), and it
 under that worktree's own header. On a worktree with no session, its review is shown under its own
 header, with no session current.
 
-The view takes the place of the terminal, with the header still above it and the **Changes**
-button drawn selected while it is shown. Its own header names the entry. A review is always shown
-under its own worktree's header, never another's. When you close the last session of a worktree
-whose review you kept, its review is shown in the session's place.
+The review opens as a **Review** tab in the location's tab strip, after its session and shell
+tabs and just before **New session**, and is the shown tab, underlined. The view takes the place
+of the terminal, with the header and the strip still above it and the **Changes** button drawn
+selected while it is shown (hover it: *The review is shown*). Its own header names the entry. A
+review is always shown under its own worktree's header and strip, never another's. A worktree with
+no session shows a strip of the **Review** tab alone beside **New session**. While the Review tab
+is shown, the status words and the split buttons keep their place in the strip, greyed out: they
+act on the terminal, which is not shown. When you close the last session of a worktree whose review
+you kept, its review is shown in the session's place.
+
+The Review tab carries two marks:
+
+- a **badge** with the number of draft comments waiting to be sent (`1`…`99`, then `99+`); with
+  no drafts there is no badge. It follows drafts added, deleted or sent in any window;
+- a **dot** while the tab is not shown and the worktree's files have changed since you last looked
+  at the review. Hover the tab to read both: *Review · 2 drafts / Changed since you looked*.
+  Showing the tab reads the changes again and the dot goes.
 
 The review is kept while you work elsewhere. Selecting a session (in the sidebar, with a session
 chord or the quick switcher), switching to another worktree or project, or opening the Overview or
 Settings puts the review aside without losing anything: the selected file, both scroll positions,
 revealed lines, the whole-file and **Committed**/**Uncommitted** toggles, the comment you are
 writing, picked lines, the review panel, the chosen pull request and a browsed file all stay as
-you left them. Each location keeps its own review. Press **Changes** (or choose **Review changes**)
-to show it again exactly as left; while it is shown, pressing **Changes** changes nothing.
+you left them. Each location keeps its own review. Press the **Review** tab, **Changes** or
+**Review changes** to show it again exactly as left; while it is shown, pressing **Changes** or
+the tab changes nothing.
 
-Only **Close** drops the review, returning to the session shown before it; the next open starts
-afresh, with your comments and the chosen pull request still there. The review is also dropped
+Only the Review tab's **×** drops the review (it takes the place of the view's former **Close**
+button), returning to the session shown before it; the next open starts afresh, with your
+comments and the chosen pull request still there. The review is also dropped
 when its worktree is removed (for example, deleted from another window) or its project is removed
 from the app.
 

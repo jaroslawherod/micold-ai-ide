@@ -107,18 +107,17 @@ pub fn terminal_status(state: &State, t: TerminalRef) -> String {
     .to_string()
 }
 
-fn split_button<'a>(pane: &Pane, axis: Axis, r: Roles) -> Element<'a, Message> {
+/// A split button for `pane`; `None` draws it disabled (feature 1269, U15: the strip's while the
+/// Review tab is shown).
+fn split_button<'a>(pane: Option<&Pane>, axis: Axis, r: Roles) -> Element<'a, Message> {
     let (icon, tip) = match axis {
         Axis::Vertical => (Icon::SplitVertical, "Split into side-by-side panes"),
         Axis::Horizontal => (Icon::SplitHorizontal, "Split into stacked panes"),
     };
     Tooltip::new(
-        IconButton::new(icon, r)
-            .compact()
-            .on_press(Message::Session(SessionMsg::Pane(PaneMsg::Split(
-                pane.id(),
-                axis,
-            )))),
+        IconButton::new(icon, r).compact().on_press_maybe(
+            pane.map(|pane| Message::Session(SessionMsg::Pane(PaneMsg::Split(pane.id(), axis)))),
+        ),
         tip,
         r,
     )
@@ -140,6 +139,16 @@ fn close_button<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
 
 /// The two split buttons for `pane`, the pair the bottom bar and every header carry.
 pub fn split_buttons<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
+    split_pair(Some(pane), r)
+}
+
+/// The two split buttons, disabled: the session strip's while the Review tab is shown, so they
+/// keep their place (feature 1269, U15).
+pub fn split_buttons_disabled<'a>(r: Roles) -> Element<'a, Message> {
+    split_pair(None, r)
+}
+
+fn split_pair<'a>(pane: Option<&Pane>, r: Roles) -> Element<'a, Message> {
     row![
         split_button(pane, Axis::Vertical, r),
         split_button(pane, Axis::Horizontal, r)

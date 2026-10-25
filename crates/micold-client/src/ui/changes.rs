@@ -96,17 +96,8 @@ pub fn view<'a>(
     if !view.panel.open {
         header = header.push(review_buttons(state, r));
     }
-    let header = header
-        .push(
-            Button::text("Close", r)
-                .leading(Icon::Close)
-                .on_press(Message::Changes(Msg::TabClosed {
-                    project: view.project.clone(),
-                    entry: view.entry.clone(),
-                })),
-        )
-        .spacing(spacing::MD)
-        .align_y(Alignment::Center);
+    // Feature 1269 (FR-007, U13): no **Close** here; the Review tab's × closes the review.
+    let header = header.spacing(spacing::MD).align_y(Alignment::Center);
 
     let mut body = row![
         container(list_pane(state, view, r)).width(Length::FillPortion(2)),
