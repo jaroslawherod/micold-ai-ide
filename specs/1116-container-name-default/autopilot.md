@@ -58,7 +58,7 @@ None.
 
 ## Open escalation
 
-None. (Answered by the user: push once with the green-gate check bypassed; layout_snapshot status-bar-warnings fails on this host without this diff, CI judges it.)
+Close PR push blocked by the gate hook: `mise run gate` is red only on `the_layout_matches_the_committed_fixture` (font-dependent, host-only; every other step green) and the diff touches tests. Needs the user to allow one push with the green-gate check bypassed, as for M1.
 
 ## Follow-ups not done
 
