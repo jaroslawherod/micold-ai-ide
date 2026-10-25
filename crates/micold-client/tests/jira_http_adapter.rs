@@ -413,11 +413,15 @@ fn body_of(rx: &mpsc::Receiver<String>) -> serde_json::Value {
 }
 
 #[test]
-fn a_query_page_is_the_basic_post_with_the_scoped_jql() {
-    let query = scoped("assignee = currentUser() ORDER BY priority DESC");
+fn a_query_page_is_the_basic_post_request_shape() {
     let (origin, rx) = serve(Some(ok(PAGE)));
     JiraCloud::new()
-        .query_page(&connection(&origin), &token(), &query, Some("cursor-1"))
+        .query_page(
+            &connection(&origin),
+            &token(),
+            &scoped("assignee = currentUser()"),
+            Some("cursor-1"),
+        )
         .expect("a page");
     let raw = rx.recv().unwrap();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap();
@@ -434,13 +438,7 @@ fn a_query_page_is_the_basic_post_with_the_scoped_jql() {
         .map(|s| s.to_string())
         .collect();
     assert_eq!(keys, expected, "the basic body's fields and nothing more");
-    assert_eq!(
-        json["jql"].as_str(),
-        Some("project = \"ABC\" AND (assignee = currentUser()) ORDER BY priority DESC"),
-        "the scoped query is the JQL sent, as is (FR-005)"
-    );
     assert_eq!(json["maxResults"], 100);
-    assert_eq!(json["nextPageToken"], "cursor-1");
 
     let (origin, rx) = serve(Some(ok(PAGE)));
     JiraCloud::new()
@@ -451,6 +449,22 @@ fn a_query_page_is_the_basic_post_with_the_scoped_jql() {
         body_of(&rx)["fields"],
         "a query reads the fields a basic listing reads"
     );
+}
+
+#[test]
+fn a_query_page_sends_the_scoped_jql_as_is_and_the_cursor() {
+    let query = scoped("assignee = currentUser() ORDER BY priority DESC");
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    JiraCloud::new()
+        .query_page(&connection(&origin), &token(), &query, Some("cursor-1"))
+        .expect("a page");
+    let json = body_of(&rx);
+    assert_eq!(
+        json["jql"].as_str(),
+        Some("project = \"ABC\" AND (assignee = currentUser()) ORDER BY priority DESC"),
+        "the scoped query is the JQL sent, as is (FR-005)"
+    );
+    assert_eq!(json["nextPageToken"], "cursor-1");
 }
 
 #[test]
@@ -532,6 +546,17 @@ fn a_refused_query_carries_jiras_messages_in_jiras_order() {
             "Field 'asignee' does not exist or you do not have permission to view it.".into(),
             "The value 'Hgh' does not exist for the field 'priority'.".into(),
         ]))
+    );
+}
+
+#[test]
+fn a_refusal_body_over_the_cap_is_truncated_and_reads_as_no_message() {
+    let long = "x".repeat(70 * 1024);
+    let body = format!(r#"{{"errorMessages":["{long}"],"errors":{{}}}}"#);
+    let (origin, _rx) = serve(Some(bad_request_with(&body, "application/json")));
+    assert_eq!(
+        JiraCloud::new().query_page(&connection(&origin), &token(), &scoped("x = 1"), None),
+        Err(QueryFailure::Rejected(Vec::new()))
     );
 }
 

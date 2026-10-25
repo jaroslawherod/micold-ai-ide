@@ -7,7 +7,7 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection, ProjectKey};
 use micold_core::jira_query::{
     load, rejection_messages, QueryFailure, QueryMode, QueryRefusal, RememberChange,
-    RememberedQuery, ScopedQuery, UserQuery, CAPPED, EMPTY, NOT_VALID_JQL, PROMPT,
+    RememberedQuery, ScopedQuery, UserQuery, NOT_VALID_JQL,
 };
 use micold_core::jira_status::TicketStatus;
 use micold_core::store::{jira_query_path, jira_token_path, project_id_of};
@@ -287,14 +287,11 @@ fn the_refusal_texts_are_spelled_as_the_contract() {
 }
 
 #[test]
-fn the_selector_texts_are_spelled_as_the_contract() {
+fn the_not_valid_jql_text_is_spelled_as_the_contract() {
     assert_eq!(
         NOT_VALID_JQL,
         "Jira did not accept the query: it is not valid JQL."
     );
-    assert_eq!(EMPTY, "No issue matches this query.");
-    assert_eq!(PROMPT, "Type a JQL query and press Enter to list issues.");
-    assert_eq!(CAPPED, "Showing the first 1,000 issues this query returns.");
 }
 
 #[test]

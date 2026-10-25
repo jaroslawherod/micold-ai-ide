@@ -20,15 +20,6 @@ const DEFAULT_SORT: &str = "ORDER BY updated DESC";
 /// Shown when Jira refused the query and gave no message of its own (FR-010).
 pub const NOT_VALID_JQL: &str = "Jira did not accept the query: it is not valid JQL.";
 
-/// Shown when the query ran and matched no issue (FR-012).
-pub const EMPTY: &str = "No issue matches this query.";
-
-/// Shown in advanced mode before a query has run (FR-004a).
-pub const PROMPT: &str = "Type a JQL query and press Enter to list issues.";
-
-/// Shown under a list that holds the load cap while more issues match (FR-006).
-pub const CAPPED: &str = "Showing the first 1,000 issues this query returns.";
-
 /// Why the app did not send a query (FR-007, data-model §2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryRefusal {

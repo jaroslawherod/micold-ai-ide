@@ -116,15 +116,20 @@ pub fn picker<'a>(
         QueryRun::Loaded { listing, .. } => {
             // FR-006: say the list is capped rather than presenting a part as the whole.
             if !listing.complete {
-                let caption = format!(
-                    "Showing the first {} issues this query returns.",
-                    group_digits(listing.issues.len() as u64)
-                );
+                let caption = cap_caption(listing.issues.len());
                 col = col.push(Text::new(caption, TypeRole::Caption, r).muted());
             }
         }
     }
     col.into()
+}
+
+/// The caption under a list that holds the load cap while more issues match (FR-006).
+fn cap_caption(held: usize) -> String {
+    format!(
+        "Showing the first {} issues this query returns.",
+        group_digits(held as u64)
+    )
 }
 
 /// The progress line while a query runs. Names the site, never the query (FR-016).
@@ -161,4 +166,19 @@ fn failure_lines<'a>(
     container(material::Scrollable::new(column, r).height(Length::Shrink))
         .max_height(FAILURE_MAX_HEIGHT)
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_view_texts_are_spelled_as_shipped() {
+        assert_eq!(PROMPT, "Type a JQL query, then press Enter or Run");
+        assert_eq!(NO_MATCH, "No issue matches this query.");
+        assert_eq!(
+            cap_caption(1_000),
+            "Showing the first 1,000 issues this query returns."
+        );
+    }
 }
