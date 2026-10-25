@@ -160,7 +160,7 @@ pub fn view<'a>(
         container(list_pane(state, view, reviews, r))
             .width(Length::Fixed(FILE_COLUMN_WIDTH))
             .padding(Padding {
-                left: spacing::LG,
+                left: FILE_COLUMN_INSET,
                 bottom: spacing::LG,
                 ..Padding::ZERO
             }),
@@ -664,10 +664,19 @@ fn counted(file: &ChangedFile) -> bool {
     file.content == Content::Text && !matches!(file.kind, ChangeKind::ModeOnly)
 }
 
-/// The changed-file tree's indentation step: the `TreeView`'s (ledger decision 7).
-pub const TREE_INDENT_STEP: f32 = spacing::MD;
-/// A 24-character file name (SC-006: names up to 24 characters show whole at the default list width), measured for the room a name keeps before the
-/// indentation stops growing (edge case "Very deep paths").
+/// The file column's leading inset: the list's rows are [`FILE_COLUMN_WIDTH`] less it wide.
+const FILE_COLUMN_INSET: f32 = spacing::LG;
+/// How wide the list's rows are in the fixed file column (feature 1273, SC-006).
+pub const FILE_LIST_WIDTH: f32 = FILE_COLUMN_WIDTH - FILE_COLUMN_INSET;
+/// The changed-file tree's indentation step: narrower than the `TreeView`'s 16 px so a tree three
+/// levels deep still indents in the 236 px list (ledger decision 11).
+pub const TREE_INDENT_STEP: f32 = spacing::SM + spacing::XS;
+/// A tree row's leading padding: small, as the indentation is the row's leading space; the
+/// trailing padding stays the button's, where the changed dot is drawn.
+const TREE_ROW_LEAD: f32 = spacing::XS;
+/// A 24-character file name: names up to that length show whole at the default list width
+/// (SC-006). Measured for the room a name keeps before the indentation stops growing (edge case
+/// "Very deep paths").
 const NAME_SAMPLE: &str = "review_file_tree_test.rs";
 /// A file row's name: emphasised, the row's most prominent text (FR-005).
 const NAME_ROLE: TypeRole = TypeRole::Action;
@@ -676,7 +685,8 @@ const NAME_ROLE: TypeRole = TypeRole::Action;
 /// padding and the review state's slot.
 pub fn name_room(list_width: f32) -> f32 {
     list_width
-        - 2.0 * anatomy::button::PADDING_TEXT
+        - TREE_ROW_LEAD
+        - anatomy::button::PADDING_TEXT
         - (Glyph::<Message>::extent(TypeRole::Body) + spacing::SM)
 }
 
@@ -692,7 +702,7 @@ pub fn tree_indent_cap(list_width: f32) -> u16 {
 
 /// [`tree_indent_cap`] of the fixed file column, shaped once rather than on every draw.
 static DEFAULT_INDENT_CAP: std::sync::LazyLock<u16> =
-    std::sync::LazyLock::new(|| tree_indent_cap(FILE_COLUMN_WIDTH));
+    std::sync::LazyLock::new(|| tree_indent_cap(FILE_LIST_WIDTH));
 
 /// The indentation of a row `levels` steps in.
 fn indent(levels: u16) -> Space {
@@ -736,7 +746,11 @@ fn folder_row(
             ButtonVariant::Text,
             r,
         )
-        .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
+        .padding(Padding {
+            left: TREE_ROW_LEAD,
+            right: tokens::anatomy::button::PADDING_TEXT,
+            ..Padding::ZERO
+        })
         .width(Length::Fill)
         .on_press(Message::Changes(Msg::TreeFolderToggled(
             folder.paths.clone(),
@@ -820,7 +834,11 @@ fn file_row(
         // and the tags, the overflow is cut there and never reaches the padding the changed dot is
         // drawn over (1271 round 3, V4).
         Button::with_content(container(line).width(Length::Fill).clip(true), variant, r)
-            .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
+            .padding(Padding {
+                left: TREE_ROW_LEAD,
+                right: tokens::anatomy::button::PADDING_TEXT,
+                ..Padding::ZERO
+            })
             .width(Length::Fill)
             .on_press(Message::Changes(Msg::FileSelected(file.path.clone()))),
         tree::hover_text(file.path.as_str(), renamed_from),
@@ -1376,15 +1394,56 @@ mod tests {
     fn a_24_character_name_keeps_its_room_at_every_depth() {
         assert_eq!(NAME_SAMPLE.chars().count(), 24);
         let name = width_of(NAME_SAMPLE, NAME_ROLE);
-        let cap = tree_indent_cap(FILE_COLUMN_WIDTH);
+        let cap = tree_indent_cap(FILE_LIST_WIDTH);
+        eprintln!(
+            "name {name} px, room {} px, cap {cap}",
+            name_room(FILE_LIST_WIDTH)
+        );
         assert!(cap >= 2, "the tree indents at the default width: cap {cap}");
         for depth in 0..20 {
             let levels = tree::indent_levels(depth, cap);
-            let room = name_room(FILE_COLUMN_WIDTH) - f32::from(levels) * TREE_INDENT_STEP;
+            let room = name_room(FILE_LIST_WIDTH) - f32::from(levels) * TREE_INDENT_STEP;
             assert!(
                 room >= name,
                 "depth {depth}: {room} px of room for a {name} px name"
             );
         }
+    }
+
+    fn changed(kind: ChangeKind, content: Content) -> ChangedFile {
+        ChangedFile {
+            path: RelPath::from_native("src/a.rs").expect("a relative path"),
+            kind,
+            content,
+            added: 4,
+            removed: 1,
+            large: false,
+            origin: micold_core::review::changes::Origin::Uncommitted,
+            identity: micold_core::review::changes::ChangeIdentity::Unknown,
+        }
+    }
+
+    /// FR-005: a kind tag for Added, Deleted, Renamed and Mode, none for Modified; an untracked
+    /// file reads as Added, and a rename's old path is left to the hover text.
+    #[test]
+    fn modified_files_carry_no_kind_tag() {
+        let r = micold_core::tokens::LIGHT;
+        let label = |kind: ChangeKind| kind_tag(&kind, r).map(|(label, _)| label);
+        assert_eq!(label(ChangeKind::Modified), None);
+        assert_eq!(label(ChangeKind::Added), Some("Added"));
+        assert_eq!(label(ChangeKind::Untracked), Some("Added"));
+        assert_eq!(label(ChangeKind::Deleted), Some("Deleted"));
+        assert_eq!(label(ChangeKind::ModeOnly), Some("Mode"));
+        let from = RelPath::from_native("src/old.rs").expect("a relative path");
+        assert_eq!(label(ChangeKind::Renamed { from }), Some("Renamed"));
+    }
+
+    /// FR-006, scenarios 2.3 and 2.4: only a text change other than a Mode one has a bar.
+    #[test]
+    fn binary_not_text_and_mode_rows_have_no_bar() {
+        assert!(counted(&changed(ChangeKind::Modified, Content::Text)));
+        assert!(!counted(&changed(ChangeKind::Added, Content::Binary)));
+        assert!(!counted(&changed(ChangeKind::Modified, Content::NotUtf8)));
+        assert!(!counted(&changed(ChangeKind::ModeOnly, Content::Text)));
     }
 }
