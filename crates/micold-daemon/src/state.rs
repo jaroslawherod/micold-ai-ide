@@ -3340,7 +3340,7 @@ impl DaemonState {
     }
 
     /// The `ReviewChanged` pushes a client that has just attached to `project` is owed: one per
-    /// entry with comments (feature 482, review-wire).
+    /// entry with comments or marks (feature 482, review-wire; feature 1271, RM3).
     pub fn review_pushes_on_attach(&self, project: &Path) -> Vec<DaemonMsg> {
         let mut inner = self.lock();
         let inner = &mut *inner;

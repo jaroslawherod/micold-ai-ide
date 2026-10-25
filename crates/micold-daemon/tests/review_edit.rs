@@ -29,8 +29,9 @@ use micold_core::protocol::messages::{
 use micold_core::review::comment::{
     CommentId, CommentState, Outcome, PrAnchor, Reporter, ReviewComment, Scope,
 };
+use micold_core::review::marks::{ChangeId, ReviewMark};
 use micold_core::review::store::ReviewFile;
-use micold_core::review::Side;
+use micold_core::review::{RelPath, Side};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -101,6 +102,7 @@ struct Pushed {
     worktree_dir: String,
     comments: Vec<ReviewComment>,
     sending: bool,
+    marks: Vec<ReviewMark>,
 }
 
 fn pushed(msg: &DaemonMsg) -> Option<Pushed> {
@@ -110,11 +112,13 @@ fn pushed(msg: &DaemonMsg) -> Option<Pushed> {
             worktree_dir,
             comments,
             sending,
+            marks,
         } => Some(Pushed {
             project: project.clone(),
             worktree_dir: worktree_dir.clone(),
             comments: comments.clone(),
             sending: *sending,
+            marks: marks.clone(),
         }),
         _ => None,
     }
@@ -503,19 +507,47 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
 
 /// Seed the review file with one reviewed mark on entry `dir` (feature 1271) and return the file.
 fn seed_mark(f: &Fixture, dir: &str) -> ReviewFile {
-    use micold_core::review::marks::{ChangeId, ReviewMark};
-    use micold_core::review::RelPath;
     let mut seed = ReviewFile::default();
     seed.marks.insert(
         dir.into(),
-        vec![ReviewMark {
-            scope: micold_core::review::comment::Scope::WorkingTree,
-            path: RelPath::from_native("src/lib.rs").unwrap(),
-            change: ChangeId::parse(&"ab".repeat(20)).unwrap(),
-        }],
+        vec![a_mark(Scope::WorkingTree, "src/lib.rs", 0xab)],
     );
     f.files().save_reviews(&f.project(), &seed).unwrap();
     seed
+}
+
+/// Change id number `n`: `n` as two hex digits, twenty times.
+fn change(n: u8) -> ChangeId {
+    ChangeId::parse(&format!("{n:02x}").repeat(20)).unwrap()
+}
+
+/// The mark of `path` in `scope` on change `n`.
+fn a_mark(scope: Scope, path: &str, n: u8) -> ReviewMark {
+    ReviewMark {
+        scope,
+        path: RelPath::from_native(path).unwrap(),
+        change: change(n),
+    }
+}
+
+/// Mark `path` in `scope` reviewed on change `n`, or unmark it with `None` (feature 1271, RM1).
+fn set_reviewed(scope: Scope, path: &str, n: Option<u8>) -> ReviewEditOp {
+    ReviewEditOp::SetReviewed {
+        scope,
+        path: path.into(),
+        change: n.map(change),
+    }
+}
+
+/// The `ReviewChanged` pushes `client` is sent within [`QUIET`].
+async fn quiet(client: &mut Client) -> Vec<Pushed> {
+    let mut seen = Vec::new();
+    while let Ok(Some(Ok(Frame::Control(msg)))) = tokio::time::timeout(QUIET, client.next()).await {
+        if let Some(p) = pushed(&msg) {
+            seen.push(p);
+        }
+    }
+    seen
 }
 
 #[tokio::test]
@@ -992,14 +1024,33 @@ async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refre
 #[tokio::test]
 async fn a_forgotten_or_removed_worktree_takes_its_marks_with_it() {
     // Feature 1271, review A M1 round 2: a marks-only entry is forgotten and pruned too.
+    // T021 (RM5): and the empty push carries no marks.
     let f = Fixture::new();
     seed_mark(&f, "feat");
     let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
     state.forget_review_worktree(&f.project(), "feat");
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (
+            seen.worktree_dir.as_str(),
+            seen.comments.len(),
+            seen.marks.len()
+        ),
+        ("feat", 0, 0),
+        "forgetting pushes both lists empty"
+    );
     assert!(f.on_disk().marks.is_empty(), "forgetting drops its marks");
+    assert!(
+        state.review_pushes_on_attach(&f.project()).is_empty(),
+        "and memory has none"
+    );
 
     seed_mark(&f, "feat");
     let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
     let status = std::process::Command::new("git")
         .current_dir(f.project())
         .args(["worktree", "remove", "--force", ".claude/worktrees/feat"])
@@ -1007,10 +1058,56 @@ async fn a_forgotten_or_removed_worktree_takes_its_marks_with_it() {
         .unwrap();
     assert!(status.success(), "git removed the worktree");
     let project = f.project();
-    tokio::task::spawn_blocking(move || state.refresh_worktrees(&project))
+    let refreshed = Arc::clone(&state);
+    tokio::task::spawn_blocking(move || refreshed.refresh_worktrees(&project))
         .await
         .unwrap();
+    let seen = next_pushed(&mut a).await;
+    assert_eq!(
+        (
+            seen.worktree_dir.as_str(),
+            seen.comments.len(),
+            seen.marks.len()
+        ),
+        ("feat", 0, 0),
+        "pruning pushes both lists empty"
+    );
     assert!(f.on_disk().marks.is_empty(), "pruning drops its marks");
+    assert!(
+        state.review_pushes_on_attach(&f.project()).is_empty(),
+        "and memory has none"
+    );
+}
+
+#[tokio::test]
+async fn removing_the_project_takes_its_marks_from_memory_too() {
+    // Feature 1271 T021 (RM5): `forget_project` drops the marks with the comments.
+    let f = Fixture::new();
+    seed_mark(&f, "");
+    let state = f.service();
+    let mut a = connect(&state).await;
+    let on_attach = attach(&mut a, &f.project()).await;
+    assert!(
+        on_attach.iter().any(|p| !p.marks.is_empty()),
+        "the mark is in memory before: {on_attach:?}"
+    );
+    let (answer, _) = request(
+        &mut a,
+        1,
+        ClientMsg::ProjectRemove {
+            req: 1,
+            path: f.project(),
+        },
+    )
+    .await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the project is removed: {answer:?}"
+    );
+    assert!(
+        state.review_pushes_on_attach(&f.project()).is_empty(),
+        "no mark of the removed project is left in memory"
+    );
 }
 
 #[tokio::test]
@@ -1295,4 +1392,472 @@ async fn w21_reanchor_moves_a_pull_request_comment_once() {
     result.expect("a stale `from` is skipped");
     assert!(seen.is_empty());
     assert_eq!(f.on_disk(), after);
+}
+
+// ---- Feature 1271: reviewed marks (contracts/marks-wire.md RM1–RM6; T020, T021) ----
+
+#[tokio::test]
+async fn rm1_rm3_a_mark_is_set_replaced_and_removed_on_disk_and_in_every_window_in_order() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+    attach(&mut b, &f.project()).await;
+
+    let steps = [
+        (
+            set_reviewed(Scope::WorkingTree, "src/b.rs", Some(1)),
+            vec![a_mark(Scope::WorkingTree, "src/b.rs", 1)],
+        ),
+        (
+            set_reviewed(Scope::PullRequest(7), "src/a.rs", Some(1)),
+            vec![
+                a_mark(Scope::WorkingTree, "src/b.rs", 1),
+                a_mark(Scope::PullRequest(7), "src/a.rs", 1),
+            ],
+        ),
+        (
+            set_reviewed(Scope::WorkingTree, "src/a.rs", Some(2)),
+            vec![
+                a_mark(Scope::WorkingTree, "src/a.rs", 2),
+                a_mark(Scope::WorkingTree, "src/b.rs", 1),
+                a_mark(Scope::PullRequest(7), "src/a.rs", 1),
+            ],
+        ),
+        // A re-mark replaces the old change.
+        (
+            set_reviewed(Scope::WorkingTree, "src/b.rs", Some(3)),
+            vec![
+                a_mark(Scope::WorkingTree, "src/a.rs", 2),
+                a_mark(Scope::WorkingTree, "src/b.rs", 3),
+                a_mark(Scope::PullRequest(7), "src/a.rs", 1),
+            ],
+        ),
+        // An unmark removes it, and only it.
+        (
+            set_reviewed(Scope::WorkingTree, "src/a.rs", None),
+            vec![
+                a_mark(Scope::WorkingTree, "src/b.rs", 3),
+                a_mark(Scope::PullRequest(7), "src/a.rs", 1),
+            ],
+        ),
+    ];
+    for (n, (op, expected)) in steps.into_iter().enumerate() {
+        let (result, seen) = edit(&mut a, n as u64 + 1, &f.project(), "feat", op).await;
+        result.expect("a valid SetReviewed is answered Ack (RM1)");
+        assert_eq!(
+            f.on_disk().marks.get("feat"),
+            Some(&expected),
+            "step {n}: on disk before the answer (W5)"
+        );
+        assert_eq!(
+            seen.last().map(|p| &p.marks),
+            Some(&expected),
+            "step {n}: the editing window is pushed every mark, by scope then path (RM3)"
+        );
+        let other = next_pushed(&mut b).await;
+        assert_eq!(
+            (other.worktree_dir.as_str(), &other.marks),
+            ("feat", &expected),
+            "step {n}: the other attached window too"
+        );
+    }
+}
+
+#[tokio::test]
+async fn rm1_a_refused_set_reviewed_stores_and_pushes_nothing() {
+    let f = Fixture::new();
+    let seed = seed_mark(&f, "feat");
+    let before = f.on_disk();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+    attach(&mut b, &f.project()).await;
+
+    let refused = [
+        (
+            "an absolute path",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "/etc/passwd", Some(1)),
+        ),
+        (
+            "a `\\` in the path",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "src\\a.rs", Some(1)),
+        ),
+        (
+            "an empty path",
+            "feat",
+            set_reviewed(Scope::WorkingTree, "", None),
+        ),
+        (
+            "pull request 0",
+            "feat",
+            set_reviewed(Scope::PullRequest(0), "src/a.rs", Some(1)),
+        ),
+        (
+            "a pull request of the Default entry",
+            "",
+            set_reviewed(Scope::PullRequest(3), "src/a.rs", Some(1)),
+        ),
+    ];
+    for (n, (why, dir, op)) in refused.into_iter().enumerate() {
+        let (result, seen) = edit(&mut a, n as u64 + 1, &f.project(), dir, op).await;
+        let (kind, _) = result.expect_err(why);
+        assert_eq!(kind, ErrorKind::InvalidInput, "{why} is InvalidInput (RM1)");
+        assert!(seen.is_empty(), "{why}: nothing is pushed");
+    }
+    // An unknown entry is NotFound, as every review edit of one (W2).
+    let (result, _) = edit(
+        &mut a,
+        9,
+        &f.project(),
+        "nope",
+        set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+    )
+    .await;
+    assert_eq!(result.expect_err("an unknown entry").0, ErrorKind::NotFound);
+    assert!(
+        quiet(&mut b).await.is_empty(),
+        "no window is pushed anything"
+    );
+    assert_eq!(f.on_disk(), before, "the file is unchanged");
+    let mut again = connect(&state).await;
+    let marks: Vec<_> = attach(&mut again, &f.project())
+        .await
+        .into_iter()
+        .map(|p| (p.worktree_dir, p.marks))
+        .collect();
+    assert_eq!(
+        marks,
+        vec![("feat".to_owned(), seed.marks["feat"].clone())],
+        "memory is unchanged"
+    );
+}
+
+#[tokio::test]
+async fn rm2_a_repeat_or_an_unmark_of_no_mark_writes_and_pushes_nothing() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+    attach(&mut b, &f.project()).await;
+
+    let (result, _) = edit(
+        &mut a,
+        1,
+        &f.project(),
+        "feat",
+        set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+    )
+    .await;
+    result.expect("marked");
+    next_pushed(&mut b).await;
+    quiet(&mut a).await;
+    // Anything written from here on would bring the file back.
+    let file = f.files().reviews_path(&f.project());
+    std::fs::remove_file(&file).unwrap();
+
+    let repeats = [
+        set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+        set_reviewed(Scope::WorkingTree, "src/other.rs", None),
+        set_reviewed(Scope::PullRequest(4), "src/a.rs", None),
+    ];
+    for (n, op) in repeats.into_iter().enumerate() {
+        let (result, seen) = edit(&mut a, n as u64 + 2, &f.project(), "feat", op).await;
+        result.expect("a repeat is answered Ack (RM2)");
+        assert!(
+            seen.is_empty(),
+            "repeat {n}: the editing window is pushed nothing"
+        );
+    }
+    assert!(quiet(&mut b).await.is_empty(), "nor is the other window");
+    assert!(!file.exists(), "nothing was written");
+}
+
+#[tokio::test]
+async fn rm1_rm6_a_mark_is_accepted_while_a_send_is_open_and_leaves_comments_and_sending() {
+    use micold_core::review::prompt::EntryKind;
+
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let draft = stored(2, CommentState::Draft);
+    seed(&f, vec![sent, draft]);
+    let catalog = Catalog::load(
+        Box::new(f.files()),
+        Box::new(JsonFileSettingsStore::at(
+            f.store.path().join("settings.json"),
+        )),
+    );
+    let mut reviews = Reviews::default();
+    let (_, opened) = reviews
+        .begin_send(
+            &catalog,
+            &f.project(),
+            "feat",
+            EntryKind::Worktree,
+            (Scope::WorkingTree, None),
+            &[],
+        )
+        .expect("the send opens and is held");
+    let opened = pushed(&opened).unwrap();
+    assert!(opened.sending);
+
+    let msg = reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+            1,
+        )
+        .expect("a send freezes comments, not marks (RM1)")
+        .expect("the mark is pushed");
+    let marked = pushed(&msg).unwrap();
+    assert_eq!(
+        (&marked.comments, marked.sending),
+        (&opened.comments, true),
+        "SetReviewed changes neither the comments nor `sending` (RM6)"
+    );
+    assert_eq!(
+        marked.marks,
+        vec![a_mark(Scope::WorkingTree, "src/a.rs", 1)]
+    );
+    assert_eq!(
+        f.on_disk().marks.get("feat"),
+        Some(&marked.marks),
+        "and it is written"
+    );
+}
+
+#[tokio::test]
+async fn rm6_a_comment_edit_pushes_the_marks_unchanged() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let comment = add_one(&mut a, 1, &f.project(), "Before the mark").await;
+
+    let (result, seen) = edit(
+        &mut a,
+        2,
+        &f.project(),
+        "feat",
+        set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+    )
+    .await;
+    result.expect("marked");
+    assert_eq!(
+        seen.last().map(|p| (&p.comments, p.sending)),
+        Some((&vec![comment.clone()], false)),
+        "the mark's push carries the comments as they were (RM6)"
+    );
+    let (result, seen) = edit(
+        &mut a,
+        3,
+        &f.project(),
+        "feat",
+        ReviewEditOp::SetText {
+            id: comment.id,
+            text: "Edited".into(),
+        },
+    )
+    .await;
+    result.expect("edited");
+    assert_eq!(
+        seen.last().map(|p| &p.marks),
+        Some(&vec![a_mark(Scope::WorkingTree, "src/a.rs", 1)]),
+        "a comment edit's push carries the marks as they were (RM6)"
+    );
+}
+
+#[tokio::test]
+async fn rm4_two_windows_marking_the_same_file_end_with_the_same_state() {
+    let f = Fixture::new();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+    attach(&mut b, &f.project()).await;
+
+    let project = f.project();
+    for round in 0..4u64 {
+        let ((ra, mut seen_a), (rb, mut seen_b)) = tokio::join!(
+            edit(
+                &mut a,
+                round * 2 + 1,
+                &project,
+                "feat",
+                set_reviewed(Scope::WorkingTree, "src/a.rs", Some(1)),
+            ),
+            edit(
+                &mut b,
+                round * 2 + 2,
+                &project,
+                "feat",
+                set_reviewed(
+                    Scope::WorkingTree,
+                    "src/a.rs",
+                    (round % 2 == 0).then_some(2)
+                ),
+            ),
+        );
+        ra.expect("a's edit is answered");
+        rb.expect("b's edit is answered");
+        seen_a.extend(quiet(&mut a).await);
+        seen_b.extend(quiet(&mut b).await);
+        let last_a = seen_a.last().map(|p| p.marks.clone()).unwrap_or_default();
+        let last_b = seen_b.last().map(|p| p.marks.clone()).unwrap_or_default();
+        assert_eq!(
+            last_a, last_b,
+            "round {round}: both windows show the same state (RM4)"
+        );
+        assert_eq!(
+            f.on_disk().marks.get("feat").cloned().unwrap_or_default(),
+            last_a,
+            "round {round}: and it is the stored one"
+        );
+    }
+}
+
+#[tokio::test]
+async fn rm3_attach_pushes_an_entry_with_marks_only_and_a_restart_keeps_them() {
+    let f = Fixture::new();
+    let first = f.service();
+    let mut a = connect(&first).await;
+    attach(&mut a, &f.project()).await;
+    let (result, _) = edit(
+        &mut a,
+        1,
+        &f.project(),
+        "feat",
+        set_reviewed(Scope::PullRequest(5), "src/a.rs", Some(4)),
+    )
+    .await;
+    result.expect("marked");
+    drop(a);
+    drop(first);
+
+    let restarted = f.service();
+    let mut client = connect(&restarted).await;
+    let on_attach = attach(&mut client, &f.project()).await;
+    assert_eq!(
+        on_attach
+            .into_iter()
+            .map(|p| (p.worktree_dir, p.comments.len(), p.marks))
+            .collect::<Vec<_>>(),
+        vec![(
+            "feat".to_owned(),
+            0,
+            vec![a_mark(Scope::PullRequest(5), "src/a.rs", 4)]
+        )],
+        "an entry with marks and no comments is pushed on attach, after a restart (RM3, FR-010)"
+    );
+}
+
+#[tokio::test]
+async fn rm5_clear_discard_a_send_and_a_report_leave_the_marks() {
+    use micold_core::review::prompt::EntryKind;
+
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let reported = stored(2, CommentState::Sent { at: 1_790_000_100 });
+    let draft = stored(3, CommentState::Draft);
+    let mut file = ReviewFile::default();
+    file.entries
+        .insert("feat".into(), vec![sent, reported.clone(), draft]);
+    let marks = vec![
+        a_mark(Scope::WorkingTree, "src/a.rs", 1),
+        a_mark(Scope::PullRequest(2), "src/b.rs", 2),
+    ];
+    file.marks.insert("feat".into(), marks.clone());
+    f.files().save_reviews(&f.project(), &file).unwrap();
+    let catalog = Catalog::load(
+        Box::new(f.files()),
+        Box::new(JsonFileSettingsStore::at(
+            f.store.path().join("settings.json"),
+        )),
+    );
+    let mut reviews = Reviews::default();
+    let kept = |msg: &DaemonMsg, what: &str| {
+        assert_eq!(
+            pushed(msg).unwrap().marks,
+            marks,
+            "{what}: the push keeps the marks"
+        );
+        assert_eq!(
+            f.on_disk().marks.get("feat"),
+            Some(&marks),
+            "{what}: the file keeps the marks"
+        );
+    };
+
+    let (snapshot, opened) = reviews
+        .begin_send(
+            &catalog,
+            &f.project(),
+            "feat",
+            EntryKind::Worktree,
+            (Scope::WorkingTree, None),
+            &[],
+        )
+        .expect("the draft is sent");
+    kept(&opened, "opening a send");
+    let msg = reviews.finish_send(&catalog, &f.project(), "feat", &snapshot, 1_790_000_200);
+    kept(&msg, "a send");
+    let (_, _, msg) = reviews
+        .report(
+            &catalog,
+            &f.project(),
+            "feat",
+            reported.reference(),
+            Outcome::Applied,
+            "done",
+            Reporter::User,
+            1_790_000_300,
+        )
+        .expect("reported");
+    kept(&msg, "a report");
+    let msg = reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            ReviewEditOp::ClearSent {
+                scope: Scope::WorkingTree,
+            },
+            1,
+        )
+        .unwrap()
+        .expect("the sent comments are cleared");
+    kept(&msg, "Clear sent");
+    reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            add("src/a.rs", Side::New, 2, 2, &["two"], "again"),
+            2,
+        )
+        .unwrap();
+    let msg = reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            ReviewEditOp::DiscardPending {
+                scope: Scope::WorkingTree,
+            },
+            3,
+        )
+        .unwrap()
+        .expect("the draft is discarded");
+    kept(&msg, "Discard drafts");
+    assert!(
+        pushed(&msg).unwrap().comments.is_empty(),
+        "every comment is gone, and the marks stay (FR-016)"
+    );
 }

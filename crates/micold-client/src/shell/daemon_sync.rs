@@ -2188,6 +2188,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             worktree_dir,
             comments,
             sending,
+            marks,
         } => {
             let _ = app
                 .core
@@ -2196,6 +2197,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     worktree_dir,
                     comments,
                     sending,
+                    marks,
                 });
         }
         // Feature 483 (W2): the whole group list of a project, pushed after `Attached` and every

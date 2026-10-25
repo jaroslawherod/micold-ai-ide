@@ -951,8 +951,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_68() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 68);
+fn the_protocol_version_is_69() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 69);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -1911,6 +1911,7 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             worktree_dir: "feature".into(),
             comments: vec![comment],
             sending: true,
+            marks: Vec::new(),
         };
         json_roundtrip(&changed);
         postcard_roundtrip(&changed);
@@ -2830,4 +2831,103 @@ fn a_kind_switch_and_its_confirmation_refusal_ride_both_wires() {
     };
     json_roundtrip(&refused);
     postcard_roundtrip(&refused);
+}
+
+/// Feature 1271 (T018, contracts/marks-wire.md RM1, RM3): a mark set and removed, and a push
+/// carrying marks of both sources, survive both wires; a change id that is not 40 hex characters
+/// fails to decode.
+#[test]
+fn the_reviewed_marks_round_trip_on_both_wires_and_a_bad_change_id_fails_to_decode() {
+    use micold_core::protocol::messages::ReviewEditOp;
+    use micold_core::review::comment::Scope;
+    use micold_core::review::marks::{ChangeId, ReviewMark};
+    use micold_core::review::RelPath;
+
+    let id = ChangeId::parse(&"0123456789abcdef".repeat(3)[..40]).unwrap();
+    for (scope, change) in [
+        (Scope::WorkingTree, Some(id)),
+        (Scope::WorkingTree, None),
+        (Scope::PullRequest(7), Some(id)),
+        (Scope::PullRequest(7), None),
+    ] {
+        let msg = ClientMsg::ReviewEdit {
+            req: 3,
+            project: PathBuf::from("/p"),
+            worktree_dir: "feature".into(),
+            edit: ReviewEditOp::SetReviewed {
+                scope,
+                path: "src/a b é.rs".into(),
+                change,
+            },
+        };
+        json_roundtrip(&msg);
+        postcard_roundtrip(&msg);
+    }
+
+    let path = |p: &str| RelPath::from_native(p).unwrap();
+    let changed = DaemonMsg::ReviewChanged {
+        project: PathBuf::from("/p"),
+        worktree_dir: "feature".into(),
+        comments: Vec::new(),
+        sending: false,
+        marks: vec![
+            ReviewMark {
+                scope: Scope::WorkingTree,
+                path: path("src/a.rs"),
+                change: id,
+            },
+            ReviewMark {
+                scope: Scope::PullRequest(7),
+                path: path("src/b.rs"),
+                change: id,
+            },
+        ],
+    };
+    json_roundtrip(&changed);
+    postcard_roundtrip(&changed);
+
+    // The same edit with its change id swapped for text that is not 40 hex characters.
+    let good = serde_json::to_string(&ClientMsg::ReviewEdit {
+        req: 3,
+        project: PathBuf::from("/p"),
+        worktree_dir: String::new(),
+        edit: ReviewEditOp::SetReviewed {
+            scope: Scope::WorkingTree,
+            path: "a.rs".into(),
+            change: Some(id),
+        },
+    })
+    .unwrap();
+    // On postcard the id is a length-prefixed string after the `Some` tag.
+    let postcard_with = |text: &str| {
+        let edit = ReviewEditOp::SetReviewed {
+            scope: Scope::WorkingTree,
+            path: "a.rs".into(),
+            change: None,
+        };
+        let mut bytes = postcard::to_stdvec(&edit).unwrap();
+        bytes.pop(); // the `None` tag
+        bytes.push(1);
+        bytes.extend(postcard::to_stdvec(&text.to_owned()).unwrap());
+        postcard::from_bytes::<ReviewEditOp>(&bytes)
+    };
+    assert!(
+        matches!(
+            postcard_with(&id.to_string()),
+            Ok(ReviewEditOp::SetReviewed { change: Some(c), .. }) if c == id
+        ),
+        "the hand-built postcard frame must decode with a good id"
+    );
+    for bad in ["0123", &"g".repeat(40), &"0".repeat(41)] {
+        let text = good.replace(&id.to_string(), bad);
+        assert_ne!(text, good);
+        assert!(
+            serde_json::from_str::<ClientMsg>(&text).is_err(),
+            "{bad:?} decoded as a change id"
+        );
+        assert!(
+            postcard_with(bad).is_err(),
+            "{bad:?} decoded as a change id on postcard"
+        );
+    }
 }

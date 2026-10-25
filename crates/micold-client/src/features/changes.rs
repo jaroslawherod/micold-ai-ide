@@ -26,6 +26,7 @@ use micold_core::review::diff::{
     LoadedDiff, SideLines, SideRow, Spans, UnifiedRow,
 };
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
+use micold_core::review::marks::{EntryMarks, ReviewMark};
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
@@ -1185,6 +1186,8 @@ pub struct ReviewView {
     pub comments: Vec<ReviewComment>,
     /// A send is in progress: editing and deleting are unavailable.
     pub sending: bool,
+    /// The entry's reviewed marks, of every source (feature 1271, FR-006, FR-011).
+    pub marks: EntryMarks,
 }
 
 /// What this window holds about the Changes view.
@@ -1423,6 +1426,8 @@ pub enum Msg {
         comments: Vec<ReviewComment>,
         /// A send is in progress.
         sending: bool,
+        /// Every reviewed mark of the entry (feature 1271).
+        marks: Vec<ReviewMark>,
     },
     /// **Send review (n)** was pressed (S1).
     SendPressed,
@@ -2731,6 +2736,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             worktree_dir,
             comments,
             sending,
+            marks,
         } => {
             // The entry's view, shown or kept hidden (1269 U6): a hidden one is read again when
             // next shown.
@@ -2757,9 +2763,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     }
                 }
             }
-            state
-                .reviews
-                .insert((project, worktree_dir), ReviewView { comments, sending });
+            state.reviews.insert(
+                (project, worktree_dir),
+                ReviewView {
+                    comments,
+                    sending,
+                    marks: EntryMarks::from_vec(marks),
+                },
+            );
             judge_anchors(state);
             Effect::None
         }

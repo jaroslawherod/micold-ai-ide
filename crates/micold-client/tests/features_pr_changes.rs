@@ -1154,6 +1154,7 @@ mod review_comments {
                 worktree_dir: "feat-a".into(),
                 comments,
                 sending: false,
+                marks: Vec::new(),
             },
         );
     }

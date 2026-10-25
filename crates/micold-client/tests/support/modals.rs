@@ -198,6 +198,7 @@ pub fn open_discard_pending(state: &mut State) {
                 pr: None,
             }],
             sending: false,
+            marks: Vec::new(),
         },
     );
     let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
@@ -242,6 +243,7 @@ pub fn open_full_reply(state: &mut State) {
             worktree_dir: String::new(),
             comments: entry.comments().to_vec(),
             sending: false,
+            marks: Vec::new(),
         },
     );
     let _ = changes::update(&mut state.changes, ChangesMsg::ShowReply(id));
