@@ -62,7 +62,36 @@ pub fn install_roboto(fonts: &mut FontSystem) {
     for bytes in ROBOTO_FACES {
         fonts.load_font(Cow::Borrowed(bytes));
     }
-    alias_bold(fonts.raw().db_mut());
+    let db = fonts.raw().db_mut();
+    alias_bold(db);
+    pin_roboto_italics(db);
+}
+
+/// Make the interface family resolve to the bundled faces only where a host Roboto could win, and
+/// return how many host faces it removed (feature 1259 contract C-2, FR-003, FR-004, FR-006).
+///
+/// Removes every face of [`ROBOTO_FAMILY`] that was not loaded from memory (`Source::Binary`) and
+/// is either not upright or not at a shipped weight ([`ROBOTO_WEIGHTS`]). `Database::query` breaks
+/// a tie between a host copy and a bundled face in favour of the face found first, and host faces
+/// are loaded first, so a host Roboto Italic would beat the bundled italics. A host upright face at
+/// 700 or 900 would beat the bold alias and the 600 face (cosmic-text matches the requested weight
+/// exactly, see [`alias_bold`]), leaving bold upright heavier than bold italic. Host upright faces
+/// at 400, 500 and 600 stay (FR-004). Faces of other families stay, so characters Roboto lacks
+/// still fall back to a system face. Idempotent: a second call removes nothing.
+pub fn pin_roboto_italics(db: &mut fontdb::Database) -> usize {
+    let foreign: Vec<fontdb::ID> = db
+        .faces()
+        .filter(|face| {
+            face.families.iter().any(|(name, _)| name == ROBOTO_FAMILY)
+                && !matches!(face.source, fontdb::Source::Binary(_))
+                && (face.style != fontdb::Style::Normal || !ROBOTO_WEIGHTS.contains(&face.weight.0))
+        })
+        .map(|face| face.id)
+        .collect();
+    for &id in &foreign {
+        db.remove_face(id);
+    }
+    foreign.len()
 }
 
 /// Register the bundled 600 faces a second time at weight 700, upright and italic.
@@ -183,8 +212,93 @@ mod tests {
         );
     }
 
-    /// Whether the global font system holds a Roboto face the application did not bundle, which
-    /// can win a match until `pin_roboto_italics` joins `install_roboto` (feature 1259 T020).
+    /// `ROBOTO_SEMIBOLD_BYTES` with the OS/2 `usWeightClass` set to 700 (glyphs unchanged), the
+    /// host Roboto Bold the bundled faces do not include.
+    fn bold_700_bytes() -> Vec<u8> {
+        let mut bytes = ROBOTO_SEMIBOLD_BYTES.to_vec();
+        let tables = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
+        let record = (0..tables)
+            .map(|i| 12 + 16 * i)
+            .find(|&r| &bytes[r..r + 4] == b"OS/2")
+            .expect("the face has an OS/2 table");
+        let at = u32::from_be_bytes(bytes[record + 8..record + 12].try_into().unwrap()) as usize;
+        bytes[at + 4..at + 6].copy_from_slice(&700u16.to_be_bytes());
+        bytes
+    }
+
+    /// C-2: a host Roboto Italic and a host Roboto Bold (700) never beat the bundled faces; a host
+    /// Roboto Regular (400) and faces of other families stay; a second call removes nothing.
+    #[test]
+    fn pin_drops_host_italics_and_off_weight_faces_only() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let host = |name: &str, bytes: &[u8]| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, bytes).expect("write host copy");
+            path
+        };
+        let mut db = fontdb::Database::new();
+        // Host copies load first, as `load_system_fonts` does before the bundled faces.
+        db.load_font_file(host("Roboto-Italic.ttf", ROBOTO_ITALIC_BYTES))
+            .expect("load host italic");
+        db.load_font_file(host("Roboto-Regular.ttf", ROBOTO_REGULAR_BYTES))
+            .expect("load host regular");
+        db.load_font_file(host("Roboto-Bold.ttf", &bold_700_bytes()))
+            .expect("load host bold");
+        for bytes in ROBOTO_FACES {
+            db.load_font_source(Source::Binary(Arc::new(bytes)));
+        }
+        db.load_font_source(Source::Binary(Arc::new(crate::FIRA_MONO_REGULAR_BYTES)));
+        assert!(
+            db.faces().any(|f| !matches!(f.source, Source::Binary(_))
+                && f.weight == Weight::BOLD
+                && f.style == Style::Normal),
+            "the patched host face does not load with weight 700"
+        );
+        let upright_before: Vec<_> = [400, 500, 600]
+            .map(|w| roboto(&db, w, Style::Normal))
+            .to_vec();
+        let faces_before = db.len();
+
+        assert_eq!(pin_roboto_italics(&mut db), 2, "host italic and host bold");
+        assert_eq!(db.len(), faces_before - 2);
+        assert!(
+            db.faces().any(|f| !matches!(f.source, Source::Binary(_))
+                && f.weight == Weight::NORMAL
+                && f.style == Style::Normal),
+            "the host Roboto Regular was removed"
+        );
+        for (weight, bytes, _) in ITALIC {
+            assert!(
+                is_bundled(&db, roboto(&db, weight, Style::Italic), bytes),
+                "italic {weight} is not the bundled face"
+            );
+        }
+        assert!(is_bundled(
+            &db,
+            roboto(&db, 700, Style::Italic),
+            ROBOTO_SEMIBOLD_ITALIC_BYTES
+        ));
+        assert!(
+            is_bundled(&db, roboto(&db, 700, Style::Normal), ROBOTO_SEMIBOLD_BYTES),
+            "upright bold is not the bundled SemiBold"
+        );
+        for (weight, before) in [400, 500, 600].into_iter().zip(upright_before) {
+            assert_eq!(
+                roboto(&db, weight, Style::Normal),
+                before,
+                "upright {weight} resolves differently after the pin"
+            );
+        }
+        assert!(
+            db.faces()
+                .any(|f| is_bundled(&db, f.id, crate::FIRA_MONO_REGULAR_BYTES)),
+            "a face of another family was removed"
+        );
+        assert_eq!(pin_roboto_italics(&mut db), 0, "a second call is a no-op");
+    }
+
+    /// Whether the global font system holds a Roboto face the application did not bundle. The pin
+    /// leaves host upright faces at 400, 500 and 600 (FR-004), and one of them wins a match there.
     fn host_roboto_present() -> bool {
         let mut fonts = iced::advanced::graphics::text::font_system()
             .write()
@@ -203,7 +317,7 @@ mod tests {
     fn the_renderer_draws_each_weight_and_bold_in_the_bundled_faces() {
         let _ = super::super::test_support::renderer();
         if host_roboto_present() {
-            eprintln!("skipped: the host has its own Roboto faces (feature 1259 T020 pins them)");
+            eprintln!("skipped: the host has its own upright Roboto faces (FR-004 keeps them)");
             return;
         }
         for (style, faces) in [

@@ -93,6 +93,9 @@ This means the interface looks the same on every machine. It no longer borrows w
 your operating system happens to provide, so a window on Linux, macOS and Windows renders text at
 the same sizes and weights, and changing your OS font setting does not change the app.
 
+If you have Roboto installed on your computer, the application still draws italic and bold text
+in its own copy, so the interface looks the same with or without it.
+
 Text is set at named sizes drawn from Material Design 3's type scale — a title, body text and a
 caption differ in size, weight and line spacing together, so they are told apart by how they look
 rather than by where they sit on screen.

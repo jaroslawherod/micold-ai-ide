@@ -147,7 +147,7 @@ exception).
 
 **Independent test**: T019 passes; quickstart §B B5.
 
-- [ ] T019 [US3] Pin tests, red first (fail to compile until T020), in `micold-material/src/roboto.rs`
+- [x] T019 [US3] Pin tests, red first (fail to compile until T020), in `micold-material/src/roboto.rs`
   tests, on a bare `fontdb::Database` seeded as contract C-2 says, in this order: a `tempfile` copy
   of `ROBOTO_ITALIC_BYTES`, a copy of `ROBOTO_REGULAR_BYTES` and a copy of `ROBOTO_SEMIBOLD_BYTES`
   with the OS/2 `usWeightClass` patched to 700 (find the `OS/2` record in the table directory,
@@ -157,14 +157,14 @@ exception).
   the host 400 face stays; each C-2 table row (italic 400/500/600/700 → bundled italic twins,
   upright 700 → `ROBOTO_SEMIBOLD_BYTES`, upright 400/500/600 → the face it resolved to before the
   call); a face of another family (`FIRA_MONO_REGULAR_BYTES`) is kept; a second call returns 0
-- [ ] T020 [US3] Implement `pin_roboto_italics(db: &mut fontdb::Database) -> usize` in
+- [x] T020 [US3] Implement `pin_roboto_italics(db: &mut fontdb::Database) -> usize` in
   `micold-material/src/roboto.rs` per contract C-2 (remove faces whose `families` contains
   `ROBOTO_FAMILY`, whose `source` is not `Source::Binary`, and whose `style` is not `Normal` or
   whose `weight` is not in `ROBOTO_WEIGHTS`; return the count; the shape of `pin_monospace`,
   `mono.rs` line 35); `install_roboto` calls it on `fonts.raw().db_mut()` after loading the faces
   (contract C-3). Re-export it from `micold-material/src/lib.rs` and `client/src/ui/mod.rs`
   beside `install_roboto`. T019 passes; T007 stays green
-- [ ] T021 [US3] User guide: `docs/user-guide/appearance-theming.md` *The typeface*: a Roboto
+- [x] T021 [US3] User guide: `docs/user-guide/appearance-theming.md` *The typeface*: a Roboto
   installed on the computer does not replace the bundled faces for emphasis or bold, so the
   interface looks the same with or without it
 - [ ] T022 [US3] Visual pass, quickstart §B B5 (host Roboto Italic in `~/.local/share/fonts`,

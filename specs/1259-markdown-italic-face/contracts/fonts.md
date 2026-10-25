@@ -82,7 +82,7 @@ fontdb `Query` (nearest weight) hid this; the resolution tests shape through cos
 (`test_support::resolves_to_bundled`). Glue: no branch, no error path (`load_font` logs and
 skips bytes it cannot parse; `tests/roboto_font.rs` fails on such a file, so it cannot ship).
 
-Milestone note: M1 ships `install_roboto` without the pin call; the call joins in M2 (T020).
+Milestone note: M1 shipped `install_roboto` without the pin call; M2 (T020) added it.
 
 **Callers** (each exactly once, before any text is shaped), replacing the Roboto registration each
 does today:
