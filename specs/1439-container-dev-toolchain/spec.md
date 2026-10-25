@@ -37,6 +37,15 @@ This feature builds on two others and does not respecify them:
 
 Both are assumed to have landed before this feature is built.
 
+## Clarifications
+
+### Session 2026-10-25
+
+- Q: Where do the X11/Wayland development libraries this repository's gate links come from — the
+  basic image, an own image, or a "dev" image variant? → A: The basic image carries them (FR-007);
+  other projects' extra system libraries come from an own image. _(provisional: recommended option
+  A, awaiting user decision)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A mise project's toolchain installs itself in a new container daemon (Priority: P1)
@@ -170,7 +179,7 @@ example that builds with `docker build` or `podman build` as given.
   `linux/amd64` and `linux/arm64`; `mise` and the build tools are present and work on both, so a
   daemon on an Apple-silicon Mac, on Windows (Docker/Podman) and on Linux behaves the same.
 - **A project that needs system libraries the basic image does not carry** (for example the
-  X11/Wayland development libraries this repository's GUI crates link against): see FR-007.
+  libraries of FR-007): the user builds an own image `FROM` the basic image that adds them (FR-012).
 - **An own image** (**My own image**) is not changed by this feature; an own image built `FROM` the
   basic image inherits `mise` and the build tools.
 - **A sandbox home created before this feature**, holding tools a user installed by hand: they keep
@@ -194,7 +203,7 @@ example that builds with `docker build` or `podman build` as given.
 - **FR-003**: The basic image MUST provide a C/C++ compiler, linker, the C library headers, `make`
   and `pkg-config`, so a Rust toolchain installed by mise can compile and link crates with C code,
   and `pkg-config` finds the libraries that the image or an own image built `FROM` it provides.
-  Development libraries beyond these are FR-007's question.
+  The development libraries of FR-007 are part of what the image provides.
 - **FR-004**: The basic image MUST provide `python3` on the default `PATH`, usable before any setup
   has run.
 - **FR-005**: Tools that a setup command installs with `mise` MUST land in the sandbox home, so they
@@ -203,12 +212,12 @@ example that builds with `docker build` or `podman build` as given.
 - **FR-006**: The basic image MUST still carry no key, token, credential, daemon or AI CLI
   (feature 806, FR-013), and MUST keep working as the base for **My own image** and for Kubernetes
   daemons.
-- **FR-007**: For system libraries a project needs beyond FR-003 (this repository's GUI crates link
-  X11/Wayland development libraries): [NEEDS CLARIFICATION: should the basic image also carry the
-  development libraries this repository's gate needs (making the default image build this repo, as
-  the issue's acceptance asks), or should project-specific system libraries come from an own image
-  or a separate "dev" image variant, with this repository's own container setup documented to use
-  it?]
+- **FR-007**: The basic image MUST also carry the X11/Wayland development libraries this
+  repository's gate links (the set CI installs for its Linux test job: `libxkbcommon-dev`,
+  `libwayland-dev`, `libx11-dev`, `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`), so the default
+  image builds and tests this repository. System libraries any other project needs beyond FR-003 and
+  this set come from an own image built `FROM` the basic image (FR-012); no separate "dev" image
+  variant is published.
 
 **This repository builds in a container (Story 2)**
 
@@ -216,7 +225,7 @@ example that builds with `docker build` or `podman build` as given.
   `mise.toml`, including the Rust components the gate and the `LSP` tool use (formatter, linter,
   rust-analyzer), so `mise install` alone provides them.
 - **FR-009**: The repository MUST document its container setup command, and with it, on a new
-  container daemon on the image FR-007 settles on, setup MUST succeed, `command -v cargo
+  container daemon on the default (basic) image, setup MUST succeed, `command -v cargo
   rust-analyzer uv python3 gh` MUST resolve all five, and `mise run gate` MUST exit 0 on a clean
   checkout of the branch that carries this feature (and of `main` after merge).
 - **FR-010**: Installing this repository's toolchain in a container session MUST NOT require root,
