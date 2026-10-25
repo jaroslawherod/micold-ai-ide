@@ -1286,6 +1286,15 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
 
+            // Focus state is tracked by the binary (gui runtime); the core only ends a drag over
+            // the Review tab's numbers with the focus, as Esc ends it: its release may never reach
+            // this window (feature 1275, review A M4 F3).
+            Message::WindowFocusChanged(focused) => {
+                if !focused {
+                    crate::features::changes::cancel_drag(&mut self.changes);
+                }
+            }
+
             // The switcher's own reducer. A dismissal reaches here from the registry (Escape, an
             // outside click, a dialog opening over it); a chosen entry's `Choice` is the shell's
             // to apply, and the shell routes every real press to its own entry point instead.
@@ -1296,8 +1305,6 @@ impl State {
             // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
             // so releasing it is the binary's business; the pure core never knew about it.
             Message::OverlayTransitionFinished
-            // Focus state is tracked by the binary (gui runtime), not the pure core.
-            | Message::WindowFocusChanged(_)
             // The binary resolves and applies a navigation press, dispatching its follow-ups
             // through its own `update` (feature 803, contracts/ui.md U3).
             | Message::Navigation(_)
