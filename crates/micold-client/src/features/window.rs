@@ -283,6 +283,8 @@ pub enum FieldId {
     QueuedMessage(micold_core::session::SessionId),
     /// A structured session's composer (feature 941, FR-001).
     Composer(micold_core::session::SessionId),
+    /// The review's changed-file tree's filter box (feature 1273, FR-009).
+    ReviewTreeFilter,
 }
 
 /// What the window reports about itself (feature 028, FR-001).

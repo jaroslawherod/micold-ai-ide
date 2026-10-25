@@ -30,8 +30,10 @@ use crate::features::changes::{
     Step, TreeKind, TreePane, WholeFile, NO_LONGER_CHANGED, TREE_CLEAR_FILTER,
     TREE_FILTER_PLACEHOLDER, TREE_NO_MATCH, WHOLE_FILE_UNAVAILABLE,
 };
+use crate::features::window::FieldId;
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::Surface;
+use crate::ui::focus::TrackFocus;
 use crate::ui::material::shaped_text::width_of;
 use crate::ui::material::{
     menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
@@ -481,7 +483,7 @@ fn list_pane<'a>(
                     _ => change_tree(state, view, files, reviews, r),
                 };
                 column![
-                    filter_box(view, r),
+                    filter_box(state, view, r),
                     sort_chips(state, view, connected, r),
                     body
                 ]
@@ -624,12 +626,13 @@ fn browsed_pane<'a>(
 
 /// The tree's filter box (feature 1273, FR-009, FR-010, contract §2.1): its clear control shows
 /// while it holds text, and `Esc` in it empties it as that control does (scenario 3.6).
-fn filter_box(view: &OpenView, r: Roles) -> Element<'_, Message> {
+fn filter_box<'a>(state: &State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
     let clear = Message::Changes(Msg::TreeFilterCleared);
     let mut field = TextField::new(TREE_FILTER_PLACEHOLDER, &view.tree.filter, r)
         .leading_icon(Icon::Search)
         .on_input(|text| Message::Changes(Msg::TreeFilterChanged(text)))
-        .on_escape(clear.clone());
+        .on_escape(clear.clone())
+        .track_focus(FieldId::ReviewTreeFilter, state.window.focused_field);
     if !view.tree.filter.is_empty() {
         field = field.trailing_action(Icon::Close, clear);
     }
