@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M2 implemented (T012–T020 ticked); review A (3 rounds) and review B clean; full gate and M2 PR
-- **Next step**: M2 unit runs the full gate on the rebased tree and pushes; orchestrator opens the M2 PR (gh not authenticated in the unit). M3 after M2 merges.
+- **Phase**: M2 implemented, reviews A and B clean, full gate green at fa639e9b on origin/main 35ac6de2; pushed, PR to open
+- **Next step**: orchestrator opens the M2 PR from the unit's pr-title.md / pr-body.md (gh not authenticated in the unit), records its number, waits on CI and merges. M3 after M2 merges.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -26,7 +26,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
-| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | implemented on claude/project-thread-bznqpy; reviews A and B clean; full gate |
+| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | pushed on claude/project-thread-bznqpy; reviews A and B clean; full gate green at fa639e9b; PR to open |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | after M2 (blockers #1125, #1127 merged) |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
@@ -74,7 +74,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-M2 unit at 165k context: T012–T020 done and pushed (head a32372a6); scoped gate green, review A 3 rounds clean. Next: review B on snapshot `86ed9f3e…:02f788dc…`, then a fresh M2 unit runs the full gate (`scripts/gate.sh`) and opens the M2 PR. No open findings; no PR yet.
+M2 unit 2: recorded review B (CLEAN, 2 MINORs; F1 fixed prose only), rebased onto origin/main 35ac6de2, full gate (`scripts/gate.sh`) red once: main's `settings_sections::nothing_points_at_the_removed_session_service_section` lists every page allowed to name "Session service diagnostics", and M2's appearance-theming, help-about and icons pages name it (lines broken mid-phrase). Fixed in fa639e9b (three ALLOWED entries, phrase kept on one line); gate green at fa639e9b. Pushed. Next: open the M2 PR. No open findings.
 
 ## Open escalation
 
