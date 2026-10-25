@@ -6,7 +6,7 @@ use crate::features::session::Msg as SessionMsg;
 use crate::features::session::{PressTarget, StartIntent};
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
-use crate::features::sidebar::{row_selected, RowSelection, SelectableRow};
+use crate::features::sidebar::{hover_holds, row_selected, RowRef, RowSelection, SelectableRow};
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
@@ -710,10 +710,15 @@ fn list_items(
     for row in crate::features::sidebar::list_rows(groups) {
         match row {
             // A header holds no chord's keyboard row, so a change of its focus tells nobody.
-            ListRow::Header(header) => {
-                items.push(group_header(header, r).keyboard_focus(false, |_| Message::NoOp))
+            ListRow::Header(header) => items.push(
+                group_header(header, r)
+                    .keyboard_focus(false, |_| Message::NoOp)
+                    .key(row_key(RowKey::Header(header.group))),
+            ),
+            ListRow::Entry(entry) => {
+                let at = items.len();
+                items.extend(build_items(state, vec![entry], 0, None, at, r))
             }
-            ListRow::Entry(entry) => items.extend(build_items(state, vec![entry], 0, None, r)),
         }
     }
     items
@@ -744,11 +749,11 @@ fn build_items(
     entries: Vec<crate::features::sidebar::SidebarEntry>,
     depth: u16,
     run: Option<(u8, micold_core::session::AiCli)>,
+    at: usize,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
     let in_view = crate::features::attention::in_view(&state.attention);
-    let hovered = state.worktree.hovered.as_deref();
     let project_root = state.workspace.active.as_deref();
     let now = unix_now();
 
@@ -774,7 +779,7 @@ fn build_items(
             }
             crate::features::sidebar::SidebarEntry::Worktree(node) => node,
             crate::features::sidebar::SidebarEntry::Group(group) => {
-                items.extend(group_items(state, group, r));
+                items.extend(group_items(state, group, at + items.len(), r));
                 continue;
             }
         };
@@ -801,6 +806,8 @@ fn build_items(
                 })
                 .collect();
         let dir = wt.dir_name.clone();
+        // The index this row is drawn at, which a hover records (feature 1125, R14).
+        let index = at + items.len();
         // Feature 1101 (FR-003): the ticket's status, first after the second line's text (feature
         // 1125, R6), from the one board every surface reads (FR-010). A ticket without a status has
         // no chip and no gap.
@@ -825,7 +832,7 @@ fn build_items(
                 move |point| Message::Worktree(WorktreeMsg::MenuToggled(dir.clone(), point))
             })
             .hover(
-                Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
+                Message::Worktree(WorktreeMsg::Hovered(dir.clone(), index)),
                 Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
             );
         if let Some(entry) = status_chip {
@@ -891,8 +898,13 @@ fn build_items(
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The
-        // hovered row is the pressable one.
-        let active = hovered == Some(dir.as_str());
+        // hovered row is the pressable one, while it is still where the pointer entered it (feature
+        // 1125, R14: a row a state change moved out from under the pointer is not hovered).
+        let active = state
+            .worktree
+            .hovered
+            .as_ref()
+            .is_some_and(|(hovered, at)| *hovered == dir && hover_holds(state, &dir, *at));
         let cluster = row_actions_cluster(
             &dir,
             // FR-004: no start action on a worktree that has a session.
@@ -938,7 +950,11 @@ fn build_items(
                 &node.listed_sessions(),
             )
         });
-        items.push(with_keyboard_focus(item, focused));
+        items.push(with_keyboard_focus(
+            item,
+            focused,
+            RowKey::Row(RowRef::Location(location)),
+        ));
 
         if node.sessions_shown() {
             let main = node.main_session();
@@ -962,6 +978,7 @@ fn build_items(
                         in_view,
                     ),
                     keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
+                    RowKey::Row(RowRef::Session(row.session.id)),
                 ));
             }
         }
@@ -970,13 +987,34 @@ fn build_items(
     items
 }
 
-/// Give `item` the keyboard's focus wrapper (feature 803, FR-010, U4). Every row gets one, focused
-/// or not, so the tree keeps its shape across presses; losing the keyboard tells the sidebar.
+/// What a sidebar row is (feature 1125, R13): a location's or a session's row by its [`RowRef`], a
+/// state group's header, a run group's row, or a run that has no worktree.
+#[derive(Hash)]
+enum RowKey {
+    Row(RowRef),
+    Header(micold_core::sidebar_groups::StateGroup),
+    RunGroup(micold_core::runs::GroupId),
+    Run(micold_core::runs::GroupId, u8),
+}
+
+/// The [`TreeItem::key`] of a row: every sidebar row has one, so the keyboard's focus, the ripple
+/// and the hover stay on a row that moves to another group (FR-017, US5.5).
+fn row_key(row: RowKey) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    row.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Give `item` the keyboard's focus wrapper (feature 803, FR-010, U4) and its key (feature 1125,
+/// R13). Every row gets one, focused or not, so the tree keeps its shape across presses; losing
+/// the keyboard tells the sidebar.
 fn with_keyboard_focus(
     item: TreeItem<'static, Message>,
     focused: bool,
+    key: RowKey,
 ) -> TreeItem<'static, Message> {
-    item.keyboard_focus(focused, |focused| {
+    item.key(row_key(key)).keyboard_focus(focused, |focused| {
         if focused {
             Message::NoOp
         } else {
@@ -989,6 +1027,7 @@ fn with_keyboard_focus(
 fn group_items(
     state: &State,
     group: crate::features::sidebar::GroupNode,
+    at: usize,
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     use crate::features::sidebar::{RunRow, SidebarEntry};
@@ -1015,6 +1054,7 @@ fn group_items(
                 Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
             ),
         false,
+        RowKey::RunGroup(group.id),
     )];
     if !group.expanded {
         return items;
@@ -1027,6 +1067,7 @@ fn group_items(
                 vec![SidebarEntry::Worktree(node)],
                 1,
                 Some((number, provider)),
+                at + items.len(),
                 r,
             )),
             RunRow::NoWorktree => {
@@ -1047,7 +1088,11 @@ fn group_items(
                 if let Some(reason) = run.reason() {
                     item = item.row_tooltip(reason.to_string());
                 }
-                items.push(with_keyboard_focus(item, false));
+                items.push(with_keyboard_focus(
+                    item,
+                    false,
+                    RowKey::Run(group.id, number),
+                ));
             }
         }
     }
@@ -1264,7 +1309,11 @@ fn build_default_item(
             &node.listed_sessions(),
         )
     });
-    items.push(with_keyboard_focus(item, focused));
+    items.push(with_keyboard_focus(
+        item,
+        focused,
+        RowKey::Row(RowRef::Location(SessionLocation::Default)),
+    ));
 
     if node.sessions_shown() {
         let in_view = crate::features::attention::in_view(&state.attention);
@@ -1289,6 +1338,7 @@ fn build_default_item(
                     in_view,
                 ),
                 keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
+                RowKey::Row(RowRef::Session(row.session.id)),
             ));
         }
     }
@@ -1533,5 +1583,50 @@ mod tests {
         };
         assert!(label(&with_project()), "drawn with a project open");
         assert!(!label(&State::default()), "not drawn with none");
+    }
+
+    /// Feature 1125 T056 (R13): every drawn row has a key, and no two share one, so the tree lays
+    /// them out keyed and a row that moves to another group keeps the keyboard (US5.5).
+    #[test]
+    fn every_sidebar_row_has_a_distinct_key() {
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut state = with_project();
+        state.worktree.worktrees = ["feat-a", "feat-b"]
+            .into_iter()
+            .map(|dir| Worktree {
+                dir_name: dir.to_string(),
+                path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+                branch: Some(format!("feat/{dir}")),
+                status: WorktreeStatus::Valid,
+                included: false,
+            })
+            .collect();
+        let mut sessions: Vec<Session> = (0..2)
+            .map(|_| {
+                Session::start_new(
+                    SessionLocation::Worktree("feat-a".to_string()),
+                    AiCli::ClaudeCode,
+                )
+            })
+            .collect();
+        sessions[0].activity = ActivitySignal::Working;
+        state
+            .workspace
+            .sessions
+            .insert(std::path::PathBuf::from("/repo"), sessions);
+        state.sidebar.expanded.insert("feat-a".to_string());
+        let items = list_items(
+            &state,
+            state.sidebar_groups(),
+            tokens::roles(ColorScheme::Dark),
+        );
+        let keys: Vec<Option<u64>> = items.iter().map(TreeItem::key_of).collect();
+        assert!(
+            keys.len() >= 6,
+            "headers, locations and session rows: {keys:?}"
+        );
+        assert!(keys.iter().all(Option::is_some), "{keys:?}");
+        let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(distinct.len(), keys.len(), "{keys:?}");
     }
 }

@@ -143,6 +143,9 @@ pub struct TreeItem<'a, M> {
     heading: bool,
     /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
     tab_stop: bool,
+    /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
+    /// R13, [`TreeItem::key`]).
+    key: Option<u64>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -178,6 +181,7 @@ impl<'a, M> TreeItem<'a, M> {
             keyboard_focus: None,
             heading: false,
             tab_stop: false,
+            key: None,
             _marker: std::marker::PhantomData,
         }
     }
@@ -205,6 +209,21 @@ impl<'a, M> TreeItem<'a, M> {
     pub fn heading(mut self) -> Self {
         self.heading = true;
         self
+    }
+
+    /// Name the row by what it shows (feature 1125, R13, FR-017). When every row of a view has a
+    /// key, the rows are laid out in a [`cdk::Keyed`](crate::ui::cdk::Keyed) column: a row the
+    /// list moves keeps its keyboard focus, ripple and hover, and the row that takes its old place
+    /// gets none of them. Keys must be distinct within the view.
+    pub fn key(mut self, key: u64) -> Self {
+        self.key = Some(key);
+        self
+    }
+
+    /// The row's [`key`](Self::key), for a host's tests to check every row has one.
+    #[cfg(test)]
+    pub(crate) fn key_of(&self) -> Option<u64> {
+        self.key
     }
 
     /// Make the row a stop in the Tab order while it has a press (feature 1125, the sidebar's
@@ -468,9 +487,10 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
         // The twisty glyph, and the width of the slot that stands in for it on a row that cannot
         // expand — one number, so labels align down the column whether or not a row has a twisty.
         let twisty_size = TypeRole::Label.size();
-        let mut col = column![].spacing(spacing::XS).width(Length::Fill);
+        let mut rows: Vec<(Option<u64>, Element<'a, M>)> = Vec::with_capacity(items.len());
 
         for mut item in items {
+            let key = item.key;
             // A heading is pressed as a whole: its twisty's message is the row's (feature 1125).
             if item.heading && item.on_press.is_none() {
                 item.on_press = item.on_toggle.clone();
@@ -855,10 +875,24 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 Some(tip) => super::Tooltip::new(interactive, tip, r).into(),
                 None => interactive,
             };
-            col = col.push(final_el);
+            rows.push((key, final_el));
         }
 
-        col.into()
+        // Every row keyed (feature 1125, R13): each row's widget state follows its key, so a row
+        // the list moves keeps the keyboard, its ripple and its hover. Otherwise, by position.
+        if !rows.is_empty() && rows.iter().all(|(key, _)| key.is_some()) {
+            return crate::ui::cdk::Keyed::column(
+                rows.into_iter()
+                    .map(|(key, row)| (key.unwrap_or_default(), row)),
+            )
+            .spacing(spacing::XS)
+            .width(Length::Fill)
+            .into();
+        }
+        iced::widget::Column::with_children(rows.into_iter().map(|(_, row)| row))
+            .spacing(spacing::XS)
+            .width(Length::Fill)
+            .into()
     }
 }
 
@@ -1712,5 +1746,57 @@ mod tests {
             iced::mouse::Cursor::Available(at),
         );
         assert!(right.contains(&"menu".to_string()), "{right:?}");
+    }
+
+    // --- Feature 1125 T052 (R13, FR-017): a keyed row keeps its widget state when it moves ----
+
+    /// Three Tab-stop rows in `order`, each keyed by its one-letter label, with hover messages.
+    fn keyed_rows(order: &[&'static str]) -> Element<'static, String> {
+        TreeView::new(
+            order
+                .iter()
+                .map(|&label| {
+                    TreeItem::new(0, label, roles().on_surface)
+                        .tab_stop()
+                        .on_press(format!("press {label}"))
+                        .hover(format!("enter {label}"), format!("exit {label}"))
+                        .keyboard_focus(false, |_| "focus".to_string())
+                        .key(u64::from(label.as_bytes()[0]))
+                })
+                .collect(),
+            roles(),
+        )
+        .into()
+    }
+
+    /// US5.5: the row the keyboard is on moves to another place, the list's length unchanged;
+    /// Enter still presses that row, not the one that took its old slot.
+    #[test]
+    fn a_keyed_row_keeps_the_keyboard_when_a_rebuild_moves_it() {
+        use super::super::test_support::{named_key, Mounted};
+        let mut mounted = Mounted::new(keyed_rows(&["a", "b", "c"]));
+        mounted.focus_next();
+        mounted.rebuild(keyed_rows(&["b", "c", "a"]));
+        let sent = mounted.send(
+            named_key(iced::keyboard::key::Named::Enter),
+            iced::mouse::Cursor::Unavailable,
+        );
+        assert!(sent.contains(&"press a".to_string()), "{sent:?}");
+        assert!(!sent.iter().any(|m| m == "press b"), "{sent:?}");
+    }
+
+    /// Edge Cases (a hovered row that moves): the hover state goes with the row, so the exit is
+    /// the moved row's own and not its new neighbour's.
+    #[test]
+    fn a_keyed_row_keeps_its_hover_state_when_a_rebuild_moves_it() {
+        use super::super::test_support::Mounted;
+        let mut mounted = Mounted::new(keyed_rows(&["a", "b", "c"]));
+        let first = mounted.node.children()[0].bounds();
+        let entered = mounted.hover(first.center());
+        assert!(entered.contains(&"enter a".to_string()), "{entered:?}");
+        mounted.rebuild(keyed_rows(&["b", "c", "a"]));
+        let left = mounted.hover(iced::Point::new(-50.0, -50.0));
+        assert!(left.contains(&"exit a".to_string()), "{left:?}");
+        assert!(!left.iter().any(|m| m == "exit b"), "{left:?}");
     }
 }

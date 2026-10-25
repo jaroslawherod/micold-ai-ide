@@ -213,7 +213,7 @@ fn no_refresh_transition_touches_the_listing_or_the_arrangement_around_it() {
         worktree("feat-b", "feat/b"),
     ]);
     st.sidebar.expanded.insert("feat-a".to_string());
-    st.worktree.hovered = Some("feat-b".to_string());
+    st.worktree.hovered = Some(("feat-b".to_string(), 2));
     let listing = st.worktree.worktrees.clone();
 
     for msg in [
@@ -229,8 +229,8 @@ fn no_refresh_transition_touches_the_listing_or_the_arrangement_around_it() {
             "expansion is untouched"
         );
         assert_eq!(
-            st.worktree.hovered.as_deref(),
-            Some("feat-b"),
+            st.worktree.hovered,
+            Some(("feat-b".to_string(), 2)),
             "and so is everything else the user arranged"
         );
     }

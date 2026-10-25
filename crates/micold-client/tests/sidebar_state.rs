@@ -236,13 +236,14 @@ fn worktree_hover_sets_and_clears() {
     let mut state = State::default();
     state.update(Message::Worktree(WorktreeMsg::Hovered(
         "feat-a".to_string(),
+        3,
     )));
-    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
+    assert_eq!(state.worktree.hovered, Some(("feat-a".to_string(), 3)));
     // A stale exit from a different row does not clear the current hover.
     state.update(Message::Worktree(WorktreeMsg::Unhovered(
         "feat-b".to_string(),
     )));
-    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
+    assert_eq!(state.worktree.hovered, Some(("feat-a".to_string(), 3)));
     // Leaving the hovered row clears it.
     state.update(Message::Worktree(WorktreeMsg::Unhovered(
         "feat-a".to_string(),

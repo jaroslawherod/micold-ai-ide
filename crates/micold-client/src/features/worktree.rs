@@ -70,9 +70,10 @@ use micold_core::worktree::{Worktree, WorktreeStatus};
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
-    /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
-    /// hover-revealed row actions (add-session + delete). Transient.
-    pub hovered: Option<String>,
+    /// The worktree row the pointer is currently over, by `dir_name` (feature 008), and the index
+    /// it was drawn at when the pointer entered it (feature 1125, R14). Drives the hover-revealed
+    /// row actions (add-session + delete) while [`crate::features::sidebar::hover_holds`]. Transient.
+    pub hovered: Option<(String, usize)>,
     /// Whether the user has opted to also delete the branch when confirming a worktree delete
     /// (feature 013). Defaults to `false` = delete (today's unconditional behavior), so an
     /// unmodified confirm is unchanged. Reset to `false` on every `WorktreeDeleteRequested`.
@@ -431,9 +432,9 @@ pub fn rename_cancelled(state: &mut crate::app::State) {
     state.worktree.rename_draft = None;
 }
 
-/// The pointer entered a worktree row (feature 008).
-pub fn hovered(state: &mut crate::app::State, dir: String) {
-    state.worktree.hovered = Some(dir);
+/// The pointer entered a worktree row (feature 008), drawn at `index` (feature 1125, R14).
+pub fn hovered(state: &mut crate::app::State, dir: String, index: usize) {
+    state.worktree.hovered = Some((dir, index));
 }
 
 /// The pointer left a worktree row (feature 008).
@@ -441,7 +442,12 @@ pub fn hovered(state: &mut crate::app::State, dir: String) {
 /// Only clears when leaving the row that was thought to be hovered, so a stale exit from a
 /// previous row cannot clobber a fresh enter.
 pub fn unhovered(state: &mut crate::app::State, dir: String) {
-    if state.worktree.hovered.as_deref() == Some(dir.as_str()) {
+    if state
+        .worktree
+        .hovered
+        .as_ref()
+        .is_some_and(|(hovered, _)| *hovered == dir)
+    {
         state.worktree.hovered = None;
     }
 }
@@ -499,8 +505,9 @@ pub enum Msg {
     RenameConfirmed,
     /// Dismiss the worktree-rename dialog without applying.
     RenameCancelled,
-    /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
-    Hovered(String),
+    /// The pointer entered a worktree row (feature 008), by `dir_name` and the index the row was
+    /// drawn at (feature 1125, R14); reveals its row actions while the row stays there.
+    Hovered(String, usize),
     /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
     Unhovered(String),
     /// Copy arbitrary displayed text (a worktree name) to the system clipboard. The binary
@@ -578,7 +585,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RenameTextChanged(text) => rename_text_changed(state, text),
         Msg::RenameConfirmed => rename_confirmed(state),
         Msg::RenameCancelled => rename_cancelled(state),
-        Msg::Hovered(dir) => hovered(state, dir),
+        Msg::Hovered(dir, index) => hovered(state, dir, index),
         Msg::Unhovered(dir) => unhovered(state, dir),
         Msg::PullRequestOpenRequested(_) => {}
     }

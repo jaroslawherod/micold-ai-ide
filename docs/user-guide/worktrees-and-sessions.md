@@ -36,6 +36,12 @@ choose a folder.
   switched to, a row the Overview, the quick switcher or a notification sends you to) or a
   navigation chord lands on a row in a collapsed group, that group opens first and stays open. The
   navigation chords step through locations in the grouped order, collapsed groups included.
+- **The keyboard follows the sidebar's order.** Tab visits the Overview row, the chip bar's
+  controls, each group header and each row, top to bottom, in the order they are shown. When the
+  row that has the keyboard changes state and moves to another group, the keyboard moves with it;
+  it does not stay on whatever row takes its old place. A row that moves out from under a still
+  pointer drops its hover actions until you point at it again; a context menu open on it stays
+  open, on the same worktree.
 - Selecting a worktree opens its **main session** in the terminal, whichever session you looked at
   last. A worktree with one session has no toggle and no sub-rows; one with several has a toggle
   (collapsed by default) that lists the main session first and marks each helper "helper". Rename

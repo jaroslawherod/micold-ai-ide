@@ -5932,7 +5932,7 @@ fn availability_nothing_is_asked_while_nothing_changes() {
 
     let _ = update_inner(
         &mut app,
-        Message::Worktree(WorktreeMsg::Hovered("feat-a".into())),
+        Message::Worktree(WorktreeMsg::Hovered("feat-a".into(), 0)),
     );
     let _ = update_inner(&mut app, Message::Sidebar(SidebarMsg::Scrolled(120)));
     let _ = view(&app);
