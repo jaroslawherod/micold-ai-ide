@@ -22,7 +22,9 @@ use iced::Rectangle;
 use micold_client::app::State;
 use micold_client::features::changes::{self, Effect, Load, Msg};
 use micold_core::review::base::{Base, ReviewScope};
-use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
+use micold_core::review::changes::{
+    ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
+};
 use micold_core::review::diff::{parse_unified, LoadedDiff, SideLines};
 use micold_core::review::drawer::DrawerEvent;
 use micold_core::review::RelPath;
@@ -129,7 +131,7 @@ fn with_diff(mut under: StateUnderTest) -> StateUnderTest {
                     removed: 0,
                     large: false,
                     origin: Origin::Uncommitted,
-                    identity: micold_core::review::changes::ChangeIdentity::Unknown,
+                    identity: ChangeIdentity::Unknown,
                 }],
                 scope: ReviewScope::Worktree {
                     base: Base::MergeBase {
