@@ -10,21 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M2 rebased onto main (3b7ae99f); orchestrator pushes/opens the M2 PR (title and body in the scratchpad: m2-pr-title.md, m2-pr-body.md), waits on CI, merges; then M3 (T031–T039) — first resolve the D14 row-width follow-up and jaro's open question (one Filters button with a panel?)
+- **Next step**: M2 rebased onto main (3b7ae99f) and pushed; orchestrator opens the M2 PR (title and body in the scratchpad: m2-pr-title.md, m2-pr-body.md), waits on CI, merges; then M3 (T031–T039) — first resolve the D14 row-width follow-up and jaro's open question (one Filters button with a panel?)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1344 | Design (spec, plan, tasks) | merged (rebase) | 4e204fd4b00deed3feaa8a30d519b5ad7b03cc48 |
-| #1381 | M1 component filter + mechanism | open, CI running (M2 prepared on top of it meanwhile) | — |
+| #1381 | M1 component filter + mechanism | merged (rebase, squashed) | 3b7ae99fdd8794db201a16b9732f0ce441d85cdc |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | #1381 | done; rebased onto #1186 M3, refit (D12), gate passed at aa3b2c52 |
-| M2 | T023–T030 | full | Fix-version filter, AND with component | — | done; rebased onto main after #1381 (D13), gate pending |
+| M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | #1381 | done; rebased onto #1186 M3, refit (D12), gate passed at aa3b2c52; merged 3b7ae99f |
+| M2 | T023–T030 | full | Fix-version filter, AND with component | — (pushed to claude/project-thread-xwkotj; orchestrator opens the PR) | done; rebased onto main 3b7ae99f (D13), Jira layouts re-recorded, rebase review CLEAN, gate passed at ea884360 |
 | M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) | — | pending |
 | M4 | T040–T045 | full | Label filter from loaded issues; all four in one row | — | pending |
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 | 1 | 90a525c42bb3339b4655d236bd0b295aa0c9be94:0cf22212a7325d538abc99d5a97d94b4eeb17c10 | CLEAN (3 MINOR: issue_picker doc displaced — fixed; `choices()` clones — declined; `released` not shown — declined) |
 | Review B M2 | 1 | d6f29faa90cf9a1c34034faa4a8d785dce237360:e4de8a606ecec897976a5ce1e3a911a9181d5735 | CLEAN (2 MINOR: cramped main row — kept as follow-up, D13; compile red "by construction" in cycle-log — noted) |
 | Visual pass M2 | 1 | e4de8a60 (CPU rasteriser renders of 8 states) | B3 PASS; FAIL: "This project has no versions" cut to "This project ha…" in the list — fixed (wrapped reason under a "No versions" line, gate `an_empty_choice_list_shows_its_whole_reason`); CONCERN: main row cramped (D13) |
+| Review rebase M2 (sonnet) | 1 | 8a4b7ddeee15324fd610b34c498807a1d6734ac6:ea88436025f3b37a41cad12c65aff40c2c5ceffa | CLEAN (main's D12 layout kept; Fix version field, PICKER_MAIN, awaited_choices newest-request fix intact; fixture touches only jira states) |
 
 ## Declined review findings
 
