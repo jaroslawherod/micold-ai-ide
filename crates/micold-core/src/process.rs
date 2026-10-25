@@ -181,6 +181,30 @@ impl TreeKill {
         }
     }
 
+    /// Whether the tree's head has exited and is a zombie not yet reaped (Unix: `waitid` with
+    /// `WNOWAIT` looks without reaping). Elsewhere false: the job handle cannot name another
+    /// process, so the tree is killed after the reap instead.
+    fn leader_exited(&self) -> bool {
+        #[cfg(unix)]
+        {
+            // SAFETY: an all-zero `siginfo_t` is valid; `waitid` writes it, and `WNOWAIT` leaves
+            // the child waitable for `try_wait`.
+            unsafe {
+                let mut info: libc::siginfo_t = std::mem::zeroed();
+                let pid = libc::id_t::from(self.pid);
+                libc::waitid(
+                    libc::P_PID,
+                    pid,
+                    &mut info,
+                    libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                ) == 0
+                    && info.si_pid() != 0
+            }
+        }
+        #[cfg(not(unix))]
+        false
+    }
+
     /// Kill the whole tree, then `child` itself, for the case where the job could not be created.
     fn kill(&self, child: &mut std::process::Child) {
         self.kill_tree();
@@ -300,21 +324,36 @@ struct Reader {
 }
 
 /// Read `pipe` to EOF on its own thread, so the child never blocks on a full pipe.
-fn drain(mut pipe: impl Read + Send + 'static) -> Reader {
+fn drain(pipe: impl Read + Send + 'static) -> Reader {
     let bytes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let sink = std::sync::Arc::clone(&bytes);
     let handle = std::thread::spawn(move || {
-        let mut chunk = [0u8; 8192];
-        while let Ok(n) = pipe.read(&mut chunk) {
-            if n == 0 {
-                break;
-            }
+        read_chunks(pipe, |chunk| {
             sink.lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .extend_from_slice(&chunk[..n]);
-        }
+                .extend_from_slice(chunk);
+            true
+        });
     });
     Reader { handle, bytes }
+}
+
+/// Hand each chunk `pipe` reads to `each` until end of file, a read error or `each` returning
+/// false. A read interrupted by a signal (`EINTR`) is retried, not taken for end of file.
+fn read_chunks(mut pipe: impl Read, mut each: impl FnMut(&[u8]) -> bool) {
+    let mut chunk = [0u8; 8192];
+    loop {
+        match pipe.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                if !each(&chunk[..n]) {
+                    break;
+                }
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => break,
+        }
+    }
 }
 
 /// What a [`drain`] thread read: everything at EOF, else what it had by `deadline` (the thread is
@@ -439,18 +478,31 @@ impl StreamingChild {
                 self.shared.tree.kill(&mut self.child);
             }
             let mut reaped = self.shared.reaped.lock().unwrap_or_else(|e| e.into_inner());
+            // As in `run_bounded`: whatever the child left running would hold the pipes open, so
+            // the tree is killed once the child exits, and before it is reaped: until then its
+            // pid, and so its group id, cannot name anyone else's processes.
+            if self.shared.tree.leader_exited() {
+                self.shared.tree.kill_tree();
+            }
             match self.child.try_wait() {
                 Ok(Some(status)) => {
                     *reaped = true;
+                    // The job handle outlives the reap, so Windows kills the tree after it.
+                    #[cfg(not(unix))]
+                    self.shared.tree.kill(&mut self.child);
                     break Ok(status);
                 }
                 Ok(None) => {}
-                Err(err) => break Err(err),
+                Err(err) => {
+                    // Not reaped: the tree is killed, then the child is reaped, under the lock.
+                    self.shared.tree.kill(&mut self.child);
+                    let _ = self.child.wait();
+                    *reaped = true;
+                    break Err(err);
+                }
             }
         };
 
-        // As in `run_bounded`: whatever the child left running would hold the pipes open.
-        self.shared.tree.kill(&mut self.child);
         let deadline = Instant::now() + READER_GRACE;
         while open > 0 {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -462,29 +514,35 @@ impl StreamingChild {
 
         match waited {
             Ok(status) => exit_kind(status),
-            Err(err) => {
-                // Reap it: the tree is dead, so this returns at once.
-                let _ = self.child.wait();
-                *self.shared.reaped.lock().unwrap_or_else(|e| e.into_inner()) = true;
-                ExitKind::WaitFailed(err.to_string())
-            }
+            Err(err) => ExitKind::WaitFailed(err.to_string()),
+        }
+    }
+}
+
+impl Drop for StreamingChild {
+    /// Dropped without [`Self::run`] (or with `run` unwound): the tree is killed and the child
+    /// reaped, so neither a process nor a zombie outlives it.
+    fn drop(&mut self) {
+        let mut reaped = self.shared.reaped.lock().unwrap_or_else(|e| e.into_inner());
+        if !*reaped {
+            self.shared.tree.kill(&mut self.child);
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            *reaped = true;
         }
     }
 }
 
 /// Send what `pipe` reads to `tx` as it arrives, then `None` at end of file, on its own thread.
 fn stream_to(
-    mut pipe: impl Read + Send + 'static,
+    pipe: impl Read + Send + 'static,
     stream: Stream,
     tx: mpsc::Sender<Option<(Stream, Vec<u8>)>>,
 ) {
     std::thread::spawn(move || {
-        let mut chunk = [0u8; 8192];
-        while let Ok(n) = pipe.read(&mut chunk) {
-            if n == 0 || tx.send(Some((stream, chunk[..n].to_vec()))).is_err() {
-                break;
-            }
-        }
+        read_chunks(pipe, |chunk| {
+            tx.send(Some((stream, chunk.to_vec()))).is_ok()
+        });
         let _ = tx.send(None);
     });
 }
@@ -506,6 +564,39 @@ fn exit_kind(status: std::process::ExitStatus) -> ExitKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pipe whose reads are interrupted by a signal before each chunk (EINTR).
+    struct Interrupted(Vec<&'static [u8]>, bool);
+
+    impl Read for Interrupted {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.1 = !self.1;
+            if self.1 {
+                return Err(std::io::ErrorKind::Interrupted.into());
+            }
+            let Some(chunk) = self.0.pop() else {
+                return Ok(0);
+            };
+            buf[..chunk.len()].copy_from_slice(chunk);
+            Ok(chunk.len())
+        }
+    }
+
+    #[test]
+    fn an_interrupted_read_is_retried_not_taken_for_end_of_file() {
+        let pipe = || Interrupted(vec![b"two", b"one "], false);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        assert_eq!(joined(Some(drain(pipe())), deadline), b"one two");
+
+        let (tx, rx) = mpsc::channel();
+        stream_to(pipe(), Stream::Stdout, tx);
+        let got: Vec<u8> = rx
+            .iter()
+            .map_while(|message| message)
+            .flat_map(|(_, bytes)| bytes)
+            .collect();
+        assert_eq!(got, b"one two");
+    }
 
     #[cfg(windows)]
     #[test]

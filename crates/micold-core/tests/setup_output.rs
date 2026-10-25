@@ -1,7 +1,7 @@
 //! Feature 1289, A4 (output): a setup run's output, split into lines as a terminal shows them and
 //! capped at the last `KEEP_LINES` lines (FR-021).
 
-use micold_core::setup::output::{OutputBuffer, Stream, KEEP_LINES};
+use micold_core::setup::output::{OutputBuffer, Stream, KEEP_LINES, MAX_LINE_BYTES};
 
 fn lines(done: Vec<(u64, String)>) -> Vec<String> {
     done.into_iter().map(|(_, line)| line).collect()
@@ -128,4 +128,17 @@ fn past_keep_lines_the_oldest_line_goes_and_is_counted() {
 
     let (first, backlog) = buffer.since(total + 5);
     assert_eq!((first, backlog.len()), (total, 0), "nothing past the end");
+}
+
+#[test]
+fn a_line_with_no_end_is_cut_at_max_line_bytes() {
+    // `yes | tr -d '\n'`, a binary `cat`, progress dots: the unfinished line must not grow
+    // without bound (FR-021), so at the limit it is kept as a line and a new one starts.
+    let mut buffer = OutputBuffer::new();
+    let long = vec![b'x'; 2 * MAX_LINE_BYTES + 10];
+    let done = lines(buffer.push(Stream::Stdout, &long));
+    assert_eq!(done.len(), 2, "two full lines were cut off");
+    assert!(done.iter().all(|line| line.len() == MAX_LINE_BYTES));
+    assert_eq!(lines(buffer.finish()), ["x".repeat(10)]);
+    assert_eq!(buffer.next_index(), 3);
 }
