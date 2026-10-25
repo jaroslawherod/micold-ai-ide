@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 implement T018–T030
+- **Next step**: M3 review A (high) and review B round 1 on snapshot 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676
 
 ## Pull requests
 
@@ -79,7 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 unit part 1. Done: T018–T030 implemented, Verify tests green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32). Next: workspace clippy, commit, push, review snapshot; then reviews A/B (orchestrator), full gate, PR.
+M3 part 1 (context over 150k). Done: T018–T030 implemented and ticked, committed 92410eac and pushed; workspace clippy `-D warnings` clean; Verify green: `cargo test -p micold-daemon --test setup_run` 7/7, `--test mcp_create_worktree_setup` 2/2, `--test mcp_create_worktree` 43/43 (exact rows gained `"setup": "none"`), `cargo test -p micold-core --lib -- protocol` 32/32. Cycle log M3 cycles 1–2. Decisions 10–14. Next: review A (code-review high) and review B (conformance, sonnet) round 1 on snapshot 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676; fix findings; then full gate (`scripts/gate.sh`) and open the PR (title/body in the orchestrator's prompt). No PR opened yet. Not run: `mise run image`/`test-sandbox` (setup runs in the sandbox only through `spawn_env_for`, already covered by M1).
 
 ## Open escalation
 
