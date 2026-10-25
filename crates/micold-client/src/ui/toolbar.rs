@@ -20,15 +20,14 @@ use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
-use crate::features::overview::{self, Msg as OverviewMsg, Tone};
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::quick_switch::Msg as QuickSwitchMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
-    unread_total_tooltip, AppMark, Breadcrumb, Button, FieldButton, IconButton, MenuItem,
-    MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
+    unread_total_tooltip, AppMark, Breadcrumb, FieldButton, IconButton, MenuItem, MenuTrigger,
+    Toolbar, Tooltip,
 };
 use iced::widget::image;
 use iced::Element;
@@ -244,7 +243,6 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     Toolbar::new(r)
         .mark(AppMark::new(app_mark_handle(), APP_NAME, r))
         .leading(switcher)
-        .leading_fixed(overview_button(state, r))
         .centre(Tooltip::new(jump, jump_tooltip(), r))
         .action(Tooltip::new(settings, "Settings", r))
         .action(menu)
@@ -263,44 +261,6 @@ pub(crate) fn settings_press(state: &State) -> Option<Message> {
         .settings_draft
         .is_none()
         .then_some(Message::Settings(SettingsMsg::Opened))
-}
-
-/// The Overview button (feature 813, contract U2): after the project switcher, shown whether or not
-/// the Overview is open, and inert while Settings is open (research R2).
-fn overview_button<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
-    let mut button = Button::text("Overview", r)
-        .leading(Icon::Overview)
-        .selected(state.overview.open)
-        .on_press_maybe(overview_press(state));
-    let badge = overview::badge(&crate::ui::overview::cards(state));
-    if let Some(badge) = &badge {
-        let (glyph, tint) = badge_look(badge.tone, &r);
-        button = button.mark(
-            UnreadMark::new(r)
-                .icon(glyph)
-                .count(badge.count)
-                .role(TypeRole::Action)
-                .tint(tint),
-        );
-    }
-    Tooltip::new(button, overview::overview_tooltip(badge.as_ref()), r).into()
-}
-
-/// The glyph and tint the Overview badge is drawn in: action is the `error` family, attention the
-/// `warning` family.
-fn badge_look(tone: Tone, r: &tokens::Roles) -> (Icon, tokens::Rgb) {
-    match tone {
-        Tone::Error => (Icon::CardNeedsAction, r.error),
-        Tone::Warning => (Icon::CardNeedsAttention, r.warning),
-    }
-}
-
-/// What the Overview button sends: nothing while Settings is open or no project is active, since
-/// the Overview only draws inside an active project.
-fn overview_press(state: &State) -> Option<Message> {
-    let settings_open = state.settings.settings_draft.is_some();
-    (!settings_open && state.workspace.active.is_some())
-        .then_some(Message::Overview(OverviewMsg::Toggled { settings_open }))
 }
 
 #[cfg(test)]
@@ -530,50 +490,28 @@ mod tests {
         assert!(settings_press(&state).is_none(), "settings open");
     }
 
-    /// The badge is red with the action glyph for an error, yellow with the attention glyph for a
-    /// warning, and the tooltip carries the chord and the badge's words.
+    /// FR-016 (contract O1): no element of the bar publishes an `Overview` message, in any body
+    /// branch — Overview closed, open, full screen, and with Settings open. The Overview is
+    /// reached from the sidebar's row and the chord, so the bar's source names no Overview control.
     #[test]
-    fn the_overview_badge_maps_tone_to_glyph_and_tint_and_the_tooltip_names_the_chord() {
-        let r = tokens::roles(ColorScheme::Light);
-        assert_eq!(
-            badge_look(Tone::Error, &r),
-            (Icon::CardNeedsAction, r.error)
-        );
-        assert_eq!(
-            badge_look(Tone::Warning, &r),
-            (Icon::CardNeedsAttention, r.warning)
-        );
-        let plain = overview::overview_tooltip(None);
-        assert!(plain.contains(crate::keymap::overview_chord_label()));
-        let badge = overview::Badge {
-            tone: Tone::Error,
-            count: 2,
-            label: "2 need action".into(),
-        };
-        let with = overview::overview_tooltip(Some(&badge));
-        assert!(with.starts_with(&plain) && with.ends_with("2 need action"));
-    }
-
-    /// F3: the Overview button is inert with no active project, and while Settings is open.
-    #[test]
-    fn the_overview_button_needs_an_active_project_and_no_settings() {
-        let mut state = State::default();
-        assert!(overview_press(&state).is_none(), "no project");
-        state.workspace.active = Some(std::path::PathBuf::from("/repo"));
-        assert!(overview_press(&state).is_some());
-        state.settings.settings_draft = Some(Default::default());
-        assert!(overview_press(&state).is_none(), "settings open");
-    }
-
-    /// Finding 12 (FR-003): full screen leaves the top bar, and its Overview button, in place.
-    #[test]
-    fn the_overview_button_is_still_built_in_full_screen() {
+    fn the_bar_has_no_overview_button_in_any_body_branch() {
         let mut state = State::default();
         state.workspace.active = Some(std::path::PathBuf::from("/repo"));
-        state.overview.open = true;
-        state.overview.full_screen = true;
-        assert!(state.overview.full_screen());
-        assert!(overview_press(&state).is_some(), "button still pressable");
-        let _bar = view(&state, ColorScheme::Light);
+        for (open, full_screen, settings) in [
+            (false, false, false),
+            (true, false, false),
+            (true, true, false),
+            (true, true, true),
+        ] {
+            state.overview.open = open;
+            state.overview.full_screen = full_screen;
+            state.settings.settings_draft = settings.then(Default::default);
+            let _bar = view(&state, ColorScheme::Light);
+        }
+        let source = include_str!("toolbar.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        for gone in ["OverviewMsg", "Icon::Overview", "Button::text(\"Overview\""] {
+            assert!(!production.contains(gone), "the bar still builds {gone}");
+        }
     }
 }

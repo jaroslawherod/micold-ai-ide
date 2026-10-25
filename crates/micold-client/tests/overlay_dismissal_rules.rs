@@ -138,11 +138,11 @@ fn a_press_on_the_jump_field_closes_an_open_quick_switcher() {
     };
     state.window.window_size = (1280, 800);
 
-    // Where the field is: the bar's centre child (shell → column → bar → lane → child 3).
+    // Where the field is: the bar's centre child (shell → column → bar → lane → child 2).
     let closed = StateUnderTest::new(state.clone());
     let field = lay::resolve(lay::view_of(&closed), &lay::renderer())
         .into_iter()
-        .find(|r| r.layer == lay::Layer::Base && r.path == [0, 0, 0, 0, 0, 3])
+        .find(|r| r.layer == lay::Layer::Base && r.path == [0, 0, 0, 0, 0, 2])
         .expect("the bar lays out its jump-to field");
     let centre = iced::Point::new(field.x + field.width / 2.0, field.y + field.height / 2.0);
 

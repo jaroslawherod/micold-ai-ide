@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: milestone M3
-- **Next step**: M3 PR open; then M4 (#1125 closed, so unblocked), then close
+- **Phase**: milestone M4
+- **Next step**: M4 gate, reviews, PR text in the scratchpad; orchestrator moves the commits onto the PR branch after M3 merges; then close
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | #1409 | merged be3819ab |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | PR open |
-| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
+| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | implemented on `wip/1127-m4` (on M3's head b7bd60ec); gate and reviews next |
 
 ## Decisions
 
@@ -53,6 +53,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D18 | M2 | How does a segment know it was shortened, for its tooltip (FR-007, C2)? | At layout: a private `Fit` widget lays the segment out unbounded, compares with its room and draws one of two renderings (full-width tooltip, or the tooltip with the full text) | agent-resolved | research R4; the view does not know the window width |
 | D19 | M2 | The segment's glyph and the switcher's old leading folder icon | Drop-down `Icon::SelectChevron` trailing (`Button::trailing`); the leading `OpenProject` glyph goes (`micold-ai-ide ▾`, quickstart §B1) | agent-resolved | spec US1 s1; quickstart §B1 |
 | D20 | M2 | `sibling_parity` assumed every bar action leads with its glyph and every bar panel ends at one trailing inset | The breadcrumb's action is its project segment (glyph trailing the label); the switcher panel may instead start at the segment's edge (R8) | agent-resolved | research R8; FR-005 |
+| D21 | M4 | T048 removes `Toolbar::leading_fixed` "unless the showcase or another caller uses it" | Kept: the material crate's own give-way tests use it (`toolbar.rs` tests); only the showcase's "with actions" pose lost its Overview button | agent-resolved | crates/micold-material/src/toolbar.rs tests |
+| D22 | M4 | #1125's sidebar Overview row exists (`ui/sidebar.rs` `overview_row`, merged); the row only opens (US2.3), so "closes from the row" in the deliverable is the chord, Escape and a session | Guide says so | agent-resolved | sidebar.rs `overview_row`; overview.rs `Msg::Opened` |
 
 ## Review rounds
 

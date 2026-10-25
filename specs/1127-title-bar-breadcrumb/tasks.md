@@ -280,24 +280,24 @@ Test*.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T046 [US3] Replace the Overview-button tests in `client/src/ui/toolbar.rs` with a failing test
+- [x] T046 [US3] Replace the Overview-button tests in `client/src/ui/toolbar.rs` with a failing test
   that no element of the bar publishes an `Overview` message in any body branch (Overview normal and
   full screen included), and drop the Overview button from the expected Tab order in
   `client/tests/title_bar_keyboard.rs` (FR-016, contract O1)
-- [ ] T047 [P] [US3] Make sure `client/src/ui/app_chord_tests.rs` covers the Overview chord opening and
+- [x] T047 [P] [US3] Make sure `client/src/ui/app_chord_tests.rs` covers the Overview chord opening and
   closing the Overview from the session view (terminal focused), from Changes and in full screen;
   and that #1125's sidebar Overview-row tests press the row from the session view and from Changes;
   add the missing cases (FR-016, contract O2, SC-006)
 
 ### Implementation for User Story 3
 
-- [ ] T048 [US3] Remove `overview_button`, `badge_look`, `overview_press` (and `overview_tooltip` if
+- [x] T048 [US3] Remove `overview_button`, `badge_look`, `overview_press` (and `overview_tooltip` if
   #1125 left it) from `client/src/ui/toolbar.rs`; remove `Toolbar::leading_fixed` from
   `lib/toolbar.rs` with its tests unless the showcase or another caller uses it (contract O3)
-- [ ] T049 [US3] Drop the Overview button from `client/tests/gates/title_bar_fits.rs`, update the
+- [x] T049 [US3] Drop the Overview button from `client/tests/gates/title_bar_fits.rs`, update the
   `app_bar.*` component paths in `client/tests/support/covered_states.rs`, and regenerate
   `client/tests/fixtures/layout_snapshot.txt`
-- [ ] T050 [US3] Update the user guide: `docs/user-guide/overview.md` (opened from the sidebar's
+- [x] T050 [US3] Update the user guide: `docs/user-guide/overview.md` (opened from the sidebar's
   Overview row and Ctrl+Shift+O / Cmd+Shift+O only), `docs/user-guide/icons.md` (the *Dashboard
   (grid)* row loses "Top bar"), `docs/user-guide/appearance-theming.md` (no Overview button)
   (FR-018)
