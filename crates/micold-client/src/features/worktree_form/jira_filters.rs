@@ -427,7 +427,9 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
             filters.field_mut(kind).open = false;
             filters.restore_query(kind);
         }
-        _ if !editing || !shows_filters(form) => return,
+        // Feature 1186 (FR-002): advanced mode hides the filters and neither applies nor clears
+        // them; switching back to Basic finds them as they were (FR-003).
+        _ if !editing || !shows_filters(form) || form.shows_advanced() => return,
         FilterMsg::Focused(kind) => {
             let filters = &mut form.jira_filters;
             filters.field_mut(kind).open = true;

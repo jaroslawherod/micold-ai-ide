@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
 - **Phase**: done
-- **Next step**: handoff — M5 and the close ship in one PR from local branch 1186-m5-wip (not pushed; title/body in the unit scratchpad `pr-title-m5.md`/`pr-body-m5.md`); the branch still holds M4's commits, which merged as #1388 (9ce7e702): rebase onto main before pushing. The run ends when that PR merges
+- **Next step**: orchestrator opens the M5 + close PR from `claude/project-thread-vf2ck6` (rebased onto origin/main 3b7ae99f, after M4 #1388 merged as 9ce7e702 and #1185 M1; D12); title/body in the unit scratchpad `pr-title-m5.md`/`pr-body-m5.md`. The run ends when that PR merges
 
 ## Pull requests
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D12 | M5 rebase | How does M5 meet #1185 M1 (3b7ae99f), merged into main after M4? | Rebased onto origin/main; the one conflict (`worktree_form::update`, the `JiraQuery` arm now returning its outcomes beside #1185's `JiraFilter` arm) kept both. #1185's view already hid its fields and **Clear filters** in advanced mode, but its reducer still applied `Cleared`/`ClearedAll`/picks there, clearing and reloading the hidden basic list; `jira_filters::update` now refuses filter messages while `shows_advanced()` (FR-002/FR-003, D1). Layout snapshot unchanged | agent-resolved | tests/jira_filters_picker.rs `advanced_mode_neither_applies_nor_drops_the_chosen_filters` red before the guard |
 | D11 | M4 | Where do a failed run's lines and **Retry** sit, when the form has 5 px left before the app bar? | The lines (Jira's messages, or basic mode's notice) scroll in a one-line viewport (20 px) under the field, as the picked issue's details scroll (837); **Retry** sits in the field's row after **Run** | agent-resolved | panel_placement red with two message lines (dialog at y=60) and with Retry on its own row (y=48); containment exemption `QUERY_FAILURE_CONTENT`; contracts/selector-ui.md §1 updated |
 | D10 | M3 | Where does the Basic/Advanced switch sit? | At the top of the issue picker's column (XS gap), not as a dialog field after `provider_switch`: as a field it added 48 px and pushed every Jira dialog's card to y=60–64, inside the app bar (65); in the picker it adds 36 px and the card stays below the bar | agent-resolved | `the_query_mode_switch_keeps_the_panel_placement` red with the switch as a field; contracts/selector-ui.md §1 updated |
 | D9 | M2 | Where does the client's `jira_query` module live? | `features/worktree_form/jira_query.rs` (`features::worktree_form::jira_query`), a submodule of the form as `settings/github_tokens.rs` is of settings, not `features/jira_query.rs`: `tests/feature_registration_cost.rs` makes every file in `features/` a feature (own isolation test, own `update(&mut State, Msg)`, no naming of `worktree_form`), and this state is the form's, applied with the form's seq. Plan, data model, research and tasks paths updated (prose only) | agent-resolved | gate run 2: feature_registration_cost 3 FAILED (`jira_query` names `worktree_form`; no isolation test; no `update`) |
