@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M1
-- **Next step**: reviews A (`code-review` high) and B (conformance) of M1 on `origin/main...HEAD` (the M1 unit had no Agent tool), then open the M1 PR. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: re-review of M1 review A round 2 (sonnet, fix diff from snapshot 4a00118f:19a082cc), then open the M1 PR with the body the M1 unit wrote. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | implemented, gated; reviews A/B pending |
+| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | review A round 1 fixed, gated; A round 2 pending; B CLEAN |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | planned (builds now) |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 2 (fixes) | 1191f086 | ACCEPTED by the orchestrator: round-2 fixes are prose only (verified); no round 3. Branch rebased onto origin/main by the tasks unit (fix commit now 14fa6a7a). |
 | tasks | 1 | 9cdc8b1a33e061cb296192d30af2188a2d21c73c:ea63a5eb357c21ec233f68fc0af40d4216fdb0e8 | CHANGES: 2 MAJOR, 2 MINOR, all verified and fixed. F1 (MAJOR, held: exhaustive `window_settings` `persist.rs:332`, `set_changed` destructure `:409`, pinned key list `settings_issue_mapping.rs:185-210`; persist test literal `:1238` ends in `..` (`:1171` does not: corrected in round 2); workspace scan for `Settings {` without `..` finds only core `settings.rs:935/948`, client `features/settings.rs:795`, `persist.rs:333/409`): T013 adds the key to the pinned list, T014 lists each site (`window_settings` takes `stored.suggestion_chips`, `set_changed` has `suggestion_chips: _` and no `set!`, `ValidSettings::into_settings` sets false, never written because the save goes through `set_changed`), T038 replaces all three with a keep-every-other-setting test. F2 (MAJOR, held): Skill tool still says Unknown skill; ran `.claude/skills/speckit-analyze/SKILL.md` steps by hand (result under *Plan*/*Tasks* below). F3 (MINOR, held): T002 no longer names `review_git.rs`, names `changes.rs` test helpers; T014 says `ValidSettings::into_settings`. F4 (MINOR, held): `pub mod` lines moved to T008/T010/T012. |
 | tasks | 2 | 64b03cb3ab2547b2dce5040cd993877738b24612:b9a769ba4a2504e5d0c0b8d4bd71e19d73202d82 | CHANGES (sonnet): round-1 fixes F2–F4 confirmed; 1 MAJOR: `persist.rs:1171` test literal is exhaustive, not `..`. Fixed by the orchestrator in T014 (add `suggestion_chips: false`); a factual task-list correction the compiler would also catch, verified against the code, no round 3. |
+| M1 A (code-review high) | 1 | 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc | CHANGES (run by the orchestrator): 3 MAJOR, 3 MINOR, all verified and fixed, red test first. F1 (MAJOR, held: `ChangeList::put` never touched a rename's `from`, so `x` stayed shown beside `y`): `Held::adopt` also puts a fresh rename's `from` into shown and latest; test s11. F2 (MAJOR, held: adopting an undotted path the fresh read no longer lists left set ≠ difference): `adopt` recomputes `changed = changed_between(shown, latest)`; test s12 with an invariant check. F3 (MAJOR, held: one failing path made every row `Stat`): on a failed batch `identify` hashes each path alone (not after a timeout), so only that row falls back; test with a required clean filter that fails. F4 (MINOR, held: `hash-object --stdin-paths` C-unquotes a leading `"` and drops a trailing CR): such paths take `Stat` (`carried_verbatim`); test with `"q"` beside `q` and `cr\r`. F5 (MINOR, held: `--raw` gives a gitlink's worktree side as zeros, the dir's stat never moves): a directory with its own `.git` takes `git rev-parse HEAD` as `Object`; submodule test. F6 (MINOR, held): `NameStatus.mode_changed: bool` became `modes: [u32; 2]` (+ `mode_changed()`), `ChangeIdentity::Sides` gained `modes` (serde default); chmod test. |
+| M1 B (conformance) | 1 | 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc | CLEAN (sonnet, run by the orchestrator). Verify: lib 1578 passed incl. 10 `review::stale`; `review_git` and `pr_diff_split` passed; `settings_refuses_save_over_failed_read` failed only because the reviewer ran as root (`scripts/gate.sh` runs it unprivileged). |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
@@ -89,6 +91,7 @@ items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 | F6, untracked rows | Partly: an untracked row's modes stay `[0, 0]` (`--raw` does not list it); a chmod on an untracked file is not flagged. Its diff shows the mode only in the `new file mode` header; left for a follow-up if wanted. |
 
 ## Handover
 
@@ -131,4 +134,7 @@ together within ~2 s.
   mutation (no `identify`, no `--no-abbrev`: I1a, I3–I6 fail); the unit lacked the Agent tool, so
   reviews A/B did not run in it.
 - M1 review snapshot (code commit, gate green: `scripts/gate.sh` exit 0):
-  `4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc`.
+  `4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc` (reviews A
+  and B round 1 ran on it).
+- M1 PR body (review A round 1 fixes): `$SCRATCHPAD/pr-body-1275-m1.md` of the M1 part-2 unit;
+  the orchestrator opens the PR after A round 2.
