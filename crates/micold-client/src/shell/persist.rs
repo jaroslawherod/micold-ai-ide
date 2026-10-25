@@ -1541,6 +1541,25 @@ mod catalog_recovery_tests {
         set_changed(&mut target, &saved, Some(&baseline));
         assert_eq!(target.daemons, registry.entries().to_vec());
     }
+
+    /// Feature 1274 (T060): the form does not carry the single-key switch yet, so a save whose
+    /// settings hold `into_settings`' placeholder `true` keeps a stored `false`.
+    #[test]
+    fn a_form_save_keeps_a_stored_single_key_switch_off() {
+        let mut target = Settings {
+            review_single_keys: false,
+            ..Settings::default()
+        };
+        let baseline = Settings::default();
+        let saved = Settings {
+            theme: micold_core::theme::ThemePreference::Light,
+            ..Settings::default()
+        };
+        assert!(saved.review_single_keys, "the form's placeholder is on");
+        set_changed(&mut target, &saved, Some(&baseline));
+        assert!(!target.review_single_keys, "the stored off is kept");
+        assert_eq!(target.theme, micold_core::theme::ThemePreference::Light);
+    }
 }
 
 /// Whether `project` has a Jira token file: the probe run on Settings open and `SettingsChanged`

@@ -45,10 +45,12 @@ snapshot)
 **Constraints**: no daemon or wire change; no key reaches or leaves a focused terminal; core has no
 OS branch (Principle VI); no stand-in for a blocker's work
 
-**Scale/Scope**: M2: `settings.rs` extended, `review/keys.rs` extended (plus compile-only lines in the client's `features/settings.rs` and `shell/persist.rs`); M3 also `features/settings.rs`, `ui/settings/appearance.rs`, `shell/{persist,startup}.rs` for the switch. M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
+**Scale/Scope**: M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
 2 extended (`quick_switch.rs`, `review/diff.rs`). M3/M4: `keymap.rs`, `features/changes.rs` (or #1269's
 Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M5:
-`features/quick_switch.rs`, the switcher's row view, 1 doc section.
+`features/quick_switch.rs`, the switcher's row view, 1 doc section. M2: `settings.rs` and `review/keys.rs` extended (plus compile-only lines in the client's
+`features/settings.rs` and `shell/persist.rs`); M3 also `features/settings.rs`,
+`ui/settings/appearance.rs`, `shell/{persist,startup}.rs` for the switch.
 
 ## Constitution Check
 

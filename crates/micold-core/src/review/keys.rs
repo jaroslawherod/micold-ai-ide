@@ -73,6 +73,12 @@ impl ReviewKey {
         !self.mods.primary
     }
 
+    /// Whether the row acts with the single-key switch at `single_keys` (FR-022): the one rule
+    /// [`resolve`], [`sheet_rows`] and [`key_hint`] share.
+    pub fn is_on(&self, single_keys: bool) -> bool {
+        single_keys || !self.is_single()
+    }
+
     /// The row's key as `(Linux/Windows form, macOS form)`, as the sheet, tooltips and user guide
     /// write it (contract K4).
     pub fn labels(&self) -> (String, String) {
@@ -204,7 +210,7 @@ pub fn resolve(press: &Press, holder: Holder, single_keys: bool) -> Option<Revie
         .iter()
         .find(|row| matches(row, press))
         .filter(|row| row.repeats || !press.repeat)
-        .filter(|row| single_keys || !row.is_single())?
+        .filter(|row| row.is_on(single_keys))?
         .action?;
     let heard = match holder {
         Holder::Review => true,
@@ -221,9 +227,7 @@ pub const SINGLE_KEYS_OFF_NOTE: &str = "Single-key shortcuts are off (Settings â
 /// The rows the `?` sheet lists, in table order (contract K4a): every row while `single_keys` is on,
 /// only the chords while it is off.
 pub fn sheet_rows(single_keys: bool) -> impl Iterator<Item = &'static ReviewKey> {
-    REVIEW_KEYS
-        .iter()
-        .filter(move |row| single_keys || !row.is_single())
+    REVIEW_KEYS.iter().filter(move |row| row.is_on(single_keys))
 }
 
 /// The row a tooltip names for `action` (FR-013, contract K4a); `None` for a single key while
