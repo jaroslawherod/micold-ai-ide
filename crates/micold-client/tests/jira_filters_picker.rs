@@ -1119,11 +1119,16 @@ fn advanced_mode_neither_applies_nor_drops_the_chosen_filters() {
     let chosen = form(&state).jira_filters.chosen.clone();
     let line = form(&state).jira_filters.active_line();
     assert!(line.is_some(), "Payments is chosen");
+    filter(&mut state, FilterMsg::Focused(COMPONENT));
+    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Au".into()));
     send(
         &mut state,
         Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Advanced)),
     );
     assert!(form(&state).shows_advanced());
+    let field = form(&state).jira_filters.field(COMPONENT);
+    assert!(!field.open, "a hidden filter's list closes");
+    assert_eq!(field.query, "Payments", "its unpicked text gives way");
     let before = state.worktree_form.issue_request_seq;
     filter(&mut state, FilterMsg::ClearedAll);
     filter(&mut state, FilterMsg::Cleared(COMPONENT));
