@@ -31,4 +31,4 @@ passed on its first run (review B F1). Red is shown afterwards by mutation. Noth
 
 | Task | Behaviour | Red evidence | Green |
 |---|---|---|---|
-| T019, T020 | `pin_roboto_italics` removes a host Roboto Italic and a host Roboto Bold (700), keeps a host Regular (400), the bundled faces and other families, resolves italic 400/500/600/700 and upright 700 to the bundled faces, and is idempotent (`pin_drops_host_italics_and_off_weight_faces_only`) | mutation: the removal loop replaced by `0` → `... FAILED` ("host italic and host bold", left 0, right 2) | restored: `cargo test -p micold-material --lib -- roboto` 6 passed |
+| T019, T020 | `pin_roboto_italics` removes a host Roboto Italic and a host Roboto Bold (700), keeps a host Regular (400), the bundled faces and other families, resolves italic 400/500/600/700 and upright 700 to the bundled faces, and is idempotent (`pin_drops_host_italics_and_off_weight_faces_only`) | mutation: the removal loop replaced by `0` → `... FAILED` ("host italic and host bold", left 0, right 2) | restored: `cargo test -p micold-material --lib -- roboto` 5 passed (the five `roboto::tests`; this row first said 6, a miscount) |
