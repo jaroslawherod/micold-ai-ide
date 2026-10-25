@@ -10,20 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: milestone M2
-- **Next step**: orchestrator moves wip/1127-m2 (397d8d8d, over M1's d9c7278b) onto the PR branch after #1376 merges and opens the M2 PR (title and body in the unit's scratchpad), then M3
+- **Next step**: M2 PR open; then M3 (built in a second worktree on wip/1127-m3), then M4
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1357 | design (spec, plan, tasks) | merged | 1076eede8a911518582fcfcbeb95fc08c4949d58 |
-| #1376 | M1 | open | pending |
+| #1376 | M1 | merged | 9fc835a0 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | PR open, CI running |
+| M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | gated on wip/1127-m2, PR to open |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
