@@ -25,16 +25,15 @@ The window is organised as a Material Design layout:
 
 ### Title bar
 
-A 44 px bar runs across the top of the window in every view: its breadcrumb is where you switch
-projects, and its jump-to field opens the [quick
-switcher](worktrees-and-sessions.md#interacting-with-the-terminal). From the left, it holds:
+A 44 px bar runs across the top of the window in every view. From the left, it holds:
 
 - **App mark** — the application's icon; hover it for the application's name. It is not a button.
 - **Breadcrumb** — the open project (press it to switch projects) and, after a `/` in a quieter
   tone, the branch or view the main area shows — see [Switching projects from the
   breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb).
-- **Jump to location, session or project** — in the middle of the free space, with its shortcut
-  (Ctrl+Shift+P, Cmd+Shift+P on macOS). Press it, or Tab to it and press Enter or Space; it is
+- **Jump to location, session or project** — in the middle of the free space, it opens the
+  [quick switcher](worktrees-and-sessions.md#interacting-with-the-terminal), as its shortcut
+  (Ctrl+Shift+P, Cmd+Shift+P on macOS) does. Press it, or Tab to it and press Enter or Space; it is
   pressed, not typed into. While Settings is open it is greyed out and does nothing.
 - **Settings** — the gear, at the right; it opens [Settings](settings.md) and is drawn selected
   while Settings is open.
@@ -210,17 +209,15 @@ open in it, that session's terminal, and Settings:
 
 ## Choosing your theme
 
-Choose the theme under **Theme** in [Settings → Appearance](settings.md#appearance); the
-overflow menu no longer holds a theme toggle. There are three choices:
+Choose the theme under **Theme** in [Settings → Appearance](settings.md#appearance). There are
+three choices:
 
-- **Auto** — follow the OS preference (the default).
+- **Follow the system** — follow the OS preference (the default).
 - **Light** — always use the light theme, regardless of the OS.
 - **Dark** — always use the dark theme, regardless of the OS.
 
 Your choice takes effect when you press **Save** and is remembered across restarts. Going back to
-**Auto** resumes tracking your OS preference and switching live when it changes.
-
-<!-- media: theme-follow-light -->
+**Follow the system** resumes tracking your OS preference and switching live when it changes.
 
 ## Motion & animations
 

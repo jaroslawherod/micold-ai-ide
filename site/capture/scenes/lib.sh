@@ -403,13 +403,9 @@ scene_form_name_y=502
 scene_tab_y=868
 scene_tab_ai_x=1355
 scene_tab_new_x=1244
-# The overflow menu in the app bar, and the two items inside it a scene uses. The theme item is the
-# first: pressing it cycles the preference and leaves the menu open, so a scene showing the cycle
-# presses the same point repeatedly.
+# The overflow menu in the title bar, and the item inside it a scene uses.
 scene_menu_x=1400
 scene_menu_y=32
-scene_menu_theme_x=1277
-scene_menu_theme_y=97
 scene_menu_settings_x=1262
 scene_menu_settings_y=145
 # The settings sections, down the left of the settings view.
