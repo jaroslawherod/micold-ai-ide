@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M4)
-- **Next step**: M4 implemented (T024–T029); reviews A, B, visual pass (T030), full gate; push after #1426 merges
+- **Next step**: M4 reviewed (A, B r2 CLEAN), visual pass done (visual-pass/m4.md), full gate, pushed; PR title/body in the unit's scratchpad for the orchestrator to open. Then M5 (T031–T039)
 
 ## Pull requests
 
@@ -19,8 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
 | #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
 | #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
-| #1426 | M3 tree state in the Changes reducer; Files on core | open | — |
-| — | M4 tree rows + ChangeBar drawn; guide; snapshot; visual pass | in progress (waits on #1426) | — |
+| #1426 | M3 tree state in the Changes reducer; Files on core | merged (rebase) | d84e94860 |
+| — | M4 tree rows + ChangeBar drawn; guide; snapshot; visual pass | pushed; PR to open | — |
 
 ## Milestones
 
@@ -28,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
-| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | open |
-| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | in progress |
+| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | merged |
+| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | reviewed; PR to open |
 | M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | after M4 |
 
 ## Decisions
@@ -64,7 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, sonnet) | 1 | da02017a…:2bad8b6c (base 6d0475a5) | CLEAN, cited (tree.rs, tasks.md:70-91, cycle-log.md:15-19) |
 | Review A M3 (code-review high) | 1 | f22196b4e09cd9e1d7f351b7b611662b7d134cb0:0db79c00204b5edec9f374c8343473ee7fed851b (base bb931624) | 5 MINOR (F1 fixed in 7b228493: reference to an unchanged file tested; F2–F5 declined) |
 | Review B M3 (conformance, sonnet) | 1 | f22196b4…:0db79c00 | CLEAN, cited (changes.rs arms, tree_state / tree_source tests, tasks T019–T023); 2 MINOR (F2 cycle-log note fixed, prose only; F1 declined) |
-| Review B M4 (conformance, sonnet) | 1 | 8f8c6c26a30918e69bb32051d5b1305ee780612b:23fe1317d03e3500752bc65f76f3d734d8b4c124 (base 5c9daf4c) | CHANGES, cited: F1 MAJOR (no red for T024/T027) fixed by mutation red, cycle-log M4; F2 MINOR fixed (`kind_tag`, `counted` tests); F3, F4 MINOR fixed (prose). F1's fix adds evidence and tests only, no code change under review: no new round (review-rounds, B re-runs only after its own BLOCKER/MAJOR fixes — re-run below) |
+| Review B M4 (conformance, sonnet) | 1 | 8f8c6c26a30918e69bb32051d5b1305ee780612b:23fe1317d03e3500752bc65f76f3d734d8b4c124 (base 5c9daf4c) | CHANGES, cited: F1 MAJOR (no red for T024/T027) fixed by mutation red, cycle-log M4; F2 MINOR fixed (`kind_tag`, `counted` tests); F3, F4 MINOR fixed (prose) |
+| Review B M4 (conformance, sonnet) | 2 (full: rebase made round 1's snapshot stale) | abd9218d5ce05c39cb42b65bfc539592eb54cd6c:16aa4cb36024ee74d40f3fca9f718029b2e28c0b | CLEAN, cited (changes.rs, change_bar.rs, glyph.rs, guide, cycle-log M4); all four round-1 fixes hold |
 | Review A M4 (code-review high) | 1 | 91fc5a5c20ea7c55ab33ba07c7f36ef62ae056d1:bbfebda252276fda85ce54f86693fd8fc106ecfb (base 5c9daf4c) | CLEAN, cited (changes.rs, change_bar.rs, glyph.rs, tree.rs); 2 MINOR (F1 fixed: indent cap shaped once; F2 declined). A first dispatch read a stale M3 prompt and reviewed M3's diff: not counted; its one M4 point (`files[*leaf]` unguarded) fixed in bbfebda2 |
 
 ## Declined review findings
