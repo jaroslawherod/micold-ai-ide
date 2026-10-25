@@ -4214,3 +4214,75 @@ fn the_last_session_of_a_location_closing_shows_its_review() {
         "a2 was feat-a's last: its review is shown"
     );
 }
+
+/// Feature 1269 T027 (U8, R8): the emptied location is the gone session's own, not the one the
+/// header followed — with the header left on `feat-b` (which `b` keeps live) when `feat-a`'s last
+/// session closes, `feat-a`'s review is shown and `feat-b`'s is not.
+#[test]
+fn the_emptied_location_is_the_gone_sessions_not_the_headers() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    let (mut app, [a1, a2, _b]) = reviewing_feat_a();
+    review_again(&mut app, feat_b.clone());
+    answer_pending(&mut app);
+    app.update(Message::Session(SessionMsg::Selected(a1)));
+    app.update(Message::Session(SessionMsg::CloseRequested(a2)));
+    assert_eq!(
+        app.session.active,
+        Some(a1),
+        "precondition: a1 is feat-a's last"
+    );
+    app.changes.header.entry = Some((project(), feat_b));
+    app.update(Message::Session(SessionMsg::CloseRequested(a1)));
+    assert_eq!(app.session.active, None);
+    assert_eq!(
+        app.review_shown(),
+        Some(&(project(), worktree())),
+        "feat-a's review is shown, not feat-b's"
+    );
+}
+
+/// Feature 1269 T027 (U8): removing the current session, its location's last, shows its review.
+#[test]
+fn removing_the_last_session_of_a_location_shows_its_review() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    let (mut app, [_a1, _a2, b]) = reviewing_feat_a();
+    review_again(&mut app, feat_b.clone());
+    answer_pending(&mut app);
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    app.update(Message::Session(SessionMsg::RemoveRequested(b)));
+    app.update(Message::Session(SessionMsg::RemoveConfirmed));
+    assert_eq!(app.session.active, None);
+    assert_eq!(app.review_shown(), Some(&(project(), feat_b)));
+}
+
+/// Feature 1269 T027 (U8): the current session gone from the catalog has no record to name its
+/// location, so the location the header followed stands for it.
+#[test]
+fn a_current_session_dropped_from_the_catalog_shows_the_headers_review() {
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::daemons::DaemonId;
+    use micold_core::protocol::messages::CatalogSnapshot;
+    let feat_b = SessionLocation::Worktree("feat-b".into());
+    let (mut app, [_a1, _a2, b]) = reviewing_feat_a();
+    review_again(&mut app, feat_b.clone());
+    answer_pending(&mut app);
+    app.update(Message::Session(SessionMsg::Selected(b)));
+    assert_eq!(app.changes.header.entry, Some((project(), feat_b.clone())));
+    if let Some(list) = app.workspace.sessions.get_mut(&project()) {
+        list.retain(|s| s.id != b);
+    }
+    let empty = CatalogSnapshot {
+        schema_version: 1,
+        last_active: None,
+        projects: Vec::new(),
+        env_include_failures: Vec::new(),
+    };
+    micold_client::catalog_sync::reconcile_catalog(&mut app, DaemonId(1), &empty, false);
+    assert_eq!(app.session.active, None);
+    assert_eq!(app.review_shown(), Some(&(project(), feat_b)));
+}
