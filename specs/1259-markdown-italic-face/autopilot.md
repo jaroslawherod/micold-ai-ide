@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M2 gate green, pushed; reviews A/B and visual-pass B5 pending (orchestrator)
-- **Next step**: orchestrator dispatches review A and B (and visual-pass B5), then opens the M2 PR
+- **Phase**: M2 PR #1389 open
+- **Next step**: orchestrator waits on CI for #1389 and merges; then the close unit (T023-T024)
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1343 | design (spec, plan, tasks) | merged | 56515707ebd3c2d9e078e059a5e791e16982a6c3 |
 | #1377 | M1 | merged | dbe13ae2425575a7b112d3c9eceaffb6ceb58f27 |
+| #1389 | M2 | open | — |
 
 ## Milestones
 
