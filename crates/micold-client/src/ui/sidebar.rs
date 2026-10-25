@@ -1501,6 +1501,18 @@ mod tests {
         assert_eq!(enter_on_first_focusable(&with_project()), [opened()]);
     }
 
+    /// Feature 1127 (T047, FR-016, SC-006): with the top bar's button gone the row is the pointer's
+    /// way in: it opens the Overview with a session active and with none. The row reads no
+    /// Changes state, so Changes sends the same message.
+    #[test]
+    fn the_overview_row_opens_the_overview_from_the_session_view() {
+        let mut state = with_project();
+        state.session.active = Some(micold_core::session::SessionId::new());
+        assert_eq!(enter_on_first_focusable(&state), [opened()], "session view");
+        state.session.active = None;
+        assert_eq!(enter_on_first_focusable(&state), [opened()], "no session");
+    }
+
     #[test]
     fn with_settings_open_the_overview_row_publishes_nothing() {
         let mut state = with_project();

@@ -10,9 +10,9 @@ follows your operating system's preference.
 The window is organised as a Material Design layout:
 
 - A 44 px **title bar** across the top holds, from the left: the app mark (hover it for the
-  application's name), a `project / place` **breadcrumb** — the open project (press it to switch
-  projects) and, after a `/` in a quieter tone, the branch or view the main area shows — and the
-  **Overview** button; in the middle of the free space, the **Jump to location, session or
+  application's name), a `project / place` **breadcrumb**: the open project (press it to switch
+  projects) and, after a `/` in a quieter tone, the branch or view the main area shows;
+  in the middle of the free space, the **Jump to location, session or
   project** field with its shortcut (Ctrl+Shift+P, Cmd+Shift+P on macOS), which opens the quick
   switcher; at the right, a **Settings** button (the gear) and the **overflow menu** (three dots).
   It shows no title text. When the window narrows, the field gives way first — it narrows to fit

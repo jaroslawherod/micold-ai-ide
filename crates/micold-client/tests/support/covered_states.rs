@@ -407,13 +407,13 @@ const TOOLBAR_MARK: &[usize] = &[0, 0, 0, 0, 0, 0];
 /// name it (T100).
 const APP_BAR: &[usize] = &[0, 0, 0, 0];
 /// The overflow (⋮) trigger, the bar's last child. The panel that clipped it opens from here.
-/// Re-pointed under feature 1127 (T014): the lane holds the mark, the switcher, the Overview
-/// button, the jump-to field (T044), Settings, then this.
-const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 5];
+/// Re-pointed under feature 1127 (T014, T049): the lane holds the mark, the switcher, the jump-to
+/// field (T044), Settings, then this.
+const APP_BAR_OVERFLOW_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 4];
 /// The Settings button, immediately before the overflow trigger (feature 1127, FR-011).
-const APP_BAR_SETTINGS: &[usize] = &[0, 0, 0, 0, 0, 4];
-/// The jump-to field, the bar's centre child after the Overview button (feature 1127, FR-008).
-const APP_BAR_FIELD: &[usize] = &[0, 0, 0, 0, 0, 3];
+const APP_BAR_SETTINGS: &[usize] = &[0, 0, 0, 0, 0, 3];
+/// The jump-to field, the bar's centre child after the switcher (feature 1127, FR-008).
+const APP_BAR_FIELD: &[usize] = &[0, 0, 0, 0, 0, 2];
 /// The project-switcher trigger, the child after the app mark (feature 1127, FR-002).
 const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 1];
 

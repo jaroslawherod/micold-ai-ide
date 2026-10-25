@@ -37,7 +37,7 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
 
 /// The title bar's lane: shell → column → bar → lane. Its children are the app mark, then one
-/// node per control the bar holds — the project switcher, the Overview button, Settings and the
+/// node per control the bar holds — the project switcher, the jump-to field, Settings and the
 /// overflow trigger (feature 1127, B2).
 ///
 /// Five indices, not the six the fixture prints: a record's path is relative to the root, and
@@ -49,9 +49,9 @@ const APP_BAR_LANE: &[usize] = &[0, 0, 0, 0, 0];
 /// place are words.
 const BREADCRUMB: usize = 1;
 
-/// The lane's centre child: the jump-to field (feature 1127, R5), after the Overview button while
-/// FR-015 keeps it in the bar (Story 3 moves the field to 2).
-const JUMP_FIELD: usize = 3;
+/// The lane's centre child: the jump-to field (feature 1127, R5), after the project switcher now
+/// the Overview button has left the bar (FR-016).
+const JUMP_FIELD: usize = 2;
 
 /// The bar's controls, in order: every child of the lane after the app mark.
 ///

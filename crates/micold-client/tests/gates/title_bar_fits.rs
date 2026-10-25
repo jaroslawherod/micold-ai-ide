@@ -1,10 +1,9 @@
 //! The title bar holds every control inside its 43 dp at the smallest and an ordinary window
 //! (feature 1127, T013 — FR-001, FR-010, SC-001, SC-003, contract B5).
 //!
-//! The fullest bar: a 60-character project name, an unread mark, and the Overview button with its
-//! badge. At 640 and 1280 dp wide, light and dark, the bar and its divider end at
+//! The fullest bar: a 60-character project name and an unread mark. At 640 and 1280 dp wide, light and dark, the bar and its divider end at
 //! `app_bar::BOTTOM_EDGE`, every child of the bar lies inside its height and the window, no two
-//! children overlap, and the mark, the project switcher, the Overview button with its badge, the
+//! children overlap, and the mark, the project switcher, the
 //! jump-to field (at least its glyph), Settings and the overflow trigger are all drawn. The field
 //! sits with equal free space either side of it (T044, FR-008, FR-010, contract B3).
 //!
@@ -59,11 +58,11 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .collect();
             assert_eq!(
                 children.len(),
-                6,
-                "{at}: mark, breadcrumb, Overview, field, Settings, overflow: {children:?}"
+                5,
+                "{at}: mark, breadcrumb, field, Settings, overflow: {children:?}"
             );
-            let (overview, field, settings) = (children[2], children[3], children[4]);
-            let before = field.x - (overview.x + overview.width);
+            let (switcher, field, settings) = (children[1], children[2], children[3]);
+            let before = field.x - (switcher.x + switcher.width);
             let after = settings.x - (field.x + field.width);
             assert!(
                 (before - after).abs() <= TOLERANCE + 0.5,
@@ -122,21 +121,23 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
             let settings = Icon::Settings.glyph().to_string();
             let menu = Icon::Menu.glyph().to_string();
             let search = Icon::Search.glyph().to_string();
-            for wanted in [
-                "Overview",
-                search.as_str(),
-                settings.as_str(),
-                menu.as_str(),
-            ] {
+            for wanted in [search.as_str(), settings.as_str(), menu.as_str()] {
                 assert!(
                     drawn(wanted),
                     "{at}: {wanted:?} is not drawn in the bar: {in_bar:?}"
                 );
             }
-            let badge = [Icon::CardNeedsAction, Icon::CardNeedsAttention]
-                .iter()
-                .any(|icon| drawn(&icon.glyph().to_string()));
-            assert!(badge, "{at}: the Overview badge is not drawn: {in_bar:?}");
+            // FR-016: the Overview button and its badge left the bar.
+            let overview_glyphs = [
+                Icon::Overview,
+                Icon::CardNeedsAction,
+                Icon::CardNeedsAttention,
+            ]
+            .map(|icon| icon.glyph().to_string());
+            assert!(
+                !drawn("Overview") && !overview_glyphs.iter().any(|g| drawn(g)),
+                "{at}: the bar draws the Overview button or its badge: {in_bar:?}"
+            );
             assert!(
                 !drawn("Micold"),
                 "{at}: the bar draws the application name as text: {in_bar:?}"

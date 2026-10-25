@@ -17,30 +17,24 @@ tallest card in that row, so rows stay even and nothing is cut off.
 
 ## Opening and closing it
 
-Press **Overview** in the top bar, after the `project / place` breadcrumb; while it is open the
-breadcrumb's place reads **Overview**. Press it again to close the
-Overview. The button is greyed out while [Settings](settings.md) is open; an Overview that was open
-before Settings shows again when Settings closes. Selecting a session in the sidebar also closes
-the Overview and shows that session.
+Press the sidebar's first row, **Overview**: click it, or reach it with Tab and press Enter or
+Space. While the Overview is open the breadcrumb's place in the top bar reads **Overview**, the row
+looks selected and no worktree row does. The row only opens the Overview, it never closes it:
+pressing it while the Overview is open changes nothing. The row does nothing while
+[Settings](settings.md) is open, and with no project open the sidebar has no Overview row. An
+Overview that was open before Settings shows again when Settings closes. Selecting a session in the
+sidebar also closes the Overview and shows that session.
 
-The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) does the same, also while a terminal has the
-keyboard; the app takes it and the terminal never receives it. The button's tooltip names it. The
-button looks pressed while the Overview is open.
-
-The sidebar's first row, **Overview**, opens it too: click it, or reach it with Tab and press Enter
-or Space. The row only opens the Overview, it never closes it: pressing it while the Overview is open
-changes nothing; close it with the top bar button, the shortcut or Escape. The row carries the same
-badge as the top bar button (below), with its words, for example "2 need action", and the same
-tooltip. While the Overview is open the row looks selected and no worktree row does. Like the
-button, the row does nothing while Settings is open, and with no project open the sidebar has no
-Overview row.
+The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) opens and closes it, also while a terminal
+has the keyboard; the app takes it and the terminal never receives it. The row's tooltip names it.
+**Escape** (with no card expanded) closes it too. The top bar has no Overview button.
 
 ### The badge
 
-When some location needs you, the button carries a badge: an icon and a count, beside the label. A
-red exclamation mark with *N* means *N* locations **need action**; if none does, an amber eye with
-*N* means *N* **need attention**. Hover the button for the words (*2 need action*). With neither,
-there is no badge. The badge shows whether or not the Overview is open.
+When some location needs you, the sidebar's Overview row carries a badge: a chip with the words, for
+example "2 need action". Red means *N* locations **need action**; if none does, amber means *N*
+**need attention**. Hover the row for the same words in its tooltip. With neither, there is no
+badge. The badge shows whether or not the Overview is open.
 
 The Overview replaces the main area; the sidebar and the top bar stay. Switching project keeps it
 open and shows the new project's cards.
@@ -49,20 +43,19 @@ open and shows the new project's cards.
 
 To give the cards the whole window, press **Full screen** at the right end of the Overview's
 header, or press **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS). The sidebar, its collapsed strip
-included, slides away and the cards fill the window's width; the top bar stays, with the breadcrumb,
-the Overview button and its badge. The button then reads **Exit full screen**; press it or
-the shortcut again and the sidebar slides back. The button's tooltip names the shortcut, and Tab
-reaches it. While a card's menu is open, the shortcut does nothing.
+included, slides away and the cards fill the window's width; the top bar stays, with the breadcrumb.
+The header control then reads **Exit full screen**; press it or the shortcut again and the sidebar
+slides back. Its tooltip names the shortcut, and Tab reaches it. While a card's menu is open, the shortcut does nothing.
 
 Entering and leaving full screen is one motion: the cards widen (or narrow) and slide to their new
 places as the sidebar goes or returns, never overlapping. A card that moves to another row slides
-along the row ends instead of vanishing and reappearing. Press the button or the shortcut again
+along the row ends instead of vanishing and reappearing. Press the control or the shortcut again
 part-way and the motion reverses from where it is. The card at the top of your view stays in view
 through the motion, even when the cards move to another row. To have no motion at all, turn on
 [Reduce motion](settings.md#reduce-motion) in Settings: full screen then switches in one step.
 
 Leaving the Overview leaves full screen in the same step: activating a card, **Escape** (with no
-card expanded), the top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the
+card expanded), or **Ctrl+Shift+O** close the Overview and bring the
 sidebar back. The sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full
 screen never changes the sidebar itself.
 

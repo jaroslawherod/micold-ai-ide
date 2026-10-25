@@ -597,11 +597,6 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                 material::Toolbar::new(roles)
                     .mark(mark())
                     .leading(leading())
-                    .leading_fixed(
-                        material::Button::text("Overview", roles)
-                            .leading(Icon::Overview)
-                            .on_press(Message::NoOp),
-                    )
                     .centre(field(roles).on_press_maybe(Some(Message::NoOp)))
                     .action(
                         material::IconButton::new(Icon::Settings, roles)
