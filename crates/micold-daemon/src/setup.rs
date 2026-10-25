@@ -9,23 +9,29 @@
 //!
 //! A run itself ([`spawn_run`]) runs on the blocking pool and is awaited by nothing: a create
 //! answers as soon as the worktree exists (FR-013), and a session starts whether or not setup has
-//! ended (FR-014).
+//! ended (FR-014). Only a delete waits for it ([`stop_and_wait`], FR-024).
+//!
+//! Each location's last run is kept on disk (M4, FR-016, FR-018): its record, its output log and
+//! the daemon-wide run id counter, through [`SetupStore`]. The operations say what to write; the
+//! callers write it after the lock is released.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use micold_core::process::{ExitKind, Stream, StreamingChild, Terminator};
 use micold_core::protocol::envelope::MAX_FRAME_LENGTH;
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::SessionLocation;
-use micold_core::setup::output::OutputBuffer;
+use micold_core::setup::output::{OutputBuffer, KEEP_LINES};
 use micold_core::setup::shell::{bash_on_path, shell_line, ShellPlatform};
 use micold_core::setup::{
     Failure, RunId, SetupCommand, SetupRun, SetupRunSummary, SetupStart, SetupState,
 };
+use micold_core::store::{SetupLog, StoredSetup};
+use tokio::sync::watch;
 
 use crate::state::{ClientId, DaemonState};
 
@@ -38,8 +44,29 @@ pub const BATCH_EVERY: Duration = Duration::from_millis(250);
 const BATCH_BYTES: usize = 1024 * 1024;
 const _: () = assert!(BATCH_BYTES * 8 < MAX_FRAME_LENGTH);
 
+/// A log grows to this many lines before it is cut back to the buffer's last [`KEEP_LINES`]
+/// (FR-021): rewriting it on every line past the bound would cost a full write per line.
+const LOG_COMPACT_AT: u64 = 20_000;
+const _: () = assert!(LOG_COMPACT_AT > KEEP_LINES as u64);
+
 /// A run's place: the project as this daemon's catalog holds it, and the location in it.
 type Key = (PathBuf, SessionLocation);
+
+/// What a location's log needs written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogWrite {
+    /// These lines, at its end.
+    Append(Vec<String>),
+    /// This log, in place of what it holds (a new run, or a compaction).
+    Replace(SetupLog),
+}
+
+/// What one location needs written: its record, its log, or both.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Persist {
+    pub record: Option<SetupRun>,
+    pub log: Option<LogWrite>,
+}
 
 /// Who a message is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +81,6 @@ pub enum To {
 pub type Outgoing = Vec<(To, DaemonMsg)>;
 
 /// Every project's setup command and every location's last run (data-model §Daemon).
-#[derive(Default)]
 pub struct SetupRuns {
     /// From `ProjectSetupSet`. Memory only (R4): the app sends them again on each connect.
     commands: HashMap<PathBuf, SetupCommand>,
@@ -62,8 +88,19 @@ pub struct SetupRuns {
     /// Each watched location's watchers, with the index of the next line each is owed. Apart from
     /// the runs, because a watch outlives a run (a new run keeps it) and may come before the first.
     watchers: HashMap<Key, BTreeMap<ClientId, u64>>,
-    /// The last id given out; ids are unique across the daemon, never per location.
-    last_id: u64,
+    /// The next id to give out; ids are unique across the daemon, never per location.
+    next_id: u64,
+}
+
+impl Default for SetupRuns {
+    fn default() -> Self {
+        Self {
+            commands: HashMap::new(),
+            runs: HashMap::new(),
+            watchers: HashMap::new(),
+            next_id: 1,
+        }
+    }
 }
 
 /// One location's last run.
@@ -74,6 +111,11 @@ struct Entry {
     terminator: Option<Terminator>,
     /// **Stop setup** asked for this run: whatever it exits with, it is `Stopped` (FR-023).
     stop_requested: bool,
+    /// The index of the first line the location's log holds.
+    log_first: u64,
+    /// Becomes `true` once the run task wrote its end; `None` for a run loaded from disk, which
+    /// has no task.
+    done: Option<watch::Receiver<bool>>,
 }
 
 impl Entry {
@@ -87,6 +129,48 @@ impl Entry {
     fn is_running(&self) -> bool {
         !self.record.state().is_ended()
     }
+
+    /// End the output with `state`'s reason line and say what the log needs: the lines kept since
+    /// the last write, or the whole buffer once the log has grown past [`LOG_COMPACT_AT`].
+    fn end_output(&mut self, state: &SetupState) -> Vec<(u64, String)> {
+        let mut done = self.output.finish();
+        if let Some(reason) = state.reason_line() {
+            done.extend(
+                self.output
+                    .push(Stream::Stdout, format!("{reason}\n").as_bytes()),
+            );
+        }
+        done
+    }
+
+    /// What the log needs for `lines`, just kept.
+    fn log_write(&mut self, lines: Vec<(u64, String)>) -> Option<LogWrite> {
+        if lines.is_empty() {
+            return None;
+        }
+        if self.output.next_index() - self.log_first > LOG_COMPACT_AT {
+            self.log_first = self.output.first_index();
+            return Some(LogWrite::Replace(SetupLog {
+                first_line: self.log_first,
+                lines: self.output.since(0).1,
+            }));
+        }
+        Some(LogWrite::Append(
+            lines.into_iter().map(|(_, line)| line).collect(),
+        ))
+    }
+}
+
+/// A run [`SetupRuns::start`] recorded, for the caller to persist and spawn.
+pub struct Begun {
+    pub id: RunId,
+    pub command: SetupCommand,
+    /// The next id after this one, for the counter file.
+    pub next_id: u64,
+    /// The record to write.
+    pub record: SetupRun,
+    /// Set by the run task once its end is written.
+    pub done: watch::Sender<bool>,
 }
 
 /// What a request to run setup got that is not a start.
@@ -142,7 +226,7 @@ impl SetupRuns {
         location: &SessionLocation,
         now: u64,
         out: &mut Outgoing,
-    ) -> Result<(RunId, SetupCommand), NotStarted> {
+    ) -> Result<Begun, NotStarted> {
         let command = self
             .commands
             .get(project)
@@ -152,21 +236,31 @@ impl SetupRuns {
         if self.runs.get(&key).is_some_and(Entry::is_running) {
             return Err(NotStarted::Busy);
         }
-        self.last_id += 1;
-        let id = RunId(self.last_id);
+        let id = RunId(self.next_id);
+        self.next_id += 1;
+        let (done, done_rx) = watch::channel(false);
         let entry = Entry {
             record: SetupRun::start(id, command.clone(), now),
             output: OutputBuffer::new(),
             terminator: None,
             stop_requested: false,
+            log_first: 0,
+            done: Some(done_rx),
         };
+        let record = entry.record.clone();
         out.push((To::All, changed(&key, Some(entry.summary()))));
         self.runs.insert(key.clone(), entry);
         // The new run's output replaces the last one's: each watcher is owed it from the start.
         if let Some(watchers) = self.watchers.get_mut(&key) {
             watchers.values_mut().for_each(|next| *next = 0);
         }
-        Ok((id, command))
+        Ok(Begun {
+            id,
+            command,
+            next_id: self.next_id,
+            record,
+            done,
+        })
     }
 
     /// The run's shell is spawned. `true` when **Stop setup** came first, so the caller ends it
@@ -181,11 +275,12 @@ impl SetupRuns {
         }
     }
 
-    /// Keep what the run printed.
-    pub fn push(&mut self, key: &Key, id: RunId, stream: Stream, bytes: &[u8]) {
-        if let Some(entry) = self.current(key, id) {
-            entry.output.push(stream, bytes);
-        }
+    /// Keep what the run printed, and say what its log needs. Nothing once the run's entry is
+    /// gone, replaced or ended, so a late line never re-creates a deleted log.
+    pub fn push(&mut self, key: &Key, id: RunId, stream: Stream, bytes: &[u8]) -> Option<LogWrite> {
+        let entry = self.current(key, id).filter(|e| e.is_running())?;
+        let lines = entry.output.push(stream, bytes);
+        entry.log_write(lines)
     }
 
     /// Send each watcher of `key` the lines it has not had yet.
@@ -205,12 +300,18 @@ impl SetupRuns {
     }
 
     /// The run ended: record its state, end its output with the reason line (SC-004), send the
-    /// watchers the rest and tell every client. Dropped when the location's record is gone or
-    /// belongs to a newer run.
-    pub fn finish(&mut self, key: &Key, id: RunId, ended: Ended, now: u64, out: &mut Outgoing) {
-        let Some(entry) = self.current(key, id) else {
-            return;
-        };
+    /// watchers the rest and tell every client, and say what to write. Dropped when the
+    /// location's record is gone, belongs to a newer run, or has already ended (an unwind
+    /// recorded it interrupted).
+    pub fn finish(
+        &mut self,
+        key: &Key,
+        id: RunId,
+        ended: Ended,
+        now: u64,
+        out: &mut Outgoing,
+    ) -> Option<Persist> {
+        let entry = self.current(key, id).filter(|e| e.is_running())?;
         let state = if entry.stop_requested {
             SetupState::Stopped
         } else {
@@ -225,24 +326,25 @@ impl SetupRuns {
                 }
             }
         };
-        entry.output.finish();
-        if let Some(reason) = state.reason_line() {
-            entry
-                .output
-                .push(Stream::Stdout, format!("{reason}\n").as_bytes());
-        }
+        let lines = entry.end_output(&state);
+        let log = entry.log_write(lines);
         entry.terminator = None;
         match entry.record.clone().finish(state, now) {
             Ok(record) => entry.record = record,
             Err(refused) => {
                 tracing::warn!(?refused, "a setup run's end was refused");
-                return;
+                return None;
             }
         }
+        let record = entry.record.clone();
         self.flush(key, id, out);
         if let Some(entry) = self.runs.get(key) {
             out.push((To::All, changed(key, Some(entry.summary()))));
         }
+        Some(Persist {
+            record: Some(record),
+            log,
+        })
     }
 
     /// **Stop setup** (FR-023): mark the run stopped and end its tree. Does not wait. `false` when
@@ -257,6 +359,113 @@ impl SetupRuns {
             terminator.terminate();
         }
         true
+    }
+
+    /// **Stop setup** for a delete (FR-024): [`Self::stop`], and the run task's end to await.
+    /// `None` when nothing runs there.
+    pub fn stop_waiter(
+        &mut self,
+        project: &Path,
+        location: &SessionLocation,
+    ) -> Option<watch::Receiver<bool>> {
+        if !self.stop(project, location) {
+            return None;
+        }
+        self.runs
+            .get(&(project.to_path_buf(), location.clone()))
+            .and_then(|entry| entry.done.clone())
+    }
+
+    /// The daemon is stopping (FR-019): end every live run's tree and record it `Interrupted`,
+    /// with the reason line last. Returns what each location needs written. A run task's own end,
+    /// coming later, is dropped.
+    pub fn interrupt_all(&mut self, now: u64, out: &mut Outgoing) -> Vec<(Key, Persist)> {
+        let mut writes = Vec::new();
+        for (key, entry) in self.runs.iter_mut().filter(|(_, e)| e.is_running()) {
+            if let Some(terminator) = entry.terminator.take() {
+                terminator.terminate();
+            }
+            let Some(persist) = interrupt(entry, now) else {
+                continue;
+            };
+            out.push((To::All, changed(key, Some(entry.summary()))));
+            writes.push((key.clone(), persist));
+        }
+        writes
+    }
+
+    /// The worktree at `location` was deleted: forget its run and tell every client
+    /// (`SetupChanged { run: None }`). The caller removes its files.
+    pub fn forget(&mut self, project: &Path, location: &SessionLocation, out: &mut Outgoing) {
+        let key = (project.to_path_buf(), location.clone());
+        if self.runs.remove(&key).is_some() {
+            out.push((To::All, changed(&key, None)));
+        }
+    }
+
+    /// The project was removed: end its runs (not waiting) and forget them and its command.
+    pub fn forget_project(&mut self, project: &Path, out: &mut Outgoing) {
+        self.commands.remove(project);
+        let keys: Vec<Key> = self
+            .runs
+            .keys()
+            .filter(|(p, _)| p == project)
+            .cloned()
+            .collect();
+        for key in keys {
+            self.stop(&key.0, &key.1);
+            self.forget(&key.0, &key.1, out);
+        }
+        self.watchers.retain(|(p, _), _| p != project);
+    }
+
+    /// What a client attaching to `project` is sent (FR-018): one `SetupChanged` per location
+    /// with a record.
+    #[must_use]
+    pub fn on_attach(&self, project: &Path) -> Vec<DaemonMsg> {
+        let mut found: Vec<(&Key, &Entry)> = self
+            .runs
+            .iter()
+            .filter(|((p, _), _)| p == project)
+            .collect();
+        found.sort_by_key(|(key, _)| place(&key.1).to_owned());
+        found
+            .into_iter()
+            .map(|(key, entry)| changed(key, Some(entry.summary())))
+            .collect()
+    }
+
+    /// The runs a daemon found on disk at start (FR-018, FR-019): each project's records and logs,
+    /// and the stored counter. A record left `Running` is `Interrupted` now, and its rewrite comes
+    /// back to be written. The next id is past both the counter and every record (data-model
+    /// §RunId).
+    pub fn loaded(
+        stored: Vec<(PathBuf, StoredSetup)>,
+        counter: Option<u64>,
+        now: u64,
+    ) -> (Self, Vec<(Key, Persist)>) {
+        let mut runs = Self::default();
+        let mut writes = Vec::new();
+        let highest = stored.iter().map(|(_, s)| s.run.id().0).max().unwrap_or(0);
+        runs.next_id = counter.unwrap_or(1).max(highest + 1);
+        for (project, setup) in stored {
+            let key = (project, setup.location);
+            let mut entry = Entry {
+                record: setup.run,
+                output: OutputBuffer::restored(setup.log.first_line, setup.log.lines),
+                terminator: None,
+                stop_requested: false,
+                log_first: setup.log.first_line,
+                done: None,
+            };
+            if entry.is_running() {
+                if let Some(persist) = interrupt(&mut entry, now) {
+                    writes.push((key.clone(), persist));
+                }
+            }
+            runs.runs.insert(key, entry);
+        }
+        (runs, writes)
     }
 
     /// `conn` watches `location`'s output from `from_line`: it is sent the backlog at once, when
@@ -304,6 +513,18 @@ impl SetupRuns {
     fn current(&mut self, key: &Key, id: RunId) -> Option<&mut Entry> {
         self.runs.get_mut(key).filter(|e| e.record.id() == id)
     }
+}
+
+/// Record `entry`'s run `Interrupted` (FR-019) and end its output with the reason line.
+fn interrupt(entry: &mut Entry, now: u64) -> Option<Persist> {
+    let state = SetupState::Interrupted;
+    let lines = entry.end_output(&state);
+    let log = entry.log_write(lines);
+    entry.record = entry.record.clone().finish(state, now).ok()?;
+    Some(Persist {
+        record: Some(entry.record.clone()),
+        log,
+    })
 }
 
 fn changed(key: &Key, run: Option<SetupRunSummary>) -> DaemonMsg {
@@ -368,17 +589,167 @@ pub fn start_in(
         runs.start(project, &location, micold_core::unix_time::unix_secs(), out)
     });
     match begun {
-        Ok((id, command)) => {
-            spawn_run(state, (project.to_path_buf(), location), dir, id, command);
+        Ok(begun) => {
+            let key = (project.to_path_buf(), location);
+            if let Some(store) = state.setup_store() {
+                // The counter before the record (data-model §RunId); the last run's log is replaced.
+                store.write_counter(begun.next_id);
+                store.write(
+                    &key,
+                    &Persist {
+                        record: Some(begun.record),
+                        log: Some(LogWrite::Replace(SetupLog::default())),
+                    },
+                );
+            }
+            let id = begun.id;
+            spawn_run(state, key, dir, id, begun.command, begun.done);
             SetupStart::Started(id)
         }
         Err(why) => why.into(),
     }
 }
 
+/// Stop the run at `location`, if one runs, and wait for its task to write its end, at most
+/// [`micold_core::process::RUN_OVERRUN`] (the kill-and-drain bound). At once when nothing runs.
+/// A delete calls it before removing the worktree (FR-024).
+pub async fn stop_and_wait(state: &Arc<DaemonState>, project: &Path, location: &SessionLocation) {
+    let Some(mut done) = state.setup(|runs, _| runs.stop_waiter(project, location)) else {
+        return;
+    };
+    let ended = tokio::time::timeout(
+        micold_core::process::RUN_OVERRUN,
+        done.wait_for(|done| *done),
+    )
+    .await;
+    if ended.is_err() {
+        tracing::warn!(
+            project = %project.display(),
+            location = place(location),
+            "a stopped setup run had not ended in time; it is forgotten anyway"
+        );
+    }
+}
+
+/// Forget the run at `location` and remove its files: the worktree was deleted (FR-016).
+pub fn forget(state: &DaemonState, project: &Path, location: &SessionLocation) {
+    state.setup(|runs, out| runs.forget(project, location, out));
+    if let Some(store) = state.setup_store() {
+        store.remove(project, location);
+    }
+}
+
+/// The daemon is stopping: record every live run `Interrupted` and end its tree (FR-019).
+pub fn interrupt_all(state: &DaemonState) {
+    let writes =
+        state.setup(|runs, out| runs.interrupt_all(micold_core::unix_time::unix_secs(), out));
+    if let Some(store) = state.setup_store() {
+        for (key, persist) in &writes {
+            store.write(key, persist);
+        }
+    }
+}
+
+/// Where setup's records, logs and the run id counter are written (M4). Absent for the ephemeral
+/// catalog, which keeps the counter in memory.
+pub struct SetupStore {
+    files: crate::catalog::SetupFiles,
+    /// The highest counter value written; held across the write, so two starts racing to the file
+    /// never lower it.
+    counter: Mutex<u64>,
+}
+
+impl SetupStore {
+    #[must_use]
+    pub fn new(files: crate::catalog::SetupFiles) -> Self {
+        Self {
+            files,
+            counter: Mutex::new(0),
+        }
+    }
+
+    /// Every stored run of `projects`, and the stored counter, as a daemon finds them at start;
+    /// the `Running` ones found are written back `Interrupted`.
+    #[must_use]
+    pub fn load(&self, projects: impl IntoIterator<Item = PathBuf>) -> SetupRuns {
+        let files = self.files.get();
+        let stored = projects
+            .into_iter()
+            .flat_map(|project| {
+                files
+                    .load_setup(&project)
+                    .into_iter()
+                    .map(move |setup| (project.clone(), setup))
+            })
+            .collect();
+        let (runs, writes) = SetupRuns::loaded(
+            stored,
+            files.load_setup_counter(),
+            micold_core::unix_time::unix_secs(),
+        );
+        for (key, persist) in &writes {
+            self.write(key, persist);
+        }
+        runs
+    }
+
+    fn write_counter(&self, next: u64) {
+        let mut written = self.counter.lock().unwrap_or_else(|e| e.into_inner());
+        if next <= *written {
+            return;
+        }
+        match self.files.get().save_setup_counter(next) {
+            Ok(()) => *written = next,
+            Err(err) => tracing::warn!(%err, "the setup run id counter was not written"),
+        }
+    }
+
+    /// Write what `key` needs. A failure is logged: the run goes on, and memory keeps it.
+    fn write(&self, (project, location): &Key, persist: &Persist) {
+        let files = self.files.get();
+        let written = persist
+            .record
+            .as_ref()
+            .map_or(Ok(()), |record| {
+                files.save_setup_record(project, location, record)
+            })
+            .and_then(|()| match &persist.log {
+                None => Ok(()),
+                Some(LogWrite::Append(lines)) => files.append_setup_log(project, location, lines),
+                Some(LogWrite::Replace(log)) => files.write_setup_log(project, location, log),
+            });
+        if let Err(err) = written {
+            tracing::warn!(
+                project = %project.display(),
+                location = place(location),
+                %err,
+                "a setup record or log was not written"
+            );
+        }
+    }
+
+    fn remove(&self, project: &Path, location: &SessionLocation) {
+        if let Err(err) = self.files.get().remove_setup(project, Some(location)) {
+            tracing::warn!(
+                project = %project.display(),
+                location = place(location),
+                %err,
+                "a deleted worktree's setup files were not removed"
+            );
+        }
+    }
+}
+
 /// Run `command` in `dir` for run `id`, sending its output to the watchers every
 /// [`BATCH_EVERY`], and record how it ended.
-fn spawn_run(state: &Arc<DaemonState>, key: Key, dir: PathBuf, id: RunId, command: SetupCommand) {
+fn spawn_run(
+    state: &Arc<DaemonState>,
+    key: Key,
+    dir: PathBuf,
+    id: RunId,
+    command: SetupCommand,
+    done: watch::Sender<bool>,
+) {
     let state = Arc::clone(state);
     tokio::spawn(async move {
         let mut run = {
@@ -396,9 +767,18 @@ fn spawn_run(state: &Arc<DaemonState>, key: Key, dir: PathBuf, id: RunId, comman
                 _ = tick.tick() => state.setup(|runs, out| runs.flush(&key, id, out)),
             }
         };
-        state.setup(|runs, out| {
-            runs.finish(&key, id, ended, micold_core::unix_time::unix_secs(), out);
-        });
+        // The end is written before `done`, so a delete that waited finds the files to remove.
+        let writer = Arc::clone(&state);
+        let _ = tokio::task::spawn_blocking(move || {
+            let persist = writer.setup(|runs, out| {
+                runs.finish(&key, id, ended, micold_core::unix_time::unix_secs(), out)
+            });
+            if let (Some(persist), Some(store)) = (persist, writer.setup_store()) {
+                store.write(&key, &persist);
+            }
+        })
+        .await;
+        let _ = done.send(true);
     });
 }
 
@@ -433,7 +813,16 @@ fn run_blocking(
         terminator.terminate();
     }
     Ended::Exited(child.run(|stream, bytes| {
-        state.setup(|runs, _| runs.push(key, id, stream, bytes));
+        let log = state.setup(|runs, _| runs.push(key, id, stream, bytes));
+        if let (Some(log), Some(store)) = (log, state.setup_store()) {
+            store.write(
+                key,
+                &Persist {
+                    record: None,
+                    log: Some(log),
+                },
+            );
+        }
     }))
 }
 
@@ -456,8 +845,8 @@ mod tests {
         let mut runs = SetupRuns::default();
         let mut out = Vec::new();
         assert_eq!(
-            runs.start(Path::new("/p"), &key("a").1, 1, &mut out),
-            Err(NotStarted::NotConfigured)
+            runs.start(Path::new("/p"), &key("a").1, 1, &mut out).err(),
+            Some(NotStarted::NotConfigured)
         );
         assert!(out.is_empty());
     }
@@ -466,16 +855,18 @@ mod tests {
     fn a_second_start_while_running_is_busy_and_ids_are_daemon_wide() {
         let mut runs = runs_with("true");
         let mut out = Vec::new();
-        let (a, _) = runs
+        let a = runs
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         assert_eq!(
-            runs.start(Path::new("/p"), &key("a").1, 1, &mut out),
-            Err(NotStarted::Busy)
+            runs.start(Path::new("/p"), &key("a").1, 1, &mut out).err(),
+            Some(NotStarted::Busy)
         );
-        let (b, _) = runs
+        let b = runs
             .start(Path::new("/p"), &key("b").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         assert_ne!(a, b, "ids are unique across locations");
     }
 
@@ -483,9 +874,10 @@ mod tests {
     fn a_stop_requested_run_is_stopped_whatever_it_exits_with() {
         let mut runs = runs_with("true");
         let mut out = Vec::new();
-        let (id, _) = runs
+        let id = runs
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         assert!(runs.stop(Path::new("/p"), &key("a").1));
         runs.finish(&key("a"), id, Ended::Exited(ExitKind::Code(0)), 2, &mut out);
         assert_eq!(runs.runs[&key("a")].record.state(), &SetupState::Stopped);
@@ -496,9 +888,10 @@ mod tests {
     fn a_finish_for_a_replaced_run_is_dropped() {
         let mut runs = runs_with("true");
         let mut out = Vec::new();
-        let (old, _) = runs
+        let old = runs
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         runs.finish(
             &key("a"),
             old,
@@ -506,9 +899,10 @@ mod tests {
             2,
             &mut out,
         );
-        let (new, _) = runs
+        let new = runs
             .start(Path::new("/p"), &key("a").1, 3, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         out.clear();
         runs.finish(
             &key("a"),
@@ -526,9 +920,10 @@ mod tests {
     fn a_watcher_gets_each_line_once_and_the_reason_line_last() {
         let mut runs = runs_with("true");
         let mut out = Vec::new();
-        let (id, _) = runs
+        let id = runs
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         runs.push(&key("a"), id, Stream::Stdout, b"one\n");
         out.clear();
         runs.watch(7, Path::new("/p"), &key("a").1, 0, &mut out);
@@ -559,9 +954,10 @@ mod tests {
         use micold_core::protocol::envelope::MAX_FRAME_LENGTH;
         let mut runs = runs_with("true");
         let mut out = Vec::new();
-        let (id, _) = runs
+        let id = runs
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
-            .unwrap();
+            .unwrap()
+            .id;
         runs.watch(7, Path::new("/p"), &key("a").1, 0, &mut out);
         let line = format!("{}\n", "x".repeat(4000));
         for _ in 0..5000 {
@@ -594,5 +990,75 @@ mod tests {
         out.clear();
         runs.watch(8, Path::new("/p"), &key("a").1, 0, &mut out);
         check(&out, 8);
+    }
+
+    /// FR-021: the log takes each line as it is kept, and once past [`LOG_COMPACT_AT`] lines it
+    /// is replaced by the buffer's last [`KEEP_LINES`], numbered on from the lines dropped.
+    #[test]
+    fn a_log_past_its_bound_is_cut_back_to_the_buffer() {
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let id = runs
+            .start(Path::new("/p"), &key("a").1, 1, &mut out)
+            .unwrap()
+            .id;
+        assert_eq!(
+            runs.push(&key("a"), id, Stream::Stdout, b"x\n"),
+            Some(LogWrite::Append(vec!["x".into()]))
+        );
+        assert_eq!(runs.push(&key("a"), id, Stream::Stdout, b"partial"), None);
+        let mut last = None;
+        for _ in 1..=LOG_COMPACT_AT {
+            last = runs.push(&key("a"), id, Stream::Stdout, b"\n");
+        }
+        let Some(LogWrite::Replace(log)) = last else {
+            panic!("the log is cut back: {last:?}");
+        };
+        assert_eq!(log.lines.len(), KEEP_LINES);
+        assert_eq!(log.first_line, LOG_COMPACT_AT + 1 - KEEP_LINES as u64);
+        assert!(matches!(
+            runs.push(&key("a"), id, Stream::Stdout, b"y\n"),
+            Some(LogWrite::Append(_))
+        ));
+    }
+
+    /// FR-019: an unwind records a live run `Interrupted` with the reason line last; the run
+    /// task's own end and late output, coming after, write and send nothing.
+    #[test]
+    fn after_an_interrupt_the_runs_own_end_is_dropped() {
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let id = runs
+            .start(Path::new("/p"), &key("a").1, 1, &mut out)
+            .unwrap()
+            .id;
+        let writes = runs.interrupt_all(2, &mut out);
+        assert_eq!(writes.len(), 1);
+        let (_, persist) = &writes[0];
+        assert_eq!(
+            persist.record.as_ref().map(SetupRun::state),
+            Some(&SetupState::Interrupted)
+        );
+        assert_eq!(
+            persist.log,
+            Some(LogWrite::Append(vec![
+                "Interrupted: the daemon stopped.".into()
+            ]))
+        );
+        out.clear();
+        assert_eq!(runs.push(&key("a"), id, Stream::Stdout, b"late\n"), None);
+        let late = runs.finish(
+            &key("a"),
+            id,
+            Ended::Exited(ExitKind::Signal(9)),
+            3,
+            &mut out,
+        );
+        assert_eq!(late, None);
+        assert!(out.is_empty());
+        assert!(
+            runs.interrupt_all(4, &mut out).is_empty(),
+            "nothing runs now"
+        );
     }
 }

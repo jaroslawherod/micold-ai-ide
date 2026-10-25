@@ -12,12 +12,17 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::occupancy::Additional;
+use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind, OperationResult};
 use micold_core::session::{AiCli, SessionLocation, TerminalMode};
-use micold_core::setup::{Failure, SetupCommand, SetupState};
+use micold_core::settings::JsonFileSettingsStore;
+use micold_core::setup::{Failure, RunId, SetupCommand, SetupRun, SetupState};
+use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::terminal::LaunchMode;
+use micold_core::workspace::Workspace;
 use micold_core::worktree::CreateMode;
+use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 
 #[path = "support/conn.rs"]
@@ -94,12 +99,24 @@ impl Inbox {
         within: Duration,
         want: impl Fn(&SetupState) -> bool,
     ) -> Option<SetupState> {
+        self.changed_run(location, within, want)
+            .await
+            .map(|run| run.state().clone())
+    }
+
+    /// The next `SetupChanged` for `location` whose state `want` accepts, as its run's record.
+    async fn changed_run(
+        &mut self,
+        location: &SessionLocation,
+        within: Duration,
+        want: impl Fn(&SetupState) -> bool,
+    ) -> Option<SetupRun> {
         self.take(within, |m| match m {
             DaemonMsg::SetupChanged {
                 location: l,
                 run: Some(summary),
                 ..
-            } if l == location && want(summary.run.state()) => Some(summary.run.state().clone()),
+            } if l == location && want(summary.run.state()) => Some(summary.run.clone()),
             _ => None,
         })
         .await
@@ -151,13 +168,14 @@ fn ended(lines: &[String]) -> bool {
             || l.starts_with("Could not start:")
             || l.starts_with("Ended by signal")
             || l == "Stopped."
+            || l.starts_with("Interrupted:")
     })
 }
 
 struct Fixture {
     state: Arc<DaemonState>,
     project: tempfile::TempDir,
-    _store: tempfile::TempDir,
+    store: tempfile::TempDir,
 }
 
 impl Fixture {
@@ -181,8 +199,39 @@ impl Fixture {
         Self {
             state,
             project,
-            _store: store,
+            store,
         }
+    }
+
+    /// A fixture whose daemon keeps its catalog and setup files in the store folder, so a second
+    /// daemon over that folder ([`Self::restart`]) is this one restarted.
+    fn persistent() -> Self {
+        let project = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        init_repo(project.path());
+        let path = project.path().to_path_buf();
+        let workspace = Workspace {
+            active: Some(path.clone()),
+            projects: vec![Project::new(path, true, Availability::Available)],
+            ..Default::default()
+        };
+        files_in(store.path()).save(&workspace).unwrap();
+        let state = persistent_state(store.path());
+        Self {
+            state,
+            project,
+            store,
+        }
+    }
+
+    /// A new daemon over this fixture's store: the restart of a persistent fixture's daemon.
+    fn restart(&self) -> Arc<DaemonState> {
+        persistent_state(self.store.path())
+    }
+
+    /// The store the daemon of a persistent fixture keeps its files in.
+    fn files(&self) -> JsonFileStore {
+        files_in(self.store.path())
     }
 
     fn path(&self) -> PathBuf {
@@ -192,6 +241,18 @@ impl Fixture {
     fn worktree_dir(&self, dir: &str) -> PathBuf {
         self.project.path().join(".claude/worktrees").join(dir)
     }
+}
+
+fn files_in(store: &Path) -> JsonFileStore {
+    JsonFileStore::at(store.join("projects.json"))
+}
+
+fn persistent_state(store: &Path) -> Arc<DaemonState> {
+    let catalog = Catalog::load(
+        Box::new(files_in(store)),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    );
+    Arc::new(DaemonState::new(catalog))
 }
 
 fn wt(dir: &str) -> SessionLocation {
@@ -619,4 +680,273 @@ async fn run_and_stop_setup() {
     let (kind, message) = error(window.answer(9).await);
     assert_eq!(kind, ErrorKind::InvalidInput);
     assert_eq!(message, "This project has no setup command.");
+}
+
+/// Wait up to `BOUND` for `pid` to end.
+async fn gone(pid: u32) -> bool {
+    let deadline = tokio::time::Instant::now() + BOUND;
+    while alive(pid) {
+        if tokio::time::Instant::now() > deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    true
+}
+
+/// The pid a `sleep 300 & echo $!; wait` setup at `location` printed first.
+async fn first_pid(inbox: &mut Inbox, project: &Path, location: &SessionLocation) -> u32 {
+    inbox.send(watch(project, location.clone())).await;
+    inbox
+        .output_until(location, |lines| !lines.is_empty())
+        .await[0]
+        .trim()
+        .parse()
+        .expect("a pid")
+}
+
+/// The record stored for `location`.
+fn stored(files: &JsonFileStore, project: &Path, location: &SessionLocation) -> Option<SetupRun> {
+    files
+        .load_setup(project)
+        .into_iter()
+        .find(|s| &s.location == location)
+        .map(|s| s.run)
+}
+
+const SLEEPER: &str = "sleep 300 & echo $!; wait";
+
+/// A11, FR-018, FR-019: a `Running` record and its log found at start load as `Interrupted`, the
+/// record is rewritten so, and the output stays readable with the reason line last.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_running_record_found_at_start_is_interrupted_with_its_output() {
+    let f = Fixture::persistent();
+    let files = f.files();
+    let running = SetupRun::start(RunId(5), SetupCommand::parse("make").unwrap(), 1);
+    files
+        .save_setup_record(&f.path(), &SessionLocation::Default, &running)
+        .unwrap();
+    files
+        .append_setup_log(
+            &f.path(),
+            &SessionLocation::Default,
+            &["one".into(), "two".into()],
+        )
+        .unwrap();
+
+    let state = f.restart();
+    let mut window = Inbox::connect(&state).await;
+    window
+        .send(watch(&f.path(), SessionLocation::Default))
+        .await;
+    let lines = window.output_until(&SessionLocation::Default, ended).await;
+    assert_eq!(lines, ["one", "two", "Interrupted: the daemon stopped."]);
+    let record = stored(&files, &f.path(), &SessionLocation::Default).expect("a record");
+    assert_eq!(record.state(), &SetupState::Interrupted);
+    assert_eq!(record.id(), RunId(5));
+}
+
+/// A11, FR-019: a daemon that unwinds while setup runs ends the run's process group and records it
+/// `Interrupted`; the next daemon shows that, with the output the run printed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unwind_during_a_run_interrupts_it_and_ends_its_processes() {
+    let f = Fixture::persistent();
+    let mut window = Inbox::connect(&f.state).await;
+    set_command(&mut window, 1, &f.path(), Some(SLEEPER)).await;
+    create(&mut window, 2, &f.path(), "wt").await;
+    let pid = first_pid(&mut window, &f.path(), &wt("wt")).await;
+    assert!(alive(pid), "the setup runs");
+
+    micold_daemon::server::unwind(&f.state, micold_daemon::idle::StopReason::Requested).await;
+    assert_eq!(
+        stored(&f.files(), &f.path(), &wt("wt")).map(|r| r.state().clone()),
+        Some(SetupState::Interrupted),
+        "the unwind recorded the run interrupted"
+    );
+    assert!(gone(pid).await, "the run's process group is ended");
+
+    let state = f.restart();
+    let mut later = Inbox::connect(&state).await;
+    later.send(watch(&f.path(), wt("wt"))).await;
+    let lines = later.output_until(&wt("wt"), ended).await;
+    assert_eq!(lines.first(), Some(&pid.to_string()), "{lines:?}");
+    assert_eq!(
+        lines.last().map(String::as_str),
+        Some("Interrupted: the daemon stopped.")
+    );
+}
+
+/// A11, data-model §RunId: after a restart the next id is `max(counter file, highest record id +
+/// 1)`, so a lost counter file never repeats an id.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_run_id_after_a_restart_is_past_every_record_and_the_counter() {
+    let f = Fixture::persistent();
+    let files = f.files();
+    let ended = SetupRun::start(RunId(41), SetupCommand::parse("true").unwrap(), 1)
+        .finish(SetupState::Succeeded, 2)
+        .unwrap();
+    files
+        .save_setup_record(&f.path(), &SessionLocation::Default, &ended)
+        .unwrap();
+    let _ = std::fs::remove_file(files.setup_counter_path());
+
+    let next_run = |state: Arc<DaemonState>, req: u64| {
+        let project = f.path();
+        async move {
+            let mut window = Inbox::connect(&state).await;
+            set_command(&mut window, req, &project, Some("true")).await;
+            window
+                .send(ClientMsg::SetupRun {
+                    req: req + 1,
+                    project,
+                    location: SessionLocation::Default,
+                })
+                .await;
+            window
+                .changed_run(&SessionLocation::Default, BOUND, running)
+                .await
+                .expect("a run starts")
+                .id()
+        }
+    };
+    assert_eq!(next_run(f.restart(), 1).await, RunId(42), "the record wins");
+    assert_eq!(
+        files.load_setup_counter(),
+        Some(43),
+        "the counter is stored"
+    );
+
+    files.save_setup_counter(100).unwrap();
+    assert_eq!(
+        next_run(f.restart(), 3).await,
+        RunId(100),
+        "the counter wins"
+    );
+}
+
+/// A12, FR-024 (and M3 review A-F3): deleting a worktree whose setup runs stops it and awaits its
+/// end before the worktree goes, then forgets the run: its record and log are gone, a late end
+/// sends nothing, and a worktree recreated under the same name runs setup again with a fresh id.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn deleting_a_worktree_stops_its_setup_first_and_forgets_it() {
+    let f = Fixture::persistent();
+    let files = f.files();
+    let mut window = Inbox::connect(&f.state).await;
+    set_command(&mut window, 1, &f.path(), Some(SLEEPER)).await;
+    create(&mut window, 2, &f.path(), "wt").await;
+    let deleted = window
+        .changed_run(&wt("wt"), BOUND, running)
+        .await
+        .expect("setup runs")
+        .id();
+    let pid = first_pid(&mut window, &f.path(), &wt("wt")).await;
+    assert!(files.setup_record_path(&f.path(), &wt("wt")).exists());
+
+    window
+        .send(ClientMsg::WorktreeDelete {
+            req: 3,
+            project: f.path(),
+            dir_name: "wt".into(),
+            stop_sessions: true,
+            delete_branch: true,
+        })
+        .await;
+    let answer = window.answer(3).await;
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "the delete succeeds: {answer:?}"
+    );
+    assert!(!alive(pid), "the run had ended when the delete answered");
+    let forgotten = window
+        .take(BOUND, |m| match m {
+            DaemonMsg::SetupChanged {
+                location,
+                run: None,
+                ..
+            } if *location == wt("wt") => Some(()),
+            _ => None,
+        })
+        .await;
+    assert!(forgotten.is_some(), "the run is forgotten");
+    assert!(!files.setup_record_path(&f.path(), &wt("wt")).exists());
+    assert!(!files.setup_log_path(&f.path(), &wt("wt")).exists());
+    window.seen.clear();
+    tokio::time::sleep(micold_core::process::RUN_OVERRUN + Duration::from_millis(500)).await;
+    assert!(
+        window
+            .changed_run(&wt("wt"), Duration::ZERO, |_| true)
+            .await
+            .is_none(),
+        "nothing more is said of the deleted run"
+    );
+    assert!(!files.setup_log_path(&f.path(), &wt("wt")).exists());
+
+    set_command(&mut window, 4, &f.path(), Some("exit 1")).await;
+    create(&mut window, 5, &f.path(), "wt").await;
+    let again = window
+        .changed_run(&wt("wt"), BOUND, |s| s.is_ended())
+        .await
+        .expect("setup runs in the recreated worktree");
+    assert_eq!(again.state(), &SetupState::Failed(Failure::Exit(1)));
+    assert_ne!(
+        again.id(),
+        deleted,
+        "the recreated worktree's run has a fresh id"
+    );
+}
+
+/// A13, FR-018: a client attaching after runs ended gets one `SetupChanged` per location with a
+/// record, right after `Attached`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn attaching_later_gets_each_locations_last_run() {
+    let f = Fixture::new();
+    let mut window = Inbox::connect(&f.state).await;
+    set_command(&mut window, 1, &f.path(), Some("true")).await;
+    for (req, dir) in [(2, "a"), (3, "b")] {
+        create(&mut window, req, &f.path(), dir).await;
+        window
+            .changed(&wt(dir), BOUND, |s| s.is_ended())
+            .await
+            .expect("setup ends");
+    }
+
+    let mut later = Inbox::connect(&f.state).await;
+    later
+        .send(ClientMsg::Attach {
+            project: f.path(),
+            force: false,
+        })
+        .await;
+    later
+        .take(BOUND, |m| {
+            matches!(m, DaemonMsg::Attached { .. }).then_some(())
+        })
+        .await
+        .expect("attached");
+    later.seen.clear();
+    let mut next = Vec::new();
+    for _ in 0..2 {
+        next.push(
+            later
+                .take(BOUND, |m| Some(m.clone()))
+                .await
+                .expect("a message"),
+        );
+    }
+    let mut places: Vec<SessionLocation> = next
+        .iter()
+        .map(|m| match m {
+            DaemonMsg::SetupChanged {
+                location,
+                run: Some(summary),
+                ..
+            } => {
+                assert_eq!(summary.run.state(), &SetupState::Succeeded);
+                location.clone()
+            }
+            other => panic!("a SetupChanged right after Attached, got {other:?}"),
+        })
+        .collect();
+    places.sort_by_key(|l| format!("{l:?}"));
+    assert_eq!(places, [wt("a"), wt("b")]);
 }

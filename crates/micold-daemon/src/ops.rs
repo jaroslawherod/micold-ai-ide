@@ -233,6 +233,10 @@ pub async fn delete_worktree(
     // Serialized with creates on the same project (T120/T124).
     let gate = state.worktree_gate(&project);
     let _serialized = gate.lock().await;
+    // Feature 1289 (FR-024): a setup run in the worktree is stopped, and its end awaited, before
+    // the worktree goes.
+    let location = SessionLocation::Worktree(dir_name.clone());
+    crate::setup::stop_and_wait(state, &project, &location).await;
     let result = tokio::task::spawn_blocking(move || {
         let target = repo.join(".claude/worktrees").join(&dir2);
         let outcome = remove_worktree(&GitCli::new(), &repo, &target, branch_to_delete.as_deref())?;
@@ -286,6 +290,9 @@ pub async fn delete_worktree(
             state.forget_review_worktree(&project, &dir_name);
             // Feature 483 (W5, FR-008): its run leaves its group, and an emptied group goes.
             state.forget_run_worktree(&project, &dir_name);
+            // Feature 1289 (FR-016, T038): its setup record and log go, so a worktree recreated
+            // under the same name starts afresh (M3 review A-F3).
+            crate::setup::forget(state, &project, &location);
             if leftovers.is_empty() {
                 tracing::info!(
                     project = %project.display(),

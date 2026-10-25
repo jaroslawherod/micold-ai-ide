@@ -259,28 +259,28 @@ worktree stops its run first and removes its record (FR-016, FR-018, FR-019, FR-
 
 **Independent test**: T031–T034 pass.
 
-- [ ] T031 [P] [US2] Store test, red until T035, in `core/src/store.rs` tests: `setup_dir()`,
+- [x] T031 [P] [US2] Store test, red until T035, in `core/src/store.rs` tests: `setup_dir()`,
   `setup_counter_path()` (`setup/next_run_id`), `setup_record_path(project, Default)` ends in
   `default.json`, `setup_log_path(project, Worktree("x"))` ends in `wt-x.log`; `remove_setup(project,
   Some(location))` removes that pair only; `remove_setup(project, None)` removes the project's
   folder; a corrupt record is quarantined by `read_or_quarantine` (line 759), as reviews' are
-- [ ] T032 [US2] Test A11, red until T036–T037, in `daemon/tests/setup_run.rs`: a `Running` record
+- [x] T032 [US2] Test A11, red until T036–T037, in `daemon/tests/setup_run.rs`: a `Running` record
   and log written to the data dir before start load as `Interrupted` with the log's lines readable
   through `SetupOutputWatch`; `unwind` during a live run records `Interrupted` and ends its process
   group (FR-019); the run id counter after restart is `max(counter file, highest record id + 1)`
   (delete the counter file to show the record wins)
-- [ ] T033 [US2] Test A12, red until T038, in `daemon/tests/setup_run.rs`: delete a worktree whose
+- [x] T033 [US2] Test A12, red until T038, in `daemon/tests/setup_run.rs`: delete a worktree whose
   `sleep 300` setup runs: the run is stopped and its end awaited before `git worktree remove`
   (the process group is gone when the delete answers), `SetupChanged { run: None }` is pushed,
   then no `<location>.json` or `.log` exists and no further `SetupChanged` for that location
   arrives within `RUN_OVERRUN` (a late `finish` is dropped). Recreate the same `dir_name` and run
   `exit 1`: its `RunId` differs from the deleted run's (data-model §RunId)
-- [ ] T034 [US2] Test A13, red until T039, in `daemon/tests/setup_run.rs`: a client attaching after
+- [x] T034 [US2] Test A13, red until T039, in `daemon/tests/setup_run.rs`: a client attaching after
   a run ended gets one `SetupChanged` per location with a record, right after `Attached`
-- [ ] T035 [US2] `core/src/store.rs`: `JsonFileStore::setup_dir`, `setup_counter_path`,
+- [x] T035 [US2] `core/src/store.rs`: `JsonFileStore::setup_dir`, `setup_counter_path`,
   `setup_record_path`, `setup_log_path`, `remove_setup` per data-model §settings and store (location
   stem `default` or `wt-<dir_name>`; records through `write_atomic`, line 807). T031 passes
-- [ ] T036 [US2] `daemon/src/setup.rs` persistence: after `start` releases the lock, write the
+- [x] T036 [US2] `daemon/src/setup.rs` persistence: after `start` releases the lock, write the
   counter file (atomic), then the `Running` record; after `finish`, write the ended record; append
   each completed line to `<location>.log` from the run task, checking under the lock that the entry
   still holds this `RunId` (so a late line never re-creates a deleted log), compacting the log to
@@ -288,13 +288,13 @@ worktree stops its run first and removes its record (FR-016, FR-018, FR-019, FR-
   (`Running` → `Interrupted`, rewritten), refill each `OutputBuffer` from its log's tail, and set
   `next_id = max(counter, highest id + 1)`. The ephemeral catalog keeps the counter in memory.
   `SetupRuns::interrupt_all()` terminates every live run and records `Interrupted`
-- [ ] T037 [US2] `daemon/src/server.rs` `unwind` (line 581) calls `interrupt_all()` before the
+- [x] T037 [US2] `daemon/src/server.rs` `unwind` (line 581) calls `interrupt_all()` before the
   catalog flush. T032 passes
-- [ ] T038 [US2] `daemon/src/ops.rs` `delete_worktree` (line 178): `stop_and_wait(project,
+- [x] T038 [US2] `daemon/src/ops.rs` `delete_worktree` (line 178): `stop_and_wait(project,
   location)` (awaits `Entry::done`, bounded by `process::RUN_OVERRUN`, at once when nothing runs)
   before `git worktree remove`, then `forget` (removes the entry, `remove_setup`, pushes
   `SetupChanged { run: None }`); a project removal calls `forget_project`. T033 passes
-- [ ] T039 [US2] `daemon/src/server.rs`: right after the `Attached` list (line ~930, beside the
+- [x] T039 [US2] `daemon/src/server.rs`: right after the `Attached` list (line ~930, beside the
   feature 483 run groups), send `on_attach(project)`'s `SetupChanged`s. T034 passes
 
 ---
