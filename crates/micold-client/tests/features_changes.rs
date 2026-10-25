@@ -4974,6 +4974,35 @@ fn a_drawer_composer_is_in_its_row_while_shown_and_on_its_card_otherwise() {
     assert!(!in_drawer(&state), "a card's composer stays on the card");
 }
 
+/// Review A M4 r2 F1. Edit or Answer… in a row of another file's comment first jumps there, as a
+/// press on the row does, so the comment's card — where its composer shows while the drawer is
+/// closed — is on screen.
+#[test]
+fn edit_or_answer_in_a_drawer_row_selects_the_comments_file() {
+    let mut state = showing(commentable());
+    let draft = comment("a.rs", Side::New, 1, 1, CommentState::Draft);
+    let waiting = comment("a.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    push(&mut state, "feat-a", vec![draft.clone(), waiting.clone()]);
+    let selected = |s: &State| s.tabs.shown_view().unwrap().selected.clone();
+    assert_eq!(selected(&state), Some(path("b.rs")));
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    changes::update(&mut state, Msg::DrawerEdit(draft.id));
+    assert_eq!(selected(&state), Some(path("a.rs")), "Edit jumped");
+    changes::update(&mut state, Msg::FileSelected(path("b.rs")));
+    changes::update(&mut state, Msg::DrawerAnswer(waiting.id));
+    assert_eq!(selected(&state), Some(path("a.rs")), "Answer… jumped");
+    assert_eq!(
+        state
+            .tabs
+            .shown_view()
+            .unwrap()
+            .composer
+            .as_ref()
+            .map(|c| c.target),
+        Some(ComposerTarget::Answer(waiting.id))
+    );
+}
+
 /// Review B M4 F1, FR-019, US3 #8. Whenever the drawer's list comes into view — the drawer
 /// opened, its tab switched, or its Review tab shown again — the list is scrolled back to that
 /// tab's kept offset; a scroll report or a closed drawer scrolls nothing.

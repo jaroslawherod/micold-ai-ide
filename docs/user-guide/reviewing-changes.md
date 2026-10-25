@@ -633,13 +633,14 @@ does not open it.
   base version), its status and the start of the comment. Rows are ordered by file, then by line. A
   row whose file is no longer among the changes is marked *Not in the current diff* and keeps its
   status.
-- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** opens the comment's text in the row.
+- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** jumps to the comment, as
+  pressing the row does, and opens its text in the row.
   Closing the drawer (or switching its tab) keeps what you wrote: meanwhile it is shown under the
   comment's card in the diff, and it is back in the row when you reopen the drawer. No row offers
   them while a send is under way.
 - **Replies.** A row shows the whole reply, wrapped; a reply longer than 4,000 characters shows its
   start and **Show all**. A Sent row offers **Mark applied** and **Answer…**, as its card does
-  ([Marking a comment by hand](#marking-a-comment-by-hand)); **Answer…** opens the note in the row.
+  ([Marking a comment by hand](#marking-a-comment-by-hand)); **Answer…** also jumps to the comment and opens the note in the row.
 - **Jumping.** Press a row to select its file and scroll the diff to the comment's first line, left
   of the drawer; the comment's card is outlined. A jump can be refused: when the file is hidden
   because the **Committed** or **Uncommitted** button is off, the drawer says to turn it back on;

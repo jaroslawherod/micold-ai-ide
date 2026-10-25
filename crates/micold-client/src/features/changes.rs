@@ -2785,7 +2785,13 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::EditComment(id) => edit_comment(state, id, ComposerPlace::Card),
-        Msg::DrawerEdit(id) => edit_comment(state, id, ComposerPlace::Drawer),
+        // A row's Edit / Answer… first jumps to the comment, as a press on the row does, so its
+        // card — where the composer shows while the drawer is closed — is on screen.
+        Msg::DrawerEdit(id) => {
+            let jump = apply(state, Msg::DrawerRowSelected(id));
+            let _ = edit_comment(state, id, ComposerPlace::Drawer);
+            jump
+        }
         Msg::MarkApplied(id) => {
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
@@ -2803,7 +2809,13 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             )
         }
         Msg::AnswerComment(id) => answer_comment(state, id, ComposerPlace::Card),
-        Msg::DrawerAnswer(id) => answer_comment(state, id, ComposerPlace::Drawer),
+        // A row's Edit / Answer… first jumps to the comment, as a press on the row does, so its
+        // card — where the composer shows while the drawer is closed — is on screen.
+        Msg::DrawerAnswer(id) => {
+            let jump = apply(state, Msg::DrawerRowSelected(id));
+            let _ = answer_comment(state, id, ComposerPlace::Drawer);
+            jump
+        }
         Msg::ShowReply(id) => {
             let known = state.tabs.shown_view().is_some_and(|view| {
                 review_of(state, view)
