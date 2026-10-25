@@ -89,6 +89,32 @@ Post-design re-check: unchanged, no violation. Complexity Tracking is empty.
 `packaging/basic/mise.sha256` (new): the pinned release (data model). The real-runtime test reads
 the version from it so a bump needs no Rust change.
 
+### D1a. Taking the pin (FR-002; first task of M1, before `mise.sha256` is written)
+
+The hashes must come from somewhere other than the build that checks them: the CI image build only
+compares the download with the committed hash, so it proves the pin was applied, not that it is
+right. The implementing unit (or the maintainer, if no unit can reach GitHub) takes the pin once,
+on a machine or a `workflow_dispatch` job that can reach `github.com` (this cloud container cannot,
+research R1):
+
+1. `gh release download v<ver> -R jdx/mise -p SHASUMS256.txt -p SHASUMS256.asc` into an empty
+   folder.
+2. Verify the signature: `gpg --verify SHASUMS256.asc` against mise's release key as published in
+   mise's install documentation (import by the fingerprint printed there, not from the release
+   itself). A bad or missing signature stops the step; no pin is written.
+3. Extract exactly the two raw-binary lines:
+   `grep -E '  (\./)?mise-v<ver>-linux-(x64|arm64)$' SHASUMS256.txt`, normalised to
+   `<hash>  mise-v<ver>-linux-<arch>` (data model: exactly two lines). Archives (`.tar.gz`,
+   `.tar.zst`), `-musl` builds and other platforms are left out.
+4. Cross-check each hash against a second origin: `npm pack @jdxcode/mise-linux-x64@<ver>` and
+   `@jdxcode/mise-linux-arm64@<ver>` (reachable from this container, R1), unpack each into an empty
+   folder and `sha256sum` the `mise` binary inside. Both must equal the lines from step 3; a
+   mismatch stops the step.
+5. Record in the ledger's *Decisions*: version, both hashes, the signing key fingerprint used, the
+   npm cross-check result, who ran it and where.
+
+The README "Update mise" section (D6) repeats these five steps for every bump.
+
 ### D2. FR-007 development libraries — isolated (provisional option A)
 
 A separate `RUN apt-get install` layer with the six packages, after D1, its comment naming FR-007
@@ -136,14 +162,19 @@ does not exist on a test host: the guard keeps that test working, and new cases 
   it does not carry, and a complete own-image `Containerfile` `FROM` the basic image that adds
   `libpq-dev` (quickstart B3).
 - `packaging/basic/README.md`: the new contents, the pinned mise version and where its checksums
-  live, and "Update mise" steps (new `SHASUMS256.txt` lines into `mise.sha256`, hash, publish,
-  pin), plus the measured size (B5).
-- `docs/user-guide/worktrees-and-sessions.md`: the setup section 1289 adds gets one sentence on S2.
+  live, and "Update mise" steps: D1a's five steps (download `SHASUMS256.txt` and `.asc`, verify the
+  signature, keep only the two raw `linux-x64`/`linux-arm64` lines, cross-check against the npm
+  platform packages, record provenance), then write `mise.sha256`, update the content hash,
+  publish, pin; plus the measured size (B5).
+- `docs/user-guide/worktrees-and-sessions.md`: the setup section 1289 adds gets one sentence on S2:
+  one setup at a time on a sandbox daemon, a waiting run's output says it is waiting for another
+  setup, and stopping the running setup (Stop setup) lets the next one start (S3).
 
 ### D7. Publish and pin
 
 Per feature 806: the PR that changes `packaging/basic/` updates `BASIC_IMAGE_CONTENT_HASH`;
-`basic-image.yml` builds both architectures on the PR (proving the checksums) and publishes on merge;
+`basic-image.yml` builds both architectures on the PR (proving each download matches the committed
+pin; the pin's own provenance is D1a) and publishes on merge;
 a follow-up pin PR sets `BASIC_IMAGE`. Story 2's acceptance "on the default image" holds after the
 pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, as the spec allows.
 
@@ -152,7 +183,7 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | Req | Where | Test layer |
 |---|---|---|
 | FR-001 | D1 step 2; B1 | real-runtime `sandbox_real_basic_image` (A5): `mise --version` = pinned |
-| FR-002 | D1 step 2; B3, B4 | shell `basic-image-hash.test.sh` (A1); build failure by hand (B4); CI image build |
+| FR-002 | D1 step 2, D1a; B3, B4 | shell `basic-image-hash.test.sh` (A1); build failure by hand (B4); CI image build |
 | FR-003 | D1 step 1; B1 | real-runtime A5 (compile and link C); A7 (Rust crate with a C build script) |
 | FR-004 | D1 step 1; B1 | real-runtime A5 (`python3 -c`, before setup) |
 | FR-005 | D4, data model "Sandbox home toolchain" | real-runtime A7 (restart, second worktree) |
@@ -165,8 +196,11 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | FR-012 | D6 | docs CI (links); quickstart B3 (example builds) |
 | FR-013 | D6 | shell A1 (README names the pinned version) |
 | Edge: concurrent setup | D4; [setup-turn.md](contracts/setup-turn.md) | daemon tests A4; quickstart B2 |
+| SC-001 | D5, D7 | quickstart B1 (after the documented setup command ends Set up, `mise run gate` exits 0 with no manual install step) |
+| SC-002 | D1, D5 | quickstart B1 (`command -v cargo rust-analyzer uv python3 gh` prints five paths in each session opened) |
 | SC-003 | D4 | real-runtime A7 (< 60 s, no download) |
 | SC-004 | research R6 | quickstart B5, recorded |
+| SC-005 | D6 | quickstart B3 step 1 (the section lists contents, limits, and an own-image example that builds) |
 
 No client or geometry-gate layer: no UI changes. No visual pass.
 
@@ -174,7 +208,7 @@ No client or geometry-gate layer: no UI changes. No visual pass.
 
 | ID | Deliverable | Requirements |
 |---|---|---|
-| M1 | Image: toolchain, `python3`, pinned `mise`, home folders; guard, entrypoint and real-runtime tests; README; hash | FR-001–FR-004, FR-006, FR-011, FR-013 |
+| M1 | Pin taken first (D1a: signed `SHASUMS256.txt`, two lines, npm cross-check, provenance in the ledger); image: toolchain, `python3`, pinned `mise`, home folders; guard, entrypoint and real-runtime tests; README with "Update mise"; hash | FR-001–FR-004, FR-006, FR-011, FR-013 |
 | M2 | FR-007's six dev libraries (isolated layer); AS4 fixture `x11`; hash | FR-003 (AS4), FR-007 |
 | M3 | Setup turn on sandbox daemons; `worktrees-and-sessions.md` sentence | edge case, Principle II |
 | M4 | `mise.toml` components; `CONTRIBUTING.md`; sandbox page section and own-image example; real-runtime `sandbox_real_mise_setup`; quickstart B1–B6 | FR-005, FR-008–FR-010, FR-012, SC-001–SC-005 |
