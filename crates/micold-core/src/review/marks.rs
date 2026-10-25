@@ -65,8 +65,8 @@ impl ChangeId {
             return None;
         }
         let mut id = [0u8; 20];
-        for (byte, pair) in id.iter_mut().zip(bytes.chunks_exact(2)) {
-            let pair = std::str::from_utf8(pair).ok()?;
+        for (byte, pair) in id.iter_mut().zip(bytes.as_chunks::<2>().0) {
+            let pair = std::str::from_utf8(pair.as_slice()).ok()?;
             if !pair.bytes().all(|b| b.is_ascii_hexdigit()) {
                 return None;
             }
