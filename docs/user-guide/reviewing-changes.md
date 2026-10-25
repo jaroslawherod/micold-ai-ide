@@ -142,9 +142,9 @@ reviewed](#marking-files-reviewed)), apart from the working tree's: marking `src
 request leaves the working tree's `src/a.rs` as it was, and the other way round. A mark is made on
 the file's diff in that pull request. When a new head commit changes a file's diff, the file is no
 longer reviewed: it drops back to ○ or ◉ with a dot at the end of its row, as after an edit in the
-working tree. A new head commit that leaves the file's diff the same keeps it reviewed. The marks stay when the pull request
-is merged, closed or no longer listed, and show again whenever its diff is shown; they go when you
-unmark them or the worktree is removed.
+working tree. A new head commit that leaves the file's diff the same keeps it reviewed. The marks
+stay when the pull request is merged, closed or no longer listed, and show again whenever its diff
+is shown; they go when you unmark them or the worktree is removed.
 
 ## Reading a diff
 
