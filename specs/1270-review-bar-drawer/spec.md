@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1356, #1369, #1382, #1402 and the M4+close PR
 
 **Input**: User description: "Review UI: review bar and comments drawer (#1270). Blocked by: #1269,
 #1124. Fixed review bar above the status bar (counts per status, **Send review (n)**, overflow with

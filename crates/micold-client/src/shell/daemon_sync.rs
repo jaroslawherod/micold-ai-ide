@@ -6615,15 +6615,17 @@ pub(crate) mod tests {
             let _ = crate::shell::changes::update(&mut app, ChangesMsg::SendPressed);
             assert!(app.pending_ops.is_empty(), "nothing was sent");
             let view = app.core.changes.tabs.shown_view().expect("shown");
-            assert!(
-                view.send_error
-                    .as_deref()
-                    .is_some_and(|e| e.starts_with("Couldn't send the review: ")),
-                "{:?}",
-                view.send_error
-            );
             assert_eq!(view.drawer.state.watch, None);
-            assert!(snackbar(&app).is_some(), "the route's snackbar stays");
+            assert_eq!(
+                view.send_error.as_deref(),
+                Some("Couldn't send the review: daemon Host unavailable"),
+                "the bar names the route's reason"
+            );
+            assert_eq!(
+                snackbar(&app).as_deref(),
+                Some("daemon Host unavailable — can't send the review comments right now."),
+                "the route's snackbar stays"
+            );
         }
 
         #[test]

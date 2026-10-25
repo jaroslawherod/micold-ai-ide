@@ -171,7 +171,10 @@ fn primary_follows_enabled_in_every_case() {
             for sendable in [false, true] {
                 let b = send_button(&counts(draft, 1, 0, 0), sending, sendable);
                 assert_eq!(b.primary, b.enabled, "{draft} {sending} {sendable}");
-                assert_eq!(b.enabled, draft > 0 && !sending && sendable);
+                // Spelled out, not the rule again: only drafts, no send under way and a sendable
+                // entry enable the button.
+                let expected = matches!((draft, sending, sendable), (1 | 1_000, false, true));
+                assert_eq!(b.enabled, expected, "{draft} {sending} {sendable}");
             }
         }
     }
