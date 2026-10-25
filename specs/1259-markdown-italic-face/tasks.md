@@ -177,10 +177,10 @@ exception).
 
 ## Phase 5: Polish (close unit)
 
-- [ ] T023 Quickstart §A: `sha256sum assets/fonts/Roboto-*Italic.ttf` equals
+- [x] T023 Quickstart §A: `sha256sum assets/fonts/Roboto-*Italic.ttf` equals
   `assets/fonts/PROVENANCE.md`; file sizes (SC-004); the `layout_snapshot.txt` diff scope; record
   the results in quickstart.md
-- [ ] T024 Quickstart §C: record what CI's macOS and Windows runners proved (layout snapshot, the
+- [x] T024 Quickstart §C: record what CI's macOS and Windows runners proved (layout snapshot, the
   resolution and pin tests) and what needs a host (the look) in quickstart.md
 
 ---
