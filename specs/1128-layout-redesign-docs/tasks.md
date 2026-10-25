@@ -179,29 +179,29 @@ regenerated fixture.
 states are in the fixture, gate W1–W5 pass in both schemes, a regeneration leaves the fixture
 unchanged, and the five mutations fail as listed.
 
-- [ ] T021 [US3] Extend `strip_with` in `crates/micold-client/tests/support/covered_states.rs`
+- [x] T021 [US3] Extend `strip_with` in `crates/micold-client/tests/support/covered_states.rs`
   (today `pub fn strip_with(shells: usize, helpers: usize) -> StateUnderTest`, ~2578) with a
   variant that takes the base `State` and the location; `strip_with` itself calls it with its
   current base and `feat-short`, so its callers and their fixture sections stay byte-identical. At a
   location that already has a session, the variant replaces that session with its main session,
   keeping its `ActivitySignal` (research R5). Reuse, do not copy, `with_every_card_state()` (~486)
   and `running_sandbox()` (~2690)
-- [ ] T022 [US3] Register `window-session-view` in
+- [x] T022 [US3] Register `window-session-view` in
   `crates/micold-client/tests/support/covered_states.rs` after the status-bar states, one entry and
   nothing else (`tests/layout_coverage_registry.rs`): `with_every_card_state()` with the session
   shown at `feat-working` holding the main session, 2 shell tabs and 1 helper tab (the T021
   variant, `ActivitySignal::Working` kept), `running_sandbox()`, connected, 1280×800; anchors
   `shell.root`, `title_bar` (the bar, not its container), `shell.body`, `sidebar`, `session.area`,
   `status_bar` ([contracts/covered-states.md](contracts/covered-states.md))
-- [ ] T023 [US3] Register `window-overview` in the same file: the same base with the Overview open
+- [x] T023 [US3] Register `window-overview` in the same file: the same base with the Overview open
   (not full screen) and the sidebar's Overview row selected, through the field or accessor #1125 M3
   shipped; same anchors, `session.area` being the Overview in its place
-- [ ] T024 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
+- [x] T024 [US3] Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` with
   `UPDATE_LAYOUT_SNAPSHOT=1 mise exec -- cargo test -p micold-client --test layout_snapshot`;
   confirm the diff only adds the two states (every existing state's section unchanged); copy the
   anchor paths from the fixture into T022/T023's entries (never counted from the source,
   `layout-snapshot.md#anchors`); re-run without the variable and confirm it passes (FR-013)
-- [ ] T025 [US3] Add gate W in `crates/micold-client/tests/gates/window_regions_fit.rs` (new),
+- [x] T025 [US3] Add gate W in `crates/micold-client/tests/gates/window_regions_fit.rs` (new),
   included from `crates/micold-client/tests/layout_snapshot.rs` with one `#[path =
   "gates/window_regions_fit.rs"] mod` as `gates/status_bar_fits.rs` is, reading the cached records
   of both states in both schemes: W1–W4 on the records, W5 on the `window-overview` `State`, exactly
@@ -209,22 +209,22 @@ unchanged, and the five mutations fail as listed.
   heights from `micold_core::tokens::anatomy::app_bar::{HEIGHT, BOTTOM_EDGE}` and
   `anatomy::status_bar::HEIGHT`, never literals (if #1127 dropped the divider, W3 follows what
   shipped). Each failure message names the state, the anchor and both numbers
-- [ ] T026 [US3] Run `mise exec -- cargo test -p micold-client --test layout_snapshot` and `--test
+- [x] T026 [US3] Run `mise exec -- cargo test -p micold-client --test layout_snapshot` and `--test
   layout_text_overflow`: both pass for the two new states in both colour schemes, containment
   included (US3 scenario 4, FR-013). Measure the two states' cost per
   `docs/development/layout-snapshot.md#adding-a-covered-state`: time a warm `layout_snapshot` run
   (a second run after the build) with the two entries and with them removed, and note the
   difference for T028
-- [ ] T027 [US3] Mutation proof: apply each of the five edits of
+- [x] T027 [US3] Mutation proof: apply each of the five edits of
   [covered-states §Mutation proof](contracts/covered-states.md#mutation-proof-quickstart-a3) in
   turn, run `layout_snapshot`, confirm the failure names the state and the listed W assertion,
   revert; record the five outcomes for the PR description and the ledger (SC-005; the red of
   Constitution I)
-- [ ] T028 [US3] In `docs/development/layout-snapshot.md` *What is covered*, one passage listing each
+- [x] T028 [US3] In `docs/development/layout-snapshot.md` *What is covered*, one passage listing each
   region's states with the issue that added them (#1124 `status-bar-*`, #1125
   `main-shell-sidebar-grouped` and its later states, #1126 `session-area-*`, #1127's states) and
   the two whole-window states, with their measured warm cost (FR-014, research R7)
-- [ ] T029 [US3] Verify: quickstart A3 in full (pass, regeneration leaves `git diff --exit-code
+- [x] T029 [US3] Verify: quickstart A3 in full (pass, regeneration leaves `git diff --exit-code
   crates/micold-client/tests/fixtures/layout_snapshot.txt` clean); A1 for `layout-snapshot.md`;
   `git diff --stat origin/main -- 'crates/*/src'` empty (FR-020)
 

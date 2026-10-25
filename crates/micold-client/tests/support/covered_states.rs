@@ -3105,6 +3105,21 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: STATUS_BAR_ANCHORS,
         },
+        // --- Feature 1128: the whole window, one state per mockup board (T022, T023) ------------
+        //
+        // Every region drawn together, so `gates/window_regions_fit.rs` can hold them against each
+        // other: the title bar, the sidebar beside the session area (or the Overview in its place)
+        // and the status bar.
+        CoveredState {
+            name: "window-session-view",
+            build: window_session_view,
+            anchors: WINDOW_ANCHORS,
+        },
+        CoveredState {
+            name: "window-overview",
+            build: window_overview,
+            anchors: WINDOW_ANCHORS,
+        },
         // --- Feature 1127: the 44 px title bar in every body branch (T014, R13) -------------------
         //
         // Each names the bar's children, so a failure says which control moved: the mark, the
@@ -3265,6 +3280,38 @@ fn with_unread_elsewhere(state: &mut State) {
         .sessions
         .insert(PathBuf::from(OTHER), vec![unread(), unread(), unread()]);
 }
+
+/// The whole-window states' regions (feature 1128, contract covered-states §Anchors), each held by
+/// gate W (`gates/window_regions_fit.rs`). Paths copied from the regenerated fixture.
+pub const WINDOW_ANCHORS: &[Anchor] = &[
+    Anchor {
+        name: "shell.root",
+        path: &[],
+    },
+    // The bar itself, not its container, which also holds the hairline beneath it.
+    Anchor {
+        name: "title_bar",
+        path: APP_BAR,
+    },
+    Anchor {
+        name: "shell.body",
+        path: &[0, 0, 1],
+    },
+    // The sidebar's column, its resize handle included: where it ends the session area starts.
+    Anchor {
+        name: "sidebar",
+        path: &[0, 0, 1, 0],
+    },
+    // The session area, or the Overview in its place.
+    Anchor {
+        name: "session.area",
+        path: &[0, 0, 1, 1],
+    },
+    Anchor {
+        name: "status_bar",
+        path: &[0, 0, 2],
+    },
+];
 
 const STATUS_BAR_ANCHORS: &[Anchor] = &[
     Anchor {
@@ -3761,14 +3808,45 @@ pub const STRIP_MEMBERS: &[(&str, usize)] = &[
 /// The main session of `feat-short` with `shells` shell instances (the second marked, the third
 /// exited when there are three or more) and `helpers` helper sessions after it (feature 1126 S9).
 pub fn strip_with(shells: usize, helpers: usize) -> StateUnderTest {
+    strip_at(with_project(), "feat-short", shells, helpers)
+}
+
+/// [`strip_with`]'s strip over `base`, at worktree `dir` (feature 1128, T021, research R5): the
+/// main session with `shells` shell instances and `helpers` helper sessions after it, the main one
+/// current. A session `base` already has at `dir` is replaced, its card state (lifecycle, activity
+/// signal, paused) carried over, so the worktree stays in its sidebar group.
+pub fn strip_at(mut state: State, dir: &str, shells: usize, helpers: usize) -> StateUnderTest {
+    let location = SessionLocation::Worktree(dir.to_string());
+    let branch = state
+        .worktree
+        .worktrees
+        .iter()
+        .find(|w| w.dir_name == dir)
+        .and_then(|w| w.branch.clone())
+        .unwrap_or_else(|| panic!("the base has a worktree {dir:?} with a branch"));
+    let sessions = state
+        .workspace
+        .sessions
+        .entry(PathBuf::from(PROJECT))
+        .or_default();
+    let replaced = sessions
+        .iter()
+        .position(|s| s.location == location)
+        .map(|at| sessions.remove(at));
+
     let mut session = Session::restored(
         SessionId::new(),
-        SessionLocation::Worktree("feat-short".to_string()),
-        SessionLabel::Named("feat/short".to_string()),
+        location.clone(),
+        SessionLabel::Named(branch),
         TerminalMode::Regular,
         AiCli::ClaudeCode,
     );
     session.main = true;
+    if let Some(replaced) = replaced {
+        session.lifecycle = replaced.lifecycle;
+        session.activity = replaced.activity;
+        session.paused_on_user = replaced.paused_on_user;
+    }
     let opened: Vec<_> = (0..shells).map(|_| session.open_shell_instance()).collect();
     for (i, id) in opened.iter().enumerate() {
         if i == 2 {
@@ -3781,24 +3859,35 @@ pub fn strip_with(shells: usize, helpers: usize) -> StateUnderTest {
         session.select_shell(*marked);
     }
     let active = session.id;
-    let mut sessions = vec![session];
+    sessions.push(session);
     for n in 0..helpers {
         sessions.push(Session::restored(
             SessionId::new(),
-            SessionLocation::Worktree("feat-short".to_string()),
+            location.clone(),
             SessionLabel::Named(format!("helper-{}", n + 1)),
             TerminalMode::AiCli,
             AiCli::ClaudeCode,
         ));
     }
-    let mut workspace = super::workspace_with(vec![(PROJECT, sessions)]);
-    workspace.active = workspace.projects.first().map(|p| p.path.clone());
-    let mut state = with_project();
-    state.workspace = workspace;
     state.session.active = Some(active);
     state.session.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
     // A pane area, so the strip draws the focused pane's split buttons as the application does.
     StateUnderTest::new(state).panes(micold_core::pane_layout::PaneLayout::single())
+}
+
+/// The whole window as the mockup's *Proposal: session view* board draws it (feature 1128, T022,
+/// contract covered-states): every sidebar group, the session shown at `feat-working` with its
+/// main session, two shell tabs and a helper, the sandbox up, connected.
+pub fn window_session_view() -> StateUnderTest {
+    strip_at(with_every_card_state(), "feat-working", 2, 1).sandbox(running_sandbox())
+}
+
+/// [`window_session_view`] with the Overview open in the session area's place, not full screen,
+/// so the sidebar's Overview row is the selected one (*Proposal: Overview*, feature 1128, T023).
+pub fn window_overview() -> StateUnderTest {
+    let mut under = window_session_view();
+    under.state.overview.open = true;
+    under
 }
 
 /// The status bar's longest texts (feature 1124, T009): the session's worktree on a container

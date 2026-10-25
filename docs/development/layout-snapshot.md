@@ -143,6 +143,23 @@ the Overview badge — inside its 43 dp at 640 and 1280 dp, in both schemes.
 Feature 1125 added the sidebar grouped by state (`main-shell-sidebar-grouped`), which holds *Default* and one worktree per card state,
 so every group header is recorded, Done collapsed as it starts.
 
+**The redesign's states, region by region.** The window redesign added each region's states with
+its own issue: the status bar's `status-bar-*` (#1124, twelve states); the sidebar's
+`main-shell-sidebar-grouped` and the chip bar at its narrowest, default and widest width,
+`main-shell-sidebar-chip-bar-*` (#1125); the session area's `session-area-one-tab`,
+`session-area-six-tabs` and `session-area-twelve-tabs` (#1126; the `session-area-review-*` states
+are feature 1269's); and the title bar's `title-bar-*` (#1127, eight states). Each holds its own
+region. Two whole-window states, added by #1128, hold the regions against each other, one per mockup
+board, at 1280×800: `window-session-view` (every sidebar group, a session shown in `feat-working`
+with its main session, two shell tabs and a helper, the sandbox up, connected) and `window-overview`
+(the same with the Overview open beside the sidebar and its row selected). Both are anchored on
+`title_bar` (the 43 dp bar, not its container), `shell.body`, `sidebar`, `session.area` and
+`status_bar`, and `gates/window_regions_fit.rs` (gate W) holds the title bar at the top at
+`app_bar::HEIGHT`, the body from `app_bar::BOTTOM_EDGE` with no gap to the status bar,
+`status_bar::HEIGHT` tall at the window's bottom, and the sidebar and the session area spanning
+the body and meeting, in both schemes. Together the two cost about 0.2 s warm in `layout_snapshot`
+(9.32 s with them against 9.12 s without, the mean of three runs each, 2026-10-25).
+
 Every state resolves at one canonical window size, 1280×800, from fixed invented data. Nothing reads
 your workspace, configuration or session store — a fixture recording the author's own machine would
 be unreproducible anywhere else, including on the same machine tomorrow.

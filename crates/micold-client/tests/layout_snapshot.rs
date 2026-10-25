@@ -252,6 +252,12 @@ mod status_bar_fits;
 #[path = "gates/title_bar_fits.rs"]
 mod title_bar_fits;
 
+// --- The whole window's regions fit against each other (feature 1128, T025: gate W) -------------
+
+// Reads this binary's record cache for `window-session-view` and `window-overview`, both schemes.
+#[path = "gates/window_regions_fit.rs"]
+mod window_regions_fit;
+
 // --- The session bar's figures stay whole inside the pane (feature 944, T037) -------------------
 
 // A structured session's pane with the meter warning, the totals, a running background task and an
@@ -369,6 +375,45 @@ fn an_unanchored_difference_is_named_by_path() {
     assert!(
         message.contains(&path),
         "an unanchored element must be named by its path ({path}); got:\n{message}"
+    );
+}
+
+/// A state whose differences come after the twenty the report details is still named (feature
+/// 1128, SC-005): a whole-window state sits late in the fixture, and an edge moved in every state
+/// must not be reported as a change to the first state alone.
+#[test]
+fn a_difference_past_the_detailed_ones_still_names_its_state() {
+    let committed = std::fs::read_to_string(FIXTURE_PATH).expect("the committed fixture");
+    let mut lines: Vec<String> = committed.lines().map(str::to_string).collect();
+    let is_record = |l: &str| l.starts_with("base") || l.starts_with("over");
+    let move_line = |l: &mut String| {
+        let keep = l.len() - 8;
+        *l = format!("{}{:>8.1}", &l[..keep], 77.0);
+    };
+    for l in lines.iter_mut().filter(|l| is_record(l)).take(21) {
+        move_line(l);
+    }
+    let last = lines
+        .iter()
+        .rposition(|l| is_record(l))
+        .expect("the fixture must contain records");
+    move_line(&mut lines[last]);
+    let last_state = lines[..last]
+        .iter()
+        .rev()
+        .find_map(|l| l.strip_prefix("## "))
+        .expect("a record sits under a state heading")
+        .to_string();
+    let mutated = lines.join("\n") + "\n";
+
+    let message = describe_difference(&mutated, &committed);
+    assert!(
+        message.contains("further differences suppressed"),
+        "premise: the first state's differences fill the report; got:\n{message}"
+    );
+    assert!(
+        message.contains(&last_state),
+        "the failure must name {last_state}, whose difference is past the detailed ones; got:\n{message}"
     );
 }
 
@@ -939,6 +984,10 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
     let mut section = "(file header)".to_string();
     let mut anchors: Vec<(&str, String)> = Vec::new();
     let mut reported = 0usize;
+    // Every covered state with a difference, past the suppressed ones too: a region edge moved in
+    // a late state (the whole-window ones, feature 1128 SC-005) is named even when an earlier
+    // state's differences fill the report.
+    let mut differing: Vec<String> = Vec::new();
 
     for i in 0..rec.len().max(obs.len()) {
         let r = rec.get(i).copied();
@@ -961,10 +1010,15 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
         if r == o {
             continue;
         }
+        if differing.last() != Some(&section) {
+            differing.push(section.clone());
+        }
         reported += 1;
-        if reported > 20 {
+        if reported == 21 {
             out.push_str("\n  … further differences suppressed\n");
-            break;
+        }
+        if reported > 20 {
+            continue;
         }
 
         let path_of = |line: Option<&str>| {
@@ -988,6 +1042,12 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
 
     if reported == 0 {
         out.push_str("\n  (no line-level difference found — the files differ in length or in trailing bytes)\n");
+    } else {
+        out.push_str(&format!(
+            "\n  covered states that differ ({}): {}\n",
+            differing.len(),
+            differing.join(", ")
+        ));
     }
 
     out
