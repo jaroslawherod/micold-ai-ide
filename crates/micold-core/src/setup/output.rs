@@ -13,6 +13,11 @@ pub use crate::process::Stream;
 /// How many lines a run keeps (FR-021: at least the last 10,000).
 pub const KEEP_LINES: usize = 10_000;
 
+/// The longest line kept, in bytes read (before escapes are removed): an unfinished line that
+/// reaches it is kept as a line and a new one starts (FR-021's bound holds for output with no line
+/// ends too: `yes | tr -d '\n'`, a binary `cat`, long progress dots).
+pub const MAX_LINE_BYTES: usize = 64 * 1024;
+
 /// One stream's unfinished line.
 #[derive(Debug, Default, Clone)]
 struct Partial {
@@ -53,7 +58,11 @@ impl OutputBuffer {
                     if std::mem::take(&mut partial.after_cr) {
                         partial.bytes.clear();
                     }
-                    partial.bytes.push(byte);
+                    if partial.bytes.len() == MAX_LINE_BYTES {
+                        let line = std::mem::take(&mut partial.bytes);
+                        done.push(self.keep(&line));
+                    }
+                    self.partial(stream).bytes.push(byte);
                 }
             }
         }

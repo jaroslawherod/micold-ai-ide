@@ -120,6 +120,60 @@ mod unix {
         );
     }
 
+    /// Whether `pid` names any process at all, a zombie included: false once it is reaped.
+    fn exists(pid: i32) -> bool {
+        // SAFETY: signal 0 only checks that the process exists.
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    /// Wait up to five seconds for `gone(pid)`.
+    fn soon(pid: i32, gone: impl Fn(i32) -> bool) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !gone(pid) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        gone(pid)
+    }
+
+    #[test]
+    fn a_natural_exit_still_ends_what_it_left_running() {
+        let (out, _, exit) = run_to_end(sh("sleep 300 >/dev/null 2>&1 & echo $!"));
+        assert_eq!(exit, ExitKind::Code(0));
+        let grandchild: i32 = String::from_utf8(out).unwrap().trim().parse().expect("pid");
+        assert!(
+            soon(grandchild, |pid| !alive(pid)),
+            "the grandchild {grandchild} outlived the run"
+        );
+    }
+
+    #[test]
+    fn dropping_it_without_run_ends_and_reaps_its_tree() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pids = dir.path().join("pids");
+        let script = format!("sleep 300 & echo $$ $! > '{}'; wait", pids.display());
+        let child = StreamingChild::spawn(sh(&script)).expect("spawn");
+        let deadline = Instant::now() + PROMPTLY;
+        let written = loop {
+            let text = std::fs::read_to_string(&pids).unwrap_or_default();
+            if text.ends_with('\n') || Instant::now() > deadline {
+                break text;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        let [leader, grandchild]: [i32; 2] = written
+            .split_whitespace()
+            .map(|pid| pid.parse().expect("pid"))
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("two pids");
+        drop(child);
+        assert!(!exists(leader), "the leader {leader} was not reaped");
+        assert!(
+            soon(grandchild, |pid| !alive(pid)),
+            "the grandchild {grandchild} outlived the drop"
+        );
+    }
+
     #[test]
     fn terminate_before_run_still_ends_it() {
         let child = StreamingChild::spawn(sh("sleep 300")).expect("spawn");

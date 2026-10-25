@@ -148,3 +148,24 @@ output is copied from the session's logs.
   `SetupCommandChange` -> `--lib -- settings` 44/44, daemon `--lib -- catalog` 13/13. The client's
   `ValidSettings::into_settings` and `set_changed` name the field (a save never writes it), and
   `saving_a_theme_keeps_every_other_setting` now holds a setup command
+
+## M2 cycle 6: review A round 1 fixes — line length cap, pre-reap group kill, Drop, EINTR (A-F1–A-F4)
+
+- tests: `setup_output.rs` `a_line_with_no_end_is_cut_at_max_line_bytes`; `streaming_child.rs`
+  `a_natural_exit_still_ends_what_it_left_running`, `dropping_it_without_run_ends_and_reaps_its_tree`;
+  `process.rs` `an_interrupted_read_is_retried_not_taken_for_end_of_file`
+- red: `--test setup_output` -> `error[E0432]: unresolved import ...::MAX_LINE_BYTES` (A-F1);
+  `--lib -- interrupted` -> `an_interrupted_read_is_retried_not_taken_for_end_of_file ... FAILED`,
+  `left: [] right: "one two"` (A-F4: EINTR taken for EOF); `--test streaming_child` ->
+  `dropping_it_without_run_ends_and_reaps_its_tree ... FAILED` (8 passed; 1 failed: the leader was
+  not reaped, A-F3). `a_natural_exit_still_ends_what_it_left_running` was green before (it guards the
+  A-F2 change); the pid-reuse race itself is not reproducible in a test
+- green: `MAX_LINE_BYTES` (64 KiB): an unfinished line that reaches it is kept as a line and a new
+  one starts; `TreeKill::leader_exited` (`waitid` + `WNOWAIT`) and the group kill before the reaping
+  `try_wait`, under the `reaped` lock (Windows kills the job after the reap); `impl Drop for
+  StreamingChild` kills and reaps when not reaped; one reader loop `read_chunks` (retries
+  `Interrupted`) under `drain` and `stream_to` -> `--lib` 1588 passed, `--test streaming_child` 9/9,
+  `--test setup_output` 9/9
+- mutant red (pre-reap kill disabled: `if false && ...leader_exited()`): `--test streaming_child` ->
+  `a_natural_exit_still_ends_what_it_left_running ... FAILED` — `the grandchild 9917 outlived the
+  run`. Restored from a copy
