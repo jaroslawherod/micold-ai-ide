@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: milestone M3
-- **Next step**: M3 unit: review B, visual pass, full gate on wip/1127-m3 (over M2's ef9ff60c); then the orchestrator moves it onto the PR branch after the M1 and M2 PRs merge and opens the M3 PR (title and body in the unit's scratchpad)
+- **Next step**: orchestrator moves wip/1127-m3 (over M2's ef9ff60c) onto the PR branch after the M1 (#1376) and M2 PRs merge and opens the M3 PR (title and body in the unit's scratchpad: pr-title-m3.md, pr-body-m3.md), then M4 (after #1125 M3 merges)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | gated on wip/1127-m2, PR to open |
-| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | built on wip/1127-m3, gating |
+| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | gated on wip/1127-m3, PR to open |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
 
 ## Decisions
@@ -74,7 +74,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review A (code-review, high) | 1 | d938ca8eba6bb93fc7d0d90e458febaf292ef7c0:ef9ff60cb174f1478f0e1ed3265c61bc18f4cb13 | CLEAN (1 MINOR, fixed: `FieldButton::fit_in` restated the fit choice `FirstThatFits` makes — removed) |
 | M3 scoped gate | — | — | red, fixed: `sibling_parity` learns the field's shape (`FIELD_HEIGHT` pill, leading-icon glyph); `anatomy_call_sites` drops the stale `FIELD_HEIGHT`/`FIELD_MAX_WIDTH` exemptions; `material_builder_api`: `FieldButton::width` became the free fn `field_button::width`; showcase poses `FieldFit`'s variants; contrast: the field's edges checked on the resting pill (pressed layer 2.98:1) |
 | M3 review B (conformance, sonnet) | 1 | 4782f85b | CHANGES: 1 BLOCKER (the Verify log was still queued behind the build lock when it read it — the run then finished green, `VERIFY_EXIT=0`); 1 MINOR (T044's conditional covered state: `title-bar-settings` already draws the field disabled, so no `title-bar-settings-field` was added — fixed, prose only, recorded here) |
+| M3 review B round 2 (scoped, sonnet) | 2 | d4c5b69f | CLEAN, citing `VERIFY_EXIT=0` and every Verify count (material 10, client lib 35, bin 1, layout_snapshot 127, layout_text_overflow 3, overlay_dismissal_rules 8, title_bar_keyboard 5) and `covered_states.rs:2900` for F2 (a first round-2 reply that cited nothing was discarded) |
 | M3 visual pass | — | 4782f85b | pass: field centred in the free space, press opens the switcher with its input focused, a second press closes it, disabled in Settings, tooltip, dark, 640 drops the words (specs/1127-title-bar-breadcrumb/visual-pass/m3/). Glyph-only and macOS hint not driven (test-covered) |
+| M3 gate (`scripts/gate.sh`) | — | d4c5b69f3c236aca5647f93e0bcb7c057bafeff0 | pass first run (layout snapshot re-recorded right before it: no change beyond the title bar's) |
 
 ## Declined review findings
 
