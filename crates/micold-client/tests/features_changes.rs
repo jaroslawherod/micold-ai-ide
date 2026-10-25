@@ -5774,3 +5774,289 @@ mod reviewed_marks {
         assert_eq!(states(&state, false)[0].1, Unseen, "disconnected: no marks");
     }
 }
+
+// ---- Feature 1273, M3 (T020): the changed-file tree's state in the reducer ----
+
+mod tree_state {
+    use super::*;
+    use changes::{tree_pane, TreePane};
+    use micold_core::review::tree::{RowKind, TreeChoices};
+
+    /// The rows as `depth:label` with `/` after an open folder and `/-` after a collapsed one.
+    fn rows(state: &State) -> Vec<String> {
+        view_of(state)
+            .change_rows
+            .iter()
+            .map(|row| {
+                let tail = match &row.kind {
+                    RowKind::Folder(folder) if folder.open => "/",
+                    RowKind::Folder(_) => "/-",
+                    RowKind::File { .. } => "",
+                };
+                format!("{}:{}{tail}", row.depth, row.label)
+            })
+            .collect()
+    }
+
+    fn collapsed(state: &State) -> Vec<&str> {
+        view_of(state)
+            .tree
+            .collapsed
+            .iter()
+            .map(String::as_str)
+            .collect()
+    }
+
+    fn toggle(state: &mut State, paths: &[&str]) -> Effect {
+        changes::update(
+            state,
+            Msg::TreeFolderToggled(paths.iter().map(|p| (*p).to_owned()).collect()),
+        )
+    }
+
+    /// Ask for a re-read (the uncommitted toggle) and return its seq.
+    fn reread(state: &mut State) -> u64 {
+        match changes::update(state, Msg::UncommittedToggled) {
+            Effect::ReadList { seq, .. } => seq,
+            other => panic!("a toggle re-reads the list, got {other:?}"),
+        }
+    }
+
+    fn answer(state: &mut State, seq: u64, result: Result<ChangeList, String>) -> Effect {
+        changes::update(
+            state,
+            Msg::ListRead {
+                seq,
+                whole: Ok(Default::default()),
+                result,
+            },
+        )
+    }
+
+    const NESTED: &[&str] = &["src/a.rs", "src/ui/b.rs", "top.rs"];
+
+    /// FR-004, data-model §6. At open every folder is open, in Path order, and the choices are
+    /// their defaults.
+    #[test]
+    fn the_tree_opens_with_every_folder_open() {
+        let state = ready(NESTED);
+        assert_eq!(view_of(&state).tree, TreeChoices::default());
+        assert_eq!(
+            rows(&state),
+            ["0:src/", "1:ui/", "2:b.rs", "1:a.rs", "0:top.rs"]
+        );
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Rows);
+    }
+
+    /// FR-003, US1 s3. A folder collapses and expands; an outer folder expanded again shows a
+    /// sub-folder collapsed before still collapsed. Paths no row stands for change nothing.
+    #[test]
+    fn a_folder_collapses_and_expands_keeping_inner_folds() {
+        let mut state = ready(NESTED);
+        assert_eq!(toggle(&mut state, &["src/ui"]), Effect::None);
+        assert_eq!(rows(&state), ["0:src/", "1:ui/-", "1:a.rs", "0:top.rs"]);
+        toggle(&mut state, &["src"]);
+        assert_eq!(rows(&state), ["0:src/-", "0:top.rs"]);
+        assert_eq!(collapsed(&state), ["src", "src/ui"]);
+        toggle(&mut state, &["src"]);
+        assert_eq!(rows(&state), ["0:src/", "1:ui/-", "1:a.rs", "0:top.rs"]);
+        toggle(&mut state, &["src/ui"]);
+        assert_eq!(
+            rows(&state),
+            ["0:src/", "1:ui/", "2:b.rs", "1:a.rs", "0:top.rs"]
+        );
+        toggle(&mut state, &["nowhere"]);
+        assert!(collapsed(&state).is_empty());
+    }
+
+    /// FR-008, US1 s4. Selecting a file inside a collapsed folder opens its folders; selecting its
+    /// row again keeps the diff.
+    #[test]
+    fn selecting_a_file_reveals_it() {
+        let mut state = ready(NESTED);
+        toggle(&mut state, &["src/ui"]);
+        toggle(&mut state, &["src"]);
+        let (seq, _) = select(&mut state, "src/ui/b.rs");
+        assert!(collapsed(&state).is_empty());
+        assert!(rows(&state).contains(&"2:b.rs".to_owned()));
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(text_diff()),
+            },
+        );
+        let effect = changes::update(&mut state, Msg::FileSelected(path("src/ui/b.rs")));
+        assert_eq!(sans_tree(effect), Effect::None);
+        assert_eq!(diff_body(view_of(&state)), DiffBody::Diff(&text_diff()));
+    }
+
+    /// `ready(NESTED)` with `src` collapsed and the repository's tree read with the same files.
+    fn collapsed_with_tree() -> State {
+        let mut state = ready(NESTED);
+        toggle(&mut state, &["src"]);
+        let Effect::ReadTree { seq, .. } = changes::update(&mut state, Msg::FilesPaneToggled)
+        else {
+            panic!("showing the files reads the tree");
+        };
+        changes::update(
+            &mut state,
+            Msg::TreeRead {
+                seq,
+                result: Ok(micold_core::pull_request::TreeListing {
+                    paths: NESTED.iter().map(|p| path(p)).collect(),
+                    truncated: false,
+                }),
+            },
+        );
+        state
+    }
+
+    /// FR-008, edge case "Selection inside a collapsed folder": **Open diff** from a browsed file
+    /// opens its folders.
+    #[test]
+    fn open_diff_from_a_browsed_file_reveals_it() {
+        let mut state = collapsed_with_tree();
+        let seq = browse(&mut state, "src/a.rs");
+        answer_file(&mut state, seq, "src/a.rs", Ok(file_text(&["a"])));
+        assert_eq!(collapsed(&state), ["src"], "browsing alone reveals nothing");
+        let effect = changes::update(&mut state, Msg::OpenFileDiff);
+        assert!(matches!(effect, Effect::ReadDiff { .. }), "{effect:?}");
+        assert!(collapsed(&state).is_empty());
+        assert_eq!(view_of(&state).selected, Some(path("src/a.rs")));
+    }
+
+    /// FR-008, edge case "Selection inside a collapsed folder": a reference followed to a changed
+    /// file opens its folders; one to a file the change does not list leaves them.
+    #[test]
+    fn a_reference_to_a_changed_file_reveals_it() {
+        let mut state = collapsed_with_tree();
+        let effect = changes::update(&mut state, Msg::ReferenceActivated(path("top.rs"), None));
+        assert!(matches!(effect, Effect::ReadFile { .. }), "{effect:?}");
+        assert_eq!(collapsed(&state), ["src"]);
+        let effect = changes::update(
+            &mut state,
+            Msg::ReferenceActivated(path("src/ui/b.rs"), Some(3)),
+        );
+        assert!(matches!(effect, Effect::ReadFile { .. }), "{effect:?}");
+        assert!(collapsed(&state).is_empty());
+        assert!(rows(&state).contains(&"2:b.rs".to_owned()));
+    }
+
+    /// Edge case "Collapsing the folder that holds the selected file": the file stays selected and
+    /// its diff shown.
+    #[test]
+    fn collapsing_the_selected_files_folder_keeps_its_diff() {
+        let mut state = ready(NESTED);
+        let (seq, _) = select(&mut state, "src/a.rs");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(text_diff()),
+            },
+        );
+        toggle(&mut state, &["src"]);
+        assert_eq!(rows(&state), ["0:src/-", "0:top.rs"]);
+        let view = view_of(&state);
+        assert_eq!(view.selected, Some(path("src/a.rs")));
+        assert_eq!(diff_body(view), DiffBody::Diff(&text_diff()));
+    }
+
+    /// FR-014, SC-005 (folds), edge case "The list changes while shown": a re-read keeps the
+    /// collapsed folders, the selection still listed and the scroll; a new folder appears open.
+    #[test]
+    fn a_reread_keeps_folds_selection_and_scroll() {
+        let mut state = ready(&["lib/c.rs", "src/a.rs", "src/b.rs"]);
+        toggle(&mut state, &["lib"]);
+        select(&mut state, "src/a.rs");
+        changes::update(
+            &mut state,
+            Msg::ListScrolled {
+                offset: 40,
+                viewport: 200,
+            },
+        );
+        let seq = reread(&mut state);
+        answer(
+            &mut state,
+            seq,
+            Ok(list(&["lib/c.rs", "lib/d.rs", "new/e.rs", "src/a.rs"])),
+        );
+        assert_eq!(collapsed(&state), ["lib"]);
+        assert_eq!(rows(&state), ["0:lib/-", "0:new/", "1:e.rs", "0:src/", "1:a.rs"]);
+        let view = view_of(&state);
+        assert_eq!(view.selected, Some(path("src/a.rs")));
+        assert_eq!(view.list_offset, 40);
+    }
+
+    /// Edge case "Reading or failure": folds made while the list is read and kept through a failed
+    /// read apply when the list returns; the tree is hidden meanwhile (FR-016).
+    #[test]
+    fn folds_made_while_reading_or_failed_apply_when_the_list_returns() {
+        let mut state = ready(NESTED);
+        let seq = reread(&mut state);
+        toggle(&mut state, &["src"]);
+        assert_eq!(rows(&state), ["0:src/-", "0:top.rs"], "the kept list folds");
+        answer(&mut state, seq, Err("fatal: index.lock exists".into()));
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Hidden);
+        assert!(view_of(&state).change_rows.is_empty());
+        let seq = reread(&mut state);
+        answer(&mut state, seq, Ok(list(NESTED)));
+        assert_eq!(rows(&state), ["0:src/-", "0:top.rs"]);
+        assert_eq!(collapsed(&state), ["src"]);
+    }
+
+    /// FR-013, edge case "Two windows on the same entry": each window's view keeps its own folds.
+    #[test]
+    fn two_views_of_one_entry_keep_their_own_folds() {
+        let mut one = ready(NESTED);
+        let two = ready(NESTED);
+        toggle(&mut one, &["src"]);
+        assert_eq!(collapsed(&one), ["src"]);
+        assert!(collapsed(&two).is_empty());
+        assert_eq!(rows(&two).len(), 5);
+    }
+
+    /// FR-016. Only a list with files has tree rows: the reading, failed and empty states keep
+    /// today's bodies and no tree.
+    #[test]
+    fn only_a_list_with_files_shows_the_tree() {
+        let mut state = State::default();
+        let seq = open(&mut state, worktree());
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Hidden);
+        assert!(view_of(&state).change_rows.is_empty());
+        answer(&mut state, seq, Ok(list(&[])));
+        assert!(matches!(list_body(view_of(&state)), ListBody::Empty(_)));
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Hidden);
+        assert!(view_of(&state).change_rows.is_empty());
+        let seq = reread(&mut state);
+        answer(&mut state, seq, Err("fatal".into()));
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Hidden);
+        let seq = reread(&mut state);
+        answer(&mut state, seq, Ok(list(&["a.rs"])));
+        assert_eq!(tree_pane(view_of(&state)), TreePane::Rows);
+        assert_eq!(rows(&state), ["0:a.rs"]);
+    }
+
+    /// Data-model §1, spec Assumptions: binary, not-text and Mode-only files count 0 and 0 in the
+    /// folder totals, and the bar scale is the largest change over the whole list.
+    #[test]
+    fn leaves_count_text_changes_only_and_the_scale_spans_the_list() {
+        let mut state = State::default();
+        let seq = open(&mut state, worktree());
+        let mut files = list(&["src/a.rs", "src/b.png", "src/c.sh", "src/d.txt", "z.rs"]);
+        (files.files[0].added, files.files[0].removed) = (3, 1);
+        (files.files[1].content, files.files[1].added) = (Content::Binary, 9);
+        (files.files[2].kind, files.files[2].added) = (ChangeKind::ModeOnly, 4);
+        (files.files[3].content, files.files[3].removed) = (Content::NotUtf8, 7);
+        (files.files[4].added, files.files[4].removed) = (2, 5);
+        answer(&mut state, seq, Ok(files));
+        let view = view_of(&state);
+        let RowKind::Folder(src) = &view.change_rows[0].kind else {
+            panic!("src first");
+        };
+        assert_eq!((src.added, src.removed), (3, 1));
+        assert_eq!(view.change_scale, 7);
+    }
+}

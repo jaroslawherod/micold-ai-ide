@@ -2818,3 +2818,134 @@ diff --git a/l b/l\nnew file mode 120000\nindex 0..2\n--- /dev/null\n+++ b/l\n@@
         assert_eq!(control(&state, true), None);
     }
 }
+
+// ---- Feature 1273, M3 (T021): the tree's folds across a source switch ----
+
+mod tree_source {
+    use super::*;
+    use changes::{tree_pane, TreePane};
+    use micold_core::review::base::{Base, ReviewScope};
+    use micold_core::review::changes::{
+        ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
+    };
+    use micold_core::review::tree::RowKind;
+
+    const NESTED_DIFF: &str = "diff --git a/src/a.rs b/src/a.rs\nindex 1..2 100644\n--- a/src/a.rs\n+++ b/src/a.rs\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n\
+diff --git a/docs/x.rs b/docs/x.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b/docs/x.rs\n@@ -0,0 +1 @@\n+fresh\n";
+
+    fn file(p: &str) -> ChangedFile {
+        ChangedFile {
+            path: RelPath::from_native(p).unwrap(),
+            kind: ChangeKind::Modified,
+            content: Content::Text,
+            added: 1,
+            removed: 0,
+            large: false,
+            origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
+        }
+    }
+
+    fn rows(state: &State) -> Vec<String> {
+        state
+            .tabs
+            .shown_view()
+            .expect("open")
+            .change_rows
+            .iter()
+            .map(|row| {
+                let tail = match &row.kind {
+                    RowKind::Folder(folder) if folder.open => "/",
+                    RowKind::Folder(_) => "/-",
+                    RowKind::File { .. } => "",
+                };
+                format!("{}:{}{tail}", row.depth, row.label)
+            })
+            .collect()
+    }
+
+    /// The worktree's view with `src/a.rs` and `src/b.rs` listed, `src` collapsed, and #7 listed.
+    fn folded() -> State {
+        let mut state = State::default();
+        changes::update(&mut state, Msg::PullRequestSettingChanged(true));
+        let Effect::ReadList { seq, .. } = changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree(),
+            },
+        ) else {
+            panic!("opening reads the list");
+        };
+        changes::update(
+            &mut state,
+            Msg::ListRead {
+                seq,
+                whole: Ok(Default::default()),
+                result: Ok(ChangeList {
+                    files: vec![file("src/a.rs"), file("src/b.rs")],
+                    scope: ReviewScope::Worktree {
+                        base: Base::MergeBase {
+                            branch: "main".into(),
+                            commit: "0123456789abcdef0123456789abcdef01234567".into(),
+                        },
+                    },
+                }),
+            },
+        );
+        changes::update(&mut state, Msg::TreeFolderToggled(vec!["src".into()]));
+        assert_eq!(rows(&state), ["0:src/-"]);
+        listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+        state
+    }
+
+    /// Edge case "Switching source", FR-004, FR-013: the pull request's files are laid out with
+    /// the folds kept per folder path, and the working tree's come back as they were.
+    #[test]
+    fn a_source_switch_keeps_the_folds_per_folder_path() {
+        let mut state = folded();
+        let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+        let view = state.tabs.shown_view().expect("open");
+        assert_eq!(tree_pane(view), TreePane::Hidden, "the diff is being read");
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Ok(split_pr_diff(NESTED_DIFF)),
+            },
+        );
+        assert_eq!(rows(&state), ["0:docs/", "1:x.rs", "0:src/-"]);
+        assert_eq!(
+            tree_pane(state.tabs.shown_view().expect("open")),
+            TreePane::Rows
+        );
+
+        changes::update(&mut state, Msg::SourceChosen(None));
+        assert_eq!(rows(&state), ["0:src/-"]);
+        let tree = &state.tabs.shown_view().expect("open").tree;
+        assert_eq!(tree.collapsed.iter().collect::<Vec<_>>(), ["src"]);
+    }
+
+    /// FR-016: a pull request whose diff cannot be read shows no tree.
+    #[test]
+    fn an_unreadable_pull_request_shows_no_tree() {
+        let mut state = folded();
+        let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Err(DiffReadFailure::TooLarge),
+            },
+        );
+        let view = state.tabs.shown_view().expect("open");
+        assert!(matches!(
+            list_body(view),
+            ListBody::PullRequestUnread { too_large: true }
+        ));
+        assert_eq!(tree_pane(view), TreePane::Hidden);
+        assert!(view.change_rows.is_empty());
+    }
+}
