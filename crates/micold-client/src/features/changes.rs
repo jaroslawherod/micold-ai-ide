@@ -1754,15 +1754,21 @@ pub fn opened(
 }
 
 /// Show the Review tab of `key` when it has one (feature 1269, U8, R8): its location's last
-/// session closed. A kept view whose location may have changed meanwhile is read again (T5, U5).
-pub fn show_if_present(state: &mut State, key: &EntryKey) -> Effect {
+/// session went. A kept view whose location may have changed meanwhile is read again (T5, U5) —
+/// unless `covered`, when it is left unwatched so that uncovering reads it (U7).
+pub fn show_if_present(state: &mut State, key: &EntryKey, covered: bool) -> Effect {
     if !state.tabs.has(key) {
         return Effect::None;
     }
     hide_other(state, key);
-    match state.tabs.show_if_present(key) {
-        Some(true) => reread_shown(state),
-        Some(false) | None => Effect::None,
+    let reread = state.tabs.show_if_present(key) == Some(true);
+    if covered {
+        state.tabs.location_left(key);
+        Effect::None
+    } else if reread {
+        reread_shown(state)
+    } else {
+        Effect::None
     }
 }
 
