@@ -97,7 +97,7 @@ capture, shell choice, a streaming child that ends its whole tree, and the setti
 
 **Independent test**: T008, T010, T012, T014, T016 pass on all three CI platforms.
 
-- [ ] T008 [P] [US2] Test A4 (model), red until T009 (no `micold_core::setup`): new
+- [x] T008 [P] [US2] Test A4 (model), red until T009 (no `micold_core::setup`): new
   `core/tests/setup_model.rs`. `SetupCommand::parse`: `""`, `"  \n\t"` → `None`; `"  a\nb  "` →
   `"a\nb"` (trimmed, "Inner newlines are kept"). `SetupRun` transitions: every row of data-model's
   table succeeds; every other `finish` (from any ended state, `Running`→`Running`) is refused;
@@ -106,7 +106,7 @@ capture, shell choice, a streaming child that ends its whole tree, and the setti
   <reason>.*, *Stopped.*, *Interrupted: the daemon stopped.*. Serde: `Failed(Exit(2))` encodes as
   `{"state":"failed","failure":{"exit":2}}`, `Running` as `{"state":"running"}` (contract C2), and
   `SetupCommand` as a plain string
-- [ ] T009 [US2] Implement `core/src/setup/mod.rs` (`pub mod setup;` in `core/src/lib.rs`):
+- [x] T009 [US2] Implement `core/src/setup/mod.rs` (`pub mod setup;` in `core/src/lib.rs`):
   `SetupCommand` (newtype `String`, `parse(&str) -> Option<SetupCommand>`, `as_str`, serde
   transparent with parse on deserialize so a blank string is refused), `RunId(u64)`, `SetupState`
   and `Failure { Exit(i32), Signal(i32), NotStarted(String) }` as closed enums with `label` and
@@ -115,46 +115,46 @@ capture, shell choice, a streaming child that ends its whole tree, and the setti
   Refused>` as the only way out of `Running`, `SetupRunSummary` (`SetupRun` plus `output_lines:
   u64`), `SetupStart { Started(RunId), NotConfigured, Busy }`. Times via `unix_time::unix_secs`.
   T008 passes
-- [ ] T010 [P] [US2] Test A4 (output), red until T011, new `core/tests/setup_output.rs`:
+- [x] T010 [P] [US2] Test A4 (output), red until T011, new `core/tests/setup_output.rs`:
   `OutputBuffer::push(stream, bytes)` returns completed lines with indices; `\r\n` and `\n` end a
   line; a lone `\r` clears the partial line; a line split across two pushes is joined; stdout and
   stderr partials are kept apart; ANSI CSI (`\x1b[31m`) and OSC (`\x1b]0;t\x07`) are removed;
   invalid UTF-8 is decoded lossily; `finish` flushes a partial line; past `KEEP_LINES = 10_000` the
   oldest line goes, `first_index` (= `dropped`) counts it, and `since(i)` returns the backlog from
   `max(i, first_index)` (FR-021)
-- [ ] T011 [US2] Implement `core/src/setup/output.rs` (`OutputBuffer { lines: VecDeque<String>,
+- [x] T011 [US2] Implement `core/src/setup/output.rs` (`OutputBuffer { lines: VecDeque<String>,
   first_index: u64, partial per stream }`, `Stream { Stdout, Stderr }`, `KEEP_LINES`) per
   data-model §OutputBuffer. Reuse an existing ANSI-stripping helper if `grep -rn "\\\\x1b\["
   crates/micold-core/src` finds one; else write it here. T010 passes
-- [ ] T012 [P] [US2] Test A4 (shell), red until T013, new `core/tests/setup_shell.rs`: the three
+- [x] T012 [P] [US2] Test A4 (shell), red until T013, new `core/tests/setup_shell.rs`: the three
   rows of data-model's `shell_line` table, asserting program and args exactly; `bash_on_path` is
   true for a temp `PATH` holding an executable `bash` stub and false for an empty one (Unix only)
-- [ ] T013 [US2] Implement `core/src/setup/shell.rs`: `ShellPlatform { Unix, Windows }`,
+- [x] T013 [US2] Implement `core/src/setup/shell.rs`: `ShellPlatform { Unix, Windows }`,
   `shell_line(platform, bash_on_path, &SetupCommand) -> (OsString, Vec<OsString>)` (pure), and
   `pub fn bash_on_path(path: &OsStr) -> bool` over `provider::resolve_on_path` (line 575, made
   `pub(crate)`), so the daemon need not reach the provider internals. T012 passes
-- [ ] T014 [P] [US2] Test A5, red until T015, new `core/tests/streaming_child.rs`: stdout and
+- [x] T014 [P] [US2] Test A5, red until T015, new `core/tests/streaming_child.rs`: stdout and
   stderr chunks arrive in order per stream (`printf a; printf b >&2; printf c`); stdin is at EOF
   (`read x; echo "got:$?"` prints a non-zero status at once); `terminator().terminate()` from
   another thread ends `sh -c 'sleep 300 & wait'` and its grandchild (the grandchild's pid, echoed
   first, is gone after `run` returns); a missing program gives `spawn` an `Err`; exit code and
   signal map to `ExitKind::Code` / `ExitKind::Signal`. A Windows variant (`#[cfg(windows)]`)
   through `powershell.exe -Command` covers order, stdin EOF and terminate (Constitution VI)
-- [ ] T015 [US2] Implement `StreamingChild`, `Terminator` and `ExitKind { Code(i32), Signal(i32),
+- [x] T015 [US2] Implement `StreamingChild`, `Terminator` and `ExitKind { Code(i32), Signal(i32),
   WaitFailed(String) }` in `core/src/process.rs` per data-model §process: stdin null, stdout and
   stderr piped, `process_group(0)` (Unix) or `JobHandle::capture` (Windows, `win_job`); `run`
   reads both pipes on two threads into `on_chunk`, waits, then drains bounded by `READER_GRACE`.
   `Terminator::terminate` calls the same `kill_process_group` (line 123) / job kill that
   `run_bounded` uses: extract the shared part rather than copying it (`mise run duplication`).
   `run_bounded`'s tests stay green. T014 passes
-- [ ] T016 [P] [US2] Test A14, red until T017: in `core/src/settings.rs` tests, a `Settings` with
+- [x] T016 [P] [US2] Test A14, red until T017: in `core/src/settings.rs` tests, a `Settings` with
   `setup_commands = {"/home/me/src/app": "mise trust && mise install"}` round-trips through the
   on-disk form; an empty map writes no `setup_commands` key; a file without the key loads an empty
   map with `settings_version` unchanged; `SetupCommandChange { project, command: None }` removes
   the entry and `Some` sets it. In `daemon/src/catalog.rs` tests (beside the
   `persist_service_settings` tests): a service-settings write keeps a `setup_commands` entry
   already in `settings.json` (contract C3)
-- [ ] T017 [US2] `core/src/settings.rs`: `Settings::setup_commands: BTreeMap<String,
+- [x] T017 [US2] `core/src/settings.rs`: `Settings::setup_commands: BTreeMap<String,
   SetupCommand>` on `Settings` (line ~324, beside `jira_base_urls`), its default (line ~430) and its
   on-disk mirror (lines ~848, 923, 981) with `#[serde(default, skip_serializing_if =
   "BTreeMap::is_empty")]`; `SetupCommandChange { project: String, command: Option<SetupCommand> }`

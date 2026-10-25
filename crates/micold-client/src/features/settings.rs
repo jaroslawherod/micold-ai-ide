@@ -817,6 +817,9 @@ impl ValidSettings {
             // Feature 1122 (D4): each project's base URL is written by its own change, as a
             // connection is, never by a save.
             jira_base_urls: std::collections::BTreeMap::new(),
+            // Feature 1289: each project's setup command is written by its own change, never by
+            // a save, as a Jira base URL is.
+            setup_commands: std::collections::BTreeMap::new(),
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.

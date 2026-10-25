@@ -14,6 +14,7 @@ use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
 use crate::session::{AiCli, SessionId};
+use crate::setup::SetupCommand;
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
@@ -213,6 +214,30 @@ impl JiraBaseUrlChange {
     }
 }
 
+/// One project's setup command changing (feature 1289), shaped as [`JiraBaseUrlChange`]: one
+/// project's entry, so a save never overwrites another project's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupCommandChange {
+    /// The project, keyed as its Jira connection is ([`crate::jira::connection_key`]).
+    pub project: String,
+    /// The new command; `None` clears the project's command.
+    pub command: Option<SetupCommand>,
+}
+
+impl SetupCommandChange {
+    /// Apply the change to a setup-command map: set or remove only this project's entry.
+    pub fn apply(&self, map: &mut BTreeMap<String, SetupCommand>) {
+        match &self.command {
+            Some(command) => {
+                map.insert(self.project.clone(), command.clone());
+            }
+            None => {
+                map.remove(&self.project);
+            }
+        }
+    }
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -322,6 +347,16 @@ pub struct Settings {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub jira_base_urls: BTreeMap<String, JiraBaseUrl>,
+    /// Each project's setup command, run in every new worktree of that project (feature 1289,
+    /// FR-009, contract C3), keyed as `jira_connections` is. Entered in the app, never read from
+    /// the repository. The client writes it; a daemon's service-settings write keeps what is on
+    /// disk. A blank entry is dropped on read: that project has no command.
+    #[serde(
+        default,
+        deserialize_with = "crate::jira::known_values",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub setup_commands: BTreeMap<String, SetupCommand>,
     /// Whether the GitHub issues integration is on (feature 1102, FR-001). On by default, and in a
     /// file written before the switch (FR-007). While off, no GitHub issue request is made and the
     /// New worktree form offers no GitHub issue source. Service-owned so every window follows one
@@ -428,6 +463,7 @@ impl Default for Settings {
             jira_enabled: false,
             jira_connections: BTreeMap::new(),
             jira_base_urls: BTreeMap::new(),
+            setup_commands: BTreeMap::new(),
             github_issues_enabled: default_github_issues_enabled(),
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
@@ -846,6 +882,15 @@ struct StoredSettings {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     jira_base_urls: BTreeMap<String, JiraBaseUrl>,
+    /// Missing in files written before feature 1289 → none; a blank entry is dropped and the rest
+    /// kept. Written only when not empty. Additive and defaulted, so `settings_version` does not
+    /// move.
+    #[serde(
+        default,
+        deserialize_with = "crate::jira::known_values",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    setup_commands: BTreeMap<String, SetupCommand>,
     /// Missing in files written before feature 1102 → on (FR-007). Additive and defaulted, so
     /// `settings_version` does not move.
     #[serde(default = "default_github_issues_enabled")]
@@ -921,6 +966,7 @@ impl StoredSettings {
             jira_enabled: settings.jira_enabled,
             jira_connections: settings.jira_connections.clone(),
             jira_base_urls: settings.jira_base_urls.clone(),
+            setup_commands: settings.setup_commands.clone(),
             github_issues_enabled: settings.github_issues_enabled,
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
@@ -979,6 +1025,7 @@ impl StoredSettings {
             jira_enabled: self.jira_enabled,
             jira_connections: self.jira_connections,
             jira_base_urls: self.jira_base_urls,
+            setup_commands: self.setup_commands,
             github_issues_enabled: self.github_issues_enabled,
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,
@@ -1521,5 +1568,125 @@ mod reduce_motion_tests {
             "the file holds the user's choice"
         );
         assert!(store.load().settings.reduce_motion, "and loads back on");
+    }
+}
+
+#[cfg(test)]
+mod setup_commands_tests {
+    //! Feature 1289, A14: each project's setup command is kept in `settings.json` (FR-009,
+    //! contract C3), additively, so `settings_version` does not move.
+
+    use super::*;
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    fn written(dir: &tempfile::TempDir) -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap()).unwrap()
+    }
+
+    fn command(text: &str) -> SetupCommand {
+        SetupCommand::parse(text).unwrap()
+    }
+
+    #[test]
+    fn a_setup_command_round_trips_through_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        let settings = Settings {
+            setup_commands: BTreeMap::from([(
+                "/home/me/src/app".to_owned(),
+                command("mise trust && mise install"),
+            )]),
+            ..Settings::default()
+        };
+
+        store.save(&settings).unwrap();
+
+        assert_eq!(
+            written(&dir).get("setup_commands"),
+            Some(&serde_json::json!({"/home/me/src/app": "mise trust && mise install"}))
+        );
+        assert_eq!(store.load().settings, settings);
+    }
+
+    #[test]
+    fn no_setup_command_writes_no_key() {
+        let dir = tempfile::tempdir().unwrap();
+        store_in(&dir).save(&Settings::default()).unwrap();
+        assert_eq!(written(&dir).get("setup_commands"), None);
+    }
+
+    #[test]
+    fn a_file_without_the_key_loads_no_commands_and_keeps_its_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark" }"#,
+        )
+        .unwrap();
+
+        let outcome = store.load();
+
+        assert_eq!(outcome.status, LoadStatus::Loaded);
+        assert!(outcome.settings.setup_commands.is_empty());
+        store.save(&outcome.settings).unwrap();
+        assert_eq!(
+            written(&dir).get("settings_version"),
+            Some(&serde_json::json!(SETTINGS_VERSION))
+        );
+        assert_eq!(
+            SETTINGS_VERSION, 4,
+            "an additive field does not move the version"
+        );
+    }
+
+    #[test]
+    fn a_blank_command_in_the_file_is_dropped_and_the_rest_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "setup_commands": { "/a": "  ", "/b": "make" } }"#,
+        )
+        .unwrap();
+
+        let outcome = store.load();
+
+        assert_eq!(
+            outcome.status,
+            LoadStatus::Loaded,
+            "one bad entry is not a bad file"
+        );
+        assert_eq!(
+            outcome.settings.setup_commands,
+            BTreeMap::from([("/b".to_owned(), command("make"))])
+        );
+    }
+
+    #[test]
+    fn a_change_sets_or_removes_one_project_only() {
+        let mut map = BTreeMap::from([("/other".to_owned(), command("make"))]);
+
+        SetupCommandChange {
+            project: "/app".to_owned(),
+            command: Some(command("mise install")),
+        }
+        .apply(&mut map);
+        assert_eq!(map.get("/app"), Some(&command("mise install")));
+
+        SetupCommandChange {
+            project: "/app".to_owned(),
+            command: None,
+        }
+        .apply(&mut map);
+        assert_eq!(map.get("/app"), None);
+        assert_eq!(
+            map.get("/other"),
+            Some(&command("make")),
+            "another project's entry stays"
+        );
     }
 }

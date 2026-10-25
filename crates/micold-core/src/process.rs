@@ -12,10 +12,15 @@
 //! - [`run_bounded`]: run a child under a hard time limit and kill its whole process tree when it
 //!   ends — the environment-include shell (feature 011) and the GitHub CLI (feature 034) both need
 //!   exactly this, and the kill is a cross-platform subtlety that was debugged once (011 BUG-003).
+//! - [`StreamingChild`]: run a child with no time limit, hand over its output as it prints, and end
+//!   its whole process tree from another thread (feature 1289, the setup command). Same tree kill.
 
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 
 #[cfg(windows)]
 use crate::win_job::JobHandle;
@@ -113,12 +118,12 @@ pub enum RunOutcome {
     SpawnFailed(String),
 }
 
-/// Kill every process in `pid`'s process group (Unix only — `cmd` is spawned with
-/// `process_group(0)` below, so the group id equals the child's own pid) via a direct `kill(2)`
-/// syscall. Deliberately NOT implemented by spawning the `kill(1)` *binary* as a subprocess —
-/// that proved unreliable in sandboxed environments during development (the spawned `kill`
-/// process reported success without the target group actually dying), whereas the direct syscall
-/// from this same process is unambiguous.
+/// Kill every process in `pid`'s process group (Unix only — the child is spawned with
+/// `process_group(0)` by [`TreeKill::prepare`], so the group id equals the child's own pid) via a
+/// direct `kill(2)` syscall. Deliberately NOT implemented by spawning the `kill(1)` *binary* as a
+/// subprocess — that proved unreliable in sandboxed environments during development (the spawned
+/// `kill` process reported success without the target group actually dying), whereas the direct
+/// syscall from this same process is unambiguous.
 #[cfg(unix)]
 fn kill_process_group(pid: u32) {
     // Safety: `kill(2)` with a negative pid signals the process group; passing an invalid/already-
@@ -126,6 +131,63 @@ fn kill_process_group(pid: u32) {
     // behavior.
     unsafe {
         libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+    }
+}
+
+/// What ends a spawned child together with everything it started: its process group on Unix, its
+/// job on Windows (011 BUG-003). [`run_bounded`] and [`StreamingChild`] share it.
+struct TreeKill {
+    #[cfg(unix)]
+    pid: u32,
+    /// `None` when the job could not be created; the child alone is killed then.
+    #[cfg(windows)]
+    job: Option<JobHandle>,
+}
+
+impl TreeKill {
+    /// Make `cmd` spawn as the head of a tree this can kill (its own process group on Unix).
+    fn prepare(cmd: &mut Command) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        #[cfg(not(unix))]
+        let _ = cmd;
+    }
+
+    /// The tree of `child`, captured as soon as it exists.
+    fn capture(child: &std::process::Child) -> Self {
+        #[cfg(not(any(unix, windows)))]
+        let _ = child;
+        Self {
+            #[cfg(unix)]
+            pid: child.id(),
+            // Windows' counterpart to the process group, assigned as soon as the child exists.
+            #[cfg(windows)]
+            job: JobHandle::capture(child),
+        }
+    }
+
+    /// Kill the whole tree from any thread, without the child (a [`Terminator`]). On Windows
+    /// without a job this reaches nothing; [`Self::kill`] covers that case.
+    fn kill_tree(&self) {
+        #[cfg(unix)]
+        kill_process_group(self.pid);
+        // The job takes the whole tree, including anything holding the child's pipes.
+        #[cfg(windows)]
+        if let Some(job) = &self.job {
+            job.terminate();
+        }
+    }
+
+    /// Kill the whole tree, then `child` itself, for the case where the job could not be created.
+    fn kill(&self, child: &mut std::process::Child) {
+        self.kill_tree();
+        #[cfg(not(unix))]
+        let _ = child.kill();
+        #[cfg(unix)]
+        let _ = child;
     }
 }
 
@@ -169,11 +231,7 @@ pub fn run_bounded_with_input(
     if input.is_some() {
         cmd.stdin(Stdio::piped());
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
+    TreeKill::prepare(&mut cmd);
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
@@ -185,13 +243,7 @@ pub fn run_bounded_with_input(
     }
     let stdout_reader = child.stdout.take().map(drain);
     let stderr_reader = child.stderr.take().map(drain);
-    // Only the Unix kill needs the pid; binding it unconditionally warns on Windows, and this
-    // crate is built with warnings denied.
-    #[cfg(unix)]
-    let pid = child.id();
-    // Windows' counterpart to the process group above, assigned as soon as the child exists.
-    #[cfg(windows)]
-    let job = JobHandle::capture(&child);
+    let tree = TreeKill::capture(&child);
 
     let start = Instant::now();
     // `Err` holds a failed wait. The group is still killed and the readers still joined below,
@@ -211,19 +263,7 @@ pub fn run_bounded_with_input(
 
     // Kill the whole group unconditionally (whether it exited on its own or timed out) so no
     // orphaned grandchild can keep the pipes open — see the doc comment above.
-    #[cfg(unix)]
-    kill_process_group(pid);
-    #[cfg(windows)]
-    {
-        // The job first — it takes the whole tree, including anything holding the pipes read
-        // below. `child.kill()` after it, for the case where the job could not be created at all.
-        if let Some(job) = &job {
-            job.terminate();
-        }
-        let _ = child.kill();
-    }
-    #[cfg(not(any(unix, windows)))]
-    let _ = child.kill();
+    tree.kill(&mut child);
 
     // Bounded: a descendant that left the group (`setsid`) still holds the pipes, so EOF may
     // never come. Take what was read once the grace period is up and leave the readers behind.
@@ -288,6 +328,179 @@ fn joined(reader: Option<Reader>, deadline: Instant) -> Vec<u8> {
     }
     let mut bytes = reader.bytes.lock().unwrap_or_else(|e| e.into_inner());
     std::mem::take(&mut *bytes)
+}
+
+/// Which of a child's output pipes a chunk came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// How a [`StreamingChild`] ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExitKind {
+    /// It exited with this status.
+    Code(i32),
+    /// A signal ended it (Unix).
+    Signal(i32),
+    /// Waiting for it failed; the tree was killed.
+    WaitFailed(String),
+}
+
+/// What a [`StreamingChild`] and its [`Terminator`]s share.
+struct Shared {
+    tree: TreeKill,
+    /// Set once the child is reaped, under the lock a terminate takes: after that its group id
+    /// could name someone else's processes, so a late terminate sends nothing.
+    reaped: Mutex<bool>,
+    /// A terminate was asked for; the run loop also kills the child itself (Windows without a job).
+    requested: AtomicBool,
+}
+
+/// A child whose stdout and stderr are handed over as they are read, with no input and no time
+/// limit, and whose whole process tree a [`Terminator`] ends from another thread (feature 1289,
+/// research R6: the setup command). The tree kill is the one [`run_bounded`] uses.
+pub struct StreamingChild {
+    child: std::process::Child,
+    shared: Arc<Shared>,
+}
+
+/// A handle that ends a [`StreamingChild`]'s whole process tree from any thread.
+#[derive(Clone)]
+pub struct Terminator(Arc<Shared>);
+
+impl Terminator {
+    /// Kill the child and everything it started. Does nothing once the child has been reaped.
+    pub fn terminate(&self) {
+        self.0.requested.store(true, Ordering::SeqCst);
+        let reaped = self.0.reaped.lock().unwrap_or_else(|e| e.into_inner());
+        if !*reaped {
+            self.0.tree.kill_tree();
+        }
+    }
+}
+
+impl StreamingChild {
+    /// Spawn `cmd` with stdin at end of file (null) and stdout and stderr piped, at the head of its
+    /// own process tree. `Err` when it cannot be spawned (a missing program, a missing folder).
+    pub fn spawn(mut cmd: Command) -> std::io::Result<Self> {
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        TreeKill::prepare(&mut cmd);
+        let child = cmd.spawn()?;
+        let tree = TreeKill::capture(&child);
+        Ok(Self {
+            child,
+            shared: Arc::new(Shared {
+                tree,
+                reaped: Mutex::new(false),
+                requested: AtomicBool::new(false),
+            }),
+        })
+    }
+
+    /// A handle that ends this child's tree from another thread.
+    #[must_use]
+    pub fn terminator(&self) -> Terminator {
+        Terminator(Arc::clone(&self.shared))
+    }
+
+    /// Hand every chunk the child prints to `on_chunk`, in the order each stream printed it, until
+    /// the child exits; then kill what is left of its tree and wait at most [`READER_GRACE`] for
+    /// the pipes to reach end of file (a descendant that left the tree may hold them).
+    pub fn run(mut self, mut on_chunk: impl FnMut(Stream, &[u8])) -> ExitKind {
+        let (tx, rx) = mpsc::channel();
+        let mut open = 0;
+        if let Some(pipe) = self.child.stdout.take() {
+            stream_to(pipe, Stream::Stdout, tx.clone());
+            open += 1;
+        }
+        if let Some(pipe) = self.child.stderr.take() {
+            stream_to(pipe, Stream::Stderr, tx.clone());
+            open += 1;
+        }
+        drop(tx);
+        let mut deliver = |message: Option<(Stream, Vec<u8>)>, open: &mut usize| match message {
+            Some((stream, bytes)) => on_chunk(stream, &bytes),
+            None => *open -= 1,
+        };
+
+        let waited = loop {
+            if open > 0 {
+                if let Ok(message) = rx.recv_timeout(POLL_INTERVAL) {
+                    deliver(message, &mut open);
+                }
+            } else {
+                std::thread::sleep(POLL_INTERVAL);
+            }
+            if self.shared.requested.load(Ordering::SeqCst) {
+                self.shared.tree.kill(&mut self.child);
+            }
+            let mut reaped = self.shared.reaped.lock().unwrap_or_else(|e| e.into_inner());
+            match self.child.try_wait() {
+                Ok(Some(status)) => {
+                    *reaped = true;
+                    break Ok(status);
+                }
+                Ok(None) => {}
+                Err(err) => break Err(err),
+            }
+        };
+
+        // As in `run_bounded`: whatever the child left running would hold the pipes open.
+        self.shared.tree.kill(&mut self.child);
+        let deadline = Instant::now() + READER_GRACE;
+        while open > 0 {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match rx.recv_timeout(left) {
+                Ok(message) => deliver(message, &mut open),
+                Err(_) => break,
+            }
+        }
+
+        match waited {
+            Ok(status) => exit_kind(status),
+            Err(err) => {
+                // Reap it: the tree is dead, so this returns at once.
+                let _ = self.child.wait();
+                *self.shared.reaped.lock().unwrap_or_else(|e| e.into_inner()) = true;
+                ExitKind::WaitFailed(err.to_string())
+            }
+        }
+    }
+}
+
+/// Send what `pipe` reads to `tx` as it arrives, then `None` at end of file, on its own thread.
+fn stream_to(
+    mut pipe: impl Read + Send + 'static,
+    stream: Stream,
+    tx: mpsc::Sender<Option<(Stream, Vec<u8>)>>,
+) {
+    std::thread::spawn(move || {
+        let mut chunk = [0u8; 8192];
+        while let Ok(n) = pipe.read(&mut chunk) {
+            if n == 0 || tx.send(Some((stream, chunk[..n].to_vec()))).is_err() {
+                break;
+            }
+        }
+        let _ = tx.send(None);
+    });
+}
+
+fn exit_kind(status: std::process::ExitStatus) -> ExitKind {
+    if let Some(code) = status.code() {
+        return ExitKind::Code(code);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return ExitKind::Signal(signal);
+        }
+    }
+    ExitKind::WaitFailed(format!("no exit status: {status}"))
 }
 
 #[cfg(test)]
