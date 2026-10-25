@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: milestone M2
-- **Next step**: orchestrator opens the M2 PR from branch `1269-m2` (title/body in the scratchpad as `pr-title-m2.md`/`pr-body-m2.md`) once M1 (#1371) merges and `1269-m2` is rebased on main; then milestone M3 (T026–T031)
+- **Phase**: milestone M3
+- **Next step**: orchestrator opens the M2 PR (`pr-title-m2.md`/`pr-body-m2.md`), then, once M2 merges and `1269-m3` is rebased on main, the M3 PR from branch `1269-m3` (title/body in the scratchpad as `pr-title-m3.md`/`pr-body-m3.md`); then milestone M4 (T032–T041)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | in CI |
 | M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | (M2 PR, opened by orchestrator) | review-ready |
-| M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | — | todo |
+| M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | (M3 PR, opened by orchestrator) | review-ready |
 | M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | — | todo |
 
 ## Decisions
@@ -56,6 +56,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code review high, opus) | 1 | 817a7bf19477df5e1f2f0a7433b2bc9cb97b4add:4010e84b31e015e5b605acf3e9e02c505506090d | CHANGES: F1 MAJOR `TabClosed` never reached the root in the real app (fixed: the shell forwards it; main_tests case through the shell), F2 MAJOR header counts stale after a cover (fixed: `uncovered` also reads the counts; test asserts it), F3 MINOR fmt (fixed) |
 | Review A M2 | 2 | 9fcd12f259a2d1543d3e8d3c4c08eefd16ad2220:aa591b75a63a4587df1f51ffc567f309b179ab29 | CLEAN (sonnet, fix diff; also covered `Outcome::ReviewHidden`/`ProjectForgotten` added for the architecture guards) |
 | Review B M2 (conformance, sonnet) | 1 | 9fcd12f259a2d1543d3e8d3c4c08eefd16ad2220:aa591b75a63a4587df1f51ffc567f309b179ab29 | CLEAN |
+| Review A M3 (code-review high) | 1 | —:594a2e53 (snapshot not taken before the round) | CHANGES: F1 MAJOR U8 wired only to `SessionsClosed`, which a user's close never reaches (fixed: `Outcome::CurrentSessionGone` from close, remove, end and catalog drop, applied by the root; archived sessions not live); F2 chords/quick switcher, F3 status bar start from the shown location (fixed); F4 show over Compare (fixed: skipped); F8 shared hide step, F9 doc, F10 test helpers (fixed); F5, F6, F7 declined |
+| Review A M3 | 2 | 790535915f8d55b410a180e946f31562ab87622e:3e78d85028a6ffbcc849c0b492614153415e965c | CHANGES: F1 T027 negative half dropped the outcomes (fixed: drained, positive `SessionsClosed` case), F2 header vs current after `started` (fixed: `started` hides a shown review), F7 covered show starting a discarded read (fixed), F4 comment, F6 needless main lookup, F9 dead arm (fixed); F3, F5, F8 declined |
+| Review A M3 | 3 | 8baf5fe42cb06a275cb3d7122f681b6275d593a5:10f2ec2e91b873f8f695a09d2561e2b633056d4a | 1 MAJOR: the location came from `header.entry`, which `resolve_foreground_after_catalog` (sets a session without hiding a shown sessionless review) can leave on another location — fixed in 285565fa: `CurrentSessionGone` carries the gone session's location, read before the clear (header only for the catalog drop, whose record is gone). Round limit reached: not re-reviewed; client tests and full gate green on it. 1 MINOR (covered show re-reads a fresh view on uncover) left |
+| Review B M3 (conformance, sonnet) | 1 | 790535915f8d55b410a180e946f31562ab87622e:3e78d85028a6ffbcc849c0b492614153415e965c | CLEAN: 2 MINOR (T029 wording vs the outcome route; navigation/quick switcher/status bar beyond the task list), fixed, prose only (tasks.md *As built*, cycle log) |
 
 ## Declined review findings
 
@@ -65,6 +69,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | F4 `close` answers `show` for a hidden tab | contract T3 defines `show` regardless of `was_shown`; the client switches only when `was_shown` (U4) |
 | M1 | A | F6 `Press::None` shadows `Option::None` (MINOR) | the contract's name (T8, data-model, M4 tasks); always written qualified |
 | M1 | A | F7 `Bytes` xorshift in `tests/terminal_history_format.rs` (MINOR) | pre-existing, outside M1 |
+| M3 | A1 | F5 a removed daemon's location is read when its review is shown | rare; a failed read shows its own notice in the view, which is what the location's state is |
+| M3 | A1 | F6 `shown_location` lacks the known-worktree check | a removed worktree reaches the client as `WorktreesReplaced`, which drops its tab (U9); a run's worktree must stay reviewable |
+| M3 | A1 | F7 `remember` on every follow step (MINOR) | one map insert after the outermost message; the follow step is the one place every selection route meets (U7) |
+| M3 | A2 | F3 the emptied location's review is not shown while Compare is open | Compare took the main area from the review (`ChangesClosedForCompare` hides it) and the view draws a shown review over Compare |
+| M3 | A2 | F5 `here` in `ChangesRequested` repeats `current_session_location` | that one filters unlisted worktrees; a session at a run's (or the shell fixture's) unlisted worktree must count as already there |
+| M3 | A2 | F8 derive U8 in the follow step instead of at each clear site | the follow step cannot tell a session that went from a review Compare hid, so it would re-show it over Compare |
 
 ## Handover
 
