@@ -229,8 +229,9 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
     }
 
     /// Open the list as a panel of [controls](MenuSelectRow::controls) `width` wide, its trailing
-    /// edge on the trigger's, rather than as wide as the trigger; Tab then moves between the
-    /// controls instead of closing it ([`cdk::picker::Picker::panel`]).
+    /// edge on the trigger's, rather than as wide as the trigger; Tab and Shift+Tab then cycle
+    /// through the trigger and the controls instead of closing it, and Escape hands the keyboard
+    /// back to the trigger ([`cdk::picker::Picker::panel`]).
     ///
     /// [`cdk::picker::Picker::panel`]: crate::ui::cdk::picker::Picker::panel
     pub fn panel_width(mut self, width: f32) -> Self {
