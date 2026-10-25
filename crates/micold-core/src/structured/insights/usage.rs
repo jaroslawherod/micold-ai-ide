@@ -178,6 +178,15 @@ impl UsageState {
         });
     }
 
+    /// A new conversation: the next result is measured from zero, not from the old one's figures,
+    /// in case the CLI does not write a zero result for `/clear`.
+    pub(super) fn reset(&mut self) {
+        self.previous = Some(Running {
+            cost: Some(0.0),
+            models: Some(Vec::new()),
+        });
+    }
+
     /// Folds a turn that ended without a result: left out of the totals.
     pub(super) fn ended_without_result(&mut self) {
         self.totals.turns_left_out += 1;
