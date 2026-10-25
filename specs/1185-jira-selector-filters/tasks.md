@@ -362,6 +362,49 @@ type a summary word and the results narrow within them.
 
 ---
 
+## Phase 7: Keyboard opening of the filter fields (milestone M5, found by the close unit)
+
+**Goal**: a filter field reached by the keyboard works like one reached by the pointer (FR-015):
+its choices load when it is first opened (FR-006), Up/Down/Enter pick from them, and its keys stay
+in the dialog.
+
+**Found by**: the close unit's visual pass (quickstart Part B step 9, ledger *Review rounds*
+"Visual pass close"): a Component, Fix version or Reporter field reached by Tab never requests its
+choices — `FilterMsg::Focused` is published by `cdk::picker::Picker` only on a pointer press, and
+`QueryChanged` opens the list without starting the load — so typing shows "Loading versions…"
+indefinitely and Down does nothing; Enter in a Tab-focused field with its list closed reached the
+app behind the dialog (the sidebar's New worktree button reopened the dialog on New branch).
+The Label field works (its choices need no request).
+
+### Tests (write first, must fail)
+
+- [ ] T047 [P] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
+  `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`: for Component, Fix
+  version and Reporter, a field first opened without `Focused` — typed into (`QueryChanged`) or
+  moved in (`HighlightMoved`) — asks for its choices once (FR-006: on first opening, never on
+  dialog open or on Tab alone), shows them when they arrive, and a Down + Enter then picks one;
+  a second keystroke asks nothing more.
+- [ ] T048 [P] Widget tests in `crates/micold-material/src/cdk/picker.rs`: in an open panel, a
+  field that gained the keyboard by the panel's Tab cycle opens on Down or Enter (publishing its
+  focus/open message, so its choices load), and that Enter or Down is captured — it never reaches a
+  widget outside the panel.
+
+### Implementation
+
+- [ ] T049 In `crates/micold-client/src/features/worktree_form/jira_filters.rs` start the choices
+  request on the first opening by any message (`QueryChanged`, `HighlightMoved`, as `Focused`
+  does), through the same `start` and the one `jira_request` gate. Makes T047 pass.
+- [ ] T050 In `crates/micold-material/src/cdk/picker.rs` (`Picker::panel` and the field's closed
+  key handling) open a closed, keyboard-focused field on Down or Enter and capture the key; the
+  panel's Tab cycle may publish the reached field's `on_focus` (which would also give it its
+  active indicator — the B9 follow-up). Makes T048 pass.
+- [ ] T051 [P] User guide keyboard paragraph in `docs/user-guide/worktrees-and-sessions.md`
+  (filters section): Down or Enter opens a filter's list from the keyboard; check it still matches.
+
+**Checkpoint**: quickstart Part B step 9 passes in full by keyboard only.
+
+---
+
 ## Dependencies & Execution Order
 
 - Setup (T001) → Foundational (T002–T008) → US1 Part A (T009–T022) → US1 Part B (T023–T030) →
@@ -451,6 +494,19 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 T046 (quickstart validation, no code) is left to the close unit.
+
+### M5 — Keyboard opening of the filter fields
+
+- **Tasks**: T047–T051
+- **Deliverable**: by keyboard only, Tab into the Filters panel, type in or press Down on Component,
+  Fix version or Reporter: its choices load and Up/Down/Enter pick one; Enter never reaches the app
+  behind the dialog.
+- **Satisfies**: FR-015 (keyboard), FR-006 (choices on first opening); quickstart Part B step 9
+- **Verify**: `cargo test -p micold-client --test jira_filters_picker --test
+  jira_is_requested_only_on_named_events`; `cargo test -p micold-material cdk::picker`; quickstart
+  Part B step 9 (visual pass, lavapipe)
+- **Depends on**: M3, M4 (PR #1406)
+- **Tier**: full
 
 ## Notes
 
