@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 review A (high) and review B round 1 on snapshot 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676
+- **Next step**: M3 review A round 2 (scoped, sonnet)
 
 ## Pull requests
 
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A | 1 (high) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 `MAX_LINE_BYTES` 64 KiB cuts a line with no end; F2 group kill before the reaping `try_wait` via `waitid` WNOWAIT, under the `reaped` lock; F3 `impl Drop for StreamingChild` kills and reaps; F4 one reader loop `read_chunks`, retries EINTR); cycle log M2 cycle 6 |
 | M2 A | 2 (scoped, sonnet) | 14733e4bf5354abea71bdb1a930a50aa83ec28c2:8d6c87f9f2f5373395bf28093df3f363883d51b8 | CLEAN — all four round-1 fixes hold; 2 MINOR fixed (F1 `MAX_LINE_BYTES` 4 KiB + decoded cut: worst case about 40 MiB, 10,000-line floor kept; F2 the cut waits for a UTF-8 character, an open escape may still split); cycle log M2 cycle 7 |
 | M2 B | 1 (sonnet) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | CLEAN — Verify re-run all green; 2 MINOR, no change (client `into_settings`/`set_changed`/DEFERRED edits are in scope; ledger/tasks ticks are the own spec dir) |
+| M3 A | 1 (high) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (`SetupOutput` batches ≤ 1 MiB of line bytes); F2 fixed (`SetupRuns` own mutex, state lock only to send); F3 deferred to M4 T038 (delete stops and forgets the run); F4 fixed (`start_in` the created worktree's path); cycle log M3 cycle 3 |
+| M3 B | 1 (sonnet) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CLEAN — Verify re-run green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32); 2 MINOR fixed (B-F1 `send_ack` doc back on it, prose only; B-F2 = A-F4) |
 
 ## Declined review findings
 
@@ -79,7 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 part 1 (context over 150k). Done: T018–T030 implemented and ticked, committed 92410eac and pushed; workspace clippy `-D warnings` clean; Verify green: `cargo test -p micold-daemon --test setup_run` 7/7, `--test mcp_create_worktree_setup` 2/2, `--test mcp_create_worktree` 43/43 (exact rows gained `"setup": "none"`), `cargo test -p micold-core --lib -- protocol` 32/32. Cycle log M3 cycles 1–2. Decisions 10–14. Next: review A (code-review high) and review B (conformance, sonnet) round 1 on snapshot 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676; fix findings; then full gate (`scripts/gate.sh`) and open the PR (title/body in the orchestrator's prompt). No PR opened yet. Not run: `mise run image`/`test-sandbox` (setup runs in the sandbox only through `spawn_env_for`, already covered by M1).
+None.
 
 ## Open escalation
 
@@ -87,5 +89,6 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 
 ## Follow-ups not done
 
+- M3 review A-F3: a setup run is keyed by (project, dir_name) and nothing stops or drops it on worktree delete, so a recreated same-name worktree gets Busy. M4 T038 (`stop_and_wait` + `forget` before `git worktree remove`) covers it.
 - Per-project sandbox image (spec Story 4, deferred by clarify Q2): needs its own issue.
 - M1 review A round 3 MINOR: an `offered.json` with `clis: []` cannot be told apart from the daemon's own, so a host daemon sharing the state dir would prepend home folders to its PATH. Fix: an ownership marker (`#[serde(default)] state: Option<PathBuf>` in `Offered`, filled by the writer; `offered_clis` returns None when Some and differs from `dir`).
