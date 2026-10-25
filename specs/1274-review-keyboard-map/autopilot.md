@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M2 PR #1415 open (gate green at c78577d96), waiting on CI and merge. M3/M4 wait for #1269, #1270, #1271, #1273; M5 for #1127.
+- **Next step**: M2 PR #1415 rebased onto origin/main (2026-10-25, conflict in settings_sections.rs resolved), full gate GATE_EXIT=0 at e813ae67d, force-pushed; waiting on CI and merge. M3/M4 wait for #1269, #1270, #1271, #1273; M5 for #1127.
 
 ## Pull requests
 
@@ -79,6 +79,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M2 rebase (2026-10-25): PR #1415 conflicted with main (no CI ran). Rebased onto origin/main 35ac6de2d; only conflict `crates/micold-client/tests/settings_sections.rs` `DEFERRED`: kept main's `suggestion_chips` (#1275 M5) and this branch's `review_single_keys` (1274 M3) entries, both sides' rows intact. settings.rs, persist.rs, core settings.rs, settings_issue_mapping.rs auto-merged.
 
 - M2: container disk (~29 GB free) ran out twice in the full gate; target-shared wiped and the gate run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`, `STRIP=symbols`. `gh` unauthenticated: branch-start.sh run without the PR argument after confirming M1's merge SHA is on origin/main; PR via GitHub MCP.
 - Plan review ran via headless `claude -p --agent autopilot-reviewer`: Bash is denied there (workspace untrusted), so the reviewer used Read/Grep/Glob; a first run that only had denied Bash calls returned a vacuous CLEAN and was rerun. Symbols it could not confirm (`UnifiedIndex`, `SideIndex`, `jump_offset`, `settings::DiffLayout`, `is_primary_shift`, `Msg::SendPressed`, `window.focused_field`, `overlay::registry::topmost`) were confirmed by the plan unit with grep.
