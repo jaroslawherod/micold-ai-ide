@@ -71,7 +71,7 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 - [x] T023 [US4] Lay the body out as `row![file column Fixed(FILE_COLUMN_WIDTH = 260.0), diff Fill]` in `crates/micold-client/src/ui/changes.rs` (T020 green)
 - [x] T024 [US1] Re-record `session-area-changes-open` and add covered states for the open control (working tree, every `PrRows` state, pull request shown, Files on) in `crates/micold-client/tests/support/covered_states.rs` and `crates/micold-client/tests/fixtures/layout_snapshot.txt` (FR-012)
 - [x] T025 [US1] Update `docs/user-guide/reviewing-changes.md`: *Opening the Changes view* (the source control, its label and tooltip), *Pull requests* (the list in the control, every state's wording), *Committed and uncommitted* (chips in the Working tree option, chip while a PR is shown), *The Default entry* (the Committed note now in the option, no "Two toggles"), *Browsing the repository* (the Files option, `Files · ` label) (FR-012, Constitution VII)
-- [ ] T026 [US1] Run the `visual-pass` skill through an `autopilot-worker` over quickstart Part B (1280×800, light and dark) and save the evidence in `specs/1272-review-source-dropdown/visual-pass/`, including step 4's two actions from working tree to a pull request (FR-012, SC-001)
+- [x] T026 [US1] Run the `visual-pass` skill through an `autopilot-worker` over quickstart Part B (1280×800, light and dark) and save the evidence in `specs/1272-review-source-dropdown/visual-pass/`, including step 4's two actions from working tree to a pull request (FR-012, SC-001)
 
 **Checkpoint**: `mise run gate` green; quickstart Part B passes.
 

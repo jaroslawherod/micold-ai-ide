@@ -58,7 +58,8 @@ pub const ROW_HEIGHT: f32 = 36.0;
 
 /// The header's *n of m reviewed* slot at its widest: laid out the same width shown or empty, so
 /// the header's other controls never move with it (feature 1271, FR-009). In a narrow header it
-/// takes two fifths of the room the title and the source control leave (feature 1272), and its bar, then its words, give way first.
+/// takes half the room the title and the source control leave (feature 1272), and its bar, then
+/// its words, give way first.
 pub const PROGRESS_SLOT_WIDTH: f32 = 260.0;
 /// The progress bar's width in that slot at its widest (research R9).
 pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
@@ -66,9 +67,11 @@ pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
 /// The file column's width, whatever the window's (feature 1272, FR-008, R8): the diff takes the
 /// rest.
 pub const FILE_COLUMN_WIDTH: f32 = 260.0;
-/// The header's source control's width: room for `Files · #12345 · ` and some of a title, kept at
-/// every window width while the title column gives way first (Edge "Narrow window").
-pub const SOURCE_CONTROL_WIDTH: f32 = 280.0;
+/// The header's source control's width, which its open list takes too: room for the Working tree
+/// option's words beside its two chips on one line, and for `Files · #12345 · ` and some of a
+/// title when closed. Kept at every window width while the title column gives way (Edge "Narrow
+/// window").
+pub const SOURCE_CONTROL_WIDTH: f32 = 360.0;
 
 /// The diff's scroll viewport, by name: a panel jump scrolls it (feature 946, FR-017). A
 /// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
@@ -117,7 +120,7 @@ pub fn view<'a>(
     let reviews = file_reviews(&state.changes, view, connected);
     let header = container(
         row![
-            container(heading).width(Length::FillPortion(3)),
+            container(heading).width(Length::FillPortion(1)),
             source_control(state, view, r),
             progress_slot(reviews_progress(&reviews, connected), r),
         ]
@@ -220,7 +223,7 @@ fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
         .max_width(PROGRESS_SLOT_WIDTH)
         .align_x(iced::alignment::Horizontal::Right);
     container(slot)
-        .width(Length::FillPortion(2))
+        .width(Length::FillPortion(1))
         .align_x(iced::alignment::Horizontal::Right)
         .into()
 }
