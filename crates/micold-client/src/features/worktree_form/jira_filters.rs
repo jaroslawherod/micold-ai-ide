@@ -343,6 +343,15 @@ impl FilterState {
         accepted && self.chosen != before
     }
 
+    /// Close every filter's list, its text back to the chosen value's label, as a dismissal does:
+    /// advanced mode hides the fields (feature 1186, FR-002), so nothing could close them there.
+    pub fn close_lists(&mut self) {
+        for kind in OFFERED {
+            self.field_mut(kind).open = false;
+            self.restore_query(kind);
+        }
+    }
+
     /// Put `kind`'s field text back to the chosen value's label, or empty.
     fn restore_query(&mut self, kind: FilterKind) {
         let shown = self.chosen.shown(kind).unwrap_or_default();

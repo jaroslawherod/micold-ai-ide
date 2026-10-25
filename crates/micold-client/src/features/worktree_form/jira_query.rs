@@ -388,6 +388,7 @@ impl WorktreeForm {
         self.issue_list_open = false;
         match mode {
             QueryMode::Advanced => {
+                self.jira_filters.close_lists();
                 if let IssueList::Loaded { search, .. } = &mut self.issues {
                     if matches!(
                         search,
