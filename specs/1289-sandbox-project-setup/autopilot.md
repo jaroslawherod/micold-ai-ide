@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 review A round 2 (scoped, sonnet)
+- **Next step**: M3 review A round 2 (scoped, sonnet) on snapshot 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 (fix diff from 76878fd7…:92410eac…); full gate green on 9ae68f10; then open the PR
 
 ## Pull requests
 
