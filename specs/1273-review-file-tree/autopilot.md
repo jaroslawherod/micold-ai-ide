@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M5)
-- **Next step**: M5 T039 visual pass, then reviews A/B, gate, push after #1430 merges
+- **Next step**: M4+M5 rebased onto main (#1430 conflicted); full gate, force-push to #1430 (carries M4+M5)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
 | #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
 | #1426 | M3 tree state in the Changes reducer; Files on core | merged (rebase) | d84e94860 |
-| #1430 | M4 tree rows + ChangeBar drawn; guide; snapshot; visual pass | open (CI) | — |
+| #1430 | M4+M5: tree rows, ChangeBar, filter box, sort chips (rebased onto main after conflicts) | open | — |
 
 ## Milestones
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | merged |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | #1430 | open |
-| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | T031–T038 done (local, unpushed) |
+| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | T031–T039 done; rides #1430 with M4 |
 
 ## Decisions
 
@@ -69,6 +69,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 (conformance, sonnet) | 2 (full: rebase made round 1's snapshot stale) | abd9218d5ce05c39cb42b65bfc539592eb54cd6c:16aa4cb36024ee74d40f3fca9f718029b2e28c0b | CLEAN, cited (changes.rs, change_bar.rs, glyph.rs, guide, cycle-log M4); all four round-1 fixes hold |
 | Review A M4 (code-review high) | 1 | 91fc5a5c20ea7c55ab33ba07c7f36ef62ae056d1:bbfebda252276fda85ce54f86693fd8fc106ecfb (base 5c9daf4c) | CLEAN, cited (changes.rs, change_bar.rs, glyph.rs, tree.rs); 2 MINOR (F1 fixed: indent cap shaped once; F2 declined). A first dispatch read a stale M3 prompt and reviewed M3's diff: not counted; its one M4 point (`files[*leaf]` unguarded) fixed in bbfebda2 |
 
+| Review A M5 (code-review high) | 1 | pre-rebase ffe41054 (M5 diff ec96c2769..HEAD) | CLEAN, cited (text_field.rs, features/changes.rs, ui/changes.rs, features_changes.rs, tree.rs:375-460); 1 MINOR declined |
+| Conflict review M4+M5 rebase (sonnet) | 1 | range-diff d84e94860..pre-rebase-m5 vs b582c2563..6926b547 | CLEAN, cited (ui/changes.rs list pane, change_tree, FileFacts, file_row, RowDot; covered_states; fixture states); 1 MINOR (counted() mirrors change_leaves; noted, kept) |
+| Review B M5 (conformance, sonnet) | 1 | 6926b547 (M5 diff e6bce9876..HEAD) | CLEAN, cited; F1 MINOR fixed (mutation red for T033–T035 in cycle-log M5); F2 MINOR none needed (decision 13) |
+
 ## Declined review findings
 
 - tasks r1 F4 (checklist's FR-017 implementation-detail waiver): FR-017's "render-free logic in the shared core, covered by unit tests" is the issue's stated acceptance (spec Input), kept deliberately since the specify unit; not a self-granted waiver.
@@ -90,6 +94,7 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 | M3 | A | F5 (`tree_rows` and `change_leaves` map leaves separately; Files lays out per draw) | different count rules by design (Files has none); Files' per-draw layout predates M3, its cost unchanged |
 | M3 | B | F1 (T034/T036 edited in M3) | decision 6 records why; prose in tasks only |
 | M4 | A | F2 (the SC-006 test restates the cap formula) | the depth-0 assertion fails when the column cannot hold a 24-character name at all, and `cap >= 2` fails when the tree could not indent; the drawn row is the visual pass's check (T030, Part B step 6) |
+| M5 | A | F1 (Escape captured on an empty filter box) | `on_escape` wraps the field in `EscapeWhileFocused`; toggling it with the filter's text would change the field's widget tree while typing and drop its focus. An empty-box Escape sends `TreeFilterCleared`, a no-op (T033) |
 
 ## Handover
 
