@@ -381,7 +381,9 @@ mod tests {
         let f = FieldButton::<String>::new(Icon::Search, LABEL, roles()).hint(HINT);
         let mut m = mounted(f, 1000.0);
         assert_eq!(m.drive(Focusables(0)), Some(0));
-        for p in m.painted_text() {
+        let painted = m.painted_text();
+        assert!(!painted.is_empty(), "the disabled field draws its words");
+        for p in painted {
             assert!(
                 (p.color.a - style::DISABLED_OPACITY).abs() < 0.01,
                 "{:?} is not at the disabled opacity: {:?}",

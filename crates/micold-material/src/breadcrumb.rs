@@ -391,7 +391,8 @@ mod tests {
         assert_eq!(leaves(&closed.node), leaves(&open.node));
     }
 
-    /// Contract T3: built in both schemes without panicking, the segment in `on_surface`.
+    /// Contract T3: the host the breadcrumb stands its project segment on gives a text button's
+    /// content `on_surface`, in both schemes.
     #[test]
     fn the_project_segment_takes_on_surface() {
         for r in [roles(), dark_roles()] {
