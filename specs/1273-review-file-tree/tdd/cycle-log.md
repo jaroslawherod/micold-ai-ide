@@ -34,3 +34,10 @@ task pair it covers.
 | T026 | `ChangeBar` in the showcase | `showcase_completeness` names a component with no entry until the entry exists (rule of the gate) | `showcase_completeness` 13 passed, `material_builder_api` 46 passed |
 | T027 | 24-character name keeps its room at every depth (SC-006); no kind tag for Modified; no bar for binary, not-text and Mode rows; tree rows drawn | proven by mutation after review B M4 F1: `tree_indent_cap` returning 0, `kind_tag(Modified)` a tag, `counted` always true → `a_24_character_name_keeps_its_room_at_every_depth`, `modified_files_carry_no_kind_tag`, `binary_not_text_and_mode_rows_have_no_bar` FAILED | `ui::changes::tests` 3 passed, with `change_bar` 6 passed |
 | T028 | `changes-tree-collapsed` recorded; the changed list states re-recorded (`changes-review-marks*`, `review-source-open*`) | containment failed on a first 12-row state (the list's scroll content past its viewport); cut to 8 rows | `layout_snapshot` 140 passed |
+
+## M5
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T031, T032 | Escape in a focused field publishes `.on_escape`'s message once and is captured; unfocused, nothing | test run before the method existed: `error[E0599]: no method named on_escape found for struct TextField` | `cargo test -p micold-material --lib text_field`: 2 passed |
+| T033–T035 | filter narrows rows, keeps selection and diff, no-match pane, clear restores pre-filter folds (no-op when empty), Size order, Unreviewed first refused without marks and ordered by marks (re-laid out on a mark change), re-read and source switch keep filter, sort, folds | written before the `Msg` variants and `sort_offers` existed (red by construction, a compile failure; not run before the arms were written) | `features_changes` tree_state, reviewed_marks, source_menu: 34 passed |

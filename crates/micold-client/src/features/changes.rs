@@ -38,7 +38,7 @@ use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::source_menu::{self, MenuInput, Shown, Stop};
 use micold_core::review::stale::Held;
 use micold_core::review::tree::{
-    self, LayoutOptions, Leaf, Openness, Row, RowKind, TreeChoices, TreeSort,
+    self, LayoutOptions, Leaf, Offer, Openness, Row, RowKind, TreeChoices, TreeSort,
 };
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::review_tabs::{EntryKey, Opened, ReviewTabs};
@@ -694,8 +694,42 @@ fn change_leaves(files: &[ChangedFile]) -> Vec<Leaf<'_>> {
         .collect()
 }
 
-/// A digest of what the changed-file tree is laid out from: the leaves and the choices.
-fn change_key(leaves: &[Leaf], choices: &TreeChoices) -> u64 {
+/// The sorts the tree's control offers (FR-012, ledger decision 6): **Unreviewed first** once the
+/// entry's reviewed marks are known, which takes the service (`connected`, FR-013) and its push of
+/// the entry's review. A sort already chosen stays shown, so the active chip never disappears.
+pub fn sort_offers(state: &State, view: &OpenView, connected: bool) -> [(TreeSort, Offer); 3] {
+    let mut offers = tree::sort_options(connected && review_of(state, view).is_some());
+    for (sort, offer) in &mut offers {
+        if *sort == view.tree.sort {
+            *offer = Offer::Shown;
+        }
+    }
+    offers
+}
+
+/// The listed files with a reviewed mark on their current change, as [`file_reviews`] judges them
+/// from the entry's last push; read only while the tree is sorted **Unreviewed first**.
+fn reviewed_paths(state: &State, view: &OpenView) -> BTreeSet<String> {
+    let (TreeSort::UnreviewedFirst, Some(review), ListBody::Files(files)) =
+        (view.tree.sort, review_of(state, view), list_body(view))
+    else {
+        return BTreeSet::new();
+    };
+    let ids = current_ids(view);
+    let scope = view_scope(view);
+    files
+        .iter()
+        .filter(|file| {
+            let mark = review.marks.get(scope.clone(), &file.path);
+            file_review(mark, ids.get(&file.path), 0).state == ReviewState::Reviewed
+        })
+        .map(|file| file.path.as_str().to_owned())
+        .collect()
+}
+
+/// A digest of what the changed-file tree is laid out from: the leaves, the choices and the
+/// reviewed files.
+fn change_key(leaves: &[Leaf], choices: &TreeChoices, reviewed: &BTreeSet<String>) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for leaf in leaves {
@@ -706,25 +740,27 @@ fn change_key(leaves: &[Leaf], choices: &TreeChoices) -> u64 {
     std::mem::discriminant(&choices.sort).hash(&mut hasher);
     choices.collapsed.hash(&mut hasher);
     choices.filter_collapsed.hash(&mut hasher);
+    reviewed.hash(&mut hasher);
     hasher.finish()
 }
 
 /// Lay the changed-file tree out again when the shown files or the choices changed (research R9):
 /// [`update`] calls it after every message, so every arm that changes the list, the source or the
-/// choices is covered, and drawing never lays out. Reviewed marks do not steer it until the sort
-/// control offers **Unreviewed first** (M5).
-fn refresh_change_rows(view: &mut OpenView) {
+/// choices is covered, and drawing never lays out. `reviewed` steers **Unreviewed first** only, so
+/// a mark that changes lays the tree out again under that sort.
+fn refresh_change_rows(view: &mut OpenView, reviewed: &BTreeSet<String>) {
     let files = match list_body(view) {
         ListBody::Files(files) => files,
         _ => &[],
     };
     let leaves = change_leaves(files);
-    let key = change_key(&leaves, &view.tree);
+    let key = change_key(&leaves, &view.tree, reviewed);
     if key == view.change_key {
         return;
     }
     let query = Query::new(&view.tree.filter);
-    let rows = tree::layout(&leaves, &view.tree.options(&query, &|_| false));
+    let is_reviewed = |path: &str| reviewed.contains(path);
+    let rows = tree::layout(&leaves, &view.tree.options(&query, &is_reviewed));
     let scale = tree::bar_scale(&leaves);
     view.change_rows = rows;
     view.change_scale = scale;
@@ -1479,6 +1515,12 @@ pub enum Msg {
     /// A folder row of the changed-file tree was pressed, by the real folders it stands for
     /// (feature 1273, FR-003): an open row collapses, a collapsed one expands.
     TreeFolderToggled(Vec<String>),
+    /// The tree's filter box holds `text` (feature 1273, FR-009).
+    TreeFilterChanged(String),
+    /// The filter box's clear control, `Esc` in the box or **Clear filter** (FR-010, FR-011).
+    TreeFilterCleared,
+    /// A sort chip was pressed (FR-012); a sort the control does not offer is refused.
+    TreeSortChosen(TreeSort),
     /// Tree read `seq` ended.
     TreeRead {
         /// The read it answers.
@@ -1866,9 +1908,14 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         };
     }
     if !scroll {
+        let reviewed = state
+            .tabs
+            .shown_view()
+            .map(|view| reviewed_paths(state, view))
+            .unwrap_or_default();
         if let Some(view) = state.tabs.shown_view_mut() {
             reshape(view);
-            refresh_change_rows(view);
+            refresh_change_rows(view, &reviewed);
             // R2: a pick stays only while its lines are still rows of the diff (a collapsed
             // revealed run takes its rows away too).
             if let Some(pick) = view.pick {
@@ -2551,6 +2598,30 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 if let Some(row) = row.cloned() {
                     view.tree.toggle(&row);
                 }
+            }
+            Effect::None
+        }
+        Msg::TreeFilterChanged(text) => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.tree.set_filter(&text);
+            }
+            Effect::None
+        }
+        Msg::TreeFilterCleared => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.tree.clear_filter();
+            }
+            Effect::None
+        }
+        Msg::TreeSortChosen(sort) => {
+            // The reducer cannot see the connection; the marks it lays out by are the entry's last
+            // push, and the control offers the sort only while that push is current (connected).
+            let offers = state
+                .tabs
+                .shown_view()
+                .map(|view| tree::sort_options(review_of(state, view).is_some()));
+            if let (Some(offers), Some(view)) = (offers, state.tabs.shown_view_mut()) {
+                view.tree.set_sort(sort, &offers);
             }
             Effect::None
         }
