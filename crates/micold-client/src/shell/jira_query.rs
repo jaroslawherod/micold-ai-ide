@@ -14,21 +14,21 @@
 //!
 //! # What is remembered
 //!
-//! A switch and a run hand back `Outcome::JiraQueryRemembered`, which [`remember`] writes to the
-//! project's file beside the token (`shell/jira.rs`, FR-013). A failed write is a notification that
-//! names the OS error, never the query.
+//! A switch and a run hand back `Outcome::JiraQueryRemembered`, which `remember_jira_query`
+//! (`shell/issues.rs`, beside the issue source's own remembering) writes to the project's file
+//! beside the token (`shell/jira.rs`, FR-013).
 //!
-//! Nothing here logs: the query leaves the form only as the request and that file (FR-016).
+//! Nothing here logs or notifies: the query leaves the form only as the request and that file
+//! (FR-016).
 
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
-use micold_client::features::Outcome;
 use micold_core::github::IssueLoadError;
 use micold_core::jira_query::{QueryFailure, ScopedQuery};
 
-use super::issues::{jira_request, on_basic_shown, on_issue_row_picked};
+use super::issues::{jira_request, on_basic_shown, on_issue_row_picked, remember_jira_query};
 use crate::App;
 
 /// A message of the selector's advanced mode. A row pick resolves to its issue as a basic row's
@@ -43,27 +43,11 @@ pub fn on_message(app: &mut App, msg: QueryMsg) -> Task<Message> {
     let remembered = app
         .core
         .update_worktree_form_for_effects(FormMsg::JiraQuery(msg));
-    remember(app, remembered);
+    remember_jira_query(app, remembered);
     Task::batch([
         on_basic_shown(app, before),
         run_if_newly_awaited(app, before_query),
     ])
-}
-
-/// Write what the form asked its project to remember (FR-013), each change a read-modify-write of
-/// one field. Without a data directory there is nowhere to keep it, and nothing to say.
-fn remember(app: &mut App, outcomes: Vec<Outcome>) {
-    let Some(dir) = app.caps.jira_token_dir().map(std::path::Path::to_path_buf) else {
-        return;
-    };
-    for outcome in outcomes {
-        if let Outcome::JiraQueryRemembered { project, change } = outcome {
-            if let Err(error) = crate::shell::jira::remember_query(&dir, &project, &change) {
-                app.core
-                    .notify_error(crate::shell::jira::remember_failed(&error));
-            }
-        }
-    }
 }
 
 /// Start the run the last message made the form await, comparing the awaited seq before it
