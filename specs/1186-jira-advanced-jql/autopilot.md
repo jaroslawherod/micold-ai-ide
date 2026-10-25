@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M3 PR
-- **Next step**: M3 done on local branch 1186-m3-wip (full gate green at 1c12b691; review A clean in round 2, review B clean; visual pass B1–B3, B7 PASS, screenshots in /mnt/project-files/issue-1186/); orchestrator rebases onto main (M2 merged as 5b5064bc), re-gates, pushes and opens the M3 PR (title/body in the unit's scratchpad); then milestone M4 (T024–T032)
+- **Phase**: M4
+- **Next step**: M4 (T024–T032) implemented on local branch 1186-m4-wip; scoped gate and review A, then review B, visual pass (B5, B6), full gate; orchestrator pushes and opens the M4 PR after #1379 merges
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
 | #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
-| (to open) | M3 Basic/Advanced switch, query field and results | gate green, local branch 1186-m3-wip, not pushed | — |
+| #1379 | M3 Basic/Advanced switch, query field and results | open, CI running | — |
+| (to open) | M4 Jira's error messages and Retry | local branch 1186-m4-wip, not pushed | — |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
-| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | (to open) | gate green at 1c12b691, not pushed |
-| M4 | T024–T032 | full | Jira's error messages and Retry | — | planned |
+| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | open, CI running (rebased onto main at e545d5f5) |
+| M4 | T024–T032 | full | Jira's error messages and Retry | (to open) | implementing on 1186-m4-wip (based on e545d5f5) |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
 
 ## Decisions

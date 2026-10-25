@@ -1,13 +1,13 @@
 //! The advanced-JQL rules and load (feature 1186, specs/1186-jira-advanced-jql/contracts/jql-rules.md).
 //!
-//! Cleaning, parsing and scoping (§1–§3), the texts (§5) and the advanced load (§6), the last
-//! driven through `FakeJiraSource::with_query`.
+//! Cleaning, parsing and scoping (§1–§3), Jira's messages (§4), the texts (§5) and the advanced
+//! load (§6), the last driven through `FakeJiraSource::with_query`.
 
 use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection, ProjectKey};
 use micold_core::jira_query::{
-    load, QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery, CAPPED, EMPTY,
-    NOT_VALID_JQL, PROMPT,
+    load, rejection_messages, QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery,
+    CAPPED, EMPTY, NOT_VALID_JQL, PROMPT,
 };
 use micold_core::jira_status::TicketStatus;
 
@@ -475,4 +475,79 @@ fn an_unscripted_query_answers_a_load_failure() {
             "FakeJiraSource: no query scripted for this call".into()
         )))
     );
+}
+
+// §4 Jira's messages (FR-010)
+
+fn messages(body: &str) -> Vec<String> {
+    rejection_messages(body.as_bytes())
+}
+
+#[test]
+fn jiras_messages_come_from_error_messages_then_errors() {
+    assert_eq!(
+        messages(
+            r#"{"errorMessages":["Field 'asignee' does not exist or you do not have permission to view it."],"errors":{}}"#
+        ),
+        ["Field 'asignee' does not exist or you do not have permission to view it."]
+    );
+    assert_eq!(
+        messages(
+            r#"{"errorMessages":[],"errors":{"jql":"Expecting ')' before the end of the query."}}"#
+        ),
+        ["Expecting ')' before the end of the query."]
+    );
+    assert_eq!(messages(r#"{"errorMessages":["a","b"]}"#), ["a", "b"]);
+}
+
+#[test]
+fn error_messages_keep_jiras_order_and_errors_follow_in_key_order() {
+    assert_eq!(
+        messages(
+            r#"{"errorMessages":["z first","a second"],"errors":{"b":"from b","a":"from a"}}"#
+        ),
+        ["z first", "a second", "from a", "from b"]
+    );
+}
+
+#[test]
+fn each_message_is_cleaned_trimmed_and_an_empty_one_dropped() {
+    assert_eq!(
+        messages(
+            r#"{"errorMessages":["  line one\nline two\t", "a\u0007b", "   ", "", 7],"errors":{"x":"\n","y":3}}"#
+        ),
+        ["line one line two", "ab"]
+    );
+}
+
+#[test]
+fn a_long_message_is_cut_at_300_chars_and_at_most_10_are_kept() {
+    let long = "é".repeat(400);
+    let cut = messages(&format!(r#"{{"errorMessages":["{long}"]}}"#));
+    assert_eq!(cut, [format!("{}…", "é".repeat(300))]);
+    let exact = "x".repeat(300);
+    assert_eq!(
+        messages(&format!(r#"{{"errorMessages":["{exact}"]}}"#)),
+        [exact.clone()],
+        "300 chars is not cut"
+    );
+
+    let twelve: Vec<String> = (1..=12).map(|n| format!("m{n}")).collect();
+    let body = serde_json::json!({ "errorMessages": twelve }).to_string();
+    assert_eq!(messages(&body), twelve[..10]);
+}
+
+#[test]
+fn a_body_with_no_messages_gives_none() {
+    for body in [
+        "<html><body>Bad request</body></html>",
+        "{}",
+        "",
+        "[]",
+        r#"{"errorMessages":"not a list","errors":["not","an object"]}"#,
+        "\u{fffd}",
+    ] {
+        assert!(messages(body).is_empty(), "{body:?}");
+    }
+    assert!(rejection_messages(&[0xff, 0xfe]).is_empty());
 }

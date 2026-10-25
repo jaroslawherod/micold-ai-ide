@@ -67,6 +67,8 @@ pub enum Msg {
     DraftChanged(String),
     /// Enter in the query input or the run control (FR-004).
     Run,
+    /// **Retry** under a failed load: run the failed scoped query again (FR-011, US2 AS3).
+    Retry,
     /// A run answered. Applies only while the selector awaits `seq`.
     Ran {
         seq: u64,
@@ -161,6 +163,25 @@ impl JiraQuery {
         }
     }
 
+    /// **Retry** (FR-011): after a load failure, the same scoped query runs again under `seq`, even
+    /// when the draft was edited since. Anything else, a query Jira rejected included, ignores it.
+    /// `true` when a run started.
+    pub fn retry(&mut self, seq: u64) -> bool {
+        let QueryRun::Failed {
+            scoped,
+            failure: QueryFailure::Load(_),
+        } = &self.run
+        else {
+            return false;
+        };
+        self.run = QueryRun::Running {
+            seq,
+            scoped: scoped.clone(),
+        };
+        self.highlight = None;
+        true
+    }
+
     /// A run answered: only the awaited one applies.
     pub fn ran(&mut self, seq: u64, result: Result<IssueListing, QueryFailure>) {
         let QueryRun::Running {
@@ -224,6 +245,8 @@ pub fn update(form: &mut WorktreeForm, msg: Msg, next_seq: u64) -> bool {
             Some(site) if form.shows_advanced() => form.jira_query.run_draft(&site, next_seq),
             _ => false,
         },
+        Msg::Retry if form.shows_advanced() => form.jira_query.retry(next_seq),
+        Msg::Retry => false,
         Msg::Ran { seq, result } => {
             form.jira_query.ran(seq, result);
             false

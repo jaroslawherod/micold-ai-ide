@@ -506,3 +506,73 @@ fn a_stalled_query_times_out_at_the_budget() {
     assert_eq!(failure, QueryFailure::Load(IssueLoadError::TimedOut));
     assert!(started.elapsed() < Duration::from_secs(3));
 }
+
+// Feature 1186 M4: a query Jira refuses (contracts/jql-rules.md §4, FR-010).
+
+fn bad_request_with(body: &str, content_type: &str) -> String {
+    format!(
+        "HTTP/1.1 400 Bad Request\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+#[test]
+fn a_refused_query_carries_jiras_messages_in_jiras_order() {
+    let body = r#"{"errorMessages":["Field 'asignee' does not exist or you do not have permission to view it.","The value 'Hgh' does not exist for the field 'priority'."],"errors":{}}"#;
+    let (origin, _rx) = serve(Some(bad_request_with(body, "application/json")));
+    assert_eq!(
+        JiraCloud::new().query_page(
+            &connection(&origin),
+            &token(),
+            &scoped("asignee = me"),
+            None
+        ),
+        Err(QueryFailure::Rejected(vec![
+            "Field 'asignee' does not exist or you do not have permission to view it.".into(),
+            "The value 'Hgh' does not exist for the field 'priority'.".into(),
+        ]))
+    );
+}
+
+#[test]
+fn a_refused_query_with_no_message_is_rejected_with_none() {
+    for body in ["<html><body>Bad request</body></html>", ""] {
+        let (origin, _rx) = serve(Some(bad_request_with(body, "text/html")));
+        assert_eq!(
+            JiraCloud::new().query_page(&connection(&origin), &token(), &scoped("x = 1"), None),
+            Err(QueryFailure::Rejected(Vec::new())),
+            "{body:?}"
+        );
+    }
+}
+
+#[test]
+fn a_400_with_a_body_still_fails_a_basic_list_as_before() {
+    let body = r#"{"errorMessages":["The value 'ABC' does not exist for the field 'project'."]}"#;
+    let (origin, _rx) = serve(Some(bad_request_with(body, "application/json")));
+    assert_eq!(
+        JiraCloud::new().list_open(&connection(&origin), &token(), None),
+        Err(micold_core::jira::classify(
+            &micold_core::jira::Outcome::Status(400)
+        ))
+    );
+}
+
+#[test]
+fn a_400_with_a_body_still_bisects_a_status_chunk() {
+    let refusal = bad_request_with(
+        r#"{"errorMessages":["Issue 'ABC-2' does not exist."]}"#,
+        "application/json",
+    );
+    let (origin, _rx) = serve_each(vec![
+        refusal.clone(),                        // [1,2]
+        ok(&status_body(&[("ABC-1", "Done")])), // [1]
+        refusal,                                // [2] alone
+    ]);
+    let keys: Vec<String> = (1..=2).map(|n| format!("ABC-{n}")).collect();
+    let got = JiraCloud::new()
+        .statuses(&connection(&origin), &token(), &keys)
+        .expect("statuses");
+    let names: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(names, ["ABC-1"]);
+}
