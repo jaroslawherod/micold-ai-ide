@@ -355,9 +355,9 @@ type a summary word and the results narrow within them.
 
 ## Phase 6: Polish & Cross-Cutting Concerns (close unit, no code)
 
-- [ ] T046 Run quickstart Part A (`cargo test -p micold-core --all-targets`, `scripts/gate.sh`) and
+- [x] T046 Run quickstart Part A (`cargo test -p micold-core --all-targets`, `scripts/gate.sh`) and
   Part B through the `visual-pass` skill; save screenshots under
-  `specs/1185-jira-selector-filters/visual/` and record SC-001 (four interactions) in
+  `specs/1185-jira-selector-filters/visual/` and record SC-001 (five interactions since D15) in
   `specs/1185-jira-selector-filters/quickstart.md`.
 
 ---
@@ -397,11 +397,14 @@ The Label field works (its choices need no request).
 - [x] T050 In `crates/micold-material/src/cdk/picker.rs` (`Picker::panel` and the field's closed
   key handling) open a closed, keyboard-focused field on Down or Enter and capture the key; the
   panel's Tab cycle may publish the reached field's `on_focus` (which would also give it its
-  active indicator — the B9 follow-up). Makes T048 pass.
+  active indicator — the B9 follow-up). Makes T048 pass. (Optional part not done: it would ask on
+  Tab alone, against FR-006; see the ledger's M5 row.)
 - [x] T051 [P] User guide keyboard paragraph in `docs/user-guide/worktrees-and-sessions.md`
   (filters section): Down or Enter opens a filter's list from the keyboard; check it still matches.
 
-**Checkpoint**: quickstart Part B step 9 passes in full by keyboard only.
+**Checkpoint**: quickstart Part B step 9 passes in full by keyboard only. (Close pass 2: passes
+with one exception outside this feature — a freshly opened dialog takes no keyboard until the first
+click, ledger D18.)
 
 ---
 

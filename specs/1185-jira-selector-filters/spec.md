@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1344, #1381, #1396, #1406
 
 **Input**: User description: "Spec 1185" — issue #1185, *Filter the Jira issue selector by reporter, label, component and fix version*: the Jira issue selector in the New worktree form can only narrow its list with free text (summary, label, or an issue key), always within the project's not-Done issues. In a large project there is no way to narrow the list to the issues I reported, a component, or the next release's fix version. Add basic filters on Jira's built-in fields — reporter, label, component, fix version — each adding a clause ANDed with the project and not-Done clauses and the free-text search. The choices for each filter come from the connected Jira project. Filter values are escaped the same way the search text is, so a value is only ever a JQL string.
 

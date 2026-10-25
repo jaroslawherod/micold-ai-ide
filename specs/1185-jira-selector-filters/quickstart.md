@@ -56,3 +56,17 @@ Reporter field reached by Tab never loads its choices, and Enter in it reached t
 dialog: milestone M5. SC-001: five interactions (open the panel, focus Component, pick Payments,
 focus Fix version, pick 2.4). Screenshots: `visual/close-*.png`. T046 stays open until step 9
 passes after M5.
+
+**Close pass 2** (2026-10-25, 86f52c86 after M5, lavapipe/wgpu on Xvfb + `fake_jira`, light).
+Part A: `scripts/gate.sh` green (11,192 passed, 0 failed). Part B re-run of every step that opens a field, M5 having moved
+each field's first opening into one path: steps 2, 3, 5, 7, 8 PASS; SC-001 again five
+interactions. Step 9 PASS with a documented exception. The exception (ledger D18, outside this
+feature): from a freshly opened dialog it fails — nothing has the keyboard, so Tab and Space before
+the first click reach the app behind (the dialog's initial focus, shared by every field of the
+dialog). After one click into the dialog, by keyboard only: Tab reaches
+**Filters**, Space opens the panel, a Tab-reached Component opens on Down with its components,
+Up/Down/Enter pick Payments, Fix version opens on Enter with 2.4 and 2.3, Esc closes the list, a
+second Esc the panel with the ring back on **Filters**, Shift+Tab goes back through the issue
+search to **Clear filters**, and no key reached the app behind. Also not this feature: a field
+reached by Tab, the issue search included, shows no focus ring. Screenshots:
+`visual/close2-*.png`.
