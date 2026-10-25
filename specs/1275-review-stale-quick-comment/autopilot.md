@@ -136,5 +136,8 @@ together within ~2 s.
 - M1 review snapshot (code commit, gate green: `scripts/gate.sh` exit 0):
   `4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc` (reviews A
   and B round 1 ran on it).
+- M1 review A round 1 fixes: commit 31cc0ed7, full `scripts/gate.sh` exit 0 on that tree; fix
+  snapshot for round 2 (`review-snapshot.sh diff 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc`):
+  `56ae08e45f3bf70dfcbd5765e7d3d5f2bdede19c:31cc0ed72894052f56730d1f7c435baa3ce81dfd`.
 - M1 PR body (review A round 1 fixes): `$SCRATCHPAD/pr-body-1275-m1.md` of the M1 part-2 unit;
   the orchestrator opens the PR after A round 2.
