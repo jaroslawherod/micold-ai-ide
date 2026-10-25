@@ -9,23 +9,12 @@
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
 use crate::support::covered_states::covered_states;
-use crate::support::layout::{self as lay, LayoutRecord};
+use crate::support::layout::{self as lay, anchored as at};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::spacing;
 
 const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
-
-fn at<'r>(
-    covered: &lay::CoveredState,
-    records: &'r [LayoutRecord],
-    name: &str,
-) -> Option<&'r LayoutRecord> {
-    let anchor = covered.anchors.iter().find(|a| a.name == name)?;
-    records
-        .iter()
-        .find(|r| r.layer == lay::Layer::Base && r.path == anchor.path)
-}
 
 #[test]
 fn new_session_and_the_splits_are_the_strips_last_children_at_its_trailing_edge() {

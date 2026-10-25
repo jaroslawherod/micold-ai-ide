@@ -859,6 +859,19 @@ pub fn anchor_for<'a>(anchors: &'a [Anchor], path: &[usize]) -> Option<&'a Ancho
     anchors.iter().find(|a| a.path == path)
 }
 
+/// The base-layer record the anchor named `name` points at in `covered`'s `records`, or `None`
+/// when the state declares no such anchor or its path names no record.
+pub fn anchored<'r>(
+    covered: &CoveredState,
+    records: &'r [LayoutRecord],
+    name: &str,
+) -> Option<&'r LayoutRecord> {
+    let anchor = covered.anchors.iter().find(|a| a.name == name)?;
+    records
+        .iter()
+        .find(|r| r.layer == Layer::Base && r.path == anchor.path)
+}
+
 /// Resolve every covered state once per scheme, and remember it.
 ///
 /// Six tests need these records and the naive form resolved ~71 full views to get them: three

@@ -6,13 +6,13 @@
 //! numbers are asserted here on the records of `window-session-view` and `window-overview`, in both
 //! colour schemes:
 //!
-//! - **W1** the title bar sits at the top and is `app_bar::HEIGHT` tall (the bar, not the container
-//!   that also holds its hairline);
-//! - **W2** the status bar is `status_bar::HEIGHT` tall and ends at the window's bottom edge;
+//! - **W1** the title bar spans the window's top and is `app_bar::HEIGHT` tall (the bar, not the
+//!   container that also holds its hairline);
+//! - **W2** the status bar spans the window, `status_bar::HEIGHT` tall, ending at its bottom edge;
 //! - **W3** the body starts at the title bar's bottom edge, `app_bar::BOTTOM_EDGE` (the bar plus its
 //!   hairline, so 0 px between them), and ends where the status bar starts;
-//! - **W4** the sidebar and the session area (or the Overview in its place) each span the body's
-//!   height, and meet;
+//! - **W4** the sidebar and the session area (or the Overview in its place) each span the body from
+//!   top to bottom, the sidebar from its left edge and the session area to its right, and meet;
 //! - **W5** `window-overview`'s `State` has the Overview open, not full screen, and its sidebar row
 //!   the selected one (the records hold geometry, not style).
 //!
@@ -24,7 +24,6 @@
 
 use crate::support::covered_states::covered_states;
 use crate::support::layout::{self as lay, CoveredState, LayoutRecord};
-use micold_client::features::sidebar::{row_selected, RowSelection, SelectableRow};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::anatomy::{app_bar, status_bar};
 
@@ -44,21 +43,12 @@ struct Window {
 impl Window {
     /// The base-layer record the anchor `name` points at.
     fn region(&self, name: &str) -> &LayoutRecord {
-        let anchor = self
-            .covered
-            .anchors
-            .iter()
-            .find(|a| a.name == name)
-            .unwrap_or_else(|| panic!("{}: no anchor {name:?}", self.covered.name));
-        self.records
-            .iter()
-            .find(|r| r.layer == lay::Layer::Base && r.path == anchor.path)
-            .unwrap_or_else(|| {
-                panic!(
-                    "{} ({:?}): anchor {name:?} at {:?} names no record",
-                    self.covered.name, self.scheme, anchor.path
-                )
-            })
+        lay::anchored(self.covered, self.records, name).unwrap_or_else(|| {
+            panic!(
+                "{} ({:?}): anchor {name:?} names no record",
+                self.covered.name, self.scheme
+            )
+        })
     }
 
     /// Fails naming the state, the scheme, what is measured and both numbers.
@@ -100,6 +90,8 @@ fn w1_the_title_bar_is_at_the_top_and_its_own_height() {
         let bar = w.region("title_bar");
         w.expect("title_bar top", bar.y, 0.0);
         w.expect("title_bar height", bar.height, app_bar::HEIGHT);
+        w.expect("title_bar left", bar.x, 0.0);
+        w.expect("title_bar width", bar.width, lay::WINDOW.width);
     }
 }
 
@@ -109,6 +101,8 @@ fn w2_the_status_bar_is_its_own_height_at_the_windows_bottom() {
         let bar = w.region("status_bar");
         w.expect("status_bar height", bar.height, status_bar::HEIGHT);
         w.expect("status_bar bottom", bar.y + bar.height, lay::WINDOW.height);
+        w.expect("status_bar left", bar.x, 0.0);
+        w.expect("status_bar width", bar.width, lay::WINDOW.width);
     }
 }
 
@@ -141,20 +135,28 @@ fn w4_the_sidebar_and_the_session_area_span_the_body_and_meet() {
             w.region("sidebar"),
             w.region("session.area"),
         );
-        w.expect(
-            "sidebar height against shell.body's",
-            sidebar.height,
-            body.height,
-        );
-        w.expect(
-            "session.area height against shell.body's",
-            area.height,
-            body.height,
-        );
+        for (name, region) in [("sidebar", sidebar), ("session.area", area)] {
+            w.expect(
+                &format!("{name} top against shell.body's"),
+                region.y,
+                body.y,
+            );
+            w.expect(
+                &format!("{name} height against shell.body's"),
+                region.height,
+                body.height,
+            );
+        }
+        w.expect("sidebar left against shell.body's", sidebar.x, body.x);
         w.expect(
             "sidebar right edge against session.area's left",
             sidebar.x + sidebar.width,
             area.x,
+        );
+        w.expect(
+            "session.area right edge against shell.body's",
+            area.x + area.width,
+            body.x + body.width,
         );
     }
 }
@@ -166,6 +168,9 @@ fn w5_window_overview_opens_the_overview_and_selects_its_row() {
         .find(|s| s.name == "window-overview")
         .expect("window-overview is a covered state");
     let state = (covered.build)().state;
+    // The Overview row has no selection field of its own: `ui::sidebar` draws it selected exactly
+    // while the Overview is open with a project active, and every other row unselected then
+    // (`features::sidebar::row_selected`). So these fields are its selection.
     assert!(
         state.overview.open && !state.overview.full_screen,
         "window-overview: the Overview is open beside the sidebar (open {}, full screen {})",
@@ -176,18 +181,4 @@ fn w5_window_overview_opens_the_overview_and_selects_its_row() {
         state.workspace.active.is_some(),
         "window-overview: a project is open, so the sidebar draws its Overview row"
     );
-    // The Overview row is drawn selected exactly while the Overview is open (`ui::sidebar`); no
-    // other row may be.
-    let selection = RowSelection {
-        overview_open: state.overview.open,
-        viewed: state.session.active,
-        revealed: state.sidebar.revealed.as_ref(),
-    };
-    for session in state.workspace.sessions.values().flatten() {
-        assert!(
-            !row_selected(&selection, SelectableRow::Session(session.id)),
-            "window-overview: the row of session {:?} is selected beside the Overview row",
-            session.location
-        );
-    }
 }

@@ -10,22 +10,11 @@
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
 use crate::support::covered_states::covered_states;
-use crate::support::layout::{self as lay, LayoutRecord};
+use crate::support::layout::{self as lay, anchored as at, LayoutRecord};
 use micold_core::theme::ColorScheme;
 
 const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
-
-fn at<'r>(
-    covered: &lay::CoveredState,
-    records: &'r [LayoutRecord],
-    name: &str,
-) -> Option<&'r LayoutRecord> {
-    let anchor = covered.anchors.iter().find(|a| a.name == name)?;
-    records
-        .iter()
-        .find(|r| r.layer == lay::Layer::Base && r.path == anchor.path)
-}
 
 fn midline(r: &LayoutRecord) -> f32 {
     r.y + r.height / 2.0
