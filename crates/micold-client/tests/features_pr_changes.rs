@@ -1104,13 +1104,12 @@ fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read(
 mod review_comments {
     use super::*;
     use micold_client::features::changes::{
-        can_pick, card_model, file_comments, jump_target, panel_groups, panel_rows, pending_counts,
-        review_toolbar_label, send_action, status_counts, tidy_actions, Jump, PanelGroup,
+        can_pick, card_model, drawer_groups, drawer_rows, file_comments, jump_target,
+        pending_counts, review_bar, DrawerGroup, Jump,
     };
     use micold_core::protocol::messages::{PrSend, ReviewEditOp};
-    use micold_core::review::comment::{
-        CommentId, CommentState, PrAnchor, ReviewComment, Scope, Status,
-    };
+    use micold_core::review::comment::{CommentId, CommentState, PrAnchor, ReviewComment, Scope};
+    use micold_core::review::drawer::DrawerTab;
     use micold_core::review::{LineRange, Side};
 
     const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -1351,8 +1350,8 @@ mod review_comments {
         let under: Vec<_> = placed.under(Side::New, 2).iter().map(|c| c.id).collect();
         assert_eq!(under, vec![ids.0]);
         assert_eq!(pending_counts(&state).values().sum::<usize>(), 1);
-        assert_eq!(review_toolbar_label(&state), "Review (1)");
-        assert_eq!(status_counts(&state)[0], (Status::Draft, 1));
+        assert_eq!(review_bar(&state).unwrap().counts.draft, 1);
+        assert_eq!(review_bar(&state).unwrap().counts.reported_or_sent(), 0);
         assert!(jump_target(&state, ids.0).is_some());
         assert_eq!(jump_target(&state, ids.1), None);
         assert_eq!(jump_target(&state, ids.2), None);
@@ -1362,14 +1361,14 @@ mod review_comments {
             &mut state,
             Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
         );
-        assert_eq!(review_toolbar_label(&state), "Review (1)");
+        assert_eq!(review_bar(&state).unwrap().counts.draft, 1);
         assert_eq!(pending_counts(&state).values().sum::<usize>(), 1);
         assert!(matches!(jump_target(&state, ids.2), Some(Jump::Hidden(_))));
     }
 
     // FR-004, FR-013: working tree first, then pull requests by number; unlisted flagged.
     #[test]
-    fn the_panel_groups_the_working_tree_first_then_pull_requests_by_number() {
+    fn the_drawer_groups_the_working_tree_first_then_pull_requests_by_number() {
         let mut state = showing_seven();
         push(
             &mut state,
@@ -1380,7 +1379,10 @@ mod review_comments {
                 comment_on(Some(7), "a.rs", Side::New, 1, CommentState::Draft),
             ],
         );
-        let scopes: Vec<_> = panel_rows(&state).iter().map(|r| r.scope).collect();
+        let scopes: Vec<_> = drawer_rows(&state, DrawerTab::Drafts)
+            .iter()
+            .map(|r| r.scope)
+            .collect();
         assert_eq!(
             scopes,
             [
@@ -1390,13 +1392,13 @@ mod review_comments {
                 Scope::PullRequest(9)
             ]
         );
-        let group = |scope, title: Option<&str>, listed| PanelGroup {
+        let group = |scope, title: Option<&str>, listed| DrawerGroup {
             scope,
             title: title.map(str::to_string),
             listed,
         };
         assert_eq!(
-            panel_groups(&state),
+            drawer_groups(&state),
             vec![
                 group(Scope::WorkingTree, None, true),
                 group(Scope::PullRequest(7), Some("title 7"), true),
@@ -1407,8 +1409,8 @@ mod review_comments {
         // The heading is what the panel prints before a row's place (`ui/changes.rs`); the draw
         // code only joins it to the place, so these are the strings drawn. There is no
         // render-test harness for `ui/changes.rs`.
-        let groups = panel_groups(&state);
-        let headings: Vec<_> = groups.iter().map(PanelGroup::heading).collect();
+        let groups = drawer_groups(&state);
+        let headings: Vec<_> = groups.iter().map(DrawerGroup::heading).collect();
         assert_eq!(
             headings,
             [
@@ -1420,7 +1422,11 @@ mod review_comments {
         );
         let unlisted = groups.last().expect("the unlisted pull request's group");
         assert!(unlisted.heading().unwrap().contains("not in the list"));
-        assert_eq!(panel_rows(&state).len(), 4, "the unlisted comment is kept");
+        assert_eq!(
+            drawer_rows(&state, DrawerTab::Drafts).len(),
+            4,
+            "the unlisted comment is kept"
+        );
     }
 
     // FR-015: tidy acts on the shown scope.
@@ -1435,8 +1441,8 @@ mod review_comments {
                 comment_on(None, "a.rs", Side::New, 1, CommentState::Draft),
             ],
         );
-        let tidy = tidy_actions(&state).unwrap();
-        assert!(tidy.clear_sent && tidy.discard_pending);
+        let tidy = review_bar(&state).unwrap().overflow;
+        assert!(tidy.clear_sent && tidy.discard_drafts);
         assert_eq!(
             add_of(changes::update(&mut state, Msg::ClearSentPressed)),
             ReviewEditOp::ClearSent {
@@ -1452,8 +1458,8 @@ mod review_comments {
         );
         // Another pull request without comments has nothing to tidy.
         changes::update(&mut state, Msg::SourceChosen(Some(8)));
-        let tidy = tidy_actions(&state).unwrap();
-        assert!(!tidy.clear_sent && !tidy.discard_pending);
+        let tidy = review_bar(&state).unwrap().overflow;
+        assert!(!tidy.clear_sent && !tidy.discard_drafts);
     }
 
     // US2 s1, FR-006, FR-013: Send review on a listed pull request counts its drafts only and
@@ -1471,10 +1477,11 @@ mod review_comments {
                 comment_on(None, "a.rs", Side::New, 1, CommentState::Draft),
             ],
         );
-        let action = send_action(&state).expect("a listed pull request is sendable");
+        let action = review_bar(&state).unwrap().send;
         assert_eq!(
             (action.label.as_str(), action.enabled),
-            ("Send review (1)", true)
+            ("Send review (1)", true),
+            "a listed pull request is sendable"
         );
         assert_eq!(
             changes::update(&mut state, Msg::SendPressed),
@@ -1514,11 +1521,11 @@ mod review_comments {
                 CommentState::Draft,
             )],
         );
-        assert!(send_action(&state).is_some());
+        assert!(review_bar(&state).unwrap().send.enabled);
         listed(&mut state, vec![listed_pr(8)]);
         // The view returns to the working tree, which holds no draft of its own.
         assert_eq!(
-            send_action(&state).map(|a| a.enabled),
+            review_bar(&state).map(|b| b.send.enabled),
             Some(false),
             "the working tree has nothing to send"
         );
@@ -1747,8 +1754,10 @@ mod review_comments {
                 },
             );
             assert!(card_model(&comment, false).editable);
-            let action = send_action(&state).expect("send stays offered");
-            assert!(action.enabled);
+            assert!(
+                review_bar(&state).unwrap().send.enabled,
+                "send stays offered"
+            );
             let Effect::ReviewSend { pr, .. } = changes::update(&mut state, Msg::SendPressed)
             else {
                 panic!("a send");

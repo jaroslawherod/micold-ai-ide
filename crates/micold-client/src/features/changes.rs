@@ -15,6 +15,7 @@ use micold_core::pull_request::{
     BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure, TreeListing,
 };
 use micold_core::review::anchor::{self, locate, Located};
+use micold_core::review::bar::{self, Overflow, ScopeCounts, SendButton};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::browse::{BrowseStack, FileReadFailure, FileText, Frame};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
@@ -25,6 +26,7 @@ use micold_core::review::diff::{
     parse_unified, plain_file, side_by_side_rows, unified_rows, FileDiff, Hunk, HunkLines,
     LoadedDiff, SideLines, SideRow, Spans, UnifiedRow,
 };
+use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::marks::{EntryMarks, ReviewMark};
 use micold_core::review::pr_diff::PrDiff;
@@ -389,8 +391,14 @@ pub struct OpenView {
     /// The comment whose whole reply is open in its dialog (feature 946, FR-006); cleared when
     /// that comment leaves the entry.
     pub reply_open: Option<CommentId>,
-    /// The review panel right of the diff (feature 946, FR-016 to FR-019).
-    pub panel: Panel,
+    /// The comments drawer (feature 1270, data-model § Client): its open state, tab, scroll and
+    /// send watch, and the jump state the review panel had (feature 946, FR-017).
+    pub drawer: ReviewDrawer,
+    /// The review bar's message after a failed send from this view (feature 1270, FR-006, R10);
+    /// cleared by the next send or its ×.
+    pub send_error: Option<String>,
+    /// The review bar's overflow menu is open (feature 1270, FR-007; a registered popover, R8).
+    pub overflow_open: bool,
     /// The entry's branch, as the shell last told it; `None` for the Default entry and a
     /// detached HEAD (feature 775).
     pub branch: Option<String>,
@@ -765,34 +773,21 @@ fn shown_hunks(view: &OpenView) -> &[Hunk] {
     &view.shaped.hunks
 }
 
-/// The review panel's state (feature 946, FR-016 to FR-019).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Panel {
-    /// The panel is shown; open by default, closed by the toolbar's "Review (n)".
-    pub open: bool,
+/// The comments drawer of one entry's view (feature 1270, data-model § Client), which replaced the
+/// review panel's state (feature 946, FR-016 to FR-019). Kept with the view, so it survives
+/// switching away and back and goes with the Review tab (FR-019).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReviewDrawer {
+    /// Open, tab, per-tab scroll and the send watch; closed when the view is made (FR-011).
+    pub state: Drawer,
     /// The comment a row jump went to: its card is drawn highlighted (FR-017).
     pub focus: Option<CommentId>,
-    /// The row list's scroll offset, in pixels.
-    pub offset: u32,
-    /// The row list's viewport height, in pixels.
-    pub viewport: u32,
     /// Why the last row press did not jump; cleared by the next press.
     pub hidden: Option<Why>,
     /// A jump waits for its file's diff to arrive, then scrolls to the focused comment.
     pub to_show: bool,
-}
-
-impl Default for Panel {
-    fn default() -> Self {
-        Self {
-            open: true,
-            focus: None,
-            offset: 0,
-            viewport: 0,
-            hidden: None,
-            to_show: false,
-        }
-    }
+    /// The row list's viewport height, in pixels.
+    pub viewport: u32,
 }
 
 /// Where pressing a panel row goes (FR-017).
@@ -830,9 +825,9 @@ impl Why {
     }
 }
 
-/// One row of the review panel (FR-016).
+/// One row of the comments drawer (feature 1270, FR-015, FR-016; feature 946's panel row).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PanelRow {
+pub struct DrawerRow {
     /// The comment.
     pub id: CommentId,
     /// The scope it belongs to: the working tree, or one pull request (1149, FR-004).
@@ -847,23 +842,27 @@ pub struct PanelRow {
     pub text: String,
     /// Its status.
     pub status: Status,
-    /// The start of its reply, made displayable.
+    /// Its whole reply made displayable, up to [`CARD_CHARS`] (D7).
     pub reply: Option<String>,
     /// Its file is not in the current diff.
     pub not_in_diff: bool,
     /// It is the comment a jump went to.
     pub selected: bool,
-    /// Edit and Delete are offered: a draft no send holds.
+    /// Edit and Delete are offered: a draft no send holds (FR-015).
     pub editable: bool,
-    /// It has a reply longer than the row shows, so **Show all** is offered.
+    /// **Mark applied** and **Answer…** are offered: the comment is Sent (FR-016).
+    pub markable: bool,
+    /// Its reply is longer than [`CARD_CHARS`], so **Show all** is offered (FR-016).
     pub has_full_reply: bool,
 }
 
-/// How many characters of a comment's text a panel row shows.
+/// How many characters of a comment's text a drawer row shows.
 pub const PANEL_TEXT_CHARS: usize = 200;
 
-/// The review panel's rows: by file path (bytewise), first line, side (current first), created.
-pub fn panel_rows(state: &State) -> Vec<PanelRow> {
+/// The rows of the drawer's `tab` over every scope of the shown view's entry: by scope (the working
+/// tree first, then pull requests by number), file path (bytewise), first shown line, side
+/// (current first), created (FR-013, FR-014, D5).
+pub fn drawer_rows(state: &State, tab: DrawerTab) -> Vec<DrawerRow> {
     let Some(view) = state.tabs.shown_view() else {
         return Vec::new();
     };
@@ -871,24 +870,7 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
         return Vec::new();
     };
     let listed = shown_list(view);
-    let mut comments: Vec<&ReviewComment> = review.comments.iter().collect();
-    comments.sort_by(|a, b| {
-        (
-            a.scope(),
-            a.path.as_str().as_bytes(),
-            shown_range(view, a).start(),
-            a.side,
-            a.created,
-        )
-            .cmp(&(
-                b.scope(),
-                b.path.as_str().as_bytes(),
-                shown_range(view, b).start(),
-                b.side,
-                b.created,
-            ))
-    });
-    comments
+    drawer::rows_of(&review.comments, tab, |c| shown_range(view, c).start())
         .into_iter()
         .map(|c| {
             let card = card_model(c, review.sending);
@@ -905,7 +887,11 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
                 (Side::New, false) => format!("Lines {span}"),
                 (Side::Old, _) => format!("Old {noun} {span}"),
             };
-            PanelRow {
+            let (reply, has_full_reply) = match card.reply {
+                Some((text, cut)) => (Some(text), cut),
+                None => (None, false),
+            };
+            DrawerRow {
                 id: c.id,
                 scope: c.scope(),
                 path: c.path.clone(),
@@ -913,7 +899,7 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
                 lines,
                 text: reply::shortened(&c.text, PANEL_TEXT_CHARS).0,
                 status: card.status,
-                reply: card.reply.map(|(text, _)| text),
+                reply,
                 not_in_diff: match (&c.pr, &view.source) {
                     (None, _) => listed.is_some_and(|l| l.files.iter().all(|f| f.path != c.path)),
                     (Some(pr), Source::PullRequest(shown)) if pr.number == shown.number => {
@@ -926,18 +912,28 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
                     }
                     (Some(_), _) => false,
                 },
-                selected: view.panel.focus == Some(c.id),
+                selected: view.drawer.focus == Some(c.id),
                 editable: card.editable,
-                has_full_reply: full_reply(c).is_some(),
+                markable: card.markable,
+                has_full_reply,
             }
         })
         .collect()
 }
 
-/// One group of the review panel: the working-tree comments, or one pull request's (1149, FR-004,
-/// FR-013).
+/// The drawer's tab counts, (drafts, replies), over every scope of the shown view's entry (US3 #7).
+pub fn drawer_counts(state: &State) -> (usize, usize) {
+    state
+        .tabs
+        .shown_view()
+        .and_then(|view| review_of(state, view))
+        .map_or((0, 0), |review| drawer::tab_counts(&review.comments))
+}
+
+/// One group of the drawer's rows: the working-tree comments, or one pull request's (1149, FR-004,
+/// FR-013; feature 1270 D5).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PanelGroup {
+pub struct DrawerGroup {
     /// The scope its rows belong to.
     pub scope: Scope,
     /// The pull request's title; `None` for the working tree, and for a pull request the list
@@ -948,7 +944,7 @@ pub struct PanelGroup {
     pub listed: bool,
 }
 
-impl PanelGroup {
+impl DrawerGroup {
     /// The heading naming the group; `None` for the working tree. A pull request the list does
     /// not hold is flagged "not in the list" (FR-013).
     pub fn heading(&self) -> Option<String> {
@@ -962,9 +958,9 @@ impl PanelGroup {
     }
 }
 
-/// The panel's groups, in row order: the working tree first, then pull requests by number; only
+/// The drawer's groups, in row order: the working tree first, then pull requests by number; only
 /// scopes that have a comment.
-pub fn panel_groups(state: &State) -> Vec<PanelGroup> {
+pub fn drawer_groups(state: &State) -> Vec<DrawerGroup> {
     let Some(view) = state.tabs.shown_view() else {
         return Vec::new();
     };
@@ -975,14 +971,14 @@ pub fn panel_groups(state: &State) -> Vec<PanelGroup> {
     scopes
         .into_iter()
         .map(|scope| match scope {
-            Scope::WorkingTree => PanelGroup {
+            Scope::WorkingTree => DrawerGroup {
                 scope,
                 title: None,
                 listed: true,
             },
             Scope::PullRequest(number) => {
                 let listed = listed_pull_request(view, number);
-                PanelGroup {
+                DrawerGroup {
                     scope,
                     title: listed.map(|pr| pr.title.clone()),
                     listed: listed.is_some(),
@@ -995,27 +991,6 @@ pub fn panel_groups(state: &State) -> Vec<PanelGroup> {
 /// The comments of `review` in `scope`.
 fn in_scope(review: &ReviewView, scope: Scope) -> impl Iterator<Item = &ReviewComment> {
     review.comments.iter().filter(move |c| c.scope() == scope)
-}
-
-/// How many comments of the open entry have each status, in the order Draft, Sent, Applied,
-/// Answered; every status is listed, with zero where none has it.
-pub fn status_counts(state: &State) -> [(Status, usize); 4] {
-    let mut counts = [
-        (Status::Draft, 0),
-        (Status::Sent, 0),
-        (Status::Applied, 0),
-        (Status::Answered, 0),
-    ];
-    let view = state.tabs.shown_view();
-    let review = view.and_then(|view| review_of(state, view));
-    let scope = view.map_or(Scope::WorkingTree, view_scope);
-    for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
-        let status = comment.state.status();
-        if let Some(slot) = counts.iter_mut().find(|(s, _)| *s == status) {
-            slot.1 += 1;
-        }
-    }
-    counts
 }
 
 /// What the panel says with no comment (US3 s5).
@@ -1044,14 +1019,6 @@ pub fn is_outdated(view: &OpenView, comment: &ReviewComment) -> bool {
     view.anchors
         .get(&comment.id)
         .is_some_and(|anchor| anchor.outdated)
-}
-
-/// The toolbar toggle's label: "Review (n)", n being every comment of the shown scope.
-pub fn review_toolbar_label(state: &State) -> String {
-    let count = state.tabs.shown_view().map_or(0, |view| {
-        review_of(state, view).map_or(0, |r| in_scope(r, view_scope(view)).count())
-    });
-    format!("Review ({count})")
 }
 
 /// Where pressing the row of comment `id` goes; `None` for an unknown comment.
@@ -1106,14 +1073,14 @@ fn row_of_line(shaped: ShapedRef<'_>, layout: DiffLayout, side: Side, line: u32)
 fn jump_offset(state: &mut State) -> Option<u32> {
     let layout = state.layout;
     let view = state.tabs.shown_view()?;
-    let focus = view.panel.focus?;
+    let focus = view.drawer.focus?;
     let comment = review_of(state, view)
         .and_then(|r| r.comments.iter().find(|c| c.id == focus))
         .filter(|c| view.selected.as_ref() == Some(&c.path));
     let Some(comment) = comment else {
         // The comment is gone or another file was chosen: the jump is abandoned.
         if let Some(view) = state.tabs.shown_view_mut() {
-            view.panel.to_show = false;
+            view.drawer.to_show = false;
         }
         return None;
     };
@@ -1134,7 +1101,7 @@ fn jump_offset(state: &mut State) -> Option<u32> {
         r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT + hung as f32
     });
     if let Some(view) = state.tabs.shown_view_mut() {
-        view.panel.to_show = false;
+        view.drawer.to_show = false;
         view.diff_offset = offset as u32;
     }
     Some(offset as u32)
@@ -1177,6 +1144,20 @@ pub struct Composer {
     pub target: ComposerTarget,
     /// What the user has written so far.
     pub text: String,
+    /// Where it is drawn: on the comment's card, or in its drawer row (feature 1270, D6).
+    pub place: ComposerPlace,
+}
+
+/// Where the composer of an edit or a note is drawn (feature 1270, data-model § Client). Its text
+/// is the view's either way, so it survives closing the drawer (Edge Cases "Unsaved text in the
+/// drawer").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ComposerPlace {
+    /// Under the comment's card in the diff (and under the picked lines for a new comment).
+    #[default]
+    Card,
+    /// In the comment's row of the drawer.
+    Drawer,
 }
 
 /// The last `ReviewChanged` of one entry.
@@ -1485,17 +1466,40 @@ pub enum Msg {
     DiscardConfirmed,
     /// The discard confirmation's Cancel, or its dismissal (S3).
     DiscardCancelled,
-    /// The toolbar's "Review (n)" toggle: close or reopen the panel (feature 946, FR-016).
-    PanelToggled,
-    /// The panel's row list scrolled.
-    PanelScrolled {
+    /// An event of the shown view's comments drawer (feature 1270): the bar's **Comments**
+    /// (`Toggle`), its × (`Close`), Esc (`Escape`) or a tab (`SelectTab`) (FR-008, FR-012).
+    Drawer(DrawerEvent),
+    /// The drawer's row list of `tab` scrolled or was resized (FR-019).
+    DrawerScrolled {
+        /// The tab whose rows scrolled.
+        tab: DrawerTab,
         /// The offset, in pixels.
         offset: u32,
         /// The viewport height, in pixels.
         viewport: u32,
     },
-    /// A panel row was pressed: jump to its comment (FR-017).
-    PanelRowSelected(CommentId),
+    /// A drawer row was pressed: jump to its comment (FR-017).
+    DrawerRowSelected(CommentId),
+    /// **Edit** on a drawer row: its composer opens in the row (D6).
+    DrawerEdit(CommentId),
+    /// **Answer…** on a drawer row: the note's composer opens in the row (D7).
+    DrawerAnswer(CommentId),
+    /// The review bar's ⋮: open or close its overflow menu (FR-007).
+    OverflowToggled,
+    /// Esc, an outside click or a scroll beneath the open overflow menu: it closes (Story 2 #4).
+    OverflowDismissed,
+    /// A send of `worktree_dir` of `project` failed with `message` (FR-006, R10). Sent by the
+    /// shell, which also shows today's error snackbar.
+    SendFailed {
+        /// The project.
+        project: PathBuf,
+        /// The wire's worktree dir; `""` is the Default entry.
+        worktree_dir: String,
+        /// The service's message.
+        message: String,
+    },
+    /// The × beside the bar's send error.
+    SendErrorDismissed,
 }
 
 /// What the shell must do.
@@ -1643,7 +1647,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     }
     let scroll = matches!(
         msg,
-        Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::PanelScrolled { .. }
+        Msg::DiffScrolled { .. } | Msg::ListScrolled { .. } | Msg::DrawerScrolled { .. }
     );
     let before = state.tabs.shown_view().filter(|_| !scroll).map(|view| {
         (
@@ -1856,7 +1860,9 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         anchors: BTreeMap::new(),
         confirm_discard: false,
         reply_open: None,
-        panel: Panel::default(),
+        drawer: ReviewDrawer::default(),
+        send_error: None,
+        overflow_open: false,
         branch: None,
         pull_requests: PrList::Absent,
         source: Source::Changes,
@@ -2225,7 +2231,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 return Effect::None;
             };
             view.toggles.committed = !view.toggles.committed;
-            view.panel.hidden = None;
+            view.drawer.hidden = None;
             request_read(state)
         }
         Msg::UncommittedToggled => {
@@ -2234,7 +2240,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 return Effect::None;
             };
             view.toggles.uncommitted = !view.toggles.uncommitted;
-            view.panel.hidden = None;
+            view.drawer.hidden = None;
             request_read(state)
         }
         Msg::FileSelected(path) => {
@@ -2439,26 +2445,32 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 }
             }
             let moves = judge_anchors(state);
-            let waiting = state.tabs.shown_view().is_some_and(|v| v.panel.to_show);
+            let waiting = state.tabs.shown_view().is_some_and(|v| v.drawer.to_show);
             match waiting.then(|| jump_offset(state)).flatten() {
                 Some(offset) => Effect::ScrollDiff { offset },
                 None => reanchor_effect(state, moves),
             }
         }
-        Msg::PanelToggled => {
+        Msg::Drawer(event) => {
             if let Some(view) = state.tabs.shown_view_mut() {
-                view.panel.open = !view.panel.open;
+                view.drawer.state.apply(event);
             }
             Effect::None
         }
-        Msg::PanelScrolled { offset, viewport } => {
+        Msg::DrawerScrolled {
+            tab,
+            offset,
+            viewport,
+        } => {
             if let Some(view) = state.tabs.shown_view_mut() {
-                view.panel.offset = offset;
-                view.panel.viewport = viewport;
+                view.drawer
+                    .state
+                    .apply(DrawerEvent::Scrolled { tab, offset });
+                view.drawer.viewport = viewport;
             }
             Effect::None
         }
-        Msg::PanelRowSelected(id) => {
+        Msg::DrawerRowSelected(id) => {
             let Some(jump) = jump_target(state, id) else {
                 return Effect::None;
             };
@@ -2468,20 +2480,50 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let path = match jump {
                 Jump::Shown { path, .. } => path,
                 Jump::Hidden(why) => {
-                    view.panel.hidden = Some(why);
-                    view.panel.focus = None;
-                    view.panel.to_show = false;
+                    view.drawer.hidden = Some(why);
+                    view.drawer.focus = None;
+                    view.drawer.to_show = false;
                     return Effect::None;
                 }
             };
-            view.panel.hidden = None;
-            view.panel.focus = Some(id);
-            view.panel.to_show = true;
+            view.drawer.hidden = None;
+            view.drawer.focus = Some(id);
+            view.drawer.to_show = true;
             let effect = update(state, Msg::FileSelected(path));
             match (effect, jump_offset(state)) {
                 (Effect::None, Some(offset)) => Effect::ScrollDiff { offset },
                 (effect, _) => effect,
             }
+        }
+        Msg::OverflowToggled => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.overflow_open = !view.overflow_open;
+            }
+            Effect::None
+        }
+        Msg::OverflowDismissed => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.overflow_open = false;
+            }
+            Effect::None
+        }
+        Msg::SendFailed {
+            project,
+            worktree_dir,
+            message,
+        } => {
+            // The view that sent, shown or hidden (R10): the failure is its, not the shown one's.
+            if let Some(view) = view_of_entry(state, &project, &worktree_dir) {
+                view.send_error = Some(bar::error_text(&message));
+                view.drawer.state.apply(DrawerEvent::SendFailed);
+            }
+            Effect::None
+        }
+        Msg::SendErrorDismissed => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.send_error = None;
+            }
+            Effect::None
         }
         Msg::ListScrolled { offset, viewport } => {
             if let Some(view) = state.tabs.shown_view_mut() {
@@ -2541,6 +2583,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     view.composer = Some(Composer {
                         target: ComposerTarget::New(pick),
                         text: String::new(),
+                        place: ComposerPlace::Card,
                     });
                 }
             }
@@ -2578,6 +2621,11 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::SendPressed => {
+            // B5: a new send starts, so the last one's error goes.
+            let Some(view) = state.tabs.shown_view_mut() else {
+                return Effect::None;
+            };
+            view.send_error = None;
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
@@ -2606,26 +2654,48 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                         .collect()
                 })
                 .unwrap_or_default();
-            Effect::ReviewSend {
+            let effect = Effect::ReviewSend {
                 project: view.project.clone(),
                 worktree_dir: entry_dir(&view.entry),
                 outdated,
                 count,
                 pr,
+            };
+            // FR-020: the drawer watches this window's send for its first report.
+            let sent: BTreeSet<CommentId> = review_of(state, view)
+                .map(|r| {
+                    in_scope(r, scope)
+                        .filter(|c| is_pending(c))
+                        .map(|c| c.id)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.drawer.state.apply(DrawerEvent::SendStarted(sent));
+            }
+            effect
+        }
+        Msg::ClearSentPressed => {
+            let enabled = review_bar(state).is_some_and(|b| b.overflow.clear_sent);
+            let Some(view) = state.tabs.shown_view_mut() else {
+                return Effect::None;
+            };
+            view.overflow_open = false;
+            if enabled {
+                review_edit(
+                    view,
+                    ReviewEditOp::ClearSent {
+                        scope: view_scope(view),
+                    },
+                )
+            } else {
+                Effect::None
             }
         }
-        Msg::ClearSentPressed => match state.tabs.shown_view() {
-            Some(view) if tidy_actions(state).is_some_and(|a| a.clear_sent) => review_edit(
-                view,
-                ReviewEditOp::ClearSent {
-                    scope: view_scope(view),
-                },
-            ),
-            _ => Effect::None,
-        },
         Msg::DiscardPendingPressed => {
-            let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
+            let enabled = review_bar(state).is_some_and(|b| b.overflow.discard_drafts);
             if let Some(view) = state.tabs.shown_view_mut() {
+                view.overflow_open = false;
                 view.confirm_discard = enabled;
             }
             Effect::None
@@ -2638,7 +2708,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::DiscardConfirmed => {
             // Re-checked: a push since the question opened may have left nothing to discard.
-            let enabled = tidy_actions(state).is_some_and(|a| a.discard_pending);
+            let enabled = review_bar(state).is_some_and(|b| b.overflow.discard_drafts);
             match state.tabs.shown_view_mut() {
                 Some(view) if view.confirm_discard => {
                     view.confirm_discard = false;
@@ -2656,22 +2726,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 _ => Effect::None,
             }
         }
-        Msg::EditComment(id) => {
-            let Some(view) = state.tabs.shown_view() else {
-                return Effect::None;
-            };
-            let text = review_of(state, view)
-                .filter(|r| !r.sending)
-                .and_then(|r| r.comments.iter().find(|c| c.id == id && is_pending(c)))
-                .map(|c| c.text.clone());
-            if let (Some(text), Some(view)) = (text, state.tabs.shown_view_mut()) {
-                view.composer = Some(Composer {
-                    target: ComposerTarget::Edit(id),
-                    text,
-                });
-            }
-            Effect::None
-        }
+        Msg::EditComment(id) => edit_comment(state, id, ComposerPlace::Card),
+        Msg::DrawerEdit(id) => edit_comment(state, id, ComposerPlace::Drawer),
         Msg::MarkApplied(id) => {
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
@@ -2688,19 +2744,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 },
             )
         }
-        Msg::AnswerComment(id) => {
-            let markable = state
-                .tabs
-                .shown_view()
-                .is_some_and(|view| is_markable(state, view, id));
-            if let Some(view) = state.tabs.shown_view_mut().filter(|_| markable) {
-                view.composer = Some(Composer {
-                    target: ComposerTarget::Answer(id),
-                    text: String::new(),
-                });
-            }
-            Effect::None
-        }
+        Msg::AnswerComment(id) => answer_comment(state, id, ComposerPlace::Card),
+        Msg::DrawerAnswer(id) => answer_comment(state, id, ComposerPlace::Drawer),
         Msg::ShowReply(id) => {
             let known = state.tabs.shown_view().is_some_and(|view| {
                 review_of(state, view)
@@ -2746,9 +2791,33 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 .map(|(key, _)| key)
                 .find(|(p, entry)| *p == project && entry_dir(entry) == worktree_dir)
                 .cloned();
+            // FR-020: the reports this push brings, against the entry's last push.
+            let reported = drawer::newly_reported(
+                state
+                    .reviews
+                    .get(&(project.clone(), worktree_dir.clone()))
+                    .map_or(&[][..], |r| &r.comments),
+                &comments,
+            );
             if let Some(key) = key {
                 state.tabs.comments_changed(&key);
+                let shown = state.tabs.shown_key() == Some(&key);
                 if let Some(view) = state.tabs.get_mut(&key).map(|tab| &mut tab.view) {
+                    if !reported.is_empty() {
+                        view.drawer.state.apply(DrawerEvent::Reported {
+                            ids: reported,
+                            shown,
+                        });
+                    }
+                    // FR-022: a focus on a comment that is gone goes with it.
+                    if view
+                        .drawer
+                        .focus
+                        .is_some_and(|id| !comments.iter().any(|c| c.id == id))
+                    {
+                        view.drawer.focus = None;
+                        view.drawer.to_show = false;
+                    }
                     close_edit_unless(view, |id| comments.iter().any(|c| c.id == id));
                     close_answer_unless(view, |id| {
                         comments
@@ -2803,6 +2872,58 @@ fn close_answer_unless(view: &mut OpenView, kept: impl Fn(CommentId) -> bool) {
             view.composer = None;
         }
     }
+}
+
+/// The view of `worktree_dir` of `project`, shown or hidden; `None` without a Review tab.
+fn view_of_entry<'a>(
+    state: &'a mut State,
+    project: &PathBuf,
+    worktree_dir: &str,
+) -> Option<&'a mut OpenView> {
+    let key = state
+        .tabs
+        .iter()
+        .map(|(key, _)| key)
+        .find(|(p, entry)| p == project && entry_dir(entry) == worktree_dir)
+        .cloned()?;
+    state.tabs.get_mut(&key).map(|tab| &mut tab.view)
+}
+
+/// **Edit** on draft `id`, from its card or its drawer row: the composer opens at `place` with the
+/// comment's text; nothing while a send holds the draft.
+fn edit_comment(state: &mut State, id: CommentId, place: ComposerPlace) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let text = review_of(state, view)
+        .filter(|r| !r.sending)
+        .and_then(|r| r.comments.iter().find(|c| c.id == id && is_pending(c)))
+        .map(|c| c.text.clone());
+    if let (Some(text), Some(view)) = (text, state.tabs.shown_view_mut()) {
+        view.composer = Some(Composer {
+            target: ComposerTarget::Edit(id),
+            text,
+            place,
+        });
+    }
+    Effect::None
+}
+
+/// **Answer…** on Sent comment `id`, from its card or its drawer row: the note's composer opens at
+/// `place`.
+fn answer_comment(state: &mut State, id: CommentId, place: ComposerPlace) -> Effect {
+    let markable = state
+        .tabs
+        .shown_view()
+        .is_some_and(|view| is_markable(state, view, id));
+    if let Some(view) = state.tabs.shown_view_mut().filter(|_| markable) {
+        view.composer = Some(Composer {
+            target: ComposerTarget::Answer(id),
+            text: String::new(),
+            place,
+        });
+    }
+    Effect::None
 }
 
 /// Whether `id` is a Sent comment of the open view's entry: the only kind marked by hand.
@@ -3002,32 +3123,37 @@ fn send_target(view: &OpenView, scope: Scope) -> Option<Option<PrSend>> {
     }))
 }
 
-/// The toolbar's **Send review (n)** (S1; 946 FR-009).
+/// The review bar of the shown Review tab (feature 1270, contracts/review-bar-ui.md B1–B8).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendAction {
-    /// "Send review (n)", or "Sending…" while a send is open.
-    pub label: String,
-    /// Whether pressing it sends.
-    pub enabled: bool,
+pub struct ReviewBarModel {
+    /// The shown scope's comments per status (FR-002).
+    pub counts: ScopeCounts,
+    /// **Send review (n)**, "Sending…" while a send of the entry is under way (FR-003, FR-005).
+    pub send: SendButton,
+    /// Which overflow items are available (FR-007).
+    pub overflow: Overflow,
+    /// The message of this view's last failed send, until the next send or its × (FR-006).
+    pub error: Option<String>,
+    /// The comments drawer is open, for the **Comments** toggle (FR-008).
+    pub drawer_open: bool,
 }
 
-/// The open view's **Send review (n)**; `None` with no view open (S1).
-pub fn send_action(state: &State) -> Option<SendAction> {
+/// The shown Review tab's bar; `None` while a session tab is shown (FR-001, B1). A pull request the
+/// list does not hold cannot be sent (FR-013).
+pub fn review_bar(state: &State) -> Option<ReviewBarModel> {
     let view = state.tabs.shown_view()?;
-    // A pull request that is not listed cannot be sent (FR-013).
     let scope = view_scope(view);
-    send_target(view, scope)?;
     let review = review_of(state, view);
-    if review.is_some_and(|r| r.sending) {
-        return Some(SendAction {
-            label: "Sending…".into(),
-            enabled: false,
-        });
-    }
-    let count = review.map_or(0, |r| in_scope(r, scope).filter(|c| is_pending(c)).count());
-    Some(SendAction {
-        label: format!("Send review ({count})"),
-        enabled: count > 0,
+    let counts = review.map_or_else(ScopeCounts::default, |r| {
+        ScopeCounts::of(&r.comments, scope)
+    });
+    let sending = review.is_some_and(|r| r.sending);
+    Some(ReviewBarModel {
+        counts,
+        send: bar::send_button(&counts, sending, send_target(view, scope).is_some()),
+        overflow: bar::overflow(&counts, sending),
+        error: view.send_error.clone(),
+        drawer_open: view.drawer.state.open,
     })
 }
 
@@ -3081,27 +3207,27 @@ impl crate::overlay::registry::Registered for FullReplyDialog {
     }
 }
 
-/// The toolbar's **Clear sent** and **Discard drafts…**, each enabled or not (S3).
+/// The review bar's overflow menu (feature 1270, FR-007), as a floating surface: a popover, so
+/// Esc, an outside click or a scroll beneath closes it before anything under it (R8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TidyActions {
-    /// The open entry has a sent comment.
-    pub clear_sent: bool,
-    /// The open entry has a pending comment and no send is open.
-    pub discard_pending: bool,
-}
+pub struct ReviewOverflowMenu;
 
-/// The open view's **Clear sent** and **Discard drafts…**; `None` with no view open (S3).
-pub fn tidy_actions(state: &State) -> Option<TidyActions> {
-    let view = state.tabs.shown_view()?;
-    let review = review_of(state, view);
-    let scope = view_scope(view);
-    let any = |pending: bool| {
-        review.is_some_and(|r| in_scope(r, scope).any(|c| is_pending(c) == pending))
-    };
-    Some(TidyActions {
-        clear_sent: any(false),
-        discard_pending: any(true) && !review.is_some_and(|r| r.sending),
-    })
+crate::floating_surface!(
+    ReviewOverflowMenu,
+    id: crate::overlay::SurfaceId::new("review_overflow"),
+    layer: Popover,
+    cancelled_by: crate::app::Message::Changes(Msg::OverflowDismissed),
+);
+
+impl crate::overlay::registry::Registered for ReviewOverflowMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(|view| view.overflow_open)
+            .then_some(ReviewOverflowMenu)
+    }
 }
 
 /// The discard confirmation's question while it is open (S3): "Discard n draft comments? This
@@ -3132,7 +3258,7 @@ pub fn sent_text(count: usize, session: &str, started: bool) -> String {
 
 /// The error snackbar (S2): the service's message.
 pub fn send_error_text(message: &str) -> String {
-    format!("Couldn't send the review: {message}")
+    bar::error_text(message)
 }
 
 /// Each file's pending-comment count in the open view's entry (L2).
@@ -4756,6 +4882,7 @@ mod tests {
         state.tabs.shown_view_mut().unwrap().composer = Some(Composer {
             target: ComposerTarget::Edit(gone),
             text: "edit".into(),
+            place: ComposerPlace::Card,
         });
         update(&mut state, Msg::SessionSelected);
         update(

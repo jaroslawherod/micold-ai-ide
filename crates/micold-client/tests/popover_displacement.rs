@@ -119,6 +119,9 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // through its own backdrop before this list is ever asked for.
     // Feature 972: it closes the Overview's card menu, and nothing else.
     ("session_start_menu", &["overview_card_menu"]),
+    // Feature 1270's review bar overflow menu, on the shown Review tab: it closes nothing, and no
+    // other popover closes it (R8).
+    ("review_overflow", &[]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -153,6 +156,9 @@ fn opener(id: &str) -> Message {
             anchor: (40, 40),
             origin: MenuOrigin::Pointer,
         }),
+        "review_overflow" => {
+            Message::Changes(micold_client::features::changes::Msg::OverflowToggled)
+        }
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -177,8 +183,16 @@ fn base() -> State {
         is_git_repo: true,
         availability: micold_core::project::Availability::Available,
     });
-    st.workspace.active = Some(path);
+    st.workspace.active = Some(path.clone());
     st.overview.open = true;
+    // A Review tab, so the review bar's overflow menu has a view to open on (feature 1270).
+    micold_client::features::changes::update(
+        &mut st.changes,
+        micold_client::features::changes::Msg::Opened {
+            project: path,
+            entry: SessionLocation::Default,
+        },
+    );
     st
 }
 

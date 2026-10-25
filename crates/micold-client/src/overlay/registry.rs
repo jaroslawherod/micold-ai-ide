@@ -264,6 +264,8 @@ register! {
     crate::features::attach::AttachDialog => crate::ui::attach_dialog::dialog,
     crate::features::changes::ConfirmDiscardPendingDialog => crate::ui::changes::discard_dialog,
     crate::features::changes::FullReplyDialog => crate::ui::changes::reply_dialog,
+    // Feature 1270: the review bar's overflow menu closes nothing by opening (R8).
+    crate::features::changes::ReviewOverflowMenu,
     crate::features::help::AboutDialog => crate::ui::about::dialog,
     crate::features::help::HelpMenu {
         displaces:

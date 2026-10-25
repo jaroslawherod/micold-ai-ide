@@ -10,23 +10,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M2 committed on `m2-1270` (prepared in parallel, not pushed); orchestrator rebases it onto main after #1369 merges, gates, pushes and opens its PR
+- **Next step**: M3 (implement → verify → PR); #1269 closed (last PR #1398), blocker cleared
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1356 | design: spec, clarify, plan, tasks | merged (rebase) | f15ecc59696cceeef6c4fca16b1b7eb7d8776b45 |
-| #1369 | M1: core rules review::{bar,drawer}, reply::card_preview, anatomy tokens | open, CI running | — |
+| #1369 | M1: core rules review::{bar,drawer}, reply::card_preview, anatomy tokens | merged (rebase) | dde943af17ba1dd8a8caadaa183357d47da43469 |
+| #1382 | M2: ReviewBar, SideSheet, LineClamped::when_cut, row reply mode; cards show 4 reply lines | merged (rebase) | 150de7f6724e9021da4913a8b5eb68e1adbafae3 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | PR open, CI running; full gate green at e0c0e828; reviews A, B clean |
-| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | — (branch `m2-1270`, worktree /home/user/micold-m2; PR title/body in the session scratchpad `pr-title-m2.md`, `pr-body-m2.md`) | committed, not pushed; full gate green at 0b8e6365 (on M1's head a54ab92e); reviews A, B clean; visual pass recorded |
-| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B, **blocked by #1269**) | — | blocked |
-| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B, **blocked by #1269**) | — | blocked |
+| M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | merged; full gate green at e0c0e828; reviews A, B clean |
+| M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | #1382 | merged; full gate green at 0b8e6365; reviews A, B clean; visual pass recorded |
+| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | — | implementing |
+| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — | not started |
 
 ## Decisions
 
@@ -50,6 +51,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D16 | M2 | Error vs counts when the bar is narrow | The error is kept whole while it fits and the counts shorten first (Full → DraftsOnly → hidden) against the room left of it; the error is ellipsized only once the counts are gone. ⋮ and the error's × are compact icon buttons (the bar is 44 high, under the 48 dp target, as `ui/changes.rs` already does) | agent-resolved | spec Edge Cases "Narrow window"; research R3 |
 | D17 | M2 | Does M2 need #1269's per-entry review view? | No: every M2 task is a self-contained component, showcase pose or doc; nothing reads view state | agent-resolved | tasks T008–T010, T027–T031, T046–T052 |
 | D13 | M1 | The three new anatomy figures reach no client component until M2/M4, and `anatomy_call_sites` fails on an unbound, unrecorded figure | Recorded them as `NOT_BUILT` gaps in `crates/micold-client/tests/anatomy_call_sites.rs`; M2 (`ReviewBar`) and M4 (drawer layout) remove the entries, which `a_recorded_gap_that_became_bound_is_stale` enforces | agent-resolved | plan missed the client gate; anatomy_call_sites.rs RECORDED |
+| D18 | M3 | Where is "#1269's per-entry view" that holds the drawer, send error and overflow state? | `OpenView`, the `V` of `ReviewTabs<OpenView>` (`State.tabs`, keyed by `(project, location)`): `panel: Panel` became `drawer: ReviewDrawer`, plus `send_error`, `overflow_open`. A message for a hidden view (`SendFailed`, `ReviewChanged`) finds its tab by project and wire worktree dir (`view_of_entry`) | agent-resolved | specs/1269-review-tab data-model; `features/changes.rs` `State.tabs` |
+| D19 | M3 | The old panel draws the drawer's state until M4, but `Drawer::default()` is closed (FR-011) | The panel is closed when a Review tab is made and opens and closes with **Review (n)** (now `Drawer(Toggle)`), and Esc closes it; it shows the drawer's selected tab, with two chips "Drafts n" / "Replies n" (`Drawer(SelectTab)`) so per-tab rows, scroll and auto-open on Replies are reachable before M4. Covered states that show a Review tab lose the panel column (layout snapshot re-recorded in M3) | agent-resolved | FR-011, T034 ("the old panel reads the drawer state"); plan.md M3 |
+| D20 | M3 | `Msg::Drawer(Scrolled)` replaces `PanelScrolled`, but the row list also reports its viewport | `Msg::DrawerScrolled { tab, offset, viewport }` applies `DrawerEvent::Scrolled` and stores `ReviewDrawer.viewport`; `Msg::Drawer` carries the other events | agent-resolved | data-model `ReviewDrawer.viewport`; `VirtualRows::on_scroll(offset, viewport)` |
+| D21 | M3 | How does a composer get `ComposerPlace::Drawer`? | `Msg::DrawerEdit(id)` / `Msg::DrawerAnswer(id)` (same rules as `EditComment` / `AnswerComment`, which keep `Card`); not drawn in a row until M4 | agent-resolved | contracts D6, D7; T034 |
+| D22 | M3 | Is the overflow menu displaced by, or does it displace, other popovers? | Neither (`popover_displacement.rs` row `review_overflow: []`); `OverflowToggled`/`OverflowDismissed` are also pure state in `app::State::update`, so the registry's dismissals (outside click, scroll beneath, a dialog opening) reach it | agent-resolved | research R8; `app.rs` DiscardCancelled arm |
+| D23 | M3 | Esc order between the Overview and the drawer | Registry, Settings draft, expanded card, Overview, then the drawer (last, R8); a closed drawer leaves Esc unused (`None`) | agent-resolved | research R8; `app::on_escape` |
 
 ## Review rounds
 

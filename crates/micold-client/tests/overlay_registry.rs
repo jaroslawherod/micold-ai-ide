@@ -1009,3 +1009,53 @@ mod daemon_form {
         assert_eq!(id_of(&state), Some("confirm_daemon_removal"));
     }
 }
+
+/// A window showing a worktree's Review tab, its view changed by `with`.
+fn review_shown(with: impl FnOnce(&mut micold_client::features::changes::OpenView)) -> State {
+    use micold_client::features::changes::{self, Msg};
+    let mut state = State::default();
+    changes::update(
+        &mut state.changes,
+        Msg::Opened {
+            project: std::path::PathBuf::from("/p"),
+            entry: micold_core::session::SessionLocation::Worktree("w".into()),
+        },
+    );
+    with(state.changes.tabs.shown_view_mut().expect("shown"));
+    state
+}
+
+/// Feature 1270 T020 (research R8, FR-007, Story 2 #4): the review bar's overflow menu is a
+/// registered popover, so an outside click, Esc or a scroll beneath dismisses it, and a dialog
+/// over it still takes Esc first.
+#[test]
+fn the_review_overflow_menu_is_a_registered_popover() {
+    use micold_client::features::changes::Msg as ChangesMsg;
+    let dismissed = Message::Changes(ChangesMsg::OverflowDismissed);
+    assert!(
+        registry::topmost(&review_shown(|_| {})).is_none(),
+        "closed: not open in the registry"
+    );
+    let state = review_shown(|view| view.overflow_open = true);
+    let open = registry::topmost(&state).expect("the menu is open");
+    assert_eq!(open.id().as_str(), "review_overflow");
+    assert_eq!(open.layer(), Layer::Popover);
+    for trigger in [
+        Trigger::OutsideClick,
+        Trigger::Escape,
+        Trigger::ScrollBeneath,
+    ] {
+        assert_eq!(open.on(trigger), Some(&dismissed), "{trigger:?}");
+    }
+    assert_eq!(on_escape(&state), Some(dismissed));
+
+    let under_dialog = review_shown(|view| {
+        view.overflow_open = true;
+        view.confirm_discard = true;
+    });
+    assert_eq!(
+        on_escape(&under_dialog),
+        Some(Message::Changes(ChangesMsg::DiscardCancelled)),
+        "the dialog above it first"
+    );
+}
