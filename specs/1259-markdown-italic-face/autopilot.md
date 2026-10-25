@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M2 implemented, gate and reviews pending
+- **Phase**: M2 gate green, pushed; reviews A/B and visual-pass B5 pending (orchestrator)
 - **Next step**: orchestrator dispatches review A and B (and visual-pass B5), then opens the M2 PR
 
 ## Pull requests
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A + B | 1 | 9d4252ee3fb689d755244756853ea3ec0e6e73fa:e4c4ba50ea9a87862bd9f149d94fd1a3abbc9655 | A (code-review high): CHANGES — F1 MAJOR site/stage.sh OFL text names only the uprights → fixed (lists every `Roboto-*.ttf`); F2 MINOR roboto_font.rs guard ignores `ui::ROBOTO_FACES` → fixed (new test over `ROBOTO_FACES`, family from `ROBOTO_FAMILY`); F3 MINOR layout.rs dead constants, wrong doc, three locks → fixed; F4 MINOR roboto.rs host-dependent test, copied query helper → fixed (skips when the host has its own Roboto; shared `test_support::query`). B (conformance): CHANGES — F1 MAJOR no tdd/cycle-log.md → added (red not recorded in unit 1 says so; red shown by mutation in unit 2); F2 MINOR fixture README → fixed |
 | M1 visual pass T018 | 1 | e4c4ba50 (worker, evidence in visual-pass/) | FAIL B1, B3 (bold italic in DejaVu Sans Mono Bold Oblique), B6 (italic 漢字 boxes); B2, B4, B7 PASS → fixed by D10, D11; re-run by the M1 unit: B1/B3 bold italic and B6 PASS (visual-pass/results.md *Re-run*) |
 | M1 review A | 2 | 9596267dc307630eff98da28bee82557759a16d3:468b460804a33c78d42ce9d7f39bb150035773de | CLEAN (scoped re-review of A and B, sonnet): all round-1 findings fixed; D10 and D11 confirmed against cosmic-text 0.15.0 source. 2 MINOR declined (see below); no code change, so no new gate. Full gate (scripts/gate.sh) green at 468b4608; layout snapshot unchanged |
+| M2 diff snapshot (pre-review) | 0 | 9edcbec0b4cb30468e08cba30782b1764f2a0625:2983ec92f3edaae8514bd95d544336d1b38eb71a | gate green (scripts/gate.sh); reviews A/B not yet run |
 
 ## Declined review findings
 
