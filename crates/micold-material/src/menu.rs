@@ -388,6 +388,7 @@ pub struct MenuOverlay<'a, M> {
     open: bool,
     anchor: Option<iced::Point>,
     hung_from: Option<iced::Point>,
+    short_of_bottom: bool,
     on_scroll: Option<M>,
     highlighted: Option<usize>,
     lifetime: std::marker::PhantomData<&'a ()>,
@@ -404,6 +405,7 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             open: true,
             anchor: None,
             hung_from: None,
+            short_of_bottom: false,
             on_scroll: None,
             highlighted: None,
             lifetime: std::marker::PhantomData,
@@ -422,6 +424,16 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
     /// [`Self::anchor`] it stays a popover, so a context menu opened inside it is still above it.
     pub fn hung_from(mut self, point: Option<iced::Point>) -> Self {
         self.hung_from = point;
+        self
+    }
+
+    /// With [`Self::hung_from`]: a list taller than the room beneath its point stops `spacing::SM`
+    /// short of the window's bottom edge, as the trailing-edge panel does (002 FR-011a), rather
+    /// than running into it. For a panel whose point is clamped against an estimate shorter than
+    /// its list — the project switcher's, hung from the title bar (feature 1127, R8). A menu
+    /// clamped against its own height already fits, and this would only take room from it.
+    pub fn short_of_bottom(mut self) -> Self {
+        self.short_of_bottom = true;
         self
     }
 
@@ -462,6 +474,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             open,
             anchor,
             hung_from,
+            short_of_bottom,
             on_scroll,
             highlighted,
             ..
@@ -494,15 +507,16 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 
         let (layer, anchor) = match (anchor, hung_from) {
             (Some(point), _) => (Layer::ContextMenu, Anchor::Point(point)),
-            // Hung from the control that opened it (BUG-1023), and stopping as far short of the
-            // window's bottom edge as the trailing-edge panel below does (FR-011a).
-            (None, Some(point)) => (
+            // Hung from the control that opened it (BUG-1023); a long list stops short of the
+            // window's bottom edge where the caller asked (FR-011a).
+            (None, Some(point)) if short_of_bottom => (
                 Layer::Popover,
                 Anchor::Below {
                     at: point,
                     bottom: spacing::SM,
                 },
             ),
+            (None, Some(point)) => (Layer::Popover, Anchor::Point(point)),
             // Read, not restated: the bar's own height plus its divider (FR-029a). This was
             // `TOP_OFFSET = 52.0 // approx. toolbar height`, written against a content-sized bar in
             // feature 005 and left alone when §7.1 pinned the bar at 64 — so the panel opened 13dp

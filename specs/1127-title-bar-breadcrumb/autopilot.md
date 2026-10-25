@@ -66,6 +66,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 gate (`scripts/gate.sh`) | — | d483f4ac49cd33cdf002a50560be52f66772b7b4 | pass after rebase on origin/main c4ca0754 and snapshot re-record; on the way: clippy `manual_contains` in `title_bar_fits`, AppMark showcase entry marked interactive (its tooltip is live), `session_area_stability` press-in-flight helper ignores `TerminalResized` |
 | M2 review A (code-review, high) | 1 | e8c78225c8584beabccb86e975eff6a0147783ca:a485c8a6050390406b0ce134367f06fa9503f935 | CLEAN (3 MINOR, fixed: `Fit`'s separate trees noted in its doc; fixture branch starts `b-` so the two floors differ; the narrowed breadcrumb test asserts the place's exact floor) |
 | M2 review B (conformance, sonnet) | 1 | e8c78225c8584beabccb86e975eff6a0147783ca:a485c8a6050390406b0ce134367f06fa9503f935 (+ A's minor fixes, uncommitted) | CLEAN (3 MINOR: Verify logs pending the scoped gate — rerun; stale `ui::switcher_hung_from` comment — fixed, prose only; `Button::tooltip` named in T028 — fixed, prose only) |
+| M2 visual pass | — | b5961ecd | pass: `micold-ai-ide ▾ ● 3 / fix/1117`; panel at y 44, x 48 by pointer; Overview, full screen, Review and Settings places; 640 px place shortens first; tooltips (specs/1127-title-bar-breadcrumb/visual-pass/m2/). Keyboard open and no-project not driven (test-covered) |
+| M2 scoped gate | — | 81c5abab | red, fixed: model test called `changes::update` outside the root (SC-002 gate); `known_projects_overflow` read the switcher at the trailing edge, and a hung popover lost FR-011a's bottom inset (new overlay `Anchor::Below`); `session_start_press` counted the bar's chevron |
 
 ## Declined review findings
 

@@ -611,6 +611,9 @@ pub fn view_with<'a>(
         );
         iced::Point::new(x as f32, y as f32)
     }))
+    // Clamped against a one-row estimate, so a long catalog is given the room beneath less the
+    // trailing-edge panel's inset, and scrolls inside it (002 FR-011a).
+    .short_of_bottom()
     // A long catalog scrolls inside the panel (002 FR-011a); a row's context menu does not follow
     // its row, so it closes instead.
     .on_scroll(Message::Project(ProjectMsg::MenuDismissed))
