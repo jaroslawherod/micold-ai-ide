@@ -1294,9 +1294,11 @@ impl State {
     }
 
     /// The session area's header follows the shown location (feature 1126, R6): derived from
-    /// `current_session_location` once the outermost message is done, so every way the shown
-    /// session changes (sidebar, tab, chord, quick switcher, a session closing, a worktree removed)
-    /// is covered without a call at each site. The shell also calls it after a message it applies
+    /// `shown_location` (feature 1269, R5: the shown review's location, else the current
+    /// session's) once the outermost message is done, so every way the shown session changes
+    /// (sidebar, tab, chord, quick switcher, a session closing, a worktree removed) is covered
+    /// without a call at each site. It also remembers the current session as its location's
+    /// last-shown one (R4). The shell also calls it after a message it applies
     /// itself, and asks for a newly followed worktree's issue title.
     pub fn follow_header(&mut self) {
         use crate::features::changes::{update, Effect, Msg};

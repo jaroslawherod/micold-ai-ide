@@ -386,6 +386,8 @@ pub fn reconcile_catalog(
             // is about.
             let outcomes = core.set_current_session(None);
             crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
+            // Feature 1269 (U8): its location's kept review, when it was the last one there.
+            crate::features::session::show_review_of_emptied_location(core);
         }
     }
 }

@@ -1471,7 +1471,9 @@ pub fn close_requested(
         }
     }
     if state.session.active == Some(id) {
-        return state.set_current_session(None);
+        let outcomes = state.set_current_session(None);
+        show_review_of_emptied_location(state);
+        return outcomes;
     }
     Vec::new()
 }
@@ -1527,6 +1529,7 @@ pub fn remove_confirmed(state: &mut crate::app::State) -> Vec<crate::features::O
             list.retain(|s| s.id != id);
         }
     }
+    show_review_of_emptied_location(state);
     outcomes
 }
 
@@ -1770,26 +1773,42 @@ pub fn tab_strip_viewport_resized(state: &mut crate::app::State, width: u32) {
 /// The pointer is cleared before the records are dropped, for the reason `remove_confirmed`
 /// records at length: feature 024 resolves the outgoing session's location by looking it up, and a
 /// record already removed has no location to find.
-///
-/// Feature 1269 (U8, R8): when the current session was its location's last, that location's
-/// Review tab, if it has one, is shown, so the location stays shown under its own header.
 pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
-    let (outcomes, left) = if state.session.active.is_some_and(|id| ids.contains(&id)) {
-        let left = state.current_session_location();
-        (state.set_current_session(None), left)
+    let outcomes = if state.session.active.is_some_and(|id| ids.contains(&id)) {
+        state.set_current_session(None)
     } else {
-        (Vec::new(), None)
+        Vec::new()
     };
     for list in state.workspace.sessions.values_mut() {
         list.retain(|s| !ids.contains(&s.id));
     }
-    let last = left.filter(|entry| state.active_sessions().iter().all(|s| &s.location != entry));
-    if let (Some(entry), Some(project)) = (last, state.workspace.active.clone()) {
-        let effect =
-            crate::features::changes::show_if_present(&mut state.changes, &(project, entry));
+    show_review_of_emptied_location(state);
+    outcomes
+}
+
+/// The current session went (closed, removed, ended or gone from the catalog) and was the last
+/// live one of its location (feature 1269, U8, R8): that location's Review tab, if it has one, is
+/// shown, so the location stays shown under its own header. Called once the records are updated;
+/// the location is the one the header followed, the gone session's. Not while Compare holds the
+/// main area; under the Overview or Settings it is shown and read when uncovered.
+pub(crate) fn show_review_of_emptied_location(state: &mut crate::app::State) {
+    if state.session.active.is_some() || state.runs.compare.is_some() {
+        return;
+    }
+    let Some(key) = state.changes.header.entry.clone() else {
+        return;
+    };
+    let (project, entry) = &key;
+    if state.workspace.active.as_ref() != Some(project)
+        || state.active_sessions().iter().any(|s| &s.location == entry)
+    {
+        return;
+    }
+    let effect = crate::features::changes::show_if_present(&mut state.changes, &key);
+    // Covered, `follow_header` marks it unwatched, so uncovering reads it.
+    if !state.review_covered() {
         state.queue_changes_effect(effect);
     }
-    outcomes
 }
 
 impl crate::app::State {

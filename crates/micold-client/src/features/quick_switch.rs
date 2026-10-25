@@ -250,7 +250,8 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
         .nav_stop
         .clone()
         .filter(|stop| nodes.iter().any(|(at, _)| at == stop))
-        .or_else(|| state.current_session_location());
+        // Feature 1269 (R5): the shown location, a sessionless worktree's review included.
+        .or_else(|| state.shown_location());
     let mut entries = Vec::new();
     for (location, node) in nodes {
         let name = node.name().to_string();

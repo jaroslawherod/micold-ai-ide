@@ -1744,9 +1744,7 @@ pub fn opened(
     current: Option<SessionId>,
 ) -> Effect {
     let key: EntryKey = (project, entry);
-    if state.tabs.shown_key().is_some_and(|shown| *shown != key) {
-        hide_shown(state);
-    }
+    hide_other(state, &key);
     let make = || fresh_view(key.0.clone(), key.1.clone());
     match state.tabs.open_or_show(key.clone(), current, make) {
         Opened::Created => request_read(state),
@@ -1758,9 +1756,10 @@ pub fn opened(
 /// Show the Review tab of `key` when it has one (feature 1269, U8, R8): its location's last
 /// session closed. A kept view whose location may have changed meanwhile is read again (T5, U5).
 pub fn show_if_present(state: &mut State, key: &EntryKey) -> Effect {
-    if state.tabs.shown_key().is_some_and(|shown| shown != key) && state.tabs.has(key) {
-        hide_shown(state);
+    if !state.tabs.has(key) {
+        return Effect::None;
     }
+    hide_other(state, key);
     match state.tabs.show_if_present(key) {
         Some(true) => reread_shown(state),
         Some(false) | None => Effect::None,
@@ -1797,6 +1796,13 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         stack: BrowseStack::default(),
         files: FilesPane::default(),
         notice: None,
+    }
+}
+
+/// Hide the shown review when it is not `key`'s, before `key`'s is shown.
+fn hide_other(state: &mut State, key: &EntryKey) {
+    if state.tabs.shown_key().is_some_and(|shown| shown != key) {
+        hide_shown(state);
     }
 }
 

@@ -97,7 +97,8 @@ fn location_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
         .nav_stop
         .clone()
         .filter(|stop| order.contains(stop))
-        .or_else(|| state.current_session_location());
+        // Feature 1269 (R5): a sessionless worktree whose review is shown is where the user is.
+        .or_else(|| state.shown_location());
     let Some(target) = micold_core::navigation::step(&order, current.as_ref(), dir) else {
         return Step::None;
     };
