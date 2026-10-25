@@ -107,6 +107,8 @@ pub mod syntax;
 pub mod terminal;
 mod toolbar;
 pub(crate) use toolbar::app_mark_handle;
+/// What the title bar's jump-to field reads and sends (feature 1127, FR-008, FR-009).
+pub use toolbar::{jump_press, jump_tooltip, JUMP_TO};
 /// The application's icon as raw RGBA, read by the window's icon and the title bar's app mark
 /// (feature 1127, R9).
 pub use toolbar::{APP_ICON_RGBA, APP_ICON_SIDE};

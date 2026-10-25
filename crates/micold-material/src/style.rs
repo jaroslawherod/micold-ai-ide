@@ -869,6 +869,31 @@ pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status)
     }
 }
 
+/// The jump-to field's pill (feature 1127, contract T2): `surface_container_highest` under a 1 dp
+/// edge in `outline` — the role that reaches 3:1 against the field and the title bar in both
+/// schemes, which `outline_variant` does not — at the full pill corner. The hover and press layers
+/// are its content colour over the fill. Disabled, its words and its edge are at the shared 38%.
+pub fn field_pill(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let content = color(r.on_surface_variant);
+        let fill = color(r.surface_container_highest);
+        let background = match state_overlay(content, status) {
+            Some(Background::Color(layer)) => over(layer, fill),
+            _ => fill,
+        };
+        button::Style {
+            background: Some(Background::Color(background)),
+            text_color: disabled_alpha(content, status),
+            border: Border {
+                color: disabled_alpha(color(r.outline), status),
+                width: anatomy::button::OUTLINE,
+                radius: shape::FULL.into(),
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
 /// Text button: transparent, no border, `primary` label (low-emphasis actions) — or the host's
 /// `on_*` role where it stands on an accent fill (FR-004a).
 pub fn text_button(

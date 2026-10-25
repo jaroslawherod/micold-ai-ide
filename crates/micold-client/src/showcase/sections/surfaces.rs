@@ -568,7 +568,7 @@ pub fn field_group<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
 }
 
 /// `Toolbar` — the title bar's shape (feature 1127): the mark and a leading label alone, then with a
-/// fixed leading item and trailing actions.
+/// fixed leading item, the jump-to field in the centre and trailing actions.
 pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let mark = || {
         material::AppMark::new(
@@ -602,6 +602,7 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                             .leading(Icon::Overview)
                             .on_press(Message::NoOp),
                     )
+                    .centre(field(roles).on_press_maybe(Some(Message::NoOp)))
                     .action(
                         material::IconButton::new(Icon::Settings, roles)
                             .target(micold_core::tokens::anatomy::app_bar::ICON_TARGET)
@@ -616,6 +617,35 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
             ),
         ],
         Layout::FullWidth,
+    )
+}
+
+/// The title bar's jump-to field, with no press yet.
+fn field(roles: Roles) -> material::FieldButton<Message> {
+    material::FieldButton::new(Icon::Search, crate::ui::JUMP_TO, roles)
+        .hint(crate::keymap::switcher_chord_label())
+}
+
+/// `FieldButton` — looks like a field, acts like a button (feature 1127, R5): the jump-to field at
+/// its three fits, each in the room it needs, and disabled.
+pub fn field_button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let pressable = || field(roles).on_press_maybe(Some(Message::NoOp));
+    let narrowed = |fit: material::FieldFit| {
+        let room = material::field_button::width(&pressable(), fit);
+        iced::widget::container(pressable()).width(iced::Length::Fixed(room))
+    };
+    arrange(
+        vec![
+            posed("full", pressable(), roles),
+            posed(
+                "glyph and hint",
+                narrowed(material::FieldFit::GlyphAndHint),
+                roles,
+            ),
+            posed("glyph", narrowed(material::FieldFit::Glyph), roles),
+            posed("disabled", field(roles), roles),
+        ],
+        Layout::Inline,
     )
 }
 

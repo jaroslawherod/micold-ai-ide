@@ -4,8 +4,9 @@
 //! The fullest bar: a 60-character project name, an unread mark, and the Overview button with its
 //! badge. At 640 and 1280 dp wide, light and dark, the bar and its divider end at
 //! `app_bar::BOTTOM_EDGE`, every child of the bar lies inside its height and the window, no two
-//! children overlap, and the mark, the project switcher, the Overview button with its badge,
-//! Settings and the overflow trigger are all drawn.
+//! children overlap, and the mark, the project switcher, the Overview button with its badge, the
+//! jump-to field (at least its glyph), Settings and the overflow trigger are all drawn. The field
+//! sits with equal free space either side of it (T044, FR-008, FR-010, contract B3).
 //!
 //! **Compiled into the `layout_snapshot` binary** for the `support::layout` passes; it builds its
 //! own state and reads no cache.
@@ -58,8 +59,15 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .collect();
             assert_eq!(
                 children.len(),
-                5,
-                "{at}: mark, breadcrumb, Overview, Settings, overflow: {children:?}"
+                6,
+                "{at}: mark, breadcrumb, Overview, field, Settings, overflow: {children:?}"
+            );
+            let (overview, field, settings) = (children[2], children[3], children[4]);
+            let before = field.x - (overview.x + overview.width);
+            let after = settings.x - (field.x + field.width);
+            assert!(
+                (before - after).abs() <= TOLERANCE + 0.5,
+                "{at}: the field is not centred in the free space: {before} before, {after} after"
             );
             for (i, a) in children.iter().enumerate() {
                 assert!(
@@ -113,7 +121,13 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
             assert!(in_bar.contains(&"/"), "{at}: the separator: {in_bar:?}");
             let settings = Icon::Settings.glyph().to_string();
             let menu = Icon::Menu.glyph().to_string();
-            for wanted in ["Overview", settings.as_str(), menu.as_str()] {
+            let search = Icon::Search.glyph().to_string();
+            for wanted in [
+                "Overview",
+                search.as_str(),
+                settings.as_str(),
+                menu.as_str(),
+            ] {
                 assert!(
                     drawn(wanted),
                     "{at}: {wanted:?} is not drawn in the bar: {in_bar:?}"

@@ -21,7 +21,7 @@ use iced::{Alignment, Background, Element, Rectangle};
 use micold_core::tokens::anatomy::status_bar::HEIGHT;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
-use super::give_way::{Floor, GiveWay, Lane, Slot};
+use super::give_way::{Floor, GiveWay, Group, Lane, Slot};
 use super::{busy_indicator, unread_mark};
 use super::{style, Ellipsized, Tooltip, TooltipPosition, TypeRole};
 
@@ -219,9 +219,9 @@ impl<'a, M: 'a> From<StatusBar<'a, M>> for Element<'a, M> {
         let groups = b
             .leading
             .into_iter()
-            .map(|e| (e, false))
-            .chain(b.trailing.into_iter().map(|e| (e, true)));
-        for (entry, trailing) in groups {
+            .map(|e| (e, Group::Leading))
+            .chain(b.trailing.into_iter().map(|e| (e, Group::Trailing)));
+        for (entry, group) in groups {
             let (element, give_way, floor) = match entry {
                 Entry::Item(item) => {
                     // What shortening to the floor text saves, its dot, one character and "…":
@@ -242,7 +242,7 @@ impl<'a, M: 'a> From<StatusBar<'a, M>> for Element<'a, M> {
                 element,
                 Slot {
                     give_way,
-                    trailing,
+                    group,
                     floor,
                 },
             );

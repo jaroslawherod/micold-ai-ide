@@ -2228,7 +2228,11 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
 - **Quick-switcher**: **Ctrl+Shift+P** (Cmd+Shift+P on macOS) opens a search box over the list of
   the active project's locations, each followed by its open sessions, then the other known
   projects, also from a focused terminal;
-  the app takes it and the terminal never sees it. The tag filter applies, as it does to the
+  the app takes it and the terminal never sees it. The **Jump to location, session or project**
+  field in the middle of the title bar opens it too: press it, or Tab to it and press Enter or
+  Space, wherever the shortcut works. While Settings is open the field is greyed out and does
+  nothing, as the shortcut does nothing there; while the switcher is open, pressing the field
+  closes it like any click outside. The tag filter applies, as it does to the
   sidebar, and a session closed in the sidebar is not listed. Type part of a name: the letters
   must appear in that order, in any case, and names that start with what you typed come first.
   A session is found by its name; typing a location's name keeps its sessions listed right after

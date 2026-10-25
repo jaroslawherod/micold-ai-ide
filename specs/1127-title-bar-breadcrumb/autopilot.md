@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: milestone M2
-- **Next step**: M2 PR open; then M3 (built in a second worktree on wip/1127-m3), then M4
+- **Phase**: milestone M3
+- **Next step**: M3 unit: review B, visual pass, full gate on wip/1127-m3 (over M2's ef9ff60c); then the orchestrator moves it onto the PR branch after the M1 and M2 PRs merge and opens the M3 PR (title and body in the unit's scratchpad)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | — | gated on wip/1127-m2, PR to open |
-| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | todo |
+| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | built on wip/1127-m3, gating |
 | M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | todo |
 
 ## Decisions
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 visual pass | — | b5961ecd | pass: `micold-ai-ide ▾ ● 3 / fix/1117`; panel at y 44, x 48 by pointer; Overview, full screen, Review and Settings places; 640 px place shortens first; tooltips (specs/1127-title-bar-breadcrumb/visual-pass/m2/). Keyboard open and no-project not driven (test-covered) |
 | M2 scoped gate | — | 81c5abab | red, fixed: model test called `changes::update` outside the root (SC-002 gate); `known_projects_overflow` read the switcher at the trailing edge, and a hung popover lost FR-011a's bottom inset (new overlay `Anchor::Below`); `session_start_press` counted the bar's chevron |
 | M2 gate (`scripts/gate.sh`) | — | 397d8d8d2079be2bc90fffb62e28ee6201c3983d | pass (after the known `attention_error_notice` flake, rerun); on the way: overlay inventory and showcase pose `Anchor::Below` |
+| M3 review A (code-review, high) | 1 | d938ca8eba6bb93fc7d0d90e458febaf292ef7c0:ef9ff60cb174f1478f0e1ed3265c61bc18f4cb13 | CLEAN (1 MINOR, fixed: `FieldButton::fit_in` restated the fit choice `FirstThatFits` makes — removed) |
+| M3 scoped gate | — | — | red, fixed: `sibling_parity` learns the field's shape (`FIELD_HEIGHT` pill, leading-icon glyph); `anatomy_call_sites` drops the stale `FIELD_HEIGHT`/`FIELD_MAX_WIDTH` exemptions; `material_builder_api`: `FieldButton::width` became the free fn `field_button::width`; showcase poses `FieldFit`'s variants; contrast: the field's edges checked on the resting pill (pressed layer 2.98:1) |
 
 ## Declined review findings
 

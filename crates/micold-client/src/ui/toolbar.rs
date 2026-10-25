@@ -1,7 +1,7 @@
 //! The title bar, composed from reusable primitives (Principle VIII; feature 1127): the shared
 //! `Toolbar` with, from the leading end, the app mark, the `project / place` breadcrumb and the
-//! Overview button, and at the trailing end a Settings button and the overflow-menu trigger (three dots).
-//! No title text and no usage (FR-002). The menu's items float as an overlay (see
+//! Overview button, the jump-to field centred in the free space, and at the trailing end a Settings
+//! button and the overflow-menu trigger (three dots). No title text and no usage (FR-002). The menu's items float as an overlay (see
 //! [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 //!
 //! # The menu offers actions, not settings (feature 027, FR-026e)
@@ -22,12 +22,13 @@ use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::overview::{self, Msg as OverviewMsg, Tone};
 use crate::features::project::Msg as ProjectMsg;
+use crate::features::quick_switch::Msg as QuickSwitchMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
-    unread_total_tooltip, AppMark, Breadcrumb, Button, IconButton, MenuItem, MenuTrigger, Toolbar,
-    Tooltip, TypeRole, UnreadMark,
+    unread_total_tooltip, AppMark, Breadcrumb, Button, FieldButton, IconButton, MenuItem,
+    MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
 };
 use iced::widget::image;
 use iced::Element;
@@ -92,6 +93,9 @@ pub const SWITCH_PROJECT: &str = "Switch project";
 /// What the project segment reads with no project open (FR-004, US1 s4).
 pub const SELECT_PROJECT: &str = "Select project";
 
+/// What the jump-to field reads, and its tooltip's first words (FR-008, contract C5).
+pub const JUMP_TO: &str = "Jump to location, session or project";
+
 /// One breadcrumb segment (data-model *Segment*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Segment {
@@ -115,6 +119,8 @@ pub struct TitleBarModel {
     pub switcher_open: bool,
     /// Where the main area is; `None` hides the segment and its `/` (FR-006).
     pub place: Option<Segment>,
+    /// What pressing the jump-to field sends: [`jump_press`]. `None` draws it disabled.
+    pub jump: Option<Message>,
 }
 
 /// The title bar's model (data-model *TitleBarModel*, *Place*: first match wins).
@@ -128,7 +134,30 @@ pub fn model(state: &State) -> TitleBarModel {
         unread: state.other_projects_unread(),
         switcher_open: state.project.switcher_open,
         place: project.and_then(|_| place(state)),
+        jump: jump_press(state),
     }
+}
+
+/// What the jump-to field sends (FR-009, research R6): what the quick switcher's chord sends in the
+/// same state, through the same reducer — so the field opens the switcher wherever the chord does,
+/// the Overview, full screen and no project included, and focuses its input as the chord does.
+/// `None` while Settings is open, where the chord does nothing (feature 968 FR-012): the field is
+/// drawn disabled.
+///
+/// `terminal_had_focus` is read here, at view time, before the click moves anything, so closing the
+/// switcher hands the keyboard back to the terminal exactly as after the chord.
+pub fn jump_press(state: &State) -> Option<Message> {
+    state.settings.settings_draft.is_none().then(|| {
+        Message::QuickSwitch(QuickSwitchMsg::Toggled {
+            terminal_had_focus: state.terminal_focused(),
+        })
+    })
+}
+
+/// The jump-to field's tooltip: its words and the chord, as the running platform writes it
+/// (contract C5).
+pub fn jump_tooltip() -> String {
+    format!("{JUMP_TO} ({})", crate::keymap::switcher_chord_label())
 }
 
 /// The place segment inside an active project (FR-006): Settings, then the Overview, then the
@@ -169,7 +198,8 @@ fn location_segment(state: &State, location: &SessionLocation) -> Option<Segment
 }
 
 /// Render the title bar (feature 1127, contract B2): the app mark, the breadcrumb, the Overview
-/// button, then Settings and the overflow trigger at the trailing end. Every panel floats as an
+/// button, the jump-to field in the free space, then Settings and the overflow trigger at the
+/// trailing end. Every panel floats as an
 /// overlay from `ui::view`, so opening one never reflows the bar.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -204,11 +234,18 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .keyboard(true)
         .on_press_maybe(settings_press(state));
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r).tooltip("More");
+    // The quick switcher, made visible (FR-008, FR-009): pressed, never typed into. It gives way
+    // first as the window narrows — its spare width, its words, then its hint (FR-010).
+    let jump = FieldButton::new(Icon::Search, JUMP_TO, r)
+        .hint(crate::keymap::switcher_chord_label())
+        .max_width(anatomy::app_bar::FIELD_MAX_WIDTH)
+        .on_press_maybe(model.jump);
 
     Toolbar::new(r)
         .mark(AppMark::new(app_mark_handle(), APP_NAME, r))
         .leading(switcher)
         .leading_fixed(overview_button(state, r))
+        .centre(Tooltip::new(jump, jump_tooltip(), r))
         .action(Tooltip::new(settings, "Settings", r))
         .action(menu)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
@@ -428,6 +465,57 @@ mod tests {
         assert_eq!(m.unread, state.other_projects_unread());
         assert_eq!(m.unread, 1);
         assert!(m.switcher_open);
+    }
+
+    /// T036 (FR-009, US2 s4, R6): the field sends the chord's message in the session view, the
+    /// Overview, full screen and with no project, carrying whether the terminal held the keyboard;
+    /// with Settings open it sends nothing.
+    #[test]
+    fn the_jump_field_sends_the_chords_message_except_in_settings() {
+        let toggled = |state: &State| {
+            Some(Message::QuickSwitch(QuickSwitchMsg::Toggled {
+                terminal_had_focus: state.terminal_focused(),
+            }))
+        };
+        let session = on_fix_1117();
+        assert!(
+            session.terminal_focused(),
+            "precondition: a session view holds the keyboard"
+        );
+        assert_eq!(jump_press(&session), toggled(&session));
+        assert_eq!(model(&session).jump, jump_press(&session));
+
+        let mut overview = on_fix_1117();
+        overview.overview.open = true;
+        assert_eq!(jump_press(&overview), toggled(&overview));
+        overview.overview.full_screen = true;
+        assert_eq!(jump_press(&overview), toggled(&overview));
+
+        let mut none = State::default();
+        assert_eq!(jump_press(&none), toggled(&none));
+        assert_eq!(
+            jump_press(&none),
+            Some(Message::QuickSwitch(QuickSwitchMsg::Toggled {
+                terminal_had_focus: false
+            }))
+        );
+
+        none.settings.settings_draft = Some(Default::default());
+        assert_eq!(jump_press(&none), None, "settings open");
+        let mut settings = on_fix_1117();
+        settings.settings.settings_draft = Some(Default::default());
+        assert_eq!(jump_press(&settings), None, "settings open");
+        assert_eq!(model(&settings).jump, None);
+    }
+
+    /// Contract C5: the tooltip names the field and its chord.
+    #[test]
+    fn the_jump_fields_tooltip_names_the_chord() {
+        assert_eq!(
+            jump_tooltip(),
+            format!("{JUMP_TO} ({})", crate::keymap::switcher_chord_label())
+        );
+        assert!(jump_tooltip().contains("Shift+P"));
     }
 
     /// T010 (FR-011, R10): Settings closed → the button opens it; open → it sends nothing.

@@ -9,7 +9,7 @@
 //! what is drawn is clipped to the lane's bounds as a second line of defence.
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
 
@@ -94,14 +94,29 @@ pub(crate) enum Floor {
     /// The width it lays out at with no room at all: whatever it cannot give up (its padding, a
     /// glyph, an ellipsis).
     Squeezed,
+    /// This wide: a child whose narrowest rendering is a fixed size, which no room at all would
+    /// clamp to nothing (the title bar's field, at its glyph's target).
+    Width(f32),
+}
+
+/// Which group of a [`Lane`] a child belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Group {
+    /// Placed from the lane's leading end, in order.
+    Leading,
+    /// Centred in the free space between the leading and the trailing group (feature 1127, B3): the
+    /// title bar's jump-to field. Equal free space either side, not the lane's centre line.
+    Centre,
+    /// Placed from the lane's trailing end, the last child at the end.
+    Trailing,
 }
 
 /// One child of a [`Lane`] beside its element.
 pub(crate) struct Slot {
     /// How it yields.
     pub(crate) give_way: GiveWay,
-    /// Whether it belongs to the trailing group, placed from the lane's trailing end.
-    pub(crate) trailing: bool,
+    /// Where in the lane it is placed.
+    pub(crate) group: Group,
     /// How narrow it may become when it shortens.
     pub(crate) floor: Floor,
 }
@@ -248,6 +263,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Lane<'_, M> {
                         (Floor::Saving(saved), GiveWay::Shorten(_)) => {
                             (natural - saved.max(0.0)).ceil()
                         }
+                        (Floor::Width(least), GiveWay::Shorten(_)) => least.min(natural),
                         (Floor::Squeezed, GiveWay::Shorten(_)) => child
                             .as_widget_mut()
                             .layout(state, renderer, &within(0.0))
@@ -302,24 +318,49 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Lane<'_, M> {
         let centred = |node: &layout::Node, x: f32| {
             Point::new(x, ((height - node.size().height) / 2.0).max(0.0))
         };
+        let in_group = |slot: &Slot, group: Group| slot.group == group;
         let mut x = self.padding;
+        let mut leading_end = self.padding;
         for ((node, slot), width) in nodes.iter_mut().zip(&self.slots).zip(&planned) {
-            if slot.trailing || !placed(node, width) {
+            if !in_group(slot, Group::Leading) || !placed(node, width) {
                 continue;
             }
             let at = centred(node, x);
             node.move_to_mut(at);
-            x += node.size().width + self.gap;
+            x += node.size().width;
+            leading_end = x;
+            x += self.gap;
         }
         let mut x = size.width - self.padding;
+        let mut trailing_start = x;
         for ((node, slot), width) in nodes.iter_mut().zip(&self.slots).zip(&planned).rev() {
-            if !slot.trailing || !placed(node, width) {
+            if !in_group(slot, Group::Trailing) || !placed(node, width) {
                 continue;
             }
             x -= node.size().width;
             let at = centred(node, x);
             node.move_to_mut(at);
+            trailing_start = x;
             x -= self.gap;
+        }
+        // The centre group, as one run `gap` apart, with as much free space before it as after it
+        // (B3). The planner kept a gap's room each side of it, so it never meets either group.
+        let centre: Vec<f32> = nodes
+            .iter()
+            .zip(&self.slots)
+            .zip(&planned)
+            .filter(|((n, s), w)| in_group(s, Group::Centre) && placed(n, w))
+            .map(|((n, _), _)| n.size().width)
+            .collect();
+        let run = centre.iter().sum::<f32>() + self.gap * centre.len().saturating_sub(1) as f32;
+        let mut x = leading_end + ((trailing_start - leading_end - run) / 2.0).max(0.0);
+        for ((node, slot), width) in nodes.iter_mut().zip(&self.slots).zip(&planned) {
+            if !in_group(slot, Group::Centre) || !placed(node, width) {
+                continue;
+            }
+            let at = centred(node, x);
+            node.move_to_mut(at);
+            x += node.size().width + self.gap;
         }
         layout::Node::with_children(size, nodes)
     }
@@ -442,6 +483,201 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Lane<'_, M> {
 impl<'a, M: 'a> From<Lane<'a, M>> for Element<'a, M> {
     fn from(lane: Lane<'a, M>) -> Self {
         Element::new(lane)
+    }
+}
+
+/// How much room a rendering of a [`FirstThatFits`] needs before it is chosen.
+pub(crate) enum Need {
+    /// Its own width laid out with unbounded room: a label that must not be shortened.
+    Natural,
+    /// This much: a rendering that fills whatever room it is given, so its natural width says
+    /// nothing about the least it can be drawn in (the jump-to field, which grows to its maximum).
+    Width(f32),
+}
+
+/// One of several renderings of one control, the first whose [`Need`] fits the room it is laid out
+/// in, else the last: a breadcrumb segment whole or shortened with its full text in its tooltip, the
+/// jump-to field with its label and hint, its hint, or its glyph alone (feature 1127).
+///
+/// The choice is made at layout because that is the first moment anything knows the room; the view
+/// that built the bar does not know the window's width. Only the chosen rendering is drawn,
+/// updated, traversed and floated, so the control is one Tab stop and one tooltip. It adds no layout
+/// node of its own.
+///
+/// The renderings keep separate trees, so a resize that crosses a threshold drops the control's
+/// hover, press and keyboard focus and restarts its tooltip's wait. A resize is not something a
+/// person does while pressing or tabbing, so the bar accepts that.
+pub(crate) struct FirstThatFits<'a, M> {
+    renderings: Vec<(Element<'a, M>, Need)>,
+}
+
+/// Which rendering the last layout chose.
+#[derive(Default)]
+struct Chosen(usize);
+
+impl<'a, M> FirstThatFits<'a, M> {
+    pub(crate) fn new() -> Self {
+        Self {
+            renderings: Vec::new(),
+        }
+    }
+
+    /// A rendering after those already added, chosen when none before it fits and it `needs` no
+    /// more than the room.
+    pub(crate) fn or(mut self, rendering: Element<'a, M>, needs: Need) -> Self {
+        self.renderings.push((rendering, needs));
+        self
+    }
+
+    fn chosen<'b>(&'b self, tree: &'b Tree) -> (&'b Element<'a, M>, &'b Tree) {
+        let i = tree.state.downcast_ref::<Chosen>().0;
+        (&self.renderings[i].0, &tree.children[i])
+    }
+
+    fn chosen_mut<'b>(&'b mut self, tree: &'b mut Tree) -> (&'b mut Element<'a, M>, &'b mut Tree) {
+        let i = tree.state.downcast_ref::<Chosen>().0;
+        (&mut self.renderings[i].0, &mut tree.children[i])
+    }
+}
+
+impl<M> Widget<M, iced::Theme, iced::Renderer> for FirstThatFits<'_, M> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Chosen>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Chosen::default())
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        self.renderings.iter().map(|(r, _)| Tree::new(r)).collect()
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        let renderings: Vec<&Element<'_, M>> = self.renderings.iter().map(|(r, _)| r).collect();
+        tree.diff_children(&renderings);
+    }
+
+    fn size(&self) -> Size<Length> {
+        self.renderings[0].0.as_widget().size()
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let unbounded =
+            layout::Limits::new(Size::ZERO, Size::new(f32::INFINITY, limits.max().height));
+        let last = self.renderings.len().saturating_sub(1);
+        let mut chosen = last;
+        for (i, ((rendering, needs), state)) in self
+            .renderings
+            .iter_mut()
+            .zip(tree.children.iter_mut())
+            .enumerate()
+            .take(last)
+        {
+            let needed = match needs {
+                Need::Natural => {
+                    rendering
+                        .as_widget_mut()
+                        .layout(state, renderer, &unbounded)
+                        .size()
+                        .width
+                }
+                Need::Width(width) => *width,
+            };
+            // Half a pixel, as every geometry rule beside this one: a width given back to it
+            // rounded is not a shortening.
+            if needed <= limits.max().width + 0.5 {
+                chosen = i;
+                break;
+            }
+        }
+        tree.state.downcast_mut::<Chosen>().0 = chosen;
+        let (child, state) = self.chosen_mut(tree);
+        child.as_widget_mut().layout(state, renderer, limits)
+    }
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        let (child, state) = self.chosen_mut(tree);
+        child
+            .as_widget_mut()
+            .operate(state, layout, renderer, operation);
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        let (child, state) = self.chosen_mut(tree);
+        child.as_widget_mut().update(
+            state, event, layout, cursor, renderer, clipboard, shell, viewport,
+        );
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        let (child, state) = self.chosen(tree);
+        child
+            .as_widget()
+            .mouse_interaction(state, layout, cursor, viewport, renderer)
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let (child, state) = self.chosen(tree);
+        child
+            .as_widget()
+            .draw(state, renderer, theme, style, layout, cursor, viewport);
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &iced::Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
+        let (child, state) = self.chosen_mut(tree);
+        child
+            .as_widget_mut()
+            .overlay(state, layout, renderer, viewport, translation)
+    }
+}
+
+impl<'a, M: 'a> From<FirstThatFits<'a, M>> for Element<'a, M> {
+    fn from(fit: FirstThatFits<'a, M>) -> Self {
+        Element::new(fit)
     }
 }
 

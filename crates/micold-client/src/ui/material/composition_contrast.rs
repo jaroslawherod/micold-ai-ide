@@ -909,3 +909,58 @@ fn the_breadcrumbs_words_are_legible_on_the_title_bar() {
         violations.join("\n  ")
     );
 }
+
+/// Feature 1127 (T040, contract T2, FR-017): the jump-to field on the title bar, at rest and
+/// elevated, in both schemes — its glyph, label and hint words in `on_surface_variant` at 4.5:1 on
+/// the pill through every state layer it draws, and the pill's and the key-cap's edge at 3:1 on
+/// the resting pill and on the bar.
+#[test]
+fn the_jump_fields_words_and_edges_are_legible_on_the_title_bar() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let (words, edge) = (
+            super::field_button::content(r),
+            super::field_button::outline(r),
+        );
+        for elevated in [false, true] {
+            let surface = style::app_bar_surface(r, elevated)(&theme);
+            let Some(Background::Color(bar)) = surface.background else {
+                panic!("the title bar paints a solid surface");
+            };
+            let bar = style::to_rgb(bar);
+            let at = if elevated { "elevated" } else { "at rest" };
+            let pill = style::field_pill(r);
+            for (state_name, status) in STATES {
+                let s = pill(&theme, status);
+                if s.border.color != style::color(edge) || s.text_color != style::color(words) {
+                    violations.push(format!(
+                        "{scheme:?} {state_name}: the pill does not draw the field's roles"
+                    ));
+                }
+                let fill = behind(bar, &s);
+                let mut checks = vec![("words on the pill", contrast(words, fill), AA_TEXT)];
+                // The edges are what say "this is a field" at rest; under the pointer the state
+                // layer says it, and a pressed layer a hair darker than the edge's 3:1 for the
+                // length of a click is not a field that cannot be seen.
+                if status == button::Status::Active {
+                    checks.push(("edge on the pill", contrast(edge, fill), AA_NON_TEXT));
+                    checks.push(("edge on the bar", contrast(edge, bar), AA_NON_TEXT));
+                }
+                for (what, ratio, needs) in checks {
+                    if ratio < needs {
+                        violations.push(format!(
+                            "{scheme:?} {at} {state_name} / {what}: {ratio:.2}:1 (needs {needs})"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "the jump-to field cannot be read on the title bar:\n  {}",
+        violations.join("\n  ")
+    );
+}

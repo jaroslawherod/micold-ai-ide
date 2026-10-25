@@ -10,7 +10,7 @@
 //!
 //! Parity: each variant resolves to exactly the style its call sites use today (FR-005).
 
-use crate::give_way::{Floor, GiveWay, Lane, Slot};
+use crate::give_way::{Floor, GiveWay, Group, Lane, Slot};
 use crate::glyph::icon;
 use crate::icons::Icon;
 use crate::keyboard_focus::{Indicator, TakesTheKeyboard};
@@ -383,7 +383,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             // children out in order, so the label took the whole room and left the mark none.
             let kept = || Slot {
                 give_way: GiveWay::Keep,
-                trailing: false,
+                group: Group::Leading,
                 floor: Floor::Natural,
             };
             let mut inner = Lane::hugging(spacing::XS);
@@ -395,7 +395,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             }
             let label = Slot {
                 give_way: GiveWay::Shorten(0),
-                trailing: false,
+                group: Group::Leading,
                 floor: Floor::Squeezed,
             };
             inner = inner.push(b.content, label);
@@ -435,69 +435,69 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         if let Some(width) = b.width {
             widget = widget.width(width);
         }
-        let on_key = b.on_press.clone();
-        let pressable = b.on_press.is_some();
-        if let Some(message) = b.on_press {
-            widget = widget.on_press(message);
-        }
-        // Wrapping is the opt-in: every `Button` ripples without any call site asking (FR-024c).
-        //
-        // Except a disabled one. A button with no `on_press` cannot be pressed, and a ripple on it
-        // would report a press that will never happen — worse than no feedback, because it says the
-        // opposite of what the disabled styling says.
-        let pressed: Element<'a, M> = if pressable {
-            // The ripple is clipped to the same corner the fill above draws, or a pill when
-            // nobody said otherwise — a wrapper cannot see the shape its child draws, so getting
-            // these two from one value is what stops them diverging silently.
-            super::Ripple::new(
-                widget,
-                b.variant.content(b.roles, b.host),
-                b.shape.unwrap_or(shape::FULL),
-            )
-            .into()
-        } else {
-            widget.into()
-        };
-
-        // And the keyboard, which the rendering stack's button does not have either (FR-030). Every
-        // button in the application joins the traversal by being built, exactly as every one of
-        // them ripples by being built — a capability a call site has to remember to ask for is a
-        // capability most call sites will not have.
-        //
-        // Outside the ripple rather than inside it, so the focus indicator is drawn over the state
-        // layer and not under it.
-        let mut focusable = TakesTheKeyboard::new(pressed, pressable);
-        if let Some(id) = b.id.clone() {
-            focusable = focusable.id(id);
-        }
-        if let Some(message) = on_key {
-            // Both keys, unlike the checkbox beside it. Enter and Space are what a button answers
-            // everywhere it exists — WAI-ARIA names both — and a *focused* button answering Enter
-            // takes nothing from the dialog: the field whose `on_submit` saves the form does not
-            // hold the keyboard while this does.
-            focusable = focusable
-                .key(keyboard::key::Named::Enter, message.clone())
-                .key(keyboard::key::Named::Space, message);
-        }
-        let focusable: Element<'a, M> = focusable
-            .indicator(Indicator {
-                // §5's ring is `secondary` against every variant, so a focused button is the same
-                // mark whether it is filled, outlined or text. The state layer under it is the
-                // variant's own content colour, because that is what a state layer is made of.
-                outline: b.roles.secondary,
-                layer: b.variant.content(b.roles, b.host),
-                // The same corner as the fill and the ripple, for the same reason: a focus ring
-                // drawn as a pill around a square button is the indicator disagreeing with the
-                // control it marks.
-                radius: b.shape.unwrap_or(shape::FULL),
-            })
-            .into();
+        let focusable = pressable(
+            widget,
+            b.on_press,
+            b.variant.content(b.roles, b.host),
+            // The ripple and the focus ring take the fill's corner, or a pill when nobody said
+            // otherwise.
+            b.shape.unwrap_or(shape::FULL),
+            b.roles.secondary,
+            b.id,
+        );
         // Outermost, so the whole button is the tooltip's trigger. It adds no layout node.
         match tooltip {
             Some(tooltip) => super::Tooltip::new(focusable, tooltip, b.roles).into(),
             None => focusable,
         }
     }
+}
+
+/// What makes a rendering-stack button one of the library's: a ripple and the keyboard, both only
+/// while it can be pressed (FR-024c, FR-030). Shared by [`Button`] and
+/// [`FieldButton`](crate::FieldButton), so a pressable control cannot have one without the other.
+///
+/// The ripple is in `tint`, the content colour (a state layer is the content colour), clipped to
+/// `radius`: a wrapper cannot see the shape its child draws, so the corner comes from the same value
+/// as the fill's. A disabled control gets no ripple: one would report a press that will never
+/// happen, the opposite of what its disabled styling says.
+///
+/// The keyboard wrapper sits outside the ripple, so the focus indicator is drawn over the state
+/// layer and not under it. Enter and Space both press, as a button answers everywhere it exists
+/// (WAI-ARIA names both); a *focused* button answering Enter takes nothing from a dialog, since the
+/// field whose `on_submit` saves the form does not hold the keyboard while this does. §5's ring is
+/// `ring` against every variant; the layer under it is `tint`. `id` names it for `focus(id)`.
+pub(crate) fn pressable<'a, M: Clone + 'a>(
+    mut widget: button::Button<'a, M>,
+    on_press: Option<M>,
+    tint: Rgb,
+    radius: f32,
+    ring: Rgb,
+    id: Option<iced::advanced::widget::Id>,
+) -> Element<'a, M> {
+    let pressed: Element<'a, M> = match on_press.clone() {
+        Some(message) => {
+            widget = widget.on_press(message);
+            super::Ripple::new(widget, tint, radius).into()
+        }
+        None => widget.into(),
+    };
+    let mut focusable = TakesTheKeyboard::new(pressed, on_press.is_some());
+    if let Some(id) = id {
+        focusable = focusable.id(id);
+    }
+    if let Some(message) = on_press {
+        focusable = focusable
+            .key(keyboard::key::Named::Enter, message.clone())
+            .key(keyboard::key::Named::Space, message);
+    }
+    focusable
+        .indicator(Indicator {
+            outline: ring,
+            layer: tint,
+            radius,
+        })
+        .into()
 }
 
 #[cfg(test)]

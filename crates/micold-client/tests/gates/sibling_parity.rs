@@ -49,6 +49,10 @@ const APP_BAR_LANE: &[usize] = &[0, 0, 0, 0, 0];
 /// place are words.
 const BREADCRUMB: usize = 1;
 
+/// The lane's centre child: the jump-to field (feature 1127, R5), after the Overview button while
+/// FR-015 keeps it in the bar (Story 3 moves the field to 2).
+const JUMP_FIELD: usize = 3;
+
 /// The bar's controls, in order: every child of the lane after the app mark.
 ///
 /// Structural rather than a list of paths: anything the bar is given past its mark is a control
@@ -166,10 +170,23 @@ fn every_app_bar_action_is_one_of_the_contracts_action_shapes() {
             let Some(glyph) = glyph else {
                 continue;
             };
-            // Which shape this action is claiming to be: a square at §7.1's target is the icon
+            // Which shape this action is claiming to be: the jump-to field is a `FieldButton`, a
+            // `FIELD_HEIGHT` pill leading with §7.3's leading-icon glyph — or, at its last fit, that
+            // glyph alone in the bar's target square; a square at §7.1's target is the icon
             // button; anything wider carries a label beside its glyph.
             let icon_only = same(action.width, anatomy::app_bar::ICON_TARGET);
-            let (height, glyph_size, shape) = if icon_only {
+            let field = action.path[APP_BAR_LANE.len()] == JUMP_FIELD;
+            let (height, glyph_size, shape) = if field {
+                (
+                    if icon_only {
+                        anatomy::app_bar::ICON_TARGET
+                    } else {
+                        anatomy::app_bar::FIELD_HEIGHT
+                    },
+                    anatomy::button::LEADING_ICON,
+                    "the jump-to field (§7.1's field height, §7.3's leading-icon glyph)",
+                )
+            } else if icon_only {
                 (
                     anatomy::app_bar::ICON_TARGET,
                     anatomy::button::ICON_BUTTON_GLYPH,
