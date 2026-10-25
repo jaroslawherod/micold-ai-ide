@@ -115,10 +115,10 @@ third; unmark returns both (spec US1).
 **Independent Test**: mark a file, change a line on disk, wait for the re-read: ○ with the dot,
 *n* − 1; revert the line: Reviewed again (spec US2).
 
-- [ ] T035 [US2] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs` for US2 s1–s4 and s7: a re-read whose whole change gives another id makes the file Unseen (HasDrafts with drafts) with `changed_since` and *n* − 1; marking again clears `changed_since` and sends the new id; a re-read back to the marked id makes it Reviewed with no edit sent; another file changing, a new file appearing (*m* + 1) and a new id for another path leave it Reviewed; a re-read when the view is shown again (#1269's tab re-read) shows the change
-- [ ] T036 [US2] Draw `UnreadMark` (dot only) inside a `Tooltip` "Changed since you marked it reviewed" at the trailing edge of a row whose `FileReview.changed_since` (from T028's `file_reviews`) is true, in `crates/micold-client/src/ui/changes.rs`
-- [ ] T037 [US2] Add a changed-since row to the `changes-review-marks` covered state in `crates/micold-client/tests/support/covered_states.rs` and regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`
-- [ ] T038 [US2] Describe in `docs/user-guide/reviewing-changes.md` *Marking files reviewed* that a file whose change differs from the marked one drops back with the changed dot, that undoing the change brings the mark back, that committing unaltered keeps it in an entry with a base, and that renames start Unseen
+- [x] T035 [US2] Write failing reducer tests in `crates/micold-client/tests/features_changes.rs` for US2 s1–s4 and s7: a re-read whose whole change gives another id makes the file Unseen (HasDrafts with drafts) with `changed_since` and *n* − 1; marking again clears `changed_since` and sends the new id; a re-read back to the marked id makes it Reviewed with no edit sent; another file changing, a new file appearing (*m* + 1) and a new id for another path leave it Reviewed; a re-read when the view is shown again (#1269's tab re-read) shows the change
+- [x] T036 [US2] Draw `UnreadMark` (dot only) inside a `Tooltip` "Changed since you marked it reviewed" at the trailing edge of a row whose `FileReview.changed_since` (from T028's `file_reviews`) is true, in `crates/micold-client/src/ui/changes.rs`
+- [x] T037 [US2] Add a changed-since row to the `changes-review-marks` covered state in `crates/micold-client/tests/support/covered_states.rs` and regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt`
+- [x] T038 [US2] Describe in `docs/user-guide/reviewing-changes.md` *Marking files reviewed* that a file whose change differs from the marked one drops back with the changed dot, that undoing the change brings the mark back, that committing unaltered keeps it in an entry with a base, and that renames start Unseen
 
 **Checkpoint**: US2's independent test passes in the app.
 
@@ -132,7 +132,7 @@ side is T020–T022, the store T016–T017.
 **Independent Test**: two windows on one entry, mark in one, the other shows it within 2 s;
 restart, the mark is still shown (spec US3).
 
-- [ ] T039 [US3] Write a reducer test in `crates/micold-client/tests/features_changes.rs`: a `ReviewChanged` arriving with a mark set elsewhere changes that row to ✓ and raises `header_progress` with no action in this window; a push removing it returns the row; a `ReviewChanged` for the entry after a reconnect restores the marks (US3 s1–s3)
+- [x] T039 [US3] Write a reducer test in `crates/micold-client/tests/features_changes.rs`: a `ReviewChanged` arriving with a mark set elsewhere changes that row to ✓ and raises `header_progress` with no action in this window; a push removing it returns the row; a `ReviewChanged` for the entry after a reconnect restores the marks (US3 s1–s3)
 
 **Checkpoint**: US3's independent test passes with two windows.
 

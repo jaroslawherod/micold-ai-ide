@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1271
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
-- **Phase**: M3 rebased, gated and pushed; PR text ready
-- **Next step**: orchestrator opens the M3 PR from the session scratchpad's `pr-m3.md` (gh is unauthenticated in the unit), records its number here, waits on CI and merges; then M4
+- **Phase**: M4 round 1 fixes applied; awaiting round 2 on the fix diff (then rebase on the orchestrator's word, main is on hold for #1408)
+- **Next step**: orchestrator runs reviews A/B and the visual pass on the pushed snapshot; then a unit rebases, re-records the layout snapshot, runs the full gate and prepares the PR
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1360 | design (spec, plan, tasks) | merged | e683d5db1514b59179c91d03dc1b85ed4fc1a049 |
 | #1374 | M1 micold-core marks | merged (after it, the orchestrator pushed two CI fixes: cf4073cf `as_chunks` for clippy 1.99; 59ff54bf quoted-path test `#[cfg(unix)]`, Windows refuses `"` in file names) | 96b90dd65dc6cd9920f111dba94c460b2a414c26 |
 | #1390 | M2 marks on the wire and in the service | merged (after the M2 PR was prepared, the orchestrator rebased onto main, which carried #1269's kept Review tabs, and added `marks: Vec::new()` to three #1269 test messages, commit 9047a4f0) | dc03f7528be1f656964c04ac87a5b21499f5f6ac |
+| #1411 | M3 row states, mark control, progress | merged (after the M3 PR text was prepared, the orchestrator rebased twice more, resolved a `use` conflict in review/marks.rs, added #1275's `identity` field to the marks covered state, and re-recorded the layout snapshot) | 81b3eb543292e6df8dca698ad249498549417349 |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | micold-core: change ids, whole-change read, EntryMarks, states, progress, review file v4 | #1374 | merged |
 | M2 | T018–T024 | full | wire SetReviewed + ReviewChanged.marks, service keeps/pushes/removes marks, client holds them; no view change (docs-not-needed) | #1390 | merged |
-| M3 | T025–T034 | full | MVP: row states, Mark reviewed control, n of m reviewed + bar, user guide | — | implementing (#1269 closed, last PR #1398) |
-| M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | — | planned |
+| M3 | T025–T034 | full | MVP: row states, Mark reviewed control, n of m reviewed + bar, user guide | #1411 | merged |
+| M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | — | implementing |
 | M5 | T040–T044 | full | pull request marks and progress, guide text | — | planned |
 
 ## Decisions
@@ -37,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Reset marks on every new head commit, or per file's change? | Per file's change (a mark holds while the file's whole change is the same) | agent-resolved | spec.md#Assumptions |
 | D2 | spec | Row symbol for a marked file with drafts | Reviewed wins; draft count stays on the row | agent-resolved | spec.md#Assumptions |
 | D3 | clarify | Header wording: *n of m reviewed* or *n/m reviewed*? | *n of m reviewed* | agent-resolved | issue #1271 body (spec.md#Input) |
-| D4 | clarify | Mark a file while a toggle hides part of its change? | A: no — Mark reviewed unavailable (tooltip) for a file with changes of a hidden kind; unmark stays available. Applied to FR-002, FR-005, Edge Cases > Toggles | provisional, pending user | spec.md US2 rationale, FR-005; Open escalation Q1 |
+| D4 | clarify | Mark a file while a toggle hides part of its change? | A: no — Mark reviewed unavailable (tooltip) for a file with changes of a hidden kind; unmark stays available. Applied to FR-002, FR-005, Edge Cases > Toggles | decided by user (2026-10-25, option A) | spec.md US2 rationale, FR-005; clarify Q1 |
 | D5 | tasks | Milestone cut vs plan's proposal | M1, M2 as planned; `pr_change_ids` moved to M5 (US4); plan's M3 split by story into M3 (US1), M4 (US2 + US3 view), M5 (US4); guide text and snapshot states in each story's milestone; visual pass and redesign note to the close unit. M1 (17 tasks, all of micold-core, likely >800 lines) kept whole: core-only, no observable split along a scenario, and it must land before #1269. Plan fixed: `Icon` lives in `crates/micold-material/src/icons.rs`, not micold-client. milestones.md rule 1 waived: M1 and M2 are Foundational alone and carry no P1 story, because US1's view is the one #1269 rewrites (research R8); their items are pub in lib crates (no dead code) and they are checked by tests only (each milestone's Verify). `mark_block` moved from plan M1 to M3 (T025, T026), with the control it gates | agent-resolved | tasks.md#Milestones, milestones.md rules 1, 3, 4, research R8 |
 | D6 | implement M1 | Where the plan's text does not fit the code | (1) `ChangeId::of_worktree` digests the resolved `NameStatus` record (kind, path, both modes and ids), since `WholeFile` holds only the resulting id; (2) `WholeChange::assemble` takes `committed: Option<&set>` (None = no base, all Uncommitted) and `untracked: Vec<(RelPath, mode)>`, the mode read from disk; (3) `--no-abbrev`, not `--full-index`: git 2.43 abbreviates `--raw` ids under `--full-index` (contract G2, research R2, tasks fixed); (4) a symlink's blob id is hashed in core over its target path (hash-object follows the link); a submodule's unhashed side gets no id; (5) the daemon's two `ReviewFile` literals get `marks: Default::default()` to compile, M2 fills them | agent-resolved | contracts/marks-wire.md G2; tests/review_git.rs G2 tests |
 | D7 | implement M2 | Where the plan's text does not fit the code | (1) an unknown entry's `SetReviewed` is `NotFound`, as every review edit's (W2 in `check_entry_locked`), not `InvalidInput` as RM1's list says: RM1 cites W2, whose answer is `NotFound`; (2) the daemon's interim per-project marks map from M1 is gone: marks load into `EntryReview::from_parts` (a marks-only entry is an entry) and every save builds the file from the entries, so one place holds them; (3) RM5's send and report are tested on `Reviews` with a real store in review_edit.rs (send pushes and the file), plus one end-to-end delivered send in review_send.rs; (4) T022 names `server.rs`, which needs no change: it builds no `ReviewChanged` itself, every one comes from `review.rs` `changed()`, which carries `marks` | agent-resolved | contracts/marks-wire.md RM1, RM5; review-wire W2 |
@@ -66,6 +67,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 rebase | — | — | Rebased onto origin/main 9fc835a0a (#1376 title bar, #1270 M3 review bar and drawer): the branch's M3 commits squashed into one (`feat(1271): … (M3)`), the pre-rebase head kept locally as `backup-m3-pre-rebase` (01a6d2f66 + ledger 57e895b55). Conflicts: `ui/changes.rs` (main's drawer/`review_bar` with this feature's progress slot; `status_label` import dropped), `shell/daemon_sync.rs` and `tests/features_changes.rs` (both sides' tests kept), `covered_states.rs` merged cleanly. Layout snapshot taken from main and re-recorded: its diff against main is `changes-review-marks`, `changes-review-marks-unavailable` and the header's (empty) progress slot in `session-area-review-shown`, `session-area-review-sessionless`, `status-bar-changes`, `title-bar-changes`. #1270 opens the drawer closed (its FR-011), so the review buttons stand in the header: `the_progress_bar_has_its_width_beside_its_words` now opens the drawer first (as the visual pass saw it); closed, at 1280×800 with the sidebar, the bar is ~37 px beside its words (gives way first, by design). Full gate first failed `documentation_is_not_read`: round 2's `fit_path` test used the literal `"README.md"`; now `"main.rs"`. clippy 1.99 clean, `cargo test --workspace --no-run` builds; one unrelated flaky daemon test (`mcp_audit_log`, terminal bracketed-paste timing under load) failed once, passed 3/3 alone; full gate (`scripts/gate.sh`) green at 5e8f19f25 on the third run; pushed |
 
 B1 runs (`MUT1271=<name>`, `cargo test -p micold-client --test features_changes --bins -- reviewed_marks a_refused_reviewed_mark`; none: all 6 pass): `toggled` (`mark_toggled` → `Effect::None`) fails `the_mark_control_asks_the_service_and_changes_nothing_itself`; `nomarks` (`file_reviews` ignores marks) fails `rows_follow_the_marks_the_drafts_and_the_whole_change`, `the_progress_counts_the_listed_files_while_connected` and two more; `noblock` (`mark_control` skips `mark_block`) fails `the_mark_control_says_why_it_is_unavailable` ("s7: c has a hidden part"); `unreadable` (the A2 branch off) fails it at "the whole change could not be read"; `progress` (`header_progress` counts the whole change, not the listed files) fails `the_progress_counts_the_listed_files_while_connected` ("m follows the toggles"); `wholeload` (`ListRead.whole` dropped) fails four tests; `wholekeep` (the last whole change not kept) fails `the_whole_change_is_read_with_the_list_and_kept`; `pendingop` (`ReviewMark` says "save the review comment") fails daemon_sync's `a_refused_reviewed_mark_notifies_and_changes_no_mark`.
+| M4 diff A/B/visual | 0 | 37f73f767c2e8468b9d8da846e0a6380c5971f14:6c83e315a51d058d3775625b6dbdad79b7408bf6 | snapshot of the M4 diff; reviews due (no Agent tool in the unit) |
+| M4 round 1 | 1 | 37f73f767c2e8468b9d8da846e0a6380c5971f14:6c83e315a51d058d3775625b6dbdad79b7408bf6 | A CLEAN, 3 MINOR (A1 guide re-mark wording and line width, A2 s3 test checked no edit, A3 s7 test strict): all fixed. B CLEAN, MINORs (line width) fixed. Visual FAIL on 2: V1 dot tooltip fading black over it, V2 dot squeezed the name to `b…`; fixed by drawing the dot over the button's trailing 12 px padding in a `stack!` (zero row width, tooltip no longer inside the button); layout snapshot shows the path 233 wide as without the dot. Two-window check not run: a second client is read-only ("project busy"), not exercisable in cloud |
+| M4 round 2 | 2 | 65ab9061d | Code re-review CLEAN (1 MINOR: dot inset tight, taken). Visual FAIL on 1: V4 at 900 wide with the Review panel open, `src/b.rs`'s "1 comment" tag wrapped ("1 / cor") into the row's trailing padding under the dot. Fixed: `Tag::one_line` (Wrapping::None) on the row's kind, Binary, Not text and comment tags, the `+a −r` counts non-wrapping; the path (ellipsized) gives way first; `CHANGED_DOT_INSET` 2 to 4 (the dot stays over the padding, takes no width from the path). New gate `a_changed_rows_tags_stay_on_one_line_clear_of_the_dot` (session_area_fits; 900 and 1100 wide, drawer closed/open) asserts every part of the row's button ends inside its content box and none is taller than a one-line tag; it fails with the old row ("is 32 px tall: a tag wrapped"). Layout snapshot re-recorded: only the dot's x moves 2 px (4 lines). Round 3 visual due |
+| M4 round 3 | 3 | 922adf0475245b280975b60e13a63a287039c800:4e706b27ad22b43859cef339b985234f343f22eb | Code re-review CLEAN (1 MINOR: `Tag::one_line` doc says it affects only the natural-width label, taken). Visual FAIL at 900 only: once the path shrinks to 0 the tags and counts are wider than the row and paint into the trailing padding, under the dot. Round 2's gate missed it: it read layout nodes (which overflow whatever clips them) at widths where the path still had room. Fixed: the row's content is `container(line).width(Fill).clip(true)` inside the button, so overflow is cut at the content edge. Gate renamed `a_changed_rows_text_is_clipped_clear_of_the_dot`: reads each painted text's clip (`painted_text_settled_at`) at 640, 700, 800, 900, 1100 wide, drawer closed and open, and asserts it ends inside the content box; fails without the clip ("… is clipped at 434.8, past the content box's 422.8"), passes with it. Layout snapshot re-recorded: only the two review-marks states move (the row's content one level deeper). Round 4 visual due |
 
 ## Declined review findings
 
@@ -79,20 +84,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product decision the repo does not settle). With the user; A applied provisionally (D4). If the user picks B or C, revise FR-002, FR-005, Edge Cases > Toggles and the Clarifications bullet.
-
-- **Q1**: When a Committed or Uncommitted toggle hides part of a file's change, may the user still
-  mark that file reviewed? FR-005 judges a mark on the whole file's change, so a mark made while
-  only the committed part is shown would also cover uncommitted lines the user never saw — the
-  "claims a review that did not happen" that US2's rationale rules out.
-  - **A (Recommended)**: The mark control is unavailable, with a tooltip "Turn on Committed and
-    Uncommitted to see this file's whole change", for a file that has changes of a hidden kind;
-    files with no hidden part can be marked as usual. Evidence: spec.md US2 "Why this priority",
-    FR-005, Edge Cases > Toggles.
-  - **B**: Marking is always available; the mark covers the whole change, including the part the
-    toggle hides.
-  - **C**: Marking is always available, but the mark records only the shown part and covers the
-    file only while the same toggles are on (changes FR-005).
+None. (Clarify Q1 answered by the user on 2026-10-25: option A, see D4.)
 
 ## Follow-ups not done
 

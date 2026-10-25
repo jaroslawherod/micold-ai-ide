@@ -3365,11 +3365,19 @@ pub fn review_marks() -> StateUnderTest {
                 pr: None,
             }],
             sending: false,
-            marks: EntryMarks::from_vec(vec![ReviewMark {
-                scope: Scope::WorkingTree,
-                path: path("src/a.rs"),
-                change: id(1),
-            }]),
+            marks: EntryMarks::from_vec(vec![
+                ReviewMark {
+                    scope: Scope::WorkingTree,
+                    path: path("src/a.rs"),
+                    change: id(1),
+                },
+                // Marked on another change than its current id(3): ○ with the changed dot.
+                ReviewMark {
+                    scope: Scope::WorkingTree,
+                    path: path("src/c.rs"),
+                    change: id(9),
+                },
+            ]),
         },
     );
     under

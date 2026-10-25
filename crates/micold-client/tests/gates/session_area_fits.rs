@@ -532,6 +532,71 @@ fn the_progress_bar_has_its_width_beside_its_words() {
     }
 }
 
+/// Feature 1271 (M4 visual rounds 2 and 3, V4): a changed row's text is never painted in the
+/// button's trailing padding, where the changed dot is drawn. In a narrow list the tags and counts
+/// can be wider than the row once the path has shrunk to nothing; the row's content is clipped to
+/// the button's content box, so what does not fit is cut at that edge and the dot stays clear.
+/// Read from what is painted (each text's clip), not from layout nodes, which overflow either way.
+#[test]
+fn a_changed_rows_text_is_clipped_clear_of_the_dot() {
+    let covered = covered_states()
+        .iter()
+        .find(|s| s.name == "changes-review-marks")
+        .expect("the covered state changes-review-marks exists");
+    let mut checked = 0;
+    for drawer_open in [false, true] {
+        for width in [640.0, 700.0, 800.0, 900.0, 1100.0] {
+            let mut under = (covered.build)();
+            under.state.sidebar.width = SIDEBAR;
+            if drawer_open {
+                let _ = micold_client::features::changes::update(
+                    &mut under.state.changes,
+                    micold_client::features::changes::Msg::Drawer(
+                        micold_core::review::drawer::DrawerEvent::Toggle,
+                    ),
+                );
+            }
+            let mut renderer = lay::renderer();
+            let (painted, records) = lay::painted_text_settled_at(
+                lay::view_of(&under),
+                &mut renderer,
+                Size::new(width, 700.0),
+            );
+            // The dot is `<stack>/1/0`, 8 px square; the row's button is `<stack>/0`.
+            let dots: Vec<_> = records
+                .iter()
+                .filter(|r| {
+                    r.width == 8.0
+                        && r.height == 8.0
+                        && r.path.len() > 2
+                        && r.path[r.path.len() - 2..] == [1, 0]
+                })
+                .collect();
+            for dot in dots {
+                let mut button_path = dot.path[..dot.path.len() - 2].to_vec();
+                button_path.push(0);
+                let button = rect(at(&records, &button_path).expect("the row's button"));
+                let content_right = button.x + button.width - 12.0;
+                for text in painted.iter().filter(|t| {
+                    t.origin.y >= button.y
+                        && t.origin.y < button.y + button.height
+                        && t.origin.x >= button.x
+                        && t.origin.x < button.x + button.width
+                }) {
+                    checked += 1;
+                    assert!(
+                        text.clip.x + text.clip.width <= content_right + TOLERANCE,
+                        "{width} drawer {drawer_open}: {:?} is clipped at {}, past the content box's {content_right}",
+                        text.content,
+                        text.clip.x + text.clip.width
+                    );
+                }
+            }
+        }
+    }
+    assert!(checked > 0, "a changed row's text was read");
+}
+
 /// The scrolling members' keyed row (`SESSION_STRIP_TABS`), under the session area.
 const STRIP_TABS: &[usize] = &[1, 0, 0, 0, 0, 0, 0];
 

@@ -34,8 +34,9 @@ use crate::ui::material::{
     menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
     CardState, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay, ProgressBar,
     PullRequestIndicator, PullRequestRow, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable,
-    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip, TreeItem,
-    TreeView, TypeRole, Typeahead, TypeaheadRow, VirtualRows, REVIEW_BAR_COMMENTS as COMMENTS,
+    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip,
+    TooltipPosition, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark,
+    VirtualRows, REVIEW_BAR_COMMENTS as COMMENTS,
 };
 use micold_core::review::drawer::{DrawerEvent, DrawerTab, START_HINT};
 use micold_core::review::marks::{FileReview, ReviewState};
@@ -465,7 +466,7 @@ fn list_pane<'a>(
                 move |index| {
                     let file = &files[index];
                     let pending = counts.get(&file.path).copied().unwrap_or(0);
-                    let review = reviews.get(&file.path).map(|review| review.state);
+                    let review = reviews.get(&file.path).copied();
                     file_row(file, selected == Some(&file.path), pending, review, r)
                 },
                 r,
@@ -686,7 +687,7 @@ fn file_row(
     file: &ChangedFile,
     selected: bool,
     pending: usize,
-    review: Option<ReviewState>,
+    review: Option<FileReview>,
     r: Roles,
 ) -> Element<'static, Message> {
     let (kind, accent) = kind_tag(&file.kind, r);
@@ -696,8 +697,8 @@ fn file_row(
         ButtonVariant::Text
     };
     let mut line = row![].spacing(spacing::SM).align_y(Alignment::Center);
-    if let Some(state) = review {
-        line = line.push(review_glyph(state, r));
+    if let Some(review) = review {
+        line = line.push(review_glyph(review.state, r));
     }
     let mut line = line
         // One line, cut from the directory side where the row's tags leave too little room, so
@@ -710,11 +711,11 @@ fn file_row(
             )
             .path(),
         )
-        .push(Tag::new(kind, accent));
+        .push(Tag::new(kind, accent).one_line());
     match file.content {
         Content::Text => {}
-        Content::Binary => line = line.push(Tag::new("Binary", r.secondary)),
-        Content::NotUtf8 => line = line.push(Tag::new("Not text", r.secondary)),
+        Content::Binary => line = line.push(Tag::new("Binary", r.secondary).one_line()),
+        Content::NotUtf8 => line = line.push(Tag::new("Not text", r.secondary).one_line()),
     }
     line = line.push(
         Text::new(
@@ -722,23 +723,50 @@ fn file_row(
             TypeRole::Caption,
             r,
         )
-        .muted(),
+        .muted()
+        .wrapping(iced::widget::text::Wrapping::None),
     );
     if pending > 0 {
-        line = line.push(Tag::new(pending_label(pending), r.tertiary));
+        line = line.push(Tag::new(pending_label(pending), r.tertiary).one_line());
     }
-    container(
+    let changed = review.is_some_and(|review| review.changed_since);
+    let button = container(
         // The row's inset is the list's, not the variant's: selecting a row outlines it without
         // taking 24 px from its path (1271 visual re-pass V1).
-        Button::with_content(line, variant, r)
+        // The content is clipped to the button's content box: in a list too narrow for the path
+        // and the tags, the overflow is cut there and never reaches the padding the changed dot is
+        // drawn over (1271 round 3, V4).
+        Button::with_content(container(line).width(Length::Fill).clip(true), variant, r)
             .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
             .width(Length::Fill)
             .on_press(Message::Changes(Msg::FileSelected(file.path.clone()))),
     )
     .height(Length::Fixed(ROW_HEIGHT))
+    .width(Length::Fill);
+    if !changed {
+        return button.into();
+    }
+    // FR-003: the changed dot sits in the button's trailing padding, over it rather than in the
+    // row, so it takes no room from the name and the tags (1271 round 1, V2) and its tooltip is
+    // not a child of the button (V1).
+    let dot = container(
+        Tooltip::new(UnreadMark::new(r), CHANGED_SINCE_TOOLTIP, r).position(TooltipPosition::Left),
+    )
     .width(Length::Fill)
-    .into()
+    .height(Length::Fill)
+    .align_x(Alignment::End)
+    .align_y(Alignment::Center)
+    .padding([0.0, CHANGED_DOT_INSET]);
+    container(stack![button, dot])
+        .height(Length::Fixed(ROW_HEIGHT))
+        .width(Length::Fill)
+        .into()
 }
+
+/// The dot's distance from the row's trailing edge, inside the button's 12 px padding.
+const CHANGED_DOT_INSET: f32 = 4.0;
+/// The changed dot's tooltip (feature 1271, FR-003).
+pub const CHANGED_SINCE_TOOLTIP: &str = "Changed since you marked it reviewed";
 
 /// A row's review state: ○, ● or ✓ (feature 1271, research R9). Reviewed reads in the label's
 /// own role, the other two quieter, as badges.

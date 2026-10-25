@@ -305,9 +305,15 @@ file**. The file's row turns to ✓ and the control reads **Reviewed**, shown pr
 again to take the mark back. A file with draft comments shows ◉ until you mark it; marking it keeps
 its drafts and their count on the row.
 
-A mark is made on the file's change as it is now. When the file changes again (an edit, a new
-commit that alters it), it is no longer reviewed and shows ○ or ◉ until you mark it again;
-committing or staging it unaltered keeps it reviewed.
+A mark is made on the file's change as it is now. When the file's change differs from the marked one
+(an edit, a new commit that alters it), it is no longer reviewed: it drops back to ○ or ◉, with a
+dot at the end of its row (tooltip: "Changed since you marked it reviewed"), and no longer counts in
+*n*. Mark it again to review the new change. If you have not marked it again, undo the change, so
+the file's change is the one you marked, and the mark comes back without pressing anything. Other
+files changing, or new files appearing, leave a mark alone. Committing or staging a file unaltered
+keeps it reviewed in an entry that has a base (see [The base line](#the-base-line)); in an entry
+without one only uncommitted changes are listed, so a committed file leaves the list. A renamed file
+starts unreviewed: its change is the one under its new name.
 
 The view's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
 the list shows, so it follows the **Committed** and **Uncommitted** toggles, and *n* how many of
