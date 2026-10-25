@@ -128,7 +128,7 @@ crates/micold-core/src/
 ├── settings.rs                   # Settings::setup_commands (+ on-disk mirror), SetupCommandChange
 ├── store.rs                      # JsonFileStore::setup_dir/setup_record_path/setup_log_path/remove_setup
 └── protocol/messages.rs          # ProjectSetupSet, SetupRun, SetupStop, SetupOutputWatch/Unwatch, SetupChanged, SetupOutput
-    protocol/version.rs           # PROTOCOL_VERSION 69
+    protocol/version.rs           # PROTOCOL_VERSION 70
 
 crates/micold-daemon/src/
 ├── setup.rs                      # NEW SetupRuns: commands, runs, start/stop/finish/on_attach/forget/interrupt_all; run task
