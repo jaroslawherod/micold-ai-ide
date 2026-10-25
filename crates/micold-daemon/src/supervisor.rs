@@ -275,26 +275,30 @@ pub(crate) enum EnvEdit {
 /// daemon's own `MICOLD_DATA_DIR` (1286): it beats `XDG_DATA_HOME` in `micold_core::paths`, so a
 /// micold build run inside a session would otherwise write the live state directory.
 pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
-    let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
-    #[cfg(windows)]
-    edits.extend(prefer_process_path(target));
-    edits.extend(strip_inherited_terminal_identity(target));
-    edits.extend(container_git_edits_here());
-    edits
-}
-
-/// [`container_git_edits`] for this process: its own data directory variable, executable and
-/// state directory. Logs once per spawn which variables a container session was given (names
-/// only, never values).
-fn container_git_edits_here() -> Vec<EnvEdit> {
     let data_dir = std::env::var(micold_core::paths::DATA_DIR_ENV).ok();
     let exe = std::env::current_exe().ok();
     let identity_exists = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
         .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
         .is_file();
-    let edits = container_git_edits(data_dir.as_deref(), exe.as_deref(), identity_exists);
-    if !edits.is_empty() {
-        let names: Vec<String> = edits
+    env_hygiene_with(target, data_dir.as_deref(), exe.as_deref(), identity_exists)
+}
+
+/// [`env_hygiene`] with the process facts it reads passed in, so a test can drive the wiring.
+fn env_hygiene_with(
+    target: &impl EnvTarget,
+    data_dir: Option<&str>,
+    exe: Option<&std::path::Path>,
+    identity_exists: bool,
+) -> Vec<EnvEdit> {
+    let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
+    #[cfg(windows)]
+    edits.extend(prefer_process_path(target));
+    edits.extend(strip_inherited_terminal_identity(target));
+    // Overwriting an inherited GIT_CONFIG_* is intended. MICOLD_DATA_DIR is the container signal:
+    // only the client's `container_env` forwards it to the SSH-started daemon.
+    let git = container_git_edits(data_dir, exe, identity_exists);
+    if !git.is_empty() {
+        let names: Vec<String> = git
             .iter()
             .filter_map(|e| match e {
                 EnvEdit::Set(key, _) => Some(key.to_string_lossy().into_owned()),
@@ -303,6 +307,7 @@ fn container_git_edits_here() -> Vec<EnvEdit> {
             .collect();
         tracing::info!(variables = %names.join(","), "container session: git credential env applied");
     }
+    edits.extend(git);
     edits
 }
 
@@ -918,6 +923,17 @@ mod container_git_tests {
     fn outside_a_container_nothing_is_added() {
         assert!(container_git_edits(None, Some(Path::new(EXE)), true).is_empty());
         assert!(container_git_edits(Some("/x"), Some(Path::new(EXE)), true).is_empty());
+    }
+
+    #[test]
+    fn env_hygiene_wires_the_container_git_env_into_every_spawn() {
+        let edits = env_hygiene_with(&std::process::Command::new("true"), Some(DATA), Some(Path::new(EXE)), true);
+        let env = set(&edits);
+        assert_eq!(env["GIT_CONFIG_COUNT"], "5");
+        assert!(env["GIT_CONFIG_VALUE_1"].starts_with("!/"), "absolute helper");
+        assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
+        let outside = env_hygiene_with(&std::process::Command::new("true"), None, Some(Path::new(EXE)), true);
+        assert!(!set(&outside).contains_key("GIT_CONFIG_COUNT"));
     }
 
     #[test]
