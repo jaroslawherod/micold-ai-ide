@@ -355,6 +355,8 @@ its follow-up.
   included.
 - **SC-004**: In each whole-window state, the gap between the title bar's bottom edge and the
   body's top edge is 0 px, the title bar is 44 px and the status bar 28 px tall.
+  (The 44 px is the bar plus its divider, `app_bar::BOTTOM_EDGE`; the bar alone is
+  `app_bar::HEIGHT` 43. See the ledger's D4.)
 - **SC-005**: Moving any region's outer edge by 1 px in either whole-window state fails the layout
   snapshot, naming the state.
 - **SC-006**: The visual pass holds 4 screenshots (2 boards × 2 themes) and 20 verdicts (5 per
