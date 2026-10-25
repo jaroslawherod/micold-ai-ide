@@ -14,7 +14,7 @@ use micold_core::daemons::DaemonId;
 use micold_core::local_time::{LocalTime, UtcOffset};
 use micold_core::session::SessionLocation;
 use micold_core::settings::SetupCommandChange;
-use micold_core::setup::{RunId, SetupCommand, SetupRunSummary, SetupState};
+use micold_core::setup::{SetupCommand, SetupRunSummary, SetupState};
 
 /// Which location's run a summary is: the daemon that runs it, the project path in that daemon's
 /// catalog, and the worktree or the project folder.
@@ -23,11 +23,11 @@ pub type Key = (DaemonId, PathBuf, SessionLocation);
 /// What this client knows of setup runs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
-    /// The latest summary of each location that has a run record.
+    /// The latest summary of each location that has a run record. A failure notifies only when
+    /// the summary before it was the same run, still running (FR-017): the daemon tells every
+    /// connected client a run started, and replays its records on each attach, so a run first
+    /// seen already failed ended before this client was there to hear it (M5 review A-F3).
     pub summaries: BTreeMap<Key, SetupRunSummary>,
-    /// The failed runs this client has already posted a notification for (FR-017): one per run,
-    /// whether it learned of the failure live or in the catch-up after an attach.
-    pub notified: BTreeSet<(DaemonId, PathBuf, SessionLocation, RunId)>,
 }
 
 /// The names a notification shows for a location, as the app shows them elsewhere.
@@ -75,21 +75,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         } => {
             let key = (daemon, project, location);
             let Some(summary) = run else {
-                // The record went away with its worktree: so do the runs it notified for, so a
-                // worktree recreated under the same name starts from nothing.
-                state
-                    .notified
-                    .retain(|(d, p, l, _)| (d, p, l) != (&key.0, &key.1, &key.2));
+                // The record went away with its worktree.
                 state.summaries.remove(&key);
                 return Effect::None;
             };
             let id = summary.run.id();
             let notice = failure_notice(&names, summary.run.state());
-            state.summaries.insert(key.clone(), summary);
+            let was_running = state.summaries.insert(key, summary).is_some_and(|before| {
+                before.run.id() == id && matches!(before.run.state(), SetupState::Running)
+            });
             match notice {
-                Some(text) if state.notified.insert((key.0, key.1, key.2, id)) => {
-                    Effect::NotifyError(text)
-                }
+                Some(text) if was_running => Effect::NotifyError(text),
                 _ => Effect::None,
             }
         }
@@ -185,17 +181,20 @@ pub fn command_for<'a>(
     commands.get(&micold_core::jira::connection_key(project))
 }
 
-/// What a daemon that just connected is told (contract C3): one `(path, command)` per project it
-/// holds that has a command. `held` is every project path registered on it, as its catalog holds
-/// them and as the client just sent them in `ProjectAdd`; a path given twice is sent once.
+/// What a daemon that just connected is told (contract C3): one `(path, command)` per project its
+/// catalog holds, `None` for one without a command, so a command cleared while the daemon was
+/// away is cleared there too (M5 review A-F2). A path given twice is sent once.
 pub fn on_connect(
     commands: &BTreeMap<String, SetupCommand>,
     held: impl IntoIterator<Item = PathBuf>,
-) -> Vec<(PathBuf, SetupCommand)> {
+) -> Vec<(PathBuf, Option<SetupCommand>)> {
     held.into_iter()
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .filter_map(|path| command_for(commands, &path).map(|c| (path, c.clone())))
+        .map(|path| {
+            let command = command_for(commands, &path).cloned();
+            (path, command)
+        })
         .collect()
 }
 

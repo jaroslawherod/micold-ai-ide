@@ -3,7 +3,7 @@
 Open **Settings** with the gear button at the right of the title bar, or from the overflow menu
 (the three-dots button) beside it. While Settings is open the gear is drawn selected, and pressing
 it again does nothing. Settings fills the
-main area, with a rail down the left listing eight sections. The [title bar](appearance-theming.md#title-bar) and the
+main area, with a rail down the left listing seven sections. The [title bar](appearance-theming.md#title-bar) and the
 [status bar](appearance-theming.md#status-bar) stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the

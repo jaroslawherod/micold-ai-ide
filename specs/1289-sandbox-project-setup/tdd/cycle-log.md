@@ -316,3 +316,24 @@ output is copied from the session's logs.
   `changed` builds the message; the reducer's map is `summaries`; `ProjectDraft::follow` keys the
   map itself; fixture regenerated (`UPDATE_LAYOUT_SNAPSHOT=1`): only the Settings rail's states
   change, one row more -> both guards, layout_snapshot 127, features_setup 9, setup_tag_geometry 3
+
+## M5 cycle 3: review round 1 fixes (A-F1–A-F5, B-F1, V-F2)
+
+- red: A-F1 `opening_a_project_hands_the_daemon_its_setup_command_behind_the_add` (workspace.rs)
+  FAILED on the round-1 code: only `[("/repo/thing", ProjectAdd)]` sent, no `ProjectSetupSet`. A-F2
+  `a_connect_clears_the_setup_command_of_a_held_project_that_has_none` (main_tests.rs) FAILED: no
+  `ProjectSetupSet` sent for `/repo/demo`, which has no command. A-F2/A-F3 in features_setup.rs red
+  at compile (`on_connect` answered `SetupCommand`, not `Option`); A-F3
+  `a_failure_already_over_when_the_client_attaches_does_not_notify` asserts what the round-1 test
+  `a_failure_learned_in_the_catch_up_notifies_once` asserted the opposite of (that test removed).
+  A-F4 `the_command_sent_behind_an_add_is_read_from_the_store` added with the A-F1 helper; it was
+  not run red on its own (the round-1 folder open sent no command at all).
+- green: `shell::setup::add_project` sends `ProjectAdd` and, when it went, the stored command
+  (`in_force`) behind it; every add site uses it (`workspace.rs` folder open, `register_projects`
+  for connect and first bind, clone reply), so `send_commands` is gone (A-F1, A-F4).
+  `features::setup::on_connect` answers every held path with `Option<SetupCommand>`; the shell
+  sends `None` too (A-F2). The reducer drops `notified`: a `Failed` summary notifies only when it
+  replaces a `Running` one of the same `RunId` (A-F3; data-model, research R11, contract C3
+  updated). `setup_chip` moved above `build_default_item`'s doc (A-F5); guide says seven sections
+  (B-F1); placeholder *e.g. mise trust && mise install* (V-F2) -> features_setup 10, the three new
+  bin tests pass; full gate below

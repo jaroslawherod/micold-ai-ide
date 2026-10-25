@@ -118,19 +118,51 @@ fn a_failed_run_notifies_once_with_the_reason() {
 }
 
 #[test]
-fn a_failure_learned_in_the_catch_up_notifies_once() {
+fn a_run_running_at_attach_notifies_when_it_fails() {
+    let mut state = State::default();
+    // The catch-up after an attach shows the run still going; it then fails while connected.
+    update(
+        &mut state,
+        changed(SessionLocation::Default, Some(running(3))),
+    );
+    assert!(matches!(
+        update(&mut state, changed(SessionLocation::Default, Some(ended(3, failed(1))))),
+        Effect::NotifyError(text) if text == "Setup failed in app / Default: Exited with status 1."
+    ));
+}
+
+#[test]
+fn a_failure_already_over_when_the_client_attaches_does_not_notify() {
+    // M5 review A-F3: the daemon replays its persisted records on every attach, so a run that
+    // failed before this client saw it running is history, not news: each launch would otherwise
+    // post it again (SC-004 says exactly one).
     let mut state = State::default();
     let catch_up = || changed(SessionLocation::Default, Some(ended(3, failed(1))));
-    assert!(
-        matches!(update(&mut state, catch_up()), Effect::NotifyError(text)
-        if text == "Setup failed in app / Default: Exited with status 1.")
-    );
     assert_eq!(update(&mut state, catch_up()), Effect::None);
+    assert_eq!(update(&mut state, catch_up()), Effect::None);
+    assert_eq!(
+        state.summary(HOST, &PathBuf::from("/src/app"), &SessionLocation::Default),
+        Some(&ended(3, failed(1))),
+        "the row still shows it"
+    );
+    // A different run seen failed without being seen running is history too.
+    update(
+        &mut state,
+        changed(SessionLocation::Default, Some(running(4))),
+    );
+    assert_eq!(
+        update(
+            &mut state,
+            changed(SessionLocation::Default, Some(ended(5, failed(1))))
+        ),
+        Effect::None
+    );
 }
 
 #[test]
 fn a_start_failure_names_its_reason() {
     let mut state = State::default();
+    update(&mut state, changed(wt("feat-a"), Some(running(4))));
     let effect = update(
         &mut state,
         changed(
@@ -169,11 +201,13 @@ fn stopped_interrupted_and_succeeded_runs_notify_nothing() {
 #[test]
 fn a_worktree_recreated_under_the_same_name_notifies_again() {
     let mut state = State::default();
+    update(&mut state, changed(wt("feat-a"), Some(running(5))));
     assert!(matches!(
         update(&mut state, changed(wt("feat-a"), Some(ended(5, failed(2))))),
         Effect::NotifyError(_)
     ));
     update(&mut state, changed(wt("feat-a"), None));
+    update(&mut state, changed(wt("feat-a"), Some(running(9))));
     assert!(
         matches!(
             update(&mut state, changed(wt("feat-a"), Some(ended(9, failed(2))))),
@@ -240,7 +274,7 @@ fn commands() -> BTreeMap<String, SetupCommand> {
 }
 
 #[test]
-fn on_connect_each_held_project_with_a_command_is_sent_once() {
+fn on_connect_each_held_project_is_sent_its_command_or_none_once() {
     let held = [
         PathBuf::from("/src/app"),
         PathBuf::from("/src/other"),
@@ -248,12 +282,16 @@ fn on_connect_each_held_project_with_a_command_is_sent_once() {
     ];
     assert_eq!(
         on_connect(&commands(), held),
-        vec![(PathBuf::from("/src/app"), command("mise install"))],
-        "a project without a command is not sent; one held twice is sent once"
+        vec![
+            (PathBuf::from("/src/app"), Some(command("mise install"))),
+            // M5 review A-F2: a command cleared while the daemon was away is cleared there too.
+            (PathBuf::from("/src/other"), None),
+        ],
+        "every held project is told its command, or that it has none; one held twice once"
     );
     assert_eq!(
         on_connect(&BTreeMap::new(), [PathBuf::from("/src/app")]),
-        vec![]
+        vec![(PathBuf::from("/src/app"), None)]
     );
 }
 

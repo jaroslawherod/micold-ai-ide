@@ -87,7 +87,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `interrupt_all` sets `stopping`/`stop_requested`, `spawned` ends a shell of an ended run, `start` refuses while stopping; F2 `Persist::seq` + `SetupStore::in_order` drop stale writes (interrupt rewrites the log whole); F3 record and log written independently; F4 `DeleteHold` refuses starts during a delete, `forget` ends a live tree; cycle log M4 cycle 3 |
 | M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CLEAN (Verify all pass); MINORs: B-F1 fixed with A-F2; B-F2 compaction red logged (cycle log M4 cycle 3) |
 | M4 A | 2 (sonnet, scoped) | 72c712a70e67a2419c9c2df0782306822ca21f05:c311173c2197557a5791e3e920f1b279c7268633 | CLEAN, no findings |
-| M5 A, M5 B | 1 (pending) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | dispatched by the orchestrator |
+| M5 A | 1 (high) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | CHANGES: 2 MAJOR, 3 MINOR — all fixed: F1 `shell::setup::add_project` (ProjectAdd + stored command) at every add site; F2 connect sends `command: None` for held projects without one; F3 a failure notifies only when it replaces the same run seen `Running` (`notified` dropped); F4 `add_project` reads `in_force`, `send_commands` gone; F5 `setup_chip` moved above `build_default_item`'s doc; cycle log M5 cycle 3 |
+| M5 B | 1 (sonnet) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | CLEAN; Verify green (features_setup 9, features_settings 155, setup_tag_geometry 3, layout_snapshot 127, feature_write_isolation 8, feature_registration_cost 7); B-F1 fixed, prose only ("seven sections") |
+| M5 visual pass | 1 (U1, U2) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | PASS; V-F1 left: the tag's tooltip shows with the row's, as the leading status chip's does (`status_chip.rs:96` inside a `row_tooltip` row), the existing pattern; V-F2 fixed (placeholder *e.g. mise trust && mise install*); evidence in `visual-pass/` |
 
 ## Declined review findings
 
@@ -96,6 +98,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M5 review round 1 fixed (2026-10-25): A-F1–A-F5, B-F1, V-F2 (cycle log M5 cycle 3); V-F1 kept as the existing pattern; full gate (scripts/gate.sh) green. Next: review A round 2 (scoped, sonnet) on the new snapshot; then rebase onto main, PR.
 M5 ready for review (2026-10-25): pushed 6cf38804d; snapshot 476492d0:6cf38804; full `cargo test -p micold-client -p micold-material` green after cycle 2 (guards, layout fixture). Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings, then full gate (`scripts/gate.sh`), rebase on origin/main, PR.
 M5 implemented (2026-10-25) on 8a49a7780 (#1407 merged by rebase): T040–T049 ticked; features_setup 9, features_settings 155, setup_tag_geometry 3, settings_sections 24 passed; clippy client+material clean (cycle log § M5 cycle 1). Next: full client suite, push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
 M4 PR (2026-10-25): rebased onto main 8eceb3ad7 (1 commit, sandbox image pin; no conflict, protocol stays 70); full gate (scripts/gate.sh) green at ed8ecde5b on the 2nd run (1st: flaky `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, 5/5 green alone, untouched by M4); pushed; PR #1407 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M5.
