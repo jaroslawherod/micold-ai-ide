@@ -13,9 +13,11 @@
 //!
 //! Each location's last run is kept on disk (M4, FR-016, FR-018): its record, its output log and
 //! the daemon-wide run id counter, through [`SetupStore`]. The operations say what to write; the
-//! callers write it after the lock is released.
+//! callers write it after the lock is released. Each write is numbered under the lock, and the
+//! store drops one older than the last it wrote for that location (M4 review A-F2), so a late
+//! write never undoes a newer one.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -30,7 +32,7 @@ use micold_core::setup::shell::{bash_on_path, shell_line, ShellPlatform};
 use micold_core::setup::{
     Failure, RunId, SetupCommand, SetupRun, SetupRunSummary, SetupStart, SetupState,
 };
-use micold_core::store::{SetupLog, StoredSetup};
+use micold_core::store::{JsonFileStore, SetupLog, StoredSetup};
 use tokio::sync::watch;
 
 use crate::state::{ClientId, DaemonState};
@@ -64,6 +66,9 @@ pub enum LogWrite {
 /// What one location needs written: its record, its log, or both.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Persist {
+    /// Issued under the setup lock, in the order the changes were made: [`SetupStore`] drops a
+    /// write older than the last one it wrote for the location (M4 review A-F2).
+    pub seq: u64,
     pub record: Option<SetupRun>,
     pub log: Option<LogWrite>,
 }
@@ -90,6 +95,12 @@ pub struct SetupRuns {
     watchers: HashMap<Key, BTreeMap<ClientId, u64>>,
     /// The next id to give out; ids are unique across the daemon, never per location.
     next_id: u64,
+    /// The last [`Persist::seq`] given out.
+    issued: u64,
+    /// The daemon is stopping: no run starts (M4 review A-F1).
+    stopping: bool,
+    /// Locations a delete holds: no run starts there until the delete ends (M4 review A-F4).
+    deleting: HashSet<Key>,
 }
 
 impl Default for SetupRuns {
@@ -99,6 +110,9 @@ impl Default for SetupRuns {
             runs: HashMap::new(),
             watchers: HashMap::new(),
             next_id: 1,
+            issued: 0,
+            stopping: false,
+            deleting: HashSet::new(),
         }
     }
 }
@@ -149,16 +163,27 @@ impl Entry {
             return None;
         }
         if self.output.next_index() - self.log_first > LOG_COMPACT_AT {
-            self.log_first = self.output.first_index();
-            return Some(LogWrite::Replace(SetupLog {
-                first_line: self.log_first,
-                lines: self.output.since(0).1,
-            }));
+            return Some(self.whole_log());
         }
         Some(LogWrite::Append(
             lines.into_iter().map(|(_, line)| line).collect(),
         ))
     }
+
+    /// The log cut back to the buffer: what it holds, numbered on from the lines dropped.
+    fn whole_log(&mut self) -> LogWrite {
+        self.log_first = self.output.first_index();
+        LogWrite::Replace(SetupLog {
+            first_line: self.log_first,
+            lines: self.output.since(0).1,
+        })
+    }
+}
+
+/// The next [`Persist::seq`].
+fn issue(issued: &mut u64) -> u64 {
+    *issued += 1;
+    *issued
 }
 
 /// A run [`SetupRuns::start`] recorded, for the caller to persist and spawn.
@@ -167,8 +192,8 @@ pub struct Begun {
     pub command: SetupCommand,
     /// The next id after this one, for the counter file.
     pub next_id: u64,
-    /// The record to write.
-    pub record: SetupRun,
+    /// The record to write, and the log emptied.
+    pub persist: Persist,
     /// Set by the run task once its end is written.
     pub done: watch::Sender<bool>,
 }
@@ -178,7 +203,8 @@ pub struct Begun {
 pub enum NotStarted {
     /// The project has no setup command.
     NotConfigured,
-    /// A run is in progress there (FR-023a).
+    /// A run is in progress there (FR-023a), the worktree is being deleted, or the daemon is
+    /// stopping: each a reason to try later.
     Busy,
 }
 
@@ -233,7 +259,10 @@ impl SetupRuns {
             .cloned()
             .ok_or(NotStarted::NotConfigured)?;
         let key = (project.to_path_buf(), location.clone());
-        if self.runs.get(&key).is_some_and(Entry::is_running) {
+        if self.stopping
+            || self.deleting.contains(&key)
+            || self.runs.get(&key).is_some_and(Entry::is_running)
+        {
             return Err(NotStarted::Busy);
         }
         let id = RunId(self.next_id);
@@ -247,7 +276,11 @@ impl SetupRuns {
             log_first: 0,
             done: Some(done_rx),
         };
-        let record = entry.record.clone();
+        let persist = Persist {
+            seq: issue(&mut self.issued),
+            record: Some(entry.record.clone()),
+            log: Some(LogWrite::Replace(SetupLog::default())),
+        };
         out.push((To::All, changed(&key, Some(entry.summary()))));
         self.runs.insert(key.clone(), entry);
         // The new run's output replaces the last one's: each watcher is owed it from the start.
@@ -258,18 +291,18 @@ impl SetupRuns {
             id,
             command,
             next_id: self.next_id,
-            record,
+            persist,
             done,
         })
     }
 
-    /// The run's shell is spawned. `true` when **Stop setup** came first, so the caller ends it
-    /// at once.
+    /// The run's shell is spawned. `true` when **Stop setup** came first, or the run has already
+    /// ended (an unwind recorded it interrupted: M4 review A-F1), so the caller ends it at once.
     pub fn spawned(&mut self, key: &Key, id: RunId, terminator: Terminator) -> bool {
         match self.current(key, id) {
             Some(entry) => {
                 entry.terminator = Some(terminator);
-                entry.stop_requested
+                !entry.is_running() || entry.stop_requested
             }
             None => true,
         }
@@ -277,10 +310,18 @@ impl SetupRuns {
 
     /// Keep what the run printed, and say what its log needs. Nothing once the run's entry is
     /// gone, replaced or ended, so a late line never re-creates a deleted log.
-    pub fn push(&mut self, key: &Key, id: RunId, stream: Stream, bytes: &[u8]) -> Option<LogWrite> {
-        let entry = self.current(key, id).filter(|e| e.is_running())?;
+    pub fn push(&mut self, key: &Key, id: RunId, stream: Stream, bytes: &[u8]) -> Option<Persist> {
+        let entry = self
+            .runs
+            .get_mut(key)
+            .filter(|e| e.record.id() == id && e.is_running())?;
         let lines = entry.output.push(stream, bytes);
-        entry.log_write(lines)
+        let log = entry.log_write(lines)?;
+        Some(Persist {
+            seq: issue(&mut self.issued),
+            record: None,
+            log: Some(log),
+        })
     }
 
     /// Send each watcher of `key` the lines it has not had yet.
@@ -342,6 +383,7 @@ impl SetupRuns {
             out.push((To::All, changed(key, Some(entry.summary()))));
         }
         Some(Persist {
+            seq: issue(&mut self.issued),
             record: Some(record),
             log,
         })
@@ -361,31 +403,41 @@ impl SetupRuns {
         true
     }
 
-    /// **Stop setup** for a delete (FR-024): [`Self::stop`], and the run task's end to await.
-    /// `None` when nothing runs there.
-    pub fn stop_waiter(
+    /// A delete of `location` begins (FR-024): no run starts there until [`Self::end_delete`]
+    /// (M4 review A-F4), and the one running is stopped. Returns its task's end to await; `None`
+    /// when nothing runs there.
+    pub fn begin_delete(
         &mut self,
         project: &Path,
         location: &SessionLocation,
     ) -> Option<watch::Receiver<bool>> {
+        let key = (project.to_path_buf(), location.clone());
+        self.deleting.insert(key.clone());
         if !self.stop(project, location) {
             return None;
         }
-        self.runs
-            .get(&(project.to_path_buf(), location.clone()))
-            .and_then(|entry| entry.done.clone())
+        self.runs.get(&key).and_then(|entry| entry.done.clone())
+    }
+
+    /// The delete [`Self::begin_delete`] began has ended, whether or not it removed anything.
+    pub fn end_delete(&mut self, project: &Path, location: &SessionLocation) {
+        self.deleting
+            .remove(&(project.to_path_buf(), location.clone()));
     }
 
     /// The daemon is stopping (FR-019): end every live run's tree and record it `Interrupted`,
     /// with the reason line last. Returns what each location needs written. A run task's own end,
-    /// coming later, is dropped.
+    /// coming later, is dropped; a shell spawned later is ended at once, and no run starts after
+    /// this (M4 review A-F1).
     pub fn interrupt_all(&mut self, now: u64, out: &mut Outgoing) -> Vec<(Key, Persist)> {
+        self.stopping = true;
         let mut writes = Vec::new();
         for (key, entry) in self.runs.iter_mut().filter(|(_, e)| e.is_running()) {
+            entry.stop_requested = true;
             if let Some(terminator) = entry.terminator.take() {
                 terminator.terminate();
             }
-            let Some(persist) = interrupt(entry, now) else {
+            let Some(persist) = interrupt(entry, now, issue(&mut self.issued)) else {
                 continue;
             };
             out.push((To::All, changed(key, Some(entry.summary()))));
@@ -394,13 +446,26 @@ impl SetupRuns {
         writes
     }
 
-    /// The worktree at `location` was deleted: forget its run and tell every client
-    /// (`SetupChanged { run: None }`). The caller removes its files.
-    pub fn forget(&mut self, project: &Path, location: &SessionLocation, out: &mut Outgoing) {
+    /// The worktree at `location` was deleted: forget its run, ending its tree if it still runs
+    /// (M4 review A-F4), and tell every client (`SetupChanged { run: None }`). The caller removes
+    /// its files, as the write numbered by the returned [`Persist::seq`].
+    pub fn forget(
+        &mut self,
+        project: &Path,
+        location: &SessionLocation,
+        out: &mut Outgoing,
+    ) -> u64 {
         let key = (project.to_path_buf(), location.clone());
-        if self.runs.remove(&key).is_some() {
+        if let Some(entry) = self.runs.remove(&key) {
+            if let Some(terminator) = entry
+                .terminator
+                .filter(|_| !entry.record.state().is_ended())
+            {
+                terminator.terminate();
+            }
             out.push((To::All, changed(&key, None)));
         }
+        issue(&mut self.issued)
     }
 
     /// The project was removed: end its runs (not waiting) and forget them and its command.
@@ -459,7 +524,7 @@ impl SetupRuns {
                 done: None,
             };
             if entry.is_running() {
-                if let Some(persist) = interrupt(&mut entry, now) {
+                if let Some(persist) = interrupt(&mut entry, now, issue(&mut runs.issued)) {
                     writes.push((key.clone(), persist));
                 }
             }
@@ -515,15 +580,18 @@ impl SetupRuns {
     }
 }
 
-/// Record `entry`'s run `Interrupted` (FR-019) and end its output with the reason line.
-fn interrupt(entry: &mut Entry, now: u64) -> Option<Persist> {
+/// Record `entry`'s run `Interrupted` (FR-019) and end its output with the reason line, as write
+/// `seq`. The log is rewritten whole, not appended to: a line write of the run issued before this
+/// one and landing after it is dropped (M4 review A-F2), and this write holds its lines.
+fn interrupt(entry: &mut Entry, now: u64, seq: u64) -> Option<Persist> {
     let state = SetupState::Interrupted;
-    let lines = entry.end_output(&state);
-    let log = entry.log_write(lines);
+    entry.end_output(&state);
+    let log = entry.whole_log();
     entry.record = entry.record.clone().finish(state, now).ok()?;
     Some(Persist {
+        seq,
         record: Some(entry.record.clone()),
-        log,
+        log: Some(log),
     })
 }
 
@@ -594,13 +662,7 @@ pub fn start_in(
             if let Some(store) = state.setup_store() {
                 // The counter before the record (data-model §RunId); the last run's log is replaced.
                 store.write_counter(begun.next_id);
-                store.write(
-                    &key,
-                    &Persist {
-                        record: Some(begun.record),
-                        log: Some(LogWrite::Replace(SetupLog::default())),
-                    },
-                );
+                store.write(&key, &begun.persist);
             }
             let id = begun.id;
             spawn_run(state, key, dir, id, begun.command, begun.done);
@@ -610,12 +672,36 @@ pub fn start_in(
     }
 }
 
-/// Stop the run at `location`, if one runs, and wait for its task to write its end, at most
-/// [`micold_core::process::RUN_OVERRUN`] (the kill-and-drain bound). At once when nothing runs.
-/// A delete calls it before removing the worktree (FR-024).
-pub async fn stop_and_wait(state: &Arc<DaemonState>, project: &Path, location: &SessionLocation) {
-    let Some(mut done) = state.setup(|runs, _| runs.stop_waiter(project, location)) else {
-        return;
+/// A delete's hold on a location: no run starts there while it is held (M4 review A-F4).
+#[must_use = "dropping the hold lets a run start there again"]
+pub struct DeleteHold {
+    state: Arc<DaemonState>,
+    key: Key,
+}
+
+impl Drop for DeleteHold {
+    fn drop(&mut self) {
+        let (project, location) = &self.key;
+        self.state
+            .setup(|runs, _| runs.end_delete(project, location));
+    }
+}
+
+/// Hold `location` for a delete, stop the run there, if one runs, and wait for its task to write
+/// its end, at most [`micold_core::process::RUN_OVERRUN`] (the kill-and-drain bound). At once when
+/// nothing runs. A delete calls it before removing the worktree (FR-024) and keeps the hold until
+/// it has forgotten the run, or failed.
+pub async fn stop_and_wait(
+    state: &Arc<DaemonState>,
+    project: &Path,
+    location: &SessionLocation,
+) -> DeleteHold {
+    let hold = DeleteHold {
+        state: Arc::clone(state),
+        key: (project.to_path_buf(), location.clone()),
+    };
+    let Some(mut done) = state.setup(|runs, _| runs.begin_delete(project, location)) else {
+        return hold;
     };
     let ended = tokio::time::timeout(
         micold_core::process::RUN_OVERRUN,
@@ -629,13 +715,14 @@ pub async fn stop_and_wait(state: &Arc<DaemonState>, project: &Path, location: &
             "a stopped setup run had not ended in time; it is forgotten anyway"
         );
     }
+    hold
 }
 
 /// Forget the run at `location` and remove its files: the worktree was deleted (FR-016).
 pub fn forget(state: &DaemonState, project: &Path, location: &SessionLocation) {
-    state.setup(|runs, out| runs.forget(project, location, out));
+    let seq = state.setup(|runs, out| runs.forget(project, location, out));
     if let Some(store) = state.setup_store() {
-        store.remove(project, location);
+        store.remove(project, location, seq);
     }
 }
 
@@ -657,6 +744,9 @@ pub struct SetupStore {
     /// The highest counter value written; held across the write, so two starts racing to the file
     /// never lower it.
     counter: Mutex<u64>,
+    /// Each location's last [`Persist::seq`] written (or removed); held across the write, so a
+    /// write issued earlier and landing later is dropped (M4 review A-F2).
+    written: Mutex<HashMap<Key, u64>>,
 }
 
 impl SetupStore {
@@ -665,6 +755,7 @@ impl SetupStore {
         Self {
             files,
             counter: Mutex::new(0),
+            written: Mutex::new(HashMap::new()),
         }
     }
 
@@ -704,39 +795,63 @@ impl SetupStore {
         }
     }
 
-    /// Write what `key` needs. A failure is logged: the run goes on, and memory keeps it.
-    fn write(&self, (project, location): &Key, persist: &Persist) {
-        let files = self.files.get();
-        let written = persist
-            .record
-            .as_ref()
-            .map_or(Ok(()), |record| {
-                files.save_setup_record(project, location, record)
-            })
-            .and_then(|()| match &persist.log {
+    /// Run `write` as `key`'s write `seq`, unless a later one was already written there.
+    fn in_order(&self, key: &Key, seq: u64, write: impl FnOnce(&JsonFileStore)) {
+        let mut written = self.written.lock().unwrap_or_else(|e| e.into_inner());
+        if written.get(key).is_some_and(|&last| last >= seq) {
+            tracing::debug!(
+                location = place(&key.1),
+                seq,
+                "a stale setup write was dropped"
+            );
+            return;
+        }
+        write(self.files.get());
+        written.insert(key.clone(), seq);
+    }
+
+    /// Write what `key` needs: the record and the log each, the one whatever became of the other
+    /// (M4 review A-F3). A failure is logged: the run goes on, and memory keeps it.
+    fn write(&self, key: &Key, persist: &Persist) {
+        let (project, location) = key;
+        let warn = |what: &str, err: std::io::Error| {
+            tracing::warn!(
+                project = %project.display(),
+                location = place(location),
+                %err,
+                "a setup {what} was not written"
+            );
+        };
+        self.in_order(key, persist.seq, |files| {
+            if let Some(record) = &persist.record {
+                if let Err(err) = files.save_setup_record(project, location, record) {
+                    warn("record", err);
+                }
+            }
+            let log = match &persist.log {
                 None => Ok(()),
                 Some(LogWrite::Append(lines)) => files.append_setup_log(project, location, lines),
                 Some(LogWrite::Replace(log)) => files.write_setup_log(project, location, log),
-            });
-        if let Err(err) = written {
-            tracing::warn!(
-                project = %project.display(),
-                location = place(location),
-                %err,
-                "a setup record or log was not written"
-            );
-        }
+            };
+            if let Err(err) = log {
+                warn("log", err);
+            }
+        });
     }
 
-    fn remove(&self, project: &Path, location: &SessionLocation) {
-        if let Err(err) = self.files.get().remove_setup(project, Some(location)) {
-            tracing::warn!(
-                project = %project.display(),
-                location = place(location),
-                %err,
-                "a deleted worktree's setup files were not removed"
-            );
-        }
+    /// Remove `location`'s files, as its write `seq`.
+    fn remove(&self, project: &Path, location: &SessionLocation, seq: u64) {
+        let key = (project.to_path_buf(), location.clone());
+        self.in_order(&key, seq, |files| {
+            if let Err(err) = files.remove_setup(project, Some(location)) {
+                tracing::warn!(
+                    project = %project.display(),
+                    location = place(location),
+                    %err,
+                    "a deleted worktree's setup files were not removed"
+                );
+            }
+        });
     }
 }
 
@@ -813,15 +928,9 @@ fn run_blocking(
         terminator.terminate();
     }
     Ended::Exited(child.run(|stream, bytes| {
-        let log = state.setup(|runs, _| runs.push(key, id, stream, bytes));
-        if let (Some(log), Some(store)) = (log, state.setup_store()) {
-            store.write(
-                key,
-                &Persist {
-                    record: None,
-                    log: Some(log),
-                },
-            );
+        let persist = state.setup(|runs, _| runs.push(key, id, stream, bytes));
+        if let (Some(persist), Some(store)) = (persist, state.setup_store()) {
+            store.write(key, &persist);
         }
     }))
 }
@@ -992,6 +1101,151 @@ mod tests {
         check(&out, 8);
     }
 
+    /// A shell of `secs` seconds, for a test that needs a live tree.
+    #[cfg(unix)]
+    fn sleeper(secs: u32) -> StreamingChild {
+        let mut cmd = Command::new("sleep");
+        cmd.arg(secs.to_string());
+        StreamingChild::spawn(cmd).unwrap()
+    }
+
+    /// The setup files of a store in `dir`.
+    fn store_in(dir: &Path) -> SetupStore {
+        let catalog = crate::catalog::Catalog::load(
+            Box::new(micold_core::store::JsonFileStore::at(
+                dir.join("projects.json"),
+            )),
+            Box::new(micold_core::settings::JsonFileSettingsStore::at(
+                dir.join("settings.json"),
+            )),
+        );
+        SetupStore::new(catalog.setup_files().expect("a file store has setup files"))
+    }
+
+    /// M4 review A-F1: a shell spawned after the unwind recorded its run `Interrupted` is ended at
+    /// once, and no run starts once the daemon is stopping.
+    #[cfg(unix)]
+    #[test]
+    fn a_shell_spawned_after_an_unwind_is_ended_and_nothing_starts_after_it() {
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let id = runs
+            .start(Path::new("/p"), &key("a").1, 1, &mut out)
+            .unwrap()
+            .id;
+        runs.interrupt_all(2, &mut out);
+        let child = sleeper(10);
+        assert!(
+            runs.spawned(&key("a"), id, child.terminator()),
+            "the caller is told to end it"
+        );
+        assert_eq!(
+            runs.start(Path::new("/p"), &key("b").1, 3, &mut out).err(),
+            Some(NotStarted::Busy)
+        );
+    }
+
+    /// M4 review A-F4: forgetting a location whose run is still live ends its tree, so nothing is
+    /// left running that **Stop setup** can no longer reach.
+    #[cfg(unix)]
+    #[test]
+    fn forgetting_a_live_run_ends_its_tree() {
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let id = runs
+            .start(Path::new("/p"), &key("a").1, 1, &mut out)
+            .unwrap()
+            .id;
+        let child = sleeper(10);
+        assert!(!runs.spawned(&key("a"), id, child.terminator()));
+        runs.forget(Path::new("/p"), &key("a").1, &mut out);
+        assert!(
+            matches!(child.run(|_, _| {}), ExitKind::Signal(_)),
+            "the forgotten run's tree is ended"
+        );
+    }
+
+    /// M4 review A-F3: a record that cannot be written does not keep a new run's log from being
+    /// replaced, so its lines never land after the last run's.
+    #[test]
+    fn a_record_write_that_fails_still_replaces_the_log() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let (project, location) = key("a");
+        let files = store.files.get();
+        files
+            .append_setup_log(&project, &location, &["old".into()])
+            .unwrap();
+        std::fs::create_dir_all(files.setup_record_path(&project, &location)).unwrap();
+        let mut runs = runs_with("true");
+        let begun = runs.start(&project, &location, 1, &mut Vec::new()).unwrap();
+        store.write(&key("a"), &begun.persist);
+        let log = std::fs::read_to_string(files.setup_log_path(&project, &location)).unwrap();
+        assert!(
+            !log.lines().any(|line| line == "old"),
+            "the last run's log is replaced: {log:?}"
+        );
+    }
+
+    /// M4 review A-F4: while a delete holds a location no run starts there, whatever the gate.
+    #[test]
+    fn a_location_being_deleted_starts_no_run() {
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let (project, location) = key("a");
+        assert!(runs.begin_delete(&project, &location).is_none());
+        assert_eq!(
+            runs.start(&project, &location, 1, &mut out).err(),
+            Some(NotStarted::Busy)
+        );
+        runs.end_delete(&project, &location);
+        assert!(runs.start(&project, &location, 2, &mut out).is_ok());
+    }
+
+    /// M4 review A-F2: writes reach the store in the order they were issued under the lock. Run
+    /// N's end landing after run N+1's start is dropped, and so is a line write landing after the
+    /// delete removed the files.
+    #[test]
+    fn a_write_issued_before_the_last_one_written_is_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(dir.path());
+        let (project, location) = key("a");
+        let mut runs = runs_with("true");
+        let mut out = Vec::new();
+        let first = runs.start(&project, &location, 1, &mut out).unwrap();
+        store.write(&key("a"), &first.persist);
+        let ended = runs
+            .finish(
+                &key("a"),
+                first.id,
+                Ended::Exited(ExitKind::Code(0)),
+                2,
+                &mut out,
+            )
+            .unwrap();
+        let second = runs.start(&project, &location, 3, &mut out).unwrap();
+        store.write(&key("a"), &second.persist);
+        store.write(&key("a"), &ended);
+        let files = store.files.get();
+        let stored = files.load_setup(&project);
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].run.id(), second.id, "run N+1's record stands");
+        assert!(
+            stored[0].log.lines.is_empty(),
+            "and its log: {:?}",
+            stored[0].log
+        );
+
+        let late = runs
+            .push(&key("a"), second.id, Stream::Stdout, b"late\n")
+            .unwrap();
+        let removed = runs.forget(&project, &location, &mut out);
+        store.remove(&project, &location, removed);
+        store.write(&key("a"), &late);
+        assert!(files.load_setup(&project).is_empty());
+        assert!(!files.setup_log_path(&project, &location).exists());
+    }
+
     /// FR-021: the log takes each line as it is kept, and once past [`LOG_COMPACT_AT`] lines it
     /// is replaced by the buffer's last [`KEEP_LINES`], numbered on from the lines dropped.
     #[test]
@@ -1002,24 +1256,22 @@ mod tests {
             .start(Path::new("/p"), &key("a").1, 1, &mut out)
             .unwrap()
             .id;
-        assert_eq!(
-            runs.push(&key("a"), id, Stream::Stdout, b"x\n"),
-            Some(LogWrite::Append(vec!["x".into()]))
-        );
-        assert_eq!(runs.push(&key("a"), id, Stream::Stdout, b"partial"), None);
+        let mut push = |bytes: &[u8]| {
+            runs.push(&key("a"), id, Stream::Stdout, bytes)
+                .and_then(|p| p.log)
+        };
+        assert_eq!(push(b"x\n"), Some(LogWrite::Append(vec!["x".into()])));
+        assert_eq!(push(b"partial"), None);
         let mut last = None;
         for _ in 1..=LOG_COMPACT_AT {
-            last = runs.push(&key("a"), id, Stream::Stdout, b"\n");
+            last = push(b"\n");
         }
         let Some(LogWrite::Replace(log)) = last else {
             panic!("the log is cut back: {last:?}");
         };
         assert_eq!(log.lines.len(), KEEP_LINES);
         assert_eq!(log.first_line, LOG_COMPACT_AT + 1 - KEEP_LINES as u64);
-        assert!(matches!(
-            runs.push(&key("a"), id, Stream::Stdout, b"y\n"),
-            Some(LogWrite::Append(_))
-        ));
+        assert!(matches!(push(b"y\n"), Some(LogWrite::Append(_))));
     }
 
     /// FR-019: an unwind records a live run `Interrupted` with the reason line last; the run
@@ -1041,9 +1293,11 @@ mod tests {
         );
         assert_eq!(
             persist.log,
-            Some(LogWrite::Append(vec![
-                "Interrupted: the daemon stopped.".into()
-            ]))
+            Some(LogWrite::Replace(SetupLog {
+                first_line: 0,
+                lines: vec!["Interrupted: the daemon stopped.".into()],
+            })),
+            "the log is rewritten whole, so a line write dropped as stale loses nothing"
         );
         out.clear();
         assert_eq!(runs.push(&key("a"), id, Stream::Stdout, b"late\n"), None);

@@ -260,3 +260,27 @@ output is copied from the session's logs.
 - after green, unit tests `a_log_past_its_bound_is_cut_back_to_the_buffer` and
   `after_an_interrupt_the_runs_own_end_is_dropped` pin the compaction and the dropped late end
   (they passed on first run)
+
+## M4 cycle 3: review round 1 fixes (A-F1–A-F4, B-F1, B-F2)
+
+- B-F2 red for the compaction: with `log_write`'s `LOG_COMPACT_AT` branch broken (`if false && …`),
+  `a_log_past_its_bound_is_cut_back_to_the_buffer` FAILED at `setup.rs:1102` *the log is cut
+  back*; branch restored, it passes
+- tests (`daemon/src/setup.rs` unit): A-F1 `a_shell_spawned_after_an_unwind_is_ended_and_nothing_starts_after_it`;
+  A-F4 `forgetting_a_live_run_ends_its_tree`, `a_location_being_deleted_starts_no_run`; A-F3
+  `a_record_write_that_fails_still_replaces_the_log`; A-F2 (and B-F1)
+  `a_write_issued_before_the_last_one_written_is_dropped`
+- red (same run as B-F2's, against facc3d6c): A-F1 FAILED at the `spawned` assert (it returned
+  `stop_requested`, still `false` after `interrupt_all`); A-F4 forget FAILED (the forgotten `sleep
+  10` exited 0, not by signal); A-F3 FAILED (the log still held `old`: the record's failed save
+  skipped the `Replace`). `a_location_being_deleted_starts_no_run` and
+  `a_write_issued_before_the_last_one_written_is_dropped` were red by not compiling
+  (`begin_delete`, `Begun::persist`, `Persist::seq` did not exist)
+- green: `Persist::seq` issued under the setup lock and `SetupStore::in_order` drops a write older
+  than the last written or removed for the location (`interrupt` now rewrites the log whole, so a
+  dropped stale line write loses nothing); `write` saves record and log independently;
+  `interrupt_all` sets `stopping` and `stop_requested`, `spawned` returns `!running ||
+  stop_requested`, `start` refuses (`Busy`) while stopping or while a delete holds the location;
+  `stop_and_wait` returns a `DeleteHold` (`begin_delete`/`end_delete`) kept to the end of
+  `delete_worktree`; `forget` ends a still-running tree -> setup unit 13 passed, `setup_run` 12,
+  `mcp_create_worktree_setup` 2

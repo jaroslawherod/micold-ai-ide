@@ -234,9 +234,9 @@ pub async fn delete_worktree(
     let gate = state.worktree_gate(&project);
     let _serialized = gate.lock().await;
     // Feature 1289 (FR-024): a setup run in the worktree is stopped, and its end awaited, before
-    // the worktree goes.
+    // the worktree goes; no run starts there until the delete ends (M4 review A-F4).
     let location = SessionLocation::Worktree(dir_name.clone());
-    crate::setup::stop_and_wait(state, &project, &location).await;
+    let _setup_hold = crate::setup::stop_and_wait(state, &project, &location).await;
     let result = tokio::task::spawn_blocking(move || {
         let target = repo.join(".claude/worktrees").join(&dir2);
         let outcome = remove_worktree(&GitCli::new(), &repo, &target, branch_to_delete.as_deref())?;
