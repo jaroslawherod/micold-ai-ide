@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1185
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
-- **Phase**: verify
-- **Next step**: M5 (T047–T051, keyboard opening of the filter fields, found by the close unit's visual pass; ships with #1406 or after it); then a new close unit (re-run quickstart step 9 for T046, spec Status, close PR). D15 still awaits jaro
+- **Phase**: pr
+- **Next step**: push wip-1185-m4 (M5 on top of #1406's df6c4089) into #1406 with the M5 section added to its body (orchestrator); then a new close unit (re-run quickstart step 9 for T046, spec Status, close PR). D15 still awaits jaro
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T023–T030 | full | Fix-version filter, AND with component | #1396 | done; merged d1bd9fe4 |
 | M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) + Filters panel (D15) | #1406 | done on 9177522b (rebased; #1397 merged, its guard no longer duplicated); visual B2/B3 black dialog = tiny-skia defect (D16), visual pass 2 on lavapipe passes; gate green at f89fa72f (rebased onto 9177522b, fixture auto-merged); pushed, PR pending |
 | M4 | T040–T045 | full | Label filter from loaded issues; all four in the Filters panel (D15) | #1406 | done on wip-1185-m4 (local, unpushed), prepared on top of the unmerged M3 (PR #1406 head 1d4c65cb, held for D15); `scripts/gate.sh` green at 459cf4b6; reviews A/B CLEAN; visual pass M4-1..3 PASS; PR text in scratchpad m4-pr-title.md / m4-pr-body.md; M4-4 panel keyboard fixed (`cdk::picker::Picker::panel`: Tab/Shift+Tab cycle button + fields, Escape returns the keyboard to the button), tests red before the fix |
-| M5 | T047–T051 | full | Keyboard opening of the filter fields: a Tab-reached Component / Fix version / Reporter field loads its choices and picks by Up/Down/Enter; its Enter stays in the dialog (FR-015, FR-006) | #1406 | implemented on wip-1185-m4 (local, unpushed, on 70190316): reducer `open_field` asks on the first opening by `Focused`/`QueryChanged`/`HighlightMoved`; `cdk::picker::Picker::open_from_keyboard` opens a closed keyboard-focused field on Down/Enter and captures the key; tests red before (picker ArrowDown published nothing; client: list not opened / NotRequested). T050's optional Tab-publishes-`on_focus` not done (would ask on Tab alone, FR-006): B9 focus-ring follow-up stays. Next: gate, reviews A/B, visual B9 |
+| M5 | T047–T051 | full | Keyboard opening of the filter fields: a Tab-reached Component / Fix version / Reporter field loads its choices and picks by Up/Down/Enter; its Enter stays in the dialog (FR-015, FR-006) | #1406 | done on wip-1185-m4 (local, unpushed, on 70190316): reducer `open_field` asks on the first opening by `Focused`/`QueryChanged`/`HighlightMoved`; `cdk::picker::Picker::open_from_keyboard` opens a closed keyboard-focused field on unmodified Down/Enter and captures the key; tests red before; reviews A/B CLEAN; `scripts/gate.sh` green at bf5eeadc; visual B9 PASS. T050's optional Tab-publishes-`on_focus` not done (would ask on Tab alone, FR-006): B9 focus-ring follow-up stays. PR section in scratchpad m5-pr-section.md, ships inside #1406 |
 
 ## Decisions
 
@@ -81,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass close | 1 | df6c4089 (lavapipe/wgpu, Xvfb + fake_jira; light, dark panel) | Quickstart B1–B8 PASS, dark PASS, SC-001 five interactions; B9 FAIL: Tab cycle and Esc, Esc pass, but (a) a Tab-reached Component / Fix version field stays "Loading…" (no request), Down does nothing; (b) Enter in a Tab-focused field reopened the dialog on New branch (key reached the sidebar behind); (c) Clear filters is reached by Shift+Tab, not Tab (quickstart wording fixed, prose only). B1 CONCERN: the issue list opens with the dialog, so the first Filters click only closes it. O1: keys before any click in the dialog went behind it (`specs/1185-jira-selector-filters/visual/close-*.png`) → M5 (D17) |
 | Review A M5 (code-review high) | 1 | e8870177:244459e3 (70190316..HEAD) | CLEAN; MINORs: F1 jira_query's on_submit+on_focus Enter untested (iced text_input captures Enter on submit, iced_widget 0.14.2 text_input.rs:1054 — holds), F2 modifiers ignored (fixed: unmodified keys only), F3 double rematch in QueryChanged (fixed), F4 structural test redundant with behaviour tests (kept as the one-call-site guard) |
 | Review B M5 (conformance, sonnet) | 1 | e8870177:244459e3 | CLEAN; MINOR F1 user-guide line past 100 columns (fixed, prose only) |
+| Visual pass M5 (B9) | 1 | bf5eeadc (lavapipe/wgpu, Xvfb + fake_jira, debug) | B9 PASS: (a) Tab to Component + Down opens it with its components (no stuck Loading), Down/Enter picks Payments; (b) Tab to Fix version + Enter opens 2.4, 2.3, picks; (c) Reporter typed into opens with You (…) under Any; (d) no Enter/Down reached the app behind (dialog never reset); (e) Esc, Esc back to the Filters button. Note: after a first load the first Down lands on row 0 (Any), as designed. Focus ring on a Tab-reached field still absent (B9 follow-up, open). `visual/m5-B9-*.png` |
 
 ## Declined review findings
 
