@@ -734,6 +734,25 @@ impl CredentialLayout {
         }
     }
 
+    /// The conventional credential files that exist under `home`, named relative to it (never their
+    /// contents), for the log line a container session start writes (#1434). `exists` is the
+    /// caller's file check, so this stays pure.
+    pub fn present_under(home: &Path, exists: impl Fn(&Path) -> bool) -> Vec<String> {
+        let layout = Self::conventional(home, None);
+        layout
+            .git_config
+            .iter()
+            .chain(layout.ai_cli_auth.iter())
+            .filter(|path| exists(path))
+            .map(|path| {
+                path.strip_prefix(home)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string()
+            })
+            .collect()
+    }
+
     fn paths_for(&self, share: CredentialShare) -> Vec<&Path> {
         match share {
             CredentialShare::GitConfig => self.git_config.as_deref().into_iter().collect(),
@@ -1145,6 +1164,20 @@ impl MissingCredential {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn present_under_names_the_shared_files_found_in_a_home_and_never_their_contents() {
+        let home = Path::new("/home/jaro");
+        let found = CredentialLayout::present_under(home, |p| {
+            p.ends_with(".claude/.credentials.json") || p.ends_with(".gitconfig")
+        });
+        assert!(found.contains(&".gitconfig".to_string()), "{found:?}");
+        assert!(
+            found.contains(&".claude/.credentials.json".to_string()),
+            "{found:?}"
+        );
+        assert!(CredentialLayout::present_under(home, |_| false).is_empty());
+    }
 
     #[test]
     fn a_profile_without_ai_clis_has_every_cli_and_an_empty_selection_round_trips() {

@@ -229,6 +229,10 @@ fn boot() -> (App, Task<Message>) {
         crate::shell::sandbox::DaemonContainers,
     ));
     micold_client::daemon::install_time_zone(crate::shell::time_zone::host());
+    // The container home its daemon and sessions run with (#1434).
+    micold_client::daemon::install_container_home(
+        directories::UserDirs::new().as_ref().map(|d| d.home_dir()),
+    );
     // What Kubernetes daemons are started with (feature 686).
     micold_client::daemon::install_kube(micold_client::daemon::KubeEnv::new(
         caps.kube_connector(),
