@@ -1474,7 +1474,7 @@ pub fn close_requested(
         }
     }
     if state.session.active == Some(id) {
-        return current_session_gone(state.set_current_session(None));
+        return current_session_gone(state);
     }
     Vec::new()
 }
@@ -1521,7 +1521,7 @@ pub fn remove_confirmed(state: &mut crate::app::State) -> Vec<crate::features::O
         return Vec::new();
     };
     let outcomes = if state.session.active == Some(id) {
-        current_session_gone(state.set_current_session(None))
+        current_session_gone(state)
     } else {
         Vec::new()
     };
@@ -1775,7 +1775,7 @@ pub fn tab_strip_viewport_resized(state: &mut crate::app::State, width: u32) {
 /// record already removed has no location to find.
 pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
     let outcomes = if state.session.active.is_some_and(|id| ids.contains(&id)) {
-        current_session_gone(state.set_current_session(None))
+        current_session_gone(state)
     } else {
         Vec::new()
     };
@@ -1785,14 +1785,15 @@ pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::fe
     outcomes
 }
 
-/// `outcomes` of clearing the current session because it went, and the root's cue to show its
-/// emptied location's Review tab (feature 1269, U8). Drained after the caller has updated the
-/// records, so the root sees whether a live session of the location is left.
-#[must_use]
-pub fn current_session_gone(
-    mut outcomes: Vec<crate::features::Outcome>,
-) -> Vec<crate::features::Outcome> {
-    outcomes.push(crate::features::Outcome::CurrentSessionGone);
+/// Clear the current session because it went, with the root's cue to show its emptied location's
+/// Review tab (feature 1269, U8): the location is read before the clear, while its record is
+/// there. The outcomes are drained after the caller has updated the records, so the root sees
+/// whether a live session of the location is left.
+#[must_use = "the outgoing row and the review are applied by draining this"]
+pub fn current_session_gone(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    let left = state.current_session_location();
+    let mut outcomes = state.set_current_session(None);
+    outcomes.push(crate::features::Outcome::CurrentSessionGone(left));
     outcomes
 }
 
