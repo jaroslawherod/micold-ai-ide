@@ -1546,6 +1546,67 @@ mod default_container_name {
         assert!(state.draft.is_some(), "the form stays open");
     }
 
+    const TOO_SHORT: &str = "A container name needs at least 2 characters.";
+
+    #[test]
+    fn a_one_character_resolved_container_name_is_refused() {
+        for (name, typed) in [("a", ""), ("build", "x"), ("build", " x ")] {
+            let mut w = World::new();
+            let before = w.registry.entries().len();
+            let state = save(&mut w, name, typed);
+            let err = state.form_error.as_ref().unwrap();
+            assert_eq!(err.field, "container_name", "{name:?}/{typed:?}");
+            assert_eq!(err.message, TOO_SHORT);
+            assert!(state.draft.is_some(), "the form stays open");
+            assert_eq!(w.registry.entries().len(), before, "nothing is added");
+        }
+    }
+
+    #[test]
+    fn a_two_character_container_name_is_accepted() {
+        let mut w = World::new();
+        save(&mut w, "build", "xy");
+        assert_eq!(stored(&w, "build").as_deref(), Some("xy"));
+    }
+
+    #[test]
+    fn a_too_short_name_never_shows_the_duplicate_message() {
+        let mut w = World::new();
+        w.registry
+            .add("held", super::daemons_fixture::container("a", 9100), false)
+            .unwrap();
+        let state = save(&mut w, "a", "");
+        assert_eq!(state.form_error.as_ref().unwrap().message, TOO_SHORT);
+    }
+
+    #[test]
+    fn a_stored_one_character_name_loads_lists_and_is_refused_on_save() {
+        let mut w = World::new();
+        w.registry
+            .add(
+                "legacy",
+                super::daemons_fixture::container("a", 9100),
+                false,
+            )
+            .unwrap();
+        assert_eq!(stored(&w, "legacy").as_deref(), Some("a"));
+        let id = w.registry.entries().last().unwrap().id;
+        let mut state = State::default();
+        daemons::begin_edit(&mut state, &w.model(), id).unwrap();
+        assert_eq!(state.draft.as_ref().unwrap().container_name, "a");
+        send(&mut state, &mut w, Msg::Saved);
+        let err = state.form_error.as_ref().unwrap();
+        assert_eq!(err.field, "container_name");
+        assert_eq!(err.message, TOO_SHORT);
+        assert_eq!(stored(&w, "legacy").as_deref(), Some("a"), "unchanged");
+    }
+
+    #[test]
+    fn the_hint_is_hidden_when_the_default_is_too_short() {
+        assert_eq!(container_name_hint(&draft_of("a", "")), "");
+        assert_eq!(container_name_hint(&draft_of("ab", "")), "ab");
+    }
+
     #[test]
     fn other_runtimes_do_not_resolve_a_container_name() {
         let mut w = World::new();

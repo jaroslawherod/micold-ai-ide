@@ -79,7 +79,9 @@ Add, edit, start, stop and remove daemons in **Settings, Daemons** ([the
 section](settings.md#daemons)). Names, container names and ports must be unique, and there can be
 only one host daemon; the form refuses a duplicate and names the field. A container daemon's
 container name may be left empty: it defaults to the daemon's name, made a valid container name, and
-is stored when you save (a name with no usable character asks you to enter one). Its port
+is stored when you save. A container name needs at least 2 characters, so a daemon with a
+one-character name needs a container name typed (the field shows no placeholder then), and a name with
+no usable character asks you to enter one. Its port
 may be left empty: a free one is chosen when you save, stored with the daemon and shown when you edit
 it. It never changes by itself, so the daemon keeps its address across restarts. If the stored port is
 taken when the daemon starts, the start fails naming the port; free it or choose another port.
