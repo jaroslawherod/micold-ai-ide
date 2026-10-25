@@ -90,6 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 A | 1 (high) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | CHANGES: 2 MAJOR, 3 MINOR — all fixed: F1 `shell::setup::add_project` (ProjectAdd + stored command) at every add site; F2 connect sends `command: None` for held projects without one; F3 a failure notifies only when it replaces the same run seen `Running` (`notified` dropped); F4 `add_project` reads `in_force`, `send_commands` gone; F5 `setup_chip` moved above `build_default_item`'s doc; cycle log M5 cycle 3 |
 | M5 B | 1 (sonnet) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | CLEAN; Verify green (features_setup 9, features_settings 155, setup_tag_geometry 3, layout_snapshot 127, feature_write_isolation 8, feature_registration_cost 7); B-F1 fixed, prose only ("seven sections") |
 | M5 visual pass | 1 (U1, U2) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | PASS; V-F1 left: the tag's tooltip shows with the row's, as the leading status chip's does (`status_chip.rs:96` inside a `row_tooltip` row), the existing pattern; V-F2 fixed (placeholder *e.g. mise trust && mise install*); evidence in `visual-pass/` |
+| M5 A | 2 (scoped, sonnet) | 1107e0107dc91a44d1323966ca70bcde87d9de44:7f5b8a36eaf2e15a4cb3532d59d873e553b54b08 | CLEAN; no findings |
 
 ## Declined review findings
 
@@ -98,6 +99,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M5 review A round 2 (2026-10-25): CLEAN, no findings. Next: rebase onto origin/main, full gate, PR.
 M5 review round 1 fixed (2026-10-25): A-F1–A-F5, B-F1, V-F2 (cycle log M5 cycle 3); V-F1 kept as the existing pattern; full gate (scripts/gate.sh) green. Next: review A round 2 (scoped, sonnet) on the new snapshot; then rebase onto main, PR.
 M5 ready for review (2026-10-25): pushed 6cf38804d; snapshot 476492d0:6cf38804; full `cargo test -p micold-client -p micold-material` green after cycle 2 (guards, layout fixture). Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings, then full gate (`scripts/gate.sh`), rebase on origin/main, PR.
 M5 implemented (2026-10-25) on 8a49a7780 (#1407 merged by rebase): T040–T049 ticked; features_setup 9, features_settings 155, setup_tag_geometry 3, settings_sections 24 passed; clippy client+material clean (cycle log § M5 cycle 1). Next: full client suite, push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
