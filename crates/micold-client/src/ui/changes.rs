@@ -967,7 +967,7 @@ fn diff_pane_body<'a>(
             // C2: the composer, or the way to open it, under the last picked row. C4: a new
             // comment's composer whose lines a refresh removed waits above the diff for a pick.
             let mut unplaced = None;
-            match (view.pick, view.composer.as_ref()) {
+            match (changes::slot_pick(view), view.composer.as_ref()) {
                 (Some(pick), None) => {
                     diff = diff.slot(
                         pick.side,
