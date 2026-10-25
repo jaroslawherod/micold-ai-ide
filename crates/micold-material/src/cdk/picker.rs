@@ -192,6 +192,47 @@ impl<M: Clone, Theme, Renderer> Picker<'_, M, Theme, Renderer> {
     }
 }
 
+impl<M: Clone, Theme, Renderer> Picker<'_, M, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+{
+    /// Down or Enter on a closed field that holds the keyboard opens it: `on_focus` is published
+    /// and the key goes no further. A field reached by Tab never sees the press that `on_focus`
+    /// otherwise comes from, so without this its list could not open from the keyboard, and Enter
+    /// went on to whatever is behind the dialog (feature 1185 M5, quickstart Part B step 9). A key
+    /// the field itself took (Enter running its `on_submit`) is left to it.
+    fn open_from_keyboard(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        field_layout: Layout<'_>,
+        renderer: &Renderer,
+        shell: &mut Shell<'_, M>,
+    ) {
+        let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event else {
+            return;
+        };
+        if self.open || shell.is_event_captured() || !matches!(key_for(key), Key::Down | Key::Enter)
+        {
+            return;
+        }
+        let Some(message) = self.on_focus.clone() else {
+            return;
+        };
+        let mut census = Census::default();
+        self.field.as_widget_mut().operate(
+            &mut tree.children[0],
+            field_layout,
+            renderer,
+            &mut census,
+        );
+        if census.focused.is_some() {
+            shell.publish(message);
+            shell.capture_event();
+        }
+    }
+}
+
 impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Picker<'_, M, Theme, Renderer>
 where
     M: Clone,
@@ -319,6 +360,7 @@ where
                 viewport,
             );
         }
+        self.open_from_keyboard(tree, event, field_layout, renderer, shell);
     }
 
     fn draw(
@@ -892,19 +934,33 @@ mod tests {
     use iced::keyboard::Modifiers;
     use iced::widget::{column, text_input};
 
+    fn input(hint: &'static str) -> iced::widget::TextInput<'static, String> {
+        text_input(hint, "").on_input(|s| s)
+    }
+
     /// A trigger and an open panel of two fields, as the Jira picker's Filters button opens one
     /// (feature 1185, D15).
     fn panel() -> Element<'static, String> {
-        let input = |hint: &'static str| text_input(hint, "").on_input(|s| s);
-        Picker::new(
-            input("Filters"),
-            column![input("Reporter"), input("Label")],
-            true,
-            4.0,
-        )
-        .panel(360.0)
-        .on_dismiss("dismissed".to_string())
-        .into()
+        panel_of(column![input("Reporter"), input("Label")].into())
+    }
+
+    /// The trigger and an open panel of `fields`.
+    fn panel_of(fields: Element<'static, String>) -> Element<'static, String> {
+        Picker::new(input("Filters"), fields, true, 4.0)
+            .panel(360.0)
+            .on_dismiss("dismissed".to_string())
+            .into()
+    }
+
+    /// The panel with its two fields as the Filters panel holds them: closed lists of their own,
+    /// each publishing `<name> opened` when reached (feature 1185 M5).
+    fn panel_of_lists() -> Element<'static, String> {
+        let list = |hint: &'static str| {
+            Picker::new(input(hint), iced::widget::text("rows"), false, 4.0)
+                .on_focus(format!("{hint} opened"))
+                .on_dismiss(format!("{hint} dismissed"))
+        };
+        panel_of(column![list("Reporter"), list("Label")].into())
     }
 
     /// Which focusables hold the keyboard, in traversal order.
@@ -936,8 +992,11 @@ mod tests {
 
     impl Open {
         fn new() -> Self {
+            Self::of(panel())
+        }
+
+        fn of(mut element: Element<'static, String>) -> Self {
             let renderer = renderer();
-            let mut element = panel();
             let mut tree = Tree::new(element.as_widget());
             let node = element
                 .as_widget_mut()
@@ -1126,5 +1185,41 @@ mod tests {
             [true, false, false],
             "the trigger has the keyboard again"
         );
+    }
+
+    /// Quickstart Part B step 9 (feature 1185 M5): a filter field reached by the panel's Tab cycle
+    /// held the keyboard with its list closed, so Down did nothing — its choices never loaded — and
+    /// Enter went past the dialog to the control behind it. Down or Enter on a closed field that
+    /// holds the keyboard opens it, and the key goes no further.
+    #[test]
+    fn down_or_enter_in_a_tabbed_to_closed_field_opens_it_and_goes_no_further() {
+        for key in [Named::ArrowDown, Named::Enter] {
+            let mut open = Open::of(panel_of_lists());
+            open.focus_trigger();
+            open.press(Named::Tab, Modifiers::empty());
+            assert_eq!(open.held(), [false, true, false], "Tab reached Reporter");
+            let (messages, captured) = open.press(key, Modifiers::empty());
+            assert_eq!(
+                messages,
+                ["Reporter opened"],
+                "{key:?} opens Reporter's list"
+            );
+            assert!(captured, "{key:?} went past the panel to the dialog behind");
+        }
+    }
+
+    /// The same keys with no field holding the keyboard open nothing: a field opens only where
+    /// the keyboard is.
+    #[test]
+    fn down_or_enter_opens_no_field_that_lacks_the_keyboard() {
+        for key in [Named::ArrowDown, Named::Enter] {
+            let mut open = Open::of(panel_of_lists());
+            open.focus_trigger();
+            let (messages, _) = open.press(key, Modifiers::empty());
+            assert!(
+                messages.iter().all(|m| !m.ends_with("opened")),
+                "{key:?} on the trigger opened a field: {messages:?}"
+            );
+        }
     }
 }

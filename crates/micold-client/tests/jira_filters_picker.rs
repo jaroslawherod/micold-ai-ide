@@ -1730,3 +1730,129 @@ fn a_filter_chosen_before_the_unfiltered_load_returns_still_gets_its_labels() {
         ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"]
     );
 }
+
+// Feature 1185 M5 (FR-006, FR-015; quickstart Part B step 9): a field reached by the keyboard opens
+// without the press that sends `Focused`. Its first opening by any message asks for its choices.
+
+/// The seq `kind`'s choices are awaited under, while in flight.
+fn awaited_choice(state: &State, kind: FilterKind) -> Option<u64> {
+    form(state)
+        .jira_filters
+        .awaited_choices()
+        .filter(|(awaited, _)| *awaited == kind)
+        .map(|(_, seq)| seq)
+}
+
+/// Answer `kind`'s choices awaited under `seq` with its fake project's choices.
+fn answer_choices(state: &mut State, kind: FilterKind, seq: u64) {
+    let msg = match kind {
+        FilterKind::Component => FilterMsg::ComponentsLoaded {
+            seq,
+            result: Ok(names()),
+        },
+        FilterKind::FixVersion => FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(versions()),
+        },
+        FilterKind::Reporter => FilterMsg::MeLoaded {
+            seq,
+            result: Ok(Some(jane())),
+        },
+        FilterKind::Label => unreachable!("labels are not asked of Jira"),
+    };
+    filter(state, msg);
+}
+
+/// What `kind` holds chosen.
+fn chosen_value(state: &State, kind: FilterKind) -> Option<String> {
+    let chosen = state.worktree_form.jira_filters();
+    match kind {
+        FilterKind::Component => chosen.component().map(str::to_owned),
+        FilterKind::FixVersion => chosen.fix_version().map(str::to_owned),
+        FilterKind::Reporter => chosen.reporter().map(|user| user.name.clone()),
+        FilterKind::Label => None,
+    }
+}
+
+/// Open `kind` from the keyboard with `first` (no `Focused`), check it asks once, answer it, then
+/// pick the first choice with Down, Down, Enter.
+fn opened_by_keyboard_asks_once_and_picks(kind: FilterKind, first: FilterMsg, again: FilterMsg) {
+    let mut state = loaded();
+    let before = state.worktree_form.filter_request_seq;
+    assert_eq!(
+        awaited_choice(&state, kind),
+        None,
+        "{kind:?}: nothing asked yet"
+    );
+    filter(&mut state, first);
+    assert!(
+        form(&state).jira_filters.field(kind).open,
+        "{kind:?}: the list opens"
+    );
+    assert_eq!(
+        awaited_choice(&state, kind),
+        Some(before + 1),
+        "{kind:?}: its first opening asks for its choices (FR-006)"
+    );
+    assert_eq!(state.worktree_form.filter_request_seq, before + 1);
+    filter(&mut state, again);
+    assert_eq!(
+        state.worktree_form.filter_request_seq,
+        before + 1,
+        "{kind:?}: a second keystroke asks nothing more"
+    );
+    answer_choices(&mut state, kind, before + 1);
+    let labels = labels_of(&state, kind);
+    assert!(labels.len() > 1, "{kind:?}: the choices show, {labels:?}");
+    let field = |state: &State| form(state).jira_filters.field(kind).clone();
+    for _ in 0..3 {
+        if field(&state).highlight == Some(1) {
+            break;
+        }
+        filter(&mut state, FilterMsg::HighlightMoved(kind, Direction::Next));
+    }
+    assert_eq!(
+        field(&state).highlight,
+        Some(1),
+        "{kind:?}: Down reaches the first choice"
+    );
+    filter(&mut state, FilterMsg::Picked(kind, 1));
+    let expected = labels[1].clone();
+    let chosen = chosen_value(&state, kind).expect("Down and Enter picked a choice");
+    assert!(
+        expected.contains(&chosen),
+        "{kind:?}: picked {chosen:?}, row read {expected:?}"
+    );
+}
+
+#[test]
+fn a_field_typed_into_without_focus_asks_for_its_choices_once_and_picks_by_keyboard() {
+    for kind in [COMPONENT, FIX_VERSION, REPORTER] {
+        opened_by_keyboard_asks_once_and_picks(
+            kind,
+            FilterMsg::QueryChanged(kind, String::new()),
+            FilterMsg::QueryChanged(kind, String::new()),
+        );
+    }
+}
+
+#[test]
+fn a_field_moved_in_without_focus_asks_for_its_choices_once_and_picks_by_keyboard() {
+    for kind in [COMPONENT, FIX_VERSION, REPORTER] {
+        opened_by_keyboard_asks_once_and_picks(
+            kind,
+            FilterMsg::HighlightMoved(kind, Direction::Next),
+            FilterMsg::HighlightMoved(kind, Direction::Next),
+        );
+    }
+}
+
+#[test]
+fn typing_into_a_component_field_before_its_choices_arrive_narrows_them_when_they_do() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Pa".into()));
+    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Pay".into()));
+    let seq = choice_seq(&state);
+    answer_choices(&mut state, COMPONENT, seq);
+    assert_eq!(row_labels(&state), ["Any component", "Payments"]);
+}

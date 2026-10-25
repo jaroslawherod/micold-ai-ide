@@ -7,8 +7,9 @@
 //!
 //! # When Jira is asked, and why only then
 //!
-//! A filter's choices are asked for when the reducer accepted the field's first focus or a
-//! **Retry** of a failed request, and handed out a new filter seq for it (FR-006, research R7); the
+//! A filter's choices are asked for when the reducer accepted the field's first opening (a focus,
+//! typed text or a move of the highlight, M5) or a **Retry** of a failed request, and handed out a
+//! new filter seq for it (FR-006, research R7); the
 //! reporter's people when text typed into its field waited out [`ISSUE_SEARCH_DEBOUNCE`] and was
 //! still the newest (FR-004, FR-014: the typed text is all a people search sends);
 //! the listing is reloaded when the reducer accepted a pick, a clear or **Clear filters** that

@@ -28,7 +28,7 @@ use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, M
 /// A filter's choices, from never asked to loaded (data-model §6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ChoiceLoad<T> {
-    /// Not asked for yet: the field never took focus on this form.
+    /// Not asked for yet: the field never opened on this form.
     #[default]
     NotRequested,
     /// Asked for; only the answer carrying `seq` applies.
@@ -725,13 +725,12 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
             }
         }
         FilterMsg::Focused(kind) => {
-            let filters = &mut form.jira_filters;
-            filters.field_mut(kind).open = true;
-            asked = filters.start(kind, next_filter_seq, false);
-            filters.rematch(kind);
+            asked = open_field(&mut form.jira_filters, kind, next_filter_seq);
         }
         FilterMsg::QueryChanged(kind, text) => {
             let filters = &mut form.jira_filters;
+            // A field reached by Tab and typed into never sent `Focused` (M5).
+            asked = open_field(filters, kind, next_filter_seq);
             if kind == FilterKind::Reporter {
                 // Text typed to find a person waits out the debounce before it is sent (FR-004);
                 // the chosen person's label in the field is not a search.
@@ -746,13 +745,12 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
                     asked = true;
                 }
             }
-            let field = filters.field_mut(kind);
-            field.query = text;
-            field.open = true;
+            filters.field_mut(kind).query = text;
             filters.rematch(kind);
         }
         FilterMsg::HighlightMoved(kind, direction) => {
             let filters = &mut form.jira_filters;
+            asked = open_field(filters, kind, next_filter_seq);
             let rows = filters.rows(kind).len();
             let field = filters.field_mut(kind);
             if let Some(next) = move_highlight(field.highlight, direction, rows) {
@@ -824,6 +822,15 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
     if asked {
         state.worktree_form.filter_request_seq = next_filter_seq;
     }
+}
+
+/// Open `kind`'s list; its first opening by any message (a focus, typed text, a move of the
+/// highlight) asks for its choices under `seq` (FR-006). `true` when a request was handed `seq`.
+fn open_field(filters: &mut FilterState, kind: FilterKind, seq: u64) -> bool {
+    filters.field_mut(kind).open = true;
+    let asked = filters.start(kind, seq, false);
+    filters.rematch(kind);
+    asked
 }
 
 /// Ask for `kind`'s choices again when they failed; `true` when a request was handed `seq`.
