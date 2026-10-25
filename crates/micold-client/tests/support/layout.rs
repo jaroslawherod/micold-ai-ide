@@ -1457,6 +1457,50 @@ pub fn runtime_messages<'a, M: 'a>(
     out
 }
 
+/// The whole window as the runtime composes it: `view` built into a `UserInterface`, its entrances
+/// settled, then drawn — the base and every floated layer, nested ones included, in the runtime's
+/// own order — and read back from the CPU rasteriser as RGBA rows `window.width` pixels wide.
+///
+/// The other paint passes walk the tree and its overlays themselves ([`painted_text_settled_at`]);
+/// this one is what the window shows, so a layer the runtime drops or a surface it paints over
+/// shows up here and nowhere else (feature 1185, M3 visual pass B2). Every pixel is repainted, so
+/// the software compositor's partial repaints are out of its reach (ledger D16).
+pub fn runtime_frame<'a, M: 'a>(view: impl Fn() -> Element<'a, M>, window: Size) -> Vec<u8> {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{clipboard, mouse};
+    use iced_runtime::user_interface::{Cache, UserInterface};
+
+    let mut renderer = renderer();
+    let mut cache = Cache::default();
+    let origin = std::time::Instant::now();
+    // One frame more than the settling: the last update is what lays the floated layers out for
+    // the draw that follows it.
+    for frame in 0..=SETTLE_FRAMES * 4 {
+        let mut ui =
+            UserInterface::build(view(), window, std::mem::take(&mut cache), &mut renderer);
+        let redraw =
+            iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame));
+        let _ = ui.update(
+            &[redraw],
+            mouse::Cursor::Unavailable,
+            &mut renderer,
+            &mut clipboard::Null,
+            &mut Vec::new(),
+        );
+        if frame == SETTLE_FRAMES * 4 {
+            ui.draw(
+                &mut renderer,
+                &iced::Theme::Light,
+                &iced::advanced::renderer::Style::default(),
+                mouse::Cursor::Unavailable,
+            );
+        }
+        cache = ui.into_cache();
+    }
+    let size = iced::Size::new(window.width as u32, window.height as u32);
+    renderer.screenshot(size, 1.0, iced::Color::WHITE)
+}
+
 /// A grid of points covering `area`, `step` apart, for [`clicks_at`] to sweep.
 pub fn grid(area: Rectangle, step: f32) -> Vec<iced::Point> {
     let mut points = Vec::new();
