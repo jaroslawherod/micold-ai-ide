@@ -28,10 +28,13 @@ Each decision: what was chosen, why, and what was rejected. Probes ran in this c
 - **Size**: the npm platform package of mise 2026.10.19 (the same binary) is 61 MB gzip-compressed
   (173 MB unpacked), measured here. Counted in R6.
 - **Risk for the implementing unit**: this cloud container cannot reach `github.com` release
-  downloads or `mise.jdx.dev` (proxy 403). Taking the checksums needs either GitHub access for
-  `jdx/mise` (the release's `SHASUMS256.txt`) or a run where it is reachable; the CI build of the
-  image (`basic-image.yml` on the PR) is the one that proves the checksum, since it downloads both
-  architectures.
+  downloads or `mise.jdx.dev` (proxy 403). The pin is therefore taken by plan D1a on a machine or
+  `workflow_dispatch` job that reaches GitHub: the release's `SHASUMS256.txt` with its signature
+  (`SHASUMS256.asc`) verified against mise's published key, only the two raw `linux-x64` /
+  `linux-arm64` lines kept, each hash cross-checked against the binary in the npm
+  `@jdxcode/mise-linux-{x64,arm64}` package (reachable here), provenance recorded in the ledger.
+  The CI image build only shows the download matches the committed hash; it is not the source of
+  the hash.
 
 ## R2. Which compiler packages
 

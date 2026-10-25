@@ -20,6 +20,9 @@ daemons run setups concurrently, as 1289 specifies.
   one line: `Waiting for another setup on this daemon to finish…`. The line goes through the same
   buffer, log and `SetupOutput` path as the shell's lines. A run that gets the turn at once prints
   nothing extra.
+- A setup that hangs holds the turn until it ends: every waiting run's line names that cause
+  (another setup on this daemon), and **Stop setup** on the running setup ends it and releases the
+  turn, so the next waiting run spawns (S3).
 - Only the shell runs inside the turn; record writes, pushes and the create answer never wait for it
   (1289 FR-013, FR-014 unchanged).
 
@@ -30,6 +33,9 @@ daemons run setups concurrently, as 1289 specifies.
 - A worktree delete (`stop_and_wait`) and a daemon stop end a waiting run the same way they end a
   running one (`Stopped` / `Interrupted`), at once.
 - A waiting run whose turn comes after it was stopped does not spawn.
+- Stopping the run that holds the turn (Stop setup, `stop_and_wait`) ends its shell as 1289
+  specifies; the guard drops when that run has ended, and the first waiting run takes the turn and
+  spawns.
 
 ## S4. What does not change
 
