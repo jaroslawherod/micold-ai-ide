@@ -1672,6 +1672,7 @@ pub(crate) mod tests {
                     comment(CommentState::Sent { at: 1 }),
                 ],
                 sending: false,
+                marks: Default::default(),
             },
         );
         assert_eq!(badge(&state).map(|n| n.get()), Some(2));
@@ -1680,6 +1681,7 @@ pub(crate) mod tests {
             crate::features::changes::ReviewView {
                 comments: vec![comment(CommentState::Draft); 5],
                 sending: false,
+                marks: Default::default(),
             },
         );
         assert_eq!(
