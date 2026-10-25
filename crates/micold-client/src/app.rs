@@ -1386,9 +1386,10 @@ impl State {
 
     /// The current session went and was the last live one of its location (feature 1269, U8,
     /// R8): that location's Review tab, if it has one, is shown, so the location stays shown under
-    /// its own header. The location is the one the header followed, the gone session's. Not while
-    /// Compare holds the main area; under the Overview or Settings it is shown and read when
-    /// uncovered (`follow_header` marks it unwatched).
+    /// its own header. The location is the one the header followed: while a session is current
+    /// the shown location is that session's (a shown review is always the current session's
+    /// location, or a sessionless one's). Not while Compare holds the main area, which it took
+    /// from the review; under the Overview or Settings it is shown unread, and read once uncovered.
     fn show_review_of_emptied_location(&mut self) {
         if self.session.active.is_some() || self.runs.compare.is_some() {
             return;
@@ -1396,14 +1397,16 @@ impl State {
         let Some(key) = self.changes.header.entry.clone() else {
             return;
         };
-        if self.workspace.active.as_ref() != Some(&key.0) || !self.sessions_at(&key.1).0.is_empty()
-        {
+        let live_left = self
+            .active_sessions()
+            .iter()
+            .any(|s| !s.archived && s.location == key.1);
+        if self.workspace.active.as_ref() != Some(&key.0) || live_left {
             return;
         }
-        let effect = crate::features::changes::show_if_present(&mut self.changes, &key);
-        if !self.review_covered() {
-            self.queue_changes_effect(effect);
-        }
+        let covered = self.review_covered();
+        let effect = crate::features::changes::show_if_present(&mut self.changes, &key, covered);
+        self.queue_changes_effect(effect);
     }
 
     /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
@@ -1713,9 +1716,10 @@ pub fn interpret(
                 crate::features::changes::Msg::SessionSelected,
             );
         }
+        // Feature 1269 (U8): the current session went; its emptied location's review is shown.
+        Outcome::CurrentSessionGone => state.show_review_of_emptied_location(),
         // Feature 1269 (U9): the forgotten project's Review tabs go with it, under either spelling
         // of its path.
-        Outcome::CurrentSessionGone => state.show_review_of_emptied_location(),
         Outcome::ProjectForgotten(path) => {
             let canonical = micold_core::project::canonicalize_best_effort(&path);
             state.changes.tabs.drop_project(&canonical);

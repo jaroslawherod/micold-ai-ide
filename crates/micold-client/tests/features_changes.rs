@@ -4116,6 +4116,20 @@ fn review_changes_on_another_location_shows_it_with_its_last_shown_else_main_ses
     review_again(&mut app, feat_b.clone());
     assert_eq!(app.session.active, Some(b), "feat-b's last-shown session");
     assert_eq!(app.shown_location(), Some(feat_b));
+
+    // A session started on feat-z while its review is shown takes the main area: the review is
+    // hidden, kept, and the header follows the new session's location.
+    review_again(&mut app, feat_z.clone());
+    let started = micold_core::session::Session::start_new(
+        feat_z.clone(),
+        micold_core::session::AiCli::ClaudeCode,
+    );
+    let z1 = started.id;
+    app.update(Message::Session(SessionMsg::Started(started)));
+    assert_eq!(app.session.active, Some(z1));
+    assert_eq!(app.review_shown(), None, "hidden by the new session");
+    assert!(app.changes.tabs.has(&(project(), feat_z.clone())), "kept");
+    assert_eq!(app.changes.header.entry, Some((project(), feat_z)));
 }
 
 /// Feature 1269 T026 (U7, R4): every way a session of a location is selected — the sidebar's row
@@ -4156,17 +4170,17 @@ fn every_selection_route_updates_the_locations_last_shown_session() {
     );
 }
 
-/// Feature 1269 T027 (U8, R8): the current session closing (here its close press, then its end
-/// through `SessionsClosed`) when its location has a Review tab and no live session left shows
-/// that tab, under the location's header; with another session of the location left, no session is
-/// current and the tab stays hidden, as before.
+/// Feature 1269 T027 (U8, R8): the current session going (its close press, which archives it, or
+/// its end through `SessionsClosed`) when its location has a Review tab and no live session left
+/// shows that tab, under the location's header; with another session of the location left, no
+/// session is current and the tab stays hidden, as before.
 #[test]
 fn the_last_session_of_a_location_closing_shows_its_review() {
     use micold_client::app::Message;
     use micold_client::features::session::Msg as SessionMsg;
     use micold_client::features::Outcome;
     let feat_b = SessionLocation::Worktree("feat-b".into());
-    let (mut app, [a1, _, b]) = reviewing_feat_a();
+    let (mut app, [a1, a2, b]) = reviewing_feat_a();
     review_again(&mut app, feat_b.clone());
     answer_pending(&mut app);
     app.update(Message::Session(SessionMsg::Selected(b)));
@@ -4181,10 +4195,22 @@ fn the_last_session_of_a_location_closing_shows_its_review() {
     assert_eq!(app.shown_location(), Some(feat_b.clone()));
     assert_eq!(app.changes.header.entry, Some((project(), feat_b)));
 
+    let end = |app: &mut micold_client::app::State, id| {
+        let first = micold_client::app::interpret(app, Outcome::SessionsClosed(vec![id]));
+        let _ = micold_client::app::drain(first, |o| micold_client::app::interpret(app, o));
+        app.update(Message::NoOp);
+    };
     app.update(Message::Session(SessionMsg::Selected(a1)));
-    let _ = micold_client::app::interpret(&mut app, Outcome::SessionsClosed(vec![a1]));
-    app.update(Message::NoOp);
+    end(&mut app, a1);
     assert_eq!(app.session.active, None, "no session current");
     assert_eq!(app.review_shown(), None, "a2 is left: the tab stays hidden");
     assert!(app.changes.tabs.has(&(project(), worktree())), "and kept");
+
+    app.update(Message::Session(SessionMsg::Selected(a2)));
+    end(&mut app, a2);
+    assert_eq!(
+        app.review_shown(),
+        Some(&(project(), worktree())),
+        "a2 was feat-a's last: its review is shown"
+    );
 }

@@ -1317,9 +1317,12 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
             .or_default()
             .push(session);
     }
+    // Feature 1269 (U2): the new session's terminal takes the main area, so a shown review (a
+    // sessionless location's included) is hidden, kept.
     let mut outcomes = vec![
         crate::features::Outcome::LocationOpened(location),
         crate::features::Outcome::MainAreaTaken,
+        crate::features::Outcome::ReviewHidden,
     ];
     outcomes.extend(state.set_current_session(Some(id)));
     // Feature 1126 (S5): the strip appends the new session's tab after the location's others and
