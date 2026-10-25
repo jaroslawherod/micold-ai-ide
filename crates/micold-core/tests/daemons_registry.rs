@@ -205,11 +205,21 @@ mod default_container_name {
 
     #[test]
     fn unusable_characters_become_one_dash_and_the_edges_are_trimmed() {
-        assert_eq!(of("Build Box!").as_deref(), Some("Build-Box"));
-        assert_eq!(of("_web.").as_deref(), Some("web"));
-        assert_eq!(of("  web  ").as_deref(), Some("web"));
-        assert_eq!(of("build box").as_deref(), Some("build-box"));
-        assert_eq!(of("a !? b").as_deref(), Some("a-b"));
+        assert_eq!(
+            of("Build Box!").as_deref(),
+            Some("Build-Box"),
+            "input {}",
+            "Build Box!"
+        );
+        assert_eq!(of("_web.").as_deref(), Some("web"), "input {}", "_web.");
+        assert_eq!(of("  web  ").as_deref(), Some("web"), "input {}", "  web  ");
+        assert_eq!(
+            of("build box").as_deref(),
+            Some("build-box"),
+            "input {}",
+            "build box"
+        );
+        assert_eq!(of("a !? b").as_deref(), Some("a-b"), "input {}", "a !? b");
     }
 
     #[test]
