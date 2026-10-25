@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M5
-- **Next step**: M5 full gate (`scripts/gate.sh`) after the rebase, then the PR
+- **Next step**: M5 PR: orchestrator opens it from the pushed branch, waits on CI and merges
 
 ## Pull requests
 
@@ -92,6 +92,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M5 review A (code-review high, sonnet) | 2 | 5f5e657bbba5820353a00c1602e088993000a23b:11749fecef664bb0f5a648d37708be2b45b46267 | CLEAN of BLOCKER/MAJOR: F1, F4 fixes hold, declines stand; 2 MINOR suggestions left (test covers the worktree arm only; one shared drawn-session count for the three counters) |
 | M5 review B (conformance, sonnet) | 1 | 5f5e657bbba5820353a00c1602e088993000a23b:11749fecef664bb0f5a648d37708be2b45b46267 | CLEAN (2 MINOR: F1 hover tests said to be in the wrong file, declined: they are in `tests/sidebar_tree.rs` as T053 asks; F2 no `tdd/cycle-log.md`, as M1–M4: T052/T053 were run red first, by compile) |
 | M5 visual pass | — | 11749fec | B6 (Tab order, Enter/Space on a header, chords onto rows), B7 (ring stays on a row that moves to Working and back; hover action dropped) PASS, light; chord into Done not seen (no merged PR). User guide's Tab bullet corrected (fixed, prose only): `visual-pass/m5-record.md` |
+| M5 full gate | — | 34e43948 | `scripts/gate.sh` green after rebasing onto origin/main 7844dde4 (target-shared/debug wiped first for disk) |
 
 ## Declined review findings
 
