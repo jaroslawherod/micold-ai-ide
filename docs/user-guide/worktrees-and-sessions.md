@@ -199,6 +199,8 @@ Small **chips** follow the second line's text:
 - **current session**, when the row is listed only because it holds the session you are in; the
   name of the **daemon** the worktree runs on; **outside this app** for an included worktree; and
   **can be removed** when its merged pull request holds all its work.
+- A **setup** tag, last, when the project's [setup command](#setup-in-a-new-worktree) has run in
+  the worktree. The *Default* entry gets it too.
 
 The type and the issue are no longer chips on the row, but they still drive the
 [tag filters](#filtering-worktrees-by-tag). The *name* of a worktree is derived from the
@@ -496,6 +498,30 @@ is unnecessary overhead this avoids.
   `.claude/worktrees/` folder marks its location `(outside this app)`, which is why that one path
   is absolute where the others are relative. A healthy worktree says nothing about its status, so
   the rows that do have something to say are the ones that stand out.
+
+### Setup in a new worktree
+
+When the open project has a **Setup command** ([Settings › Project](settings.md#project)), every
+worktree the app creates for it runs that command in the worktree's folder, on the daemon the
+worktree runs on, as soon as the worktree exists. That holds for a worktree made with the New
+worktree form and for one an AI session makes with `create_worktree`. A worktree you
+[include](#including-a-worktree-that-already-exists), or one the app discovers on a refresh, runs
+nothing. Sessions start at once: nothing waits for setup to finish.
+
+The row's last tag says how setup went, in words, and its tooltip gives the time:
+
+| Tag | Meaning | Tooltip |
+| --- | --- | --- |
+| *Setting up…* | The command is running | *Setup running since* the time it started |
+| *Set up* | It exited with status 0 | *Setup finished at* the time |
+| *Setup failed* (error colour) | It exited non-zero, was ended by a signal, or could not start | *Setup failed at* the time, and the exit status or the reason |
+| *Setup stopped* | It was stopped before it finished | *Setup stopped at* the time |
+| *Setup interrupted* (warning colour) | The daemon stopped while it ran | *Setup interrupted: the daemon stopped* |
+
+A project with no setup command shows no tag. When setup fails, the app posts one error
+notification for that run, such as *Setup failed in app / Login page: Exited with status 2.*,
+naming the project and the worktree. A run that was stopped or interrupted posts none, and the same
+run never notifies twice, even after a reconnect.
 
 ## Creating a worktree
 

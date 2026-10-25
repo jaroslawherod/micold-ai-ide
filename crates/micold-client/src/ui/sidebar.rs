@@ -840,6 +840,10 @@ fn build_items(
                 crate::ui::material::StatusChip::new(&entry.status, r).stale(entry.stale),
             );
         }
+        // Feature 1289 (U2): the worktree's setup run, last in the tag line.
+        if let Some(chip) = setup_chip(state, &SessionLocation::Worktree(dir.clone()), r) {
+            item = item.trailing_chip(chip);
+        }
         // FR-017: an expander only for several sessions. FR-018: a press selects the main
         // session, never a helper; with no session it selects nothing.
         if node.has_expander() {
@@ -1231,6 +1235,41 @@ fn session_tree_item(
 /// but — unlike worktree rows' hover-revealed cluster — is always shown, since it is the row's
 /// sole action and there is only ever one Default row to keep tidy (no reflow/clutter concern
 /// that motivated the fade-on-hover treatment for the potentially-many worktree rows).
+/// The setup tag of `location` in the active project, with its tooltip (feature 1289, contract
+/// U2), from the run its daemon reports; `None` with no run record.
+fn setup_chip(
+    state: &State,
+    location: &SessionLocation,
+    r: Roles,
+) -> Option<Element<'static, Message>> {
+    use crate::features::setup::{row_tag, Tone};
+    let project = state.workspace.active.as_deref()?;
+    let key = match location {
+        SessionLocation::Worktree(dir) => dir.as_str(),
+        SessionLocation::Default => "",
+    };
+    let micold_core::daemons::Binding::Bound(daemon) = state.daemon_binding(key) else {
+        return None;
+    };
+    let summary = state.setup.summary(daemon, project, location)?;
+    let tag = row_tag(summary, |secs| {
+        micold_core::local_time::UtcOffset::local_at(i64::try_from(secs).unwrap_or(i64::MAX))
+    });
+    let tint = match tag.tone {
+        Tone::Neutral => r.secondary,
+        Tone::Error => r.error,
+        Tone::Warning => r.warning,
+    };
+    // Sized by its label up to a cap, which also sets its line at the second line's own text
+    // height: a plain tag's taller line would grow a row that has no other chip and move its name
+    // (G1). A narrow sidebar cuts it with an ellipsis; the tooltip still says it all.
+    let chip = material::Tag::new(tag.label, tint).max_width(SETUP_TAG_MAX_WIDTH);
+    Some(Tooltip::new(chip, tag.tooltip, r).into())
+}
+
+/// The widest a setup tag grows: room for its longest label, *Setup interrupted*.
+const SETUP_TAG_MAX_WIDTH: f32 = 160.0;
+
 fn build_default_item(
     state: &State,
     node: &crate::features::sidebar::DefaultNode,
@@ -1285,6 +1324,10 @@ fn build_default_item(
         ));
     if state.start_offered(&SessionLocation::Default) {
         item = item.trailing_element(start_session);
+    }
+    // Feature 1289 (U2): the project folder's setup run, as on a worktree row.
+    if let Some(chip) = setup_chip(state, &SessionLocation::Default, r) {
+        item = item.trailing_chip(chip);
     }
     if node.has_expander() {
         item = item.expandable(

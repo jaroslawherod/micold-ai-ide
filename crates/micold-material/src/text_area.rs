@@ -41,6 +41,13 @@ const PADDING: Padding = Padding {
     left: spacing::MD,
 };
 
+/// The whole field's height when it shows `rows` lines: the padding around them, and never below
+/// [`MIN_HEIGHT`].
+pub fn rows_height(rows: usize) -> f32 {
+    let line = super::TypeRole::Body.line_height_dp();
+    (rows as f32 * line + PADDING.top + PADDING.bottom).max(MIN_HEIGHT)
+}
+
 /// The indicator's colour and thickness: thicker, in `primary`, while focused.
 pub fn indicator(r: Roles, focused: bool) -> (Color, f32) {
     style::field_indicator(r, focused, false)
@@ -56,6 +63,8 @@ pub struct TextArea<'a, M> {
     key_binding: Option<KeyBindingFn<'a, M>>,
     on_press: Option<OnPressFn<'a, M>>,
     max_height: Option<f32>,
+    min_rows: usize,
+    monospace: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     id: Option<iced::widget::Id>,
 }
@@ -78,9 +87,27 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
             key_binding: None,
             on_press: None,
             max_height: None,
+            min_rows: 1,
+            monospace: false,
             on_focus_change: None,
             id: None,
         }
+    }
+
+    /// Set the text in `Font::MONOSPACE`, for a field that holds code or a command line (feature
+    /// 1289, contract U1). The line height stays the body role's, so the row arithmetic of
+    /// [`Self::rows`] holds.
+    pub fn monospace(mut self) -> Self {
+        self.monospace = true;
+        self
+    }
+
+    /// Be at least `min` lines tall, and grow with the lines up to `max`, then scroll (feature
+    /// 1289, contract U1: 4 rows growing to 10).
+    pub fn rows(mut self, min: usize, max: usize) -> Self {
+        self.min_rows = min.max(1);
+        self.max_height = Some(rows_height(max.max(self.min_rows)));
+        self
     }
 
     /// What it shows while empty.
@@ -151,9 +178,13 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
             .placeholder(area.placeholder)
             .size(line.size())
             .line_height(line.line_height())
-            .font(line.font())
+            .font(if area.monospace {
+                iced::Font::MONOSPACE
+            } else {
+                line.font()
+            })
             .padding(PADDING)
-            .min_height(MIN_HEIGHT - PADDING.top - PADDING.bottom)
+            .min_height(rows_height(area.min_rows) - PADDING.top - PADDING.bottom)
             .style(move |_theme, status| {
                 let field = style::field_input(r)(
                     _theme,
@@ -453,6 +484,20 @@ mod tests {
             "five lines: {}",
             height(&five, 400.0)
         );
+    }
+
+    /// Feature 1289 (U1): a field set to 4 rows growing to 10 is 4 rows tall empty, grows with its
+    /// lines, and holds at 10.
+    #[test]
+    fn rows_set_the_floor_and_the_ceiling() {
+        let sized =
+            |content: &Content| laid_out_height(TextArea::new(content, LIGHT).rows(4, 10), 400.0);
+        let lines = |n: usize| Content::with_text(&vec!["x"; n].join("\n"));
+        assert_eq!(sized(&Content::new()), rows_height(4));
+        assert_eq!(sized(&lines(4)), rows_height(4));
+        assert!(sized(&lines(6)) > rows_height(4), "grows past 4");
+        assert_eq!(sized(&lines(30)), rows_height(10), "holds at 10");
+        assert_eq!(rows_height(1), MIN_HEIGHT);
     }
 
     #[test]

@@ -289,6 +289,11 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
         &current.jira_base_urls,
         token_stored,
     );
+    // Feature 1289 (U1): the open project's setup command, as stored.
+    let project = crate::shell::setup::open_project(app);
+    draft
+        .project
+        .follow(project, crate::shell::setup::in_force(app));
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
     // to decide which limits are editable (FR-015), so it is carried across here rather than
@@ -690,6 +695,7 @@ pub(crate) fn save_and_prepare_check(
     // back.
     let jira_action = valid.jira.clone();
     let base_url_change = valid.jira_base_url.clone();
+    let setup_change = valid.setup_command.clone();
     let settings = valid.into_settings();
     let baseline = app
         .core
@@ -767,6 +773,10 @@ pub(crate) fn save_and_prepare_check(
     if let Some(change) = &base_url_change {
         change.apply(&mut app.core.settings.jira_base_urls);
     }
+    // Feature 1289 (U1): the open project's setup command, in force here at once.
+    if let Some(change) = &setup_change {
+        change.apply(&mut app.core.settings.setup_commands);
+    }
     if let Some(store) = app.caps.settings() {
         // Through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
@@ -780,6 +790,9 @@ pub(crate) fn save_and_prepare_check(
             if let Some(change) = &base_url_change {
                 change.apply(&mut stored.jira_base_urls);
             }
+            if let Some(change) = &setup_change {
+                change.apply(&mut stored.setup_commands);
+            }
         });
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
@@ -787,6 +800,10 @@ pub(crate) fn save_and_prepare_check(
                 .notify_error(format!("Couldn't save your settings: {err}"));
             written = false;
         }
+    }
+    // Feature 1289 (C3): the daemons that hold the project learn its new command, once it is stored.
+    if let (true, Some(change)) = (written, &setup_change) {
+        crate::shell::setup::on_saved(app, change);
     }
     // The registry's single entry moved with the placement (feature 491, FR-005): read it back.
     if let Some(store) = app.caps.settings() {

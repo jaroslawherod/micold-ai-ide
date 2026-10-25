@@ -308,7 +308,7 @@ a failed run raises one error notification per client.
 **Independent test**: T040, T044, T047 pass; quickstart B3 (row tags), B4 (tag and
 notification), B6; visual pass U1, U2.
 
-- [ ] T040 [P] [US2] Test A16 (state, sync), red until T041–T043, new
+- [x] T040 [P] [US2] Test A16 (state, sync), red until T041–T043, new
   `client/tests/features_setup.rs`: `Changed` stores and replaces the summary per
   `(daemon, project, location)` and `run: None` removes it; a `Failed` summary yields one
   notification effect with *Setup failed in <project> / <location>: Exited with status 2.*; the
@@ -319,40 +319,40 @@ notification), B6; visual pass U1, U2.
   each connected daemon whose catalog holds it, none to others; each carries that daemon's catalog
   path, and a mapped container daemon (`links.rs` `PATHS_MAPPED`) gets its mapped path (contract
   C3)
-- [ ] T041 [US2] New `client/src/features/setup.rs` (`pub mod setup;` in
+- [x] T041 [US2] New `client/src/features/setup.rs` (`pub mod setup;` in
   `client/src/features/mod.rs`): the render-free reducer of data-model §Client (`runs`, `notified`;
   `view` stays `None` until T050), `Msg::Changed`, and the notification effect. Keep every
   decision a pure function the tests call
-- [ ] T042 [US2] `client/src/shell/daemon_sync.rs`: route `DaemonMsg::SetupChanged` into the
+- [x] T042 [US2] `client/src/shell/daemon_sync.rs`: route `DaemonMsg::SetupChanged` into the
   reducer (replacing T019's drop; `SetupOutput` stays dropped until T051); after
   `register_projects` (line 731) send `ProjectSetupSet` for each registered project with a command,
   with a `PendingOp` entry (beside `PendingOp::ProjectAdd`, line 237) whose failure text names the
   action; the path is the one `register_projects` sends in `ProjectAdd`. Failure notifications go
   through `App::notify_error` (`client/src/app.rs` line 562)
-- [ ] T043 [US2] `client/src/shell/persist.rs`: write `setup_commands` in the normal save, as
+- [x] T043 [US2] `client/src/shell/persist.rs`: write `setup_commands` in the normal save, as
   `jira_base_urls` (lines 289, 385, 451, 756–769) is; after a save that changes a project's command,
   send `ProjectSetupSet` per contract C3. T040 passes
-- [ ] T044 [P] [US2] Test A17, red until T045, extend `client/tests/features_settings.rs`: the
+- [x] T044 [P] [US2] Test A17, red until T045, extend `client/tests/features_settings.rs`: the
   draft's `project.setup_command` loads the open project's command; switching the open project
   reloads it (as `JiraDraft::follow`, line 540); saving `"  "` removes the entry; saving text stores
   `SetupCommand::parse(text)`; no project open → no field, no change on save
-- [ ] T045 [US2] `client/src/features/settings.rs`: `SettingsSection::Project` after `Jira` (enum
+- [x] T045 [US2] `client/src/features/settings.rs`: `SettingsSection::Project` after `Jira` (enum
   line 221, its list line 245, `label` → "Project", `icon` an existing icon, `index`); a
   `ProjectDraft { setup_command: String }` with `follow(project)`; save applies a
   `SetupCommandChange`. T044 passes
-- [ ] T046 [US2] New `client/src/ui/settings/project.rs` (declared in `client/src/ui/settings/mod.rs`
+- [x] T046 [US2] New `client/src/ui/settings/project.rs` (declared in `client/src/ui/settings/mod.rs`
   beside `jira`, wired where `settings_view.rs` picks the section view): contract U1 exactly — the
   project display name heading, a monospace `TextArea` labelled **Setup command**, 4 rows growing
   to 10, the help line, and with no project *Open a project to set its setup command.*
-- [ ] T047 [US2] Test G1, red until T048, new `client/tests/setup_tag_geometry.rs` (pattern:
+- [x] T047 [US2] Test G1, red until T048, new `client/tests/setup_tag_geometry.rs` (pattern:
   `client/tests/jira_status_geometry.rs`): a worktree row with a setup tag keeps its name and state
   icon at the same bounds as without; a long display name with a tag is truncated, not pushed; the
   Default row gets the tag too
-- [ ] T048 [US2] `client/src/ui/sidebar.rs`: the setup `Tag` (shared component) in the row's tag
+- [x] T048 [US2] `client/src/ui/sidebar.rs`: the setup `Tag` (shared component) in the row's tag
   line after the type and issue tags (tag drawing near line 419), on worktree rows and the Default
   row, with contract U2's text, tooltip (local time) and tint (`tokens::Roles`: neutral for
   Running/Succeeded/Stopped, error for Failed, warning for Interrupted). T047 passes
-- [ ] T049 [P] [US2] User guide: `guide/settings.md` gains the **Project** section (the field, the
+- [x] T049 [P] [US2] User guide: `guide/settings.md` gains the **Project** section (the field, the
   help text, that it is stored per project in this app's settings and runs on the worktree's
   daemon); `guide/worktrees-and-sessions.md` gains the setup tags and their meanings, that setup
   runs on every app-created worktree (form and AI) and never on an included or discovered one, and

@@ -797,7 +797,11 @@ mod issue_mapping {
             Some(&SettingsSection::GithubIssues),
             "GitHub is fifth in the rail, after Daemons (AS1); Jira follows it (feature 533)"
         );
-        assert_eq!(SettingsSection::ALL.len(), 6);
+        assert_eq!(
+            SettingsSection::ALL.len(),
+            7,
+            "Project follows Jira (feature 1289)"
+        );
         assert_eq!(SettingsSection::ALL.get(5), Some(&SettingsSection::Jira));
         // Feature 040 (FR-029): the page also holds the pull request switch, so it is "GitHub".
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
@@ -3415,5 +3419,177 @@ mod default_prompt_template {
             ..Settings::default()
         };
         assert!(SettingsDraft::from_settings(&settings).error.is_none());
+    }
+}
+
+// --- Feature 1289 M5: Settings › Project's setup command (T044, test A17) ----------------------
+
+mod project_setup_command {
+    use iced::widget::text_editor::{Action, Edit, Motion};
+    use micold_client::app::{EditorAction, State};
+    use micold_client::features::settings::{update, Msg, SettingsDraft, SettingsSection};
+    use micold_core::settings::{Settings, SetupCommandChange};
+    use micold_core::setup::SetupCommand;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    fn commands() -> BTreeMap<String, SetupCommand> {
+        BTreeMap::from([
+            (
+                "/work/app".to_owned(),
+                SetupCommand::parse("mise install").unwrap(),
+            ),
+            (
+                "/work/lib".to_owned(),
+                SetupCommand::parse("make deps").unwrap(),
+            ),
+        ])
+    }
+
+    fn at(path: &str) -> Option<(PathBuf, String)> {
+        Some((
+            PathBuf::from(path),
+            path.rsplit('/').next().unwrap().to_owned(),
+        ))
+    }
+
+    /// Settings open with `project` open (or none).
+    fn open(project: Option<(PathBuf, String)>) -> State {
+        let mut draft = SettingsDraft::from_settings(&Settings::default());
+        draft.project.follow(project, &commands());
+        let mut state = State::default();
+        state.settings.settings_draft = Some(draft);
+        state
+    }
+
+    fn draft(state: &mut State) -> &mut SettingsDraft {
+        state
+            .settings
+            .settings_draft
+            .as_mut()
+            .expect("Settings is open")
+    }
+
+    /// Replace the field's text, as select-all then typing does.
+    fn type_text(state: &mut State, text: &str) {
+        for action in [
+            Action::Move(Motion::DocumentStart),
+            Action::Select(Motion::DocumentEnd),
+            Action::Edit(Edit::Paste(Arc::new(text.to_owned()))),
+        ] {
+            update(state, Msg::SetupCommandAction(EditorAction(action)));
+        }
+    }
+
+    fn saved(state: &mut State) -> Option<SetupCommandChange> {
+        draft(state)
+            .validate()
+            .expect("the form is valid")
+            .setup_command
+    }
+
+    #[test]
+    fn the_section_follows_jira_in_the_rail() {
+        let jira = SettingsSection::Jira.index();
+        assert_eq!(
+            SettingsSection::ALL.get(jira + 1),
+            Some(&SettingsSection::Project)
+        );
+        assert_eq!(SettingsSection::Project.label(), "Project");
+    }
+
+    #[test]
+    fn the_field_loads_the_open_projects_command() {
+        let mut state = open(at("/work/app"));
+        assert_eq!(draft(&mut state).project.setup_command, "mise install");
+        assert_eq!(draft(&mut state).project.editor.text(), "mise install");
+        assert_eq!(saved(&mut state), None, "unchanged, nothing is saved");
+    }
+
+    #[test]
+    fn switching_the_open_project_reloads_the_field() {
+        let mut state = open(at("/work/app"));
+        type_text(&mut state, "edited");
+        draft(&mut state)
+            .project
+            .follow(at("/work/lib"), &commands());
+        assert_eq!(draft(&mut state).project.setup_command, "make deps");
+        draft(&mut state)
+            .project
+            .follow(at("/work/new"), &commands());
+        assert_eq!(
+            draft(&mut state).project.setup_command,
+            "",
+            "no command: empty"
+        );
+    }
+
+    #[test]
+    fn a_refresh_keeps_what_the_user_typed() {
+        let mut state = open(at("/work/app"));
+        type_text(&mut state, "mise trust && mise install");
+        draft(&mut state)
+            .project
+            .follow(at("/work/app"), &commands());
+        assert_eq!(
+            draft(&mut state).project.setup_command,
+            "mise trust && mise install"
+        );
+        let mut untouched = open(at("/work/app"));
+        let mut moved = commands();
+        moved.insert(
+            "/work/app".into(),
+            SetupCommand::parse("just setup").unwrap(),
+        );
+        draft(&mut untouched)
+            .project
+            .follow(at("/work/app"), &moved);
+        assert_eq!(
+            draft(&mut untouched).project.setup_command,
+            "just setup",
+            "another window's save shows in an untouched field"
+        );
+    }
+
+    #[test]
+    fn saving_text_stores_the_parsed_command() {
+        let mut state = open(at("/work/app"));
+        type_text(&mut state, "  mise trust\nmise install  ");
+        assert_eq!(
+            saved(&mut state),
+            Some(SetupCommandChange {
+                project: "/work/app".into(),
+                command: SetupCommand::parse("mise trust\nmise install"),
+            })
+        );
+    }
+
+    #[test]
+    fn saving_blank_text_removes_the_entry() {
+        let mut state = open(at("/work/app"));
+        type_text(&mut state, "  ");
+        assert_eq!(
+            saved(&mut state),
+            Some(SetupCommandChange {
+                project: "/work/app".into(),
+                command: None,
+            })
+        );
+        let mut none_stored = open(at("/work/new"));
+        type_text(&mut none_stored, " \n ");
+        assert_eq!(
+            saved(&mut none_stored),
+            None,
+            "blank over nothing changes nothing"
+        );
+    }
+
+    #[test]
+    fn with_no_project_open_there_is_no_field_and_no_change() {
+        let mut state = open(None);
+        assert_eq!(draft(&mut state).project.project, None);
+        type_text(&mut state, "make");
+        assert_eq!(saved(&mut state), None);
     }
 }

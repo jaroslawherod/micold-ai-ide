@@ -462,6 +462,8 @@ pub struct State {
     pub permission_prompts: crate::features::permission_prompts::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
+    /// Each location's setup run (feature 1289) -- see [`crate::features::setup::State`].
+    pub setup: crate::features::setup::State,
     /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
     pub overview: crate::features::overview::State,
     /// What the quick switcher holds (feature 968) -- see [`crate::features::quick_switch::State`].

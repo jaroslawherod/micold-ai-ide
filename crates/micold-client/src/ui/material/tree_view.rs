@@ -82,6 +82,9 @@ pub struct TreeItem<'a, M> {
     /// feature 1101's Jira status chip). It sits on the second line, so it changes neither the
     /// row's height nor where that line starts.
     pub leading_chip: Option<Element<'a, M>>,
+    /// A pre-built chip drawn last on the second line, after the tags (feature 1289: a location's
+    /// setup tag with its own tooltip, contract U2). Like the tags, it opens the second line.
+    pub trailing_chip: Option<Element<'a, M>>,
     /// What a right-click of the row becomes, built from the **press point** in window
     /// coordinates (feature 008 context menu, FR-013; the point since BUG-008, FR-029d).
     ///
@@ -167,6 +170,7 @@ impl<'a, M> TreeItem<'a, M> {
             tags: Vec::new(),
             supporting_text: None,
             leading_chip: None,
+            trailing_chip: None,
             on_right_press: None,
             on_hover: None,
             on_unhover: None,
@@ -313,6 +317,12 @@ impl<'a, M> TreeItem<'a, M> {
     /// Draw `chip` first after the supporting text (see [`TreeItem::leading_chip`]).
     pub fn leading_chip(mut self, chip: impl Into<Element<'a, M>>) -> Self {
         self.leading_chip = Some(chip.into());
+        self
+    }
+
+    /// Draw `chip` last on the second line, after the tags (see [`TreeItem::trailing_chip`]).
+    pub fn trailing_chip(mut self, chip: impl Into<Element<'a, M>>) -> Self {
+        self.trailing_chip = Some(chip.into());
         self
     }
 
@@ -501,7 +511,9 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             if primary && (item.tint == r.on_surface || item.tint == r.on_surface_variant) {
                 item.tint = r.on_primary_container;
             }
-            let has_second_line = item.supporting_text.is_some() || !item.tags.is_empty();
+            let has_second_line = item.supporting_text.is_some()
+                || !item.tags.is_empty()
+                || item.trailing_chip.is_some();
             // Read before any field is moved out of `item`; see where the label is pushed below.
             let row_label_role = item.label_role(label_role, selected_label_role);
             // The indent spacer indents, and nothing else. It used to carry §7.2's height floor as
@@ -723,6 +735,9 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 }
                 for (label, accent) in item.tags {
                     tag_row = tag_row.push(super::Tag::new(label, accent));
+                }
+                if let Some(chip) = item.trailing_chip {
+                    tag_row = tag_row.push(chip);
                 }
                 (
                     column![line, tag_row].spacing(2).width(Length::Fill).into(),

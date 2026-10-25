@@ -185,7 +185,9 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     }
     // A project first bound to a connected daemon is registered there before a session starts.
     for daemon in bound {
-        crate::shell::daemon_sync::register_projects(app, daemon);
+        let registered = crate::shell::daemon_sync::register_projects(app, daemon);
+        // Feature 1289 (C3): a project newly bound here takes its setup command with it.
+        crate::shell::setup::send_commands(app, daemon, registered);
     }
     micold_client::app::drain(rest, |outcome| {
         micold_client::app::interpret(&mut app.core, outcome)

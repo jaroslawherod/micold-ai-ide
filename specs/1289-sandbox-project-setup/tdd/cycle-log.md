@@ -284,3 +284,24 @@ output is copied from the session's logs.
   `stop_and_wait` returns a `DeleteHold` (`begin_delete`/`end_delete`) kept to the end of
   `delete_worktree`; `forget` ends a still-running tree -> setup unit 13 passed, `setup_run` 12,
   `mcp_create_worktree_setup` 2
+
+## M5 cycle 1: A16 reducer and sync, A17 Settings › Project, G1 row tag (T040–T048)
+
+- tests: `client/tests/features_setup.rs` (A16, 9), `features_settings.rs` mod
+  `project_setup_command` (A17, 7) and the rail count, `setup_tag_geometry.rs` (G1, 3);
+  `micold-material` `text_area::rows_set_the_floor_and_the_ceiling`
+- red: A16 and A17 first red by not compiling (`features::setup`, `ProjectDraft`,
+  `Msg::SetupCommandAction` did not exist). G1 red for a real reason on the first run of the
+  finished code: the Default row's title moved from y 206.05 to 205.2 with a plain `Tag` (its role
+  line is taller than the second line's text), so the tag now uses `Tag::max_width`, whose label
+  takes the second line's height. Mutation red after green (one run, then restored): dedup broken
+  (`notified.insert` ignored) -> `a_failed_run_notifies_once_with_the_reason`,
+  `a_failure_learned_in_the_catch_up_notifies_once` FAILED; `ProjectDraft::follow` never reloading ->
+  `the_field_loads_the_open_projects_command`, `switching_the_open_project_reloads_the_field`,
+  `a_refresh_keeps_what_the_user_typed` FAILED; Default row chip dropped ->
+  `the_default_row_gets_the_tag_too` FAILED
+- green: `features::setup` (`update`, `failure_notice`, `row_tag`, `on_connect`, `on_change`),
+  `ProjectDraft` with `follow`/`change`, `SettingsSection::Project`, `ui/settings/project.rs`,
+  `TextArea::monospace`/`rows`, `TreeItem::trailing_chip`, `shell/setup.rs` (connect, bind, clone
+  and save sync; `SetupChanged` routed) -> features_setup 9, features_settings 155,
+  setup_tag_geometry 3, settings_sections 24, settings_rail 6, text_area 15 passed
