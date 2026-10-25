@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
-| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | rebased on main bb931624b, fixture re-recorded, gate + push |
+| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | red-CI fix pushed at 892c6760b (main bb931624b), full gate green; CI pending |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
