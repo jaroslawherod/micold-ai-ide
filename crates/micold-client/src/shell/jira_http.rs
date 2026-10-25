@@ -12,6 +12,7 @@
 //! Depends on `micold_core`, `ureq`, `base64` and `serde_json` alone, so the adapter test includes
 //! this file by path.
 
+use std::io::Read;
 use std::time::Duration;
 
 use base64::Engine;
@@ -19,18 +20,23 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage};
 use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
-use micold_core::jira_query::{QueryFailure, ScopedQuery};
+use micold_core::jira_query::{rejection_messages, QueryFailure, ScopedQuery};
 use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
 
 /// How many times a refused status request is halved to find the key Jira refuses: 2^7 covers a
 /// chunk of 100 (contracts/jira-status-source.md §3).
 const MAX_BISECTION_DEPTH: u8 = 7;
 
-/// Why one request failed: a `400` is told apart, because a status request answers it by halving.
+/// Why one request failed: a `400` is told apart, because a status request answers it by halving
+/// and a query shows Jira's messages from its body (feature 1186, FR-010).
 enum PostError {
-    BadRequest,
+    /// Jira answered `400`; the body as read, up to [`MAX_REFUSAL_BYTES`].
+    BadRequest(Vec<u8>),
     Load(IssueLoadError),
 }
+
+/// Bytes of a `400` answer's body read at most: Jira's messages are a few lines.
+const MAX_REFUSAL_BYTES: u64 = 64 * 1024;
 
 /// The whole request's budget: connect, send and read (FR-018).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -83,7 +89,7 @@ impl JiraCloud {
         body: &serde_json::Value,
     ) -> Result<Vec<u8>, IssueLoadError> {
         self.send(conn, token, body).map_err(|error| match error {
-            PostError::BadRequest => classify(&Outcome::Status(400)),
+            PostError::BadRequest(_) => classify(&Outcome::Status(400)),
             PostError::Load(error) => error,
         })
     }
@@ -123,7 +129,7 @@ impl JiraCloud {
         match status {
             200..=299 => {}
             300..=399 => return Err(load(Outcome::Redirected)),
-            400 => return Err(PostError::BadRequest),
+            400 => return Err(PostError::BadRequest(refusal_body(&mut response))),
             _ => return Err(load(Outcome::Status(status))),
         }
         response
@@ -149,11 +155,11 @@ impl JiraCloud {
         match self.send(conn, token, &body) {
             Ok(bytes) => parse_statuses(&bytes),
             Err(PostError::Load(error)) => Err(error),
-            Err(PostError::BadRequest) if keys.len() == 1 => Ok(Vec::new()),
-            Err(PostError::BadRequest) if depth >= MAX_BISECTION_DEPTH => {
+            Err(PostError::BadRequest(_)) if keys.len() == 1 => Ok(Vec::new()),
+            Err(PostError::BadRequest(_)) if depth >= MAX_BISECTION_DEPTH => {
                 Err(classify(&Outcome::Status(400)))
             }
-            Err(PostError::BadRequest) => {
+            Err(PostError::BadRequest(_)) => {
                 let (head, tail) = keys.split_at(keys.len() / 2);
                 let mut read = self.read_chunk(conn, token, head, depth + 1)?;
                 read.extend(self.read_chunk(conn, token, tail, depth + 1)?);
@@ -170,6 +176,18 @@ fn outcome_of(error: &ureq::Error, token: &ApiToken) -> Outcome {
         ureq::Error::Timeout(_) => Outcome::TimedOut,
         other => Outcome::Unreachable(other.to_string().replace(token.expose(), "…")),
     }
+}
+
+/// The body of a `400` answer, up to [`MAX_REFUSAL_BYTES`]; what could not be read is left out, so
+/// a body lost in transit reads as no message.
+fn refusal_body(response: &mut ureq::http::Response<ureq::Body>) -> Vec<u8> {
+    let mut body = Vec::new();
+    let _ = response
+        .body_mut()
+        .as_reader()
+        .take(MAX_REFUSAL_BYTES)
+        .read_to_end(&mut body);
+    body
 }
 
 fn request_body(jql: &str, cursor: Option<&str>, max_results: u32) -> serde_json::Value {
@@ -229,7 +247,10 @@ impl JiraSource for JiraCloud {
         cursor: Option<&str>,
     ) -> Result<IssuePage, QueryFailure> {
         let body = request_body(jql.as_str(), cursor, PAGE_SIZE);
-        let bytes = self.post(conn, token, &body).map_err(QueryFailure::Load)?;
+        let bytes = self.send(conn, token, &body).map_err(|error| match error {
+            PostError::BadRequest(body) => QueryFailure::Rejected(rejection_messages(&body)),
+            PostError::Load(error) => QueryFailure::Load(error),
+        })?;
         parse_page(&bytes).map_err(QueryFailure::Load)
     }
 }

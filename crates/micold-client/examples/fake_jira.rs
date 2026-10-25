@@ -7,8 +7,10 @@
 //! Serves the captured search page at `POST /rest/api/3/search/jql` on `127.0.0.1:<port>`
 //! (default 8099). Connect a project to `http://127.0.0.1:<port>` (a debug build accepts loopback
 //! `http`) with any email and token. Type a mode on stdin to switch it: `ok` answers the page,
-//! `refuse` answers 401, `silent` never answers, `html` answers a login page. Stop the process to
-//! see the unreachable notice, start it again to retry.
+//! `refuse` answers 401, `silent` never answers, `html` answers a login page, `badjql` answers
+//! `400` with Jira's message for a mistyped field (feature 1186, quickstart §B B5). Stop the
+//! process to see the unreachable notice, start it again to retry. In `ok` mode each request's
+//! `jql` is printed, so a step can check the scoped query an advanced run sent.
 //!
 //! A search whose JQL holds `key in (...)` (feature 1101, the linked tickets' statuses) is answered
 //! with those keys' statuses, `To Do` unless a script changed them. `status ABC-1 done Done`
@@ -31,6 +33,10 @@ const OK: u8 = 0;
 const REFUSE: u8 = 1;
 const SILENT: u8 = 2;
 const HTML: u8 = 3;
+const BAD_JQL: u8 = 4;
+
+/// What `badjql` answers: Jira's refusal of a query naming a field that does not exist.
+const BAD_JQL_BODY: &str = r#"{"errorMessages":["Field 'asignee' does not exist or you do not have permission to view it."]}"#;
 
 /// The statuses a script set: key to `(category key, name)`; and keys Jira "cannot show".
 #[derive(Default)]
@@ -92,6 +98,14 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
     let request = String::from_utf8_lossy(&seen).to_string();
     let request_body = request.split_once("\r\n\r\n").map_or("", |(_, b)| b);
     let status_page = status_answer(request_body, &tickets.lock().expect("tickets"));
+    if mode == OK {
+        if let Some(jql) = serde_json::from_str::<serde_json::Value>(request_body)
+            .ok()
+            .and_then(|json| json["jql"].as_str().map(str::to_string))
+        {
+            println!("jql: {jql}");
+        }
+    }
     let (status, content_type, body) = match mode {
         SILENT => {
             thread::sleep(Duration::from_secs(60));
@@ -99,6 +113,7 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
         }
         REFUSE => ("401 Unauthorized", "application/json", "{}"),
         HTML => ("200 OK", "text/html", LOGIN_PAGE),
+        BAD_JQL => ("400 Bad Request", "application/json", BAD_JQL_BODY),
         _ => match &status_page {
             Some(page) => ("200 OK", "application/json", page.as_str()),
             None => ("200 OK", "application/json", PAGE),
@@ -117,7 +132,7 @@ fn main() {
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(8099);
     let listener = TcpListener::bind(("127.0.0.1", port)).expect("bind the fake Jira port");
-    println!("fake Jira on http://127.0.0.1:{port} - modes: ok, refuse, silent, html; status KEY CATEGORY NAME; missing KEY");
+    println!("fake Jira on http://127.0.0.1:{port} - modes: ok, refuse, silent, html, badjql; status KEY CATEGORY NAME; missing KEY");
     let mode = Arc::new(AtomicU8::new(OK));
     let switch = Arc::clone(&mode);
     let tickets = Arc::new(Mutex::new(Tickets::default()));
@@ -150,6 +165,7 @@ fn main() {
                 "refuse" => REFUSE,
                 "silent" => SILENT,
                 "html" => HTML,
+                "badjql" => BAD_JQL,
                 other => {
                     println!("unknown mode {other:?}");
                     continue;

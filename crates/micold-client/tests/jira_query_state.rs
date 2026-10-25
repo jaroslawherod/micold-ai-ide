@@ -714,3 +714,148 @@ fn a_load_failure_lands_as_failed() {
         }
     ));
 }
+
+// ---- US2: Jira's refusal, a new run after it, and Retry (FR-010, FR-011) ----
+
+/// Advanced mode with `text` run and failed with `failure`.
+fn advanced_failed(text: &str, failure: QueryFailure) -> State {
+    let mut state = advanced_shown();
+    query(&mut state, QueryMsg::DraftChanged(text.into()));
+    query(&mut state, QueryMsg::Run);
+    let (seq, _) = running(&state);
+    query(
+        &mut state,
+        QueryMsg::Ran {
+            seq,
+            result: Err(failure),
+        },
+    );
+    state
+}
+
+fn rejected() -> QueryFailure {
+    QueryFailure::Rejected(vec![
+        "Field 'asignee' does not exist or you do not have permission to view it.".into(),
+    ])
+}
+
+#[test]
+fn a_rejected_query_keeps_the_query_as_typed() {
+    let state = advanced_failed("asignee = currentUser() ORDER BY rank", rejected());
+    assert!(matches!(
+        &jq(&state).run,
+        QueryRun::Failed { failure, .. } if *failure == rejected()
+    ));
+    assert_eq!(jq(&state).draft, "asignee = currentUser() ORDER BY rank");
+    assert_eq!(jq(&state).last_run, "asignee = currentUser() ORDER BY rank");
+    assert_eq!(form(&state).shown_issues(), Vec::<&Issue>::new());
+}
+
+#[test]
+fn editing_and_running_again_replaces_the_error_with_the_new_result() {
+    let mut state = advanced_failed("asignee = currentUser()", rejected());
+    query(
+        &mut state,
+        QueryMsg::DraftChanged("assignee = currentUser()".into()),
+    );
+    assert!(
+        matches!(jq(&state).run, QueryRun::Failed { .. }),
+        "typing alone keeps the error until the next run"
+    );
+    query(&mut state, QueryMsg::Run);
+    let (seq, jql) = running(&state);
+    assert_eq!(jql, scoped("assignee = currentUser()"));
+    let found = vec![issue("ABC-42", 42, "Mine", &[], "Task")];
+    query(
+        &mut state,
+        QueryMsg::Ran {
+            seq,
+            result: Ok(listing(found.clone())),
+        },
+    );
+    assert!(matches!(&jq(&state).run, QueryRun::Loaded { listing, .. } if listing.issues == found));
+}
+
+#[test]
+fn retry_after_a_load_failure_runs_the_same_scoped_query_again() {
+    let mut state = advanced_failed(
+        "priority = High",
+        QueryFailure::Load(IssueLoadError::TimedOut),
+    );
+    let failed_scoped = match &jq(&state).run {
+        QueryRun::Failed { scoped, .. } => scoped.clone(),
+        other => panic!("expected Failed, found {other:?}"),
+    };
+    // An edit after the failure does not change what Retry runs (FR-011).
+    query(&mut state, QueryMsg::DraftChanged("priority = Low".into()));
+    let before = state.worktree_form.issue_request_seq;
+    query(&mut state, QueryMsg::Retry);
+    match &jq(&state).run {
+        QueryRun::Running { seq, scoped } => {
+            assert_eq!(*seq, before + 1, "Retry takes the form's next seq");
+            assert_eq!(*scoped, failed_scoped);
+        }
+        other => panic!("expected the run again, found {other:?}"),
+    }
+    assert_eq!(state.worktree_form.issue_request_seq, before + 1);
+    assert_eq!(state.worktree_form.awaited_jira_query(), Some(before + 1));
+    assert_eq!(jq(&state).last_run, "priority = High");
+}
+
+#[test]
+fn retry_is_ignored_unless_a_load_failure_shows() {
+    let idle = advanced_shown();
+    let refused = {
+        let mut state = advanced_shown();
+        query(&mut state, QueryMsg::DraftChanged("(a = b".into()));
+        query(&mut state, QueryMsg::Run);
+        state
+    };
+    let in_flight = {
+        let mut state = advanced_shown();
+        query(&mut state, QueryMsg::DraftChanged("a = b".into()));
+        query(&mut state, QueryMsg::Run);
+        state
+    };
+    let loaded = advanced_loaded("a = b", basic_issues());
+    let rejected = advanced_failed("asignee = me", rejected());
+    let basic = {
+        let mut state = advanced_failed("a = b", QueryFailure::Load(IssueLoadError::TimedOut));
+        query(&mut state, QueryMsg::ModeChanged(QueryMode::Basic));
+        state
+    };
+    for (name, mut state) in [
+        ("idle", idle),
+        ("refused", refused),
+        ("running", in_flight),
+        ("loaded", loaded),
+        ("rejected", rejected),
+        ("basic mode", basic),
+    ] {
+        let run = jq(&state).run.clone();
+        let seq = state.worktree_form.issue_request_seq;
+        let awaited = state.worktree_form.awaited_jira_query();
+        query(&mut state, QueryMsg::Retry);
+        assert_eq!(jq(&state).run, run, "{name}");
+        assert_eq!(state.worktree_form.issue_request_seq, seq, "{name}");
+        assert_eq!(state.worktree_form.awaited_jira_query(), awaited, "{name}");
+    }
+}
+
+#[test]
+fn a_refused_query_keeps_the_draft_and_sends_nothing_even_after_a_failure() {
+    let mut state = advanced_failed("a = b", QueryFailure::Load(IssueLoadError::TimedOut));
+    query(
+        &mut state,
+        QueryMsg::DraftChanged("project = XYZ OR (a = b".into()),
+    );
+    let before = state.worktree_form.issue_request_seq;
+    query(&mut state, QueryMsg::Run);
+    assert_eq!(
+        jq(&state).run,
+        QueryRun::Refused(QueryRefusal::UnbalancedParentheses)
+    );
+    assert_eq!(jq(&state).draft, "project = XYZ OR (a = b");
+    assert_eq!(state.worktree_form.issue_request_seq, before);
+    assert_eq!(state.worktree_form.awaited_jira_query(), None);
+}

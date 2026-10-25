@@ -1164,7 +1164,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         // Feature 1186: the Jira source in advanced mode — the prompt before any query ran, the
         // results open (the rows gate reads them) and capped, the run in flight, a refused query,
-        // no match, and a query Jira rejected.
+        // no match, and a query Jira rejected with no message.
         CoveredState {
             name: "add-worktree-dialog-jira-advanced-prompt",
             build: || jira_advanced_state("", QueryRun::Idle, false),
@@ -1231,6 +1231,40 @@ pub fn covered_states() -> &'static [CoveredState] {
                     QueryRun::Failed {
                         scoped: advanced_scoped(),
                         failure: QueryFailure::Rejected(Vec::new()),
+                    },
+                    false,
+                )
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 1186 M4: Jira's own messages, one line each, and a load failure with Retry.
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-rejected-messages",
+            build: || {
+                jira_advanced_state(
+                    ADVANCED_QUERY,
+                    QueryRun::Failed {
+                        scoped: advanced_scoped(),
+                        failure: QueryFailure::Rejected(vec![
+                            "Field 'asignee' does not exist or you do not have permission to view it.".into(),
+                            "The value 'Hgh' does not exist for the field 'priority'.".into(),
+                        ]),
+                    },
+                    false,
+                )
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-advanced-load-failed",
+            build: || {
+                jira_advanced_state(
+                    ADVANCED_QUERY,
+                    QueryRun::Failed {
+                        scoped: advanced_scoped(),
+                        failure: QueryFailure::Load(IssueLoadError::Unreachable(
+                            "connection refused".into(),
+                        )),
                     },
                     false,
                 )

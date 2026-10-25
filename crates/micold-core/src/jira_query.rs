@@ -211,6 +211,51 @@ pub enum QueryFailure {
     Load(IssueLoadError),
 }
 
+/// Characters of one of Jira's messages kept before it is cut (contracts/jql-rules.md §4).
+const MAX_MESSAGE_CHARS: usize = 300;
+
+/// Jira's messages kept at most.
+const MAX_MESSAGES: usize = 10;
+
+/// Jira's messages in a `400` answer to a query (FR-010, contracts/jql-rules.md §4): the
+/// `errorMessages` strings in order, then the `errors` object's string values in key order, each
+/// cleaned as a query is, empty ones dropped, cut at 300 characters plus `…`, at most 10. A body
+/// that is not such JSON (an HTML page, `{}`) gives none, which the selector says as
+/// [`NOT_VALID_JQL`].
+pub fn rejection_messages(body: &[u8]) -> Vec<String> {
+    let Ok(serde_json::Value::Object(json)) = serde_json::from_slice::<serde_json::Value>(body)
+    else {
+        return Vec::new();
+    };
+    let listed = json
+        .get("errorMessages")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten();
+    let by_field: std::collections::BTreeMap<&String, &serde_json::Value> = json
+        .get("errors")
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .collect();
+    listed
+        .chain(by_field.into_values())
+        .filter_map(serde_json::Value::as_str)
+        .map(clean)
+        .filter(|message| !message.is_empty())
+        .map(cut_message)
+        .take(MAX_MESSAGES)
+        .collect()
+}
+
+/// `message` cut at [`MAX_MESSAGE_CHARS`] characters, with `…` when it was longer.
+fn cut_message(message: String) -> String {
+    match message.char_indices().nth(MAX_MESSAGE_CHARS) {
+        Some((at, _)) => format!("{}…", &message[..at]),
+        None => message,
+    }
+}
+
 /// Which way the selector lists Jira issues (FR-001).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

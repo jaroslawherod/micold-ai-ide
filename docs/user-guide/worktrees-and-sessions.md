@@ -832,7 +832,17 @@ says which, and the query stays as you typed it.
 
 **Up to 1,000 issues.** At most 1,000 matching issues are loaded; when more match, the line under
 the list says it shows the first 1,000 the query returns. A query that matches nothing says
-"No issue matches this query.", and a query Jira does not accept says it is not valid JQL.
+"No issue matches this query."
+
+**When a query fails.** A query Jira does not accept, such as one naming a field that does not
+exist, shows Jira's own messages in place of the list, one per line and in Jira's order, for example
+*Field 'asignee' does not exist or you do not have permission to view it.* The query stays in the
+field as you ran it, so fix it and run it again; the new result replaces the messages. When Jira
+gives no message, the line says "Jira did not accept the query: it is not valid JQL." A query the
+app refuses to send (see *What the app checks first*) gives the app's own reason instead, and
+nothing reaches Jira. Any other failure (the site unreachable, a timeout, credentials refused, no
+access to the project, rate limiting, a server error) shows the same notice as the basic list with a
+**Retry** button, and **Retry** runs the same query again.
 
 ### On a Kubernetes daemon
 

@@ -4,7 +4,12 @@
 //! What the selector shows is decided render-free in `features::worktree_form::jira_query`; this
 //! module only lays it out. The rows are the basic picker's own (`worktree_form::issue_rows_with`),
 //! so an advanced result looks exactly like a listed issue (FR-006). Nothing here logs or notifies:
-//! the query reaches the screen and nowhere else (FR-016).
+//! the query reaches the screen and nowhere else (FR-016). A failed run shows Jira's own messages, or
+//! basic mode's notice with **Retry** (FR-010, FR-011).
+//!
+//! View glue under the GUI exception (Constitution I): what it shows is `QueryRun`, whose
+//! transitions `tests/jira_query_state.rs` covers; its look is the layout snapshot's and the
+//! recorded pass's (quickstart §B).
 
 use crate::app::Message;
 use crate::features::worktree_form::jira_query::{Msg as QueryMsg, QueryRun};
@@ -14,7 +19,7 @@ use crate::ui::material::{self, Button, StageProgress, Text, ToggleChip, TypeRol
 use iced::widget::{row, Column};
 use iced::{Element, Length};
 use micold_core::format::group_digits;
-use micold_core::jira_query::{QueryFailure, QueryMode};
+use micold_core::jira_query::{QueryFailure, QueryMode, NOT_VALID_JQL};
 use micold_core::jira_status::StatusBoard;
 use micold_core::tokens::{spacing, Roles};
 
@@ -23,9 +28,6 @@ pub const PROMPT: &str = "Type a JQL query, then press Enter or Run";
 
 /// What an empty result says in place of the rows, distinct from an error (FR-012).
 pub const NO_MATCH: &str = "No issue matches this query.";
-
-/// What a query Jira answered with 400 says until M4 shows Jira's own messages (FR-008).
-pub const REJECTED: &str = "Jira did not accept the query: it is not valid JQL.";
 
 fn message(msg: QueryMsg) -> Message {
     Message::WorktreeForm(FormMsg::JiraQuery(msg))
@@ -98,8 +100,30 @@ pub fn picker<'a>(
         QueryRun::Running { .. } => {
             col = col.push(StageProgress::new(running(form), r));
         }
-        QueryRun::Failed { failure, .. } => {
-            col = col.push(Text::new(failed(form, failure), TypeRole::Caption, r).tint(r.error));
+        QueryRun::Failed {
+            failure: QueryFailure::Rejected(messages),
+            ..
+        } => {
+            // FR-010: Jira's messages in Jira's order, one line each, or the plain words.
+            if messages.is_empty() {
+                col = col.push(Text::new(NOT_VALID_JQL, TypeRole::Caption, r).tint(r.error));
+            }
+            for line in messages {
+                col = col.push(Text::new(line.as_str(), TypeRole::Caption, r).tint(r.error));
+            }
+        }
+        QueryRun::Failed {
+            failure: QueryFailure::Load(error),
+            ..
+        } => {
+            // FR-011: basic mode's notice and Retry (533 FR-018); Retry runs the same query.
+            let notice = form
+                .notice_source()
+                .map(|source| error.message(source))
+                .unwrap_or_default();
+            col = col
+                .push(Text::new(notice, TypeRole::Caption, r).tint(r.error))
+                .push(Button::text("Retry", r).on_press(message(QueryMsg::Retry)));
         }
         QueryRun::Loaded { listing, .. } if listing.issues.is_empty() => {
             col = col.push(Text::new(NO_MATCH, TypeRole::Caption, r).muted());
@@ -123,17 +147,5 @@ fn running(form: &WorktreeForm) -> String {
     match form.jira_site() {
         Some(site) => format!("Running the query on {}…", site.host),
         None => "Running the query…".to_string(),
-    }
-}
-
-/// A failed run's line: basic mode's message for a load failure (533 FR-018), one line for a query
-/// Jira rejected. M4 (T030) replaces this with Jira's own messages and **Retry**.
-fn failed(form: &WorktreeForm, failure: &QueryFailure) -> String {
-    match failure {
-        QueryFailure::Rejected(_) => REJECTED.to_string(),
-        QueryFailure::Load(error) => form
-            .notice_source()
-            .map(|source| error.message(source))
-            .unwrap_or_default(),
     }
 }
