@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 PR #1393 open — wait on CI, merge (rebase; main conflicts in crates/micold-core/src/session.rs)
+- **Next step**: M3 PR #1393 rebased onto main and force-pushed — wait on CI, merge (rebase)
 
 ## Pull requests
 
@@ -83,7 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None. M3 rebase (2026-10-25): #1393 rebased onto origin/main (af0d60077, 17 commits); one conflict, the `SessionLocation` derive in crates/micold-core/src/session.rs — main added `Hash`, M3 added `Serialize, Deserialize`; kept both. Main made no protocol version bump, so protocol 69 stands. Full gate (scripts/gate.sh) green at 2f1cfd93b.
 
 ## Open escalation
 
