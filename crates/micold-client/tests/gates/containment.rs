@@ -188,10 +188,10 @@ fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
 /// line and scroll the rest rather than pushing the dialog over the app bar (ledger decision D11).
 /// Only `add-worktree-dialog-jira-advanced-rejected-messages` holds more than one line, and fires it,
 /// past the **bottom** edge of the lines' `Scrollable` ([`QUERY_FAILURE_VIEWPORT`]).
-const QUERY_FAILURE_CONTENT: &[&str] = &["0/6/0/0/0/3/3/0/0"];
+const QUERY_FAILURE_CONTENT: &[&str] = &["0/8/0/0/0/3/3/0/0"];
 
 /// The `Scrollable` a failed run's lines scroll in: the parent of [`QUERY_FAILURE_CONTENT`].
-const QUERY_FAILURE_VIEWPORT: &str = "0/6/0/0/0/3/3/0";
+const QUERY_FAILURE_VIEWPORT: &str = "0/8/0/0/0/3/3/0";
 
 /// Whether `escape`, in the covered state `state`, is a failed run's lines outgrowing their viewport
 /// downwards, which is the only overhang [`QUERY_FAILURE_CONTENT`] allows.
