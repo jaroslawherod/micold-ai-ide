@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M5
-- **Next step**: M5 verify step 2 (review B, visual pass §B6, §B7), then full gate and PR
+- **Next step**: M5 full gate (`scripts/gate.sh`) after the rebase, then the PR
 
 ## Pull requests
 
@@ -89,6 +89,9 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M4 visual pass | — | 3eedd2e8 | B1 chip-bar half, B5 (pointer and keyboard-opened ⋯ menu, Escape, attach chosen, type chip filters), B8 at 180 px PASS, light and dark: `visual-pass/m4-record.md` |
 | M4 full gate | — | e2cf702f | `scripts/gate.sh` green after rebasing onto origin/main 78c2fc22 |
 | M5 review A (code-review high) | 1 | fb59692ed13c4bbf9cdd355161af82462297c129:675c06a721ce7e292a6d3c005ac986ec9bf25113 | CHANGES: F1 `location_row`/`row_heights` counted folded-away sessions, so `hover_holds` failed for rows below a fold (fixed: count `session_rows()`, test `the_row_counts_skip_the_sessions_a_fold_hides`); F4 shadowed `at` (fixed, `entered`); F2, F3 MINOR declined. Scoped gate red: a missed `Hovered` call site in `sidebar_attention.rs`, and `anatomy_call_sites` (a `#[cfg(test)]` accessor in tree_view.rs read as a second test module; fixed: `pub(crate) key` field). Green on micold-client; micold-core `settings_refuses_save_over_failed_read` fails only as root (gate.sh runs it as a user) |
+| M5 review A (code-review high, sonnet) | 2 | 5f5e657bbba5820353a00c1602e088993000a23b:11749fecef664bb0f5a648d37708be2b45b46267 | CLEAN of BLOCKER/MAJOR: F1, F4 fixes hold, declines stand; 2 MINOR suggestions left (test covers the worktree arm only; one shared drawn-session count for the three counters) |
+| M5 review B (conformance, sonnet) | 1 | 5f5e657bbba5820353a00c1602e088993000a23b:11749fecef664bb0f5a648d37708be2b45b46267 | CLEAN (2 MINOR: F1 hover tests said to be in the wrong file, declined: they are in `tests/sidebar_tree.rs` as T053 asks; F2 no `tdd/cycle-log.md`, as M1–M4: T052/T053 were run red first, by compile) |
+| M5 visual pass | — | 11749fec | B6 (Tab order, Enter/Space on a header, chords onto rows), B7 (ring stays on a row that moves to Working and back; hover action dropped) PASS, light; chord into Done not seen (no merged PR). User guide's Tab bullet corrected (fixed, prose only): `visual-pass/m5-record.md` |
 
 ## Declined review findings
 
