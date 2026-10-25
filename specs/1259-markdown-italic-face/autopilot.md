@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M1 PR #1377 open
-- **Next step**: orchestrator waits on CI for the M1 PR and merges; then M2
+- **Phase**: M2 implemented, gate and reviews pending
+- **Next step**: orchestrator dispatches review A and B (and visual-pass B5), then opens the M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1343 | design (spec, plan, tasks) | merged | 56515707ebd3c2d9e078e059a5e791e16982a6c3 |
-| #1377 | M1 | open | — |
+| #1377 | M1 | merged | dbe13ae2425575a7b112d3c9eceaffb6ceb58f27 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | #1377 | PR open |
-| M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | — | planned |
+| M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | — | implemented (T019-T021); T022 B5 pending |
 
 ## Decisions
 
@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D10 | M1 fix (visual pass T018) | Bold (700) and bold italic drew in DejaVu, not Roboto 600: cosmic-text 0.15 takes the requested family only at the exact requested weight (`FontFallbackIter::default_font_match_key` filters `font_weight_diff == 0`), so a 700 request skipped Roboto 600 for any host 700 face. Same on `origin/main` for upright bold (upright registration unchanged). Ship a real 700 face, map bold to 600 in `painted`, or alias? | Alias: `install_roboto` pushes each bundled 600 face again as a 700 `FaceInfo` over the same bytes (`alias_bold`). One place, covers every `Weight::Bold` on `ROBOTO` (also the picker's emphasis), keeps the spec's "bold resolves to 600" (no new face, no weight change; spec Out of scope "changing which weight bold resolves to" holds). Contract C-3 updated. Resolution tests now shape through cosmic-text (`test_support::resolves_to_bundled`), red first | agent-resolved | cosmic-text-0.15.0 src/font/fallback/mod.rs:279-287, 305-340; red: "Normal ROBOTO at Bold is not drawn in the bundled Roboto-SemiBold" |
 | D11 | M1 fix (visual pass T018 B6) | Italic 漢字 drew boxes: cosmic-text falls back only to faces of the requested style (`Attrs::matches`: style equal, emoji excepted) and hosts ship no italic CJK | `LinkText` splits emphasis per grapheme where Roboto's italic has no glyph and draws those pieces upright (`upright_where_italic_lacks`, `roboto::italic_has_glyph`); they then fall back as upright text does, which is the spec's Edge (coverage). Link kept per piece, so one focus stop. No synthesised slant (spec Out of scope). Contract C-4 updated | agent-resolved | cosmic-text-0.15.0 src/attrs.rs:323-327; red: `[("漢字 and 🙂", true)]` vs the split |
 | D12 | M1 rebase onto #1262 | #1262 (a4f2edd2) moved `text.rs`, `link_text.rs`, `mono.rs`, `test_support.rs` into `crates/micold-material`. Where does `roboto.rs` go? | `crates/micold-material/src/roboto.rs`, beside `mono.rs` (its twin): `link_text` (now in the crate) calls `roboto::italic_has_glyph` and `text.rs` names `ROBOTO`, and the crate cannot depend on the client. It names no `micold_core` module, so `tests/no_domain_types.rs` holds. `pub mod roboto` + re-exports in the crate's `lib.rs`; the client's `ui::material` glob re-export and `ui/mod.rs` keep every `ui::ROBOTO*` path. `unicode-segmentation` moves from the client's Cargo.toml to the crate's (only `link_text` uses it); `include_bytes!` paths shortened. No behaviour change; contract, plan, tasks, research, data-model paths follow | agent-resolved | full gate (scripts/gate.sh) green at fd518b5d after the rebase onto 78c2fc22; git show a4f2edd2; 41415bd7 (1127 precedent) |
+| D13 | M2 | Does the alias (D10) make the weight-700 pin unnecessary, or C-2 need adjusting? | No change: the alias is a Binary face at 700 beside a host Roboto Bold 700; fontdb breaks the tie for the first-loaded (host) face and cosmic-text matches the requested weight exactly, so a host 700 would still win bold. The pin keeps removing host non-Binary Roboto faces at unshipped weights; it runs after `alias_bold` (the alias is Binary, so it survives). C-2 as written; test seeds a host 700 | agent-resolved | `pin_drops_host_italics_and_off_weight_faces_only` green |
 
 ## Review rounds
 

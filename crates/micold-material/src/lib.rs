@@ -134,8 +134,8 @@ pub use required_legend::RequiredLegend;
 pub use resize_handle::{ResizeHandle, WIDTH as RESIZE_HANDLE_WIDTH};
 pub use ripple::{pulse as ripple_pulse, Ripple};
 pub use roboto::{
-    install_roboto, ROBOTO, ROBOTO_FACES, ROBOTO_FAMILY, ROBOTO_ITALIC_BYTES, ROBOTO_MEDIUM_BYTES,
-    ROBOTO_MEDIUM_ITALIC_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
+    install_roboto, pin_roboto_italics, ROBOTO, ROBOTO_FACES, ROBOTO_FAMILY, ROBOTO_ITALIC_BYTES,
+    ROBOTO_MEDIUM_BYTES, ROBOTO_MEDIUM_ITALIC_BYTES, ROBOTO_REGULAR_BYTES, ROBOTO_SEMIBOLD_BYTES,
     ROBOTO_SEMIBOLD_ITALIC_BYTES, ROBOTO_WEIGHTS,
 };
 pub use scrollable::{ScrollDirection, Scrollable};
