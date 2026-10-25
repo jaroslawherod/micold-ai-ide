@@ -64,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, sonnet) | 1 | da02017a…:2bad8b6c (base 6d0475a5) | CLEAN, cited (tree.rs, tasks.md:70-91, cycle-log.md:15-19) |
 | Review A M3 (code-review high) | 1 | f22196b4e09cd9e1d7f351b7b611662b7d134cb0:0db79c00204b5edec9f374c8343473ee7fed851b (base bb931624) | 5 MINOR (F1 fixed in 7b228493: reference to an unchanged file tested; F2–F5 declined) |
 | Review B M3 (conformance, sonnet) | 1 | f22196b4…:0db79c00 | CLEAN, cited (changes.rs arms, tree_state / tree_source tests, tasks T019–T023); 2 MINOR (F2 cycle-log note fixed, prose only; F1 declined) |
+| Review A M4 (code-review high) | 1 | 91fc5a5c20ea7c55ab33ba07c7f36ef62ae056d1:bbfebda252276fda85ce54f86693fd8fc106ecfb (base 5c9daf4c) | CLEAN, cited (changes.rs, change_bar.rs, glyph.rs, tree.rs); 2 MINOR (F1 fixed: indent cap shaped once; F2 declined). A first dispatch read a stale M3 prompt and reviewed M3's diff: not counted; its one M4 point (`files[*leaf]` unguarded) fixed in bbfebda2 |
 
 ## Declined review findings
 
@@ -85,6 +86,7 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 | M3 | A | F4 (non-shown views keep stale rows) | only the shown view is drawn or read by `tree_pane`; a tab switch is a message through `update`, which refreshes the newly shown view |
 | M3 | A | F5 (`tree_rows` and `change_leaves` map leaves separately; Files lays out per draw) | different count rules by design (Files has none); Files' per-draw layout predates M3, its cost unchanged |
 | M3 | B | F1 (T034/T036 edited in M3) | decision 6 records why; prose in tasks only |
+| M4 | A | F2 (the SC-006 test restates the cap formula) | the depth-0 assertion fails when the column cannot hold a 24-character name at all, and `cap >= 2` fails when the tree could not indent; the drawn row is the visual pass's check (T030, Part B step 6) |
 
 ## Handover
 

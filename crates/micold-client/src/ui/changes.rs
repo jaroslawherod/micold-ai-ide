@@ -620,7 +620,7 @@ fn change_tree<'a>(
     let counts = pending_counts(&state.changes);
     let rows = &view.change_rows;
     let scale = view.change_scale;
-    let cap = tree_indent_cap(FILE_COLUMN_WIDTH);
+    let cap = *DEFAULT_INDENT_CAP;
     VirtualRows::new(
         rows.len(),
         ROW_HEIGHT,
@@ -689,6 +689,10 @@ pub fn tree_indent_cap(list_width: f32) -> u16 {
         width_of(NAME_SAMPLE, NAME_ROLE),
     )
 }
+
+/// [`tree_indent_cap`] of the fixed file column, shaped once rather than on every draw.
+static DEFAULT_INDENT_CAP: std::sync::LazyLock<u16> =
+    std::sync::LazyLock::new(|| tree_indent_cap(FILE_COLUMN_WIDTH));
 
 /// The indentation of a row `levels` steps in.
 fn indent(levels: u16) -> Space {
