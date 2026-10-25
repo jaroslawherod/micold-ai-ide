@@ -86,11 +86,10 @@ still closed. The folders you close stay closed while the view is kept, even whe
 again or you switch the source. Selecting a file in a closed folder some other way (from the diff's
 **Open diff**, or by following a reference) opens the folders above it.
 
-A file row starts with the file's own name, in bold; the folders above it say where it is. Under the
-name:
+A file row starts with its review state (○ not reviewed yet, ◉ not reviewed and with draft
+comments, ✓ reviewed; see [Marking files reviewed](#marking-files-reviewed)) and the file's own name,
+in bold; the folders above it say where it is. Under the name:
 
-- its review state: ○ not reviewed yet, ◉ not reviewed and with draft comments, ✓ reviewed (see
-  [Marking files reviewed](#marking-files-reviewed)), before the name;
 - what happened to it: **Added**, **Deleted**, **Renamed** or **Mode** (only its permissions
   changed); a modified file has no tag. A file git does not track yet counts as **Added**;
 - **Binary** or **Not text** when the file's contents are not readable text;
