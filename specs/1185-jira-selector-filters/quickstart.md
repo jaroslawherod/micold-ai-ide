@@ -43,5 +43,16 @@ filtered searches by the clauses it understands); a debug build with a project c
 8. Clear filters: unfiltered list returns, line gone.
 9. Keyboard only: Tab reaches the Filters button; Space or Enter opens the panel, then Tab and
    Shift+Tab cycle through its fields and the button; Up/Down/Enter pick; Esc closes a list, a
-   second Esc the panel with the keyboard back on the button; Tab or Shift+Tab then goes on to Clear filters.
+   second Esc the panel with the keyboard back on the button; Shift+Tab then goes back through the
+   issue search to Clear filters (it trails the Basic / Advanced row above), Tab on to Type.
 Record screenshots under `specs/1185-jira-selector-filters/visual/`.
+
+## Results
+
+**Close pass 1** (2026-10-25, df6c4089, lavapipe/wgpu on Xvfb + `fake_jira`, light; one dark
+check). Part A: `scripts/gate.sh` green (11,185 passed, 0 failed). Part B: steps 1–8 PASS, dark
+panel PASS; step 9 FAIL — the Tab cycle and Esc, Esc pass, but a Component / Fix version /
+Reporter field reached by Tab never loads its choices, and Enter in it reached the app behind the
+dialog: milestone M5. SC-001: five interactions (open the panel, focus Component, pick Payments,
+focus Fix version, pick 2.4). Screenshots: `visual/close-*.png`. T046 stays open until step 9
+passes after M5.
