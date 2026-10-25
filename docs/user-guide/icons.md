@@ -88,6 +88,6 @@ See [Appearance & Theming](appearance-theming.md) for how themes and colors work
 "Help (question mark)" app-bar icon that no longer exists — the top app bar renders `Icon::Menu`
 — and listed 9 of the 21 icons the application defines. All rendered icons are now documented.
 
-**Alignment**: 2026-10-25 (#1128). `Icon::Help` draws the overflow menu's **Session service
-diagnostics** item and is in the table. `Icon::DarkMode` and `Icon::AutoMode` are defined with no
+**Alignment**: 2026-10-25 (#1128). `Icon::Help` draws the overflow menu's
+**Session service diagnostics** item and is in the table. `Icon::DarkMode` and `Icon::AutoMode` are defined with no
 rendered call site since the overflow menu's theme toggle was removed, and are left out of it.

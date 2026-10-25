@@ -37,8 +37,8 @@ A 44 px bar runs across the top of the window in every view. From the left, it h
   pressed, not typed into. While Settings is open it is greyed out and does nothing.
 - **Settings** — the gear, at the right; it opens [Settings](settings.md) and is drawn selected
   while Settings is open.
-- **Overflow menu** — the three dots at the right end, holding Settings, Session service
-  diagnostics and [About](help-about.md).
+- **Overflow menu** — the three dots at the right end, holding Settings,
+  Session service diagnostics and [About](help-about.md).
 
 It shows no title text and no Overview button: the Overview opens from the sidebar's first row —
 see [Opening and closing it](overview.md#opening-and-closing-it). When the window narrows, the field
