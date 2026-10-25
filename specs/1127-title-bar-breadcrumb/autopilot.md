@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1127
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
-- **Phase**: milestone M4
-- **Next step**: orchestrator moves M4's commits onto the PR branch after M3 merges and opens M4's PR; then close
+- **Phase**: done
+- **Next step**: handoff — the orchestrator moves the close commits (branch `wip/1127-close`, on M4's head 13beef6d) onto the PR branch after M3 and M4 merge and opens the close PR (title and body in the scratchpad: `pr-title-close.md`, `pr-body-close.md`); the run ends when it merges
 
 ## Pull requests
 
@@ -19,6 +19,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1357 | design (spec, plan, tasks) | merged | 1076eede8a911518582fcfcbeb95fc08c4949d58 |
 | #1376 | M1 | merged | 9fc835a0 |
 | #1409 | M2 | merged | be3819ab |
+| #1416 | M3 | open (CI) | — |
+| — | M4 | built on `wip/1127-m4`, no PR yet | — |
+| — | close | built on `wip/1127-close`, gated; the orchestrator opens it after M4 | — |
 
 ## Milestones
 
@@ -55,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D20 | M2 | `sibling_parity` assumed every bar action leads with its glyph and every bar panel ends at one trailing inset | The breadcrumb's action is its project segment (glyph trailing the label); the switcher panel may instead start at the segment's edge (R8) | agent-resolved | research R8; FR-005 |
 | D21 | M4 | T048 removes `Toolbar::leading_fixed` "unless the showcase or another caller uses it" | Kept: the material crate's own give-way tests use it (`toolbar.rs` tests); only the showcase's "with actions" pose lost its Overview button | agent-resolved | crates/micold-material/src/toolbar.rs tests |
 | D22 | M4 | #1125's sidebar Overview row exists (`ui/sidebar.rs` `overview_row`, merged); the row only opens (US2.3), so "closes from the row" in the deliverable is the chord, Escape and a session | Guide says so | agent-resolved | sidebar.rs `overview_row`; overview.rs `Msg::Opened` |
+| D23 | close | `speckit-converge` before tdd-verify? | Skipped: *Review rounds* holds a CLEAN review B for M1–M4 | agent-resolved | close.md step 1; Review rounds below |
+| D24 | close | T051 names `visual/`; M1–M4 saved under `visual-pass/m<K>/` | The whole-feature pass goes in `visual-pass/close/` beside them; T051 says so | agent-resolved | specs/1127-title-bar-breadcrumb/visual-pass/ |
 
 ## Review rounds
 
@@ -84,6 +89,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review B (conformance, sonnet) | 1 | 5f19bdee | first run could not read (Bash denied): discarded; re-run with the diff as a file: CLEAN, 2 MINORs fixed (comments; test name no longer claims Changes) |
 | M4 gate (`scripts/gate.sh`) | — | tree of f2f681b0 | pass (after one `feature_registration_cost` red: the chord test called `overview::update`, now `State::update`; and the known `attention_error_notice` flake, rerun) |
 | M4 visual pass | — | f2f681b0 | pass (visual-pass/m4/) |
+| Close: tdd-verify smell pass (autopilot-reviewer, fresh) | 1 | 13beef6d | 10 findings: 1 HIGH, 4 MEDIUM/LOW and a test doc fixed (T052–T056); 4 recorded, not fixed (tdd/verification.md findings 9–11; 11 holds two) |
+| Close: deliberate mutants | — | 13beef6d | 6 run, 6 caught (one run lost to a full disk and was repeated) |
+| Close: T051 visual pass (release build) | — | 13beef6d | pass: every body branch, light and dark, 640/900/1280 (visual-pass/close/) |
+| Close review (autopilot-reviewer) | 1 | a11aedb3ac4bcbb41634fba35ccadf1befbf12b6:13beef6db03edc44c2af7473f8745d2ab412809b | CHANGES: 1 MAJOR (verification.md `suite:` still a placeholder — filled from the gate); 2 MINOR fixed, prose only (decision order, fixed-finding count) |
+| Close review round 2 (scoped, sonnet) | 2 | dae4d0341b69f9277e6185304390648f7f5456bb:1d992f449c3dcf8469d21abc7fe8a9b43bbd217d | CLEAN, citing verification.md:18, the decision order and the Review rounds rows; 1 MINOR fixed, prose only (which findings are unfixed); it could not sum the gate log (outside the worktree), the totals were summed here from its `test result` lines |
+| Close gate (`scripts/gate.sh`) | — | tree of 1d992f44 | pass on the second run (first: rustfmt on the field_button test edit); 11137 passed, 0 failed, 18 ignored |
 
 ## Declined review findings
 
@@ -108,5 +119,6 @@ None.
 
 - The session header's chips row is 15.6 dp with text chips and 16 dp once the pull request chip (an icon chip) appears, so the terminal below re-measures by 0.4 dp; at the 1127 body height that crosses a row boundary (`session_area_stability` now ignores the resize). Give the chips row one height.
 - `ui/mod.rs` shell-instance menu `.rising_above(anatomy::app_bar::HEIGHT)` (and the showcase's twin) reads the title bar's height for a bottom bar; it should read the bar it rises from (M1 review A).
-- T051 (visual pass of quickstart Part B) is in no milestone: the close unit runs it (analyze G5).
+- A menu trigger's tooltip draws over its own open panel while the pointer rests on it (the project segment's `Switch project` over the switcher's first row; the sidebar ⋯'s `More actions` likewise): hide a trigger's tooltip while its menu is open (close visual pass, `visual-pass/close/switcher-open-dark.png`).
+- TDD audit findings 9–11 left as is (`tdd/verification.md`): the eager `title_bar_fits` gate, the stage-reading sweep in `material::toolbar`, the `anatomy::ALL.len()` pin and hand-built press/release pairs.
 - Analyze LOWs left as is: G2 (icon contrast pairs; icons use existing app-bar roles), G4 (tooltip placement test), F3, F5. (T1 fixed with tasks review F2.)
