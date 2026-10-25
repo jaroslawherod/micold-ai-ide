@@ -630,7 +630,11 @@ fn change_tree<'a>(
             match &row.kind {
                 RowKind::Folder(folder) => folder_row(row, folder, levels, r),
                 RowKind::File { leaf } => {
-                    let file = &files[*leaf];
+                    // Rows are laid out from these files by `update`; a row that no longer names
+                    // one draws nothing rather than panicking mid-draw.
+                    let Some(file) = files.get(*leaf) else {
+                        return Space::new().into();
+                    };
                     let bar = counted(file)
                         .then(|| tree::bar(file.added, file.removed, scale, CHANGE_BAR_WIDTH))
                         .flatten();
