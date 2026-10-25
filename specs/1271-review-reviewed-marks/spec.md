@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1360, #1374, #1390, #1411, #1417, #1419
 
 **Input**: User description: "Implement GitHub issue #1271: Review UI: reviewed marks and progress.
 Blocked by: #1269. Per-file reviewed state (unseen / has drafts / reviewed), 'n of m reviewed' with
