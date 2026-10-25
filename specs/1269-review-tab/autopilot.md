@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 (branch `1269-m4`, stacked on `1269-m3`): T032–T040 implemented; reviews A/B, visual pass (T041) and full gate next
+- **Next step**: orchestrator opens the M4 PR (branch `1269-m4`, stacked on `1269-m3`; PR files `pr-title-m4.md`/`pr-body-m4.md` in the scratchpad); then the close unit (T042–T043)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | in CI |
 | M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | (M2 PR, opened by orchestrator) | review-ready |
 | M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | (M3 PR, opened by orchestrator) | review-ready |
-| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | (M4 PR, opened by orchestrator) | in progress |
+| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | (M4 PR, opened by orchestrator) | review-ready |
 
 ## Decisions
 
@@ -90,6 +90,10 @@ None.
 
 ## Follow-ups not done
 
+- M4: at 640×480 with the sidebar open the strip's viewport (~150 px) is narrower than one tab (feature 1126's layout); tabs scroll and are whole with the sidebar collapsed.
+- M4: the visual-pass reveal fixes (`tab_reveal_from_start`, oversized member revealed at its leading edge) and the `feature_registration_cost` allowlist entries landed after reviews A/B and were not re-reviewed; tests and gate green.
+- M4: quickstart B12 (chords) and B11's twelve tabs were not run by hand; their tests cover them. B9's Settings half not run by hand.
+- M4: the gate ran in chunks (disk too small for every test binary at once); six root-only permission tests skipped (container runs as root).
 - M2: quickstart B0 (M2 subset: B1 without the strip, B2–B4, B9) was not run by hand in this container (no display, disk at its limit); the M4 visual pass covers B1–B4 and B9.
 - M2: T020's failed re-read on show keeps the tab, toggles and comments and shows the error as today; as today, a failed list read also drops the selection and the pick (`list_read` → `close_new`), so "picks kept" holds only for a re-read that succeeds.
 - M2: the root-level stray file `/reviewB-m2-r1.out` (an empty-variable redirect while launching review B) could not be removed by the unit; delete it by hand.

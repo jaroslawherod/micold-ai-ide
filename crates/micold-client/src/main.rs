@@ -680,13 +680,24 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
         return None;
     }
     app.core.session.pending_tab_reveal = false;
+    // Feature 1269: after a location change the offset is the left strip's, so the reveal measures
+    // from the start and always scrolls, to the start when the marked tab already fits there.
+    let from_start = std::mem::take(&mut app.core.session.tab_reveal_from_start);
     let model = micold_client::ui::terminal::StripModel::of(&app.core)?;
-    let offset = micold_client::ui::terminal::scroll_into_view(
-        model.marked_index()?,
-        app.core.session.tab_strip_scroll_offset as f32,
-        app.core.session.tab_strip_viewport_width as f32,
-        &model.members,
-    )?;
+    let index = model.marked_index()?;
+    let reveal = |from: f32| {
+        micold_client::ui::terminal::scroll_into_view(
+            index,
+            from,
+            app.core.session.tab_strip_viewport_width as f32,
+            &model.members,
+        )
+    };
+    let offset = if from_start {
+        reveal(0.0).unwrap_or(0.0)
+    } else {
+        reveal(app.core.session.tab_strip_scroll_offset as f32)?
+    };
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),
         iced::widget::scrollable::AbsoluteOffset { x: offset, y: 0.0 },

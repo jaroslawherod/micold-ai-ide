@@ -115,6 +115,11 @@ pub struct State {
     /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
     /// frame where the viewport has a width.
     pub pending_tab_reveal: bool,
+    /// Whether that reveal measures from the strip's start rather than from
+    /// `tab_strip_scroll_offset` (feature 1269, visual pass): set when the shown location changes,
+    /// because the offset then belongs to the strip that was left, and a reveal measured from it
+    /// leaves the new strip where the old one was scrolled to.
+    pub tab_reveal_from_start: bool,
     /// Sessions that were auto-restarted while their project was inactive, pending a return
     /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,
@@ -1725,6 +1730,14 @@ pub fn shell_instance_menu_closed(state: &mut crate::app::State) {
 /// write-isolation guard reports against every caller instead of the one function that writes it.
 pub(crate) fn arm_tab_reveal(state: &mut crate::app::State) {
     state.session.pending_tab_reveal = true;
+}
+
+/// The shown location changed (feature 1269, visual pass): the strip now drawn is another
+/// location's, so its marked tab is revealed from the start rather than from the offset the left
+/// strip was scrolled to.
+pub(crate) fn arm_tab_reveal_from_start(state: &mut crate::app::State) {
+    state.session.pending_tab_reveal = true;
+    state.session.tab_reveal_from_start = true;
 }
 
 /// The AI tab was pressed (feature 026, FR-006/FR-007).

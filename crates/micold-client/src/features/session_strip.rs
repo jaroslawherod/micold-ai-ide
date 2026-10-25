@@ -495,6 +495,10 @@ pub(crate) fn strip_overflow(offset: f32, viewport: f32, members: &[Member]) -> 
 /// `None` rather than "scroll to where you already are" is the requirement: a user may scroll away
 /// from the marked tab by hand, and a reveal that fired on every selection would yank them back.
 /// It scrolls the member **just** into view rather than centring it.
+///
+/// A member wider than the viewport cannot be brought wholly into view, so its **leading** edge is
+/// (feature 1269, visual pass): that is where a tab's mark — the Review tab's changed dot — is
+/// drawn, and showing its trailing end instead left the mark under the leading fade.
 pub fn scroll_into_view(
     index: usize,
     offset: f32,
@@ -502,13 +506,14 @@ pub fn scroll_into_view(
     members: &[Member],
 ) -> Option<f32> {
     let (leading, trailing) = *member_offsets(members).get(index)?;
-    if leading + EDGE_TOLERANCE < offset {
-        Some(leading)
+    let target = if leading + EDGE_TOLERANCE < offset || trailing - leading > viewport {
+        leading
     } else if trailing > offset + viewport + EDGE_TOLERANCE {
-        Some(trailing - viewport)
+        trailing - viewport
     } else {
-        None
-    }
+        return None;
+    };
+    ((target - offset).abs() > EDGE_TOLERANCE).then_some(target)
 }
 
 /// A session's tab (S1, R8): `<command> · <session name>`, its role and status on hover.
@@ -1165,6 +1170,13 @@ pub(crate) mod tests {
             None,
             "no such member"
         );
+        // Feature 1269 (visual pass): a member wider than the viewport shows its leading edge,
+        // where a tab's mark is drawn, and one already scrolled there is left alone.
+        let (leading, trailing) = offsets[11];
+        let narrow = (trailing - leading) - 10.0;
+        assert_eq!(scroll_into_view(11, 0.0, narrow, &members), Some(leading));
+        assert_eq!(scroll_into_view(11, leading, narrow, &members), None);
+        assert_eq!(scroll_into_view(0, 0.0, narrow, &members), None);
     }
 
     /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.

@@ -1333,6 +1333,9 @@ impl State {
                 None => (std::path::PathBuf::new(), None),
             };
             effect = update(&mut self.changes, Msg::HeaderFollowed { project, entry });
+            // Feature 1269 (visual pass): another location's strip is drawn; its marked tab — the
+            // Review tab when a review is shown — is revealed from the strip's start.
+            crate::features::session::arm_tab_reveal_from_start(self);
         }
         // While the Overview hides the header its watch is off (`header_watch_entry`), so the
         // counts are read again when it shows once more.
