@@ -74,7 +74,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-None.
+M2 unit at 165k context: T012–T020 done and pushed (head a32372a6); scoped gate green, review A 3 rounds clean. Next: review B on snapshot `86ed9f3e…:02f788dc…`, then a fresh M2 unit runs the full gate (`scripts/gate.sh`) and opens the M2 PR. No open findings; no PR yet.
 
 ## Open escalation
 
