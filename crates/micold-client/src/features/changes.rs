@@ -1801,7 +1801,11 @@ pub fn opened(
     let key: EntryKey = (project, entry);
     hide_other(state, &key);
     let make = || fresh_view(key.0.clone(), key.1.clone());
-    match state.tabs.open_or_show(key.clone(), current, make) {
+    let outcome = state.tabs.open_or_show(key.clone(), current, make);
+    // Opening a view, kept or new, starts with the source control's list closed (1272,
+    // data-model §8).
+    close_source_menu(state);
+    match outcome {
         Opened::Created => request_read(state),
         Opened::Shown { reread: true } => reread_shown(state),
         Opened::Shown { reread: false } | Opened::AlreadyShown => Effect::None,
