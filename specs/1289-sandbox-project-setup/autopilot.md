@@ -81,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A | 2 (scoped, sonnet) | 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 | CLEAN, no findings — lock order setup→inner everywhere, no I/O under either mutex, chunking keeps watcher `next` consistent, 1 MiB bound holds |
 | M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `interrupt_all` sets `stopping`/`stop_requested`, `spawned` ends a shell of an ended run, `start` refuses while stopping; F2 `Persist::seq` + `SetupStore::in_order` drop stale writes (interrupt rewrites the log whole); F3 record and log written independently; F4 `DeleteHold` refuses starts during a delete, `forget` ends a live tree; cycle log M4 cycle 3 |
 | M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CLEAN (Verify all pass); MINORs: B-F1 fixed with A-F2; B-F2 compaction red logged (cycle log M4 cycle 3) |
+| M4 A | 2 (sonnet, scoped) | 72c712a70e67a2419c9c2df0782306822ca21f05:c311173c2197557a5791e3e920f1b279c7268633 | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
@@ -89,6 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M4 review round 1 fixed (2026-10-25) at c311173c2: A-F1–A-F4, B-F1, B-F2 (cycle log M4 cycle 3); full gate (scripts/gate.sh) green and pushed. Next: review A round 2 (scoped) on 72c712a7:c311173c; then rebase onto main, PR.
 M4 implemented (2026-10-25) on 9177522b: T031–T039 ticked, `setup_run` 12/12, daemon `-- setup` 10/10, core `setup_store` 5/5, clippy core+daemon clean. Snapshot 5975a20d:facc3d6c. Unit context over 150k at this point: a fresh unit continues. Next: reviews A and B round 1, fix findings, then the full gate (`scripts/gate.sh`), rebase, PR.
 
 Earlier: M3 rebase 1 (2026-10-25): onto af0d60077; `SessionLocation` derive conflict in session.rs (main `Hash`, M3 `Serialize, Deserialize`) — kept both.
