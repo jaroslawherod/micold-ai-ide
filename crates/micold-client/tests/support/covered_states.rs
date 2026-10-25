@@ -3570,6 +3570,11 @@ fn feat_short_pull_requests() -> Vec<micold_core::pull_request::BranchPullReques
     ]
 }
 
+/// When the posed pull-request lists were read: a fixed instant in the year 2096. The view asks the
+/// clock, and a clock behind a reading makes nothing stale (`pull_request::is_stale`), so the list
+/// is never marked *Possibly stale* whatever day the test runs.
+pub const LIST_READ_AT: u64 = 4_000_000_000;
+
 /// `feat-short`'s review (the project root's, for [`SourcePose::DefaultEntry`]) posed as `pose`,
 /// with the source control's list open when `open` (feature 1272).
 pub fn review_source(pose: SourcePose, open: bool) -> StateUnderTest {
@@ -3581,9 +3586,7 @@ pub fn review_source(pose: SourcePose, open: bool) -> StateUnderTest {
     } else {
         review_marks()
     };
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
+    let now = LIST_READ_AT;
     let state = &mut under.state.changes;
     state.pr_enabled = pose != SourcePose::SettingOff;
     let view = state.tabs.shown_view_mut().expect("the review is shown");

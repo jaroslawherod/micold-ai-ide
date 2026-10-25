@@ -18,7 +18,7 @@ use crate::support::covered_states::{
     REVIEW_DIFF_AREA, REVIEW_DIFF_PANE, REVIEW_DRAWER,
 };
 use crate::support::layout::{self as lay, LayoutRecord, StateUnderTest, WINDOW};
-use iced::Rectangle;
+use iced::{Rectangle, Size};
 use micold_client::app::State;
 use micold_client::features::changes::{self, Effect, Load, Msg};
 use micold_core::review::base::{Base, ReviewScope};
@@ -285,18 +285,52 @@ fn with_the_drawer_closed_the_diff_spans_the_body_beside_the_file_list() {
     );
 }
 
+/// The drawer's full width (FR-010), by value rather than the token that builds it.
+const DRAWER_PX: f32 = 360.0;
+
+/// A window narrow enough that half the diff area is under [`DRAWER_PX`].
+const NARROW: Size = Size::new(1000.0, WINDOW.height);
+
 /// FR-010, FR-017: the open drawer is 360 wide (at most half the diff area) at the area's right
 /// edge, from under the header to the bar, and its left edge is at or right of the area's middle.
 #[test]
 fn the_open_drawer_covers_the_right_of_the_diff_area_down_to_the_bar() {
     let records = records(&drawer_open(review_bar()));
     let area = at(&records, REVIEW_DIFF_AREA, "the diff area");
-    let drawer = at(&records, REVIEW_DRAWER, "the drawer");
-    let bar = at(&records, REVIEW_BAR, "the bar");
-    // The drawer is 360 wide, or half the diff area when that is narrower. Since feature 1272's
-    // fixed file column the area at this window is just over 720, so the drawer takes its 360.
-    let full = micold_core::tokens::anatomy::comments_drawer::WIDTH;
-    let wanted = full.min(area.width / 2.0);
+    assert!(
+        area.width / 2.0 >= DRAWER_PX,
+        "at the fixture's window the drawer takes its full width: {area:?}"
+    );
+    assert_drawer_covers_the_right_of(&records, DRAWER_PX);
+}
+
+/// FR-010: when half the diff area is under 360, the drawer is that half.
+#[test]
+fn in_a_narrow_window_the_drawer_is_half_the_diff_area() {
+    let mut renderer = lay::renderer();
+    let (_, all) = lay::painted_text_settled_at(
+        lay::view_of(&drawer_open(review_bar())),
+        &mut renderer,
+        NARROW,
+    );
+    let records: Vec<LayoutRecord> = all
+        .into_iter()
+        .filter(|r| r.layer == lay::Layer::Base)
+        .collect();
+    let area = at(&records, REVIEW_DIFF_AREA, "the diff area");
+    assert!(
+        area.width / 2.0 < DRAWER_PX,
+        "the narrow window leaves the drawer less than its full width: {area:?}"
+    );
+    assert_drawer_covers_the_right_of(&records, area.width / 2.0);
+}
+
+/// The drawer is `wanted` wide, at the area's right edge, from its top to the bar, and starts at or
+/// right of the area's middle.
+fn assert_drawer_covers_the_right_of(records: &[LayoutRecord], wanted: f32) {
+    let area = at(records, REVIEW_DIFF_AREA, "the diff area");
+    let drawer = at(records, REVIEW_DRAWER, "the drawer");
+    let bar = at(records, REVIEW_BAR, "the bar");
     assert!(
         (drawer.width - wanted).abs() <= TOLERANCE,
         "the drawer is {wanted} wide: {drawer:?} over {area:?}"

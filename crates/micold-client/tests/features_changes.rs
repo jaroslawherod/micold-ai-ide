@@ -4368,28 +4368,14 @@ fn a_current_session_dropped_from_the_catalog_shows_the_headers_review() {
 mod drive;
 
 mod source_menu {
-    use super::drive::{highlight, menu, menu_label, pick, stops, view};
+    use super::drive::{highlight, menu, menu_label, pick, pr, stops, view};
     use super::*;
     use changes::{Source, SourceKey};
-    use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus, TreeListing};
+    use micold_core::pull_request::{BranchPrState, TreeListing};
     use micold_core::review::pr_diff::split_pr_diff;
     use micold_core::review::source_menu::{Kind, Stop};
 
     const PR_DIFF: &str = "diff --git a/a.rs b/a.rs\nindex 1..2 100644\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n";
-
-    fn branch_pr(number: u64) -> BranchPullRequest {
-        BranchPullRequest {
-            number,
-            title: format!("title {number}"),
-            url: format!("https://github.com/acme/widgets/pull/{number}"),
-            state: BranchPrState::Open,
-            created_at: "2026-10-10T09:00:00Z".into(),
-            base: "main".into(),
-            head: "abc".into(),
-            head_branch: "feat/a".into(),
-            checks: CheckStatus::None,
-        }
-    }
 
     /// `showing(..)` with the PR status setting on and pull requests 7 and 8 listed.
     fn with_prs() -> State {
@@ -4408,7 +4394,7 @@ mod source_menu {
             Msg::PullRequestsRead {
                 seq,
                 read_at: 1,
-                result: Ok(vec![branch_pr(7), branch_pr(8)]),
+                result: Ok(vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Open)]),
             },
         );
         state

@@ -203,8 +203,10 @@ fn the_working_tree_option_holds_its_chips_and_note_inside_its_row() {
                 chip.origin.y + chip.natural_height <= note.origin.y + TOLERANCE,
                 "the chip sits above the note: {chip:?}, {note:?}"
             );
+            let middle = chip.origin.y + chip.natural_height / 2.0;
             assert!(
-                chip.origin.y + TOLERANCE >= option.origin.y - chip.natural_height,
+                middle >= option.origin.y - TOLERANCE
+                    && middle <= option.origin.y + option.natural_height + TOLERANCE,
                 "the chip is on the option's line: {chip:?}, {option:?}"
             );
         }
