@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: review M4
-- **Next step**: orchestrator: Review A round 2 (sonnet) on the fix diff `review-snapshot.sh diff c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7`; then open the M4 PR (body: scratchpad pr-body-1275-m4.md).
+- **Next step**: orchestrator: Review A round 2 (sonnet) on the fix diff `git diff a47ef1e52 66c7ca0fb` (round 1's snapshot is stale after the rebase onto origin/main acefceb57: `review-snapshot.sh diff` exits 2; new snapshot in *Review rounds*); then open the M4 PR (body: scratchpad pr-body-1275-m4.md).
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
-| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | pushed 3dc34ba63, gate green; reviews pending |
+| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | review round 1 fixed; pushed 66c7ca0fb, gate green; A round 2 pending |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
 
@@ -173,4 +173,4 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
   unchanged by that move. Client lib + the three test targets + core `review` green.
 - Full `scripts/gate.sh` on pushed 2f0606e03 (main d84e94860): exit 0.
 - M4 (unit, 2026-10-25): T026–T034 done on b582c2563. Deviations: press stays `.on_gutter`, over is `.on_gutter_over` + `.dragging`; Q5 focus as `Effect::FocusComposer`; slots stay under the pre-press pick while dragging (`slot_pick`, visual-pass finding); a click retargets a new box on release (C4); `AddComment` and `close_new` end a drag. Carried MINORs: `Drag::span` clamps 0 (core d9), `chose_gone` reset with the hold (`forget_hold`, apply, `SourceChosen`), Decisions row 1 *By* fixed. Layout snapshot unchanged (passes). Full `scripts/gate.sh` exit 0 on 3dc34ba63 (main b582c2563, unmoved); pushed. TDD log `tdd/cycle-log.md`.
-- M4 review round 1 fixes (unit, 2026-10-25): A F1 (MAJOR) widget-level release, F2 Esc via `on_escape`, F3 cancel on unfocus (the drag listener maps `Window(Unfocused)` to `GutterDragCancelled`; a main.rs call and a root arm were refused by `feature_registration_cost` / `root_is_routing_only`) and `cancel_drag` in `hide_shown`; B1 red runs logged, B3 clause dropped. Fix commits c78280476, aac85eda7 + the listener fix, rebased onto origin/main 48cda33fe (main moved: #1431 and docs only). Visual check of a fast click: PASS (`visual-pass/m4-c-*`). Layout snapshot: gate decides.
+- M4 review round 1 fixes (unit, 2026-10-25): A F1 (MAJOR) widget-level release, F2 Esc via `on_escape`, F3 cancel on unfocus (the drag listener maps `Window(Unfocused)` to `GutterDragCancelled`; a main.rs call and a root arm were refused by `feature_registration_cost` / `root_is_routing_only`) and `cancel_drag` in `hide_shown`; B1 red runs logged, B3 clause dropped. Fix commits d0f058f13, 44676ab5b, 66c7ca0fb (fix diff a47ef1e52..66c7ca0fb), rebased onto origin/main acefceb57 (main moved: #1431, 1185 M3–M5, docs). Visual check of a fast click: PASS (`visual-pass/m4-c-*`). Layout snapshot unchanged (`layout_snapshot` passed after the rebase). Full `scripts/gate.sh` exit 0 on 66c7ca0fb; pushed.
