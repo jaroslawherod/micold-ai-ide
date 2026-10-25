@@ -35,6 +35,9 @@ Showing the first 1,000 issues this query returns.   ← only when !complete
   one error-tinted line per message, or the plain text; `Failed(Load)` → `error.message(source)` and
   **Retry** (`JiraQuery(Retry)`), as basic mode's failure; `Loaded` empty → `No issue matches this
   query.` muted.
+- A failed run's lines scroll in a viewport one caption line high (`FAILURE_MAX_HEIGHT`, 20 px),
+  and **Retry** sits in the field's row after **Run**: the form is the tallest dialog, and a second
+  line or a row of its own pushed it over the app bar (M4, decision D11).
 
 ## 2. The shared `Typeahead` gains `.on_submit` (`crates/micold-client/src/ui/material/typeahead.rs`)
 

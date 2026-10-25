@@ -181,6 +181,27 @@ fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
         && escape.edge == "bottom"
 }
 
+/// A **failed advanced JQL run's lines** taller than their one-line viewport (feature 1186, M4).
+///
+/// A sixth site of the scrolling mechanism, for the reason [`ISSUE_DETAILS_CONTENT`] gives: the New
+/// worktree form is the tallest dialog, so Jira's messages for a query it refused (FR-010) show one
+/// line and scroll the rest rather than pushing the dialog over the app bar (ledger decision D11).
+/// Only `add-worktree-dialog-jira-advanced-rejected-messages` holds more than one line, and fires it,
+/// past the **bottom** edge of the lines' `Scrollable` ([`QUERY_FAILURE_VIEWPORT`]).
+const QUERY_FAILURE_CONTENT: &[&str] = &["0/6/0/0/0/3/3/0/0"];
+
+/// The `Scrollable` a failed run's lines scroll in: the parent of [`QUERY_FAILURE_CONTENT`].
+const QUERY_FAILURE_VIEWPORT: &str = "0/6/0/0/0/3/3/0";
+
+/// Whether `escape`, in the covered state `state`, is a failed run's lines outgrowing their viewport
+/// downwards, which is the only overhang [`QUERY_FAILURE_CONTENT`] allows.
+fn is_query_failure_scroll(state: &str, escape: &lay::Escape) -> bool {
+    state == "add-worktree-dialog-jira-advanced-rejected-messages"
+        && QUERY_FAILURE_CONTENT.contains(&escape.child_path.as_str())
+        && escape.parent_path == QUERY_FAILURE_VIEWPORT
+        && escape.edge == "bottom"
+}
+
 /// An **inline issue link's focus gutter** (feature 1122, contract U1 `TextLink::inline`).
 ///
 /// Not a clip and not a scroll: a different mechanism again, kept apart for the reason the lists
@@ -295,6 +316,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("SETTINGS_PAGE_CONTENT")
     } else if is_issue_details_scroll(state, escape) {
         Some("ISSUE_DETAILS_CONTENT")
+    } else if is_query_failure_scroll(state, escape) {
+        Some("QUERY_FAILURE_CONTENT")
     } else if is_inline_link_gutter(state, escape) {
         Some("INLINE_LINK_GUTTER")
     } else if is_transcript_scroll(state, escape) {
@@ -340,6 +363,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(PICKER_LIST_CONTENT)
         .chain(SETTINGS_PAGE_CONTENT)
         .chain(ISSUE_DETAILS_CONTENT)
+        .chain(QUERY_FAILURE_CONTENT)
         .chain(INLINE_LINK_GUTTER)
         .chain(PR_NUMBER_GUTTER)
         .chain(TRANSCRIPT_CONTENT)
