@@ -45,7 +45,7 @@ snapshot)
 **Constraints**: no daemon or wire change; no key reaches or leaves a focused terminal; core has no
 OS branch (Principle VI); no stand-in for a blocker's work
 
-**Scale/Scope**: M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
+**Scale/Scope**: M2: `settings.rs` extended, `review/keys.rs` extended (plus compile-only lines in the client's `features/settings.rs` and `shell/persist.rs`); M3 also `features/settings.rs`, `ui/settings/appearance.rs`, `shell/{persist,startup}.rs` for the switch. M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
 2 extended (`quick_switch.rs`, `review/diff.rs`). M3/M4: `keymap.rs`, `features/changes.rs` (or #1269's
 Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M5:
 `features/quick_switch.rs`, the switcher's row view, 1 doc section.
@@ -174,7 +174,7 @@ renders `sheet_rows` and, when off, `SINGLE_KEYS_OFF_NOTE`.
 `REVIEW_KEYS`, sheet, jump-to entries in M5); send chord row in
 `docs/user-guide/terminal-panes.md#keyboard-shortcuts` and bullet in
 `docs/user-guide/worktrees-and-sessions.md#interacting-with-the-terminal`. Layout snapshot states
-`review-current-hunk` and `review-shortcut-sheet` in `tests/support/covered_states.rs`, listed in
+`review-current-hunk`, `review-shortcut-sheet` and `review-shortcut-sheet-single-keys-off` in `tests/support/covered_states.rs`, listed in
 `docs/development/layout-snapshot.md`. Visual pass at 1280×800, both themes (quickstart §B).
 
 ## Requirement map
@@ -220,7 +220,7 @@ renders `sheet_rows` and, when off, `SINGLE_KEYS_OFF_NOTE`.
 | Client state (M4) | `tests/features_composer.rs` | Ctrl/Cmd+Enter saves, with Shift it does not; `.on_press` message | 010 |
 | Registry (M4) | `tests/overlay_registry.rs` | `ShortcutSheet` identity, Dialog layer, Escape / outside click | 012 |
 | Client state (M5) | `tests/quick_switch.rs` | entries present only with a Review tab, position, choice → step, no session change | 016–019 |
-| Snapshot (M3, M4) | `tests/support/covered_states.rs` + gates | `review-current-hunk`, `review-shortcut-sheet` | 021 |
+| Snapshot (M3, M4) | `tests/support/covered_states.rs` + gates | `review-current-hunk`, `review-shortcut-sheet`, `review-shortcut-sheet-single-keys-off` | 021, 022 |
 | Visual pass | quickstart §B (visual-pass skill), 1280×800, both themes | B1–B15 | all |
 | Platforms | CI on three; quickstart §C | primary modifier, AltGr layouts, terminal untouched | VI, 015 |
 

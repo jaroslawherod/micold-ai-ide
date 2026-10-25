@@ -398,6 +398,11 @@ pub struct Settings {
     /// then would erase a fold the user left. Client-owned: the daemon never reads it.
     #[serde(default)]
     pub folded_origins: BTreeSet<SessionId>,
+    /// Whether the Review tab answers its single keys (`j k n p ] [ v g c ?`; feature 1274,
+    /// FR-022). On by default; a file written before the key existed reads as on. Client-owned,
+    /// like `reduce_motion`: the daemon's settings write re-reads the file and keeps it.
+    #[serde(default = "default_review_single_keys")]
+    pub review_single_keys: bool,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -442,6 +447,11 @@ fn default_desktop_notifications() -> bool {
     true
 }
 
+/// Feature 1274, FR-022: the Review tab's single keys are on until the user turns them off.
+fn default_review_single_keys() -> bool {
+    true
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -477,6 +487,7 @@ impl Default for Settings {
             plan_usage_enabled: default_plan_usage_enabled(),
             plan_usage_warn_percent: crate::plan_usage::WarnPercent::DEFAULT,
             folded_origins: BTreeSet::new(),
+            review_single_keys: default_review_single_keys(),
         }
     }
 }
@@ -930,6 +941,10 @@ struct StoredSettings {
     plan_usage_warn_percent: u64,
     #[serde(default)]
     folded_origins: BTreeSet<SessionId>,
+    /// Missing in files written before feature 1274's switch → on (FR-022). Additive and
+    /// defaulted, so `settings_version` does not move.
+    #[serde(default = "default_review_single_keys")]
+    review_single_keys: bool,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -984,6 +999,7 @@ impl StoredSettings {
             plan_usage_enabled: settings.plan_usage_enabled,
             plan_usage_warn_percent: u64::from(settings.plan_usage_warn_percent),
             folded_origins: settings.folded_origins.clone(),
+            review_single_keys: settings.review_single_keys,
         }
     }
 
@@ -1044,6 +1060,7 @@ impl StoredSettings {
             plan_usage_enabled: self.plan_usage_enabled,
             plan_usage_warn_percent: clamp_plan_usage_warn_percent(self.plan_usage_warn_percent),
             folded_origins: self.folded_origins,
+            review_single_keys: self.review_single_keys,
         }
     }
 }
@@ -1613,6 +1630,68 @@ mod reduce_motion_tests {
             "the file holds the user's choice"
         );
         assert!(store.load().settings.suggestion_chips, "and loads back on");
+    }
+}
+
+#[cfg(test)]
+mod review_single_keys_tests {
+    //! Feature 1274, FR-022: the single-key switch of the Review tab as it is stored.
+
+    use super::*;
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    /// On by default, and a file written before the key existed loads with it on.
+    #[test]
+    fn review_single_keys_default_on() {
+        assert!(
+            Settings::default().review_single_keys,
+            "a fresh installation answers the single keys"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark" }"#,
+        )
+        .unwrap();
+
+        let outcome = store_in(&dir).load();
+
+        assert_eq!(outcome.status, LoadStatus::Loaded);
+        assert!(
+            outcome.settings.review_single_keys,
+            "an older file never turned them off"
+        );
+    }
+
+    /// Off survives a save and a load, and the file holds the choice.
+    #[test]
+    fn review_single_keys_off_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+
+        store
+            .save(&Settings {
+                review_single_keys: false,
+                ..Settings::default()
+            })
+            .unwrap();
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap())
+                .unwrap();
+
+        assert_eq!(
+            written.get("review_single_keys"),
+            Some(&serde_json::Value::Bool(false)),
+            "the file holds the user's choice"
+        );
+        assert!(
+            !store.load().settings.review_single_keys,
+            "and loads back off"
+        );
     }
 }
 

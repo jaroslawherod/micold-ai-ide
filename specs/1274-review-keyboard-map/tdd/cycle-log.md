@@ -25,3 +25,10 @@ Review A fix (M1): `step_hunk` with a stale current hunk past a re-read, shorter
 takes the file's last hunk instead of crossing files. Red: `-- shrunken`:
 `left: File { path: RelPath("a.rs"), edge: Last }, right: Current(1)` (FAILED); green after
 `i.min(count).checked_sub(1)`: `-- review:: quick_switch` `312 passed; 0 failed`.
+
+### M2 — single-key switch, core (T059–T062)
+
+| Tasks | Behaviour | Red | Green |
+|---|---|---|---|
+| T059 → T060 | `Settings.review_single_keys`: default on; a file without the key loads on; `false` written as `"review_single_keys": false` and loaded back; `settings_issue_mapping` field list | tests written before the field; red not captured by a test run: the tests did not compile (no field `review_single_keys` on `Settings`) | `review_single_keys_default_on ... ok`, `review_single_keys_off_round_trips ... ok` (`cargo test -p micold-core --all-targets`) |
+| T061 → T062 | `resolve(.., single_keys)`: off → no single row under any holder, chord still `Send` under `Review` and `Composer`; `is_single` for the ten chars; `sheet_rows` on 12 rows / off the two chords; `key_hint` per action and switch; `SINGLE_KEYS_OFF_NOTE` | tests written before the code; red not captured by a run: `resolve` took two arguments and `sheet_rows`, `key_hint`, `is_single`, `SINGLE_KEYS_OFF_NOTE` did not exist (compile errors) | 5 new `review::keys` tests ok, the 20 existing calls pass `true` unchanged |
