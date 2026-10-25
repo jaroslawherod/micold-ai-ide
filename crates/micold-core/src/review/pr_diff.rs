@@ -287,8 +287,13 @@ mod tests {
             ids.keys().map(RelPath::as_str).collect::<Vec<_>>(),
             ["a.rs", "b.rs"]
         );
-        assert_eq!(diff.files.len(), 2);
         assert_ne!(ids.get(&path("a.rs")), ids.get(&path("b.rs")));
+        let a = &diff.files[0];
+        assert_eq!(
+            ids.get(&a.file.path),
+            Some(&ChangeId::of_patch(&a.file, &shown_part(&a.patch))),
+            "a.rs's id is its own section's"
+        );
     }
 
     /// US4 s3: a new head commit moves a file's id only when it changes that file's section.
