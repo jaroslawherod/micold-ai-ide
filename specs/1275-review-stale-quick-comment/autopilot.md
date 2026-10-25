@@ -16,7 +16,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M3
-- **Next step**: M3 review A round 2 on the fix diff (orchestrator), then review B, then open the M3 PR.
+- **Next step**: CI on #1424 after the red-CI fix (rebase on main bb931624b, `changes-review-held` fixture re-recorded), then merge M3.
+- **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
 
@@ -25,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
 | #1380 | M1 | merged | 8c0711181531461916b4e025a22d3da0b615f577 |
 | #1413 | M2 | merged | 055754352429f96b08c2b5df561b32d6a34d764d |
+| #1424 | M3 | open; CI red (layout snapshot drift from main), fixed by rebase on bb931624b + re-recorded `changes-review-held` | |
 
 ## Milestones
 
@@ -32,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
-| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gate green, pushed; PR not opened (reviews pending) |
+| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | rebased on main bb931624b, fixture re-recorded, gate + push |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
