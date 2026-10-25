@@ -898,7 +898,9 @@ pub fn inline_diff<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
 
 use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus};
 use micold_core::review::base::Toggles;
-use micold_core::review::source_menu::{self, MenuInput, PrRows, Shown, Stop};
+use micold_core::review::source_menu::{
+    self, tooltip as control_tooltip, MenuInput, PrRows, Shown, Stop,
+};
 use micold_core::typeahead::Direction;
 
 /// The width a posed control is given: a header's share, narrow enough for a long title to give way.
@@ -1091,7 +1093,7 @@ pub fn menu_select_sample<M: Clone + 'static>(
             Shown::WorkingTree => *stop == Stop::WorkingTree,
             Shown::PullRequest { number, .. } => *stop == Stop::PullRequest(number),
         });
-    let tooltip = source_menu::tooltip(Some("Compared with main"), &source_menu::label(&input));
+    let tooltip = control_tooltip(Some("Compared with main"), &source_menu::label(&input));
     let select = control(
         &input,
         open,
