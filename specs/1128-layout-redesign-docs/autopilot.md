@@ -58,6 +58,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M2 review A (code-review, high) | 1 | — (`origin/main...d1e125b3`) | 9 findings: fixed — `Choosing your theme` described the removed overflow theme toggle (now Settings → Appearance), icons.md theme rows, `docs/README.md` "Help toolbar entry", help-about step 1 named one menu item, Overview first paragraph repeated the chord, Title bar intro repeated its bullets; declined — line reflow (as M1), quick-switcher link target. |
 | M2 review A (code-review, high) | 2 | — (fix diff `d1e125b3..bbbfc373`) | 9 findings: fixed — picker label is "Follow the system", the `theme-follow` clip showed and pressed the removed toggle (clip, `site/media.toml` entry and `site/capture/scenes/theme-follow.sh` removed), icons.md alignment note contradicted itself and named a wrong path, unrendered Dark/Auto rows dropped, history wording dropped, overview reflow, help-about links Settings and diagnostics. |
 | M2 review A (code-review, high) | 3 | — (fix diff `bbbfc373..55f70280`) | 7 findings, none from this diff at BLOCKER/MAJOR: fixed — icons.md contributor paths, alignment note dated separately and records the orphaned Dark/Auto icons; declined or follow-up — see below. Clean. |
+| M2 review B (conformance) | 1 | `86ed9f3eebb0fd4ed330dee693d4cddfa1392404:02f788dccc6541db122fee7aa38c8f9b2ce52d3a` | pending: dispatch by the orchestrator (no Agent tool in the unit) |
 
 ## Declined review findings
 
