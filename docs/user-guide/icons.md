@@ -14,9 +14,7 @@ status markers.
 | Info | Open the About dialog | Overflow menu |
 | Help (question mark) | Open Session service diagnostics | Overflow menu |
 | Settings (gear) | Open Settings; drawn selected while Settings is open | Title bar, before the overflow menu, and the overflow menu |
-| Light mode (sun) | The Appearance section | Settings rail, **Appearance** |
-| Dark mode (moon) | The theme is following dark mode | Not drawn: the overflow menu's theme toggle is gone; choose the theme in [Settings](settings.md#appearance) |
-| Auto mode | The theme is following your operating system | Not drawn: the overflow menu's theme toggle is gone; choose the theme in [Settings](settings.md#appearance) |
+| Light mode (sun) | The [Appearance](settings.md#appearance) section of Settings | Settings rail |
 | Open folder | Open or choose a project | Empty state, "Open another project", the known-projects **Open** button, the project switcher, and "Open this folder" in the selector |
 | Drop-down arrow | Opens a list to choose from | The title bar's project segment (it opens the project switcher), select fields |
 | Pencil | Rename a known project | Known-projects list, project right-click menu |
@@ -76,7 +74,7 @@ through to a blank box at runtime. To add one:
 
 1. Find the glyph's codepoint in the upstream
    [`.codepoints`](https://github.com/google/material-design-icons) manifest.
-2. Add an `Icon` variant and its codepoint in `src/icons.rs`, and add a row to the mapping
+2. Add an `Icon` variant and its codepoint in `crates/micold-material/src/icons.rs`, and add a row to the mapping
    table in `PROVENANCE.md`.
 3. Extend the mapping assertion in `tests/icons.rs`. The font-integrity test
    (`tests/icons_font.rs`) then verifies the glyph is present in the bundled font — which it
@@ -89,6 +87,5 @@ See [Appearance & Theming](appearance-theming.md) for how themes and colors work
 **Alignment**: 2026-07-20 — Spec/code alignment audit (spec 004 FR-013). The table advertised a
 "Help (question mark)" app-bar icon that no longer exists — the top app bar renders `Icon::Menu`
 — and listed 9 of the 21 icons the application defines. All rendered icons are now documented.
-`Icon::Help` remains defined in `src/icons.rs` with zero call sites and is deliberately omitted
-here; it is tracked as orphaned code for removal. (Since then the overflow menu's **Session
-service diagnostics** item draws it; see the table.)
+`Icon::Help`, defined in `crates/micold-material/src/icons.rs`, now draws the overflow menu's
+**Session service diagnostics** item and is listed in the table.

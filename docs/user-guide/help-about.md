@@ -12,7 +12,8 @@ When you launch Micold AI IDE, a single main window opens with a
 ## Opening About
 
 1. In the title bar, select the **overflow menu** (the three-dots icon on the right). Its items
-   appear beneath it: **Settings**, **Session service diagnostics** and **About**.
+   appear beneath it: [**Settings**](settings.md), [**Session service
+   diagnostics**](../daemon.md#finding-the-logs-and-recent-errors) and **About**.
 2. Select **About**. The About dialog opens as a modal overlay centered in the window.
 
 While the dialog is open, the rest of the window (including the title bar) is dimmed and does
