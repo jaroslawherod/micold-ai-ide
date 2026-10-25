@@ -66,7 +66,7 @@ updated." Labels: enhancement, flow:feature. This is slice R4 (item 1) of
 - Q: When a Committed or Uncommitted toggle hides part of a file's change, may the user still mark
   that file reviewed? → A: No. Marking is unavailable for a file that has changes of a hidden kind,
   with a tooltip saying to turn both on; unmarking stays available. Files with no hidden part are
-  marked as usual. _(provisional, pending user)_
+  marked as usual. _(decided by user, 2026-10-25, option A)_
 
 ## User Scenarios & Testing *(mandatory)*
 

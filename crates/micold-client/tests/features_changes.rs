@@ -5647,4 +5647,144 @@ mod reviewed_marks {
             "FR-004: re-judged on the new change"
         );
     }
+
+    /// Re-read `state`'s shown list as `files` (answering the read a change on disk starts).
+    fn reread(state: &mut State, files: Spec<'_>) -> Effect {
+        let Effect::ReadList { seq, .. } = changes::update(state, Msg::Changed) else {
+            panic!("a change on disk rereads the list");
+        };
+        answer(state, seq, Ok(listed(files)), Ok(whole(files)))
+    }
+
+    fn changed_since(state: &State) -> Vec<String> {
+        file_reviews(state, view(state), true)
+            .into_iter()
+            .filter(|(_, review)| review.changed_since)
+            .map(|(p, _)| p.to_string())
+            .collect()
+    }
+
+    /// US2 s1-s4, SC-003, FR-003. A new whole-change id drops a mark back (with the changed dot and
+    /// *n* - 1); marking again sends the new id; undoing the change brings the mark back without
+    /// an edit; other files changing, a new file and another path's new id leave it Reviewed.
+    #[test]
+    fn a_changed_file_drops_back_and_returns_when_the_change_is_undone() {
+        use ReviewState::{HasDrafts, Reviewed, Unseen};
+        let mut state = opened(THREE);
+        pushed(&mut state, &["a.rs"], &[("a.rs", 1), ("b.rs", 2)]);
+        assert_eq!(progress_of(&state, true), ratio(2, 3));
+
+        let a_edited: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 7),
+            ("b.rs", Origin::Uncommitted, 2),
+            ("c.rs", Origin::Uncommitted, 3),
+        ];
+        reread(&mut state, a_edited);
+        let reviews = file_reviews(&state, view(&state), true);
+        let a = reviews[&path("a.rs")];
+        assert_eq!(
+            (a.state, a.changed_since),
+            (HasDrafts, true),
+            "s1: ● with drafts, with the changed dot"
+        );
+        assert_eq!(reviews[&path("b.rs")].state, Reviewed, "b is untouched");
+        assert!(!reviews[&path("b.rs")].changed_since);
+        assert_eq!(progress_of(&state, true), ratio(1, 3), "s1: n goes down");
+
+        select(&mut state, "a.rs");
+        let Effect::ReviewEdit {
+            edit: ReviewEditOp::SetReviewed { change, .. },
+            ..
+        } = changes::update(&mut state, Msg::MarkToggled)
+        else {
+            panic!("marking sends SetReviewed");
+        };
+        assert_eq!(change, Some(id(7)), "s2: marked on the new change");
+        pushed(&mut state, &["a.rs"], &[("a.rs", 7), ("b.rs", 2)]);
+        assert!(changed_since(&state).is_empty(), "s2: the dot goes");
+        assert_eq!(progress_of(&state, true), ratio(2, 3));
+
+        // s3: the mark is on id 1 again after the file goes back to it.
+        pushed(&mut state, &["a.rs"], &[("a.rs", 1), ("b.rs", 2)]);
+        assert_eq!(changed_since(&state), vec!["a.rs"]);
+        let effect = reread(&mut state, THREE);
+        assert!(
+            !matches!(effect, Effect::ReviewEdit { .. }),
+            "s3: no edit is sent: {effect:?}"
+        );
+        assert_eq!(
+            states(&state, true)[0],
+            ("a.rs".to_string(), Reviewed),
+            "s3: Reviewed again, no new mark"
+        );
+        assert!(changed_since(&state).is_empty());
+
+        // s4: another file changes, a new file appears, another path gets a new id.
+        let others: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 1),
+            ("b.rs", Origin::Uncommitted, 8),
+            ("c.rs", Origin::Uncommitted, 3),
+            ("d.rs", Origin::Uncommitted, 4),
+        ];
+        reread(&mut state, others);
+        let all = states(&state, true);
+        assert_eq!(all[0], ("a.rs".to_string(), Reviewed), "s4: a stays");
+        assert_eq!(all[1], ("b.rs".to_string(), Unseen));
+        assert_eq!(all[3], ("d.rs".to_string(), Unseen), "s4: the new file");
+        assert_eq!(progress_of(&state, true), ratio(1, 4), "s4: m goes up");
+    }
+
+    /// US2 s7. A marked file that changes while the review is hidden is shown changed since
+    /// reviewed once the tab is shown and re-reads.
+    #[test]
+    fn a_review_shown_again_shows_the_change_made_meanwhile() {
+        let mut state = opened(THREE);
+        pushed(&mut state, &[], &[("a.rs", 1)]);
+        changes::update(&mut state, Msg::SessionSelected);
+        let edited: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 7),
+            ("b.rs", Origin::Uncommitted, 2),
+            ("c.rs", Origin::Uncommitted, 3),
+        ];
+        let hidden = changes::update(&mut state, Msg::Changed);
+        assert!(
+            !matches!(hidden, Effect::ReadList { .. }),
+            "a hidden review reads nothing: {hidden:?}"
+        );
+        let shown = changes::update(&mut state, super::opened_msg(worktree()));
+        let Effect::ReadList { seq, .. } = shown else {
+            panic!("showing the tab after a change re-reads: {shown:?}");
+        };
+        answer(&mut state, seq, Ok(listed(edited)), Ok(whole(edited)));
+        assert_eq!(changed_since(&state), vec!["a.rs"]);
+        assert_eq!(progress_of(&state, true), ratio(0, 3));
+    }
+
+    /// US3 s1-s3 (view), SC-002. A mark set in another window arrives as `ReviewChanged` and
+    /// changes the row and the progress with no action here; a push without it returns the row; a
+    /// push after a reconnect restores the marks.
+    #[test]
+    fn marks_from_other_windows_show_without_action() {
+        use ReviewState::{Reviewed, Unseen};
+        let mut state = opened(THREE);
+        assert_eq!(progress_of(&state, true), ratio(0, 3));
+
+        pushed(&mut state, &[], &[("b.rs", 2)]);
+        assert_eq!(states(&state, true)[1], ("b.rs".to_string(), Reviewed));
+        assert_eq!(progress_of(&state, true), ratio(1, 3), "s1: n goes up");
+
+        pushed(&mut state, &[], &[]);
+        assert_eq!(states(&state, true)[1], ("b.rs".to_string(), Unseen));
+        assert_eq!(
+            progress_of(&state, true),
+            ratio(0, 3),
+            "s3: the row returns"
+        );
+
+        // Disconnected: marks are not known; a push on reconnect restores them (s2).
+        assert_eq!(progress_of(&state, false), None);
+        pushed(&mut state, &[], &[("a.rs", 1), ("c.rs", 3)]);
+        assert_eq!(progress_of(&state, true), ratio(2, 3));
+        assert_eq!(states(&state, false)[0].1, Unseen, "disconnected: no marks");
+    }
 }

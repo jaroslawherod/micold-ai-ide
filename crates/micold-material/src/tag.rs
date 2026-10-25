@@ -23,6 +23,7 @@ pub struct Tag<'a, M> {
     role: TypeRole,
     truncate_to: Option<f32>,
     max_width: Option<f32>,
+    one_line: bool,
     leading: Option<Element<'a, M>>,
     _marker: PhantomData<&'a M>,
 }
@@ -37,6 +38,7 @@ impl<'a, M: 'a> Tag<'a, M> {
             role: TypeRole::SidebarTag,
             truncate_to: None,
             max_width: None,
+            one_line: false,
             leading: None,
             _marker: PhantomData,
         }
@@ -66,6 +68,15 @@ impl<'a, M: 'a> Tag<'a, M> {
     /// size; only a long one is cut, and its full text belongs in a tooltip around the chip.
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = Some(width);
+        self
+    }
+
+    /// Keep the label on one line at its natural width, whatever room the row leaves: a row that
+    /// is short of width takes it from its flexible box, not by breaking this label (feature 1271).
+    /// Only the natural-width label is affected: the [`Self::truncate_to`] and [`Self::max_width`]
+    /// labels are ellipsized and already stay on one line.
+    pub fn one_line(mut self) -> Self {
+        self.one_line = true;
         self
     }
 
@@ -102,6 +113,11 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
                 .size(t.role.size())
                 .font(t.role.font())
                 .line_height(t.role.line_height())
+                .wrapping(if t.one_line {
+                    iced::widget::text::Wrapping::None
+                } else {
+                    iced::widget::text::Wrapping::default()
+                })
                 .into(),
         };
         let content: Element<'a, M> = match t.leading {
