@@ -157,9 +157,9 @@ is not marked; switch back: it is (spec US4).
 
 ## Phase 8: Polish & Cross-Cutting Concerns (close unit)
 
-- [ ] T045 [P] Note slice R4 item 1 (#1271) as done in `docs/development/review-redesign.md`
-- [ ] T046 Run quickstart.md Part A (`mise run test-core`, `mise run gate`)
-- [ ] T047 Run quickstart.md Part B with the `visual-pass` skill at 1280×800 in both themes and record the screenshots in `specs/1271-review-reviewed-marks/visual-pass/` (SC-005)
+- [x] T045 [P] Note slice R4 item 1 (#1271) as done in `docs/development/review-redesign.md`
+- [x] T046 Run quickstart.md Part A (`mise run test-core`, `mise run gate`)
+- [x] T047 Run quickstart.md Part B with the `visual-pass` skill at 1280×800 in both themes and record the screenshots in `specs/1271-review-reviewed-marks/visual-pass/` (SC-005)
 
 ---
 

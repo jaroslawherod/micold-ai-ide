@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1271
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
-- **Phase**: M5 round 1 fixes applied and rebased on origin/main a3948a180 (M4 merged); awaiting round 2 on the fix diff
-- **Next step**: orchestrator runs round 2 (scoped, sonnet) on the fix diff; then the full gate, push 1271-m5 and open the M5 PR
+- **Phase**: close done / awaiting close PR (stacked on M5, #1419, waiting for CI)
+- **Next step**: orchestrator runs scripts/gate.sh, pushes 1271-close and opens the close PR; the run ends when it merges
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1374 | M1 micold-core marks | merged (after it, the orchestrator pushed two CI fixes: cf4073cf `as_chunks` for clippy 1.99; 59ff54bf quoted-path test `#[cfg(unix)]`, Windows refuses `"` in file names) | 96b90dd65dc6cd9920f111dba94c460b2a414c26 |
 | #1390 | M2 marks on the wire and in the service | merged (after the M2 PR was prepared, the orchestrator rebased onto main, which carried #1269's kept Review tabs, and added `marks: Vec::new()` to three #1269 test messages, commit 9047a4f0) | dc03f7528be1f656964c04ac87a5b21499f5f6ac |
 | #1417 | M4 changed-since dot, other windows' marks | merged (rebase merge) | a3948a180 |
+| #1419 | M5 pull request marks and progress | open (CI pending at close) | — |
 | #1411 | M3 row states, mark control, progress | merged (after the M3 PR text was prepared, the orchestrator rebased twice more, resolved a `use` conflict in review/marks.rs, added #1275's `identity` field to the marks covered state, and re-recorded the layout snapshot) | 81b3eb543292e6df8dca698ad249498549417349 |
 
 ## Milestones
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T024 | full | wire SetReviewed + ReviewChanged.marks, service keeps/pushes/removes marks, client holds them; no view change (docs-not-needed) | #1390 | merged |
 | M3 | T025–T034 | full | MVP: row states, Mark reviewed control, n of m reviewed + bar, user guide | #1411 | merged |
 | M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | #1417 | merged (rebase merge a3948a180) |
-| M5 | T040–T044 | full | pull request marks and progress, guide text | — | round 1 fixed, round 2 due |
+| M5 | T040–T044 | full | pull request marks and progress, guide text | #1419 | open, waiting for CI |
 
 ## Decisions
 
