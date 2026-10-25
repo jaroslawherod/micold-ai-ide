@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M3 (T031–T039 + Filters panel, D15) implementing on d1bd9fe4: gate, reviews A and B, visual pass, push; orchestrator opens the M3 PR
+- **Next step**: M3 handover (see *Handover*): fix the black dialog when a field in the Filters panel opens its list, then gate, re-review, visual pass, push; orchestrator opens the M3 PR
 
 ## Pull requests
 
@@ -64,6 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M2 | 1 | e4de8a60 (CPU rasteriser renders of 8 states) | B3 PASS; FAIL: "This project has no versions" cut to "This project ha…" in the list — fixed (wrapped reason under a "No versions" line, gate `an_empty_choice_list_shows_its_whole_reason`); CONCERN: main row cramped (D13) |
 | Review rebase M2 (sonnet) | 1 | 8a4b7ddeee15324fd610b34c498807a1d6734ac6:ea88436025f3b37a41cad12c65aff40c2c5ceffa | CLEAN (main's D12 layout kept; Fix version field, PICKER_MAIN, awaited_choices newest-request fix intact; fixture touches only jira states) |
 | Review A M3 | 1 | ed9a28d90d0ee5dec30eb9ee8b3c3156605622d0:256ce33fcd941af92f010f33f298650ed80d8d46 | CLEAN (2 MINOR fixed: no-match row said "you are still offered" with no own user — now "No reporter matches"; a people search ran while `/myself` failed and its people were never shown — no search until the own user loads) |
+| Review B M3 (sonnet) | 1 | 598221e8b2f26212ae5c9718c2884a0a8f32b5e0:b2bab7f603e5b9a4e45873b5fc1c216706ca77c6 | CLEAN; Verify from the green gate log at b2bab7f6: jira_filter_choices 23, jira_filters_picker 42, jira_http_adapter 33, jira_token_never_leaks 3, jira_is_requested_only_on_named_events 7, layout_snapshot 127, bin jira_filter_shell 7 passed; 1 MINOR (cycle-log count 41 → 42) fixed, prose only |
+| Visual pass M3 | 1 | b2bab7f6 (CPU rasteriser, dev build opt-level=2, Xvfb + fake_jira) | B1 PASS (Filters button trails the search, panel under it with Reporter / Component / Fix version, inside the dialog, clear of the app bar). B2, B3 FAIL: clicking Component or Fix version in the panel turns the whole dialog black within ~5 s, the panel is not drawn, only the field and its list (`/mnt/project-files/issue-1185/m3-b2-black-dialog-FAIL.png`, `m3-b3-black-dialog-FAIL.png`). B5, B8, B9, capped list, dark: not run. The Type dropdown in the same dialog renders fine. Open: may be a tiny-skia artifact, unconfirmed |
 
 ## Declined review findings
 
@@ -83,3 +85,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - After #1185 and #1186 both merge: implement `JiraSource::load`/`JiraCloud::list_open`/`search_open` through their filtered forms with empty filters (review A M1, declined for R10).
 - ~~M2 (D14): with two fields the issue search shows ~83 px …~~ resolved in M3 by the Filters panel (D15), pending jaro's confirmation.
 - M2–M4 add fields to the picker's main row (D9) and values to the one-line active line (D12: the filtered form is at y=66, 1 px of slack; a second line of "Filtered by …" pushes it over the app bar): re-check `gates/jira_filters_fit.rs` and `panel_placement`. The visual pass of M1 found the Component field ~153 px wide, so a chosen value scrolls in a 35 px text area beside the search icon and the clear action (the active line under it names it in full); the four-field row M4 builds has to give each field room or move the fields to a row of their own.
+
+## Handover
+
+Written 2026-10-25 by the M3 unit at CONTEXT ~380k (over the 150k cap).
+
+- **Done**: T031–T039 and the Filters panel (D15, awaiting jaro's confirmation) on d1bd9fe4: commits 256ce33f (feat) and b2bab7f6 (review A fixes), plus this ledger and cycle-log commit. `scripts/gate.sh` green at b2bab7f6 (log: scratchpad `gate-green-b2bab7f6.log`). Review A M3 and Review B M3 clean. #1397's advanced-mode guard and its test `advanced_mode_neither_applies_nor_drops_the_chosen_filters` are carried here, because #1397 is not yet on main. Not pushed, and no PR open.
+- **Open finding (blocks DONE)**: Visual pass M3 B2 and B3. When a field nested in the Filters panel opens its list, the dialog paints black, the panel is not drawn, and only the field and its list remain. The likely area is the nested overlay path: `cdk::picker::Picker` in panel mode (`panel_width`, crates/micold-material/src/cdk/picker.rs) holds a `MenuSelect` whose `controls` rows each hold a Typeahead with its own overlay (crates/micold-client/src/ui/worktree_form.rs `jira_filters_control`). Check how the outer `Menu` overlay draws and lays out when a child returns an overlay (`overlay()` / `overlay::Group`), and whether the layer or backdrop of the outer overlay is dropped once the inner one opens. The layout harness (`support/layout.rs::paint_overlay`) paints nested overlays fine, so the gates do not catch this. Reproduce under the GPU renderer if one is available. If it is tiny-skia only, record that as evidence. Then add a regression test where one is possible, run the gate, run review A on the diff (sonnet for a re-review), and visual-pass B2, B3, B5, B8, B9, the capped list and dark mode.
+- **Then**: push with `git push --force-with-lease=claude/project-thread-xwkotj: -u origin claude/project-thread-xwkotj`. Fill `VISUAL_LINE` in scratchpad `m3-pr-body.md`; `m3-pr-title.md` is written. The orchestrator opens the M3 PR.
