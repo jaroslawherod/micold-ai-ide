@@ -55,7 +55,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done** (unit M1, 2026-10-25): all 22 M1 tasks implemented test-first and ticked; commit
+  `2f158e10` on `claude/project-thread-m7gq7k` (local, **not pushed**, no PR yet). Red/green
+  evidence in `tdd/cycle-log.md`. `cargo test -p micold-core --lib -- review:: quick_switch`:
+  311 passed; `cargo clippy -p micold-core --all-targets -D warnings` clean; `cargo fmt` applied.
+  Client change limited to `detail: None` in the three `Candidate` literals and a refusing
+  `ReviewFile | ReviewComment => None` arm in `features/quick_switch.rs::resolve` (not listed until M4).
+- **Next step**: verify.md step 1: scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A
+  (`code-review` high on `origin/main...HEAD`), then review B (conformance, sonnet), then the full
+  gate (`scripts/gate.sh`; `mise` is not installed here), then pr.md. PR title exactly
+  `#1274: Review UI: keyboard map for reviewing (M1: core key map)`; body opens with the
+  orchestrator's attribution lines, `Refs #1274`; open it with the GitHub MCP tools (gh is
+  unauthenticated).
+- **Notes**: `branch-start.sh 1366` reports `PREVIOUS-PR-OPEN: UNKNOWN` only because gh is
+  unauthenticated; #1366's merge SHA is an ancestor of origin/main. Run `branch-start.sh` with no
+  argument (it rebases `2f158e10`). Disk had 15 GB free: sweep before the full gate. 968's
+  `quick_switch` test fixtures gained `detail: None` / `via: Via::Name` only (assertions unchanged).
+- **Open findings**: none (no review has run yet).
 
 ## Open escalation
 
