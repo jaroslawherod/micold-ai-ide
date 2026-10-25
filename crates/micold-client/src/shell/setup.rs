@@ -14,6 +14,8 @@ use micold_core::setup::{SetupCommand, SetupRunSummary};
 
 use crate::shell::daemon_sync::{send_op_bound, PendingOp};
 use crate::App;
+use iced::Task;
+use micold_client::app::Message;
 
 /// Tell `daemon`, which just connected, the command of every project it holds: those its catalog
 /// lists and those `registered` was just sent in `ProjectAdd` (contract C3). The commands are read
@@ -90,29 +92,30 @@ pub fn on_saved(app: &mut App, change: &SetupCommandChange) {
     }
 }
 
-/// A `SetupChanged` from `daemon` (contract C2): keep the summary, and post the failure's one
-/// notification (FR-017).
-pub fn on_changed(
-    app: &mut App,
+/// Apply `msg` to the setup state, and post the notification it asks for (FR-017).
+pub fn update(app: &mut App, msg: micold_client::features::setup::Msg) -> Task<Message> {
+    match setup::update(&mut app.core.setup, msg) {
+        Effect::NotifyError(text) => app.core.notify_error(text),
+        Effect::None => {}
+    }
+    Task::none()
+}
+
+/// A `SetupChanged` from `daemon` (contract C2), as the reducer's message: the summary, with the
+/// names its notification would show.
+pub fn changed(
+    app: &App,
     daemon: DaemonId,
     project: PathBuf,
     location: SessionLocation,
     run: Option<SetupRunSummary>,
-) {
-    let names = names(app, &project, &location);
-    let effect = setup::update(
-        &mut app.core.setup,
-        Msg::Changed {
-            daemon,
-            project,
-            location,
-            run,
-            names,
-        },
-    );
-    match effect {
-        Effect::NotifyError(text) => app.core.notify_error(text),
-        Effect::None => {}
+) -> Msg {
+    Msg::Changed {
+        names: names(app, &project, &location),
+        daemon,
+        project,
+        location,
+        run,
     }
 }
 

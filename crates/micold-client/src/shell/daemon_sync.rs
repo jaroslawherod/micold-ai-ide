@@ -2305,7 +2305,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             project,
             location,
             run,
-        } => crate::shell::setup::on_changed(app, daemon, project, location, run),
+        } => {
+            let msg = crate::shell::setup::changed(app, daemon, project, location, run);
+            follow_up = Task::batch([follow_up, crate::shell::setup::update(app, msg)]);
+        }
         // Other control messages (Pong) are consumed as their flows land; `SetupOutput` with the
         // output view (feature 1289, M6).
         _ => {}

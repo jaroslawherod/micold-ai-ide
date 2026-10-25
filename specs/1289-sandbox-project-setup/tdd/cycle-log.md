@@ -305,3 +305,14 @@ output is copied from the session's logs.
   `TextArea::monospace`/`rows`, `TreeItem::trailing_chip`, `shell/setup.rs` (connect, bind, clone
   and save sync; `SetupChanged` routed) -> features_setup 9, features_settings 155,
   setup_tag_geometry 3, settings_sections 24, settings_rail 6, text_area 15 passed
+
+## M5 cycle 2: the client's architecture guards and the layout fixture
+
+- red (full `cargo test -p micold-client`): `feature_registration_cost` (`settings` named
+  `setup`; `shell/setup.rs` named no `features::setup::Msg`; `setup` had `pub enum Msg` and no
+  entry point), `feature_write_isolation` (`state.runs` read as the Run in parallel feature's),
+  `layout_snapshot` (the Settings rail gained **Project**)
+- green: `shell/setup.rs` `update(&mut App, features::setup::Msg) -> Task<Message>` (shape B) and
+  `changed` builds the message; the reducer's map is `summaries`; `ProjectDraft::follow` keys the
+  map itself; fixture regenerated (`UPDATE_LAYOUT_SNAPSHOT=1`): only the Settings rail's states
+  change, one row more -> both guards, layout_snapshot 127, features_setup 9, setup_tag_geometry 3

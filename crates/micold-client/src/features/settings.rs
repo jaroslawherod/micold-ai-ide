@@ -690,7 +690,7 @@ impl ProjectDraft {
     ) {
         let stored = project
             .as_ref()
-            .and_then(|(path, _)| crate::features::setup::command_for(commands, path))
+            .and_then(|(path, _)| commands.get(&micold_core::jira::connection_key(path)))
             .cloned();
         let moved = self.project.as_ref().map(|(p, _)| p) != project.as_ref().map(|(p, _)| p);
         let untouched = micold_core::setup::SetupCommand::parse(&self.setup_command) == self.stored;
