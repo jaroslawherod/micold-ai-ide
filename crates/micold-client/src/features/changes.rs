@@ -694,6 +694,22 @@ fn change_leaves(files: &[ChangedFile]) -> Vec<Leaf<'_>> {
         .collect()
 }
 
+/// The tree's filter box's placeholder (contract §2.1).
+pub const TREE_FILTER_PLACEHOLDER: &str = "Filter files…";
+/// The list's line when the filter matches no changed file (FR-011, contract §2.4).
+pub const TREE_NO_MATCH: &str = "No changed file matches the filter";
+/// The text button under [`TREE_NO_MATCH`] that empties the filter (FR-011).
+pub const TREE_CLEAR_FILTER: &str = "Clear filter";
+
+/// A sort chip's label (FR-012).
+pub fn sort_label(sort: TreeSort) -> &'static str {
+    match sort {
+        TreeSort::Path => "Path",
+        TreeSort::Size => "Size",
+        TreeSort::UnreviewedFirst => "Unreviewed first",
+    }
+}
+
 /// The sorts the tree's control offers (FR-012, ledger decision 6): **Unreviewed first** once the
 /// entry's reviewed marks are known, which takes the service (`connected`, FR-013) and its push of
 /// the entry's review. A sort already chosen stays shown, so the active chip never disappears.

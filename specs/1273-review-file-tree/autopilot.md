@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M5)
-- **Next step**: M5 T036 (draw filter box and sort chips in `ui/changes.rs`); see Handover
+- **Next step**: M5 T039 visual pass, then reviews A/B, gate, push after #1430 merges
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | merged |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | #1430 | open |
-| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | T031–T035 done (local, unpushed) |
+| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | T031–T038 done (local, unpushed) |
 
 ## Decisions
 
@@ -93,12 +93,7 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 
 ## Handover
 
-M5 unit 1 (context cap). Done, committed locally on `claude/project-thread-p2tb7i` (NOT pushed: #1430 open from this branch):
-T031–T032 `TextField::on_escape` (micold-material `text_field.rs`, wrapper `EscapeWhileFocused`; 2 harness tests green);
-T033–T035 `Msg::TreeFilterChanged/TreeFilterCleared/TreeSortChosen`, `changes::sort_offers`, `reviewed_paths` feeding `refresh_change_rows` (decision 13);
-tests in `tests/features_changes.rs` (tree_state: 6 new; reviewed_marks: `unreviewed_first_follows_the_marks`; source_menu: `a_source_switch_keeps_the_filter_and_the_sort`), 34 passed.
-Next: T036 draw (filter TextField with `.on_escape(Msg::TreeFilterCleared)`, leading search icon, trailing clear; `ToggleChip` per `sort_offers(.., connected)`, Disabled in Tooltip, Hidden skipped; spans highlighted in labels — check whether M4 rows already draw `row.spans`; NoMatch line `No changed file matches the filter` + **Clear filter** text button; only when `tree_pane != Hidden`), T037 snapshot states, T038 guide, T039 visual pass; then review A/B, gate, and the rebase/push ordering in the orchestrator's M5 brief (push only after #1430 merges).
-Cycle log: M5 rows added for T031–T035.
+None.
 
 ## Open escalation
 

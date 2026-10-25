@@ -475,7 +475,7 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
 /// [`Ellipsized`](super::Ellipsized) is a widget. It shares that module's technique and none of its
 /// code: this one draws several paragraphs in two colours, and that one draws one in a single
 /// colour.
-struct EmphasisedLabel<M> {
+pub struct EmphasisedLabel<M> {
     content: String,
     spans: Vec<Range<usize>>,
     role: TypeRole,
@@ -487,7 +487,9 @@ struct EmphasisedLabel<M> {
 }
 
 impl<M> EmphasisedLabel<M> {
-    fn new(
+    /// `content` in `role` and `base`, its `spans` (byte ranges) in `accent` and one weight
+    /// heavier; one line, truncated so the emphasis stays visible.
+    pub fn new(
         content: String,
         spans: Vec<Range<usize>>,
         role: TypeRole,

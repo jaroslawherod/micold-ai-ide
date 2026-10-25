@@ -136,6 +136,7 @@ pub use markdown_view::MarkdownView;
 pub use menu_select::{MenuSelect, MenuSelectRow};
 pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
+pub use picker::EmphasisedLabel;
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress_bar::ProgressBar;

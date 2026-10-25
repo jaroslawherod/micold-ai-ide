@@ -103,6 +103,27 @@ in bold; the folders above it say where it is. Under the name:
 Hover a file row to see its full path, and for a rename the path it had before. A name too long for
 the list ends in `…`; deep folders stop indenting further before a file's name loses its room.
 
+Above the tree, the **Filter files…** box narrows the list: type part of a path and only the files
+whose path matches stay listed, inside the folders that hold them, with the matched characters
+highlighted. It matches as **Open file by path** does (see
+[Browsing the repository](#browsing-the-repository)), so `tests.r` finds `daemon/tests.rs`. While the
+box holds text every folder holding a match is shown open; empty it — press `Esc` in the box, or its
+**×** — and the tree comes back with the folders you had closed still closed. When nothing matches,
+the list says **No changed file matches the filter** with a **Clear filter** button; the diff keeps
+showing the file you had open, and that file is selected again once the filter is cleared.
+
+Under the filter box, the sort chips order each level of the tree; folders always stay before files
+and the tree is never flattened:
+
+- **Path** (the default): by name.
+- **Size**: the largest change (lines added plus removed) first; a folder counts the files below it.
+- **Unreviewed first**: files you have not marked reviewed first, and folders holding any such file
+  before folders holding none. It is offered once the files' reviewed marks are known (see
+  [Marking files reviewed](#marking-files-reviewed)).
+
+The filter text and the chosen sort stay as they are while the view is kept, when the list is read
+again and when you switch the source. Each window keeps its own.
+
 A file changed both in a commit and again since is listed once, with the combined change. Long
 lists scroll smoothly: only the rows on screen are drawn.
 
