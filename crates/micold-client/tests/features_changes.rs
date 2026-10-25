@@ -6267,6 +6267,70 @@ mod hold {
         );
     }
 
+    // Review A F1, H1, FR-014: the open file dropping out of a background read keeps its diff,
+    // its picked lines and its comment; only selecting it then says it has no changes any more.
+    #[test]
+    fn the_open_file_leaving_a_background_read_keeps_its_diff_until_selected() {
+        let mut state = reading_a();
+        let before = view(&state).clone();
+        background(&mut state, list(&["b.rs"]));
+        let after = view(&state);
+        assert!(changed_since_you_looked(after, &path("a.rs")));
+        assert!(!no_longer_changed(after));
+        assert!(
+            matches!(diff_body(after), DiffBody::Diff(_)),
+            "the diff stays"
+        );
+        assert_eq!(after.pick, before.pick);
+        assert_eq!(after.composer, before.composer);
+        let effect = changes::update(&mut state, Msg::FileSelected(path("a.rs")));
+        assert!(!reads_diff(&effect), "nothing to read: {effect:?}");
+        assert_eq!(diff_body(view(&state)), DiffBody::NoLongerChanged);
+    }
+
+    // Review A F2, H8, FR-009: selecting the open file while it carries a dot reads its latest
+    // diff, the old one kept on screen meanwhile.
+    #[test]
+    fn selecting_the_open_dotted_file_reads_its_latest_diff() {
+        let mut state = reading_a();
+        background(&mut state, edited());
+        let Effect::ReadDiff { seq, .. } =
+            changes::update(&mut state, Msg::FileSelected(path("a.rs")))
+        else {
+            panic!("the open dotted file is read again");
+        };
+        assert!(
+            matches!(&view(&state).diff, Load::Loading { last: Some(_), .. }),
+            "the old diff stays meanwhile"
+        );
+        diff_read(&mut state, seq, DiffRow::Row(counted("a.rs", 5)));
+        assert!(!changed_since_you_looked(view(&state), &path("a.rs")));
+        assert_eq!(
+            changes::update(&mut state, Msg::FileSelected(path("a.rs"))),
+            Effect::None,
+            "no dot: the shown file is kept"
+        );
+    }
+
+    // Review A F5, research R3: a watch read that answers while the user's read is queued is not
+    // shown; the user's queued read is.
+    #[test]
+    fn a_watch_read_ahead_of_the_users_queued_read_is_not_shown() {
+        let mut state = reading_a();
+        let watch_seq = watch(&mut state);
+        changes::update(&mut state, Msg::UncommittedToggled);
+        let effect = answer(&mut state, watch_seq, Ok(edited()));
+        assert_eq!(
+            changes::shown_list(view(&state)),
+            Some(&list(&["a.rs", "b.rs"])),
+            "the watch read is not applied"
+        );
+        let seq = list_seq(&effect).expect("the queued read runs");
+        answer(&mut state, seq, Ok(list(&["b.rs"])));
+        assert_eq!(changes::shown_list(view(&state)), Some(&list(&["b.rs"])));
+        assert_eq!(stale_notice(view(&state)), None);
+    }
+
     // H2: a read that changes no row replaces the list silently.
     #[test]
     fn a_read_that_changes_nothing_replaces_the_list_silently() {

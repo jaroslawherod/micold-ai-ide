@@ -76,9 +76,26 @@ pub fn changed_since_you_looked(view: &OpenView, path: &RelPath) -> bool {
     }
 }
 
-/// Whether the selected file changed since the user looked and the latest read no longer lists
-/// it: the diff area says it has no changes any more (US1 AS11).
+/// Whether the user selected the selected file while it was changed since they looked and the
+/// latest read no longer lists it: the diff area says it has no changes any more (US1 AS11). A
+/// file that drops out of a background read while open keeps its diff (H1, FR-014).
 pub fn no_longer_changed(view: &OpenView) -> bool {
+    view.chose_gone && selection_gone(view)
+}
+
+/// The user just selected the selected file: remember whether it was gone then.
+pub(super) fn note_selection(view: &mut OpenView) {
+    view.chose_gone = selection_gone(view);
+}
+
+/// The head the shown patch of `path` was read at: the head of the read it was adopted from, or
+/// the pull request's.
+pub fn head_of<'a>(pr: &'a PullRequestView, path: &RelPath) -> &'a str {
+    pr.adopted.get(path).unwrap_or(&pr.head)
+}
+
+/// Whether the selected file is in the changed-since set and the latest read does not list it.
+fn selection_gone(view: &OpenView) -> bool {
     fn gone<L: Listing>(held: Option<&Held<L>>, selected: Option<&RelPath>) -> bool {
         match (held, selected) {
             (Some(held), Some(path)) => held.contains(path) && !held.latest_lists(path),
@@ -95,6 +112,21 @@ pub fn no_longer_changed(view: &OpenView) -> bool {
 /// Empty, unread or failed, a change applies at once (FR-012).
 pub(super) fn list_on_screen(view: &OpenView) -> Option<&ChangeList> {
     shown_list(view).filter(|list| !list.files.is_empty())
+}
+
+/// Take the list on screen to hold a background read against; `None` (the list left as it is)
+/// when the read is the user's (`apply`) or no rows are on screen.
+pub(super) fn take_list_on_screen(view: &mut OpenView, apply: bool) -> Option<ChangeList> {
+    if apply || list_on_screen(view).is_none() {
+        return None;
+    }
+    match std::mem::take(&mut view.list) {
+        Load::Ready(list)
+        | Load::Loading {
+            last: Some(list), ..
+        } => Some(list),
+        _ => None,
+    }
 }
 
 /// The list on screen, to change in place.
@@ -127,6 +159,9 @@ pub(super) fn hold_read(view: &mut OpenView, shown: ChangeList, read: Result<Cha
             shown
         }
     });
+    if !selection_gone(view) {
+        view.chose_gone = false;
+    }
 }
 
 /// The selection no longer listed loses its diff and a new comment on it (as a refresh does).
@@ -153,7 +188,7 @@ pub(super) fn applied(state: &mut State) -> Effect {
         let Some(HeldPr { held, head }) = pr.held.take() else {
             return Effect::None;
         };
-        let mut shown = pr_diff_of(pr).unwrap_or_default();
+        let mut shown = PrDiff::default();
         held.apply(&mut shown);
         show_pr_diff(view, shown, head);
         let moves = judge_anchors(state);
@@ -203,7 +238,11 @@ pub(super) fn adopt_row(view: &mut OpenView, row: DiffRow) {
         scope: shown.scope.clone(),
     };
     match view.held.take() {
-        Some(held) => view.held = held.adopt(shown, &path, &fresh),
+        // A read the user's selection started: one that no longer lists the file says so.
+        Some(held) => {
+            view.held = held.adopt(shown, &path, &fresh);
+            note_selection(view);
+        }
         None => {
             shown.put(&path, &fresh);
             if let Some(ChangeKind::Renamed { from }) = fresh.files.first().map(|r| &r.kind) {
@@ -261,6 +300,7 @@ pub(super) fn show_pr_diff(view: &mut OpenView, diff: PrDiff, head: String) {
     };
     pr.diff = pr_diff_ready(diff);
     pr.head = head;
+    pr.adopted.clear();
     let dropped = pr
         .selected
         .as_ref()
@@ -277,19 +317,26 @@ pub(super) fn show_pr_diff(view: &mut OpenView, diff: PrDiff, head: String) {
 /// Selecting `path` of a held pull request (FR-009): a file in the set shows its latest patch
 /// and row and leaves the set; one the latest diff no longer lists stays in it.
 pub(super) fn adopt_pr_selection(pr: &mut PullRequestView, path: &RelPath) {
-    let Some(HeldPr { held, head }) = pr.held.take() else {
+    if !pr.held.as_ref().is_some_and(|h| h.held.contains(path)) {
+        return;
+    }
+    let (Some(mut shown), Some(HeldPr { held, head })) = (pr_diff_of(pr), pr.held.take()) else {
         return;
     };
-    let Some(mut shown) = pr_diff_of(pr).filter(|_| held.contains(path)) else {
-        pr.held = Some(HeldPr { held, head });
-        return;
-    };
+    // The whole latest diff, so a file new to the shown one takes its place in GitHub's order.
     let latest = held.latest().clone();
+    let listed = latest.files.iter().any(|f| &f.file.path == path);
     pr.held = match held.adopt(&mut shown, path, &latest) {
-        Some(held) => Some(HeldPr { held, head }),
+        Some(held) => {
+            if listed {
+                pr.adopted.insert(path.clone(), head.clone());
+            }
+            Some(HeldPr { held, head })
+        }
         None => {
             // Nothing left held: what is shown is the latest diff, read at its head.
             pr.head = head;
+            pr.adopted.clear();
             None
         }
     };

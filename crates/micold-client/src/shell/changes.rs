@@ -380,6 +380,15 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             off_thread(
                 label,
                 move || {
+                    // Feature 1275 (research R5): the file's row, read before its diff so a change
+                    // in between leaves it in the changed-since set (an extra dot), never a stale
+                    // diff counted as seen.
+                    let paths: Vec<RelPath> =
+                        std::iter::once(path.clone()).chain(from.clone()).collect();
+                    let row = DiffRow::from_read(
+                        git.change_list_of(&dir, scope.clone(), toggles, &paths),
+                        &path,
+                    );
                     let mut loaded = git
                         .file_diff(&dir, &scope, toggles, &path, from.as_ref(), force_large)
                         .map_err(|error| error.to_string())?;
@@ -396,11 +405,6 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                             HIGHLIGHT_BUDGET.as_secs()
                         )),
                     }
-                    // Feature 1275 (research R5): the file's row as of this diff, so a file the
-                    // user opens leaves the changed-since set with the counts it shows.
-                    let paths: Vec<RelPath> = std::iter::once(path.clone()).chain(from).collect();
-                    let row =
-                        DiffRow::from_read(git.change_list_of(&dir, scope, toggles, &paths), &path);
                     Ok((loaded, row))
                 },
                 answer,

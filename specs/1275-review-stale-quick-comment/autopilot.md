@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M3
-- **Next step**: M3 continue from *Handover* (fresh unit).
+- **Next step**: M3 review A round 2 on the fix diff (orchestrator), then review B, then open the M3 PR.
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
-| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
+| M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gate green, pushed; PR not opened (reviews pending) |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B (conformance) | 1 | 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc | CLEAN (sonnet, run by the orchestrator). Verify: lib 1578 passed incl. 10 `review::stale`; `review_git` and `pr_diff_split` passed; `settings_refuses_save_over_failed_read` failed only because the reviewer ran as root (`scripts/gate.sh` runs it unprivileged). |
 | M2 A (code-review high) | 1 | e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05 | pending (unit had no Agent tool; orchestrator runs it) |
 | M2 B (conformance) | 1 | e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05 | pending |
+| M3 A (code-review high) | 1 | 3ca84763c (WIP) | CHANGES (run by the orchestrator): 4 MAJOR, 2 MINOR, all verified. F1 open file dropping out of a background read switched to NO_LONGER_CHANGED on its own → `OpenView.chose_gone` (set only when the user selects the file, or the read their selection started finds it gone; `stale::note_selection`), test `the_open_file_leaving_a_background_read_keeps_its_diff_until_selected` (red seen). F2 re-selecting the open dotted file did nothing → `FileSelected` re-reads it keeping the old diff, test `selecting_the_open_dotted_file_reads_its_latest_diff` (red seen). F3 ReadDiff job read the row after the diff → row read first (no seam for a test: off-thread closure over real git). F4 adopted PR file recorded the old head → `PullRequestView.adopted` + `stale::head_of` for the anchor's `head_commit` and the head-version read, test `a_comment_on_an_adopted_file_records_the_head_it_was_read_at` (red seen). F5 watch read ahead of a queued user read was applied → `OpenView.apply_queued`, test `a_watch_read_ahead_of_the_users_queued_read_is_not_shown` (red seen). F6 clones: fixed in part (see Declined). |
+| M3 visual pass (T025) | 1 | M3 tree, debug build | PASS (unit, cloud Xvfb, 1280x800, light and dark): §A step 2 held state, re-selecting the open dotted file (A F2), notice applied. Observations: base line ellipsised while the notice shows; #1271's dot close to the `−2` count. Evidence `visual-pass/` and /mnt/project-files/issue-1275/. |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
@@ -95,47 +97,12 @@ items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A r1 | F6 (MINOR), clones | Partly: `applied` no longer clones the shown PR diff, `list_read` takes the list instead of cloning it, `adopt_pr_selection` checks the set before building anything. Kept: the latest PR diff is still cloned on adoption (`Listing::put` places a file new to the shown diff by its neighbours in the latest one, so the whole latest diff is the `fresh` argument) and `hold_pr_refresh` builds the shown `PrDiff` to compare (the view stores files and patches apart). |
 | M1 | A r1 | F6, untracked rows | Partly: an untracked row's modes stay `[0, 0]` (`--raw` does not list it); a chmod on an untracked file is not flagged. Its diff shows the mode only in the `new file mode` header; left for a follow-up if wanted. |
 
 ## Handover
 
-M3 unit 1 (2026-10-25) handed over at the context cap; work committed locally on
-`claude/project-thread-1l3w9s` (WIP commit `feat(1275): M3 hold …`, NOT pushed, NOT gated), rebased on
-origin/main at 96545e4d.
-
-Done (T015–T024 ticked; tests green: `features_changes` 177 incl. `hold::` 16, `features_pr_changes`
-93 incl. H11–H14, `layout_snapshot` green after re-record; `cargo check -p micold-client --tests` clean):
-- `features/changes/stale.rs` (new child module): `DiffRow` + `from_read`, `HeldPr { held, head }`,
-  `stale_notice`, `changed_since_you_looked`, `no_longer_changed`, hold/apply/adopt helpers.
-- `features/changes.rs`: `OpenView.held/apply_next`, `PullRequestView.held: Option<HeldPr>`,
-  `Msg::DiffRead.row`, `Msg::StaleApplied`, `DiffBody::NoLongerChanged` + `NO_LONGER_CHANGED`,
-  `request_user_read` (toggles), `list_read` holds watch reads, `request_diff` reads a held file
-  under the latest read, `follow_head` skips a held head, `SourceChosen(None)` from a PR applies the
-  tree hold.
-- `micold-core/src/git.rs`: `Git::change_list_of` (default filters `change_list`; GitCli overrides).
-- `shell/changes.rs`: ReadDiff job also reads `change_list_of([path, from])` → `DiffRow`.
-- `ui/changes.rs`: header notice (`Button::text`, `Msg::StaleApplied`), `RowDot` reusing #1271's
-  `UnreadMark` row dot with its own tooltip, NoLongerChanged text.
-- Tests: existing refresh helpers (`answer_list`, `reread`, PR `answer_head`, two direct tests) now
-  press `StaleApplied` after a differing background read; new covered state `changes-review-held`
-  (also in `session_area_fits` header test); fixture re-recorded (+482 lines, additions only).
-- Docs: reviewing-changes.md *Keeping up with changes*, comment-box paragraph, hidden-tab paragraph,
-  *When the pull request moves*.
-
-Deviations from tasks.md (say so in the PR body): T021 no `ChangedDot` primitive (reuse #1271's
-`UnreadMark` dot, tooltip by `RowDot`); H11–H14 live in `features_pr_changes.rs` (its PR fixtures);
-`PullRequestView.held` is `Option<HeldPr>` (holds the new head, so comments record the shown head
-and `follow_head` does not re-read a held head); `PrDiffLoad::Ready` unchanged, converted to
-`PrDiff` at the hold boundary (`stale::pr_diff_of`); `whole` (marks' ids) still updates live
-(FR-013/M6 untouched). Tests were written after the code in this unit (red phase not observed).
-
-Next: (1) `scripts/autopilot/checkpoint.sh`; rebase if main moved, re-record the fixture; (2) full
-`mise run gate` detached (lib unit tests in `features/changes.rs` and the rest of the client suite
-not yet run — `main_tests.rs`/covered-state tests driving `Msg::Changed` may need `StaleApplied`);
-(3) T025 visual pass (cloud-gui-repro note: Xvfb + import available, no xdotool) of state
-`changes-review-held` / quickstart §A step 2, screenshots to /mnt/project-files/issue-1275/, else
-"visual pass pending (orchestrator)"; (4) amend into a clean commit, push, review-snapshot.sh, PR body
-to the scratchpad `pr-body-1275-m3.md`; return REVIEW NEEDED: M3.
+None.
 
 ## Open escalation
 
