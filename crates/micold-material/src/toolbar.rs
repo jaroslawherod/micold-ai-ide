@@ -296,6 +296,9 @@ mod tests {
     /// The title bar's whole shape: the mark, a `project / place` breadcrumb, a 120 fixed item, the
     /// jump-to field in the centre, two 40 actions.
     fn title_bar(project: &str, place: &str) -> Toolbar<'static, String> {
+        // The bundled fonts first: the breadcrumb and the field measure their words as they are
+        // built.
+        let _ = super::super::test_support::renderer();
         Toolbar::new(roles())
             .mark(block(anatomy::app_bar::MARK, anatomy::app_bar::MARK))
             .leading(
