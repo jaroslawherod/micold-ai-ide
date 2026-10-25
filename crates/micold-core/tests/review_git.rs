@@ -848,6 +848,8 @@ fn a_new_file_keeps_its_id_from_untracked_to_staged_to_committed() {
     assert_eq!(whole_file(&committed, "new.rs").origin, Origin::Committed);
 }
 
+// Windows refuses `"` in a file name, so no such path can reach `hash-object` there.
+#[cfg(unix)]
 #[test]
 fn a_path_starting_with_a_quote_is_hashed_and_keeps_its_id_when_staged() {
     // Review A M1 F1: `hash-object --stdin-paths` C-unquotes a line starting with `"`.
