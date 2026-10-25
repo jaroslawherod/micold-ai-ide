@@ -2066,7 +2066,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         //
         // `feat-short`'s review listing five files in folders: the nested `crates/core/src/review`
         // chained into one row, `tests` collapsed, a binary file in `assets`, a Mode change in
-        // `scripts`, `README.md` at the top level; `tree.rs` selected. Eight rows, so the list
+        // `scripts`, `build.rs` at the top level; `tree.rs` selected. Eight rows, so the list
         // fits the 800 px window's column without scrolling.
         CoveredState {
             name: "changes-tree-collapsed",
@@ -3644,7 +3644,7 @@ pub fn review_tree_collapsed() -> StateUnderTest {
     let text = Content::Text;
     let list = ChangeList {
         files: vec![
-            file("README.md", ChangeKind::Modified, text, 3, 1),
+            file("build.rs", ChangeKind::Modified, text, 3, 1),
             file("assets/logo.png", ChangeKind::Added, Content::Binary, 0, 0),
             file(
                 "crates/core/src/review/tree.rs",
