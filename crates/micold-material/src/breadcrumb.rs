@@ -192,6 +192,10 @@ impl<'a, M: Clone + 'a> From<Breadcrumb<M>> for Element<'a, M> {
 /// was shortened; the view that built the bar does not know the window's width. Only the chosen
 /// child is drawn, updated, traversed and floated, so the segment is one Tab stop and one tooltip.
 /// It adds no layout node of its own.
+///
+/// The two renderings keep separate trees, so a resize that crosses the threshold drops the
+/// segment's hover, press and keyboard focus and restarts its tooltip's wait. A resize is not
+/// something a person does while pressing or tabbing, so the bar accepts that.
 struct Fit<'a, M> {
     whole: Element<'a, M>,
     cut: Element<'a, M>,
@@ -508,11 +512,8 @@ mod tests {
             "at least one character and …"
         );
         assert!(
-            painted.iter().any(|w| w == &floor_text(LONG_PLACE))
-                || painted
-                    .iter()
-                    .any(|w| w.ends_with('…') && LONG_PLACE.starts_with(w.trim_end_matches('…'))),
-            "the place keeps its floor: {painted:?}"
+            painted.contains(&floor_text(LONG_PLACE)),
+            "the place is at its floor before the project shortens: {painted:?}"
         );
         for leaf in leaves(&m.node) {
             assert!(

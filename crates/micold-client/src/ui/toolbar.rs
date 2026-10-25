@@ -381,13 +381,10 @@ mod tests {
     #[test]
     fn changes_reads_its_entry_and_compare_keeps_the_session() {
         let mut state = on_fix_1117();
-        crate::features::changes::update(
-            &mut state.changes,
-            crate::features::changes::Msg::Opened {
-                project: PathBuf::from(REPO),
-                entry: SessionLocation::Worktree("feat-2000".into()),
-            },
-        );
+        let _ = state.update_changes(crate::features::changes::Msg::Opened {
+            project: PathBuf::from(REPO),
+            entry: SessionLocation::Worktree("feat-2000".into()),
+        });
         assert_eq!(place_text(&state).as_deref(), Some("feat/2000"));
 
         let mut state = on_fix_1117();

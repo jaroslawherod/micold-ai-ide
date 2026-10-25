@@ -3349,9 +3349,10 @@ pub const SIXTY_CHARACTER_PROJECT: &str =
     "a-project-with-a-name-sixty-characters-long-for-the-title-ba";
 
 /// A 60-character branch with no conventional type, so the place segment shows it whole until the
-/// bar shortens it (feature 1127, T032).
+/// bar shortens it (feature 1127, T032). Its first character differs from
+/// [`SIXTY_CHARACTER_PROJECT`]'s, so each segment's floor, one character and `…`, names one segment.
 pub const SIXTY_CHARACTER_BRANCH: &str =
-    "a-branch-with-a-name-sixty-characters-long-for-the-title-bar";
+    "b-branch-with-a-name-sixty-characters-long-for-the-title-bar";
 
 /// The title bar at its fullest (feature 1127, T013, T032 — contract B5, SC-003): a 60-character
 /// project name, three unread sessions in another project (the project segment's unread mark), a
