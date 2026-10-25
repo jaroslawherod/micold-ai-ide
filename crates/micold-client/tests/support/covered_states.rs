@@ -3146,7 +3146,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: TITLE_BAR_ANCHORS,
         },
-        // Settings open: the Settings button drawn selected and inert, the Overview button inert.
+        // Settings open: the Settings button drawn selected and inert, the jump-to field disabled.
         CoveredState {
             name: "title-bar-settings",
             build: || {
@@ -3975,7 +3975,7 @@ pub const SIXTY_CHARACTER_BRANCH: &str =
 
 /// The title bar at its fullest (feature 1127, T013, T032 — contract B5, SC-003): a 60-character
 /// project name, three unread sessions in another project (the project segment's unread mark), a
-/// session shown on a 60-character branch, and the Overview button carrying its badge.
+/// session shown on a 60-character branch.
 pub fn title_bar_crowded() -> State {
     assert_eq!(SIXTY_CHARACTER_PROJECT.chars().count(), 60);
     assert_eq!(SIXTY_CHARACTER_BRANCH.chars().count(), 60);
