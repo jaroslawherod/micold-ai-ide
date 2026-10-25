@@ -70,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code review high, headless reviewer) | 1 | 8c92d360526b5d06c0d85ae3cfa2941ce96b91ea:68c5b3fe6ec8cee326941591b531e4f411b34580 | CLEAN: 3 MINOR, all fixed (drafts-only test asserts `DraftsOnly` is `None`; card test helpers deduplicated; catalogue pose names match the render labels). A first run returned a bare CLEAN; re-run with JSON output (12 turns) to confirm it read the diff |
 | Review B M2 (conformance, headless reviewer) | 1 | 8c92d360526b5d06c0d85ae3cfa2941ce96b91ea:68c5b3fe6ec8cee326941591b531e4f411b34580 | CLEAN |
 | Visual pass M2 (in-process tiny-skia, 1280 wide, both schemes) | 1 | — | 1 real finding fixed: Answer… overflowed a 340 px whole-reply row; Mark applied / Answer… moved to their own line. Record: `visual-pass-m2.md` |
+| Review A M3 (code review high, headless reviewer) | 1 | 28fbd07040ff3c5c74adc97695d603af7a90c0e3:75b576df73af295f0de414be1c74aa9a1c5dd45c | CHANGES: F1 MAJOR fixed (a send that never left — no daemon, route down — now also fails in the bar and drops the watch: `shell/changes.rs` uses `send_op_bound_req`; test `a_send_with_no_daemon_fails_in_the_bar_and_drops_the_watch`); F2 MINOR fixed (the error clears only when a send starts); F3 MINOR fixed (the overflow menu closes when the tab hides and when a send starts) |
+| Visual pass M3 (in-process tiny-skia, 1280×800, both schemes) | 1 | — | 1 finding fixed: "No review comments yet" said twice in an empty panel. Record: `visual-pass-m3.md` |
 
 ## Declined review findings
 

@@ -163,7 +163,9 @@ fn review_buttons<'a>(state: &'a State, r: Roles) -> iced::widget::Row<'a, Messa
 /// row's label rather than in a group header.
 fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
     let buttons = review_buttons(state, r);
+    // With no comment the empty text below says so; the counts line would say it twice.
     let counts = review_bar(&state.changes)
+        .filter(|bar| !bar.counts.is_empty())
         .and_then(|bar| counts_text(&bar.counts, CountsForm::Full))
         .unwrap_or_default();
     let tab = view.drawer.state.tab;
