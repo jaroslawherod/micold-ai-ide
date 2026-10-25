@@ -195,6 +195,20 @@ pub trait Git {
         toggles: crate::review::base::Toggles,
     ) -> io::Result<crate::review::changes::ChangeList>;
 
+    /// [`Git::change_list`] limited to `paths`: exactly the full list's rows for them (feature
+    /// 1275, research R5). A rename is found only when both its paths are given. Read-only.
+    fn change_list_of(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        paths: &[crate::review::RelPath],
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        let mut list = self.change_list(dir, scope, toggles)?;
+        list.files.retain(|row| paths.contains(&row.path));
+        Ok(list)
+    }
+
     /// The diff of `path` in `dir` under `scope` and `toggles`, with both versions' lines (feature
     /// 482, research R1, R8). `from` is a renamed file's old path. Over the R8 limits it answers
     /// `FileDiff::TooLarge` unless `force_large`. Read-only.
@@ -789,6 +803,16 @@ impl Git for GitCli {
         toggles: crate::review::base::Toggles,
     ) -> io::Result<crate::review::changes::ChangeList> {
         GitCli::change_list(self, dir, scope, toggles)
+    }
+
+    fn change_list_of(
+        &self,
+        dir: &Path,
+        scope: crate::review::base::ReviewScope,
+        toggles: crate::review::base::Toggles,
+        paths: &[crate::review::RelPath],
+    ) -> io::Result<crate::review::changes::ChangeList> {
+        GitCli::change_list_of(self, dir, scope, toggles, paths)
     }
 
     fn file_diff(

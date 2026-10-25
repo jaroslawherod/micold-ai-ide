@@ -14,9 +14,9 @@ use std::time::{Duration, Instant};
 use iced::widget::text_editor;
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::changes::Effect;
 use micold_client::features::changes::Msg;
 use micold_client::features::changes::SourceKey;
+use micold_client::features::changes::{DiffRow, Effect};
 use micold_client::features::settings;
 use micold_client::ui::syntax;
 use micold_core::context_header::ChangeSummary;
@@ -27,7 +27,7 @@ use micold_core::pull_request::{PullRequestSource, ReadingFailure, TreeListing};
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::browse::{self, Confined, FileReadFailure, FileSource, FileText};
 use micold_core::review::changes::ChangeList;
-use micold_core::review::diff::Spans;
+use micold_core::review::diff::{LoadedDiff, Spans};
 use micold_core::review::marks::WholeChange;
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
@@ -365,7 +365,13 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             from,
             force_large,
         } => {
-            let answer = move |result| Message::Changes(Msg::DiffRead { seq, result });
+            let answer = move |read: Result<(LoadedDiff, DiffRow), String>| {
+                let (result, row) = match read {
+                    Ok((diff, row)) => (Ok(diff), row),
+                    Err(message) => (Err(message), DiffRow::NotRead),
+                };
+                Message::Changes(Msg::DiffRead { seq, result, row })
+            };
             let (dir, git) = match local(app, &entry) {
                 Ok(found) => found,
                 Err(why) => return Task::done(answer(Err(why.into()))),
@@ -390,7 +396,12 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                             HIGHLIGHT_BUDGET.as_secs()
                         )),
                     }
-                    Ok(loaded)
+                    // Feature 1275 (research R5): the file's row as of this diff, so a file the
+                    // user opens leaves the changed-since set with the counts it shows.
+                    let paths: Vec<RelPath> = std::iter::once(path.clone()).chain(from).collect();
+                    let row =
+                        DiffRow::from_read(git.change_list_of(&dir, scope, toggles, &paths), &path);
+                    Ok((loaded, row))
                 },
                 answer,
             )

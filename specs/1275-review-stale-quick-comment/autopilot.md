@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: implement M2
-- **Next step**: M1 (#1380) and M2 (#1413) merged (M2 at 05575435). Wait for #1271 to close (#1269 closed 2026-10-25), then M3 (rebase, re-record layout_snapshot.txt right before the gate).
+- **Phase**: implement M3
+- **Next step**: M3 continue from *Handover* (fresh unit).
 
 ## Pull requests
 
@@ -24,13 +24,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
 | #1380 | M1 | merged | 8c0711181531461916b4e025a22d3da0b615f577 |
+| #1413 | M2 | merged | 055754352429f96b08c2b5df561b32d6a34d764d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
-| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | pushed 00fb5329, gate green; reviews A/B pending, PR not opened |
+| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
@@ -98,7 +99,43 @@ items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
 
 ## Handover
 
-None.
+M3 unit 1 (2026-10-25) handed over at the context cap; work committed locally on
+`claude/project-thread-1l3w9s` (WIP commit `feat(1275): M3 hold …`, NOT pushed, NOT gated), rebased on
+origin/main at 96545e4d.
+
+Done (T015–T024 ticked; tests green: `features_changes` 177 incl. `hold::` 16, `features_pr_changes`
+93 incl. H11–H14, `layout_snapshot` green after re-record; `cargo check -p micold-client --tests` clean):
+- `features/changes/stale.rs` (new child module): `DiffRow` + `from_read`, `HeldPr { held, head }`,
+  `stale_notice`, `changed_since_you_looked`, `no_longer_changed`, hold/apply/adopt helpers.
+- `features/changes.rs`: `OpenView.held/apply_next`, `PullRequestView.held: Option<HeldPr>`,
+  `Msg::DiffRead.row`, `Msg::StaleApplied`, `DiffBody::NoLongerChanged` + `NO_LONGER_CHANGED`,
+  `request_user_read` (toggles), `list_read` holds watch reads, `request_diff` reads a held file
+  under the latest read, `follow_head` skips a held head, `SourceChosen(None)` from a PR applies the
+  tree hold.
+- `micold-core/src/git.rs`: `Git::change_list_of` (default filters `change_list`; GitCli overrides).
+- `shell/changes.rs`: ReadDiff job also reads `change_list_of([path, from])` → `DiffRow`.
+- `ui/changes.rs`: header notice (`Button::text`, `Msg::StaleApplied`), `RowDot` reusing #1271's
+  `UnreadMark` row dot with its own tooltip, NoLongerChanged text.
+- Tests: existing refresh helpers (`answer_list`, `reread`, PR `answer_head`, two direct tests) now
+  press `StaleApplied` after a differing background read; new covered state `changes-review-held`
+  (also in `session_area_fits` header test); fixture re-recorded (+482 lines, additions only).
+- Docs: reviewing-changes.md *Keeping up with changes*, comment-box paragraph, hidden-tab paragraph,
+  *When the pull request moves*.
+
+Deviations from tasks.md (say so in the PR body): T021 no `ChangedDot` primitive (reuse #1271's
+`UnreadMark` dot, tooltip by `RowDot`); H11–H14 live in `features_pr_changes.rs` (its PR fixtures);
+`PullRequestView.held` is `Option<HeldPr>` (holds the new head, so comments record the shown head
+and `follow_head` does not re-read a held head); `PrDiffLoad::Ready` unchanged, converted to
+`PrDiff` at the hold boundary (`stale::pr_diff_of`); `whole` (marks' ids) still updates live
+(FR-013/M6 untouched). Tests were written after the code in this unit (red phase not observed).
+
+Next: (1) `scripts/autopilot/checkpoint.sh`; rebase if main moved, re-record the fixture; (2) full
+`mise run gate` detached (lib unit tests in `features/changes.rs` and the rest of the client suite
+not yet run — `main_tests.rs`/covered-state tests driving `Msg::Changed` may need `StaleApplied`);
+(3) T025 visual pass (cloud-gui-repro note: Xvfb + import available, no xdotool) of state
+`changes-review-held` / quickstart §A step 2, screenshots to /mnt/project-files/issue-1275/, else
+"visual pass pending (orchestrator)"; (4) amend into a clean commit, push, review-snapshot.sh, PR body
+to the scratchpad `pr-body-1275-m3.md`; return REVIEW NEEDED: M3.
 
 ## Open escalation
 

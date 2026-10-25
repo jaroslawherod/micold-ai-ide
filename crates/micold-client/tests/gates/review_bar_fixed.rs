@@ -20,7 +20,7 @@ use crate::support::covered_states::{
 use crate::support::layout::{self as lay, LayoutRecord, StateUnderTest, WINDOW};
 use iced::{Rectangle, Size};
 use micold_client::app::State;
-use micold_client::features::changes::{self, Effect, Load, Msg};
+use micold_client::features::changes::{self, DiffRow, Effect, Load, Msg};
 use micold_core::review::base::{Base, ReviewScope};
 use micold_core::review::changes::{
     ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
@@ -164,6 +164,7 @@ fn with_diff(mut under: StateUnderTest) -> StateUnderTest {
                 new: SideLines::from_bytes(new.as_bytes()),
                 spans: Default::default(),
             }),
+            row: DiffRow::NotRead,
         },
     );
     under

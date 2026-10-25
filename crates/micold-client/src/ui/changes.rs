@@ -20,13 +20,14 @@ use micold_core::typeahead::{match_one, Query};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    self as changes, adjacent, base_line, browse_body, can_go_back, card_model, composer_in_drawer,
-    composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups, drawer_rows,
-    file_comments, file_diff_available, file_reviews, list_body, mark_control, pending_counts,
-    picker_matches, pr_header, progress_label, review_bar, review_of, reviews_progress,
-    selected_file, source_control_tooltip, source_menu_input, stop_message, tree_rows, whole_file,
-    BrowseBody, ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel,
-    Source, Step, TreeKind, WholeFile, WHOLE_FILE_UNAVAILABLE,
+    self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
+    changed_since_you_looked, composer_in_drawer, composer_placed, diff_body, discard_prompt,
+    drawer_counts, drawer_groups, drawer_rows, file_comments, file_diff_available, file_reviews,
+    list_body, mark_control, pending_counts, picker_matches, pr_header, progress_label, review_bar,
+    review_of, reviews_progress, selected_file, source_control_tooltip, source_menu_input,
+    stale_notice, stop_message, tree_rows, whole_file, BrowseBody, ComposerTarget, DiffBody,
+    DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel, Source, Step, TreeKind, WholeFile,
+    NO_LONGER_CHANGED, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::Surface;
@@ -118,14 +119,19 @@ pub fn view<'a>(
     // Feature 1271: the rows' review states, judged once for the list and the header, whose
     // *n of m reviewed* slot sits beside the heading (FR-008, FR-009).
     let reviews = file_reviews(&state.changes, view, connected);
-    let header = container(
-        row![
-            container(heading).width(Length::FillPortion(1)),
-            source_control(state, view, r),
-            progress_slot(reviews_progress(&reviews, connected), r),
-        ]
+    let mut controls = row![container(heading).width(Length::FillPortion(1))]
         .spacing(spacing::MD)
-        .align_y(Alignment::Center),
+        .align_y(Alignment::Center);
+    // Feature 1275 (FR-007): what changed while the list and the diff were held, and the way to
+    // show it.
+    if let Some(notice) = stale_notice(view) {
+        controls =
+            controls.push(Button::text(notice, r).on_press(Message::Changes(Msg::StaleApplied)));
+    }
+    let header = container(
+        controls
+            .push(source_control(state, view, r))
+            .push(progress_slot(reviews_progress(&reviews, connected), r)),
     )
     .width(Length::Fill)
     .padding(spacing::LG);
@@ -470,7 +476,8 @@ fn list_pane<'a>(
                     let file = &files[index];
                     let pending = counts.get(&file.path).copied().unwrap_or(0);
                     let review = reviews.get(&file.path).copied();
-                    file_row(file, selected == Some(&file.path), pending, review, r)
+                    let dot = RowDot::of(review, changed_since_you_looked(view, &file.path));
+                    file_row(file, selected == Some(&file.path), pending, review, dot, r)
                 },
                 r,
             )
@@ -618,6 +625,7 @@ fn file_row(
     selected: bool,
     pending: usize,
     review: Option<FileReview>,
+    dot: Option<RowDot>,
     r: Roles,
 ) -> Element<'static, Message> {
     let (kind, accent) = kind_tag(&file.kind, r);
@@ -659,7 +667,6 @@ fn file_row(
     if pending > 0 {
         line = line.push(Tag::new(pending_label(pending), r.tertiary).one_line());
     }
-    let changed = review.is_some_and(|review| review.changed_since);
     let button = container(
         // The row's inset is the list's, not the variant's: selecting a row outlines it without
         // taking 24 px from its path (1271 visual re-pass V1).
@@ -673,14 +680,14 @@ fn file_row(
     )
     .height(Length::Fixed(ROW_HEIGHT))
     .width(Length::Fill);
-    if !changed {
+    let Some(dot) = dot else {
         return button.into();
-    }
+    };
     // FR-003: the changed dot sits in the button's trailing padding, over it rather than in the
     // row, so it takes no room from the name and the tags (1271 round 1, V2) and its tooltip is
     // not a child of the button (V1).
     let dot = container(
-        Tooltip::new(UnreadMark::new(r), CHANGED_SINCE_TOOLTIP, r).position(TooltipPosition::Left),
+        Tooltip::new(UnreadMark::new(r), dot.tooltip(), r).position(TooltipPosition::Left),
     )
     .width(Length::Fill)
     .height(Length::Fill)
@@ -697,6 +704,43 @@ fn file_row(
 const CHANGED_DOT_INSET: f32 = 4.0;
 /// The changed dot's tooltip (feature 1271, FR-003).
 pub const CHANGED_SINCE_TOOLTIP: &str = "Changed since you marked it reviewed";
+/// The dot's tooltip on a row changed while the list was held (feature 1275, FR-008).
+pub const CHANGED_SINCE_LOOKED_TOOLTIP: &str = "Changed since you looked";
+/// The dot's tooltip on a row that is both.
+pub const CHANGED_SINCE_BOTH_TOOLTIP: &str =
+    "Changed since you looked, and since you marked it reviewed";
+
+/// Why a row carries the changed dot: one dot, whichever says so (features 1271 and 1275).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowDot {
+    /// Changed since the user marked it reviewed (1271, FR-003).
+    Reviewed,
+    /// Changed since the user looked: the list is held (1275, FR-008).
+    Looked,
+    /// Both.
+    Both,
+}
+
+impl RowDot {
+    /// The dot a row carries, if any.
+    pub fn of(review: Option<FileReview>, looked: bool) -> Option<Self> {
+        match (review.is_some_and(|review| review.changed_since), looked) {
+            (true, true) => Some(Self::Both),
+            (true, false) => Some(Self::Reviewed),
+            (false, true) => Some(Self::Looked),
+            (false, false) => None,
+        }
+    }
+
+    /// The dot's tooltip.
+    pub fn tooltip(self) -> &'static str {
+        match self {
+            Self::Reviewed => CHANGED_SINCE_TOOLTIP,
+            Self::Looked => CHANGED_SINCE_LOOKED_TOOLTIP,
+            Self::Both => CHANGED_SINCE_BOTH_TOOLTIP,
+        }
+    }
+}
 
 /// A row's review state: ○, ● or ✓ (feature 1271, research R9). Reviewed reads in the label's
 /// own role, the other two quieter, as badges.
@@ -856,6 +900,9 @@ fn diff_pane_body<'a>(
         DiffBody::NoSelection => Text::new("Select a file", TypeRole::Body, r).muted().into(),
         DiffBody::Loading => StageProgress::new("Loading diff…", r).into(),
         DiffBody::Failed(message) => Text::new(message, TypeRole::Body, r).tint(r.error).into(),
+        DiffBody::NoLongerChanged => Text::new(NO_LONGER_CHANGED, TypeRole::Body, r)
+            .muted()
+            .into(),
         DiffBody::Diff(loaded) => {
             let spans = match scheme {
                 ColorScheme::Light => &loaded.spans.light,

@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 
 use micold_client::features::changes::{
     self, base_line, browse_body, can_go_back, can_pick, committed_available, diff_body, list_body,
-    pickable, BrowseBody, DiffBody, Effect, ListBody, Load, Msg, State, WholeFile, BOTH_HIDDEN,
-    DEFAULT_ENTRY_NOTE,
+    pickable, BrowseBody, DiffBody, DiffRow, Effect, ListBody, Load, Msg, State, WholeFile,
+    BOTH_HIDDEN, DEFAULT_ENTRY_NOTE,
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::browse::{FileReadFailure, FileText};
@@ -518,6 +518,7 @@ fn selecting_a_file_reads_its_diff() {
         Msg::DiffRead {
             seq,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     let view = state.tabs.shown_view().unwrap();
@@ -562,6 +563,7 @@ fn a_stale_diff_answer_is_dropped() {
         Msg::DiffRead {
             seq: first,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(
@@ -573,6 +575,7 @@ fn a_stale_diff_answer_is_dropped() {
         Msg::DiffRead {
             seq: second,
             result: Err("fatal: bad revision".into()),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(
@@ -595,6 +598,7 @@ fn show_diff_reads_a_large_file_forced_and_remembers_it() {
         Msg::DiffRead {
             seq,
             result: Ok(large.clone()),
+            row: DiffRow::NotRead,
         },
     );
     let view = state.tabs.shown_view().unwrap();
@@ -640,6 +644,7 @@ fn binary_not_utf8_and_mode_only_allow_no_pick() {
             Msg::DiffRead {
                 seq,
                 result: Ok(loaded(diff.clone())),
+                row: DiffRow::NotRead,
             },
         );
         assert!(!can_pick(state.tabs.shown_view().unwrap()), "{diff:?}");
@@ -656,6 +661,7 @@ fn a_list_reread_keeps_the_selection_and_rereads_its_diff() {
         Msg::DiffRead {
             seq,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
@@ -719,6 +725,7 @@ fn a_failed_list_reread_drops_the_selection_and_its_diff() {
         Msg::DiffRead {
             seq,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled) else {
@@ -748,6 +755,7 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
         Msg::DiffRead {
             seq,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     changes::update(
@@ -769,6 +777,7 @@ fn selecting_the_shown_file_again_keeps_its_diff_unless_it_failed() {
         Msg::DiffRead {
             seq: failed,
             result: Err("fatal: bad object".into()),
+            row: DiffRow::NotRead,
         },
     );
     let (retry, _) = select(&mut state, "a.rs");
@@ -848,6 +857,7 @@ fn showing(diff: LoadedDiff) -> State {
         Msg::DiffRead {
             seq,
             result: Ok(diff),
+            row: DiffRow::NotRead,
         },
     );
     state
@@ -1089,6 +1099,7 @@ fn the_composer_survives_a_list_and_diff_reread() {
         Msg::DiffRead {
             seq,
             result: Ok(commentable()),
+            row: DiffRow::NotRead,
         },
     );
     assert!(before.is_some());
@@ -1391,22 +1402,46 @@ fn quoting(p: &str, side: Side, start: u32, quote: &[&str]) -> ReviewComment {
 }
 
 /// Answer the list read `effect` asked for with `paths`, returning what the answer asks next.
+/// Answer the background read `effect` asked for with `paths`, each row changed since the list
+/// on screen, then press the notice that shows it (feature 1275): what a refresh is now. A read
+/// queued behind it is returned instead, unapplied.
 fn answer_list(state: &mut State, effect: Effect, paths: &[&str]) -> Effect {
     let Effect::ReadList { seq, .. } = effect else {
         panic!("a list read, got {effect:?}");
     };
-    match changes::update(
+    let effect = changes::update(
         state,
         Msg::ListRead {
             seq,
             whole: Ok(Default::default()),
-            result: Ok(list(paths)),
+            result: Ok(changed_since_shown(state, paths)),
         },
-    ) {
+    );
+    let effect = match effect {
+        Effect::ReadList { .. } => effect,
+        _ => changes::update(state, Msg::StaleApplied),
+    };
+    match effect {
         // The diff's read leads; a browsed file's and the tree's re-reads follow it.
         Effect::Batch(mut effects) => effects.remove(0),
         effect => effect,
     }
+}
+
+/// `list(paths)`, each row's added count one more than the shown row's: a change the hold counts.
+fn changed_since_shown(state: &State, paths: &[&str]) -> ChangeList {
+    let shown = state
+        .tabs
+        .shown_view()
+        .and_then(changes::shown_list)
+        .cloned()
+        .unwrap_or_else(|| list(&[]));
+    let mut latest = list(paths);
+    for row in &mut latest.files {
+        let before = shown.files.iter().find(|f| f.path == row.path);
+        row.added = before.map_or(1, |f| f.added + 1);
+    }
+    latest
 }
 
 /// Answer the diff read `effect` asked for with `diff`.
@@ -1419,6 +1454,7 @@ fn answer_diff(state: &mut State, effect: Effect, diff: LoadedDiff) {
         Msg::DiffRead {
             seq,
             result: Ok(diff),
+            row: DiffRow::NotRead,
         },
     );
 }
@@ -1456,6 +1492,7 @@ fn refresh_effect(state: &mut State, diff: LoadedDiff) -> Effect {
         Msg::DiffRead {
             seq,
             result: Ok(diff),
+            row: DiffRow::NotRead,
         },
     )
 }
@@ -1469,7 +1506,7 @@ fn pushed_down(above: usize) -> LoadedDiff {
     }
 }
 
-/// R1, FR-010. A change re-reads the list, then the open diff.
+/// R1, FR-010. A change re-reads the list; applying it (feature 1275) re-reads the open diff.
 #[test]
 fn a_change_rereads_the_list_and_the_open_diff() {
     let mut state = showing(commentable());
@@ -2233,6 +2270,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
         Msg::DiffRead {
             seq,
             result: Ok(commentable()),
+            row: DiffRow::NotRead,
         },
     );
     // Unified rows: header, a, -b, +B, c, -x, +d: line 4 is row 6; two rows above it stay.
@@ -2364,6 +2402,7 @@ fn a_reason_clears_with_the_toggle_and_an_abandoned_jump_does_not_scroll() {
         Msg::DiffRead {
             seq,
             result: Ok(commentable()),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(sans_tree(effect), Effect::None);
@@ -2581,6 +2620,7 @@ fn expansion_state_is_kept_per_file() {
         Msg::DiffRead {
             seq,
             result: Ok(long_file("X")),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(
@@ -2594,6 +2634,7 @@ fn expansion_state_is_kept_per_file() {
         Msg::DiffRead {
             seq,
             result: Ok(long_file("X")),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(shown_lines(&state), open);
@@ -2645,6 +2686,7 @@ fn files_without_two_text_versions_offer_no_markers() {
             Msg::DiffRead {
                 seq,
                 result: Ok(long_file("X")),
+                row: DiffRow::NotRead,
             },
         );
         assert!(view_of(&state).shaped.gaps.is_empty(), "{kind:?}");
@@ -2732,6 +2774,7 @@ fn whole_file_is_hidden_for_added_files_and_disabled_without_a_text_version() {
             Msg::DiffRead {
                 seq,
                 result: Ok(long_file("X")),
+                row: DiffRow::NotRead,
             },
         );
         assert_eq!(whole_of(&state), WholeFile::Hidden, "{kind:?}");
@@ -2750,6 +2793,7 @@ fn whole_file_is_hidden_for_added_files_and_disabled_without_a_text_version() {
         Msg::DiffRead {
             seq,
             result: Ok(long_file("X")),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(whole_of(&state), WholeFile::Unavailable);
@@ -2773,6 +2817,7 @@ fn whole_file_state_is_per_file_and_survives_a_refresh() {
         Msg::DiffRead {
             seq,
             result: Ok(long_file("X")),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(whole_of(&state), WholeFile::Available { on: false });
@@ -2782,6 +2827,7 @@ fn whole_file_state_is_per_file_and_survives_a_refresh() {
         Msg::DiffRead {
             seq,
             result: Ok(long_file("X")),
+            row: DiffRow::NotRead,
         },
     );
     assert_eq!(whole_of(&state), WholeFile::Available { on: true });
@@ -3108,6 +3154,7 @@ fn back_to_a_diff_whose_file_left_the_list_starts_at_the_top() {
             result: Ok(list(&["z.rs"])),
         },
     );
+    changes::update(&mut state, Msg::StaleApplied);
     let effect = changes::update(&mut state, Msg::BrowseBack);
     assert_eq!(effect, Effect::ScrollDiff { offset: 0 });
 }
@@ -3327,6 +3374,7 @@ fn lines_link_only_to_listed_files_once_the_tree_is_read() {
         Msg::DiffRead {
             seq,
             result: Ok(text_diff()),
+            row: DiffRow::NotRead,
         },
     );
     let Effect::Batch(asked) = effect else {
@@ -3693,6 +3741,7 @@ fn answer_reads(state: &mut State, effect: Effect, files: &[&str], diff: &Loaded
                 Msg::DiffRead {
                     seq,
                     result: Ok(diff.clone()),
+                    row: DiffRow::NotRead,
                 },
             ),
             Effect::ReadTree { seq, .. } => changes::update(
@@ -5639,7 +5688,12 @@ mod reviewed_marks {
         let Effect::ReadList { seq, .. } = changes::update(state, Msg::Changed) else {
             panic!("a change on disk rereads the list");
         };
-        answer(state, seq, Ok(listed(files)), Ok(whole(files)))
+        let effect = answer(state, seq, Ok(listed(files)), Ok(whole(files)));
+        // Feature 1275: a list that differs is held until the notice is pressed.
+        match changes::update(state, Msg::StaleApplied) {
+            Effect::None => effect,
+            applied => applied,
+        }
     }
 
     fn changed_since(state: &State) -> Vec<String> {
@@ -5884,6 +5938,7 @@ mod tree_state {
             Msg::DiffRead {
                 seq,
                 result: Ok(text_diff()),
+                row: DiffRow::NotRead,
             },
         );
         let effect = changes::update(&mut state, Msg::FileSelected(path("src/ui/b.rs")));
@@ -5969,6 +6024,7 @@ mod tree_state {
             Msg::DiffRead {
                 seq,
                 result: Ok(text_diff()),
+                row: DiffRow::NotRead,
             },
         );
         toggle(&mut state, &["src"]);
@@ -6076,5 +6132,406 @@ mod tree_state {
         };
         assert_eq!((src.added, src.removed), (3, 1));
         assert_eq!(view.change_scale, 7);
+    }
+}
+
+/// Feature 1275 US1 (contract H1–H10a): the Review tab holds the list and the diff while a
+/// background read differs, counts what changed since the user looked, and applies on the notice.
+mod hold {
+    use super::*;
+    use micold_client::features::changes::{
+        changed_since_you_looked, no_longer_changed, stale_notice, OpenView, NO_LONGER_CHANGED,
+    };
+
+    fn counted(p: &str, added: u32) -> ChangedFile {
+        ChangedFile { added, ..file(p) }
+    }
+
+    fn listing(rows: Vec<ChangedFile>) -> ChangeList {
+        ChangeList {
+            files: rows,
+            scope: main_base(),
+        }
+    }
+
+    fn view(state: &State) -> &OpenView {
+        state.tabs.shown_view().expect("the view is open")
+    }
+
+    /// The `ReadList` in `effect`, alone or in a batch.
+    fn list_seq(effect: &Effect) -> Option<u64> {
+        match effect {
+            Effect::ReadList { seq, .. } => Some(*seq),
+            Effect::Batch(effects) => effects.iter().find_map(list_seq),
+            _ => None,
+        }
+    }
+
+    fn reads_diff(effect: &Effect) -> bool {
+        match effect {
+            Effect::ReadDiff { .. } => true,
+            Effect::Batch(effects) => effects.iter().any(reads_diff),
+            _ => false,
+        }
+    }
+
+    /// The file watch's wake: the read it starts.
+    fn watch(state: &mut State) -> u64 {
+        let effect = changes::update(state, Msg::Changed);
+        list_seq(&effect).unwrap_or_else(|| panic!("the watch reads the list, got {effect:?}"))
+    }
+
+    fn answer(state: &mut State, seq: u64, result: Result<ChangeList, String>) -> Effect {
+        changes::update(
+            state,
+            Msg::ListRead {
+                seq,
+                whole: Ok(Default::default()),
+                result,
+            },
+        )
+    }
+
+    /// A background read answering with `latest`.
+    fn background(state: &mut State, latest: ChangeList) -> Effect {
+        let seq = watch(state);
+        answer(state, seq, Ok(latest))
+    }
+
+    fn diff_read(state: &mut State, seq: u64, row: DiffRow) {
+        changes::update(
+            state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(text_diff()),
+                row,
+            },
+        );
+    }
+
+    /// `a.rs` and `b.rs` listed, `a.rs` selected with its diff shown, scrolled, lines picked and
+    /// a comment being written.
+    fn reading_a() -> State {
+        let mut state = ready(&["a.rs", "b.rs"]);
+        let (seq, _) = select(&mut state, "a.rs");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(commentable()),
+                row: DiffRow::NotRead,
+            },
+        );
+        changes::update(
+            &mut state,
+            Msg::DiffScrolled {
+                offset: 40,
+                viewport: 300,
+            },
+        );
+        gutter(&mut state, None, Some(2), false);
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("half a thought".into()));
+        state
+    }
+
+    /// `a.rs` edited and `c.rs` new since the list on screen.
+    fn edited() -> ChangeList {
+        listing(vec![counted("a.rs", 5), file("b.rs"), file("c.rs")])
+    }
+
+    // H1, US1 AS1, FR-005, FR-014: a differing background read moves nothing on screen.
+    #[test]
+    fn a_differing_background_read_holds_the_list_and_the_diff() {
+        let mut state = reading_a();
+        let before = view(&state).clone();
+        let effect = background(&mut state, edited());
+        assert!(!reads_diff(&effect), "no diff read: {effect:?}");
+        let after = view(&state);
+        assert_eq!(changes::shown_list(after), changes::shown_list(&before));
+        assert_eq!(after.selected, before.selected);
+        assert_eq!(after.diff, before.diff);
+        assert_eq!(after.diff_offset, 40);
+        assert_eq!(after.pick, before.pick);
+        assert_eq!(after.composer, before.composer);
+        assert_eq!(after.anchors, before.anchors);
+        assert_eq!(
+            stale_notice(after).as_deref(),
+            Some("2 files changed since you looked")
+        );
+        assert!(changed_since_you_looked(after, &path("a.rs")));
+        assert!(!changed_since_you_looked(after, &path("b.rs")));
+        assert!(
+            changed_since_you_looked(after, &path("c.rs")),
+            "an unlisted file counts (FR-008)"
+        );
+    }
+
+    // H2: a read that changes no row replaces the list silently.
+    #[test]
+    fn a_read_that_changes_nothing_replaces_the_list_silently() {
+        let mut state = reading_a();
+        let mut same = list(&["a.rs", "b.rs"]);
+        same.files[1].large = true;
+        background(&mut state, same.clone());
+        let view = view(&state);
+        assert_eq!(changes::shown_list(view), Some(&same));
+        assert_eq!(stale_notice(view), None);
+    }
+
+    // H3, FR-009: a read the user causes applies at once, also one queued behind a watch read.
+    #[test]
+    fn a_read_the_user_causes_applies_even_queued_behind_a_watch_read() {
+        let mut state = reading_a();
+        background(&mut state, edited());
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled)
+        else {
+            panic!("a toggle reads the list");
+        };
+        assert_eq!(stale_notice(view(&state)), None, "nothing stays held");
+        answer(&mut state, seq, Ok(edited()));
+        assert_eq!(changes::shown_list(view(&state)), Some(&edited()));
+
+        let mut state = reading_a();
+        let watch_seq = watch(&mut state);
+        assert_eq!(
+            changes::update(&mut state, Msg::UncommittedToggled),
+            Effect::None,
+            "queued behind the watch read"
+        );
+        let effect = answer(&mut state, watch_seq, Ok(list(&["a.rs", "b.rs"])));
+        let seq = list_seq(&effect).expect("the queued read runs");
+        answer(&mut state, seq, Ok(edited()));
+        assert_eq!(changes::shown_list(view(&state)), Some(&edited()));
+        assert_eq!(stale_notice(view(&state)), None);
+    }
+
+    // H4, US1 AS3, AS4: a newer background read re-observes: a file back as shown leaves the set.
+    #[test]
+    fn a_background_read_while_held_counts_again() {
+        let mut state = reading_a();
+        background(&mut state, edited());
+        background(
+            &mut state,
+            listing(vec![counted("a.rs", 9), file("b.rs"), file("c.rs")]),
+        );
+        assert_eq!(
+            stale_notice(view(&state)).as_deref(),
+            Some("2 files changed since you looked"),
+            "each file counts once"
+        );
+        background(
+            &mut state,
+            listing(vec![file("a.rs"), file("b.rs"), file("c.rs")]),
+        );
+        assert_eq!(
+            stale_notice(view(&state)).as_deref(),
+            Some("1 file changed since you looked")
+        );
+        background(&mut state, list(&["a.rs", "b.rs"]));
+        assert_eq!(stale_notice(view(&state)), None);
+    }
+
+    // H5, research R9: #1269's re-read when the tab is shown again is held like a watch read.
+    #[test]
+    fn the_reread_on_showing_the_tab_again_is_held() {
+        let mut state = reading_a();
+        watch(&mut state);
+        changes::update(&mut state, Msg::SessionSelected);
+        let effect = changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree(),
+            },
+        );
+        let seq = list_seq(&effect).expect("shown again with a read dropped: read again");
+        answer(&mut state, seq, Ok(edited()));
+        assert_eq!(
+            changes::shown_list(view(&state)),
+            Some(&list(&["a.rs", "b.rs"]))
+        );
+        assert!(stale_notice(view(&state)).is_some());
+    }
+
+    // H6, FR-012: with no list on screen a read applies at once.
+    #[test]
+    fn with_no_list_on_screen_a_read_applies_at_once() {
+        let mut state = ready(&[]);
+        background(&mut state, list(&["a.rs"]));
+        assert_eq!(changes::shown_list(view(&state)), Some(&list(&["a.rs"])));
+        assert_eq!(stale_notice(view(&state)), None);
+    }
+
+    // H15: a failed background read keeps the list and the hold and shows no error.
+    #[test]
+    fn a_failed_background_read_keeps_the_list_and_the_hold() {
+        let mut state = reading_a();
+        background(&mut state, edited());
+        let seq = watch(&mut state);
+        answer(&mut state, seq, Err("git broke".into()));
+        let view = view(&state);
+        assert_eq!(changes::shown_list(view), Some(&list(&["a.rs", "b.rs"])));
+        assert!(!matches!(view.list, Load::Failed(_)));
+        assert!(stale_notice(view).is_some());
+    }
+
+    // US1 AS2, FR-010, FR-011: the notice shows the latest list, keeps the selection, the pick
+    // and the comment, and reads the diff again keeping the old one meanwhile.
+    #[test]
+    fn the_notice_applies_keeping_the_selection_and_the_comment() {
+        let mut state = reading_a();
+        background(&mut state, edited());
+        let before = view(&state).clone();
+        let effect = changes::update(&mut state, Msg::StaleApplied);
+        let Effect::ReadDiff { path: asked, .. } = effect else {
+            panic!("the selected file's diff is read again, got {effect:?}");
+        };
+        assert_eq!(asked, path("a.rs"));
+        let view = view(&state);
+        assert_eq!(changes::shown_list(view), Some(&edited()));
+        assert_eq!(stale_notice(view), None);
+        assert_eq!(view.selected, Some(path("a.rs")));
+        assert_eq!(diff_body(view), DiffBody::Diff(&commentable()));
+        assert_eq!(view.composer, before.composer);
+        assert_eq!(view.pick, before.pick);
+    }
+
+    // H7: a file outside the set reads under the shown list's scope.
+    #[test]
+    fn selecting_a_file_outside_the_set_reads_under_the_shown_scope() {
+        let mut state = reading_a();
+        let mut latest = edited();
+        latest.scope = ReviewScope::RootUncommitted;
+        background(&mut state, latest);
+        let Effect::ReadDiff { scope, .. } =
+            changes::update(&mut state, Msg::FileSelected(path("b.rs")))
+        else {
+            panic!("a read");
+        };
+        assert_eq!(scope, main_base());
+    }
+
+    // H8, US1 AS10: a file in the set reads under the latest scope and adopts the row it reads.
+    #[test]
+    fn selecting_a_file_in_the_set_reads_its_latest_diff_and_leaves_the_set() {
+        let mut state = ready(&["a.rs", "b.rs"]);
+        let mut latest = edited();
+        latest.scope = ReviewScope::RootUncommitted;
+        background(&mut state, latest);
+        let Effect::ReadDiff { seq, scope, .. } =
+            changes::update(&mut state, Msg::FileSelected(path("a.rs")))
+        else {
+            panic!("a read");
+        };
+        assert_eq!(scope, ReviewScope::RootUncommitted);
+        diff_read(&mut state, seq, DiffRow::Row(counted("a.rs", 5)));
+        let view = view(&state);
+        assert_eq!(changes::shown_list(view).unwrap().files[0].added, 5);
+        assert!(!changed_since_you_looked(view, &path("a.rs")));
+        assert_eq!(
+            stale_notice(view).as_deref(),
+            Some("1 file changed since you looked"),
+            "c.rs stays held"
+        );
+    }
+
+    // H8: a rename in the set is read with its old path from the latest read.
+    #[test]
+    fn a_renamed_file_in_the_set_is_read_with_its_latest_old_path() {
+        let mut state = ready(&["a.rs", "b.rs"]);
+        let renamed = ChangedFile {
+            kind: ChangeKind::Renamed { from: path("a.rs") },
+            ..file("n.rs")
+        };
+        background(&mut state, listing(vec![file("b.rs"), renamed]));
+        let Effect::ReadDiff { from, .. } =
+            changes::update(&mut state, Msg::FileSelected(path("n.rs")))
+        else {
+            panic!("a read");
+        };
+        assert_eq!(from, Some(path("a.rs")));
+    }
+
+    // H9, US1 AS11: a file in the set the latest read no longer lists is not read.
+    #[test]
+    fn a_file_the_latest_read_no_longer_lists_says_so_and_keeps_its_dot() {
+        let mut state = reading_a();
+        background(&mut state, list(&["a.rs"]));
+        let effect = changes::update(&mut state, Msg::FileSelected(path("b.rs")));
+        assert!(!reads_diff(&effect), "no read: {effect:?}");
+        let view = view(&state);
+        assert!(no_longer_changed(view));
+        assert_eq!(diff_body(view), DiffBody::NoLongerChanged);
+        assert!(!NO_LONGER_CHANGED.is_empty());
+        assert!(changed_since_you_looked(view, &path("b.rs")));
+        assert_eq!(
+            changes::shown_list(view),
+            Some(&list(&["a.rs", "b.rs"])),
+            "the row stays until applied"
+        );
+    }
+
+    // H10: with nothing held a working-tree row is written into the shown list.
+    #[test]
+    fn with_nothing_held_the_read_row_updates_the_list() {
+        let mut state = ready(&["a.rs", "b.rs"]);
+        let (seq, _) = select(&mut state, "a.rs");
+        diff_read(&mut state, seq, DiffRow::Row(counted("a.rs", 7)));
+        let view = view(&state);
+        assert_eq!(changes::shown_list(view).unwrap().files[0].added, 7);
+        assert_eq!(stale_notice(view), None);
+    }
+
+    // H10a: `NotRead` adopts nothing; `Unlisted` under a hold acts as H9, with nothing held it
+    // leaves the list.
+    #[test]
+    fn not_read_adopts_nothing_and_unlisted_acts_as_no_longer_listed() {
+        let mut state = ready(&["a.rs", "b.rs"]);
+        background(&mut state, edited());
+        let (seq, _) = select(&mut state, "a.rs");
+        diff_read(&mut state, seq, DiffRow::NotRead);
+        assert!(changed_since_you_looked(view(&state), &path("a.rs")));
+
+        let (seq, _) = select(&mut state, "b.rs");
+        diff_read(&mut state, seq, DiffRow::Unlisted);
+        let held = view(&state);
+        assert!(no_longer_changed(held));
+        assert!(changed_since_you_looked(held, &path("b.rs")));
+
+        let mut state = ready(&["a.rs", "b.rs"]);
+        let (seq, _) = select(&mut state, "b.rs");
+        diff_read(&mut state, seq, DiffRow::Unlisted);
+        assert_eq!(
+            changes::shown_list(view(&state)),
+            Some(&list(&["a.rs", "b.rs"]))
+        );
+        assert!(!no_longer_changed(view(&state)));
+    }
+
+    // T019: the row of a pathspec-limited read.
+    #[test]
+    fn the_diff_row_comes_from_the_limited_read() {
+        let a = path("a.rs");
+        assert_eq!(
+            DiffRow::from_read(Err(std::io::Error::other("no git")), &a),
+            DiffRow::NotRead
+        );
+        assert_eq!(
+            DiffRow::from_read(Ok(list(&["b.rs"])), &a),
+            DiffRow::Unlisted
+        );
+        assert_eq!(
+            DiffRow::from_read(Ok(list(&["a.rs"])), &a),
+            DiffRow::Row(file("a.rs"))
+        );
+        let renamed = ChangedFile {
+            kind: ChangeKind::Renamed { from: path("a.rs") },
+            ..file("n.rs")
+        };
+        assert_eq!(
+            DiffRow::from_read(Ok(listing(vec![renamed.clone()])), &a),
+            DiffRow::Row(renamed)
+        );
     }
 }
