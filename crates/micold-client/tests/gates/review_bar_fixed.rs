@@ -291,10 +291,12 @@ fn the_open_drawer_covers_the_right_of_the_diff_area_down_to_the_bar() {
     let area = at(&records, REVIEW_DIFF_AREA, "the diff area");
     let drawer = at(&records, REVIEW_DRAWER, "the drawer");
     let bar = at(&records, REVIEW_BAR, "the bar");
-    assert_eq!(
-        drawer.width,
-        micold_core::review::drawer::width(area.width),
-        "{drawer:?} over {area:?}"
+    // At this window the diff area is under twice the drawer's 360, so the drawer takes half.
+    let full = micold_core::tokens::anatomy::comments_drawer::WIDTH;
+    assert!(area.width < 2.0 * full, "the area is under 720: {area:?}");
+    assert!(
+        (drawer.width - area.width / 2.0).abs() <= TOLERANCE,
+        "the drawer is half the area: {drawer:?} over {area:?}"
     );
     assert!(
         (drawer.x + drawer.width - (area.x + area.width)).abs() <= TOLERANCE,

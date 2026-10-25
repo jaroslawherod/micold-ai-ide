@@ -59,3 +59,23 @@ Screenshots of steps 1, 3, 4, 6 (both tabs) and 11, light and dark, go in `visua
 
 On each: steps 3, 4, 6 and 9 of §B (overflow menu, Esc, drawer, auto-open). The bar, menu and
 drawer are the app's own widgets on every platform (Principle VI).
+
+## Results (close unit, 2026-10-25)
+
+- **§A**: the full gate (fmt, clippy core and workspace with `-D warnings`, every package's tests,
+  `scripts/tests`) passed at each milestone's tip: M1 `e0c0e828`, M2 `0b8e6365`, M3 `5358a2b7`, M4
+  `8b16f5e3` (M4 before its rebase onto `main`; the orchestrator re-records the layout snapshot and
+  re-runs the gate on the rebased tip). Test-first evidence per task is in `tdd/cycle-log.md`; the
+  audit of it is `tdd/verification.md`. The layout snapshot was re-recorded in M4 only; its diff
+  holds the Review tab's states (`session-area-review-shown`, `session-area-review-sessionless`,
+  `status-bar-changes`) and the four new ones (`review-bar`, `drawer-drafts`, `drawer-replies`,
+  `overflow`).
+- **§B**: recorded in `visual-pass-m4.md` (steps 1–4, 6, 10 and 11 drawn at 1280×800 and 640×480,
+  light and dark, screenshots in `visual-pass/m4-*`; all pass after one fix: drawer rows ran under
+  the list's scrollbar). Steps 5, 7, 8, 9 and step 4's and 6's state survival and timing are
+  covered by client-state tests and the `review_bar_fixed` geometry gate instead, as that record
+  names. Earlier passes: `visual-pass-m2.md` (components), `visual-pass-m3.md` (per-entry view).
+  §B ran in process (tiny-skia) with no live session or fake AI CLI, so 6's "within 2 s" was not
+  timed by hand.
+- **§C**: not run — the runs had no macOS or Windows host. The bar, menu and drawer are the app's
+  own widgets (Principle VI); CI builds and tests on macOS and Windows.
