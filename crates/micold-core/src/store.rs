@@ -737,6 +737,17 @@ pub fn jira_token_file_name(project: &Path) -> String {
     format!("{}.token", project_id(project))
 }
 
+/// The file `project`'s advanced Jira mode and last run query are remembered in, beside its token:
+/// `<dir>/<project_id_of(project)>.query.json` (feature 1186, FR-013).
+pub fn jira_query_path(dir: &Path, project: &Path) -> PathBuf {
+    dir.join(jira_query_file_name(project))
+}
+
+/// The remembered query file's name alone, for `owner_only::write`.
+pub fn jira_query_file_name(project: &Path) -> String {
+    format!("{}.query.json", project_id(project))
+}
+
 /// Path of the temporary file used for an atomic write to `path`.
 ///
 /// Unique per call, not derived from `path` alone (T153, BUG-025). A staging path that only the

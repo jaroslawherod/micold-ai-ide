@@ -6,10 +6,11 @@
 use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection, ProjectKey};
 use micold_core::jira_query::{
-    load, rejection_messages, QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery,
-    CAPPED, EMPTY, NOT_VALID_JQL, PROMPT,
+    load, rejection_messages, QueryFailure, QueryMode, QueryRefusal, RememberChange,
+    RememberedQuery, ScopedQuery, UserQuery, CAPPED, EMPTY, NOT_VALID_JQL, PROMPT,
 };
 use micold_core::jira_status::TicketStatus;
+use micold_core::store::{jira_query_path, jira_token_path, project_id_of};
 
 fn parsed(raw: &str) -> UserQuery {
     UserQuery::parse(raw).unwrap_or_else(|refusal| panic!("{raw:?} refused: {refusal:?}"))
@@ -550,4 +551,109 @@ fn a_body_with_no_messages_gives_none() {
         assert!(messages(body).is_empty(), "{body:?}");
     }
     assert!(rejection_messages(&[0xff, 0xfe]).is_empty());
+}
+
+// data-model §5: the remembered mode and last run query (FR-013, FR-014)
+
+#[test]
+fn a_remembered_query_round_trips_through_its_file_format() {
+    let json = br#"{"mode":"advanced","query":"assignee = currentUser()"}"#;
+    let remembered = RememberedQuery::from_json(json);
+    assert_eq!(remembered.mode, QueryMode::Advanced);
+    assert_eq!(remembered.query, "assignee = currentUser()");
+    assert_eq!(
+        RememberedQuery::from_json(&remembered.to_json()),
+        remembered
+    );
+    assert_eq!(
+        String::from_utf8(remembered.to_json()).unwrap(),
+        r#"{"mode":"advanced","query":"assignee = currentUser()"}"#
+    );
+}
+
+#[test]
+fn the_default_is_basic_with_an_empty_query() {
+    let remembered = RememberedQuery::default();
+    assert_eq!(remembered.mode, QueryMode::Basic);
+    assert_eq!(remembered.query, "");
+    // A field the file lacks takes its default.
+    assert_eq!(
+        RememberedQuery::from_json(br#"{"mode":"advanced"}"#),
+        RememberedQuery::default().with_mode(QueryMode::Advanced)
+    );
+}
+
+#[test]
+fn an_unreadable_file_reads_as_the_default() {
+    for bytes in [
+        &b""[..],
+        b"not json",
+        b"[]",
+        b"\xff\xfe",
+        br#"{"mode":"expert","query":"priority = High"}"#,
+        br#"{"mode":"advanced","query":"summary ~ \"open"}"#,
+        br#"{"mode":"advanced","query":"(a = 1"}"#,
+        br#"{"mode":"advanced","query":42}"#,
+    ] {
+        assert_eq!(
+            RememberedQuery::from_json(bytes),
+            RememberedQuery::default(),
+            "{:?}",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+}
+
+#[test]
+fn with_mode_and_with_query_change_one_field() {
+    let start = RememberedQuery::from_json(br#"{"mode":"advanced","query":"priority = High"}"#);
+    let basic = start.clone().with_mode(QueryMode::Basic);
+    assert_eq!(basic.mode, QueryMode::Basic);
+    assert_eq!(basic.query, "priority = High");
+
+    let requeried = start.clone().with_query(&parsed("  status = Done\n"));
+    assert_eq!(requeried.mode, QueryMode::Advanced);
+    assert_eq!(requeried.query, "status = Done", "the cleaned text is kept");
+
+    // The empty query is a query run like any other (US3 AS4).
+    assert_eq!(start.with_query(&parsed("")).query, "");
+}
+
+#[test]
+fn a_change_applies_to_its_one_field() {
+    let start = RememberedQuery::from_json(br#"{"mode":"advanced","query":"priority = High"}"#);
+    assert_eq!(
+        start
+            .clone()
+            .with_change(&RememberChange::Mode(QueryMode::Basic)),
+        start.clone().with_mode(QueryMode::Basic)
+    );
+    assert_eq!(
+        start
+            .clone()
+            .with_change(&RememberChange::Query("status = Done".into())),
+        start.clone().with_query(&parsed("status = Done"))
+    );
+    // A query the checks refuse is never remembered.
+    assert_eq!(
+        start
+            .clone()
+            .with_change(&RememberChange::Query("(open".into())),
+        start
+    );
+}
+
+#[test]
+fn each_project_remembers_in_its_own_file_beside_its_token() {
+    let dir = std::path::Path::new("/data/jira");
+    let a = jira_query_path(dir, std::path::Path::new("/work/a"));
+    let b = jira_query_path(dir, std::path::Path::new("/work/b"));
+    assert_ne!(a, b);
+    assert_eq!(a.parent(), Some(dir));
+    let id = project_id_of(std::path::Path::new("/work/a"));
+    assert_eq!(a, dir.join(format!("{id}.query.json")));
+    assert_eq!(
+        a.parent(),
+        jira_token_path(dir, std::path::Path::new("/work/a")).parent()
+    );
 }

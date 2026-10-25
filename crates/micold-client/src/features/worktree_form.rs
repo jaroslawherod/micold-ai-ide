@@ -1828,24 +1828,34 @@ pub fn issue_details_loaded(
 /// keyboard apply whatever the form is doing, as a load's answer does; the switch, the input and
 /// Run are inputs, inert while a create runs or a prompt is up. A run or a basic load the message
 /// started takes the next seq.
-fn jira_query_changed(state: &mut crate::app::State, msg: jira_query::Msg) {
+fn jira_query_changed(
+    state: &mut crate::app::State,
+    msg: jira_query::Msg,
+) -> Vec<crate::features::Outcome> {
     use jira_query::Msg as QueryMsg;
     let next_seq = state.worktree_form.issue_request_seq + 1;
-    let mut handed_out = false;
+    let mut applied = jira_query::Applied::default();
     let inert_while_busy = !matches!(
         msg,
         QueryMsg::Ran { .. } | QueryMsg::HighlightMoved(_) | QueryMsg::Dismissed
     );
     let change = |form: &mut WorktreeForm| {
-        handed_out = jira_query::update(form, msg, next_seq);
+        applied = jira_query::update(form, msg, next_seq);
     };
     if inert_while_busy {
         while_editing_unprompted(state, change);
     } else {
         with_form(state, change);
     }
-    if handed_out {
+    if applied.handed_out {
         state.worktree_form.issue_request_seq = next_seq;
+    }
+    // Feature 1186 (FR-013): the shell writes it to the project's remembered file.
+    match (applied.remember, state.workspace.active.clone()) {
+        (Some(change), Some(project)) => {
+            vec![crate::features::Outcome::JiraQueryRemembered { project, change }]
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -2301,7 +2311,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             number,
             result,
         } => issue_details_loaded(state, seq, number, result),
-        Msg::JiraQuery(msg) => jira_query_changed(state, msg),
+        Msg::JiraQuery(msg) => return jira_query_changed(state, msg),
         Msg::JiraFilter(msg) => crate::features::worktree_form::jira_filters::update(state, msg),
     }
     Vec::new()

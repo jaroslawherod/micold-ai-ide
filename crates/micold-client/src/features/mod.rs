@@ -264,6 +264,16 @@ pub enum Outcome {
         /// The source chosen.
         provider: micold_core::jira::IssueProvider,
     },
+    /// The add-worktree form's advanced Jira mode has something for `project` to remember
+    /// (feature 1186, FR-013): the mode at a switch, the query at a run. The shell reads the
+    /// project's remembered file, applies the change and writes it back
+    /// (`shell::jira_query::remember`); the root does nothing with it.
+    JiraQueryRemembered {
+        /// The project the dialog is open in.
+        project: std::path::PathBuf,
+        /// The one field to change.
+        change: micold_core::jira_query::RememberChange,
+    },
     /// A repository on a remote daemon's host was named (feature 489, FR-012): the shell asks that
     /// daemon whether it is one and opens it as a project when it is.
     RemoteRepositoryRequested {

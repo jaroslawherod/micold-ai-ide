@@ -876,6 +876,17 @@ nothing reaches Jira. Any other failure (the site unreachable, a timeout, creden
 access to the project, rate limiting, a server error) shows the same notice as the basic list with a
 **Retry** button, and **Retry** runs the same query again.
 
+**Remembered per project.** The app remembers, for each project, the mode you last switched to and
+the last query you ran; text you typed but did not run is not remembered. When you next open the
+dialog on that project, in this or a later app run, it opens in that mode with that query in the
+field. In Advanced, the query runs once as soon as the Jira source shows; with no remembered query
+the field is empty and nothing runs until you do. In Basic, switching to Advanced shows the query
+without running it. Running an empty query remembers it as empty. Another project never shows this
+project's query. Turning the Jira integration off or choosing GitHub keeps what is remembered;
+removing the project's Jira connection in Settings deletes it. It is kept on this computer only, in
+a file beside the API token that only your user can read, never in the project or in
+`settings.json`.
+
 ### On a Kubernetes daemon
 
 A worktree bound to a Kubernetes daemon comes from the project's git remote: the daemon clones it
