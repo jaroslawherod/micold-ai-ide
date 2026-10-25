@@ -61,10 +61,11 @@ impl Drag {
         }
     }
 
-    /// The lines to show as picked while dragging (FR-016).
+    /// The lines to show as picked while dragging (FR-016). Line numbers are 1-based; a 0 counts
+    /// as line 1, as the client's pick clamps it.
     pub fn span(&self) -> (Side, LineRange) {
         let (start, end) = (self.pressed.min(self.last), self.pressed.max(self.last));
-        let range = LineRange::new(start, end).expect("gutter line numbers are 1-based");
+        let range = LineRange::new(start.max(1), end.max(1)).expect("start <= end, both >= 1");
         (self.side, range)
     }
 
@@ -228,5 +229,15 @@ mod tests {
                 "after passing {n}"
             );
         }
+    }
+
+    /// M3 review MINOR: a 0 line number (none is 1-based) never panics the span; it counts as
+    /// line 1, as `Pick::range` clamps it.
+    #[test]
+    fn d9_a_zero_line_number_spans_from_line_one() {
+        let mut drag = Drag::press(Side::New, 0);
+        assert_eq!(drag.span(), (Side::New, lines(1, 1)));
+        drag.over(None, Some(3));
+        assert_eq!(drag.span(), (Side::New, lines(1, 3)));
     }
 }

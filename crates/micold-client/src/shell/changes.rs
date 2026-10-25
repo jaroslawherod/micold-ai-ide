@@ -186,6 +186,9 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             project,
             number,
         } => crate::shell::pr_status::diff_requested(app, seq, project, number),
+        Effect::FocusComposer => {
+            iced::widget::operation::focus(micold_client::ui::COMPOSER_ID.clone())
+        }
         Effect::ScrollDiff { offset } => iced::widget::operation::scroll_to(
             micold_client::ui::DIFF_SCROLL_ID.clone(),
             iced::widget::scrollable::AbsoluteOffset {

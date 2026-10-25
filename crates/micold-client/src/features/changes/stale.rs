@@ -206,6 +206,7 @@ pub(super) fn apply_tree_hold(view: &mut OpenView) -> bool {
     let Some(held) = view.held.take() else {
         return false;
     };
+    view.chose_gone = false;
     if let Some(list) = shown_list_mut(&mut view.list) {
         held.apply(list);
     }

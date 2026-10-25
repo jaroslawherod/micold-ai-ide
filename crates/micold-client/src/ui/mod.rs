@@ -91,7 +91,8 @@ pub mod status_bar;
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
 pub use changes::{
-    DIFF_SCROLL_ID, DRAWER_SCROLL_ID, FILE_COLUMN_WIDTH, PROGRESS_BAR_WIDTH, SOURCE_CONTROL_WIDTH,
+    COMPOSER_ID, DIFF_SCROLL_ID, DRAWER_SCROLL_ID, FILE_COLUMN_WIDTH, PROGRESS_BAR_WIDTH,
+    SOURCE_CONTROL_WIDTH,
 };
 pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component

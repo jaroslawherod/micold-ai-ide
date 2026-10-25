@@ -159,6 +159,18 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if let Some(entry) = app.core.header_watch_entry() {
         subs.extend(crate::shell::changes_watch::watch(app, entry));
     }
+    // Feature 1275 (US2, R7): a drag over the diff's line numbers ends with the button's release
+    // anywhere in the window, or **Esc**; listened to only while a drag is under way. It maps no
+    // pointer move, so FR-010's "no mouse-move messages" holds.
+    if app
+        .core
+        .changes
+        .tabs
+        .shown_view()
+        .is_some_and(|view| view.drag.is_some())
+    {
+        subs.push(iced::event::listen_with(changes_drag_message));
+    }
     // Compare's per-run watches (483 R11), likewise only while the view is open.
     subs.extend(crate::shell::runs_watch::watches(app));
     // The Overview's progress watches (813 R9), likewise only while it is open.
@@ -201,6 +213,26 @@ fn window_focus_message(
         iced::Event::Window(iced::window::Event::Unfocused) => {
             Some(Message::WindowFocusChanged(false))
         }
+        _ => None,
+    }
+}
+
+/// The `listen_with` callback that ends a Review tab drag (feature 1275, contracts/quick-comment.md
+/// Q8, Q9): the left button's release, captured or not, releases it; **Esc** cancels it.
+fn changes_drag_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    use micold_client::features::changes::Msg as ChangesMsg;
+    match event {
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+            Some(Message::Changes(ChangesMsg::GutterDragReleased))
+        }
+        iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+            key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+            ..
+        }) => Some(Message::Changes(ChangesMsg::GutterDragCancelled)),
         _ => None,
     }
 }
@@ -375,6 +407,47 @@ mod tests {
                 dummy_status(),
                 iced::window::Id::unique()
             ),
+            None
+        );
+    }
+
+    /// Feature 1275 (Q8, Q9): a drag ends on the left button's release and is cancelled by Esc;
+    /// nothing else, not a pointer move, maps to a message.
+    #[test]
+    fn changes_drag_message_ends_on_release_and_cancels_on_esc() {
+        use micold_client::features::changes::Msg as ChangesMsg;
+        let map = |event| changes_drag_message(event, dummy_status(), iced::window::Id::unique());
+        assert_eq!(
+            map(iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left
+            ))),
+            Some(Message::Changes(ChangesMsg::GutterDragReleased))
+        );
+        let esc = iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape);
+        assert_eq!(
+            map(iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: esc.clone(),
+                modified_key: esc.clone(),
+                physical_key: iced::keyboard::key::Physical::Unidentified(
+                    iced::keyboard::key::NativeCode::Unidentified
+                ),
+                location: iced::keyboard::Location::Standard,
+                modifiers: iced::keyboard::Modifiers::empty(),
+                text: None,
+                repeat: false,
+            })),
+            Some(Message::Changes(ChangesMsg::GutterDragCancelled))
+        );
+        assert_eq!(
+            map(iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+                position: iced::Point::ORIGIN
+            })),
+            None
+        );
+        assert_eq!(
+            map(iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Right
+            ))),
             None
         );
     }

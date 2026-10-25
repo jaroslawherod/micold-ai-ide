@@ -16,14 +16,17 @@
 //! (`.spans`) over its tint, the bytes they do not cover in `on_surface` (R10).
 //!
 //! Comments (C1–C3): a press on a line's number reports the row's numbers through `.on_gutter`
-//! (with whether Shift was held), the picked range's numbers take the pick fill (`.pick`), and
+//! (with whether Shift was held) and, while `.dragging(true)`, the cursor coming into a number
+//! reports its row's through `.on_gutter_over` (#1275 drag to comment); the picked range's
+//! numbers take the pick fill (`.pick`), and
 //! `.slot(side, line, element)` hangs an element — comment cards, the composer — under the row
 //! showing that line. Slots are measured as they are laid out (`.on_slot_measured`) and the
 //! heights passed back (`.slot_heights`) keep the virtualised rows' arithmetic exact.
 //!
 //! Builder form: `DiffView::new(&diff, layout, roles).spans(&scheme_spans).offset(o).viewport(v)
 //! .on_scroll(|o, v| Msg::Scrolled(o, v)).on_show_large(Msg::ShowLarge).pick(side, range)
-//! .on_gutter(|old, new, extend| ..).slot(side, line, card).slot_heights(&heights)
+//! .on_gutter(|old, new, extend| ..).on_gutter_over(|old, new| ..).dragging(on)
+//! .slot(side, line, card).slot_heights(&heights)
 //! .on_slot_measured(|side, line, h| ..).references(|text| ..).on_reference(|path, line| ..).into()`.
 //!
 //! References (feature 1150, FR-012): `.references(f)` says which bytes of a line's text name a
@@ -226,10 +229,16 @@ fn slot_extras(
 /// What a gutter press sends: the row's old and new numbers, and whether Shift was held.
 type OnGutter<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>, bool) -> M + 'a>;
 
-/// What the number cells need: the pick to fill and what a press sends.
+/// What the cursor coming into a number cell during a drag sends: the row's old and new numbers.
+type OnGutterOver<'a, M> = Rc<dyn Fn(Option<u32>, Option<u32>) -> M + 'a>;
+
+/// What the number cells need: the pick to fill, what a press sends and, while a drag is on, what
+/// the cursor coming into a cell sends (#1275, R7).
 struct Gutters<'a, M> {
     pick: Option<(Side, LineRange)>,
     on: Option<OnGutter<'a, M>>,
+    over: Option<OnGutterOver<'a, M>>,
+    dragging: bool,
     links: Option<Links<'a, M>>,
 }
 
@@ -238,6 +247,8 @@ impl<M> Clone for Gutters<'_, M> {
         Self {
             pick: self.pick,
             on: self.on.clone(),
+            over: self.over.clone(),
+            dragging: self.dragging,
             links: self.links.clone(),
         }
     }
@@ -271,6 +282,8 @@ impl<M> Gutters<'_, M> {
         Self {
             pick: None,
             on: None,
+            over: None,
+            dragging: false,
             links: None,
         }
     }
@@ -360,6 +373,19 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
     /// reports its own, and both for a context line) and whether Shift was held (C1).
     pub fn on_gutter(mut self, f: impl Fn(Option<u32>, Option<u32>, bool) -> M + 'a) -> Self {
         self.gutters.on = Some(Rc::new(f));
+        self
+    }
+
+    /// What the cursor coming into a line's number sends while [`Self::dragging`]: the row's
+    /// numbers, as [`Self::on_gutter`] reports them (#1275, FR-016).
+    pub fn on_gutter_over(mut self, f: impl Fn(Option<u32>, Option<u32>) -> M + 'a) -> Self {
+        self.gutters.over = Some(Rc::new(f));
+        self
+    }
+
+    /// A drag over the line numbers is on: the numbers report the cursor coming into them.
+    pub fn dragging(mut self, on: bool) -> Self {
+        self.gutters.dragging = on;
         self
     }
 
@@ -786,9 +812,17 @@ fn number<'a, M: 'a>(
         (Some(on_press), Some(_)) => {
             let on_press = Rc::clone(on_press);
             let (old, new) = reports;
+            let on_over = match (&gutters.over, gutters.dragging) {
+                (Some(over), true) => {
+                    let over = Rc::clone(over);
+                    Some(Box::new(move || over(old, new)) as Box<dyn Fn() -> M + 'a>)
+                }
+                _ => None,
+            };
             Element::new(Gutter {
                 content: cell,
                 on_press: Box::new(move |extend| on_press(old, new, extend)),
+                on_over,
             })
         }
         _ => cell,
@@ -796,10 +830,21 @@ fn number<'a, M: 'a>(
 }
 
 /// A number cell that reports presses with whether Shift was held: iced's mouse events carry no
-/// modifiers, so it keeps the last `ModifiersChanged` itself.
+/// modifiers, so it keeps the last `ModifiersChanged` itself. During a drag it also reports the
+/// cursor coming into it (#1275, R7).
 struct Gutter<'a, M> {
     content: Element<'a, M>,
     on_press: Box<dyn Fn(bool) -> M + 'a>,
+    on_over: Option<Box<dyn Fn() -> M + 'a>>,
+}
+
+/// What a [`Gutter`] remembers between events.
+#[derive(Default)]
+struct GutterState {
+    /// The last modifiers reported.
+    modifiers: keyboard::Modifiers,
+    /// The cursor was over the cell at the last event: only coming into it reports `over`.
+    inside: bool,
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
@@ -812,11 +857,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
     }
 
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<keyboard::Modifiers>()
+        tree::Tag::of::<GutterState>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(keyboard::Modifiers::default())
+        tree::State::new(GutterState::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -870,18 +915,25 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
         shell: &mut Shell<'_, M>,
         _viewport: &Rectangle,
     ) {
+        let state = tree.state.downcast_mut::<GutterState>();
+        let inside = cursor.is_over(layout.bounds());
         match event {
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-                *tree.state.downcast_mut::<keyboard::Modifiers>() = *modifiers;
+                state.modifiers = *modifiers;
             }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
-                if cursor.is_over(layout.bounds()) =>
-            {
-                let shift = tree.state.downcast_ref::<keyboard::Modifiers>().shift();
-                shell.publish((self.on_press)(shift));
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
+                shell.publish((self.on_press)(state.modifiers.shift()));
                 shell.capture_event();
             }
+            Event::Mouse(mouse::Event::CursorMoved { .. }) if inside && !state.inside => {
+                if let Some(on_over) = &self.on_over {
+                    shell.publish(on_over());
+                }
+            }
             _ => {}
+        }
+        if matches!(event, Event::Mouse(_)) {
+            state.inside = inside;
         }
     }
 
@@ -1374,6 +1426,84 @@ mod tests {
         assert_eq!(
             gutter_numbers(Some(old), Some(new), false),
             (Some(7), Some(9))
+        );
+    }
+
+    /// What a number cell of line 5 (a context line, old 4) publishes for `events`, each at its
+    /// point, with a drag on (`dragging`) or not (#1275 T026, research R7).
+    fn gutter_messages(dragging: bool, events: &[(Event, iced::Point)]) -> Vec<String> {
+        let mut gutters: Gutters<'_, String> = Gutters::none();
+        gutters.on = Some(Rc::new(|old, new, shift| {
+            format!("press {old:?} {new:?} shift={shift}")
+        }));
+        gutters.over = Some(Rc::new(|old, new| format!("over {old:?} {new:?}")));
+        gutters.dragging = dragging;
+        let mut element = number(Some(5), LIGHT, &gutters, Side::New, (Some(4), Some(5)));
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(NUMBER_WIDTH, ROW_HEIGHT)),
+        );
+        let mut messages = Vec::new();
+        for (event, at) in events {
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                event,
+                Layout::new(&node),
+                mouse::Cursor::Available(*at),
+                &renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(Size::new(800.0, 600.0)),
+            );
+        }
+        messages
+    }
+
+    /// T026 (#1275 US2, FR-016, FR-018, R7): a number cell publishes a press as before, Shift
+    /// extending, and `over` each time the cursor comes into it, only while a drag is on.
+    #[test]
+    fn a_number_cell_reports_presses_and_drag_entries_only_while_dragging() {
+        let inside = iced::Point::new(4.0, ROW_HEIGHT / 2.0);
+        let outside = iced::Point::new(4.0, ROW_HEIGHT * 3.0);
+        let moved = |at| (Event::Mouse(mouse::Event::CursorMoved { position: at }), at);
+        let press = (
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            inside,
+        );
+        let shift = (
+            Event::Keyboard(keyboard::Event::ModifiersChanged(
+                keyboard::Modifiers::SHIFT,
+            )),
+            inside,
+        );
+        let walk = [
+            moved(outside),
+            moved(inside),
+            moved(inside),
+            moved(outside),
+            moved(inside),
+        ];
+        assert_eq!(
+            gutter_messages(true, &walk),
+            vec!["over Some(4) Some(5)", "over Some(4) Some(5)"],
+            "one over per entry, none for moving inside or leaving"
+        );
+        assert!(
+            gutter_messages(false, &walk).is_empty(),
+            "no drag on, no over"
+        );
+        assert_eq!(
+            gutter_messages(false, &[press.clone()]),
+            vec!["press Some(4) Some(5) shift=false"]
+        );
+        assert_eq!(
+            gutter_messages(true, &[shift, press]),
+            vec!["press Some(4) Some(5) shift=true"],
+            "Shift still extends, and a press is no entry"
         );
     }
 
