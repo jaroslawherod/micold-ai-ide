@@ -20,3 +20,8 @@ observed before the implementation it names.
 
 Refactor: clippy's `double_ended_iterator_last` (`next_back`), a `Row` alias for K1's tuple, a
 `one_span` helper for span assertions; no behaviour change, suite re-run green.
+
+Review A fix (M1): `step_hunk` with a stale current hunk past a re-read, shorter diff — `p` now
+takes the file's last hunk instead of crossing files. Red: `-- shrunken`:
+`left: File { path: RelPath("a.rs"), edge: Last }, right: Current(1)` (FAILED); green after
+`i.min(count).checked_sub(1)`: `-- review:: quick_switch` `312 passed; 0 failed`.

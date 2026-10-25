@@ -123,8 +123,8 @@ mod tests {
 
     #[test]
     fn a_file_entry_is_named_by_its_file_and_detailed_by_its_path() {
-        let files = [path("daemon/tests.rs"), path("README.md")];
-        let rows = review_candidates(&files, |p| p.as_str() == "README.md", &[]);
+        let files = [path("daemon/tests.rs"), path("guide.md")];
+        let rows = review_candidates(&files, |p| p.as_str() == "guide.md", &[]);
         let shown: Vec<_> = rows
             .iter()
             .map(|(c, _)| {
@@ -146,9 +146,9 @@ mod tests {
                     true
                 ),
                 (
-                    EntryKey::ReviewFile(path("README.md")),
-                    "README.md",
-                    Some("README.md"),
+                    EntryKey::ReviewFile(path("guide.md")),
+                    "guide.md",
+                    Some("guide.md"),
                     true
                 ),
             ],
@@ -164,7 +164,7 @@ mod tests {
         assert_eq!(
             rows[1].1,
             ReviewEntry::File {
-                path: path("README.md"),
+                path: path("guide.md"),
                 reviewed: true
             },
             "FR-016: the row shows the reviewed state"

@@ -25,8 +25,10 @@ fn keys(entries: &[Entry]) -> Vec<SessionLocation> {
         .iter()
         .filter_map(|e| match &e.candidate.key {
             EntryKey::Location(l) => Some(l.clone()),
-            EntryKey::Session(_) => None,
-            EntryKey::Project(_) => None,
+            EntryKey::Session(_)
+            | EntryKey::Project(_)
+            | EntryKey::ReviewFile(_)
+            | EntryKey::ReviewComment(_) => None,
         })
         .collect()
 }

@@ -103,7 +103,8 @@ pub fn step_hunk(
         (None, Dir::Next) => (count > 0).then_some(0),
         (None, Dir::Previous) => count.checked_sub(1),
         (Some(i), Dir::Next) => (i + 1 < count).then_some(i + 1),
-        (Some(i), Dir::Previous) => i.checked_sub(1).filter(|&j| j < count),
+        // `min` clamps a current hunk past a re-read, shorter diff to just after its last.
+        (Some(i), Dir::Previous) => i.min(count).checked_sub(1),
     };
     if let Some(i) = inside {
         return HunkMove::Current(i);
@@ -485,6 +486,17 @@ mod tests {
         assert_eq!(
             hunk_step(&order, Some("b.rs"), three, Some(2), Dir::Previous),
             HunkMove::Current(1)
+        );
+    }
+
+    #[test]
+    fn p_from_a_hunk_past_a_shrunken_diff_takes_its_last_hunk() {
+        let order = abc();
+        let two = SelectedDiff::Hunks(2);
+        assert_eq!(
+            hunk_step(&order, Some("b.rs"), two, Some(4), Dir::Previous),
+            HunkMove::Current(1),
+            "a stale current hunk past the re-read diff's end: p stays in the file"
         );
     }
 
