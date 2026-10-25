@@ -41,6 +41,7 @@ filtered searches by the clauses it understands); a debug build with a project c
 6. Label: alphabetical labels of the loaded issues.
 7. Stop the fake, focus an unopened filter: cause + Retry on that filter only; picker still works.
 8. Clear filters: unfiltered list returns, line gone.
-9. Keyboard only: Tab reaches the Filters button, every field in the panel and Clear filters;
-   Up/Down/Enter pick; Esc closes a list, a second Esc the panel.
+9. Keyboard only: Tab reaches the Filters button; Space or Enter opens the panel, then Tab and
+   Shift+Tab cycle through its fields and the button; Up/Down/Enter pick; Esc closes a list, a
+   second Esc the panel with the keyboard back on the button; Tab or Shift+Tab then goes on to Clear filters.
 Record screenshots under `specs/1185-jira-selector-filters/visual/`.

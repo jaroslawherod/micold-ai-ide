@@ -831,9 +831,10 @@ list; clearing one field keeps the others. If the list fails to load, the line n
 sits beside **Retry**, with the **Filters** button after it. When no open issue matches the chosen filters the list
 says *No open issue matches the filters.*; a search with no match says *No open issue matches the
 search and filters.* A long name is cut with an ellipsis in the list and shown whole when you rest
-the pointer on it. The fields work from the keyboard too: Tab to the **Filters** button and press Enter, Tab between the
-fields, use the arrow keys and Enter to pick, Escape to close a list without changing the filter and
-Escape again to close the panel. If a field's choices can't be read,
+the pointer on it. The fields work from the keyboard too: Tab to the **Filters** button and press
+Enter; while the panel is open, Tab and Shift+Tab cycle through its fields and back to the button.
+Use the arrow keys and Enter to pick, Escape to close a list without changing the filter, and Escape
+again to close the panel with the keyboard back on the button. If a field's choices can't be read,
 its list shows why and a **Retry** row; a project with none says so (*This project has no
 versions*). When the people search fails, you are still offered and **Retry** searches again. The
 other fields, the issue list, the search and creating a worktree by hand keep

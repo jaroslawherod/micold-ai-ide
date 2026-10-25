@@ -43,7 +43,9 @@ Filtered by component Payments. Showing the 1,000 most recently updated.   ← o
 ```
 - The button (`PanelToggled`) opens and closes the panel; Escape or a press outside closes it
   (`PanelDismissed`), and closing it closes any open field list (text back to the chosen value).
-  Tab moves between the panel's fields. The panel stays open across picks and the reloads they
+  While it is open, Tab and Shift+Tab cycle through the Filters button and the panel's fields
+  (the panel keeps the key); Escape closes it and puts the keyboard back on the button, from which
+  Tab goes on through the dialog. The panel stays open across picks and the reloads they
   start; a reload answered while it is open does not open the issue list under it. Opening it asks
   Jira nothing: each field still asks for its choices on its own first focus.
 - Feature 1186: the switch to Advanced closes the panel and its lists; the reducer refuses every

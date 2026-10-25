@@ -19,6 +19,7 @@
 use std::time::Duration;
 
 use iced::advanced::layout::{self, Layout};
+use iced::advanced::widget::operation::Focusable;
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{keyboard, Element, Event, Length, Point, Rectangle, Size, Vector};
@@ -106,8 +107,10 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
 
     /// Float the menu as a panel of controls `width` wide rather than a list as wide as the field:
     /// its trailing edge on the field's (never past the window's leading edge), as a panel opened
-    /// from a button at the end of a row sits. Tab then moves between the panel's controls rather
-    /// than closing it; Escape and a press outside still do.
+    /// from a button at the end of a row sits. Tab and Shift+Tab then cycle through the field and
+    /// the panel's controls, and claim the key, rather than closing it: the application's own
+    /// traversal reaches a floated panel only after every control behind it. Escape and a press
+    /// outside still close it, and Escape hands the keyboard back to the field.
     pub fn panel(mut self, width: f32) -> Self {
         self.panel_width = Some(width);
         self
@@ -450,10 +453,18 @@ where
             on_dismiss: self.on_dismiss.clone(),
             tab_closes: self.panel_width.is_none(),
         };
-        let (menu, state) = (&mut self.menu, &mut tree.children[1]);
+        let field_layout = self.parts(layout).0;
+        let panel = self.panel_width.is_some();
+        let (field_tree, menu_tree) = tree.children.split_at_mut(1);
+        let trigger = panel.then(|| Trigger {
+            element: &mut self.field,
+            state: &mut field_tree[0],
+            layout: field_layout,
+        });
         Some(overlay::Element::new(Box::new(Menu {
-            content: menu,
-            state,
+            content: &mut self.menu,
+            state: &mut menu_tree[0],
+            trigger,
             field,
             panel_width: self.panel_width,
             gap: self.gap,
@@ -536,10 +547,78 @@ enum Claim {
     PassOn,
 }
 
+/// A panel's field, which its keyboard cycle starts from and Escape returns to.
+struct Trigger<'a, 'b, M, Theme, Renderer> {
+    element: &'b mut Element<'a, M, Theme, Renderer>,
+    state: &'b mut Tree,
+    layout: Layout<'b>,
+}
+
+/// Where a panel's Tab, Shift+Tab or Escape puts the keyboard.
+#[derive(Clone, Copy)]
+enum Step {
+    Forward,
+    Back,
+    Trigger,
+}
+
+/// Counts the focusables a walk meets and notes which one holds the keyboard.
+#[derive(Default)]
+struct Census {
+    count: usize,
+    focused: Option<usize>,
+}
+
+impl Operation for Census {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: Rectangle,
+        state: &mut dyn Focusable,
+    ) {
+        if state.is_focused() {
+            self.focused = Some(self.count);
+        }
+        self.count += 1;
+    }
+}
+
+/// Gives the keyboard to the `target`th focusable a walk meets and takes it from the others.
+struct FocusAt {
+    target: usize,
+    seen: usize,
+}
+
+impl Operation for FocusAt {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: Rectangle,
+        state: &mut dyn Focusable,
+    ) {
+        if self.seen == self.target {
+            state.focus();
+        } else if state.is_focused() {
+            state.unfocus();
+        }
+        self.seen += 1;
+    }
+}
+
 /// The floating list itself: where it sits, what it captures, and when it closes.
 struct Menu<'a, 'b, M, Theme, Renderer> {
     content: &'b mut Element<'a, M, Theme, Renderer>,
     state: &'b mut Tree,
+    /// A panel's field ([`Picker::panel`]); `None` for a list.
+    trigger: Option<Trigger<'a, 'b, M, Theme, Renderer>>,
     /// The field's on-screen rectangle — everything below is measured from it.
     field: Rectangle,
     /// A panel's own width, its trailing edge on the field's ([`Picker::panel`]).
@@ -549,6 +628,45 @@ struct Menu<'a, 'b, M, Theme, Renderer> {
     leaving: bool,
     on_dismiss: Option<M>,
     keys: Keys<'b, M>,
+}
+
+impl<M, Theme, Renderer> Menu<'_, '_, M, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+{
+    /// Run `operation` over the panel's field, then its controls: the panel's keyboard cycle.
+    fn walk(&mut self, layout: Layout<'_>, renderer: &Renderer, operation: &mut dyn Operation) {
+        if let Some(trigger) = self.trigger.as_mut() {
+            trigger.element.as_widget_mut().operate(
+                trigger.state,
+                trigger.layout,
+                renderer,
+                operation,
+            );
+        }
+        self.content
+            .as_widget_mut()
+            .operate(self.state, layout, renderer, operation);
+    }
+
+    /// Move the keyboard one `step` round the cycle. With nothing in it focused, Tab enters at the
+    /// first control and Shift+Tab at the last.
+    fn move_focus(&mut self, step: Step, layout: Layout<'_>, renderer: &Renderer) {
+        let mut census = Census::default();
+        self.walk(layout, renderer, &mut census);
+        let Census { count, focused } = census;
+        if count == 0 {
+            return;
+        }
+        let target = match (step, focused) {
+            (Step::Trigger, _) => 0,
+            (Step::Forward, Some(at)) => (at + 1) % count,
+            (Step::Forward, None) => 1 % count,
+            (Step::Back, Some(at)) => (at + count - 1) % count,
+            (Step::Back, None) => count - 1,
+        };
+        self.walk(layout, renderer, &mut FocusAt { target, seen: 0 });
+    }
 }
 
 impl<M, Theme, Renderer> overlay::Overlay<M, Theme, Renderer> for Menu<'_, '_, M, Theme, Renderer>
@@ -634,8 +752,26 @@ where
 
         // The keyboard first, and only the keys the rule claims. Capturing the event is what stops
         // Enter also submitting the dialog behind the list.
-        if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+        if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event {
+            let pressed = key_for(key);
+            // A panel keeps Tab to itself: the application's traversal would reach the panel's
+            // controls only after every control behind it (feature 1185, visual pass M4).
+            if self.trigger.is_some() && pressed == Key::Tab {
+                let step = if modifiers.shift() {
+                    Step::Back
+                } else {
+                    Step::Forward
+                };
+                self.move_focus(step, layout, renderer);
+                shell.capture_event();
+                return;
+            }
             if let Some((message, claim)) = self.keys.message_for(key) {
+                // Escape closes the panel, and the control holding the keyboard goes with it: the
+                // field takes it back, so the next Tab goes on from there.
+                if self.trigger.is_some() && pressed == Key::Escape {
+                    self.move_focus(Step::Trigger, layout, renderer);
+                }
                 shell.publish(message);
                 if claim == Claim::Taken {
                     shell.capture_event();
@@ -743,5 +879,252 @@ where
 {
     fn from(t: Picker<'a, M, Theme, Renderer>) -> Self {
         Element::new(t)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{key_with, renderer, WINDOW};
+    use iced::advanced::clipboard;
+    use iced::advanced::widget::operation::Focusable;
+    use iced::keyboard::key::Named;
+    use iced::keyboard::Modifiers;
+    use iced::widget::{column, text_input};
+
+    /// A trigger and an open panel of two fields, as the Jira picker's Filters button opens one
+    /// (feature 1185, D15).
+    fn panel() -> Element<'static, String> {
+        let input = |hint: &'static str| text_input(hint, "").on_input(|s| s);
+        Picker::new(
+            input("Filters"),
+            column![input("Reporter"), input("Label")],
+            true,
+            4.0,
+        )
+        .panel(360.0)
+        .on_dismiss("dismissed".to_string())
+        .into()
+    }
+
+    /// Which focusables hold the keyboard, in traversal order.
+    #[derive(Default)]
+    struct Held(Vec<bool>);
+
+    impl Operation for Held {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: Rectangle,
+            state: &mut dyn Focusable,
+        ) {
+            self.0.push(state.is_focused());
+        }
+    }
+
+    /// The trigger in the window, its panel floated, as the runtime holds them.
+    struct Open {
+        element: Element<'static, String>,
+        tree: Tree,
+        node: layout::Node,
+        renderer: iced::Renderer,
+    }
+
+    impl Open {
+        fn new() -> Self {
+            let renderer = renderer();
+            let mut element = panel();
+            let mut tree = Tree::new(element.as_widget());
+            let node = element
+                .as_widget_mut()
+                .layout(
+                    &mut tree,
+                    &renderer,
+                    &layout::Limits::new(Size::ZERO, WINDOW),
+                )
+                .move_to(Point::new(200.0, 40.0));
+            Self {
+                element,
+                tree,
+                node,
+                renderer,
+            }
+        }
+
+        /// The trigger holds the keyboard, as it does once Space on it opened the panel.
+        fn focus_trigger(&mut self) {
+            self.element.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &mut Focus,
+            );
+        }
+
+        /// Which of trigger, Reporter, Label hold the keyboard.
+        fn held(&mut self) -> Vec<bool> {
+            let mut held = Held::default();
+            self.element.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &mut held,
+            );
+            let mut overlay = self
+                .element
+                .as_widget_mut()
+                .overlay(
+                    &mut self.tree,
+                    Layout::new(&self.node),
+                    &self.renderer,
+                    &Rectangle::with_size(WINDOW),
+                    Vector::ZERO,
+                )
+                .expect("the panel is open");
+            let node = overlay.as_overlay_mut().layout(&self.renderer, WINDOW);
+            overlay
+                .as_overlay_mut()
+                .operate(Layout::new(&node), &self.renderer, &mut held);
+            held.0
+        }
+
+        /// A key as the runtime sends it: the overlay first, the tree only if it was let past.
+        /// What was published, and whether it was captured.
+        fn press(&mut self, named: Named, modifiers: Modifiers) -> (Vec<String>, bool) {
+            let event = key_with(named, modifiers);
+            let viewport = Rectangle::with_size(WINDOW);
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            if let Some(mut overlay) = self.element.as_widget_mut().overlay(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &viewport,
+                Vector::ZERO,
+            ) {
+                let node = overlay.as_overlay_mut().layout(&self.renderer, WINDOW);
+                overlay.as_overlay_mut().update(
+                    &event,
+                    Layout::new(&node),
+                    mouse::Cursor::Unavailable,
+                    &self.renderer,
+                    &mut clipboard::Null,
+                    &mut shell,
+                );
+            }
+            if !shell.is_event_captured() {
+                self.element.as_widget_mut().update(
+                    &mut self.tree,
+                    &event,
+                    Layout::new(&self.node),
+                    mouse::Cursor::Unavailable,
+                    &self.renderer,
+                    &mut clipboard::Null,
+                    &mut shell,
+                    &viewport,
+                );
+            }
+            let captured = shell.is_event_captured();
+            (messages, captured)
+        }
+    }
+
+    /// Focuses the first focusable it meets: the trigger.
+    struct Focus;
+
+    impl Operation for Focus {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: Rectangle,
+            state: &mut dyn Focusable,
+        ) {
+            state.focus();
+        }
+    }
+
+    /// Visual pass M4 (feature 1185): Space opened the Filters panel and Tab went to the field
+    /// under it, because the panel let Tab past to the application's traversal, which reaches the
+    /// floated panel only after every control in the dialog. Tab and Shift+Tab now cycle through
+    /// the trigger and the panel's fields, and claim the key so the application never moves it.
+    #[test]
+    fn tab_and_shift_tab_cycle_through_the_trigger_and_the_open_panel() {
+        let mut open = Open::new();
+        open.focus_trigger();
+        assert_eq!(
+            open.held(),
+            [true, false, false],
+            "the trigger starts with the keyboard"
+        );
+
+        let steps = [
+            (
+                Modifiers::empty(),
+                [false, true, false],
+                "Tab from the trigger reaches Reporter",
+            ),
+            (
+                Modifiers::empty(),
+                [false, false, true],
+                "Tab from Reporter reaches Label",
+            ),
+            (
+                Modifiers::empty(),
+                [true, false, false],
+                "Tab from Label wraps to the trigger",
+            ),
+            (
+                Modifiers::SHIFT,
+                [false, false, true],
+                "Shift+Tab from the trigger wraps to Label",
+            ),
+            (
+                Modifiers::SHIFT,
+                [false, true, false],
+                "Shift+Tab from Label reaches Reporter",
+            ),
+        ];
+        for (modifiers, held, what) in steps {
+            let (messages, captured) = open.press(Named::Tab, modifiers);
+            assert!(
+                captured,
+                "{what}: the panel let Tab past to the dialog's traversal"
+            );
+            assert!(
+                messages.is_empty(),
+                "{what}: Tab closed the panel ({messages:?})"
+            );
+            assert_eq!(open.held(), held, "{what}");
+        }
+    }
+
+    /// Escape closes the panel and gives the keyboard back to the trigger, so the next Tab goes on
+    /// from the Filters button rather than from a field that is no longer there (quickstart step 9).
+    #[test]
+    fn escape_in_the_panel_closes_it_and_hands_the_keyboard_back_to_the_trigger() {
+        let mut open = Open::new();
+        open.focus_trigger();
+        open.press(Named::Tab, Modifiers::empty());
+        assert_eq!(open.held(), [false, true, false], "Tab reached Reporter");
+
+        let (messages, captured) = open.press(Named::Escape, Modifiers::empty());
+        assert_eq!(messages, ["dismissed"], "Escape closes the panel");
+        assert!(
+            captured,
+            "Escape is the panel's: the dialog behind it must not also close"
+        );
+        assert_eq!(
+            open.held(),
+            [true, false, false],
+            "the trigger has the keyboard again"
+        );
     }
 }
