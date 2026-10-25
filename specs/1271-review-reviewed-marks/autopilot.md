@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 9585ec9b5c4444f1fb0f85c4ee8c95e4644fe2fd:2742a52748cad1ffbc15c420079a08ded6708f7c | CHANGES: 1 MAJOR, 3 MINOR (run by the orchestrator). F1 fixed, prose only: `[P]` removed from T004, T008, T012 (share marks.rs) and T021 (shares review_edit.rs), Dependencies and parallel example say so; F2 fixed, prose only: D5 records the rule 1 waiver (#1269, R8, tests only) and `mark_block` moved to M3; F3 fixed, prose only: D4 note names T025, T026, T027 s7, T028's `HiddenKind` arm; F4 fixed (MINOR, no new round): T029 starts with a failing daemon_sync test that a failed `ReviewMark` notifies and leaves state unchanged. Review done. Fix snapshot 44b93dad2fc8b2cfa901b4f068ffd6325655fcf7:7ec6e4fc0d4c9837d50a6bfc26ff768d1af15a11. speckit-analyze is not invocable here; FR/SC coverage checked by grep |
 | M1 diff | 1 | d666189b8e5357d37344c06f55639874bdebb5c7:3f3d70abe73089804fe8fe57960c022bef086b75 | A (high): CHANGES, 2 MAJOR, 2 MINOR. F1 fixed: `hash-object --stdin-paths` input C-quoted for a path starting with `"` or holding CR/LF (newline paths now hashed too), test with a quoted path; F2 fixed in part: `core.fileMode=false` gives an untracked file 100644, G2 test; the `core.symlinks=false` half declined (see below); F3 fixed: last entry wins for marks too, store test; F4 fixed: the daemon carries the file's marks through `Reviews` and writes them back unchanged, review_edit test. B (conformance, sonnet): CLEAN; Verify `review::` 218 passed 1 ignored, `review_git` 32 passed; MINORs: daemon `marks: Default::default()` (gone with F4), no tdd/cycle-log.md (not fixed) |
 | M1 diff | 2 | 91ddebc0bca0429a7d1369d72a451490b061fdbc:96b101ead03a0b38041050f7cd063eeb05b83e8d | A (sonnet, fix diff): CLEAN; F1–F4 confirmed, core.symlinks decline stands. 1 MINOR fixed (no new round): `forget_worktree`/`prune_worktrees` also drop the dir's marks and treat a marks-only entry as present, review_edit test. Review done. Scoped gate green before; 4 core permission tests fail as root on origin/main too: settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers x2 |
+| M2 diff | 1 | 24d097d8054d8a9489db208736b8c4bdeced7a84:f8b443698b06216bf66c3a26ded840b2d5ba617e | due: A (high) and B (conformance, sonnet), run by the orchestrator. Scoped gate before: fmt, clippy (core, workspace) and clippy 1.99 (core, daemon, client) clean; `cargo test --workspace --no-fail-fast` fails only the six root_only permission tests of scripts/gate.sh (as root here, also on main) |
 
 ## Declined review findings
 
@@ -63,7 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 implemented (T018–T024 ticked), committed at f8b44369 and pushed; scoped gate clean (see *Review rounds* M2 diff 1). Next: the orchestrator runs review A (high) and B on snapshot 24d097d8…:f8b44369 and sends findings; then fix, full gate (`scripts/gate.sh`, as root it reruns root_only unprivileged) and the PR text in scratchpad pr-m2.md. Deviations: D7. Disk is tight here (~39 GB cap): build with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`, a full-debug workspace test build filled the disk once.
 
 ## Open escalation
 
