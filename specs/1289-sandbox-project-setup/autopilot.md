@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M2
-- **Next step**: M2 review A round 2 (scoped, sonnet) on the fix diff; then full gate, PR
+- **Next step**: M2 PR CI and merge (orchestrator)
 
 ## Pull requests
 
@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 2 (sonnet) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, 1 MINOR — fixed, prose only (guide paragraph re-wrapped to ~100 columns). Verify: toolchain_path 16/16, daemon `offered` 9/9 |
 | M1 A | 3 (sonnet, scoped, red-CI fix c9320751) | 896f820bf2e94b14db372bee07de2cf983fe110b:c9320751 | CLEAN, 1 MINOR — logged as a follow-up, not fixed (offered.json with `clis: []` ambiguous across daemons) |
 | M2 A | 1 (high) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 `MAX_LINE_BYTES` 64 KiB cuts a line with no end; F2 group kill before the reaping `try_wait` via `waitid` WNOWAIT, under the `reaped` lock; F3 `impl Drop for StreamingChild` kills and reaps; F4 one reader loop `read_chunks`, retries EINTR); cycle log M2 cycle 6 |
+| M2 A | 2 (scoped, sonnet) | 14733e4bf5354abea71bdb1a930a50aa83ec28c2:8d6c87f9f2f5373395bf28093df3f363883d51b8 | CLEAN — all four round-1 fixes hold; 2 MINOR fixed (F1 `MAX_LINE_BYTES` 4 KiB + decoded cut: worst case about 40 MiB, 10,000-line floor kept; F2 the cut waits for a UTF-8 character, an open escape may still split); cycle log M2 cycle 7 |
 | M2 B | 1 (sonnet) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | CLEAN — Verify re-run all green; 2 MINOR, no change (client `into_settings`/`set_changed`/DEFERRED edits are in scope; ledger/tasks ticks are the own spec dir) |
 
 ## Declined review findings

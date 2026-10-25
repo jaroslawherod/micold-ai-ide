@@ -169,3 +169,16 @@ output is copied from the session's logs.
 - mutant red (pre-reap kill disabled: `if false && ...leader_exited()`): `--test streaming_child` ->
   `a_natural_exit_still_ends_what_it_left_running ... FAILED` — `the grandchild 9917 outlived the
   run`. Restored from a copy
+
+## M2 cycle 7: review A round 2 MINORs — 40 MiB worst case, cut keeps a character whole
+
+- tests: `setup_output.rs` `the_buffer_is_bounded_even_for_binary_output`,
+  `a_cut_line_does_not_split_a_character`
+- red: `--test setup_output` -> both FAILED (9 passed; 2 failed): the worst case was 10,000 × 64 KiB
+  (about 640 MiB), and a cut at the limit split `é` into U+FFFD halves
+- green: `MAX_LINE_BYTES` 64 KiB → 4 KiB; the cut waits up to `CHAR_SLACK` (3) continuation bytes;
+  `keep` cuts a decoded line back to `MAX_LINE_BYTES + 3` at a char boundary (invalid bytes widen to
+  U+FFFD) -> 11/11. FR-021's 10,000-line floor holds; the worst case is about 40 MiB. An escape
+  sequence open at the cut is still split (accepted, as the review allowed)
+- mutant red (decoded cut removed): `the_buffer_is_bounded_even_for_binary_output ... FAILED`;
+  (continuation slack off): `a_cut_line_does_not_split_a_character ... FAILED`. Restored from a copy

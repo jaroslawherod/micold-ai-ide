@@ -13,10 +13,15 @@ pub use crate::process::Stream;
 /// How many lines a run keeps (FR-021: at least the last 10,000).
 pub const KEEP_LINES: usize = 10_000;
 
-/// The longest line kept, in bytes read (before escapes are removed): an unfinished line that
-/// reaches it is kept as a line and a new one starts (FR-021's bound holds for output with no line
-/// ends too: `yes | tr -d '\n'`, a binary `cat`, long progress dots).
-pub const MAX_LINE_BYTES: usize = 64 * 1024;
+/// The longest line kept, in bytes: an unfinished line that reaches it is kept as a line and a new
+/// one starts (FR-021's bound holds for output with no line ends too: `yes | tr -d '\n'`, a binary
+/// `cat`, long progress dots). The cut waits for the character it falls in (up to 3 more bytes),
+/// and a decoded line is cut back to that size, so 10,000 lines hold at most about 40 MiB. An
+/// escape sequence open at the cut is split; its two halves show as text.
+pub const MAX_LINE_BYTES: usize = 4 * 1024;
+
+/// The bytes a cut may run past [`MAX_LINE_BYTES`] to finish a UTF-8 character.
+const CHAR_SLACK: usize = 3;
 
 /// One stream's unfinished line.
 #[derive(Debug, Default, Clone)]
@@ -58,7 +63,9 @@ impl OutputBuffer {
                     if std::mem::take(&mut partial.after_cr) {
                         partial.bytes.clear();
                     }
-                    if partial.bytes.len() == MAX_LINE_BYTES {
+                    let len = partial.bytes.len();
+                    let continues = byte & 0b1100_0000 == 0b1000_0000;
+                    if len >= MAX_LINE_BYTES && !(continues && len < MAX_LINE_BYTES + CHAR_SLACK) {
                         let line = std::mem::take(&mut partial.bytes);
                         done.push(self.keep(&line));
                     }
@@ -111,7 +118,13 @@ impl OutputBuffer {
 
     /// Store one finished line, dropping the oldest past [`KEEP_LINES`].
     fn keep(&mut self, raw: &[u8]) -> (u64, String) {
-        let line = String::from_utf8_lossy(&strip_escapes(raw)).into_owned();
+        let mut line = String::from_utf8_lossy(&strip_escapes(raw)).into_owned();
+        // Invalid bytes widen to U+FFFD (3 bytes each): keep the bound on what is stored.
+        let mut end = line.len().min(MAX_LINE_BYTES + CHAR_SLACK);
+        while !line.is_char_boundary(end) {
+            end -= 1;
+        }
+        line.truncate(end);
         let index = self.next_index();
         self.lines.push_back(line.clone());
         if self.lines.len() > KEEP_LINES {
