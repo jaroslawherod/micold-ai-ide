@@ -30,6 +30,22 @@ task pair it covers.
 | Task | Behaviour | Red evidence | Green |
 |---|---|---|---|
 | T019, T021, T022 | every source pose (2 PRs listed, loading, unavailable, empty, setting off, PR shown, Files on, Default entry), both themes: the left column holds one child at its top, none of `Pull requests`, `Committed`, `Uncommitted`, `Files` or the Default-entry note painted in it; the header holds the control reading the label's fixed part; the tooltip carries the base line | run on the pre-M4 view (constants and helpers only): `the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_control` FAILED at the one-child assertion | `layout_snapshot session_area_fits` green |
-| T020, T023 | body two columns; file column 260 px at 1280, 1600 and 900 wide; diff area ≥ 70% of the body at 1280; control keeps its 280 px in the header while the title column narrows at 900 | same run: `the_file_column_keeps_its_width_and_the_diff_takes_the_rest` FAILED at the 260 px assertion | same run |
+| T020, T023 | body two columns; file column 260 px at 1280, 1600 and 900 wide; diff area ≥ 70% of the body at 1280; control keeps its width in the header while the title column narrows at 900 (280 px when written, 360 px `SOURCE_CONTROL_WIDTH` after the T026 visual pass) | same run: `the_file_column_keeps_its_width_and_the_diff_takes_the_rest` FAILED at the 260 px assertion | same run |
 | T024 | `review-source-*` covered states (closed with PR shown; open over each list state, with a PR shown, with Files on), recorded with their overlay through the new `StateUnderTest::settled` | new states | `layout_snapshot` 137 passed after re-record |
 | T026 | visual pass (in-process tiny-skia renders of the `review_source` poses, both themes): the open list's Working tree option wrapped its words at a 280 px control | seen in the render | control 360 px, header title : slot 1 : 1; `session_area_fits` and `layout_snapshot` green after re-record; `visual-pass/m4.md` |
+
+## Close
+
+Test-strength fixes for `tdd/verification.md` findings F1–F8 (tasks T028–T033). Each red is a
+deliberate mutant of the production line, run once against the new test, then restored with
+`git checkout`.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T028 (F1) | gestures through the real review header: `Esc` and an outside press send `SourceMenuDismissed`, an arrow key `SourceMenuMoved`, a trigger press `SourceMenuToggled`; the tooltip the header gives the widget, read by hovering the trigger (`painted_text_hovering_at`), holds the base line for every pose that has one, and `DefaultEntry` is asserted to have none | `ui/changes.rs:185` (`on_dismiss` → `SourceMenuToggled`) and `:189` (arrow → `SourceMenuToggled`) FAILED the gesture test; `:190` (tooltip `String::new()`) FAILED the left-column/tooltip test | `layout_snapshot` green |
+| T029 (F2) | file column and source control widths asserted against literal `260.0` / `360.0` | `FILE_COLUMN_WIDTH = 240.0` FAILED `the_file_column_keeps_its_width_and_the_diff_takes_the_rest` | same |
+| T030 (F3) | explicit chips and note for the Default entry, Committed off, and both on | `source_menu.rs:187` reduced to `toggles.committed` FAILED `default_entry_shows_the_committed_chip_off_and_unavailable_with_a_note` | `review::source_menu` 20 passed |
+| T031 (F4) | drawer pinned at a literal 360 px at 1280; new `in_a_narrow_window_the_drawer_is_half_the_diff_area` at 1000 px | not mutated (pins an existing rule by value) | `review_bar_fixed` green |
+| T032 (F5, F6) | chip centre within the option's text span; re-seat lands on index 0 (working tree) of 5 stops; `picking_a_source_is_choosing_it` split into a pull-request and a working-tree pick; the walk iterates the expected stops | not mutated (tightened bounds) | `features_pr_changes`, `layout_snapshot` green |
+| T033 (F7) | fixture clock `LIST_READ_AT`, a fixed instant, instead of `SystemTime::now()`; `pr` shared from `tests/support/source_menu.rs` | refactor of fixtures, no red | `layout_snapshot` unchanged |
+| T033 (F8) | `layout_snapshot.txt` re-records: `1fd8a4bc8` (M4 view) and `37437b583` (control 360 px) went with M4's reviews A and B and the visual pass `visual-pass/m4.md`. `b92d372b8` came after those reviews (rebase onto #1271): in the close unit its hunks were checked to touch only the `changes-review-marks`, `changes-review-marks-unavailable` and `review-source-open{,-empty,-loading,-unavailable}` states; their values were not reviewed one by one, only covered by the gate and CI (green on 72c45fba). The geometry gates (`session_area_fits`, `menu_select_fits`, `review_bar_fixed`) cover the same poses independently | n/a (fixture review) | `layout_snapshot` green |

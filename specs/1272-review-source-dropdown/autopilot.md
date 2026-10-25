@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1272
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
-- **Phase**: milestone M4
-- **Next step**: orchestrator opens the M4 PR from branch claude/project-thread-43e62l (title/body in the unit's scratchpad m4/), waits on CI and merges; then the close unit (T027)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1355 | Design PR: spec, plan, tasks | merged | db1c1bcf |
 | #1368 | M1: core `review::source_menu` model | merged | ae314336 |
 | #1383 | M2 + M3: reducer state and picks; shared `MenuSelect` | merged | 3db9cc2f |
+| #1418 | M4: header control, emptied left column, two columns, snapshot, guide, visual pass | merged (rebase) | b92d372b |
+| (close PR, opened by orchestrator) | Close: TDD verification, test-strength fixes T028–T033, quickstart results T027, spec Closed; full gate (scripts/gate.sh) green at 72c52894c | open | |
 
 ## Milestones
 
@@ -27,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | #1368 | done, gate green at 703c8ff5; PR open |
 | M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | #1383 | done; ported onto #1269's kept Review tabs (decision 5) |
 | M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | #1383 | done |
-| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | (opened by orchestrator) | done; full gate (scripts/gate.sh) green at 88213c041; reviews A CLEAN, B CLEAN after round 2; visual pass `visual-pass/m4.md` |
+| M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | #1418 | merged b92d372b; full gate (scripts/gate.sh) green at 88213c041; reviews A CLEAN, B CLEAN after round 2; visual pass `visual-pass/m4.md`; after review rebased onto #1271's changed-since dot (a3948a18): import-list conflict in `ui/changes.rs` (kept `UnreadMark` and `TooltipPosition`), layout snapshot re-recorded (only `changes-review-marks*` and `review-source-open*` states changed); gate passed, CI green on 72c45fba. Flakes, unrelated: CI `card_grid` `a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (real clock against `EXPAND_REST`) passed on re-run; local `micold-daemon` `connection logging_sink::an_inherited_journal_stream_does_not_silence_the_log_file` |
 
 ## Decisions
 
@@ -58,6 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high, headless claude -p) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 2 MINOR (F1 redundant strut and extra gap before the option marker, fixed; F2 declined) |
 | M3 B (conformance, sonnet, headless) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 3 MINOR, all taken (F1 mapper scope recorded as decision 4; F2 visual pass run on the showcase under Xvfb, `visual-pass/m3.md`; F3 `OPEN_POSE_ROOM` named). Ran beside A; Verify output supplied by the implementer |
 | M2 rebase (conflict resolution only, sonnet, headless claude -p) | 1 | diff vs origin/main 7844dde4 of changes.rs, tests/support/source_menu.rs, ui/mod.rs | CLEAN: 2 MINOR (F1 a cover leaves the list open, declined; F2 local `opened` shadowed the fn name, renamed `outcome`) |
+| Close TDD verify (speckit-tdd-verify, sonnet, headless claude -p) | 1 | b92d372b8 | FAIL: 1 HIGH (F1 header wiring mutants survive), 5 MED, 2 LOW; T028–T033 added and fixed by two sonnet workers (core, client); converge skipped: every milestone has a CLEAN review B |
+| Close review (correctness of tests, truth of docs; opus, headless claude -p) | 1 | b121d2f5f4b983b5650cd352ea586cfbb599ba66:b92d372b8ce33d1c0b4d48d50fce527467fa0057 | CHANGES: 1 MAJOR (cycle-log claimed b92d372b8's re-record was reviewed; fixed), 2 MINOR (F2 `centre_of` extracted from press/hover; F3 T028–T032 red evidence and ledger next step; both fixed) |
+| Close review (scoped re-review, sonnet, headless) | 2 | 93018c770a97d751b5e178e7a7189db063b2de90:b92d372b8ce33d1c0b4d48d50fce527467fa0057 | CLEAN: 1 MINOR (T033 task text names the old `pr` location; left, the task text records the plan) |
 
 ## Declined review findings
 
@@ -84,4 +89,5 @@ None.
 
 ## Follow-ups not done
 
-- Depends on unmerged #1270 (R1, bottom bar + drawer; removes the right column) and possibly #1269 (R0, Review tab). FR-008's two-column result is verifiable only after #1270 merges; plan must sequence or gate on it.
+- ~~Depends on unmerged #1270 and possibly #1269~~ resolved: both merged before M4 (#1418), which shipped FR-008's two columns on top of them.
+- Flaky tests seen during M4, not this feature's: `card_grid` `a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (real clock against `EXPAND_REST`), `micold-daemon` `logging_sink::an_inherited_journal_stream_does_not_silence_the_log_file`.

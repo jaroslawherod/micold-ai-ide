@@ -77,7 +77,7 @@ Crate paths: `crates/micold-core/src/review/` (core), `crates/micold-client/src/
 
 ## Phase 6: Polish (no code; done by the close unit, not a milestone)
 
-- [ ] T027 Record quickstart Part A and Part B results in `specs/1272-review-source-dropdown/quickstart.md` and tick the tasks above
+- [x] T027 Record quickstart Part A and Part B results in `specs/1272-review-source-dropdown/quickstart.md` and tick the tasks above
 
 ## Dependencies and order
 
@@ -128,3 +128,14 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run gate` (`session_area_fits`, layout snapshot); quickstart Part B
 - **Depends on**: M2, M3, **#1270 merged** (and #1269 merged or confirmed not to touch the review header) — do not start before
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+From `tdd/verification.md` (verdict **FAIL**). The feature is not done until T028 is cleared: three non-equivalent mutants in the review header's wiring survive the suite. Order: HIGH first.
+
+- [x] T028 [US1] [F1] Add a view-level gesture gate through the real review header (`crates/micold-client/tests/gates/`, using `lay::runtime_messages` over `review_source(SourcePose::Listed, true)`): `Esc` and a press outside send `Message::Changes(Msg::SourceMenuDismissed)`, an arrow key sends `Msg::SourceMenuMoved(..)`, a trigger press sends `Msg::SourceMenuToggled`. Replace the conditional tooltip check at `crates/micold-client/tests/gates/session_area_fits.rs:844-850` with one that reads the tooltip the header gives the widget and asserts it holds the base line for every pose that has one (no `if let`). Done when `cargo test -p micold-client --test layout_snapshot` passes and fails with each of `crates/micold-client/src/ui/changes.rs:185` (`on_dismiss` sending `SourceMenuToggled`), `:189` (arrow hookup sending `SourceMenuToggled`) and `:190` (tooltip `String::new()`) mutated, each restored with `git checkout`
+- [x] T029 [US4] [F2] Pin the spec widths by value in `crates/micold-client/tests/gates/session_area_fits.rs:928` and `:944` (a named `const` of 260.0 and 360.0 in the test) instead of the production `FILE_COLUMN_WIDTH` / `SOURCE_CONTROL_WIDTH`. Done when `cargo test -p micold-client --test layout_snapshot session_area_fits` fails with `FILE_COLUMN_WIDTH = 240.0` at `ui/changes.rs:69`
+- [x] T030 [US2] [F3] In `crates/micold-core/src/review/source_menu.rs:567-596` add explicit expectations for the chips (`Chip { on: false, available: false }` for the Default entry with both toggles on; Committed off with the entry available) and the note, beside or in place of the mirrored formula. Done when `cargo test -p micold-core --lib review::source_menu` passes and fails with `:187` reduced to `toggles.committed`
+- [x] T031 [US4] [F4] Restore a pinned case for the narrow drawer in `crates/micold-client/tests/gates/review_bar_fixed.rs:298-302`: assert the 360 px value literally at the 1280 window and add a window where the area is under 720 and the drawer is half of it. Done when `cargo test -p micold-client --test layout_snapshot review_bar_fixed` passes
+- [x] T032 [US1] [F5, F6] Tighten `crates/micold-client/tests/gates/menu_select_fits.rs:206-209` (the chip must lie within the option's row box, not up to a chip height above it) and `crates/micold-client/tests/features_pr_changes.rs:2338` (assert the highlight index the re-seat lands on, named, not only `< len`); split `picking_a_source_is_choosing_it` (`:2265`) into a pull-request pick and a working-tree pick. Done when `cargo test -p micold-client --test features_pr_changes --test layout_snapshot` passes
+- [x] T033 [P] [F7, F8] Replace `SystemTime::now()` with a fixed instant in `crates/micold-client/tests/support/covered_states.rs:3578` and `crates/micold-client/tests/gates/session_area_fits.rs:840`; reuse `pr` from `features_pr_changes.rs:47` for `branch_pr` at `features_changes.rs:4380`; note in `tdd/cycle-log.md` that the `layout_snapshot.txt` re-records of `1fd8a4bc8`, `37437b583`, `b92d372b8` were reviewed. Done when `cargo test -p micold-client --test layout_snapshot` passes unchanged
