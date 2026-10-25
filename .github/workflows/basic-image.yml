@@ -141,11 +141,11 @@ jobs:
       # FR-002 on this architecture: sshd and the install runtime are there, the daemon and the AI
       # CLIs are not, and sshd accepts its config (with a throwaway host key). The full check is the
       # `sandbox_real_basic_image` test in ci.yml.
-      - name: Carries sshd and Node, and no daemon or AI CLI
+      - name: Carries sshd, Node and session tools, and no daemon or AI CLI
         run: |
           set -euo pipefail
           docker run --rm --entrypoint /bin/sh "$REPOSITORY:$HASH-${{ matrix.arch }}" -c '
-            for c in sshd node npm git flock; do command -v "$c" >/dev/null || { echo "missing $c"; exit 1; }; done
+            for c in sshd node npm git flock gh curl wget jq rg make python3; do command -v "$c" >/dev/null || { echo "missing $c"; exit 1; }; done
             for c in micold-daemon claude codex gemini opencode pi copilot; do
               if command -v "$c" >/dev/null; then echo "unexpected $c"; exit 1; fi
             done
