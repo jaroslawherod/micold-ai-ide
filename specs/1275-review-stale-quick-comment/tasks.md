@@ -272,12 +272,15 @@ steps 2–4.
 - [x] T032 [US2] Update *Picking lines* and *Writing a comment* in
   `docs/user-guide/reviewing-changes.md`: drag over line numbers, Esc cancels, click and Shift-click
   as before.
-- [ ] T033 [US2] Run `crates/micold-client/tests/layout_snapshot.rs`; the drag adds no static
+- [x] T033 [US2] Run `crates/micold-client/tests/layout_snapshot.rs`; the drag adds no static
   element, so `crates/micold-client/tests/fixtures/layout_snapshot.txt` should stay unchanged:
   regenerate it only for a picked-range change, and say why in the PR.
-- [ ] T034 [US2] Visual pass at 1280×800 in light and dark of quickstart §B steps 2–4 (mouse drag,
+  *M4*: `layout_snapshot` passed unchanged (140 states); fixture not re-recorded.
+- [x] T034 [US2] Visual pass at 1280×800 in light and dark of quickstart §B steps 2–4 (mouse drag,
   touchpad drag, Esc mid-drag); evidence and any step a container could not run in
   `specs/1275-review-stale-quick-comment/visual-pass/`.
+  *M4*: PASS (mouse drag, Esc mid-drag, both themes); touchpad and release outside the window not
+  runnable under Xvfb — see the visual-pass README.
 
 **Checkpoint**: M4 done.
 

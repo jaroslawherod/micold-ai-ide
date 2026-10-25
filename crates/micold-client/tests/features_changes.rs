@@ -1670,7 +1670,9 @@ fn a_composer_whose_lines_are_gone_waits_for_a_new_pick_and_keeps_its_text() {
         Effect::None,
         "nowhere to save it"
     );
+    // A click: since #1275 the box follows a plain press's pick on the release.
     gutter(&mut state, None, Some(2), false);
+    changes::update(&mut state, Msg::GutterDragReleased);
     let view = state.tabs.shown_view().unwrap();
     assert_eq!(
         changes::composer_placed(view),
@@ -6925,6 +6927,33 @@ mod drag {
         );
         over(&mut state, None, Some(2));
         assert_eq!(pick(&state), new_pick(1, 2), "back up line by line");
+    }
+
+    // FR-016 (visual pass M4): while dragging, the box and **Add comment** stay under the pick
+    // from before the press, so no row moves under the pointer; only the fill follows it.
+    #[test]
+    fn the_slots_stay_put_while_the_pick_follows_the_pointer() {
+        let mut state = writing();
+        let before = pick(&state);
+        press(&mut state, 2);
+        over(&mut state, None, Some(4));
+        assert_eq!(pick(&state), new_pick(2, 4));
+        assert_eq!(changes::slot_pick(view(&state)), before);
+        assert_eq!(changes::composer_placed(view(&state)), before);
+        release(&mut state);
+        assert_eq!(changes::slot_pick(view(&state)), new_pick(2, 4));
+        assert_eq!(changes::composer_placed(view(&state)), new_pick(2, 4));
+    }
+
+    // C4 kept: a click (press and release in place) takes an open new comment's box to its line.
+    #[test]
+    fn a_click_takes_an_open_new_box_to_its_line() {
+        let mut state = writing();
+        press(&mut state, 3);
+        assert_eq!(release(&mut state), Effect::None);
+        let open = composer(&state).expect("the box stays open");
+        assert_eq!(open.target, ComposerTarget::New(new_pick(3, 3).unwrap()));
+        assert_eq!(open.text, "kept");
     }
 
     // Q4, FR-018, US2 AS4: press and release on one line is today's click.

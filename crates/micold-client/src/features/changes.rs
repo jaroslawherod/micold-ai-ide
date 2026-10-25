@@ -2932,11 +2932,10 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                     },
                 };
                 view.pick = Some(pick);
-                // A new comment's composer follows the pick, keeping its text (C4).
-                if let Some(composer) = view.composer.as_mut() {
-                    if let ComposerTarget::New(_) = composer.target {
-                        composer.target = ComposerTarget::New(pick);
-                    }
+                // A Shift-click's pick takes a new comment's composer along, keeping its text
+                // (C4); a drag's takes it on release, so nothing moves under the pointer meanwhile.
+                if view.drag.is_none() {
+                    follow_pick(view, pick);
                 }
             }
             Effect::None
@@ -2968,6 +2967,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::AddComment => {
             if let Some(view) = state.tabs.shown_view_mut() {
+                // A button press: any drag is over (its release can only have come first).
+                view.drag = None;
                 if let Some(pick) = view.pick {
                     view.composer = Some(Composer {
                         target: ComposerTarget::New(pick),
@@ -3368,8 +3369,26 @@ fn review_edit(view: &OpenView, edit: ReviewEditOp) -> Effect {
 /// next pick places it again.
 pub fn composer_placed(view: &OpenView) -> Option<Pick> {
     match view.composer.as_ref()?.target {
-        ComposerTarget::New(pick) if view.pick == Some(pick) => Some(pick),
+        ComposerTarget::New(pick) if slot_pick(view) == Some(pick) => Some(pick),
         _ => None,
+    }
+}
+
+/// The pick the diff's slots (the composer, **Add comment**) hang under: during a drag the one
+/// from before its press, so no row moves under the pointer while the pick follows it (feature
+/// 1275, FR-016).
+pub fn slot_pick(view: &OpenView) -> Option<Pick> {
+    view.drag
+        .as_ref()
+        .map_or(view.pick, |drag| drag.before_pick)
+}
+
+/// A new comment's composer moves to `pick`, keeping its text (C4).
+fn follow_pick(view: &mut OpenView, pick: Pick) {
+    if let Some(composer) = view.composer.as_mut() {
+        if let ComposerTarget::New(_) = composer.target {
+            composer.target = ComposerTarget::New(pick);
+        }
     }
 }
 
@@ -3383,11 +3402,13 @@ fn gutter_drag_released(state: &mut State) -> Effect {
     let Some(DragState { drag, .. }) = view.drag.take() else {
         return Effect::None;
     };
-    let Release::Range { side, anchor, head } = drag.release() else {
+    let pick = Pick::of_drag(drag);
+    view.pick = Some(pick);
+    let Release::Range { .. } = drag.release() else {
+        // Today's click (FR-018): a new comment's composer follows its one line (C4).
+        follow_pick(view, pick);
         return Effect::None;
     };
-    let pick = Pick { side, anchor, head };
-    view.pick = Some(pick);
     match view.composer.as_mut() {
         Some(Composer {
             target: ComposerTarget::Edit(_) | ComposerTarget::Answer(_),
