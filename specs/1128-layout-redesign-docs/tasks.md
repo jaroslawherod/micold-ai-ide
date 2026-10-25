@@ -239,22 +239,22 @@ unchanged, and the five mutations fail as listed.
 **Independent test**: quickstart §B: 4 screenshots, 20 verdicts, every non-*matches* verdict with
 its reason (SC-006).
 
-- [ ] T030 [US4] Draw `window-session-view` and `window-overview` at 1280×800 in light and dark
+- [x] T030 [US4] Draw `window-session-view` and `window-overview` at 1280×800 in light and dark
   through `ui::view` and the tiny-skia renderer from a harness in the session scratchpad (not
   committed), or with the `visual-pass` skill on Xvfb (research R8); save
   `specs/1128-layout-redesign-docs/visual-pass/{session-view,overview}-{light,dark}-1280.png`
-- [ ] T031 [US4] Write the header of `specs/1128-layout-redesign-docs/visual-pass.md` per
+- [x] T031 [US4] Write the header of `specs/1128-layout-redesign-docs/visual-pass.md` per
   [contracts/visual-pass-record.md §Header](contracts/visual-pass-record.md#header): full commit
   SHA, how it was run, states, size, renderer; not checked (macOS, Windows, other sizes, failure
   states); the mockup boards
-- [ ] T032 [US4] One table per screenshot in `specs/1128-layout-redesign-docs/visual-pass.md`: five
+- [x] T032 [US4] One table per screenshot in `specs/1128-layout-redesign-docs/visual-pass.md`: five
   verdicts (title bar, sidebar, session area or Overview, status bar, whole window), each
   *matches*, *differs on purpose* (the decision and its spec) or *differs by defect* (the region's
   issue and the follow-up) (FR-015, FR-017)
-- [ ] T033 [US4] Contrast column per region and theme: cite the composition-contrast test of
+- [x] T033 [US4] Contrast column per region and theme: cite the composition-contrast test of
   research R9, or measure with `micold_core::tokens::contrast` in a scratchpad probe and record the
   ratio; body text under 4.5:1 is *differs by defect* (FR-016)
-- [ ] T034 [US4] Each *differs by defect* gets a line in the ledger's *Follow-ups not done* (region,
+- [x] T034 [US4] Each *differs by defect* gets a line in the ledger's *Follow-ups not done* (region,
   issue, what is wrong, screenshot); no code change (D1, FR-020). Check quickstart §B's expected
   counts
 
