@@ -64,3 +64,17 @@ fn a_reported_corner_is_kept_by_the_reducer() {
     let _ = project::update(&mut state, Msg::SwitcherAnchored((300, 64)));
     assert_eq!(state.project.switcher_anchor, Some((300, 64)));
 }
+
+/// Feature 1127 (T026, R8, FR-005, contract P1): opened from the keyboard, which reports no
+/// corner, the panel hangs from the project segment's computed leading edge — after the bar's
+/// padding, the app mark and the gap — not the window's trailing edge.
+#[test]
+fn opened_from_the_keyboard_the_panel_hangs_from_the_segments_edge() {
+    use micold_core::tokens::anatomy::app_bar;
+    let x = app_bar::PADDING + app_bar::MARK + app_bar::GAP;
+    assert!(
+        panel_at(&open_state(None), x, app_bar::BOTTOM_EDGE),
+        "panel not at x {x}, y {}",
+        app_bar::BOTTOM_EDGE
+    );
+}

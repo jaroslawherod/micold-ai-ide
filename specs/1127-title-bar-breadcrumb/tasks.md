@@ -150,10 +150,10 @@ Test*.
 
 #### Tests for Part B ⚠️
 
-- [ ] T023 [P] [US1] Write failing unit tests in `lib/button.rs` for `Button::trailing(Icon)`: the
+- [x] T023 [P] [US1] Write failing unit tests in `lib/button.rs` for `Button::trailing(Icon)`: the
   glyph is drawn after the label at the leading slot's size, in both orders with `.trailing_mark`
   (R4)
-- [ ] T024 [P] [US1] Write failing unit tests in NEW `lib/breadcrumb.rs`: `Breadcrumb::new(label, roles)`
+- [x] T024 [P] [US1] Write failing unit tests in NEW `lib/breadcrumb.rs`: `Breadcrumb::new(label, roles)`
   draws the project segment as a pressable text button with a trailing drop-down glyph; `.place(text,
   tooltip)` adds a `/` separator and a non-pressable place label, and without it neither is drawn;
   `.trailing_mark(count, tooltip)` draws the unread mark; `.open(true)` draws the segment selected;
@@ -161,7 +161,7 @@ Test*.
   narrowed, the place shortens with `…` before the project segment (to a floor of one character and
   `…`), the glyph and mark never shorten, and a shortened segment's tooltip holds its full text
   (FR-004, FR-006, FR-007, contract C2, C3)
-- [ ] T025 [US1] Write failing render-free tests in `client/src/ui/toolbar.rs` for
+- [x] T025 [US1] Write failing render-free tests in `client/src/ui/toolbar.rs` for
   `model(state) -> TitleBarModel` over data-model *Place*: the project segment's tooltip is
   `Switch project`, with the full name on a second line when the name is shortened (FR-013, C2); no project → project `Select project`,
   place `None`; project, no location → place `None`; a session on `fix/1117-x` → place short branch
@@ -169,35 +169,35 @@ Test*.
   name; Overview (normal and full screen) → `Overview`; Settings → `Settings`; Changes → its entry's
   location; Compare → the current session's location; a location removed from the state → `None`;
   `unread` = `other_projects_unread()`, `switcher_open` follows the switcher (FR-004, FR-006, SC-005)
-- [ ] T026 [P] [US1] Add to `client/tests/switcher_anchor.rs`: opened with no reported corner
+- [x] T026 [P] [US1] Add to `client/tests/switcher_anchor.rs`: opened with no reported corner
   (keyboard), the panel hangs at `x` = `PADDING + MARK + GAP`, `y` = `BOTTOM_EDGE`; and add a covered
   state `title-bar-switcher-open` to `client/tests/support/covered_states.rs` so
   `client/tests/gates/panel_placement.rs` checks it (FR-005, SC-004, contract P1)
-- [ ] T027 [P] [US1] Add breadcrumb pairs to `client/src/ui/material/composition_contrast.rs`: project
+- [x] T027 [P] [US1] Add breadcrumb pairs to `client/src/ui/material/composition_contrast.rs`: project
   segment in `on_surface`, separator and place in `on_surface_variant`, each ≥ 4.5:1 on the bar's
   surface at rest and elevated, light and dark (FR-017, contract T3)
 
 #### Implementation for Part B
 
-- [ ] T022 [P] [US1] Make `context_header::branch_chip` `pub` in `crates/micold-core/src/context_header.rs`
+- [x] T022 [P] [US1] Make `context_header::branch_chip` `pub` in `crates/micold-core/src/context_header.rs`
   with a doc comment naming its second reader (the title bar's place segment); its existing tests
   stay green (R7)
-- [ ] T028 [US1] Implement `Button::trailing(Icon)` in `lib/button.rs` (R4)
-- [ ] T029 [US1] Implement `Breadcrumb` in `lib/breadcrumb.rs` over `Button` (`.trailing`,
+- [x] T028 [US1] Implement `Button::trailing(Icon)` in `lib/button.rs` (R4)
+- [x] T029 [US1] Implement `Breadcrumb` in `lib/breadcrumb.rs` over `Button` (`.trailing`,
   `.trailing_mark`, `.selected`) and `Ellipsized`, reporting its two segments to the toolbar's
   planner as `Shorten(0)` (place) and `Shorten(1)` (project); `pub mod` / `pub use` in `lib/lib.rs`
   (R4)
-- [ ] T030 [US1] Implement `TitleBarModel`, `Segment` and `model()` in `client/src/ui/toolbar.rs` per
+- [x] T030 [US1] Implement `TitleBarModel`, `Segment` and `model()` in `client/src/ui/toolbar.rs` per
   data-model (place text from `ui::overview::location_card` and `context_header::branch_chip`) (R7)
-- [ ] T031 [US1] Replace the switcher `Button` in `view()` (`client/src/ui/toolbar.rs`) with the
+- [x] T031 [US1] Replace the switcher `Button` in `view()` (`client/src/ui/toolbar.rs`) with the
   `Breadcrumb` built from `model()`, still in its `ContextArea::on_primary_bounds`, and give the
   switcher's `hung_from` in `client/src/ui/mod.rs` the keyboard fallback `x` (R8)
-- [ ] T032 [US1] Extend `client/tests/gates/title_bar_fits.rs` with a 60-character branch (place
+- [x] T032 [US1] Extend `client/tests/gates/title_bar_fits.rs` with a 60-character branch (place
   shortens before project, both keep `…`), add the `title-bar-*` states to
   `client/tests/layout_text_overflow.rs` if it lists states, add a `Breadcrumb` showcase entry in
   `client/src/showcase/sections/surfaces.rs`, update the `app_bar.*` component paths in
   `client/tests/support/covered_states.rs` for the breadcrumb's children, and regenerate `client/tests/fixtures/layout_snapshot.txt`
-- [ ] T033 [US1] Update the user guide for Part B: `docs/user-guide/project-selection.md`
+- [x] T033 [US1] Update the user guide for Part B: `docs/user-guide/project-selection.md`
   (§Switching projects from the top bar: the breadcrumb's project segment, where the panel opens,
   the place segment), `docs/user-guide/worktrees-and-sessions.md` (the "Open another project (app
   bar)" sentence), `docs/user-guide/overview.md` (the Overview button after the breadcrumb),

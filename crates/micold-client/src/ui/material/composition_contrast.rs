@@ -861,3 +861,51 @@ fn the_status_bars_text_and_dots_are_legible_on_its_fill() {
         violations.join("\n  ")
     );
 }
+
+/// Feature 1127 (T027, contract T3, FR-017): the breadcrumb's words on the title bar's surface, at
+/// rest and elevated, in both schemes — the project segment in `on_surface` (its button's content
+/// on the bar's host, through every state layer it draws), the separator and the place in
+/// `on_surface_variant`, each at 4.5:1.
+#[test]
+fn the_breadcrumbs_words_are_legible_on_the_title_bar() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        for elevated in [false, true] {
+            let surface = style::app_bar_surface(r, elevated)(&theme);
+            let Some(Background::Color(bar)) = surface.background else {
+                panic!("the title bar paints a solid surface");
+            };
+            let bar = style::to_rgb(bar);
+            let at = if elevated { "elevated" } else { "at rest" };
+            // The project segment, as `material::Breadcrumb` builds it.
+            let host = super::breadcrumb::host(r);
+            let segment = Variant::Text.content(r, Some(host));
+            if segment != r.on_surface {
+                violations.push(format!("{scheme:?}: the project segment is not on_surface"));
+            }
+            let style_fn = Variant::Text.style(r, Some(host));
+            for (state_name, status) in STATES {
+                let s = style_fn(&theme, status);
+                let ratio = contrast(segment, behind(bar, &s));
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} {at} / project segment {state_name}: {ratio:.2}:1"
+                    ));
+                }
+            }
+            let ratio = contrast(r.on_surface_variant, bar);
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} {at} / separator and place: {ratio:.2}:1"
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "the breadcrumb cannot be read on the title bar:\n  {}",
+        violations.join("\n  ")
+    );
+}

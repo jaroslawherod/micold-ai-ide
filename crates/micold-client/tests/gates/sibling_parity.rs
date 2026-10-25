@@ -44,6 +44,11 @@ const TOLERANCE: f32 = 0.5;
 /// `path_token` prepends the root's own `0` for display.
 const APP_BAR_LANE: &[usize] = &[0, 0, 0, 0, 0];
 
+/// The lane's leading child: the `project / place` breadcrumb (feature 1127, R4). A path rather than
+/// one control: its first child, the project segment, is the action, and the separator and the
+/// place are words.
+const BREADCRUMB: usize = 1;
+
 /// The bar's controls, in order: every child of the lane after the app mark.
 ///
 /// Structural rather than a list of paths: anything the bar is given past its mark is a control
@@ -74,10 +79,16 @@ fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
 /// a trailing badge nests deeper than the leading glyph (Overview's `UnreadMark` icon), so "deepest"
 /// would measure the badge.
 fn glyph_of<'a>(records: &'a [LayoutRecord], root: &LayoutRecord) -> Option<&'a LayoutRecord> {
+    leaves_of(records, root).first().copied()
+}
+
+/// The leaves under `root` — records with no descendant in its layer — from the left; among leaves
+/// at the same `x`, the deepest first.
+fn leaves_of<'a>(records: &'a [LayoutRecord], root: &LayoutRecord) -> Vec<&'a LayoutRecord> {
     let under = |r: &LayoutRecord| {
         r.layer == root.layer && r.path.len() > root.path.len() && r.path.starts_with(&root.path)
     };
-    records
+    let mut leaves: Vec<&LayoutRecord> = records
         .iter()
         .filter(|r| under(r))
         .filter(|leaf| {
@@ -85,7 +96,9 @@ fn glyph_of<'a>(records: &'a [LayoutRecord], root: &LayoutRecord) -> Option<&'a 
                 under(o) && o.path.len() > leaf.path.len() && o.path.starts_with(&leaf.path)
             })
         })
-        .min_by(|a, b| a.x.total_cmp(&b.x).then(b.path.len().cmp(&a.path.len())))
+        .collect();
+    leaves.sort_by(|a, b| a.x.total_cmp(&b.x).then(b.path.len().cmp(&a.path.len())));
+    leaves
 }
 
 /// Every anchored panel in a state: a layer's own child, smaller than the window on both axes.
@@ -134,7 +147,23 @@ fn every_app_bar_action_is_one_of_the_contracts_action_shapes() {
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         for action in app_bar_actions(records) {
-            let Some(glyph) = glyph_of(records, action) else {
+            // The breadcrumb's action is its project segment, a labelled button whose glyph is the
+            // drop-down arrow *after* its label (`Button::trailing`, at the leading slot's size):
+            // the second leaf from the left, the first being the label.
+            let (action, glyph) = if action.path[APP_BAR_LANE.len()] == BREADCRUMB {
+                let mut segment_path = action.path.clone();
+                segment_path.push(0);
+                let Some(segment) = records
+                    .iter()
+                    .find(|r| r.layer == action.layer && r.path == segment_path)
+                else {
+                    continue;
+                };
+                (segment, leaves_of(records, segment).get(1).copied())
+            } else {
+                (action, glyph_of(records, action))
+            };
+            let Some(glyph) = glyph else {
                 continue;
             };
             // Which shape this action is claiming to be: a square at §7.1's target is the icon
@@ -190,6 +219,10 @@ fn every_app_bar_action_is_one_of_the_contracts_action_shapes() {
 
 /// Every panel hanging from the app bar is the same panel (FR-029c, SC-008e).
 ///
+/// One width, and one of two edges: the trailing inset of the first, or — for the project
+/// switcher, which hangs from the project segment rather than the window's trailing edge (feature
+/// 1127, R8, FR-005) — the segment's leading edge, after the bar's padding, the app mark and the gap.
+///
 /// Read across states rather than within one: only one bar-anchored panel is open at a time, so a
 /// within-state check would never see the pair. Identified by their top edge — a panel that begins
 /// at the bar's bottom edge is anchored to the bar, which `panel_placement` already establishes is
@@ -199,6 +232,7 @@ fn the_panels_hanging_from_the_app_bar_are_the_same_panel() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
     let mut seen: Vec<(String, String, f32, f32)> = Vec::new();
+    let segment_edge = anatomy::app_bar::PADDING + anatomy::app_bar::MARK + anatomy::app_bar::GAP;
 
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         for panel in anchored_panels(records) {
@@ -213,16 +247,23 @@ fn the_panels_hanging_from_the_app_bar_are_the_same_panel() {
         }
     }
 
-    let Some((first_state, first_path, first_width, first_end)) = seen.first().cloned() else {
+    let Some((first_state, first_path, first_width, first_end)) = seen
+        .iter()
+        .find(|(_, _, width, end)| !same(*end - *width, segment_edge))
+        .cloned()
+    else {
         panic!(
-            "no panel anchored to the app bar's bottom edge in any covered state — this gate has \
-             nothing to compare, which means the states it reads have stopped covering the menus"
+            "no panel anchored to the app bar's bottom edge at its trailing end in any covered \
+             state — this gate has nothing to compare, which means the states it reads have \
+             stopped covering the menus"
         );
     };
     let differing: Vec<String> = seen
         .iter()
-        .skip(1)
-        .filter(|(_, _, width, end)| !same(*width, first_width) || !same(*end, first_end))
+        .filter(|(_, _, width, end)| {
+            !same(*width, first_width)
+                || !(same(*end, first_end) || same(*end - *width, segment_edge))
+        })
         .map(|(state, path, width, end)| {
             format!(
                 "{}: the panel at {} is {:.1} wide ending at x={:.1}, where {}'s at {} is {:.1} \

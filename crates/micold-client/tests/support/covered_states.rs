@@ -2915,6 +2915,20 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: TITLE_BAR_ANCHORS,
         },
+        // The project switcher opened from the keyboard, which reports no corner: the panel hangs
+        // from the project segment's computed edge, under the bar (T026, FR-005, contract P1), and
+        // `gates/panel_placement.rs` checks it starts below the bar.
+        CoveredState {
+            name: "title-bar-switcher-open",
+            build: || {
+                let mut state = with_active_session();
+                with_unread_elsewhere(&mut state);
+                state.project.switcher_open = true;
+                state.project.switcher_anchor = None;
+                StateUnderTest::new(state)
+            },
+            anchors: TITLE_BAR_ANCHORS,
+        },
         // The overflow menu open under its trigger, below the bar (FR-012).
         CoveredState {
             name: "title-bar-menu-open",
@@ -3334,14 +3348,35 @@ const STATUS_BAR_ANCHORS_WITH_BANNERS: &[Anchor] = &[
 pub const SIXTY_CHARACTER_PROJECT: &str =
     "a-project-with-a-name-sixty-characters-long-for-the-title-ba";
 
-/// The title bar at its fullest (feature 1127, T013 — contract B5, SC-003): a 60-character project
-/// name, three unread sessions in another project (the switcher's unread mark), and the Overview
-/// button carrying its badge.
+/// A 60-character branch with no conventional type, so the place segment shows it whole until the
+/// bar shortens it (feature 1127, T032).
+pub const SIXTY_CHARACTER_BRANCH: &str =
+    "a-branch-with-a-name-sixty-characters-long-for-the-title-bar";
+
+/// The title bar at its fullest (feature 1127, T013, T032 — contract B5, SC-003): a 60-character
+/// project name, three unread sessions in another project (the project segment's unread mark), a
+/// session shown on a 60-character branch, and the Overview button carrying its badge.
 pub fn title_bar_crowded() -> State {
     assert_eq!(SIXTY_CHARACTER_PROJECT.chars().count(), 60);
+    assert_eq!(SIXTY_CHARACTER_BRANCH.chars().count(), 60);
     let mut state = with_every_card_state();
     state.workspace.projects[0].display_name = SIXTY_CHARACTER_PROJECT.to_string();
     with_unread_elsewhere(&mut state);
     assert_eq!(state.other_projects_unread(), 3);
+    state
+        .worktree
+        .worktrees
+        .push(worktree("long-branch", SIXTY_CHARACTER_BRANCH));
+    let session = Session::start_new(
+        SessionLocation::Worktree("long-branch".to_string()),
+        AiCli::ClaudeCode,
+    );
+    state.session.active = Some(session.id);
+    state
+        .workspace
+        .sessions
+        .entry(PathBuf::from(PROJECT))
+        .or_default()
+        .push(session);
     state
 }

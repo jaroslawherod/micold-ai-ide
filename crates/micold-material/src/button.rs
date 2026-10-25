@@ -98,7 +98,9 @@ pub struct Button<'a, M> {
     width: Option<Length>,
     shape: Option<f32>,
     leading: Option<(Icon, Option<Rgb>)>,
+    trailing: Option<Icon>,
     trailing_mark: Option<(usize, String)>,
+    tooltip: Option<String>,
     mark: Option<super::UnreadMark<'a, M>>,
     selected: bool,
     host: Option<style::Host>,
@@ -135,7 +137,9 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             on_press: None,
             padding: None,
             leading: None,
+            trailing: None,
             trailing_mark: None,
+            tooltip: None,
             mark: None,
             selected: false,
             width: None,
@@ -227,6 +231,23 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
     /// [`leading_tinted`](Self::leading_tinted).
     pub fn leading(mut self, glyph: Icon) -> Self {
         self.leading = Some((glyph, None));
+        self
+    }
+
+    /// A trailing glyph after the label, at the leading slot's [`anatomy::button::LEADING_ICON`]
+    /// size and in the variant's content colour (feature 1127, R4): the drop-down glyph of the
+    /// title bar's project segment, saying the control opens a list. It sits between the label and
+    /// any mark, whichever builder step came first, and never shortens.
+    pub fn trailing(mut self, glyph: Icon) -> Self {
+        self.trailing = Some(glyph);
+        self
+    }
+
+    /// A hover tooltip over the whole button, `tooltip` its first line (feature 1127, contract
+    /// C2). With a [`trailing_mark`](Self::trailing_mark) the mark's own words follow on the next
+    /// line, so the button keeps one tooltip rather than two stacked over each other.
+    pub fn tooltip(mut self, tooltip: impl Into<String>) -> Self {
+        self.tooltip = Some(tooltip.into());
         self
     }
 
@@ -348,7 +369,13 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             ),
             None => (b.mark, None),
         };
-        let inner: Element<'a, M> = if b.leading.is_none() && mark.is_none() {
+        // The caller's tooltip first, then what the mark counts (contract C2).
+        let tooltip = match (b.tooltip, tooltip) {
+            (Some(own), Some(marked)) => Some(format!("{own}\n{marked}")),
+            (own, marked) => own.or(marked),
+        };
+        let inner: Element<'a, M> = if b.leading.is_none() && b.trailing.is_none() && mark.is_none()
+        {
             b.content
         } else {
             // A give-way lane rather than a `row!` (feature 1127): in a narrowed button the label
@@ -372,6 +399,10 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
                 floor: Floor::Squeezed,
             };
             inner = inner.push(b.content, label);
+            if let Some(glyph) = b.trailing {
+                let tint = b.variant.content(b.roles, b.host);
+                inner = inner.push(icon(glyph, anatomy::button::LEADING_ICON, tint), kept());
+            }
             if let Some(mark) = mark {
                 // One more `XS` before the mark than between the glyph and the label: the glyph
                 // belongs to the name, and the count is a second thing said after it.
@@ -575,6 +606,90 @@ mod tests {
             label.bounds.width > 40.0,
             "the label keeps the room left beside the glyph and the mark: {:?}",
             label.bounds
+        );
+    }
+
+    /// T023 (feature 1127, R4): a trailing glyph sits after the label at the leading slot's size,
+    /// and before the mark whichever builder step came first.
+    #[test]
+    fn a_trailing_glyph_follows_the_label_before_the_mark_in_either_order() {
+        let glyph_first = Button::text("micold-ai-ide", roles())
+            .trailing(Icon::SelectChevron)
+            .trailing_mark(3, "3 unread")
+            .on_press(Message::NoOp);
+        let mark_first = Button::text("micold-ai-ide", roles())
+            .trailing_mark(3, "3 unread")
+            .trailing(Icon::SelectChevron)
+            .on_press(Message::NoOp);
+        let (one, first) = parts(glyph_first.into());
+        let (two, second) = parts(mark_first.into());
+        assert_eq!(
+            (one, &first),
+            (two, &second),
+            "the builder order changes nothing"
+        );
+        let [label, glyph, mark] = first[..] else {
+            panic!("label, glyph and mark are three boxes, not {}", first.len());
+        };
+        assert!(
+            glyph.x >= label.x + label.width,
+            "the glyph follows the label"
+        );
+        assert!(
+            mark.x >= glyph.x + glyph.width,
+            "the mark follows the glyph"
+        );
+        assert_eq!(
+            glyph.width,
+            anatomy::button::LEADING_ICON,
+            "the glyph is the leading slot's size"
+        );
+    }
+
+    /// T023: without a mark the trailing glyph is the button's last part, `PADDING_TEXT` inside its
+    /// trailing edge, and the button grows by it.
+    #[test]
+    fn a_trailing_glyph_alone_ends_the_button() {
+        let (plain, _) = parts(
+            Button::text("Projects", roles())
+                .on_press(Message::NoOp)
+                .into(),
+        );
+        let (with, content) = parts(
+            Button::text("Projects", roles())
+                .trailing(Icon::SelectChevron)
+                .on_press(Message::NoOp)
+                .into(),
+        );
+        let [_label, glyph] = content[..] else {
+            panic!("label and glyph are two boxes, not {}", content.len());
+        };
+        let inset = (with.x + with.width) - (glyph.x + glyph.width);
+        assert!(
+            (inset - anatomy::button::PADDING_TEXT).abs() < 0.5,
+            "{inset}"
+        );
+        assert!(with.width > plain.width + anatomy::button::LEADING_ICON - 0.5);
+    }
+
+    /// Contract C2: a button's own tooltip and its mark's words are one tooltip, own line first.
+    #[test]
+    fn a_buttons_tooltip_and_its_marks_words_share_one_tooltip() {
+        use super::super::test_support::Mounted;
+        let button = Button::<String>::text("micold-ai-ide", roles())
+            .tooltip("Switch project")
+            .trailing_mark(3, "3 unread elsewhere")
+            .on_press("go".to_string());
+        let mut m = Mounted::new_in(button, ROOM);
+        let centre = m.node.bounds().center();
+        let floated = m.floated_text(centre).join("\n");
+        assert!(
+            floated.contains("Switch project") && floated.contains("3 unread elsewhere"),
+            "{floated:?}"
+        );
+        assert!(
+            floated.find("Switch project") < floated.find("3 unread"),
+            "{floated:?}"
         );
     }
 

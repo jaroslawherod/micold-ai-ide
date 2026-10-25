@@ -17,6 +17,7 @@ status markers.
 | Dark mode (moon) | The theme is following dark mode | Theme toggle in the overflow menu |
 | Auto mode | The theme is following your operating system | Theme toggle in the overflow menu |
 | Open folder | Open or choose a project | Empty state, "Open another project", the known-projects **Open** button, the project switcher, and "Open this folder" in the selector |
+| Drop-down arrow | Opens a list to choose from | The title bar's project segment (it opens the project switcher), select fields |
 | Pencil | Rename a known project | Known-projects list, project right-click menu |
 | Commit | This folder is a git repository | "git" badge in the known-projects list and the project selector |
 | Check circle | This is the active project | Known-projects list, project switcher |
