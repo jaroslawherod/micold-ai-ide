@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M4
-- **Next step**: M4 review A (high) and review B round 1 on the pushed snapshot
+- **Next step**: M4 review A round 2 (scoped, sonnet) on the fix snapshot; then rebase, PR
 
 ## Pull requests
 
@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 15 | M4 | How does a log keep its dropped-line count across a restart and a compaction? | A header line `#micold-setup-log first_line=N`; a log without it starts at 0. data-model §settings and store updated | unit | FR-021 "the view MUST say how many" |
 | 16 | M4 | How does the daemon reach the setup files without the state lock? | `ProjectStore::setup_files() -> Option<&JsonFileStore>` (default `None`), and `Catalog::setup_files()` hands out a `SetupFiles` clone of the store's `Arc`; `DaemonState.setup_store` writes outside both locks | unit | catalog.rs `OrderedStore` behind `Arc` |
 | 17 | M4 | Delete: forget the run when git's remove fails? | No: `stop_and_wait` runs before git, `forget` only on a successful (or partial) remove; a failed delete keeps the `Stopped` record | unit | FR-016 "kept … until the worktree is deleted" |
+| 18 | M4 | What does a start refused while the daemon stops, or while a delete holds the worktree, answer? | `Busy` (*try later*): no new `SetupStart` variant, so no protocol bump; both windows are short | unit | M4 review A-F1, A-F4 |
 
 ## Review rounds
 
@@ -78,8 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A | 1 (high) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (`SetupOutput` batches ≤ 1 MiB of line bytes); F2 fixed (`SetupRuns` own mutex, state lock only to send); F3 deferred to M4 T038 (delete stops and forgets the run); F4 fixed (`start_in` the created worktree's path); cycle log M3 cycle 3 |
 | M3 B | 1 (sonnet) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CLEAN — Verify re-run green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32); 2 MINOR fixed (B-F1 `send_ack` doc back on it, prose only; B-F2 = A-F4) |
 | M3 A | 2 (scoped, sonnet) | 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 | CLEAN, no findings — lock order setup→inner everywhere, no I/O under either mutex, chunking keeps watcher `next` consistent, 1 MiB bound holds |
-| M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | pending (orchestrator dispatches) |
-| M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | pending (orchestrator dispatches) |
+| M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `interrupt_all` sets `stopping`/`stop_requested`, `spawned` ends a shell of an ended run, `start` refuses while stopping; F2 `Persist::seq` + `SetupStore::in_order` drop stale writes (interrupt rewrites the log whole); F3 record and log written independently; F4 `DeleteHold` refuses starts during a delete, `forget` ends a live tree; cycle log M4 cycle 3 |
+| M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CLEAN (Verify all pass); MINORs: B-F1 fixed with A-F2; B-F2 compaction red logged (cycle log M4 cycle 3) |
 
 ## Declined review findings
 
