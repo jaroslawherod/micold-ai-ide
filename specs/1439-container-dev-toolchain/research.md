@@ -29,8 +29,8 @@ Each decision: what was chosen, why, and what was rejected. Probes ran in this c
   (173 MB unpacked), measured here. Counted in R6.
 - **Risk for the implementing unit**: this cloud container cannot reach `github.com` release
   downloads or `mise.jdx.dev` (proxy 403). The pin is therefore taken by plan D1a on a machine or
-  `workflow_dispatch` job that reaches GitHub: the release's `SHASUMS256.txt` with its signature
-  (`SHASUMS256.asc`) verified against mise's published key, only the two raw `linux-x64` /
+  `workflow_dispatch` job that reaches GitHub: the release's `SHASUMS256.txt` with its clearsigned
+  GPG copy (`SHASUMS256.asc`) and minisign signature verified against the keys mise's docs publish, only the two raw `linux-x64` /
   `linux-arm64` lines kept, each hash cross-checked against the binary in the npm
   `@jdxcode/mise-linux-{x64,arm64}` package (reachable here), provenance recorded in the ledger.
   The CI image build only shows the download matches the committed hash; it is not the source of

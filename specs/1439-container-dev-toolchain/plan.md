@@ -97,21 +97,31 @@ right. The implementing unit (or the maintainer, if no unit can reach GitHub) ta
 on a machine or a `workflow_dispatch` job that can reach `github.com` (this cloud container cannot,
 research R1):
 
-1. `gh release download v<ver> -R jdx/mise -p SHASUMS256.txt -p SHASUMS256.asc` into an empty
-   folder.
-2. Verify the signature: `gpg --verify SHASUMS256.asc` against mise's release key as published in
-   mise's install documentation (import by the fingerprint printed there, not from the release
-   itself). A bad or missing signature stops the step; no pin is written.
+1. `gh release download v<ver> -R jdx/mise -p SHASUMS256.txt -p SHASUMS256.asc -p
+   SHASUMS256.txt.minisig` into an empty folder.
+2. Verify both signatures with keys taken from mise's documentation, never from the release itself
+   (`docs/installing-mise.md` and `SECURITY.md` "Release gpg key" in jdx/mise; values below as read
+   there on 2026-10-25 at `b9e15069`, re-read at run time, and stop if they differ):
+   - GPG: `SHASUMS256.asc` is **clearsigned** (mise's `scripts/release.sh` runs `gpg --clearsign`),
+     not a detached signature. Import the key by fingerprint
+     `24853EC9F655CE80B48E6C3A8B81C9D17413A06D` (e.g. from `keys.openpgp.org`), check
+     `gpg --fingerprint` shows exactly that, then `gpg --decrypt SHASUMS256.asc > signed.txt`; GPG
+     must report a good signature by that fingerprint.
+   - minisign (the check mise's docs give): `minisign -Vm SHASUMS256.txt -P
+     RWTC3g8W3z4RZK3V3qv7fa1QY4JEWyBtqIHW+85QlJpZc5yG+uNYNBSZ` (`minisign.pub` in the repository).
+   - `signed.txt` and `SHASUMS256.txt` must be identical (`cmp`).
+   A bad or missing signature or a difference stops the step; no pin is written. Step 3 reads
+   `signed.txt`, the text GPG verified.
 3. Extract exactly the two raw-binary lines:
-   `grep -E '  (\./)?mise-v<ver>-linux-(x64|arm64)$' SHASUMS256.txt`, normalised to
+   `grep -E '  (\./)?mise-v<ver>-linux-(x64|arm64)$' signed.txt`, normalised to
    `<hash>  mise-v<ver>-linux-<arch>` (data model: exactly two lines). Archives (`.tar.gz`,
    `.tar.zst`), `-musl` builds and other platforms are left out.
 4. Cross-check each hash against a second origin: `npm pack @jdxcode/mise-linux-x64@<ver>` and
    `@jdxcode/mise-linux-arm64@<ver>` (reachable from this container, R1), unpack each into an empty
    folder and `sha256sum` the `mise` binary inside. Both must equal the lines from step 3; a
    mismatch stops the step.
-5. Record in the ledger's *Decisions*: version, both hashes, the signing key fingerprint used, the
-   npm cross-check result, who ran it and where.
+5. Record in the ledger's *Decisions*: version, both hashes, the GPG fingerprint and minisign key
+   used, the npm cross-check result, who ran it and where.
 
 The README "Update mise" section (D6) repeats these five steps for every bump.
 
@@ -162,8 +172,8 @@ does not exist on a test host: the guard keeps that test working, and new cases 
   it does not carry, and a complete own-image `Containerfile` `FROM` the basic image that adds
   `libpq-dev` (quickstart B3).
 - `packaging/basic/README.md`: the new contents, the pinned mise version and where its checksums
-  live, and "Update mise" steps: D1a's five steps (download `SHASUMS256.txt` and `.asc`, verify the
-  signature, keep only the two raw `linux-x64`/`linux-arm64` lines, cross-check against the npm
+  live, and "Update mise" steps: D1a's five steps (download `SHASUMS256.txt`, `.asc` and `.txt.minisig`,
+  verify the GPG and minisign signatures with the documented keys, keep only the two raw `linux-x64`/`linux-arm64` lines, cross-check against the npm
   platform packages, record provenance), then write `mise.sha256`, update the content hash,
   publish, pin; plus the measured size (B5).
 - `docs/user-guide/worktrees-and-sessions.md`: the setup section 1289 adds gets one sentence on S2:
