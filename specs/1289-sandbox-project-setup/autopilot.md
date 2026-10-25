@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 review A round 2 (scoped, sonnet) on snapshot 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 (fix diff from 76878fd7…:92410eac…); full gate green on 9ae68f10; then open the PR
+- **Next step**: M3 PR open — wait on CI, merge (rebase; main conflicts in crates/micold-core/src/session.rs)
 
 ## Pull requests
 
@@ -73,6 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B | 1 (sonnet) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | CLEAN — Verify re-run all green; 2 MINOR, no change (client `into_settings`/`set_changed`/DEFERRED edits are in scope; ledger/tasks ticks are the own spec dir) |
 | M3 A | 1 (high) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (`SetupOutput` batches ≤ 1 MiB of line bytes); F2 fixed (`SetupRuns` own mutex, state lock only to send); F3 deferred to M4 T038 (delete stops and forgets the run); F4 fixed (`start_in` the created worktree's path); cycle log M3 cycle 3 |
 | M3 B | 1 (sonnet) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CLEAN — Verify re-run green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32); 2 MINOR fixed (B-F1 `send_ack` doc back on it, prose only; B-F2 = A-F4) |
+| M3 A | 2 (scoped, sonnet) | 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 | CLEAN, no findings — lock order setup→inner everywhere, no I/O under either mutex, chunking keeps watcher `next` consistent, 1 MiB bound holds |
 
 ## Declined review findings
 
