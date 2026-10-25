@@ -493,7 +493,7 @@ fn nothing_points_at_the_removed_session_service_section() {
     // The page title is "Session service" with a capital S; the lower-case phrase names the daemon
     // and is everywhere. Every remaining use of the title is listed here, with why.
     const TITLE: &str = "Session service";
-    const ALLOWED: [(&str, &str); 11] = [
+    const ALLOWED: [(&str, &str); 14] = [
         // The overflow menu's live diagnostics item, not the page.
         ("docs/daemon.md", "Session service diagnostics"),
         (
@@ -501,6 +501,13 @@ fn nothing_points_at_the_removed_session_service_section() {
             "Session service diagnostics",
         ),
         ("src/ui/toolbar.rs", "Session service diagnostics"),
+        // The same item where the title bar, the About steps and the icon table name it.
+        (
+            "user-guide/appearance-theming.md",
+            "Session service diagnostics",
+        ),
+        ("user-guide/help-about.md", "Session service diagnostics"),
+        ("user-guide/icons.md", "Session service diagnostics"),
         ("micold-material/src/menu.rs", "Session service"),
         // Comments recording how wide the old label was when it wrapped.
         ("micold-material/src/section_list.rs", "Session service"),
