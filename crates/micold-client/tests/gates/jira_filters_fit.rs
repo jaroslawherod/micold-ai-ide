@@ -168,10 +168,11 @@ fn the_filters_button_clear_filters_and_the_active_line_fit_the_dialog() {
 #[test]
 fn the_filters_panel_stacks_every_field_under_the_button() {
     let drawn = painted(&panel());
-    let button = find(&drawn, "Filters · 3");
+    let button = find(&drawn, "Filters · 4");
     assert_inside(button);
     assert_whole(button);
-    let fields: Vec<&lay::Overflow> = ["You (Jane Doe)", "Payments", "2.4"]
+    // All four, in the order FR-001 names them (M4).
+    let fields: Vec<&lay::Overflow> = ["You (Jane Doe)", "backend", "Payments", "2.4"]
         .into_iter()
         .map(|value| {
             drawn
@@ -197,6 +198,33 @@ fn the_filters_panel_stacks_every_field_under_the_button() {
             "{:?} runs past the window",
             field.content
         );
+    }
+}
+
+/// The label list opens under the Label field, its labels whole (M4, T041).
+#[test]
+fn the_label_list_hangs_under_its_field() {
+    let mut under = panel();
+    filter(&mut under, FilterMsg::Focused(FilterKind::Label));
+    let drawn = painted(&under);
+    let any = find(&drawn, "Any label");
+    let field = drawn
+        .iter()
+        .filter(|d| d.content == "backend")
+        .min_by(|a, b| a.origin.y.total_cmp(&b.origin.y))
+        .expect("the field's value is painted");
+    assert!(
+        any.origin.y > field.origin.y && (any.origin.x - field.origin.x).abs() <= 48.0,
+        "the list's first row ({:.1}, {:.1}) is not under its field ({:.1}, {:.1})",
+        any.origin.x,
+        any.origin.y,
+        field.origin.x,
+        field.origin.y
+    );
+    for label in ["Any label", "payments", "ui"] {
+        let row = find(&drawn, label);
+        assert_inside(row);
+        assert_whole(row);
     }
 }
 

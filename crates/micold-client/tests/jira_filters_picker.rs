@@ -7,7 +7,9 @@
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
-use micold_client::features::worktree_form::jira_filters::{shows_filters, ChoiceLoad, FilterMsg};
+use micold_client::features::worktree_form::jira_filters::{
+    shows_filters, ChoiceLoad, FilterMsg, LabelSource, OFFERED,
+};
 use micold_client::features::worktree_form::jira_query::{Msg as QueryMsg, QueryRun};
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, JiraAvailability, Msg, SearchState, WorktreeForm,
@@ -1549,5 +1551,182 @@ fn no_search_runs_before_the_own_user_loads_and_no_match_without_you_says_only_t
         labels_of(&state, REPORTER),
         ["Any reporter", "No reporter matches"],
         "nobody is offered, so the row does not say you are"
+    );
+}
+
+// Feature 1185 M4: the label filter (US3; FR-001, FR-005; research R5).
+
+const LABEL: FilterKind = FilterKind::Label;
+
+fn labelled_issues() -> Vec<Issue> {
+    vec![
+        issue("ABC-5", 5, "Login slow", &["backend", "Perf"]),
+        issue("ABC-6", 6, "Session drops", &["backend", "login-flow"]),
+        issue("ABC-7", 7, "Crash on start", &["backend"]),
+        issue("ABC-8", 8, "Button colour", &["ui", "alpha"]),
+    ]
+}
+
+/// The Jira source showing `issues` as its unfiltered listing.
+fn loaded_with(issues: Vec<Issue>, complete: bool) -> State {
+    let mut state = jira_form();
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let seq = awaited(&state);
+    answer(&mut state, seq, Ok(listing(issues, complete)));
+    state
+}
+
+#[test]
+fn the_panel_offers_all_four_filters_in_order() {
+    assert_eq!(
+        OFFERED,
+        [FilterKind::Reporter, LABEL, COMPONENT, FIX_VERSION]
+    );
+}
+
+#[test]
+fn the_label_filter_offers_the_loaded_labels_alphabetically_without_a_request() {
+    let mut state = loaded_with(labelled_issues(), true);
+    let asked = state.worktree_form.filter_request_seq;
+    filter(&mut state, FilterMsg::PanelToggled);
+    filter(&mut state, FilterMsg::Focused(LABEL));
+    assert_eq!(
+        state.worktree_form.filter_request_seq, asked,
+        "the labels ask Jira nothing"
+    );
+    assert_eq!(state.worktree_form.awaited_choices(), None);
+    assert!(form(&state).jira_filters.field(LABEL).open);
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"]
+    );
+}
+
+#[test]
+fn the_label_filter_says_why_it_has_no_choices() {
+    let mut state = jira_form();
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "Labels load with the issues"]
+    );
+    let seq = awaited(&state);
+    answer(&mut state, seq, Err(IssueLoadError::TimedOut));
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "Labels need the issue list: retry it above"]
+    );
+    send(&mut state, Msg::IssueRetry);
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "Labels load with the issues"],
+        "the list's Retry brings the labels back to loading"
+    );
+    let seq = awaited(&state);
+    answer(&mut state, seq, Ok(listing(all_issues(), true)));
+    assert_eq!(labels_of(&state, LABEL), ["Any label", "payments"]);
+
+    let state = loaded_with(vec![issue("ABC-2", 2, "Login slow", &[])], true);
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "No labels on the loaded issues"]
+    );
+}
+
+#[test]
+fn a_capped_listing_adds_the_most_recent_issues_notice() {
+    let state = loaded_with(labelled_issues(), false);
+    let rows = form(&state).jira_filters.rows(LABEL);
+    let last = rows.last().expect("rows");
+    assert_eq!(
+        last.label(LABEL, Some(source())),
+        "Only labels of the 1,000 most recent issues"
+    );
+    assert!(!last.enabled(), "the notice cannot be picked");
+}
+
+#[test]
+fn choosing_a_label_and_typing_loads_with_it_and_matches_key_summary_or_label() {
+    let mut state = loaded_with(labelled_issues(), true);
+    filter(&mut state, FilterMsg::Focused(LABEL));
+    pick_in(&mut state, LABEL, "backend");
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"labels = "backend""#]
+    );
+    assert_eq!(
+        form(&state).jira_filters.active_line().as_deref(),
+        Some("Filtered by label backend")
+    );
+    let seq = awaited(&state);
+    answer(
+        &mut state,
+        seq,
+        Ok(listing(labelled_issues()[..3].to_vec(), true)),
+    );
+    send(&mut state, Msg::IssueQueryChanged("login".into()));
+    assert_eq!(shown_keys(&state), ["ABC-5", "ABC-6"]);
+}
+
+#[test]
+fn a_filtered_load_never_replaces_the_label_choices() {
+    let mut state = loaded_with(labelled_issues(), true);
+    filter(&mut state, FilterMsg::Focused(LABEL));
+    pick_in(&mut state, LABEL, "ui");
+    let seq = awaited(&state);
+    answer(
+        &mut state,
+        seq,
+        Ok(listing(
+            vec![issue("ABC-8", 8, "Button colour", &["ui"])],
+            true,
+        )),
+    );
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"],
+        "choosing a filter does not shrink the labels"
+    );
+    filter(&mut state, FilterMsg::ClearedAll);
+    let seq = awaited(&state);
+    answer(&mut state, seq, Ok(listing(all_issues(), true)));
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"],
+        "the first unfiltered listing's labels are kept"
+    );
+}
+
+#[test]
+fn a_filter_chosen_before_the_unfiltered_load_returns_still_gets_its_labels() {
+    let mut state = jira_form();
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let unfiltered = awaited(&state);
+    focus_and_answer(&mut state, Ok(names()));
+    pick(&mut state, "Payments");
+    let filtered_seq = awaited(&state);
+    assert_eq!(
+        form(&state).jira_filters.labels,
+        LabelSource::Waiting { seq: unfiltered }
+    );
+    answer(&mut state, unfiltered, Ok(listing(labelled_issues(), true)));
+    assert_eq!(
+        awaited(&state),
+        filtered_seq,
+        "the superseded listing is not shown"
+    );
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"]
+    );
+    answer(
+        &mut state,
+        filtered_seq,
+        Ok(listing(payments_issues(), true)),
+    );
+    assert_eq!(shown_keys(&state), ["ABC-1", "ABC-3"]);
+    assert_eq!(
+        labels_of(&state, LABEL),
+        ["Any label", "alpha", "backend", "login-flow", "Perf", "ui"]
     );
 }
