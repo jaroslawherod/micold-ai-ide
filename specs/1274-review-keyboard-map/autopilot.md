@@ -10,23 +10,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M1 PR #1404 open, waiting on CI and merge. M2/M3 wait for #1269, #1270, #1271, #1273; M4 for #1127. D4 still provisional.
+- **Next step**: M2 (single-key switch, core) PR open, waiting on CI and merge. M3/M4 wait for #1269, #1270, #1271, #1273; M5 for #1127.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1366 | design (spec, plan, tasks) | merged | 76c1335e705aec8ebf02d278273bcc578d91112f |
-| #1404 | M1 core key map | open | — |
+| #1404 | M1 core key map | merged | 8f38e9ca85309f92e24376c870038cd481eff913 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | #1404 | PR open, CI pending |
-| M2 | T012–T021, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, docs — **blocked by #1269, #1270, #1271, #1273** | — | blocked |
-| M3 | T033–T047 | full | ]/[, c, send chord, shortcut sheet, full docs — after M2 (same blockers) | — | blocked |
-| M4 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M3 | — | blocked |
+| M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | — | in progress |
+| M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs — **blocked by #1269, #1270, #1271, #1273** | — | blocked |
+| M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | — | blocked |
+| M5 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M4 | — | blocked |
 
 ## Decisions
 
@@ -35,9 +36,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | `g` single key or `g f` prefix (redesign table) for jump-to? | `g` = next unreviewed (issue wording); jump-to keeps Ctrl/Cmd+Shift+P | agent-resolved | issue #1274 body; spec.md#assumptions |
 | D2 | spec | Do next/prev wrap? | j/k, ]/[, g wrap (803 step rule); n/p continue into adjacent file and wrap | agent-resolved | crates/micold-core/src/navigation.rs; spec.md FR-003, FR-004 |
 | D3 | clarify 1 | Send chord with unsaved composer text: save+send, or saved drafts only? | Saved drafts only; composer stays open with its text and the keyboard | agent-resolved | spec.md#FR-010 ("exactly" Send review); crates/micold-client/src/features/changes.rs Msg::SendPressed; review-redesign.md proposal 8 |
-| D4 | clarify 1 | FR-001: single-letter keys on by default or behind a Settings switch (redesign open question 5)? | On by default, no setting | provisional — recommended option, awaiting user | review-redesign.md open question 5; spec.md#terms, FR-002, SC-002; specs/803-keyboard-navigation/spec.md#assumptions. If the user picks a switch (on or off by default), FR-001 gains a Settings requirement and clarify re-runs |
-| D5 | tasks | Plan's M2 (US1–US5 client, ~29 tasks) as one milestone? | Split by story into M2 (US1, US2) and M3 (US3–US5); jump-to becomes M4. Plan, quickstart, contracts, research updated to match | agent-resolved | milestones.md rules 2–3; tasks.md#milestones |
+| D4 | clarify 1 | FR-001: single-letter keys on by default or behind a Settings switch (redesign open question 5)? | On by default, with a Settings switch to turn them off ("On, with a switch to turn off") | decided by user (2026-10-25, decision card) | spec.md FR-001, FR-022 and clarify rounds 2–3 (Session 2026-10-25, all agent-resolved: switch scope, Settings → Appearance and client-held storage like `reduce_motion`, off behaviour, sheet/tooltips, other windows, jump-to unchanged) |
+| D5 | tasks | Plan's M2 (US1–US5 client, ~29 tasks) as one milestone? | Split by story into M2 (US1, US2) and M3 (US3–US5); jump-to becomes M4 (renumbered M3–M5 by D7). Plan, quickstart, contracts, research updated to match | agent-resolved | milestones.md rules 2–3; tasks.md#milestones |
 | D6 | tasks | M1 is core-only (22 tasks, no user-visible deliverable)? | Kept whole: every client task needs the blockers (rule 6: core and tests ship, UI waits); splitting core gains nothing observable | agent-resolved | plan.md#milestones; research R1 |
+| D7 | tasks 2 | Where does the switch's work go? | New **M2** (core: setting field + `resolve`/sheet/tooltip filters, T059–T062, no blocker); the Settings row and its save/load (T063–T065) join the keys' client milestone, renumbered **M3** (old M2), so the switch never ships without keys (rule 6); old M3/M4 → M4/M5. M3 now 17 tasks: kept whole, the switch row has no deliverable without `j`…`g` | agent-resolved | milestones.md rules 1–6; plan.md D10; research R4 |
+| D8 | plan 2 | Settings page and storage for the switch | Appearance page, `Checkbox` + `field_note` after **Reduce motion**; `Settings.review_single_keys`, client-held like `reduce_motion` (daemon write keeps it; no wire change) | agent-resolved | crates/micold-core/src/settings.rs `reduce_motion`; crates/micold-daemon/src/catalog.rs settings write (BUG-025); research R4 |
 
 ## Review rounds
 
@@ -63,7 +66,7 @@ None.
 
 ## Open escalation
 
-None. (D4 is provisional; the coordinator's decision card to the user is still open.)
+None.
 
 ## Follow-ups not done
 

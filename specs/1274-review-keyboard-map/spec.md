@@ -28,9 +28,39 @@ This is slice R5 of `docs/development/review-redesign.md` (Proposal item 6, *Nex
   and leaves the composer untouched; spec.md#FR-009 and docs/development/review-redesign.md#proposal
   item 8: composer text is kept)_
 - Q: Are the single-letter review keys on by default, or behind a Settings switch (redesign open
-  question 5)? → A: On by default, no setting (FR-001). _(provisional — recommended option, awaiting
-  user; evidence: spec.md#terms and FR-002/SC-002 keep the keys away from text fields and terminals;
-  specs/803-keyboard-navigation/spec.md#assumptions: no key-binding settings today)_
+  question 5)? → A: On by default, with a Settings switch that turns them off (FR-001, FR-022).
+  _(decided by user, 2026-10-25: "On, with a switch to turn off")_
+
+### Session 2026-10-25
+
+- Q: Does the switch also turn off the send chord and `?`? → A: It turns off the ten single keys of
+  FR-001, `?` included; the send chord, the composer's save chord and the overflow menu's
+  **Keyboard shortcuts** item keep working, so the sheet stays reachable (FR-022). _(agent-resolved:
+  the user's answer names the single-letter keys; spec.md#FR-012 opens the sheet from the overflow
+  item too; spec.md#FR-015 sets the chord apart as a modified Enter)_
+- Q: Where does the switch live and how is it kept? → A: Settings → Appearance, a checkbox
+  **Single-key shortcuts in the Review tab** saved in the app's own settings file beside **Reduce
+  motion**; like the other settings it applies on **Save**, is discarded by **Cancel** and is kept
+  across restarts; a settings file written before the switch existed reads as on (FR-022).
+  _(agent-resolved: crates/micold-core/src/settings.rs `reduce_motion` (client-held, missing key →
+  serde default); docs/user-guide/settings.md#reduce-motion; plan.md#technical-context "no daemon or
+  wire change")_
+- Q: With the switch off, what does a single key press in the Review tab do? → A: Nothing, as before
+  this feature: it is not a review key and reaches whatever has the keyboard as it does today
+  (FR-002, FR-022). _(agent-resolved: spec.md#FR-002)_
+- Q: With the switch off, what do the shortcut sheet and the tooltips of FR-013 show? → A: Only keys
+  that act: the sheet lists the send and save-comment chords and the line "Single-key shortcuts are
+  off (Settings → Appearance)"; the tooltips of FR-013 name no single key (the **Send review (n)**
+  tooltip still names the chord) (FR-022). _(agent-resolved: spec.md#FR-012 and FR-013 list keys so
+  the user can use them; a listed key that does nothing contradicts SC-004's "lists the keys")_
+- Q: Does a window that is already open pick up a change saved in another window? → A: As for the
+  other Appearance settings: the window that saves applies it at once; a window opened later reads
+  the saved value (FR-022). _(agent-resolved: crates/micold-client/src/shell/persist.rs
+  `save_and_prepare_check` updates only the saving window's copy of `reduce_motion`)_
+- Q: Does the switch change the jump-to entries of FR-016 or the hunk controls themselves? → A: No;
+  it covers keys only: the jump-to entries, the hunk controls, **Mark reviewed** and **Send review
+  (n)** are unchanged (round 3; records the existing scope, so the rounds end). _(agent-resolved:
+  spec.md#FR-022 names the single keys, the sheet and the tooltips only)_
 
 ## Dependencies
 
@@ -65,6 +95,8 @@ stand-in for another issue's work.
 - **Comment order**: the comments of the shown source (working tree or a pull request), ordered by
   their file in file order, then by their line in the diff as shown.
 - **Shortcut sheet**: the panel that lists the review keys (FR-012).
+- **Single-key switch**: the Settings → Appearance checkbox **Single-key shortcuts in the Review
+  tab** (FR-022); on by default.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -97,6 +129,9 @@ follow each press.
    **Then** only those two files are visited.
 6. **Given** the comment composer has the keyboard, **When** the user types `j`, **Then** the
    letter goes into the comment and the selection does not move.
+7. **Given** the single-key switch is off in Settings → Appearance, **When** the review has the
+   keyboard and the user presses `j` or `n`, **Then** the selection and the current hunk do not
+   change.
 
 ---
 
@@ -208,6 +243,9 @@ does, in the current platform's form; Escape closes it.
    a **Keyboard shortcuts** item opens the same sheet.
 5. **Given** the pointer rests on the next/previous hunk control or **Mark reviewed**, **When** its
    tooltip shows, **Then** it names the key (`n` / `p`, `v`).
+6. **Given** the single-key switch is off, **When** the user opens the sheet from the overflow
+   menu, **Then** it lists only the send and save-comment chords and says "Single-key shortcuts are
+   off (Settings → Appearance)"; `?` does nothing.
 
 ---
 
@@ -276,6 +314,9 @@ selected. Then type a word from a comment and choose it; its card is shown.
 - **Cross-platform (Principle VI)**: the send chord is Ctrl+Shift+Enter on Linux and Windows and
   Cmd+Shift+Enter on macOS; the sheet, tooltips and docs show the platform's form. Single keys are
   the same on all three platforms.
+- **Single keys turned off**: with the single-key switch off, the Review tab answers only the send
+  chord; `?` is off too, and the overflow menu still opens the sheet, which then lists the chords
+  and says the single keys are off (FR-022).
 - **Terminal programs**: the review keys are heard only while the review has the keyboard, which a
   focused terminal never is, so no key reaches or is taken from a terminal.
 
@@ -286,7 +327,7 @@ selected. Then type a word from a comment and choose it; its card is shown.
 - **FR-001**: While the review has the keyboard, the Review tab MUST act on these keys: `j` next
   file, `k` previous file, `n` next hunk, `p` previous hunk, `]` next comment, `[` previous comment,
   `v` toggle the selected file's reviewed mark, `g` next unreviewed file, `c` comment, `?` open the
-  shortcut sheet. The keys are on by default, with no Settings switch to turn them off.
+  shortcut sheet. The keys are on by default; the single-key switch turns them off (FR-022).
 - **FR-002**: When the review does not have the keyboard, none of the single keys of FR-001 MUST
   change the Review tab (the send chord's one exception, the composer, is FR-010's); the key MUST reach the field, dialog or surface that has the keyboard as it does today.
 - **FR-003**: `j` and `k` MUST select the next or previous file in file order, wrapping at both ends,
@@ -354,6 +395,15 @@ selected. Then type a word from a comment and choose it; its card is shown.
   `docs/user-guide/worktrees-and-sessions.md#interacting-with-the-terminal`) (Principle VII).
 - **FR-021**: The layout snapshot MUST cover the Review tab with a current hunk marked and with the
   shortcut sheet open, and a visual pass at 1280×800 in the light and dark themes MUST show both.
+- **FR-022**: Settings → Appearance MUST offer the single-key switch, a checkbox **Single-key
+  shortcuts in the Review tab**, on by default; a settings file without it MUST read as on. It MUST
+  be saved in the app's settings file, apply in the saving window when **Save** is pressed, be
+  discarded by **Cancel**, and be read by every window opened later. While it is off: none of the
+  single keys of FR-001 (`?` included) MUST act and each MUST behave as FR-002 says; the send chord
+  (FR-010), the composer's save chord and the overflow menu's **Keyboard shortcuts** item MUST keep
+  working; the shortcut sheet MUST list only the send and save-comment chords and the line
+  "Single-key shortcuts are off (Settings → Appearance)"; and the tooltips of FR-013 MUST name no
+  single key. The user guide MUST describe the switch in `docs/user-guide/settings.md#appearance`.
 
 ### Key Entities
 
@@ -374,8 +424,8 @@ selected. Then type a word from a comment and choose it; its card is shown.
   review action happens and the character reaches the field.
 - **SC-003**: Each review key shows its result (selection, scroll, mark, composer, sheet) within
   100 ms in the app's test harness on a 200-file review.
-- **SC-004**: The shortcut sheet lists 100% of the keys of FR-001 and FR-010, and the user guide
-  lists the same set.
+- **SC-004**: With the single-key switch on, the shortcut sheet lists 100% of the keys of FR-001
+  and FR-010, and the user guide lists the same set; with it off, the sheet lists 0 single keys.
 - **SC-005**: From the jump-to field, any file of a 200-file review is chosen with at most 4 typed
   characters of a distinguishing part of its name, at most 2 Up/Down presses and Enter.
 - **SC-006**: Sending with the chord and with **Send review (n)** produce the same message and
@@ -385,7 +435,8 @@ selected. Then type a word from a comment and choose it; its card is shown.
 
 - The key set and the meaning of each key are those of the issue and of
   `docs/development/review-redesign.md` item 6; they are fixed, as other app keys are
-  (user-configurable bindings stay out of scope, as in #803 and #968).
+  (user-configurable bindings stay out of scope, as in #803 and #968). The single-key switch turns
+  the single keys off as a set; it does not rebind them.
 - `g` is a single key for next unreviewed (the issue's wording). The redesign table's `g f` for the
   jump-to field is not adopted: the jump-to field keeps its own chord (Ctrl/Cmd+Shift+P) and a `g`
   prefix would delay every `g` press.
@@ -403,7 +454,8 @@ selected. Then type a word from a comment and choose it; its card is shown.
 
 ## Out of Scope
 
-- User-configurable key bindings, and a vim-style `g`-prefix chord set.
+- User-configurable key bindings (beyond the single-key switch's on/off), and a vim-style
+  `g`-prefix chord set.
 - A key for every control of the Review tab (source dropdown, sort, drawer tabs, whole file,
   unified/side-by-side, Discard, Clear sent): only the keys listed in FR-001 and FR-010.
 - An app-wide shortcut sheet for keys outside the Review tab.

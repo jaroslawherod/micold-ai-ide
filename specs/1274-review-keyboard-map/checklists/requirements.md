@@ -32,8 +32,9 @@
 ## Notes
 
 - Both `[NEEDS CLARIFICATION]` markers were resolved in clarify round 1 (spec.md#clarifications):
-  FR-001 on by default with no setting (provisional, awaiting the user), and US4 scenario 4 sending
-  saved drafts only.
+  FR-001 on by default, and US4 scenario 4 sending saved drafts only. On 2026-10-25 the user chose
+  "on, with a switch to turn off" for FR-001; clarify rounds 2–3 added FR-022 (the single-key
+  switch), US1 s7, US5 s6, an edge case and the SC-004 off case, all testable.
 - The only crate name (`micold-core`) is in Assumptions, quoting the issue's acceptance line
   (Principle I), not in a requirement.
 - Behaviour that depends on unmerged work (#1269, #1270, #1271, #1273, #1127) is stated under

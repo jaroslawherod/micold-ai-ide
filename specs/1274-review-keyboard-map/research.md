@@ -11,13 +11,13 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
   lists, hunk counts, a reviewed predicate, comment facts). None of it names a type from #1269,
   #1270, #1271, #1273 or #1127. That is milestone **M1** and can merge before any blocker. The
   client wiring (listener, Review tab state, sheet, tooltips, jump-to entries), docs, layout
-  snapshot and visual pass are **M2** and **M3** (after #1269, #1270, #1271, #1273) and **M4**
-  (after #1127); the tasks unit split the client work by story into M2 and M3.
+  snapshot and visual pass are **M3** and **M4** (after #1269, #1270, #1271, #1273) and **M5**
+  (after #1127); the tasks unit split the client work by story into M3 and M4.
 - **Rationale**: the issue's acceptance asks for the pure logic in core with unit tests (Principle
   I); the spec's Dependencies section forbids stand-ins for another issue's work. Inputs as plain
   slices and closures are what each blocker will hand over whatever its own types turn out to be.
 - **Rejected**: (a) one milestone after all blockers: idles the feature for weeks and lets the core
-  rules drift with each blocker's types. (b) Building M2 against today's Changes view and porting
+  rules drift with each blocker's types. (b) Building M3 against today's Changes view and porting
   it to the Review tab later: a stand-in the spec rules out, done twice.
 
 ## R2 — Key recognition: core matches the table; the client only says which modifier is primary
@@ -69,15 +69,29 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
   the client (not reachable by #1276's core-side test, and not in the core-only milestone);
   deriving labels in the view (untestable glue with a rule in it).
 
-## R4 — D4 provisional: keys on by default, no setting; how a setting would land
+## R4 — D4 decided by the user: keys on by default, a Settings switch turns them off
 
-- **Decision**: no setting now (ledger D4, spec FR-001). The extension point is named so that the
-  user's other answer costs one small change: `resolve` is the one function every single key
-  passes, so a setting adds one argument (`single_keys: bool` from `Settings`) and one early
-  return there, and the sheet filters `REVIEW_KEYS` on the same bool. No dormant code is written for
-  it now (Principle I: no untested branch, no unused option).
-- **Rejected**: adding the switch now, off or on (contradicts FR-001 as clarified); a global
-  key-binding settings model (out of scope, spec Assumptions).
+- **Decision** (ledger D4, spec FR-001, FR-022): one `bool` setting, `review_single_keys`, default
+  `true`, on `micold_core::settings::Settings` and its on-disk `StoredSettings` with a
+  `default_review_single_keys()` serde default, so a file written before the key existed reads as
+  on. It is **client-held**, like `reduce_motion`: read at startup into the window's settings state,
+  written by `persist_settings` / the Save path, kept by the daemon's settings write because that
+  write re-reads the file and copies only its own fields (`crates/micold-daemon/src/catalog.rs`,
+  BUG-025). No `DaemonSettings`, `SettingsSet` or protocol version change. The core API takes the
+  bool as a plain argument, so core never reads settings: `resolve(press, holder, single_keys)`
+  returns `None` for any row with `mods.primary == false` when it is false (the send chord is
+  untouched); `sheet_rows(single_keys)` yields `REVIEW_KEYS` rows in table order, only the
+  `primary` rows when off; `key_hint(action, single_keys)` gives the row a tooltip names, `None` for
+  a single key when off; `SINGLE_KEYS_OFF_NOTE` is the sheet's line. `REVIEW_KEYS` itself is
+  unchanged (still 12 rows, public and stable for #1276).
+- **Where in Settings**: the Appearance page, a `Checkbox` + `field_note` row after **Reduce
+  motion** (`crates/micold-client/src/ui/settings/appearance.rs`), because it is the page of the
+  window's own client-held preferences; the other pages hold service-held settings (Environment,
+  Terminal) or integrations (GitHub, Jira, Daemons).
+- **Rejected**: a daemon-held setting (needs a wire change and a protocol bump for a per-user UI
+  preference with no service reader); a new Settings page "Review" (one checkbox does not earn a
+  page); filtering inside `REVIEW_KEYS` or making it a function (breaks #1276's stable table); a
+  global key-binding settings model (out of scope, spec Assumptions).
 
 ## R5 — Navigation rules: reuse `navigation::step`; hunks cross files with a pending edge
 
@@ -177,7 +191,7 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
   pending edge resolves once `Load::Ready` arrives. The current hunk's header row is drawn with a
   theme-role accent bar (FR-005); colours come from `ui/material` roles, both themes.
 - **Hunk controls** (FR-013): the redesign gives the diff header previous / next hunk buttons. If
-  #1270 / #1273 do not deliver them, M2 adds two icon buttons there that send the same action as
+  #1270 / #1273 do not deliver them, M3 adds two icon buttons there that send the same action as
   `n` / `p` (one message, one reducer path).
 - **Rejected**: scrolling by line number (hunk headers have no line number; sections differ per
   layout).
@@ -187,7 +201,7 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
 - Core unit (M1): every rule of R2–R6 and R9 (`mise run test-core`), including a 200-file,
   500-comment timing test with a generous 50 ms bound so loaded CI does not flake (SC-003's 100 ms
   is the view's budget).
-- Client render-free (M2–M4): `tests/keymap.rs` (send chord decode, near misses, conflicts with
+- Client render-free (M3–M5): `tests/keymap.rs` (send chord decode, near misses, conflicts with
   #803 FR-006 reserved lists and every existing app chord: FR-011; labels in docs: SC-004),
   `tests/review_keys.rs` (new: holder gate, press → reducer effects on a Review tab state, send
   chord ≡ `SendPressed`: SC-006, selection change clears current hunk), `tests/quick_switch.rs`
