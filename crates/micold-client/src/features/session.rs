@@ -1389,7 +1389,15 @@ pub fn shell_instance_selected(
         session.set_mode(micold_core::session::TerminalMode::Regular);
     }
     arm_tab_reveal(state); // 026 FR-002d — the newly marked tab has to be in view
-    state.focus_terminal() // FR-011
+    shows_the_terminal(state.focus_terminal()) // FR-011
+}
+
+/// A strip press that shows a pane of the current session: a shown review is hidden, kept
+/// (feature 1269, U2, US1.2), as a session selection hides it; then `outcomes`.
+fn shows_the_terminal(outcomes: Vec<crate::features::Outcome>) -> Vec<crate::features::Outcome> {
+    let mut all = vec![crate::features::Outcome::ReviewHidden];
+    all.extend(outcomes);
+    all
 }
 
 /// A new shell instance was opened from the "+" (feature 011 FR-001, feature 027 FR-004).
@@ -1407,7 +1415,7 @@ pub fn shell_instance_open_requested(
     state: &mut crate::app::State,
 ) -> Vec<crate::features::Outcome> {
     arm_tab_reveal(state);
-    state.focus_terminal()
+    shows_the_terminal(state.focus_terminal())
 }
 
 /// A shell instance was closed (feature 012).
@@ -1742,7 +1750,7 @@ pub fn ai_cli_selected(
     }
     arm_tab_reveal(state);
     // FR-011, as every other pane switch does.
-    state.focus_terminal()
+    shows_the_terminal(state.focus_terminal())
 }
 
 /// The tab strip was scrolled (feature 026, FR-009).
