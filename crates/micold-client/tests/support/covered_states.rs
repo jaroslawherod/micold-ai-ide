@@ -1720,6 +1720,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
+                        suggestion_chips: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -1795,6 +1796,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
+                        suggestion_chips: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -2104,6 +2106,25 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-tree-no-match",
             build: || review_tree_filtered("zzz", false),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
+        // --- Feature 1275: suggestion chips (T042, FR-023, FR-027) ----------------------------
+        //
+        // `changes-review-held` with **Suggestion chips** on and a new comment's box open under
+        // `src/a.rs`'s line 2: the notice, the dot and the chips row (*Rename*, *Add test*, *Why?*)
+        // between the text and Cancel/Save, together (SC-006).
+        CoveredState {
+            name: "changes-review-held-chips",
+            build: review_held_chips,
             anchors: &[
                 Anchor {
                     name: "shell.root",
@@ -2641,6 +2662,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     appearance: AppearanceDraft {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
+                        suggestion_chips: false,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -3728,6 +3750,31 @@ pub fn review_tree_filtered(filter: &str, by_size: bool) -> StateUnderTest {
         changes::update(changes, Msg::TreeSortChosen(TreeSort::Size));
     }
     changes::update(changes, Msg::TreeFilterChanged(filter.into()));
+    under
+}
+
+/// [`review_held`] with **Suggestion chips** on and a new comment's box open on `src/a.rs`'s
+/// new line 2 (#1275, T042).
+pub fn review_held_chips() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+
+    let mut under = review_held();
+    let changes = &mut under.state.changes;
+    changes::update(changes, Msg::SuggestionChipsInForce(true));
+    changes::update(
+        changes,
+        Msg::GutterPressed {
+            old: None,
+            new: Some(2),
+            extend: false,
+        },
+    );
+    changes::update(changes, Msg::GutterDragReleased);
+    changes::update(changes, Msg::AddComment);
+    assert!(
+        changes::chips_shown(changes),
+        "the box is open with its chips"
+    );
     under
 }
 

@@ -291,16 +291,16 @@ steps 2–4.
 **Goal**: a Settings switch, off by default, shows *Rename*, *Add test*, *Why?* under every
 composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B step 5.
 
-- [ ] T035 [P] [US3] Write failing tests in the tests of
+- [x] T035 [P] [US3] Write failing tests in the tests of
   `crates/micold-client/src/features/settings.rs`: the switch on the draft, Save applies it, Cancel
   discards it (FR-022, FR-026).
-- [ ] T036 [P] [US3] Write failing tests Q10–Q12 and H14's chip case in
+- [x] T036 [P] [US3] Write failing tests Q10–Q12 and H14's chip case in
   `crates/micold-client/tests/features_changes.rs`.
-- [ ] T037 [P] [US3] Make `ToggleChip` (`crates/micold-material/src/toggle_chip.rs`) join keyboard
+- [x] T037 [P] [US3] Make `ToggleChip` (`crates/micold-material/src/toggle_chip.rs`) join keyboard
   traversal through `TakesTheKeyboard`, as `AttachmentChip` does
   (`crates/micold-material/src/attachment_chip.rs`), with an in-file focus/geometry test; show the
   focusable chip in `crates/micold-client/src/showcase/sections/controls.rs`.
-- [ ] T038 [US3] Put `suggestion_chips` on the Appearance draft and the applied state with
+- [x] T038 [US3] Put `suggestion_chips` on the Appearance draft and the applied state with
   `SuggestionChipsToggled(bool)` in `crates/micold-client/src/features/settings.rs`, following
   `reduce_motion` (including the field table at `features/settings.rs:34`), and replace T014's
   stopgaps: `ValidSettings` carries it into `into_settings`, `window_settings` takes it from the
@@ -309,20 +309,20 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
   `saving_reduce_motion_keeps_every_other_setting` does; add the **Suggestion chips** `Checkbox` under **Reduce motion** in
   `crates/micold-client/src/ui/settings/appearance.rs` with a new `FieldId`; delete T014's
   `suggestion_chips` entry from `DEFERRED` in `crates/micold-client/tests/settings_sections.rs`.
-- [ ] T039 [US3] Implement in `crates/micold-client/src/features/changes.rs`:
+- [x] T039 [US3] Implement in `crates/micold-client/src/features/changes.rs`:
   `State.suggestion_chips`, `Msg::SuggestionChipsInForce(bool)`, `Msg::ChipPressed(usize)` →
   `composer.text = chips::insert(..)` (nothing with no composer or the setting off),
   `chips_shown(state)`; in `crates/micold-client/src/shell/changes.rs` send `SuggestionChipsInForce`
   at start and after a settings save, and on `ChipPressed` run `sync_composer` (`shell/changes.rs:107`)
   then focus the text area.
-- [ ] T040 [US3] Draw the chips under the composer when `chips_shown` in
+- [x] T040 [US3] Draw the chips under the composer when `chips_shown` in
   `crates/micold-client/src/ui/changes.rs`, after the text area in keyboard order (glue).
-- [ ] T041 [US3] Update `docs/user-guide/settings.md` (the switch, off by default) and *Writing a
+- [x] T041 [US3] Update `docs/user-guide/settings.md` (the switch, off by default) and *Writing a
   comment* in `docs/user-guide/reviewing-changes.md` (the chips and what they insert).
-- [ ] T042 [US3] Add the chips row and the Settings switch to the scene in
+- [x] T042 [US3] Add the chips row and the Settings switch to the scene in
   `crates/micold-client/tests/layout_snapshot.rs` and regenerate
   `crates/micold-client/tests/fixtures/layout_snapshot.txt`.
-- [ ] T043 [US3] Visual pass at 1280×800 in light and dark of quickstart §B step 5 (switch off: no
+- [x] T043 [US3] Visual pass at 1280×800 in light and dark of quickstart §B step 5 (switch off: no
   chips; on: three chips, Tab reaches each with its ring, *Add test* fills an empty box), plus one
   frame showing notice, dot and chips together; evidence in
   `specs/1275-review-stale-quick-comment/visual-pass/`.

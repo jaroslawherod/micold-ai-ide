@@ -125,6 +125,9 @@ pub struct State {
     /// Whether the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
     /// expansion (feature 1299) switch in one step (persisted). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
     pub reduce_motion: bool,
+    /// Whether comment boxes show the suggestion chips (#1275, FR-022; persisted). Set by a save,
+    /// like `reduce_motion`; the draft's copy is the unsaved edit.
+    pub suggestion_chips: bool,
     /// Where sessions are running **now** (FR-035b; BUG-003).
     ///
     /// Not the draft's `daemon.placement`, which is what the user is *choosing*, and not the
@@ -175,6 +178,7 @@ impl Default for State {
             system_scheme: Default::default(),
             theme_pref: Default::default(),
             reduce_motion: false,
+            suggestion_chips: false,
             placement_in_force: Default::default(),
             daemons: Default::default(),
             legacy_default_daemon: None,
@@ -297,6 +301,8 @@ pub struct AppearanceDraft {
     /// Switch the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
     /// expansion (feature 1299) in one step.
     pub reduce_motion: bool,
+    /// Show *Rename*, *Add test* and *Why?* under every comment box (#1275, FR-022).
+    pub suggestion_chips: bool,
 }
 
 /// The Terminal section's fields.
@@ -740,6 +746,8 @@ pub struct ValidSettings {
     pub theme: ThemePreference,
     /// Appearance (feature 970).
     pub reduce_motion: bool,
+    /// Appearance: **Suggestion chips** (#1275).
+    pub suggestion_chips: bool,
     /// Terminal.
     pub scrollback_lines: usize,
     /// Environment.
@@ -795,8 +803,7 @@ impl ValidSettings {
         Settings {
             theme: self.theme,
             reduce_motion: self.reduce_motion,
-            // Not on the form until #1275 M5; the save path never writes it (`set_changed`).
-            suggestion_chips: false,
+            suggestion_chips: self.suggestion_chips,
             scrollback_lines: self.scrollback_lines,
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
@@ -1180,6 +1187,7 @@ impl SettingsDraft {
         Ok(ValidSettings {
             theme: self.appearance.theme,
             reduce_motion: self.appearance.reduce_motion,
+            suggestion_chips: self.appearance.suggestion_chips,
             scrollback_lines,
             env_include_enabled: self.environment.enabled,
             env_include_script_path: self.environment.script_path.clone(),
@@ -1526,6 +1534,7 @@ impl SettingsDraft {
                 AppearanceDraft {
                     theme: _,
                     reduce_motion: _,
+                    suggestion_chips: _,
                 },
             terminal:
                 TerminalDraft {
@@ -1605,6 +1614,7 @@ impl SettingsDraft {
         refresh!(
             appearance.theme,
             appearance.reduce_motion,
+            appearance.suggestion_chips,
             terminal.scrollback_lines,
             terminal.save_terminal_history,
             environment.enabled,
@@ -1654,6 +1664,7 @@ impl SettingsDraft {
             appearance: AppearanceDraft {
                 theme: settings.theme,
                 reduce_motion: settings.reduce_motion,
+                suggestion_chips: settings.suggestion_chips,
             },
             terminal: TerminalDraft {
                 scrollback_lines: settings.scrollback_lines.to_string(),
@@ -1780,6 +1791,9 @@ pub enum Msg {
     /// The Settings **Reduce motion** switch was toggled (feature 970, FR-008). Edits the draft;
     /// Save applies it and Cancel discards it.
     ReduceMotionToggled(bool),
+    /// The Settings **Suggestion chips** switch was toggled (#1275, FR-022). Edits the draft; Save
+    /// applies it and Cancel discards it.
+    SuggestionChipsToggled(bool),
     /// The Settings scrollback field changed.
     ScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
@@ -1924,6 +1938,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RailToggled => rail_toggled(state),
         Msg::ThemeChanged(theme) => theme_changed(state, theme),
         Msg::ReduceMotionToggled(on) => reduce_motion_toggled(state, on),
+        Msg::SuggestionChipsToggled(on) => suggestion_chips_toggled(state, on),
         Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
         Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),
         Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
@@ -2126,6 +2141,11 @@ pub fn theme_changed(state: &mut crate::app::State, theme: ThemePreference) {
 /// Appearance: the **Reduce motion** switch was toggled (feature 970, FR-008).
 pub fn reduce_motion_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.appearance.reduce_motion = on);
+}
+
+/// Appearance: the **Suggestion chips** switch was toggled (#1275, FR-022).
+pub fn suggestion_chips_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.appearance.suggestion_chips = on);
 }
 
 /// Terminal: the scrollback field was edited.
@@ -2803,5 +2823,100 @@ mod reduce_motion_tests {
 
         assert!(state.settings.settings_draft.is_none());
         assert!(!state.settings.reduce_motion);
+    }
+}
+
+#[cfg(test)]
+mod suggestion_chips_tests {
+    //! #1275 (US3, FR-022, FR-026): the **Suggestion chips** switch is a draft field like **Reduce
+    //! motion**: off by default, Save applies it and Cancel discards it.
+
+    use super::*;
+
+    fn open_with(suggestion_chips: bool) -> crate::app::State {
+        let mut state = crate::app::State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&Settings {
+            suggestion_chips,
+            ..Settings::default()
+        }));
+        state
+    }
+
+    fn draft(state: &crate::app::State) -> &SettingsDraft {
+        state.settings.settings_draft.as_ref().expect("open")
+    }
+
+    /// The draft opens showing what is stored, off on a fresh install (FR-022, SC-004).
+    #[test]
+    fn the_draft_is_seeded_from_the_stored_setting_and_is_off_by_default() {
+        assert!(
+            !SettingsDraft::from_settings(&Settings::default())
+                .appearance
+                .suggestion_chips
+        );
+        assert!(!draft(&open_with(false)).appearance.suggestion_chips);
+        assert!(draft(&open_with(true)).appearance.suggestion_chips);
+        assert!(!crate::app::State::default().settings.suggestion_chips);
+    }
+
+    /// Toggling edits only the draft; the applied setting waits for Save (FR-026).
+    #[test]
+    fn toggling_edits_only_the_draft() {
+        let mut state = open_with(false);
+
+        update(&mut state, Msg::SuggestionChipsToggled(true));
+
+        assert!(
+            draft(&state).appearance.suggestion_chips,
+            "the page shows it"
+        );
+        assert!(
+            !state.settings.suggestion_chips,
+            "nothing is applied before Save"
+        );
+    }
+
+    /// Save's validated copy carries the draft's value into the stored shape.
+    #[test]
+    fn the_validated_settings_carry_the_draft_value() {
+        let mut state = open_with(false);
+        update(&mut state, Msg::SuggestionChipsToggled(true));
+
+        let valid = draft(&state).validate().expect("the defaults are valid");
+
+        assert!(valid.suggestion_chips);
+        assert!(
+            valid.into_settings().suggestion_chips,
+            "and it reaches the stored shape"
+        );
+    }
+
+    /// Cancel discards the draft, so nothing is applied.
+    #[test]
+    fn cancel_discards_the_edit() {
+        let mut state = open_with(false);
+        update(&mut state, Msg::SuggestionChipsToggled(true));
+
+        update(&mut state, Msg::Cancelled);
+
+        assert!(state.settings.settings_draft.is_none());
+        assert!(!state.settings.suggestion_chips);
+    }
+
+    /// Another window's save refreshes the switch while this page has not touched it (BUG-475).
+    #[test]
+    fn another_windows_save_refreshes_an_untouched_switch() {
+        let mut state = open_with(false);
+        let now = Settings {
+            suggestion_chips: true,
+            ..Settings::default()
+        };
+        state
+            .settings
+            .settings_draft
+            .as_mut()
+            .unwrap()
+            .refresh_untouched(&now);
+        assert!(draft(&state).appearance.suggestion_chips);
     }
 }

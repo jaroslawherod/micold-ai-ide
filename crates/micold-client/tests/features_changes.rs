@@ -6651,6 +6651,34 @@ mod hold {
         assert_eq!(view.pick, before.pick);
     }
 
+    // H14 (chips): while held, a chip fills the box as without a hold, and Save quotes the lines
+    // shown (FR-011, FR-025).
+    #[test]
+    fn while_held_a_chip_fills_the_box_and_save_quotes_the_lines_shown() {
+        let mut state = reading_a();
+        changes::update(&mut state, Msg::SuggestionChipsInForce(true));
+        background(&mut state, edited());
+        assert!(stale_notice(view(&state)).is_some(), "held");
+
+        assert_eq!(
+            changes::update(&mut state, Msg::ChipPressed(2)),
+            Effect::FocusComposer
+        );
+        assert_eq!(
+            view(&state).composer.as_ref().map(|c| c.text.as_str()),
+            Some("half a thought\nWhy is this needed?")
+        );
+        let Effect::ReviewEdit {
+            edit: ReviewEditOp::Add { quote, text, .. },
+            ..
+        } = changes::update(&mut state, Msg::ComposerSaved)
+        else {
+            panic!("Save sends the comment");
+        };
+        assert_eq!(quote, vec!["B".to_string()], "the line shown");
+        assert_eq!(text, "half a thought\nWhy is this needed?");
+    }
+
     // H7: a file outside the set reads under the shown list's scope.
     #[test]
     fn selecting_a_file_outside_the_set_reads_under_the_shown_scope() {
@@ -7104,5 +7132,137 @@ mod drag {
         press(&mut state, 1);
         changes::update(&mut state, Msg::FileSelected(path("a.rs")));
         assert!(view(&state).drag.is_none());
+    }
+}
+
+/// #1275 M5: suggestion chips under the comment box (contracts/quick-comment.md Q10–Q12; FR-023–FR-026).
+mod chips {
+    use super::*;
+    use micold_client::features::changes::chips_shown;
+
+    const RENAME: usize = 0;
+    const ADD_TEST: usize = 1;
+
+    fn text(state: &State) -> Option<String> {
+        state
+            .tabs
+            .shown_view()
+            .and_then(|view| view.composer.as_ref())
+            .map(|composer| composer.text.clone())
+    }
+
+    /// A view of `b.rs` with a new comment's box open on line 2, the setting `on`.
+    fn new_box(on: bool) -> State {
+        let mut state = showing(commentable());
+        changes::update(&mut state, Msg::SuggestionChipsInForce(on));
+        gutter(&mut state, None, Some(2), false);
+        changes::update(&mut state, Msg::AddComment);
+        state
+    }
+
+    /// Q10, AS1, SC-004: off (the default), no box shows chips; on, every kind of box does, and
+    /// no box means no chips.
+    #[test]
+    fn q10_chips_show_under_every_box_only_with_the_setting_on() {
+        assert!(!State::default().suggestion_chips, "off by default");
+        let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+        let draft = comment("b.rs", Side::New, 3, 3, CommentState::Draft);
+        for on in [false, true] {
+            let mut state = showing(commentable());
+            push(&mut state, "feat-a", vec![sent.clone(), draft.clone()]);
+            changes::update(&mut state, Msg::SuggestionChipsInForce(on));
+            assert!(!chips_shown(&state), "no box, no chips (on: {on})");
+
+            gutter(&mut state, None, Some(2), false);
+            changes::update(&mut state, Msg::AddComment);
+            assert_eq!(chips_shown(&state), on, "a new comment's box");
+            changes::update(&mut state, Msg::ComposerCancelled);
+
+            changes::update(&mut state, Msg::EditComment(draft.id));
+            assert_eq!(chips_shown(&state), on, "an Edit box");
+            changes::update(&mut state, Msg::ComposerCancelled);
+
+            changes::update(&mut state, Msg::AnswerComment(sent.id));
+            assert_eq!(chips_shown(&state), on, "an Answer box");
+        }
+    }
+
+    /// Q11, AS3, FR-024: a chip in an empty box sets the box to its text; Save is available by the
+    /// blank-text rule and sends it like typed text (FR-025); the shell focuses the box.
+    #[test]
+    fn q11_a_chip_fills_an_empty_box_and_counts_as_typed_text() {
+        let mut state = new_box(true);
+
+        let effect = changes::update(&mut state, Msg::ChipPressed(ADD_TEST));
+
+        assert_eq!(effect, Effect::FocusComposer, "the box keeps the keyboard");
+        assert_eq!(
+            text(&state).as_deref(),
+            Some("Add a test that covers this.")
+        );
+        let Effect::ReviewEdit {
+            edit: ReviewEditOp::Add { text, .. },
+            ..
+        } = changes::update(&mut state, Msg::ComposerSaved)
+        else {
+            panic!("Save sends the chip's text as the comment");
+        };
+        assert_eq!(text, "Add a test that covers this.");
+    }
+
+    /// Q11, AS4: in a box with text, the chip's text goes on a new line after it.
+    #[test]
+    fn q11_a_chip_adds_a_line_after_written_text() {
+        let mut state = new_box(true);
+        changes::update(&mut state, Msg::ComposerEdited("Looks off".into()));
+
+        changes::update(&mut state, Msg::ChipPressed(RENAME));
+
+        assert_eq!(text(&state).as_deref(), Some("Looks off\nRename this to "));
+    }
+
+    /// Q11: with the setting off, or no box open, or an index past the chips, a press does nothing.
+    #[test]
+    fn q11_a_chip_does_nothing_off_without_a_box_or_out_of_range() {
+        let mut state = new_box(false);
+        assert_eq!(
+            changes::update(&mut state, Msg::ChipPressed(ADD_TEST)),
+            Effect::None
+        );
+        assert_eq!(text(&state).as_deref(), Some(""));
+
+        let mut state = showing(commentable());
+        changes::update(&mut state, Msg::SuggestionChipsInForce(true));
+        let before = state.clone();
+        assert_eq!(
+            changes::update(&mut state, Msg::ChipPressed(ADD_TEST)),
+            Effect::None
+        );
+        assert_eq!(state, before);
+
+        let mut state = new_box(true);
+        assert_eq!(
+            changes::update(&mut state, Msg::ChipPressed(99)),
+            Effect::None
+        );
+        assert_eq!(text(&state).as_deref(), Some(""));
+    }
+
+    /// Q12, AS5, FR-026: the setting in force follows each message; an open box follows it, and a
+    /// box opened later too.
+    #[test]
+    fn q12_the_setting_in_force_follows_each_message() {
+        let mut state = new_box(false);
+        assert!(!chips_shown(&state));
+
+        changes::update(&mut state, Msg::SuggestionChipsInForce(true));
+        assert!(state.suggestion_chips);
+        assert!(chips_shown(&state), "the open box follows");
+
+        changes::update(&mut state, Msg::SuggestionChipsInForce(false));
+        changes::update(&mut state, Msg::ComposerCancelled);
+        gutter(&mut state, None, Some(4), false);
+        changes::update(&mut state, Msg::AddComment);
+        assert!(!chips_shown(&state), "a box opened later follows too");
     }
 }

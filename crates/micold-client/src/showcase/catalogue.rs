@@ -549,7 +549,7 @@ pub const COMPONENTS: &[Entry] = &[
         component: "ToggleChip",
         variants: &[],
         density: &[],
-        posed: &["inactive", "active", "accented", "disabled"],
+        posed: &["inactive", "active", "accented", "disabled", "keyboard stop"],
         live: &["hover", "pressed", "focus"],
         interactive: true,
         section: Section::Components,

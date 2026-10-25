@@ -333,8 +333,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
     Settings {
         theme: app.core.settings.theme_pref,
         reduce_motion: app.core.settings.reduce_motion,
-        // Not on the Settings page until #1275 M5: keep what is stored.
-        suggestion_chips: stored.suggestion_chips,
+        suggestion_chips: app.core.settings.suggestion_chips,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
@@ -405,7 +404,6 @@ fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Op
 /// The diff layout is never set: the form does not hold it (feature 482, which the service owns).
 /// Nor are the plan-usage settings: the service owns them, and they reach it as `SettingsSet`
 /// (feature 490, W3).
-/// Nor is **Suggestion chips** (#1275): the form does not hold it until M5.
 /// The destructuring is there so that a field added to `Settings` fails to compile here until a save
 /// says what it does with it.
 fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
@@ -482,6 +480,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     }
     set!(theme);
     set!(reduce_motion);
+    set!(suggestion_chips);
     set!(scrollback_lines);
     set!(env_include_enabled);
     set!(env_include_script_path);
@@ -708,6 +707,8 @@ pub(crate) fn save_and_prepare_check(
     changed(&mut window);
     app.core.settings.theme_pref = window.theme;
     app.core.settings.reduce_motion = window.reduce_motion;
+    // #1275 (FR-026): boxes opened after the save follow the switch.
+    crate::shell::changes::suggestion_chips_in_force(&mut app.core, window.suggestion_chips);
     app.scrollback_lines = window.scrollback_lines;
     app.env_include_enabled = window.env_include_enabled;
     app.env_include_script_path = window.env_include_script_path;
@@ -1540,6 +1541,38 @@ mod catalog_recovery_tests {
         let baseline = target.clone();
         set_changed(&mut target, &saved, Some(&baseline));
         assert_eq!(target.daemons, registry.entries().to_vec());
+    }
+
+    /// #1275 (T038, FR-022): a form save that turns **Suggestion chips** on writes it and keeps
+    /// every other stored setting, as saving *Reduce motion* does.
+    #[test]
+    fn saving_suggestion_chips_keeps_every_other_setting() {
+        let stored = Settings {
+            theme: micold_core::theme::ThemePreference::Light,
+            scrollback_lines: 12_345,
+            desktop_notifications: false,
+            long_task_threshold_secs: 120,
+            reduce_motion: true,
+            ..Settings::default()
+        };
+        let mut target = stored.clone();
+        let baseline = Settings::default();
+        let saved = Settings {
+            suggestion_chips: true,
+            ..Settings::default()
+        };
+
+        set_changed(&mut target, &saved, Some(&baseline));
+
+        assert!(target.suggestion_chips, "the choice is written");
+        assert_eq!(
+            Settings {
+                suggestion_chips: false,
+                ..target
+            },
+            stored,
+            "every field but `suggestion_chips` came back unchanged"
+        );
     }
 
     /// Feature 1274 (T060): the form does not carry the single-key switch yet, so a save whose

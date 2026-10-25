@@ -32,6 +32,7 @@ use micold_core::tokens::Roles;
 pub const SETTINGS: &[(&str, &str)] = &[
     ("theme", "ThemeChanged"),
     ("reduce_motion", "ReduceMotionToggled"),
+    ("suggestion_chips", "SuggestionChipsToggled"),
 ];
 
 /// The theme options, in the order the picker lists them.
@@ -70,10 +71,21 @@ pub fn view<'a>(
         roles,
     );
 
+    // #1275 (FR-022): off by default; comment boxes opened after Save follow it (FR-026).
+    let suggestion_chips =
+        Checkbox::new("Suggestion chips", draft.appearance.suggestion_chips, roles)
+            .track_focus(FieldId::SettingsSuggestionChips, focused)
+            .on_toggle(|on| Message::Settings(SettingsMsg::SuggestionChipsToggled(on)));
+    let suggestion_chips = field_note(
+        suggestion_chips,
+        Some("Show Rename, Add test and Why? under every comment box"),
+        roles,
+    );
+
     page(
         "Appearance",
         "How the application looks.",
-        vec![theme.into(), reduce_motion],
+        vec![theme.into(), reduce_motion, suggestion_chips],
         roles,
     )
 }
