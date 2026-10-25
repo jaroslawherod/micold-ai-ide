@@ -1375,13 +1375,35 @@ impl State {
         let live = self
             .active_sessions()
             .iter()
-            .filter(|s| &s.location == entry)
+            .filter(|s| !s.archived && &s.location == entry)
             .map(|s| s.id)
             .collect();
         (
             live,
             crate::features::navigation::main_session_at(self, entry),
         )
+    }
+
+    /// The current session went and was the last live one of its location (feature 1269, U8,
+    /// R8): that location's Review tab, if it has one, is shown, so the location stays shown under
+    /// its own header. The location is the one the header followed, the gone session's. Not while
+    /// Compare holds the main area; under the Overview or Settings it is shown and read when
+    /// uncovered (`follow_header` marks it unwatched).
+    fn show_review_of_emptied_location(&mut self) {
+        if self.session.active.is_some() || self.runs.compare.is_some() {
+            return;
+        }
+        let Some(key) = self.changes.header.entry.clone() else {
+            return;
+        };
+        if self.workspace.active.as_ref() != Some(&key.0) || !self.sessions_at(&key.1).0.is_empty()
+        {
+            return;
+        }
+        let effect = crate::features::changes::show_if_present(&mut self.changes, &key);
+        if !self.review_covered() {
+            self.queue_changes_effect(effect);
+        }
     }
 
     /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
@@ -1657,7 +1679,12 @@ pub fn interpret(
             // review; a sessionless one with none. Then its Review tab is made, or shown as left.
             let project = state.workspace.active.clone().unwrap_or_default();
             let mut outcomes = Vec::new();
-            if state.shown_location().as_ref() != Some(&entry) {
+            let here = state
+                .session
+                .active
+                .and_then(|id| state.active_sessions().iter().find(|s| s.id == id))
+                .map(|s| &s.location);
+            if here != Some(&entry) && state.shown_location().as_ref() != Some(&entry) {
                 let (live, main) = state.sessions_at(&entry);
                 let key = (project.clone(), entry.clone());
                 let next = state.changes.tabs.session_for(&key, &live, main);
@@ -1688,6 +1715,7 @@ pub fn interpret(
         }
         // Feature 1269 (U9): the forgotten project's Review tabs go with it, under either spelling
         // of its path.
+        Outcome::CurrentSessionGone => state.show_review_of_emptied_location(),
         Outcome::ProjectForgotten(path) => {
             let canonical = micold_core::project::canonicalize_best_effort(&path);
             state.changes.tabs.drop_project(&canonical);

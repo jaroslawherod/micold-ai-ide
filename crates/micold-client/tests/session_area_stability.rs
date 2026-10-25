@@ -614,6 +614,9 @@ mod rendered_presses {
             ))],
             "never a close"
         );
+        // The follow step's own bookkeeping (feature 1269, R4) settles first.
+        state.update(Message::NoOp);
+        let _ = state.take_changes_effect();
         let before = state.changes.tabs.clone();
         for message in pressed {
             state.update(message);
