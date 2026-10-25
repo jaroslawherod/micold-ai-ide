@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Closed 2026-10-25 — shipped in PRs #1343, #1377, #1389 and the close PR
+**Status**: Closed 2026-10-25 — shipped in PRs #1343, #1377, #1389, #1391
 
 **Input**: User description: "Markdown italic renders upright: no italic font face bundled. Follow-up
 from #940 (structured session view). The rich markdown view maps `*emphasis*` to an italic style.
