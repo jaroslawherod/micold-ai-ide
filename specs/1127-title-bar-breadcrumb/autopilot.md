@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 gate, reviews, PR text in the scratchpad; orchestrator moves the commits onto the PR branch after M3 merges; then close
+- **Next step**: orchestrator moves M4's commits onto the PR branch after M3 merges and opens M4's PR; then close
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | #1409 | merged be3819ab |
 | M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | PR open |
-| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | implemented on `wip/1127-m4` (on M3's head b7bd60ec); gate and reviews next |
+| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | done on `wip/1127-m4` (on M3's head b7bd60ec); gated, reviewed, PR text in scratchpad; orchestrator opens the PR |
 
 ## Decisions
 
@@ -80,6 +80,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B round 2 (scoped, sonnet) | 2 | d4c5b69f | CLEAN, citing `VERIFY_EXIT=0` and every Verify count (material 10, client lib 35, bin 1, layout_snapshot 127, layout_text_overflow 3, overlay_dismissal_rules 8, title_bar_keyboard 5) and `covered_states.rs:2900` for F2 (a first round-2 reply that cited nothing was discarded) |
 | M3 visual pass | — | 4782f85b | pass: field centred in the free space, press opens the switcher with its input focused, a second press closes it, disabled in Settings, tooltip, dark, 640 drops the words (specs/1127-title-bar-breadcrumb/visual-pass/m3/). Glyph-only and macOS hint not driven (test-covered) |
 | M3 gate (`scripts/gate.sh`) | — | d4c5b69f3c236aca5647f93e0bcb7c057bafeff0 | pass first run (layout snapshot re-recorded right before it: no change beyond the title bar's) |
+| M4 review A (code-review-style, autopilot-reviewer) | 1 | HEAD 12aa9a11 | CLEAN, 3 MINORs fixed (stale Overview-button comments) |
+| M4 review B (conformance, sonnet) | 1 | 5f19bdee | first run could not read (Bash denied): discarded; re-run with the diff as a file: CLEAN, 2 MINORs fixed (comments; test name no longer claims Changes) |
+| M4 gate (`scripts/gate.sh`) | — | tree of f2f681b0 | pass (after one `feature_registration_cost` red: the chord test called `overview::update`, now `State::update`; and the known `attention_error_notice` flake, rerun) |
+| M4 visual pass | — | f2f681b0 | pass (visual-pass/m4/) |
 
 ## Declined review findings
 
