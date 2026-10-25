@@ -21,6 +21,7 @@ use micold_core::protocol::messages::{
     BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
     OperationResult, RefusedRequest, SessionProcess, TerminalRef, WindowView,
 };
+use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, explain_directory_taken, parse_worktrees, preflight, CreateError,
@@ -1911,7 +1912,7 @@ where
                     let created = match &session {
                         None => ops::create_worktree(state, project, names, mode, Some(progress))
                             .await
-                            .map(|()| None)
+                            .map(|_setup| None)
                             .map_err(ops::WorktreeStartFailure::Create),
                         Some(definition) => ops::create_worktree_with_session(
                             state,
@@ -1929,7 +1930,7 @@ where
                             },
                         )
                         .await
-                        .map(|(session, _prompt)| Some(session)),
+                        .map(|(session, _prompt, _setup)| Some(session)),
                     };
                     let reply = match created {
                         Ok(session) => DaemonMsg::OperationOk {
@@ -2662,6 +2663,73 @@ where
                 }
                 Err(e) => send_io_error(state, id, req, "failed to delete the session", &e),
             },
+            // --- 1289: the project's setup command and its runs (contract C1) ---
+            ClientMsg::ProjectSetupSet {
+                req,
+                project,
+                command,
+            } => {
+                state.set_setup_command(&project, command);
+                send_ack(state, id, req);
+            }
+            ClientMsg::SetupRun {
+                req,
+                project,
+                location,
+            } => {
+                let reply = match crate::setup::start(state, &project, location.clone()) {
+                    Some(SetupStart::Started(_)) => {
+                        send_ack(state, id, req);
+                        continue;
+                    }
+                    Some(SetupStart::NotConfigured) => (
+                        ErrorKind::InvalidInput,
+                        "This project has no setup command.".to_string(),
+                    ),
+                    Some(SetupStart::Busy) => (
+                        ErrorKind::Busy,
+                        format!(
+                            "Setup is already running in {}.",
+                            crate::setup::place(&location)
+                        ),
+                    ),
+                    None => (
+                        ErrorKind::NotFound,
+                        format!("There is no {} here.", crate::setup::place(&location)),
+                    ),
+                };
+                send_setup_error(state, id, req, reply);
+            }
+            ClientMsg::SetupStop {
+                req,
+                project,
+                location,
+            } => {
+                if state.setup(|runs, _| runs.stop(&project, &location)) {
+                    send_ack(state, id, req);
+                } else {
+                    send_setup_error(
+                        state,
+                        id,
+                        req,
+                        (
+                            ErrorKind::NotFound,
+                            format!(
+                                "Setup is not running in {}.",
+                                crate::setup::place(&location)
+                            ),
+                        ),
+                    );
+                }
+            }
+            ClientMsg::SetupOutputWatch {
+                project,
+                location,
+                from_line,
+            } => state.setup(|runs, out| runs.watch(id, &project, &location, from_line, out)),
+            ClientMsg::SetupOutputUnwatch { project, location } => {
+                state.setup(|runs, _| runs.unwatch(id, &project, &location));
+            }
             // Any remaining unhandled control message is ignored.
             _ => {}
         }
@@ -2905,6 +2973,24 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
 }
 
 /// Reply to a correlated RPC with a bare success (`OperationOk { Ack }`).
+/// A refused setup request's answer (contract C1).
+fn send_setup_error(
+    state: &Arc<DaemonState>,
+    id: crate::state::ClientId,
+    req: u64,
+    (kind, message): (ErrorKind, String),
+) {
+    state.send(
+        id,
+        DaemonMsg::OperationError {
+            req,
+            kind,
+            message,
+            detail: None,
+        },
+    );
+}
+
 fn send_ack(state: &Arc<DaemonState>, id: crate::state::ClientId, req: u64) {
     state.send(
         id,

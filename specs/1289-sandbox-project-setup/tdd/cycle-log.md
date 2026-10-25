@@ -182,3 +182,32 @@ output is copied from the session's logs.
   sequence open at the cut is still split (accepted, as the review allowed)
 - mutant red (decoded cut removed): `the_buffer_is_bounded_even_for_binary_output ... FAILED`;
   (continuation slack off): `a_cut_line_does_not_split_a_character ... FAILED`. Restored from a copy
+
+## M3 cycle 1: A15 the setup messages travel, protocol 69 (T018 → T019)
+
+- tests: `crates/micold-core/src/protocol/messages.rs` `setup_wire_tests`:
+  `the_client_setup_messages_encode_and_decode`, `the_daemon_setup_messages_encode_and_decode`,
+  `the_setup_messages_bump_the_protocol_to_69`
+- red: `cargo test -p micold-core --lib -- setup_wire_tests` -> `error[E0599]: no variant named
+  ProjectSetupSet found for enum messages::ClientMsg` (and `SetupRun`, `SetupStop`,
+  `SetupOutputWatch`, `SetupOutputUnwatch`, `SetupChanged`, `SetupOutput`; `SessionLocation` not in
+  scope), 14 errors
+- green: T019 adds the five `ClientMsg` and two `DaemonMsg` variants, `SessionLocation` gains
+  `Hash, Serialize, Deserialize`, `PROTOCOL_VERSION` 68 → 69 (`protocol_roundtrip.rs` and
+  `schema_hash.rs` pins follow); `cargo test -p micold-core --lib -- protocol` -> `32 passed`
+
+## M3 cycle 2: A6, A8, A9, A10 the daemon runs setup; A7 the MCP result (T020–T024 → T025–T029)
+
+- tests: `crates/micold-daemon/tests/setup_run.rs` (A6
+  `a_new_worktree_runs_the_setup_command_without_waiting_for_it`, `a_session_starts_while_setup_runs`;
+  A8 `a_failing_command_reports_its_exit_status`, `a_run_whose_folder_is_gone_could_not_start`,
+  `with_no_command_a_create_runs_nothing`; A10 `only_a_worktree_the_app_creates_runs_setup`; A9
+  `run_and_stop_setup`), `crates/micold-daemon/tests/mcp_create_worktree_setup.rs` (A7, 2 tests)
+- red: `cargo test -p micold-daemon --test setup_run --test mcp_create_worktree_setup` ->
+  `mcp_create_worktree_setup`: `error[E0599]: no method named set_setup_command found for struct
+  Arc<DaemonState>`; `setup_run` (`-- setup`): 4 FAILED at `setup_run.rs:86` `the request is
+  answered` (the server ignored `ProjectSetupSet`; the other three wait on the same answer)
+- green: T025 `daemon/src/setup.rs` (`SetupRuns`, the run task, 5 unit tests written beside it),
+  T026 `ops::create_worktree` starts setup and returns `SetupStart`, T027/T028 the five handlers and
+  the disconnect unwatch, T029 the `setup` field -> `setup_run` 7 passed, `mcp_create_worktree_setup`
+  2 passed; `mcp_create_worktree` 43 passed after its exact-row expectations gained `"setup": "none"`

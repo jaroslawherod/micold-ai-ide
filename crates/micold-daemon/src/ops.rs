@@ -22,7 +22,8 @@ use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
 use micold_core::prompt_template::WorktreeFacts;
-use micold_core::session::{AiCli, SessionId, SessionKind};
+use micold_core::session::{AiCli, SessionId, SessionKind, SessionLocation};
+use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
@@ -109,7 +110,10 @@ pub async fn branch_situation(
 }
 
 /// Create worktree `names.dir_name` on `names.branch` under `<project>/.claude/worktrees/`, record
-/// and broadcast the refreshed catalog.
+/// and broadcast the refreshed catalog, then start the project's setup command in it (feature 1289,
+/// FR-010). The setup is only recorded and spawned: nothing here waits for it, and a setup that
+/// fails or cannot start never fails the create (FR-013). What it got is returned for
+/// `create_worktree`'s result (contract C4).
 ///
 /// Serialized per project by `worktree_gate`, so two creates cannot interleave and a rolled-back
 /// one cannot remove the directory a racing one just populated (T120). `git worktree add` runs on
@@ -120,10 +124,11 @@ pub async fn create_worktree(
     names: DerivedNames,
     mode: CreateMode,
     progress: Option<ProgressSink>,
-) -> Result<(), CreateFailure> {
+) -> Result<SetupStart, CreateFailure> {
     let Some((repo, true)) = state.project_repo(&project) else {
         return Err(CreateFailure::NotARepository);
     };
+    let location = SessionLocation::Worktree(names.dir_name.clone());
     // Read before the blocking task: the included set decides how a blocked holder is described
     // (016 BUG-002, FR-032), and the lock must not be held across the git work.
     let included = state.included_worktrees(&project);
@@ -164,8 +169,9 @@ pub async fn create_worktree(
     .await;
     match result {
         Ok(Ok(_worktree)) => {
-            refresh_worktrees_and_broadcast(state, project).await;
-            Ok(())
+            refresh_worktrees_and_broadcast(state, project.clone()).await;
+            // The refresh just listed the worktree, so it is known; were it not, no run starts.
+            Ok(crate::setup::start(state, &project, location).unwrap_or(SetupStart::NotConfigured))
         }
         Ok(Err(e)) => Err(CreateFailure::Create(e)),
         Err(join) => Err(CreateFailure::Task(join.to_string())),
@@ -925,7 +931,7 @@ pub async fn create_worktree_with_session(
     mode: CreateMode,
     progress: Option<ProgressSink>,
     definition: StartDefinition<'_>,
-) -> Result<(SessionId, Result<(), FirstPromptUndelivered>), WorktreeStartFailure> {
+) -> Result<(SessionId, Result<(), FirstPromptUndelivered>, SetupStart), WorktreeStartFailure> {
     let Some((repo, true)) = state.project_repo(&project) else {
         return Err(WorktreeStartFailure::Create(CreateFailure::NotARepository));
     };
@@ -938,7 +944,7 @@ pub async fn create_worktree_with_session(
         return Err(WorktreeStartFailure::CliUnavailable(why));
     }
     let dir_name = names.dir_name.clone();
-    create_worktree(state, project.clone(), names, mode, progress)
+    let setup = create_worktree(state, project.clone(), names, mode, progress)
         .await
         .map_err(WorktreeStartFailure::Create)?;
     create_session_with_prompt(
@@ -954,6 +960,7 @@ pub async fn create_worktree_with_session(
         definition.prompt,
     )
     .await
+    .map(|(session, typed)| (session, typed, setup))
     .map_err(|error| WorktreeStartFailure::Session { dir_name, error })
 }
 

@@ -36,10 +36,11 @@ use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::scoped_credential::{SecretToken, UnixTime};
 use crate::session::{
-    AiCli, PermissionMode, SessionId, SessionKind, SessionLabel, ShellInstanceId,
+    AiCli, PermissionMode, SessionId, SessionKind, SessionLabel, SessionLocation, ShellInstanceId,
 };
 use crate::settings::DiffLayout;
 use crate::settings::{JiraBaseUrlChange, JiraConnectionChange};
+use crate::setup::{RunId, SetupCommand, SetupRunSummary};
 use crate::structured::permission::RequestKind;
 use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
@@ -1019,6 +1020,54 @@ pub enum ClientMsg {
         session: SessionId,
     },
 
+    // --- Setup (feature 1289, contract C1) ---
+    /// Replace this daemon's in-memory setup command for `project` (`None` clears it). `project`
+    /// is the path in this daemon's catalog. Never starts a run; a run in progress is unaffected.
+    ProjectSetupSet {
+        /// Correlation id.
+        req: u64,
+        /// Project path, as this daemon's catalog holds it.
+        project: PathBuf,
+        /// The command, or `None` for no setup.
+        command: Option<SetupCommand>,
+    },
+    /// Run the project's current setup command at `location` (FR-022). Refused while a run is in
+    /// progress there (FR-023a).
+    SetupRun {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+    },
+    /// End the setup run at `location` and every process it started (FR-023).
+    SetupStop {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+    },
+    /// Receive the setup output of `location`: the backlog from `from_line` at once, then each
+    /// later batch, until [`ClientMsg::SetupOutputUnwatch`] or the end of the connection.
+    SetupOutputWatch {
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+        /// The first line index wanted.
+        from_line: u64,
+    },
+    /// Stop receiving the setup output of `location`. Idempotent.
+    SetupOutputUnwatch {
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+    },
+
     // --- Keepalive ---
     /// Liveness probe (protocol.md §5 Liveness). Answered with [`DaemonMsg::Pong`].
     Ping {
@@ -1436,6 +1485,33 @@ pub enum DaemonMsg {
         hold: bool,
         /// The queued messages, in delivery order.
         queue: Vec<QueuedSummary>,
+    },
+    // --- Setup (feature 1289, contract C2) ---
+    /// A location's setup run changed state, to every client; and one per location with a record
+    /// right after `Attached`. `run: None` when the record went away.
+    SetupChanged {
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+        /// The run, or `None` for no record.
+        run: Option<SetupRunSummary>,
+    },
+    /// A batch of a location's setup output, to its watchers only: at most every 250 ms while
+    /// lines arrive, and once more when the run ends, ending with the reason line (SC-004).
+    SetupOutput {
+        /// Project path.
+        project: PathBuf,
+        /// A worktree, or the project folder.
+        location: SessionLocation,
+        /// The run the lines belong to.
+        run: RunId,
+        /// The index of `lines[0]`; a gap from what the client holds means lines were dropped.
+        first_line: u64,
+        /// The lines, oldest first.
+        lines: Vec<String>,
+        /// How many of the run's earliest lines the daemon no longer keeps.
+        dropped: u64,
     },
 }
 
@@ -2574,5 +2650,105 @@ mod desktop_notifications_wire_tests {
                 other => panic!("expected SettingsSet, got {other:?}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod setup_wire_tests {
+    //! Feature 1289, contracts C1–C2 (version 69): the setup messages travel as written (A15).
+
+    use super::*;
+    use crate::protocol::version::PROTOCOL_VERSION;
+    use crate::setup::{Failure, RunId, SetupCommand, SetupRun, SetupRunSummary, SetupState};
+
+    fn through_json<T: Serialize + serde::de::DeserializeOwned>(value: &T) -> T {
+        let json = serde_json::to_string(value).expect("the message encodes");
+        serde_json::from_str(&json).expect("the message decodes")
+    }
+
+    fn command() -> SetupCommand {
+        SetupCommand::parse("mise trust && mise install").expect("a command")
+    }
+
+    fn worktree() -> SessionLocation {
+        SessionLocation::Worktree("feat-x".into())
+    }
+
+    #[test]
+    fn the_client_setup_messages_encode_and_decode() {
+        for msg in [
+            ClientMsg::ProjectSetupSet {
+                req: 3,
+                project: PathBuf::from("/repo"),
+                command: Some(command()),
+            },
+            ClientMsg::ProjectSetupSet {
+                req: 4,
+                project: PathBuf::from("/repo"),
+                command: None,
+            },
+            ClientMsg::SetupRun {
+                req: 5,
+                project: PathBuf::from("/repo"),
+                location: worktree(),
+            },
+            ClientMsg::SetupStop {
+                req: 6,
+                project: PathBuf::from("/repo"),
+                location: SessionLocation::Default,
+            },
+            ClientMsg::SetupOutputWatch {
+                project: PathBuf::from("/repo"),
+                location: worktree(),
+                from_line: 17,
+            },
+            ClientMsg::SetupOutputUnwatch {
+                project: PathBuf::from("/repo"),
+                location: SessionLocation::Default,
+            },
+        ] {
+            assert_eq!(
+                through_json(&msg),
+                msg,
+                "a setup request is read as written"
+            );
+        }
+    }
+
+    #[test]
+    fn the_daemon_setup_messages_encode_and_decode() {
+        let failed = SetupRun::start(RunId(9), command(), 100)
+            .finish(SetupState::Failed(Failure::Exit(3)), 107)
+            .expect("a running run ends");
+        for msg in [
+            DaemonMsg::SetupChanged {
+                project: PathBuf::from("/repo"),
+                location: worktree(),
+                run: None,
+            },
+            DaemonMsg::SetupChanged {
+                project: PathBuf::from("/repo"),
+                location: SessionLocation::Default,
+                run: Some(SetupRunSummary {
+                    run: failed,
+                    output_lines: 12,
+                }),
+            },
+            DaemonMsg::SetupOutput {
+                project: PathBuf::from("/repo"),
+                location: worktree(),
+                run: RunId(9),
+                first_line: 4,
+                lines: vec!["hi".into(), "Exited with status 3.".into()],
+                dropped: 4,
+            },
+        ] {
+            assert_eq!(through_json(&msg), msg, "a setup push is read as written");
+        }
+    }
+
+    #[test]
+    fn the_setup_messages_bump_the_protocol_to_69() {
+        assert_eq!(PROTOCOL_VERSION, 69);
     }
 }

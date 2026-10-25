@@ -40,6 +40,7 @@ use micold_core::protocol::messages::{
 };
 use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
+use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
@@ -1051,7 +1052,8 @@ async fn create_literal_worktree(
 }
 
 /// Create the worktree and, when the call defined a session (feature 776, FR-006), its one session
-/// with it; the session's `create_session` reply is returned. Policy is checked for the session as
+/// with it; the session's `create_session` reply is returned, with the result's `setup` (feature
+/// 1289, contract C4) in either case. Policy is checked for the session as
 /// `create_session` would, before anything exists; a missing CLI fails before the worktree does.
 #[allow(clippy::too_many_arguments)]
 async fn create_with_optional_session(
@@ -1065,10 +1067,10 @@ async fn create_with_optional_session(
     asked: tokio::time::Instant,
 ) -> Result<Option<Value>, OpError> {
     let Some(start) = start else {
-        ops::create_worktree(state, project.to_path_buf(), names, mode, None)
+        let setup = ops::create_worktree(state, project.to_path_buf(), names, mode, None)
             .await
             .map_err(create_failure)?;
-        return Ok(None);
+        return Ok(Some(serde_json::json!({ "setup": setup_word(setup) })));
     };
     let cli = start.ai_cli.unwrap_or_else(|| state.default_ai_cli());
     check_policy(
@@ -1094,7 +1096,7 @@ async fn create_with_optional_session(
         // A terminal without bracketed paste still gets the prompt, as one plain submission.
         require_bracketed: false,
     });
-    let (session, typed) = ops::create_worktree_with_session(
+    let (session, typed, setup) = ops::create_worktree_with_session(
         state,
         project.to_path_buf(),
         names,
@@ -1111,9 +1113,21 @@ async fn create_with_optional_session(
              no session, and create_session starts one"
         )),
     })?;
-    session_reply(state, caller, session, cli, prompt.is_some(), typed)
-        .await
-        .map(Some)
+    let mut reply = session_reply(state, caller, session, cli, prompt.is_some(), typed).await?;
+    if let Some(fields) = reply.as_object_mut() {
+        fields.insert("setup".into(), setup_word(setup).into());
+    }
+    Ok(Some(reply))
+}
+
+/// The `create_worktree` result's `setup` (feature 1289, contract C4). Nothing waits for setup,
+/// and a create never fails because of it (FR-013).
+fn setup_word(setup: SetupStart) -> &'static str {
+    match setup {
+        SetupStart::Started(_) => "started",
+        SetupStart::NotConfigured => "none",
+        SetupStart::Busy => "already running",
+    }
 }
 
 /// The first prompt a new session in worktree `dir_name` gets (1161 FR-008, FR-009, R8): a

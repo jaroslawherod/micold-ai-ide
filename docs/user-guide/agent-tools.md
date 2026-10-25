@@ -259,6 +259,18 @@ A successful `create_worktree` result carries a `next_step` field, repeated as t
 result text: do not work in the new worktree from this session, and hand the work to a dedicated
 session with `create_session` for that worktree.
 
+It also carries a `setup` field, which says whether the project's setup command started in the new
+worktree:
+
+| `setup` | Meaning |
+|---|---|
+| `"started"` | The project's setup command is running in the new worktree. Ask the user to read its output. |
+| `"none"` | The project has no setup command. |
+| `"already running"` | A setup run was already in progress in that worktree. |
+
+Nothing waits for setup: the worktree is created, and a session in it can start, while setup still
+runs, and a setup that fails never fails the call.
+
 ## Reading and typing into other sessions
 
 An assistant can read what another session of the same project shows, and type into it. This is

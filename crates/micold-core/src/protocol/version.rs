@@ -242,7 +242,11 @@
 ///
 /// And 68 → 69 for feature 1271's reviewed marks (RM7): `ReviewEditOp::SetReviewed` and `marks` on
 /// `DaemonMsg::ReviewChanged`.
-pub const PROTOCOL_VERSION: u32 = 69;
+///
+/// And 69 → 70 for feature 1289's setup command (contracts C1–C2): `ClientMsg::ProjectSetupSet`,
+/// `SetupRun`, `SetupStop`, `SetupOutputWatch`, `SetupOutputUnwatch` and `DaemonMsg::SetupChanged`,
+/// `SetupOutput`.
+pub const PROTOCOL_VERSION: u32 = 70;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -147,8 +147,9 @@ fn assert_retry_hint(error: &Value, branch: &str) {
     }
 }
 
-/// The keys of a literal-branch result before feature 532 (FR-009), and the hand-off (FR-010).
-const LITERAL_RESULT_KEYS: [&str; 7] = [
+/// The keys of a literal-branch result before feature 532 (FR-009), the hand-off (FR-010) and
+/// whether setup started (feature 1289, contract C4).
+const LITERAL_RESULT_KEYS: [&str; 8] = [
     "ref",
     "display_name",
     "branch",
@@ -156,6 +157,7 @@ const LITERAL_RESULT_KEYS: [&str; 7] = [
     "status",
     "session_count",
     "next_step",
+    "setup",
 ];
 
 /// A non-empty folder under the managed root, which the pre-flight reports as taken.
@@ -207,6 +209,8 @@ async fn create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it() {
             "status": "clean",
             "session_count": 0,
             "next_step": HAND_OFF,
+            // Feature 1289, contract C4: the project has no setup command.
+            "setup": "none",
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());
@@ -403,6 +407,8 @@ async fn a_default_session_creates_a_worktree_as_any_session_does() {
             "status": "clean",
             "session_count": 0,
             "next_step": HAND_OFF,
+            // Feature 1289, contract C4: the project has no setup command.
+            "setup": "none",
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());

@@ -341,6 +341,8 @@ struct Inner {
     reviews: crate::review::Reviews,
     /// Run groups per project (feature 483), read on first use.
     runs: crate::runs::Runs,
+    /// Setup commands and runs (feature 1289, data-model §Daemon), through [`DaemonState::setup`].
+    setup: crate::setup::SetupRuns,
     /// A test's override of the long-task threshold (feature 613, C2), set by
     /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
     /// decides ([`Inner::effective_long_task_threshold`]).
@@ -1056,6 +1058,7 @@ impl DaemonState {
                 turn_clock_ahead: std::time::Duration::ZERO,
                 reviews: crate::review::Reviews::default(),
                 runs: crate::runs::Runs::default(),
+                setup: crate::setup::SetupRuns::default(),
                 attention_retry: AttentionRetry::default(),
                 plan_usage: None,
                 plan_usage_reported: HashMap::new(),
@@ -2297,6 +2300,7 @@ impl DaemonState {
             inner.clients.remove(&id);
             inner.attachments.retain(|_, att| att.client != id);
             inner.views.remove(id);
+            inner.setup.unwatch_all(id);
         }
         self.presence
             .lock()
@@ -3451,6 +3455,66 @@ impl DaemonState {
             }
             None => false,
         }
+    }
+
+    /// Run `f` on the setup runs under the state lock, then send what it queued, still under the
+    /// lock, so pushes leave in the order the changes were made (feature 1289). `f` does no I/O.
+    pub(crate) fn setup<R>(
+        &self,
+        f: impl FnOnce(&mut crate::setup::SetupRuns, &mut crate::setup::Outgoing) -> R,
+    ) -> R {
+        let mut inner = self.lock();
+        let mut out = Vec::new();
+        let result = f(&mut inner.setup, &mut out);
+        for (to, msg) in out {
+            match to {
+                crate::setup::To::All => Self::broadcast_locked(&inner, vec![msg]),
+                crate::setup::To::One(id) => {
+                    if let Some(client) = inner.clients.get(&id) {
+                        let _ = client.tx.send(Frame::Control(msg));
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// Replace `project`'s setup command (`ProjectSetupSet`, contract C1); `None` clears it. Never
+    /// starts a run.
+    pub fn set_setup_command(
+        &self,
+        project: &Path,
+        command: Option<micold_core::setup::SetupCommand>,
+    ) {
+        self.setup(|runs, _| runs.set_command(project, command));
+    }
+
+    /// The folder setup runs in at `location`: the project's own for `Default`, the worktree's as
+    /// the last refresh found it. `None` for a project or worktree this daemon does not know.
+    pub(crate) fn setup_dir(
+        &self,
+        project: &Path,
+        location: &micold_core::session::SessionLocation,
+    ) -> Option<PathBuf> {
+        let inner = self.lock();
+        let (repo, _) = inner.catalog.project_repo(project)?;
+        match location {
+            micold_core::session::SessionLocation::Default => Some(repo),
+            micold_core::session::SessionLocation::Worktree(dir) => inner
+                .worktrees
+                .get(project)?
+                .iter()
+                .find(|w| &w.dir_name == dir)
+                .map(|w| w.path.clone()),
+        }
+    }
+
+    /// The environment a session spawned in `cwd` gets, and its `PATH`, for a setup run there
+    /// (FR-011). May run the environment-include script: never call it under the state lock.
+    pub(crate) fn setup_env_for(&self, cwd: &Path) -> (Vec<(String, String)>, std::ffi::OsString) {
+        let vars = self.env_include_vars_for(cwd);
+        let path = session_path(&vars);
+        (vars, path)
     }
 
     /// Push a full `CatalogChanged` snapshot to every connected client (FR-011; idempotent).
