@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A | 2 | 9596267dc307630eff98da28bee82557759a16d3:468b460804a33c78d42ce9d7f39bb150035773de | CLEAN (scoped re-review of A and B, sonnet): all round-1 findings fixed; D10 and D11 confirmed against cosmic-text 0.15.0 source. 2 MINOR declined (see below); no code change, so no new gate. Full gate (scripts/gate.sh) green at 468b4608; layout snapshot unchanged |
 | Review A M2 | 1 | 9edcbec0b4cb30468e08cba30782b1764f2a0625:2983ec92f3edaae8514bd95d544336d1b38eb71a | CLEAN; F1 MINOR fixed (`remove_host_faces` shared with `pin_monospace`), F2 MINOR declined |
 | Review B M2 | 1 | same | CHANGES: F1 MAJOR fixed (M2 cycle-log with red by mutation), F2 MINOR fixed (Verify names micold-material); visual pass B5 PASS |
+| Close review + tdd-verify + converge | 1 | e96467d88139e39bb3c3aff606c1cde655db8412:a6ba671167b82cb6ccd85c5248a05aba198da3d0 | pending (dispatched by orchestrator); close diff = quickstart Results, tasks T023–T024 ticks, ledger |
 
 ## Declined review findings
 

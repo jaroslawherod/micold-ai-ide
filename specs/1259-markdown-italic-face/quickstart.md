@@ -77,7 +77,7 @@ the D10/D11 re-run; B5 by the M2 unit).
   `build + test (windows-latest)` green on #1377, run 40147222770, and #1389, run 40157020830):
   the layout snapshot, `tests/roboto_font.rs` (the six faces resolve), the `roboto.rs` resolution
   and pin tests (`pin_drops_host_italics_and_off_weight_faces_only` builds its own font database from
-  temp-dir host copies, so it runs the same on every host; the resolution test that reads the host's fonts skips where a
+  temp-dir host copies, so it runs the same on every host; `the_renderer_draws_each_weight_and_bold_in_the_bundled_faces`, which reads the host's fonts, skips where a
   host Roboto is installed, which neither runner image has), the `link_text.rs` span-font tests and `markdown_subset.rs`.
   #1377 also passed `package + smoke (windows-11-arm)`.
 - **Needs a host, not run**: the look itself (B1 and B3 in a release build) on macOS and Windows.
