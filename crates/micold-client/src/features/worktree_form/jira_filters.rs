@@ -462,9 +462,10 @@ impl FilterState {
                 }
             }
         }
-        if matches!(&self.labels, LabelSource::Ready(choices) if kind == FilterKind::Label && choices.partial())
-        {
-            rows.push(FilterRow::new(RowText::LabelsPartial, RowAction::Inert));
+        if let (FilterKind::Label, LabelSource::Ready(choices)) = (kind, &self.labels) {
+            if choices.partial() {
+                rows.push(FilterRow::new(RowText::LabelsPartial, RowAction::Inert));
+            }
         }
         rows
     }
