@@ -64,3 +64,71 @@ pub fn state_with(form: WorktreeForm) -> StateUnderTest {
     state.worktree_form.form = Some(form);
     StateUnderTest::new(state)
 }
+
+/// `state` (a project open) connected to Jira, its New worktree form on the Jira source with the
+/// component `Payments` chosen over a capped listing (feature 1185): the filter row, the active
+/// line with **Clear filters** and the cap caption all show. Driven through the reducer, as the
+/// application gets there, so the field shows the chosen value.
+pub fn jira_filtered(mut state: State) -> State {
+    use micold_client::app::Message;
+    use micold_client::features::worktree_form::jira_filters::FilterMsg;
+    use micold_client::features::worktree_form::Msg;
+    use micold_core::jira::{connection_key, JiraConnection};
+    use micold_core::jira_filter::FilterKind;
+    let project = state.workspace.active.clone().expect("a project is open");
+    state.settings.jira_enabled = true;
+    state.settings.jira_connections.insert(
+        connection_key(&project),
+        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com")
+            .expect("a Jira connection"),
+    );
+    let mut send = |msg: Msg| state.update(Message::WorktreeForm(msg));
+    send(Msg::Opened);
+    // No session, as the other Jira states: the first prompt is not this state's subject.
+    send(Msg::SessionCliChosen(None));
+    send(Msg::RemotesListed(Ok(Vec::new())));
+    send(Msg::SourceChanged(BranchSource::Issue));
+    let capped = |numbers: &[u64]| IssueListing {
+        issues: numbers
+            .iter()
+            .map(|n| ticket(*n, "Refund is charged twice", None))
+            .collect(),
+        total_open: numbers.len() as u64,
+        complete: false,
+    };
+    let answer = |state: &mut State, numbers: &[u64]| {
+        let seq = state
+            .worktree_form
+            .awaited_issue_load()
+            .expect("a load in flight");
+        state.update(Message::WorktreeForm(Msg::IssuesLoaded {
+            seq,
+            result: Ok((capped(numbers), PathBuf::new())),
+            resolved_env: None,
+        }));
+    };
+    answer(&mut state, &[1, 2, 3]);
+    let filter = |state: &mut State, msg: FilterMsg| {
+        state.update(Message::WorktreeForm(Msg::JiraFilter(msg)));
+    };
+    filter(&mut state, FilterMsg::Focused(FilterKind::Component));
+    let seq = state
+        .worktree_form
+        .awaited_choices()
+        .expect("components in flight")
+        .1;
+    filter(
+        &mut state,
+        FilterMsg::ComponentsLoaded {
+            seq,
+            result: Ok(vec![
+                "Payments".to_string(),
+                "Auth".to_string(),
+                "Ä \"quoted\" \\ name".to_string(),
+            ]),
+        },
+    );
+    filter(&mut state, FilterMsg::Picked(FilterKind::Component, 1));
+    answer(&mut state, &[1, 3]);
+    state
+}

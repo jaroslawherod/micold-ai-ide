@@ -576,3 +576,172 @@ fn a_400_with_a_body_still_bisects_a_status_chunk() {
     let names: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
     assert_eq!(names, ["ABC-1"]);
 }
+
+// --- feature 1185, T004 and T010: filtered requests and filter choices --------------------
+
+/// The request line, the headers (names lower-cased) and the body of a raw request.
+fn parts(raw: &str) -> (String, Vec<(String, String)>, String) {
+    let (head, body) = raw.split_once("\r\n\r\n").unwrap();
+    let mut lines = head.lines();
+    let line = lines.next().unwrap().to_string();
+    let headers = lines
+        .map(|l| {
+            let (k, v) = l.split_once(':').unwrap();
+            (k.to_ascii_lowercase(), v.trim().to_string())
+        })
+        .collect();
+    (line, headers, body.to_string())
+}
+
+/// The headers are ours and nothing else: `Authorization`, `Accept`, `User-Agent`, and
+/// `Content-Type` exactly when `post`; the host is the connection's site.
+fn assert_our_headers(headers: &[(String, String)], origin: &str, post: bool) {
+    use base64::Engine;
+    let basic = base64::engine::general_purpose::STANDARD.encode(format!("me@acme.com:{SENTINEL}"));
+    let get = |name: &str| {
+        headers
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.clone())
+    };
+    assert_eq!(get("authorization"), Some(format!("Basic {basic}")));
+    assert_eq!(get("accept").as_deref(), Some("application/json"));
+    assert_eq!(get("user-agent").as_deref(), Some("micold-ai-ide"));
+    assert_eq!(
+        get("content-type").as_deref(),
+        post.then_some("application/json")
+    );
+    assert_eq!(
+        get("host").as_deref(),
+        origin.strip_prefix("http://"),
+        "only the connection's site"
+    );
+    let allowed = [
+        "authorization",
+        "accept",
+        "content-type",
+        "user-agent",
+        "host",
+        "content-length",
+        "accept-encoding",
+    ];
+    for (name, _) in headers {
+        assert!(allowed.contains(&name.as_str()), "unexpected header {name}");
+    }
+}
+
+fn payments() -> micold_core::jira_filter::JiraFilters {
+    let mut filters = micold_core::jira_filter::JiraFilters::default();
+    assert!(filters.set_component(Some("Payments".into())));
+    assert!(filters.set_fix_version(Some("2.4".into())));
+    filters
+}
+
+#[test]
+fn a_filtered_listing_posts_the_narrowed_list_jql() {
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    let page = JiraCloud::new()
+        .list_filtered(
+            &connection(&origin),
+            &token(),
+            &payments(),
+            Some("cursor-1"),
+        )
+        .expect("a page");
+    assert_eq!(page.issues.len(), 1);
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert!(
+        line.starts_with("POST /rest/api/3/search/jql HTTP/1.1"),
+        "{line}"
+    );
+    assert_our_headers(&headers, &origin, true);
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        json["jql"].as_str(),
+        Some(
+            r#"project = "ABC" AND statusCategory != Done AND component = "Payments" AND fixVersion = "2.4" ORDER BY updated DESC"#
+        )
+    );
+    assert_eq!(json["maxResults"], 100);
+    assert_eq!(json["nextPageToken"], "cursor-1");
+    assert!(!body.contains(SENTINEL));
+}
+
+#[test]
+fn a_filtered_search_posts_the_narrowed_search_jql_for_fifty_results() {
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    let found = JiraCloud::new()
+        .search_filtered(&connection(&origin), &token(), "refund", &payments())
+        .expect("issues");
+    assert_eq!(found.len(), 1);
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert!(line.starts_with("POST /rest/api/3/search/jql "), "{line}");
+    assert_our_headers(&headers, &origin, true);
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        json["jql"].as_str(),
+        Some(
+            r#"project = "ABC" AND statusCategory != Done AND (summary ~ "refund*" OR labels = "refund") AND component = "Payments" AND fixVersion = "2.4" ORDER BY updated DESC"#
+        )
+    );
+    assert_eq!(json["maxResults"], 50);
+}
+
+#[test]
+fn filtered_requests_are_classified_and_follow_no_redirect() {
+    let (origin, _rx) = serve(Some(format!(
+        "HTTP/1.1 302 Found\r\nLocation: {}/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        closed_origin()
+    )));
+    let error = JiraCloud::new()
+        .list_filtered(&connection(&origin), &token(), &payments(), None)
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::NotJiraCloud);
+    let (origin, _rx) = serve(Some(status(401)));
+    let error = JiraCloud::new()
+        .search_filtered(&connection(&origin), &token(), "x", &payments())
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::CredentialsRefused);
+}
+
+fn status(code: u16) -> String {
+    format!("HTTP/1.1 {code} Status\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+}
+
+#[test]
+fn components_get_the_projects_components_from_the_site_only() {
+    let (origin, rx) = serve(Some(ok(r#"[{"name":"Payments"},{"name":"Auth"}]"#)));
+    let names = JiraCloud::new()
+        .components(&connection(&origin), &token())
+        .expect("components");
+    assert_eq!(names, ["Payments", "Auth"]);
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert_eq!(line, "GET /rest/api/3/project/ABC/components HTTP/1.1");
+    assert_our_headers(&headers, &origin, false);
+    assert!(body.is_empty(), "a GET sends no body: {body}");
+}
+
+#[test]
+fn a_components_failure_is_classified_as_a_search_failure_is() {
+    for (code, expected) in [
+        (401, IssueLoadError::CredentialsRefused),
+        (403, IssueLoadError::CredentialsRefused),
+        (404, IssueLoadError::NoAccess),
+    ] {
+        let (origin, _rx) = serve(Some(status(code)));
+        let error = JiraCloud::new()
+            .components(&connection(&origin), &token())
+            .unwrap_err();
+        assert_eq!(error, expected, "status {code}");
+    }
+    let (origin, _rx) = serve(None);
+    let error = JiraCloud::with_timeout(Duration::from_millis(300))
+        .components(&connection(&origin), &token())
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::TimedOut);
+    let error = JiraCloud::new()
+        .components(&connection(&closed_origin()), &token())
+        .unwrap_err();
+    assert!(matches!(error, IssueLoadError::Unreachable(_)), "{error:?}");
+    assert!(!format!("{error:?}").contains(SENTINEL));
+}

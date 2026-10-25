@@ -19,7 +19,7 @@
 | FR-006 (choices only on first focus, nothing on open), FR-014 (nothing else sent) | client integration | `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` (extended) |
 | FR-006 (no name/account in logs or `{:?}`), token | client integration | `crates/micold-client/tests/jira_token_never_leaks.rs` (extended) |
 | Multi-dialog isolation (Principle II) | client integration | `jira_filters_picker.rs`: two `App`s, one filter changed |
-| FR-014 statement text | client unit | `features/jira_filters.rs` / `worktree_form.rs` tests |
+| FR-014 statement text | client unit | `features/worktree_form/jira_filters.rs` / `worktree_form.rs` tests |
 | Row fits, lists anchor, footer reachable with the active line shown | geometry gates | `crates/micold-client/tests/gates/jira_filters_fit.rs` (NEW), `gates/panel_placement.rs` scenario with filters active |
 | FR-015 keyboard, look, narrow-list tooltips | visual pass | Part B |
 

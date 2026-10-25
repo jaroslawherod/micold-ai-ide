@@ -746,7 +746,11 @@ Turning it on lets Micold read the open issues of a Jira Cloud project to start 
 page then says whether the integration is enabled and, for the open project, which Jira site and
 project it is connected to, or that it has no Jira connection yet. With no project open it says to
 open one. Once a project is connected, Micold contacts that connection's Jira site and sends the
-project key, the search text you type and your account email with its API token.
+project key, the search text you type, the filters you choose in the issue list and your account
+email with its API token. To offer the **Component** filter's choices it asks the site for the
+project's components, sending only the project key and your credentials, and only when you first
+open that filter in the New worktree dialog (see
+[From a Jira issue](worktrees-and-sessions.md#from-a-jira-issue)).
 
 It also does so with no dialog open, to show the status of the tickets your worktrees are linked to
 (see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)): the keys of those tickets are

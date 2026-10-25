@@ -36,6 +36,7 @@ pub mod issue_details;
 pub mod issue_link;
 pub mod issue_types;
 pub mod jira;
+pub mod jira_filter;
 pub mod jira_query;
 pub mod jira_status;
 pub mod kube;

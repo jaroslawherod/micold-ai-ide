@@ -2,7 +2,7 @@
 
 All state is in memory, held by the open create-worktree form, and never serialised (FR-006,
 FR-016). Core types live in `crates/micold-core/src/jira_filter.rs` (NEW); form state in
-`crates/micold-client/src/features/jira_filters.rs` (NEW).
+`crates/micold-client/src/features/worktree_form/jira_filters.rs` (NEW).
 
 ## 1. `AccountId` (core)
 - A Jira Cloud account id: non-empty, no control characters. Built only by `parse_myself` /

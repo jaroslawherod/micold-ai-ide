@@ -9,6 +9,10 @@
 //! header) reaches a notice unclassified. The token is used only to build the header of the
 //! request in hand.
 //!
+//! Feature 1185 adds the filtered listing and search (the same `POST`, its JQL narrowed by the
+//! chosen filters) and the filter choices (`GET` of a project resource). One private `request`
+//! builds every request, so the headers and the outcome mapping exist once.
+//!
 //! Depends on `micold_core`, `ureq`, `base64` and `serde_json` alone, so the adapter test includes
 //! this file by path.
 
@@ -20,6 +24,7 @@ use micold_core::github::{Issue, IssueLoadError, IssuePage};
 use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
+use micold_core::jira_filter::{narrowed, parse_components, JiraFilters};
 use micold_core::jira_query::{rejection_messages, QueryFailure, ScopedQuery};
 use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
 
@@ -37,6 +42,23 @@ enum PostError {
 
 /// Bytes of a `400` answer's body read at most: Jira's messages are a few lines.
 const MAX_REFUSAL_BYTES: u64 = 64 * 1024;
+
+/// A failure as the caller sees it: a `400` is classified like any other status.
+fn load_error(error: PostError) -> IssueLoadError {
+    match error {
+        PostError::BadRequest(_) => classify(&Outcome::Status(400)),
+        PostError::Load(error) => error,
+    }
+}
+
+/// How a request is sent.
+enum Method<'a> {
+    Get,
+    Post(&'a serde_json::Value),
+}
+
+/// Where every issue search goes.
+const SEARCH_PATH: &str = "/rest/api/3/search/jql";
 
 /// The whole request's budget: connect, send and read (FR-018).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -88,10 +110,7 @@ impl JiraCloud {
         token: &ApiToken,
         body: &serde_json::Value,
     ) -> Result<Vec<u8>, IssueLoadError> {
-        self.send(conn, token, body).map_err(|error| match error {
-            PostError::BadRequest(_) => classify(&Outcome::Status(400)),
-            PostError::Load(error) => error,
-        })
+        self.send(conn, token, body).map_err(load_error)
     }
 
     /// [`Self::post`], keeping a `400` apart from the other failures.
@@ -101,8 +120,35 @@ impl JiraCloud {
         token: &ApiToken,
         body: &serde_json::Value,
     ) -> Result<Vec<u8>, PostError> {
+        self.request(conn, token, Method::Post(body), SEARCH_PATH, &[])
+    }
+
+    /// `GET path` on the connection's site, with `query`, returning the body (feature 1185).
+    fn get(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<Vec<u8>, IssueLoadError> {
+        self.request(conn, token, Method::Get, path, query)
+            .map_err(load_error)
+    }
+
+    /// Every request to Jira: `path` on the connection's site only, with the headers
+    /// `Authorization`, `Accept`, `User-Agent` (and `Content-Type` on a `POST`) and nothing else of
+    /// ours, the request budget, no redirect followed, and every failure classified, a `400` kept
+    /// apart (contracts/jira-filter-source.md §3).
+    fn request(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        method: Method<'_>,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<Vec<u8>, PostError> {
         let load = |outcome: Outcome| PostError::Load(classify(&outcome));
-        let url = format!("{}/rest/api/3/search/jql", conn.site.as_str());
+        let url = format!("{}{path}", conn.site.as_str());
         let credentials = base64::engine::general_purpose::STANDARD.encode(format!(
             "{}:{}",
             conn.email.as_str(),
@@ -114,13 +160,24 @@ impl JiraCloud {
             .http_status_as_error(false)
             .build()
             .into();
-        let sent = agent
-            .post(&url)
-            .header("Authorization", format!("Basic {credentials}"))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .header("User-Agent", "micold-ai-ide")
-            .send(body.to_string().as_bytes());
+        let authorization = format!("Basic {credentials}");
+        let sent = match method {
+            Method::Get => agent
+                .get(&url)
+                .query_pairs(query.iter().copied())
+                .header("Authorization", &authorization)
+                .header("Accept", "application/json")
+                .header("User-Agent", "micold-ai-ide")
+                .call(),
+            Method::Post(body) => agent
+                .post(&url)
+                .query_pairs(query.iter().copied())
+                .header("Authorization", &authorization)
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "micold-ai-ide")
+                .send(body.to_string().as_bytes()),
+        };
         let mut response = match sent {
             Ok(response) => response,
             Err(error) => return Err(load(outcome_of(&error, token))),
@@ -252,6 +309,41 @@ impl JiraSource for JiraCloud {
             PostError::Load(error) => QueryFailure::Load(error),
         })?;
         parse_page(&bytes).map_err(QueryFailure::Load)
+    }
+
+    fn list_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        filters: &JiraFilters,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        let jql = narrowed(&list_jql(&conn.project_key), filters);
+        let body = request_body(&jql, cursor, PAGE_SIZE);
+        parse_page(&self.post(conn, token, &body)?)
+    }
+
+    fn search_filtered(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        text: &str,
+        filters: &JiraFilters,
+    ) -> Result<Vec<Issue>, IssueLoadError> {
+        let Some(jql) = search_jql(&conn.project_key, text) else {
+            return Ok(Vec::new());
+        };
+        let body = request_body(&narrowed(&jql, filters), None, SEARCH_SIZE);
+        parse_page(&self.post(conn, token, &body)?).map(|page| page.issues)
+    }
+
+    fn components(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+    ) -> Result<Vec<String>, IssueLoadError> {
+        let path = format!("/rest/api/3/project/{}/components", conn.project_key);
+        parse_components(&self.get(conn, token, &path, &[])?)
     }
 }
 

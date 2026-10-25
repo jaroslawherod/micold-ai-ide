@@ -208,3 +208,41 @@ fn the_advanced_query_is_never_logged_or_notified() {
         assert!(offenders.is_empty(), "{file}: {offenders:?}");
     }
 }
+
+/// Feature 1185 (FR-006, FR-014): a filter's choices are asked for only from the filter handler,
+/// when the reducer handed out a new filter seq (a first focus, a Retry), and a filtered listing
+/// is loaded only by the load path, from the named events above or a filter change. Opening the
+/// form or showing the Jira source asks no choice: the behaviour is driven over `FakeJiraSource`
+/// in `main_tests.rs` (`jira_filter_shell`); what stays here is the structure.
+#[test]
+fn filter_choices_and_filtered_loads_start_only_from_their_handlers() {
+    let choices: Vec<_> = occurrences(".components(connection, token)");
+    assert_eq!(choices.len(), 1, "{choices:?}");
+    assert_eq!(
+        choices[0].0,
+        "crates/micold-client/src/shell/jira_filters.rs"
+    );
+    let starters: Vec<_> = occurrences("start_components(")
+        .into_iter()
+        .filter(|(_, line)| !line.starts_with("fn start_components("))
+        .collect();
+    assert_eq!(starters.len(), 1, "{starters:?}");
+    let loads: Vec<_> = occurrences("start_jira_load(")
+        .into_iter()
+        .filter(|(_, line)| !line.starts_with("pub(crate) fn start_jira_load("))
+        .map(|(file, _)| file)
+        .collect();
+    assert_eq!(
+        loads,
+        [
+            "crates/micold-client/src/shell/issues.rs",
+            "crates/micold-client/src/shell/jira_filters.rs"
+        ],
+        "the load path, and the filter handler after a change of the chosen filters"
+    );
+    let handler =
+        std::fs::read_to_string(root().join("crates/micold-client/src/shell/jira_filters.rs"))
+            .unwrap();
+    assert!(handler.contains(".filter(|seq| *seq > issue_before)"));
+    assert!(handler.contains(".filter(|(_, seq)| *seq > choice_before)"));
+}

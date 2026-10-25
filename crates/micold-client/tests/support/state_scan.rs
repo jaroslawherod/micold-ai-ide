@@ -703,8 +703,10 @@ impl Merge for BTreeMap<String, BTreeSet<String>> {
     }
 }
 
-/// The feature a source file belongs to, or `None` for shell, view and root code.
+/// The feature a source file belongs to, or `None` for shell, view and root code. A file in a
+/// feature's own directory (`features/worktree_form/jira_filters.rs`) belongs to that feature.
 pub fn feature_of(file: &str) -> Option<String> {
     let stem = file.strip_prefix("features/")?.strip_suffix(".rs")?;
-    (stem != "mod").then(|| stem.to_string())
+    let feature = stem.split('/').next().unwrap_or(stem);
+    (feature != "mod").then(|| feature.to_string())
 }

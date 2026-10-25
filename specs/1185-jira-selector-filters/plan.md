@@ -51,7 +51,7 @@ line); no name or account in `Debug`/logs (FR-006).
 *GATE: passed before Phase 0; re-checked after Phase 1 design: unchanged.*
 
 - [x] **I. Test-First**: all decisions (clauses, escaping, parsing, label choices, reducer
-  transitions, seq discarding) sit in `micold-core` or the render-free `features/jira_filters.rs`
+  transitions, seq discarding) sit in `micold-core` or the render-free `features/worktree_form/jira_filters.rs`
   and start from failing tests; `ui/worktree_form.rs` only draws the reducer's state (glue
   exception, covered by geometry gates and quickstart Part B). PASS.
 - [x] **II. Multi-Session**: filter state is per form (per window's `App`), never shared or
@@ -102,11 +102,10 @@ crates/micold-client/
 ├── src/shell/jira_http.rs     # one private request(method, path, query, body); the six methods
 ├── src/shell/issues.rs        # Jira load/search pass the form's filters; choice-request starters
 ├── src/shell/jira_filters.rs  # NEW: on_filter_* handlers (focus → request, people debounce, retry)
-├── src/features/jira_filters.rs # NEW: FilterState, ChoiceLoad, FilterMsg, reducer, active line,
+├── src/features/worktree_form/jira_filters.rs # NEW: FilterState, ChoiceLoad, FilterMsg, reducer, active line,
 │                                #      list rows per kind, statement suffix
-├── src/features/worktree_form.rs # WorktreeForm.jira_filters; FormMsg::JiraFilter; reset points;
+├── src/features/worktree_form.rs # pub mod jira_filters; WorktreeForm.jira_filters; FormMsg::JiraFilter; reset points;
 │                                 #   jira_search_request(); empty/cap texts with filters; notice
-├── src/features/mod.rs        # mod jira_filters
 ├── src/ui/worktree_form.rs    # filter row + active line in the Jira issue section
 ├── src/main.rs / app dispatch # route FormMsg::JiraFilter to shell::jira_filters
 ├── examples/fake_jira.rs      # components, versions, myself, user search, clause-aware search
@@ -117,7 +116,7 @@ docs/user-guide/{worktrees-and-sessions,settings}.md
 **Structure Decision**: logic in `micold-core` (testable with `test-core`), form state and
 transitions in the client's render-free `features/`, IO in `shell/`, drawing in `ui/`, matching
 features 533 and 1101. The new filter code sits in its own files (`jira_filter.rs`,
-`features/jira_filters.rs`, `shell/jira_filters.rs`) so the files #1186 also edits
+`features/worktree_form/jira_filters.rs`, `shell/jira_filters.rs`) so the files #1186 also edits
 (`jira.rs`, `jira_http.rs`, `features/worktree_form.rs`, `ui/worktree_form.rs`) get only small,
 additive hunks.
 
@@ -137,7 +136,7 @@ additive hunks.
 | FR-011 | empty filtered listing text + Clear filters ([filter-ui §3](contracts/filter-ui.md)) |
 | FR-012 | per-kind `ChoiceLoad::Failed` + `ChoicesRetry(kind)`; nothing else blocked |
 | FR-013 | failures render as today; `FilterState` untouched by a listing failure |
-| FR-014 | `jira_notice` text + "Filters sent: …"; request table ([source §3](contracts/jira-filter-source.md)) |
+| FR-014 | `jira_notice` text + the active line naming the values sent (ledger D12); request table ([source §3](contracts/jira-filter-source.md)) |
 | FR-015 | typeahead focus stops, Any row, Clear filters button, active line |
 | FR-016 | `FilterState` reset points ([data-model §7](data-model.md)) |
 | FR-017 | pick path unchanged |

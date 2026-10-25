@@ -23,8 +23,11 @@
 //! struct is where that claim becomes checkable: everything the form accumulates between opening
 //! and submitting is inside `form`, and nothing outside this module names any of it.
 
+pub mod jira_filters;
+
 use crate::app::Message;
 use crate::features::window::FieldId;
+use crate::features::worktree_form::jira_filters::{FilterMsg, FilterState};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::env_include::EnvIncludeSnapshot;
@@ -37,6 +40,7 @@ use micold_core::github::{
 use micold_core::issue_details::IssueDetails;
 use micold_core::issue_types::LabelTypeEntry;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
+use micold_core::jira_filter::{FilterKind, JiraFilters};
 use micold_core::naming::{
     derive, dir_name_from_branch, naming_for_issue, ConventionalType, DerivedNames, NamingError,
     WorktreeNaming,
@@ -77,6 +81,9 @@ pub struct State {
     /// The last issue-load seq handed out (feature 034, FR-007a). Lives here, not on the form, so
     /// it outlives a closed form and a late result can never match a new form's request.
     pub issue_request_seq: u64,
+    /// The last filter-choice seq handed out (feature 1185, research R7). Beside
+    /// `issue_request_seq` for the same reason: a late answer never matches a new form's request.
+    pub filter_request_seq: u64,
 }
 
 impl State {
@@ -155,6 +162,27 @@ impl State {
             } => Some(form.issue_query.trim().to_string()),
             _ => None,
         }
+    }
+
+    /// What a running Jira search asks: the typed text and the filters chosen (feature 1185,
+    /// FR-009). `None` exactly when [`Self::jira_search_text`] is.
+    pub fn jira_search_request(&self) -> Option<(String, JiraFilters)> {
+        let text = self.jira_search_text()?;
+        let filters = self.form.as_ref()?.jira_filters.chosen.clone();
+        Some((text, filters))
+    }
+
+    /// The filters a Jira listing of the open form is loaded with (feature 1185, FR-007).
+    pub fn jira_filters(&self) -> JiraFilters {
+        self.form
+            .as_ref()
+            .map(|form| form.jira_filters.chosen.clone())
+            .unwrap_or_default()
+    }
+
+    /// The filter-choice request the open form awaits, with its filter (feature 1185).
+    pub fn awaited_choices(&self) -> Option<(FilterKind, u64)> {
+        self.form.as_ref()?.jira_filters.awaited_choices()
     }
 
     /// The read of the picked issue's details the open form awaits (837 form-details §1).
@@ -617,6 +645,8 @@ pub struct WorktreeForm {
     pub first_prompt_edited: bool,
     /// The selector's advanced JQL state (feature 1186).
     pub jira_query: jira_query::JiraQuery,
+    /// The Jira filters of the issue picker (feature 1185): reset with the issues.
+    pub jira_filters: FilterState,
 }
 
 impl WorktreeForm {
@@ -630,9 +660,16 @@ impl WorktreeForm {
         {
             return;
         }
-        let picked = self
-            .picked_issue
-            .and_then(|n| self.held_issues().find(|i| i.number() == n));
+        let picked = self.picked_issue.and_then(|n| {
+            self.held_issues()
+                .find(|i| i.number() == n)
+                // Feature 1185: a pick a filter change left out of the list keeps its facts.
+                .or(self
+                    .jira_filters
+                    .kept_pick
+                    .as_ref()
+                    .filter(|i| i.number() == n))
+        });
         let facts = micold_core::prompt_template::WorktreeFacts {
             issue: self.ticket.trim().to_string(),
             issue_title: picked.map(|i| i.title().to_string()).unwrap_or_default(),
@@ -778,10 +815,34 @@ impl WorktreeForm {
         if self.jira_query.is_advanced() {
             return Some(jira_query::notice(site));
         }
-        Some(format!(
-            "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
+        let notice = format!(
+            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
             site.key, site.origin
-        ))
+        );
+        // Feature 1185 (FR-014): the values sent are named by the active line under the picker's
+        // main row, not here: a fourth line of statement is one the tallest dialog lacks (D12).
+        Some(notice)
+    }
+
+    /// Whether the Jira list is narrowed by a filter (feature 1185).
+    pub fn jira_filtered(&self) -> bool {
+        self.jira_site().is_some() && !self.jira_filters.chosen.is_empty()
+    }
+
+    /// What an empty list says when filters chose nothing (feature 1185, FR-011); `None` without
+    /// a filter.
+    pub fn filtered_empty_text(&self) -> Option<&'static str> {
+        self.jira_filtered()
+            .then_some("No open issue matches the filters.")
+    }
+
+    /// What the issue list says when nothing matches the search (feature 1185, filter-ui §3).
+    pub fn issue_no_match_text(&self) -> &'static str {
+        if self.jira_filtered() {
+            "No open issue matches the search and filters."
+        } else {
+            "No open issue matches."
+        }
     }
 
     /// The Jira site the Issue source reads, while Jira is the provider.
@@ -839,10 +900,14 @@ impl WorktreeForm {
             IssueList::Loaded { listing, .. }
                 if !listing.complete && self.provider == IssueProvider::Jira =>
             {
-                Some(format!(
-                    "Showing the {} most recently updated open issues.",
-                    group_digits(listing.issues.len() as u64)
-                ))
+                // Feature 1185 (FR-007): a filtered list's caption follows "Filtered by …" in one
+                // paragraph, which says what it is a part of; short, so the two keep one line (D12).
+                let shown = group_digits(listing.issues.len() as u64);
+                Some(if self.jira_filters.chosen.is_empty() {
+                    format!("Showing the {shown} most recently updated open issues.")
+                } else {
+                    format!("Showing the {shown} most recently updated.")
+                })
             }
             IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
                 "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
@@ -919,6 +984,8 @@ impl WorktreeForm {
         self.issue_highlight = None;
         self.set_picked_issue(None);
         self.jira_query.reset();
+        // Feature 1185 (FR-016): leaving the source, the provider or Jira drops the filters.
+        self.jira_filters = FilterState::default();
         self.refresh_default_prompt();
     }
 
@@ -1483,6 +1550,16 @@ pub fn issues_loaded(
         }
         match result {
             Ok((listing, gh)) => {
+                // Feature 1185 (FR-009): a Jira list reloaded under new filters with text typed and
+                // the list capped searches beyond it again, after the usual pause.
+                let search = if form.provider == IssueProvider::Jira
+                    && !listing.complete
+                    && !form.issue_query.trim().is_empty()
+                {
+                    SearchState::Pending { seq }
+                } else {
+                    SearchState::Idle
+                };
                 // The list arrived without descriptions; they follow under this load's seq, so
                 // a later load's pass can never take this one's pages (038 FR-024).
                 let descriptions =
@@ -1499,7 +1576,7 @@ pub fn issues_loaded(
                     listing,
                     gh,
                     searched: Vec::new(),
-                    search: SearchState::Idle,
+                    search,
                     descriptions,
                 };
                 form.issue_list_open = true;
@@ -2157,6 +2234,8 @@ pub enum Msg {
     },
     /// A message of the selector's advanced mode (feature 1186, data-model §7).
     JiraQuery(jira_query::Msg),
+    /// A message of the Jira filters (feature 1185).
+    JiraFilter(FilterMsg),
 }
 
 /// The form's own reducer: one entry point, thirty-five answers (FR-004a).
@@ -2223,6 +2302,48 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             result,
         } => issue_details_loaded(state, seq, number, result),
         Msg::JiraQuery(msg) => jira_query_changed(state, msg),
+        Msg::JiraFilter(msg) => crate::features::worktree_form::jira_filters::update(state, msg),
     }
     Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn jira_form() -> WorktreeForm {
+        let connection =
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap();
+        WorktreeForm {
+            jira: JiraAvailability::Connected(JiraSite::of(&connection)),
+            provider: IssueProvider::Jira,
+            source: BranchSource::Issue,
+            ..WorktreeForm::default()
+        }
+    }
+
+    /// Feature 1185 (FR-014, filter-ui §4): the statement names the filters; while one is chosen
+    /// the active line names the values it sends (D12).
+    #[test]
+    fn the_jira_statement_names_the_filters_and_the_values_sent() {
+        let mut form = jira_form();
+        let statement = form.jira_notice().expect("a statement");
+        assert!(
+            statement.contains("Sends the project key, your search text, the filters you choose and your credentials"),
+            "{statement}"
+        );
+        assert!(!statement.contains("Filters sent"), "{statement}");
+        assert!(form
+            .jira_filters
+            .chosen
+            .set_component(Some("Payments".into())));
+        // The statement keeps its three lines; the active line names the values sent (D12).
+        let chosen = form.jira_notice().expect("a statement");
+        assert_eq!(chosen, statement);
+        assert_eq!(
+            form.jira_filters.active_line().as_deref(),
+            Some("Filtered by component Payments")
+        );
+        assert_eq!(form.issue_notice(), Some(chosen));
+    }
 }
