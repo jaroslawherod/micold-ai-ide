@@ -103,13 +103,14 @@ fn cli_item(state: &State) -> Option<ItemModel> {
     )))
 }
 
-/// Where the active session's daemon runs (research R6): "local" for the host daemon or with no
-/// project open, the daemon's name for another runtime, "no daemon" when unbound.
+/// Where the shown location's daemon runs (research R6; feature 1269 R5, a sessionless worktree's
+/// review included): "local" for the host daemon or with no project open, the daemon's name for
+/// another runtime, "no daemon" when unbound.
 fn location(state: &State) -> String {
     if state.workspace.active.is_none() {
         return "local".to_string();
     }
-    let key = match state.current_session_location() {
+    let key = match state.shown_location() {
         Some(SessionLocation::Worktree(dir)) => dir,
         Some(SessionLocation::Default) | None => String::new(),
     };

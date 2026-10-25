@@ -3420,18 +3420,7 @@ fn flat_effects(effect: Option<Effect>) -> Vec<Effect> {
 
 /// The counts reads the root left for the shell, flattened.
 fn counts_reads(app: &mut micold_client::app::State) -> Vec<SessionLocation> {
-    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
-        match effect {
-            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
-            Effect::ReadCounts { entry, .. } => out.push(entry),
-            _ => {}
-        }
-    }
-    let mut out = Vec::new();
-    if let Some(effect) = app.take_changes_effect() {
-        flat(effect, &mut out);
-    }
-    out
+    counts_reads_in(app.take_changes_effect())
 }
 
 /// Feature 1126 H7 (T045): the header's follow reads the counts of a newly shown location once,
@@ -3838,34 +3827,24 @@ fn answer_pending(app: &mut micold_client::app::State) -> Option<Effect> {
 
 /// The list reads in `effect`, by entry.
 fn list_reads(effect: Option<Effect>) -> Vec<SessionLocation> {
-    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
-        match effect {
-            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
-            Effect::ReadList { entry, .. } => out.push(entry),
-            _ => {}
-        }
-    }
-    let mut out = Vec::new();
-    if let Some(effect) = effect {
-        flat(effect, &mut out);
-    }
-    out
+    flat_effects(effect)
+        .into_iter()
+        .filter_map(|e| match e {
+            Effect::ReadList { entry, .. } => Some(entry),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The counts reads in `effect`, by entry.
 fn counts_reads_in(effect: Option<Effect>) -> Vec<SessionLocation> {
-    fn flat(effect: Effect, out: &mut Vec<SessionLocation>) {
-        match effect {
-            Effect::Batch(effects) => effects.into_iter().for_each(|e| flat(e, out)),
-            Effect::ReadCounts { entry, .. } => out.push(entry),
-            _ => {}
-        }
-    }
-    let mut out = Vec::new();
-    if let Some(effect) = effect {
-        flat(effect, &mut out);
-    }
-    out
+    flat_effects(effect)
+        .into_iter()
+        .filter_map(|e| match e {
+            Effect::ReadCounts { entry, .. } => Some(entry),
+            _ => None,
+        })
+        .collect()
 }
 
 /// `feat-a`'s session `a1` current, its review open and read, a part of its view changed.
@@ -4115,7 +4094,7 @@ fn review_changes_on_another_location_shows_it_with_its_last_shown_else_main_ses
     let (mut app, [a1, a2, b]) = with_sessionless_worktree();
     app.update(Message::Session(SessionMsg::Selected(b)));
     review_again(&mut app, feat_a.clone());
-    let main = micold_core::occupancy::main_session(&app.active_sessions(), &feat_a);
+    let main = micold_core::occupancy::main_session(app.active_sessions(), &feat_a);
     assert!(
         main == Some(a1) || main == Some(a2),
         "feat-a has a main session"
@@ -4177,22 +4156,22 @@ fn every_selection_route_updates_the_locations_last_shown_session() {
     );
 }
 
-/// Feature 1269 T027 (U8, R8): the current session closing when its location has a Review tab and
-/// no live session left shows that tab, under the location's header; with another session of the
-/// location left, no session is current and the tab stays hidden, as before.
+/// Feature 1269 T027 (U8, R8): the current session closing (here its close press, then its end
+/// through `SessionsClosed`) when its location has a Review tab and no live session left shows
+/// that tab, under the location's header; with another session of the location left, no session is
+/// current and the tab stays hidden, as before.
 #[test]
 fn the_last_session_of_a_location_closing_shows_its_review() {
     use micold_client::app::Message;
     use micold_client::features::session::Msg as SessionMsg;
     use micold_client::features::Outcome;
     let feat_b = SessionLocation::Worktree("feat-b".into());
-    let (mut app, [a1, a2, b]) = reviewing_feat_a();
+    let (mut app, [a1, _, b]) = reviewing_feat_a();
     review_again(&mut app, feat_b.clone());
     answer_pending(&mut app);
     app.update(Message::Session(SessionMsg::Selected(b)));
     assert_eq!(app.review_shown(), None, "precondition: hidden");
-    let _ = micold_client::app::interpret(&mut app, Outcome::SessionsClosed(vec![b]));
-    app.update(Message::NoOp);
+    app.update(Message::Session(SessionMsg::CloseRequested(b)));
     assert_eq!(app.session.active, None);
     assert_eq!(
         app.review_shown(),
@@ -4208,5 +4187,4 @@ fn the_last_session_of_a_location_closing_shows_its_review() {
     assert_eq!(app.session.active, None, "no session current");
     assert_eq!(app.review_shown(), None, "a2 is left: the tab stays hidden");
     assert!(app.changes.tabs.has(&(project(), worktree())), "and kept");
-    let _ = a2;
 }
