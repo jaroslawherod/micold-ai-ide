@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M5 PR
-- **Next step**: M5 done on local branch 1186-m5-wip (full gate green at e5c3e7a7; review A and B clean; visual pass B8–B11 PASS, screenshots /mnt/project-files/issue-1186/m5-*); the orchestrator pushes and opens M4's PR (1186-m4-wip at cc23db94), then M5's (title/body in the unit's scratchpad, stacked on M4); then the close unit (T040)
+- **Phase**: done
+- **Next step**: handoff — M5 and the close ship in one PR from local branch 1186-m5-wip (not pushed; title/body in the unit scratchpad `pr-title-m5.md`/`pr-body-m5.md`); the branch still holds M4's commits, which merged as #1388 (9ce7e702): rebase onto main before pushing. The run ends when that PR merges
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
 | #1379 | M3 Basic/Advanced switch, query field and results | merged | 5a5bc7e1a7f244d276f0e2b55fbe3e43b8704043 |
 | #1388 | M4 Jira's error messages and Retry | merged | 9ce7e702237d496464a4e7e2ce290f3b7bf22cef |
-| (to open) | M5 remember the last query and mode per project | full gate green at e5c3e7a7, local branch 1186-m5-wip (on 1186-m4-wip), not pushed | — |
+| (to open) | M5 remember the last query and mode per project, and the close (T040, TDD remediation T041–T047) | full gate green at 5854ed49, local branch 1186-m5-wip, not pushed | — |
 
 ## Milestones
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | merged |
 | M4 | T024–T032 | full | Jira's error messages and Retry | #1388 | merged |
-| M5 | T033–T039 | full | Remember last query and mode per project | (to open) | full gate green at e5c3e7a7, reviews clean, visual pass B8–B11 PASS, not pushed |
+| M5 | T033–T039 | full | Remember last query and mode per project | (to open) | full gate green at 5854ed49 (with the close), reviews clean, visual pass B8–B11 PASS, not pushed |
 
 ## Decisions
 
@@ -74,6 +74,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 review A (high) | 1 | 0845a0010c46ea3d3e7d757923272d8495b64d4c:ac16fd29265e92a74e7333123d11e2752c94eb16 | CLEAN (1 MINOR declined: a failed query-file delete after the token's leaves the connection in settings) |
 | M5 review B (conformance, sonnet) | 1 | 3708e8aa1aec1da3404309f12ff2c11f9e00d27e:e5c3e7a761f0a172d1da50587bcfe481c07a0c8a | CLEAN (MINOR: same Remove ordering as A's, declined; Verify read from the full gate log — reviewers run no cargo here: jira_query 36, jira_query_state 34, jira_connection_shell 13, bin 715 passed) |
 | M5 visual pass (quickstart §B B8–B11) | 1 | e5c3e7a7 binary | PASS all four (Xvfb, tiny-skia, fake_jira); screenshots /mnt/project-files/issue-1186/m5-*.png; B11 directory listing: A's .query.json and .token gone, B's token kept; tiny-skia stalls noted, not defects |
+| Close: speckit-tdd-verify (sonnet worker) | 1 | b841af58 | FAIL: 2 HIGH (surviving mutant on the 64 KiB 400-body cap; review-fix tests with no red), 3 MED, 4 LOW; none needs new behaviour; all cleared by T041–T047 (tdd/verification.md §Remediation). speckit-converge skipped: review B CLEAN for every milestone |
+| Close review (tests + docs, sonnet) | 1 | e97fdf70c9fb3dab50096e566d4fd9530f0b48c4:b841af586545bf0b04567fc04641a9e436cb0dac | CLEAN |
+| Close visual pass (quickstart §B B12–B13) | 1 | b841af58 binary | PASS: B12 light/dark at 800, 640 (min) and 1400 px; B13 Linux 0700/0600; macOS/Windows not run (no access); visual/close.md |
 
 ## Declined review findings
 

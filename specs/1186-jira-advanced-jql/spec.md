@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1346, #1350, #1364, #1379, #1388 and the M5/close PR
 
 **Input**: User description: "Support advanced JQL in the Jira issue selector (GitHub issue #1186). The Jira issue selector in the New worktree form only builds its own JQL: the project's not-Done issues, narrowed by free text matched against summary, one label or an issue key. Basic field filters (#1185) cover the common cases, but anything else (custom fields, sprints, epics, assignee, priority, status, date ranges, `OR` combinations, a different sort order) cannot be expressed. Add an advanced mode in the selector where the user types a JQL query directly, as in Jira's own advanced search, and the selector lists the issues it returns. The query is scoped to the connected project: it runs as `project = \"<KEY>\" AND (<user JQL>)`, so it cannot list another project's issues. A trailing `ORDER BY` in the user's JQL is kept; without one, `ORDER BY updated DESC` applies. An invalid query shows Jira's error message in the selector instead of an empty list. Ideally the last query used is remembered per project. Alternative considered: the basic filters of #1185, which cover reporter, label, component and fix version only."
 
