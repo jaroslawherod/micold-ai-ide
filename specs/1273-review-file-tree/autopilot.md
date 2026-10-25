@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M5)
-- **Next step**: orchestrator: CI on #1430 (M4+M5, rebased onto main b582c2563, gate green at 228744dc2), then merge; then the close unit (T040)
+- **Next step**: orchestrator: force-push, CI on #1430 (M4+M5, rebased onto main acefceb57 without conflicts, gate green at 3b25e6338), then merge; then the close unit (T040)
 
 ## Pull requests
 
