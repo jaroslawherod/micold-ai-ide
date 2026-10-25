@@ -44,3 +44,19 @@ as a stub answering `current_session_location()` (today's behaviour), so the red
 | T030 | `over_changes` → `over_review`, header of `shown_location()` | glue (quickstart B7, B8) | builds |
 | review A | U8 on every path the current session goes (`CurrentSessionGone` from close, remove, end, catalog drop; archived sessions are not live; not over Compare; covered: shown unread); a started session hides a shown review; chords, quick switcher and the status bar's daemon start from `shown_location()` (R5) | T027 rewritten through `CloseRequested` (failed: `left: None`, the close press never reached `closed`) and drained `SessionsClosed`; T026 gained the started-session case | all `cargo test -p micold-client` green |
 | review A r3/r4 | U8's location is the gone session's own (`CurrentSessionGone(Some(location))`, the record's raw location read before the clear), the header only for a catalog drop (`None`) | `the_emptied_location_is_the_gone_sessions_not_the_headers` (header left on `feat-b`, `feat-a`'s last closes) failed with the location read reverted to `header.entry` (`left: None` `right: Some((P, feat-a))`); remove and catalog-drop cases added | 4 U8 tests green on the restored code |
+
+# TDD cycle log: 1269 (M4)
+
+Commands: `cargo test -p micold-client --lib -- session_strip count_badge session_area`,
+`cargo test -p micold-material --lib -- count_badge tab::`, `cargo test -p micold-client --test
+layout_snapshot --test session_area_stability --test layout_text_overflow`. The strip's new API
+(`Member::Review`, `MemberKey::Review`, `CountBadge`, `tab::REVIEW_WIDTH`) did not exist, so the
+first reds are build errors against it.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T032, T035 | `CountBadge`: `1`, `99`, `99+`; pill widest at the cap; a tooltip changes no size; the section list's chip is the same pill (`count_badge::chip`) | build error: no `count_badge` module | 3 `count_badge` tests and the section list's tests green |
+| T033, T036 | U13: hidden Review tab last, session member marked; shown: same members, Review the one marked member; sessionless `[Review]` with empty status, no restart; badge counts drafts only, `None` while unknown, never another location's; changed mark only while hidden | build error (`Member::Review`, `MemberKey::Review`); then 1 failed `a_shown_review_tab_is_the_one_marked_member` (two fixtures, two sets of ids: compared against a clone instead) | 31 strip/area unit tests green |
+| T034, T036 | U14 press `ReviewChangesRequested`, × `TabClosed`; U15 one width whatever badge or mark, offsets and reveal count it; press in flight on the Review tab, its ×, and a session tab across badge/mark appearing and the tab opening/closing | build error; then the × press published nothing (`left: []`): the × is the content row's last slot, not the tab's right edge (content is centred), so the test now finds it from the layout records | 16 `session_area_stability` green |
+| T037, T038 | three covered states replace `session-area-changes-open`; header, strip and view top to bottom; Review tab's mark, label, `99+` badge and × whole at 640×480 and 1280×800, both themes; members at their widths (`STRIP_MEMBERS`) | `the_review_tab_holds…` failed: the label slot is the ceiling container around the row (descend to the row); `the_layout_matches_the_committed_fixture` failed until re-recorded (only the session-area review states and `status-bar-changes`, which shows the Changes view, changed) | 113 `layout_snapshot` green |
+| review A F1 | a press on the current session's tab, a shell tab or "+" while the review is shown hides it, kept (US1.2) | found by review A; the test was written with the fix, red not re-run by mutation | green |
