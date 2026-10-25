@@ -6,8 +6,24 @@
 use micold_client::features::changes::{
     self, source_menu_input, source_menu_stops, Effect, Msg, OpenView, SourceMenu, State,
 };
+use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus};
 use micold_core::review::source_menu::{label, Stop};
 use micold_core::typeahead::Direction;
+
+/// Pull request `number` in `state`, on `feat/a` against `main`, with no checks.
+pub fn pr(number: u64, state: BranchPrState) -> BranchPullRequest {
+    BranchPullRequest {
+        number,
+        title: format!("title {number}"),
+        url: format!("https://github.com/acme/widgets/pull/{number}"),
+        state,
+        created_at: "2026-10-10T09:00:00Z".into(),
+        base: "main".into(),
+        head: "abc".into(),
+        head_branch: "feat/a".into(),
+        checks: CheckStatus::None,
+    }
+}
 
 pub fn view(state: &State) -> &OpenView {
     state.tabs.shown_view().expect("open")

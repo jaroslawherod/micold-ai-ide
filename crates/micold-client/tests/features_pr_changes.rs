@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use drive::pr;
 use micold_client::features::changes::{
     self, adjacent, base_line, browse_body, check_mark, diff_body, head_note, list_body, pr_header,
     pr_mark, section, whole_file, BrowseBody, DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList,
@@ -42,20 +43,6 @@ fn project() -> PathBuf {
 
 fn worktree() -> SessionLocation {
     SessionLocation::Worktree("feat-a".into())
-}
-
-fn pr(number: u64, state: BranchPrState) -> BranchPullRequest {
-    BranchPullRequest {
-        number,
-        title: format!("title {number}"),
-        url: format!("https://github.com/acme/widgets/pull/{number}"),
-        state,
-        created_at: "2026-10-10T09:00:00Z".into(),
-        base: "main".into(),
-        head: "abc".into(),
-        head_branch: "feat/a".into(),
-        checks: micold_core::pull_request::CheckStatus::None,
-    }
 }
 
 /// A state with the setting on and the view of `worktree()` open; the list read it asked for is
@@ -2157,6 +2144,11 @@ mod source_menu {
 
     use super::drive::{highlight, highlighted, menu, menu_label, pick, stops, view};
 
+    /// The stops left when only #7 is listed, and where a highlight on the vanished #8 lands: the
+    /// working tree, the source now shown.
+    const RESEATED_STOPS: usize = 5;
+    const RESEATED_AT: usize = 0;
+
     fn two_listed() -> State {
         let mut state = opened(true);
         listed(
@@ -2209,23 +2201,22 @@ mod source_menu {
         changes::update(&mut state, Msg::SourceMenuToggled);
         changes::update(&mut state, Msg::SourceMenuMoved(Direction::Prev));
         assert_eq!(highlighted(&state), Some(Stop::WorkingTree));
+        // Seven presses: the five steps down the stops, then two at the end that stay on Files.
+        let expected = [
+            Stop::Kind(Kind::Committed),
+            Stop::Kind(Kind::Uncommitted),
+            Stop::PullRequest(7),
+            Stop::PullRequest(8),
+            Stop::Files,
+            Stop::Files,
+            Stop::Files,
+        ];
         let mut walked = vec![];
-        for _ in 0..7 {
+        for _ in &expected {
             changes::update(&mut state, Msg::SourceMenuMoved(Direction::Next));
             walked.extend(highlighted(&state));
         }
-        assert_eq!(
-            walked,
-            [
-                Stop::Kind(Kind::Committed),
-                Stop::Kind(Kind::Uncommitted),
-                Stop::PullRequest(7),
-                Stop::PullRequest(8),
-                Stop::Files,
-                Stop::Files,
-                Stop::Files,
-            ]
-        );
+        assert_eq!(walked, expected);
     }
 
     /// R7, contract §2. On the Default entry the arrows land on the disabled Committed chip like any
@@ -2259,10 +2250,10 @@ mod source_menu {
         assert_eq!(state, before, "a disabled stop changes nothing");
     }
 
-    /// FR-006, US1 s3–s4. A pick through the control is the same as `SourceChosen`: the same read,
-    /// PR header and per-entry memory, and the list closes.
+    /// FR-006, US1 s3. A pull-request pick through the control is the same as `SourceChosen`: the
+    /// same read, PR header and per-entry memory, and the list closes.
     #[test]
-    fn picking_a_source_is_choosing_it() {
+    fn picking_a_pull_request_is_choosing_it() {
         let mut through_menu = two_listed();
         let mut direct = two_listed();
         let effect = pick(&mut through_menu, Stop::PullRequest(8));
@@ -2274,7 +2265,16 @@ mod source_menu {
         assert!(matches!(source(&through_menu), Source::PullRequest(p) if p.number == 8));
         assert_eq!(menu_label(&through_menu), "#8 · title 8");
         assert!(through_menu.remembered.values().any(|n| *n == 8));
+    }
 
+    /// FR-006, US1 s4. The working-tree pick, from a pull request shown, is the same as
+    /// `SourceChosen(None)` and drops the PR header.
+    #[test]
+    fn picking_the_working_tree_is_choosing_it() {
+        let mut through_menu = two_listed();
+        let mut direct = two_listed();
+        chosen(&mut through_menu, 8);
+        chosen(&mut direct, 8);
         let effect = pick(&mut through_menu, Stop::WorkingTree);
         assert_eq!(
             effect,
@@ -2334,8 +2334,13 @@ mod source_menu {
 
         refreshed(&mut state, vec![pr(7, BranchPrState::Open)]);
         assert!(menu(&state).open);
-        let at = menu(&state).highlight.expect("still highlighted");
-        assert!(at < stops(&state).len(), "re-seated onto the shorter list");
+        // The shorter list's stops: working tree, both kinds, #7, Files.
+        assert_eq!(stops(&state).len(), RESEATED_STOPS);
+        assert_eq!(
+            menu(&state).highlight,
+            Some(RESEATED_AT),
+            "re-seated at {RESEATED_AT} of {RESEATED_STOPS}"
+        );
         assert_eq!(source(&state), &Source::Changes);
         assert_eq!(menu_label(&state), "Working tree");
     }

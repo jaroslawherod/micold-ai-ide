@@ -13,7 +13,7 @@
 //!
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
-use crate::support::covered_states::{covered_states, review_source, SourcePose};
+use crate::support::covered_states::{covered_states, review_source, SourcePose, LIST_READ_AT};
 use crate::support::layout::{self as lay, LayoutRecord, StateUnderTest, WINDOW};
 use iced::advanced::widget::Tree;
 use iced::advanced::{layout, Layout};
@@ -828,7 +828,7 @@ fn starts_inside(text: &lay::Overflow, area: &Rectangle) -> bool {
 /// shown source, and the control's tooltip carries the base line.
 #[test]
 fn the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_control() {
-    use micold_client::features::changes::{base_line, source_control_tooltip, source_menu_input};
+    use micold_client::features::changes::{base_line, source_menu_input};
     use micold_core::review::source_menu::{label, DEFAULT_ENTRY_NOTE, FILES, PULL_REQUESTS};
     // The chips' words, as `ui::source_menu` draws them.
     const COMMITTED: &str = "Committed";
@@ -837,15 +837,40 @@ fn the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_con
         let under = review_source(pose, false);
         let changes = &under.state.changes;
         let view = changes.tabs.shown_view().expect("the review is shown");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
-        let fixed = label(&source_menu_input(view, changes.pr_enabled, now)).fixed;
-        if let Some(base) = base_line(view) {
-            let tooltip = source_control_tooltip(view, changes.pr_enabled, now);
+        let now = LIST_READ_AT;
+        let shown = label(&source_menu_input(view, changes.pr_enabled, now));
+        let fixed = shown.fixed.clone();
+        // The project root's review compares with no base; every other pose has a base line.
+        let base = base_line(view);
+        assert_eq!(
+            base.is_none(),
+            pose == SourcePose::DefaultEntry,
+            "{pose:?}: the base line {base:?}"
+        );
+        // What the widget was given, read as a person reads it: the pointer on the trigger, the
+        // tooltip it opens painted.
+        let mut hovered = review_source(pose, false);
+        hovered.state.sidebar.width = SIDEBAR;
+        let mut renderer = lay::renderer();
+        let (tip, _) = lay::painted_text_hovering_at(
+            lay::view_of(&hovered),
+            &mut renderer,
+            &[SESSION_AREA, SOURCE_CONTROL].concat(),
+            WINDOW,
+        );
+        let tooltip = |wanted: &str| {
+            tip.iter()
+                .any(|p| p.layer == lay::Layer::Overlay && p.content.contains(wanted))
+        };
+        assert!(
+            tooltip(&shown.full()),
+            "{pose:?}: the tooltip carries the full label {:?} (FR-009): {tip:?}",
+            shown.full()
+        );
+        if let Some(base) = base {
             assert!(
-                tooltip.contains(&base),
-                "{pose:?}: the tooltip {tooltip:?} carries the base line {base:?} (FR-009)"
+                tooltip(&base),
+                "{pose:?}: the tooltip carries the base line {base:?} (FR-009): {tip:?}"
             );
         }
         for theme in [ThemePreference::Light, ThemePreference::Dark] {
@@ -900,13 +925,74 @@ fn the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_con
     }
 }
 
+/// What the review header's source control publishes for `gestures`, in a review posed as `pose`
+/// with the list `open`, driven through the runtime's own `UserInterface`.
+fn header_messages(
+    pose: SourcePose,
+    open: bool,
+    gestures: &[lay::Gesture],
+) -> Vec<Vec<micold_client::app::Message>> {
+    let mut under = review_source(pose, open);
+    under.state.sidebar.width = SIDEBAR;
+    lay::runtime_messages(|| lay::view_of(&under), WINDOW, gestures)
+}
+
+/// Feature 1272 T028 (US1 s6, US4 s3, FR-011): through the real review header, a press on the
+/// trigger toggles the list, a press outside it or `Esc` dismisses it, and an arrow key walks it —
+/// each its own message, so a header that wired one to another's fails here.
+#[test]
+fn the_review_header_sends_each_gesture_to_its_own_message() {
+    use iced::keyboard::key::Named;
+    use micold_client::app::Message;
+    use micold_client::features::changes::Msg;
+    use micold_core::typeahead::Direction;
+    let changes = |msg: Msg| vec![Message::Changes(msg)];
+
+    let (_, records) = painted_source(SourcePose::Listed, ThemePreference::Light, WINDOW);
+    let trigger = part_at(&records, SOURCE_CONTROL, "the closed header");
+    let at = iced::Point::new(
+        trigger.x + trigger.width / 2.0,
+        trigger.y + trigger.height / 2.0,
+    );
+    assert_eq!(
+        header_messages(SourcePose::Listed, false, &[lay::Gesture::Click(at)]),
+        vec![changes(Msg::SourceMenuToggled)],
+        "a press on the trigger toggles the list"
+    );
+
+    let outside = iced::Point::new(WINDOW.width - 8.0, WINDOW.height - 8.0);
+    for gesture in [
+        lay::Gesture::Click(outside),
+        lay::Gesture::Key(Named::Escape),
+    ] {
+        assert_eq!(
+            header_messages(SourcePose::Listed, true, &[gesture]),
+            vec![changes(Msg::SourceMenuDismissed)],
+            "{gesture:?} dismisses the open list"
+        );
+    }
+    assert_eq!(
+        header_messages(
+            SourcePose::Listed,
+            true,
+            &[lay::Gesture::Key(Named::ArrowDown)]
+        ),
+        vec![changes(Msg::SourceMenuMoved(Direction::Next))],
+        "the down arrow walks to the next stop"
+    );
+}
+
+/// FR-008 ("about 260 px"): the file column's width, by value, not the constant that builds it.
+const FILE_COLUMN_PX: f32 = 260.0;
+/// The source control's width in the header, by value (R8).
+const SOURCE_CONTROL_PX: f32 = 360.0;
+
 /// Feature 1272 T020 (FR-008, SC-002, US4 s1–s2, Edge "Narrow window"): the body is the file column
 /// at its fixed width and the diff area; at 1280×800 the diff area is at least 70% of the body; at
 /// 1600 and 900 px wide the file column keeps its width; at 900 px the source control keeps its
 /// width inside the header while the title column gives way.
 #[test]
 fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
-    use micold_client::ui::{FILE_COLUMN_WIDTH, SOURCE_CONTROL_WIDTH};
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         let mut titles = Vec::new();
         for width in [1280.0, 1600.0, 900.0] {
@@ -925,8 +1011,8 @@ fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
                 "{what}: the body is two columns"
             );
             assert!(
-                (file.width - FILE_COLUMN_WIDTH).abs() <= TOLERANCE,
-                "{what}: the file column {file:?} is {FILE_COLUMN_WIDTH} px (US4 s2)"
+                (file.width - FILE_COLUMN_PX).abs() <= TOLERANCE,
+                "{what}: the file column {file:?} is {FILE_COLUMN_PX} px (US4 s2)"
             );
             assert!(
                 diff.x >= file.x + file.width && inside(&diff, &body),
@@ -941,7 +1027,7 @@ fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
             let header = part_at(&records, VIEW_HEADER, &what);
             let control = part_at(&records, SOURCE_CONTROL, &what);
             assert!(
-                (control.width - SOURCE_CONTROL_WIDTH).abs() <= TOLERANCE
+                (control.width - SOURCE_CONTROL_PX).abs() <= TOLERANCE
                     && inside(&control, &header)
                     && control.x + control.width <= width + TOLERANCE,
                 "{what}: the control {control:?} keeps its width in the header {header:?}"

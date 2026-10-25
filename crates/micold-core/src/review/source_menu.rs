@@ -595,6 +595,78 @@ mod tests {
         }
     }
 
+    /// The working-tree row's chips and note for `toggles` and `committed_available`.
+    fn working_tree_chips(
+        t: Toggles,
+        committed_available: bool,
+    ) -> (Chip, Chip, Option<&'static str>) {
+        let menu = MenuInput {
+            toggles: t,
+            committed_available,
+            ..input(Shown::WorkingTree, PrRows::Absent)
+        };
+        let Some(Row::WorkingTree {
+            committed,
+            uncommitted,
+            note,
+            ..
+        }) = rows(&menu).first().cloned()
+        else {
+            panic!("no working tree row");
+        };
+        (committed, uncommitted, note)
+    }
+
+    #[test]
+    fn default_entry_shows_the_committed_chip_off_and_unavailable_with_a_note() {
+        let (committed, uncommitted, note) = working_tree_chips(toggles(true, true), false);
+        assert_eq!(
+            committed,
+            Chip {
+                on: false,
+                available: false,
+            }
+        );
+        assert_eq!(
+            uncommitted,
+            Chip {
+                on: true,
+                available: true,
+            }
+        );
+        assert_eq!(note, Some(DEFAULT_ENTRY_NOTE));
+    }
+
+    #[test]
+    fn committed_toggled_off_on_an_available_entry_is_off_but_available() {
+        let (committed, uncommitted, note) = working_tree_chips(toggles(false, true), true);
+        assert_eq!(
+            committed,
+            Chip {
+                on: false,
+                available: true,
+            }
+        );
+        assert_eq!(
+            uncommitted,
+            Chip {
+                on: true,
+                available: true,
+            }
+        );
+        assert_eq!(note, None);
+    }
+
+    #[test]
+    fn both_toggles_on_with_an_available_entry_lights_both_chips_without_a_note() {
+        let (committed, uncommitted, note) = working_tree_chips(toggles(true, true), true);
+        let lit = Chip {
+            on: true,
+            available: true,
+        };
+        assert_eq!((committed, uncommitted, note), (lit, lit, None));
+    }
+
     // ---- stops (T003) ----
 
     #[test]

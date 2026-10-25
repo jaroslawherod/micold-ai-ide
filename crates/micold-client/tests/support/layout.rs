@@ -423,22 +423,7 @@ fn press_and_settle<'a, M: 'a>(
         WINDOW,
     );
 
-    let target = walk(Layout::new(node), Layer::Base)
-        .into_iter()
-        .find(|r| r.path == path)
-        .unwrap_or_else(|| {
-            panic!(
-                "no node at {} to press — the tree changed shape, so re-point the path \
-                 against layout_snapshot.txt",
-                path_token(path),
-            )
-        });
-    assert!(
-        target.width > 0.0 && target.height > 0.0,
-        "the node at {} has no area, so a press lands on nothing and the control this covered \
-         state means to open will stay shut while every assertion still passes",
-        path_token(path),
-    );
+    let at = centre_of(node, path, "press");
 
     let mut messages: Vec<M> = Vec::new();
     let mut shell = Shell::new(&mut messages);
@@ -446,10 +431,7 @@ fn press_and_settle<'a, M: 'a>(
         tree,
         &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
         Layout::new(node),
-        mouse::Cursor::Available(iced::Point::new(
-            target.x + target.width / 2.0,
-            target.y + target.height / 2.0,
-        )),
+        mouse::Cursor::Available(at),
         renderer,
         &mut clipboard::Null,
         &mut shell,
@@ -475,6 +457,91 @@ fn press_and_settle<'a, M: 'a>(
     );
     *node = element.as_widget_mut().layout(tree, renderer, limits);
 }
+
+/// Settle, put the pointer on the middle of the node at `path`, and settle again, as a pointer
+/// resting on a control that has a tooltip.
+fn hover_and_settle<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    tree: &mut Tree,
+    node: &mut layout::Node,
+    renderer: &iced::Renderer,
+    limits: &layout::Limits,
+    path: &[usize],
+    window: Size,
+) {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let origin = std::time::Instant::now();
+    settle(
+        element,
+        tree,
+        node,
+        renderer,
+        origin,
+        0..SETTLE_FRAMES,
+        window,
+    );
+    let at = centre_of(node, path, "hover");
+    let mut messages: Vec<M> = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    element.as_widget_mut().update(
+        tree,
+        &iced::Event::Mouse(mouse::Event::CursorMoved { position: at }),
+        Layout::new(node),
+        mouse::Cursor::Available(at),
+        renderer,
+        &mut clipboard::Null,
+        &mut shell,
+        &Rectangle::with_size(window),
+    );
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
+    // …then rest there past any show delay, with the pointer still over the node: `settle` hands
+    // frames over with no cursor, which a tooltip reads as the pointer having left.
+    for frame in SETTLE_FRAMES..SETTLE_FRAMES + HOVER_FRAMES {
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            tree,
+            &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
+            Layout::new(node),
+            mouse::Cursor::Available(at),
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(window),
+        );
+    }
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
+}
+
+/// The centre of the base-layer node at `path`, where a `verb` (press, hover) lands. Panics when
+/// no node is there or it has no area: the gesture would land on nothing while every assertion
+/// still passed.
+fn centre_of(node: &layout::Node, path: &[usize], verb: &str) -> iced::Point {
+    let target = walk(Layout::new(node), Layer::Base)
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap_or_else(|| {
+            panic!(
+                "no node at {} to {verb} — the tree changed shape, so re-point the path \
+                 against layout_snapshot.txt",
+                path_token(path),
+            )
+        });
+    assert!(
+        target.width > 0.0 && target.height > 0.0,
+        "the node at {} has no area, so a {verb} lands on nothing and the control this covered \
+         state means to reach is never touched while every assertion still passes",
+        path_token(path),
+    );
+    iced::Point::new(
+        target.x + target.width / 2.0,
+        target.y + target.height / 2.0,
+    )
+}
+
+/// How many frames a pointer rests on a node in [`hover_and_settle`]: about four seconds, past any
+/// tooltip's show delay.
+const HOVER_FRAMES: u32 = 250;
 
 // --- Covered states, anchors and the fixture (T018, T021) -------------------------------------
 
@@ -1076,6 +1143,20 @@ pub fn painted_text_scrolled<'a, M: 'a>(
     painted(element, renderer, true, Before::Scrolled(at), WINDOW).0
 }
 
+/// As [`painted_text_settled_at`], but with the pointer resting on the node at `hover_at` first —
+/// and reporting what the tooltip it opens painted as well as the base tree.
+///
+/// For asking what a tooltip *says*: its text is the widget's, drawn only while the pointer is over
+/// the trigger, so it is read the way a person reads it.
+pub fn painted_text_hovering_at<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    hover_at: &[usize],
+    window: Size,
+) -> (Vec<Overflow>, Vec<LayoutRecord>) {
+    painted(element, renderer, true, Before::Hovered(hover_at), window)
+}
+
 /// One thing a person does with the mouse, for [`messages_after`].
 #[derive(Debug, Clone, Copy)]
 pub enum Input {
@@ -1454,6 +1535,8 @@ enum Before<'p> {
     Settled,
     /// Settle, press the node at this path, then settle again — [`press_and_settle`].
     Pressed(&'p [usize]),
+    /// Settle, move the pointer onto the node at this path, then settle again — [`hover_and_settle`].
+    Hovered(&'p [usize]),
     /// Settle, turn the wheel down with the cursor at this point, settle again —
     /// [`scroll_and_settle`].
     Scrolled(iced::Point),
@@ -1495,6 +1578,15 @@ fn painted<'a, M: 'a>(
             &*renderer,
             &limits,
             path,
+        ),
+        Before::Hovered(path) => hover_and_settle(
+            &mut element,
+            &mut tree,
+            &mut node,
+            &*renderer,
+            &limits,
+            path,
+            window,
         ),
         Before::Scrolled(at) => {
             scroll_and_settle(&mut element, &mut tree, &mut node, &*renderer, &limits, at)
