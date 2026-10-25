@@ -25,11 +25,8 @@ use micold_core::worktree::CreateMode;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 
-#[path = "support/conn.rs"]
-mod conn;
-#[path = "support/mcp.rs"]
-mod mcp;
-use conn::{connect, Client};
+use crate::conn::{connect, Client};
+use crate::mcp_support as mcp;
 use mcp::{git, init_repo, session, sid, state_over};
 
 const BOUND: Duration = Duration::from_secs(20);

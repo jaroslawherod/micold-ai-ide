@@ -2,9 +2,7 @@
 // unix-only: the setup command `true` is a POSIX shell builtin; on Windows setup runs in PowerShell
 #![cfg(unix)]
 
-#[path = "support/mcp.rs"]
-mod mcp_support;
-
+use crate::mcp_support;
 use std::sync::Arc;
 
 use mcp_support::*;
