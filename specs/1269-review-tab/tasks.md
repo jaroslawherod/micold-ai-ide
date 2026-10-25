@@ -359,7 +359,10 @@ the changed mark and ×; × replaces the view's **Close**.
   through the new covered states' anchors and `STRIP_MEMBERS`; `session_area_fits` gains
   `the_review_tab_holds_its_label_badge_mark_and_close_whole` (`99+` and the mark, both windows and
   themes) and `the_header_and_the_strip_stand_over_the_shown_review`. Showing a Review tab sets
-  `pending_tab_reveal`, so it is scrolled into view.
+  `pending_tab_reveal`, so it is scrolled into view. With the strip drawn over a shown review, its
+  session, shell and "+" members became pressable there for the first time, so (review A F1,
+  US1.2, U2) `session::ai_cli_selected`, `shell_instance_selected` and
+  `shell_instance_open_requested` now hide a shown review as `selected` does.
 - [ ] T041 Visual pass, quickstart Part B (B1–B13) at 1280×800 light and dark and at 640×480;
   screenshots in `specs/1269-review-tab/visual-pass/`, results in
   `specs/1269-review-tab/visual-pass.md`.
