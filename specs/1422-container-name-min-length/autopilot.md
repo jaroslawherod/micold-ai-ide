@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1422
 - **Worktree branch**: feat/1422_container-name-enforce-a-minimum-length-docker
 - **Started**: 2026-10-25
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: M1 (after design PR merges)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | Container names under 2 characters refused at Save; placeholder hidden; legacy loads | | pending |
 
 ## Decisions
 
@@ -31,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Tasks review | 1 | c100ddba0515c7c28900f913580f41407520fd2d:ab6e6b6e7fe761534a06c67a4cf8183dfd268da6 | CLEAN (3 MINOR, fixed, prose only) |
 | Spec review | 1 | a56d0f73c3192bb09fcf2e27967a43a6c3e7cdeb:357d48d5be4eedc191d9a5b91cc25f19270f23ef | CLEAN (3 MINOR, fixed, prose only) |
 
 ## Declined review findings

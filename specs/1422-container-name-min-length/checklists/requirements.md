@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 open: FR-004, FR-008; the clarify unit resolves them)
+- [x] No [NEEDS CLARIFICATION] markers remain (FR-004, FR-008 resolved in clarify)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
