@@ -1787,11 +1787,18 @@ pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::fe
 
 /// Clear the current session because it went, with the root's cue to show its emptied location's
 /// Review tab (feature 1269, U8): the location is read before the clear, while its record is
-/// there. The outcomes are drained after the caller has updated the records, so the root sees
-/// whether a live session of the location is left.
+/// there — the record's own, even a worktree no longer listed, whose tab `WorktreesReplaced`
+/// dropped (U9). The outcomes are drained after the caller has updated the records, so the root
+/// sees whether a live session of the location is left.
 #[must_use = "the outgoing row and the review are applied by draining this"]
 pub fn current_session_gone(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
-    let left = state.current_session_location();
+    let left = state.session.active.and_then(|id| {
+        state
+            .active_sessions()
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.location.clone())
+    });
     let mut outcomes = state.set_current_session(None);
     outcomes.push(crate::features::Outcome::CurrentSessionGone(left));
     outcomes

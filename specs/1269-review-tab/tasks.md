@@ -277,7 +277,10 @@ session of a location closing shows its Review tab (US2.5, US2.6, edge case, R5,
   *As built*: the architecture guards forbid `session` writing `changes`, and a user's close
   (`close_requested`), removal and a catalog drop never reach `closed`; so every path that clears
   the current session because it went pushes `Outcome::CurrentSessionGone`, and the root's
-  `show_review_of_emptied_location` applies R8 (`changes::show_if_present`).
+  `show_review_of_emptied_location` applies R8 (`changes::show_if_present`). The location travels
+  in `CurrentSessionGone(Option<SessionLocation>)`: `session::current_session_gone` reads the
+  gone record's own location before the clear (close, remove, end); the catalog drop, whose
+  record is already gone, passes `None`, and the root then takes the location the header followed.
 - [x] T030 [US2] Rename `session_area::over_changes` to `over_review` in
   `client/src/ui/session_area.rs`, drawing the header of `shown_location()` above the view (header
   only); `client/src/ui/mod.rs`'s Review branch calls it (U16). Glue, checked by quickstart B0 (M3:
