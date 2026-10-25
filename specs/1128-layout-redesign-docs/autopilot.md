@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M2 implemented (T012–T020 ticked); scoped gate and review A (3 rounds) clean; awaiting review B
-- **Next step**: orchestrator dispatches review B for M2 (snapshot in *Review rounds*), then continues the M2 unit for the full gate and the M2 PR (`feat(1128): …` per pr.md; M2 is docs plus `site/`). M3 after M2 merges.
+- **Phase**: M2 implemented (T012–T020 ticked); review A (3 rounds) and review B clean; full gate and M2 PR
+- **Next step**: M2 unit runs the full gate on the rebased tree and pushes; orchestrator opens the M2 PR (gh not authenticated in the unit). M3 after M2 merges.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -26,7 +26,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
-| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | implemented on claude/project-thread-bznqpy; review A clean; awaiting review B |
+| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | implemented on claude/project-thread-bznqpy; reviews A and B clean; full gate |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | after M2 (blockers #1125, #1127 merged) |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
@@ -58,7 +58,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M2 review A (code-review, high) | 1 | — (`origin/main...d1e125b3`) | 9 findings: fixed — `Choosing your theme` described the removed overflow theme toggle (now Settings → Appearance), icons.md theme rows, `docs/README.md` "Help toolbar entry", help-about step 1 named one menu item, Overview first paragraph repeated the chord, Title bar intro repeated its bullets; declined — line reflow (as M1), quick-switcher link target. |
 | M2 review A (code-review, high) | 2 | — (fix diff `d1e125b3..bbbfc373`) | 9 findings: fixed — picker label is "Follow the system", the `theme-follow` clip showed and pressed the removed toggle (clip, `site/media.toml` entry and `site/capture/scenes/theme-follow.sh` removed), icons.md alignment note contradicted itself and named a wrong path, unrendered Dark/Auto rows dropped, history wording dropped, overview reflow, help-about links Settings and diagnostics. |
 | M2 review A (code-review, high) | 3 | — (fix diff `bbbfc373..55f70280`) | 7 findings, none from this diff at BLOCKER/MAJOR: fixed — icons.md contributor paths, alignment note dated separately and records the orphaned Dark/Auto icons; declined or follow-up — see below. Clean. |
-| M2 review B (conformance) | 1 | `86ed9f3eebb0fd4ed330dee693d4cddfa1392404:02f788dccc6541db122fee7aa38c8f9b2ce52d3a` | pending: dispatch by the orchestrator (no Agent tool in the unit) |
+| M2 review B (conformance) | 1 | `86ed9f3eebb0fd4ed330dee693d4cddfa1392404:02f788dccc6541db122fee7aa38c8f9b2ce52d3a` | CLEAN, 2 MINORs: F1 icons.md Filter row named the removed tag-filter panel — fixed, prose only (glyph shown only in the component showcase); F2 icons.md "adding an icon" steps re-pathed beyond FR-011 — paths correct, recorded as an extra in *Follow-ups not done*. |
 
 ## Declined review findings
 
@@ -83,7 +83,7 @@ None.
 ## Follow-ups not done
 
 - M2 (T012): #1127 kept plan usage in the status bar (its FR-002 and *Out of scope*), so FR-001 and FR-010 stand unchanged. Removed list as shipped: the title bar's Overview button and badge, the app-name title text, the switcher button next to the menu button (now the breadcrumb's project segment), the sidebar's filter button and tag-filter panel (now the chip bar and its ⋯ menu), type/issue chips on rows (now two-line rows). Owning sections: title bar → new `appearance-theming.md#title-bar` (#1127 wrote a bullet, not a section); breadcrumb → `project-selection.md#switching-projects-from-the-breadcrumb` (renamed; no inbound links to the old anchor); Overview row → `overview.md#opening-and-closing-it`; chip bar → `worktrees-and-sessions.md#filtering-worktrees-by-tag`; groups → `#browsing-worktrees`; two-line rows → `#reading-a-worktree-name--tags`. Spec Edge case *Project with no worktrees* and doc-edits S15 corrected to what #1125 shipped (Default under its state's group, chip bar with All, "No worktrees yet" hint).
-- M2 extra hits beyond S1–S15: `help-about.md` toolbar wording and its About steps, `docs/README.md` Help entry, the overflow theme toggle (removed before #1127: `toolbar.rs` module doc) in `appearance-theming.md#choosing-your-theme`, `settings.md` mode-button sentence and `icons.md` rows; the `theme-follow` clip, manifest entry and scene were removed with it.
+- M2 extra hits beyond S1–S15: `help-about.md` toolbar wording and its About steps, `docs/README.md` Help entry, the overflow theme toggle (removed before #1127: `toolbar.rs` module doc) in `appearance-theming.md#choosing-your-theme`, `settings.md` mode-button sentence and `icons.md` rows; the `theme-follow` clip, manifest entry and scene were removed with it. Also beyond FR-011: the `icons.md` "adding an icon" contributor steps were re-pathed to the current files (review B F2; paths verified).
 - M2: `site/capture/scenes/lib.sh` coordinates (overflow menu items, `scene_tab_y` "bottom bar", menu at y=32) predate the 44 px title bar and the tab strip; the capture needs re-measuring before the next release's screenshots. `scene_start --preference` is now unused. `Choosing your theme` could take a Settings → Appearance picture. `Icon::DarkMode`/`Icon::AutoMode` have no rendered call site.
 - M2 unit: `lychee` not installed, `gh` not authenticated, no Agent tool (review B not dispatched). Links checked with a local anchor script over `docs/user-guide/*.md` and `docs/README.md` (0 broken); `scoped-gate.sh` SCOPE none; `scripts/tests/*.test.sh` 28/28; `media-references` 11 entries ok; `git diff --stat origin/main -- 'crates/*/src'` empty (FR-020).
 

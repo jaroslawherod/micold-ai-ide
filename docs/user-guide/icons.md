@@ -28,7 +28,7 @@ status markers.
 | Add worktree | Create a new worktree | Sidebar chip bar |
 | Refresh | Re-read the project's worktree list from git | Sidebar chip bar's more (⋯) menu |
 | Delete | Delete a worktree | Sidebar worktree rows |
-| Filter | Toggle a tag-filter panel | Component showcase |
+| Filter | Toggle a filter panel; the sidebar no longer has one, so the app window does not show it | Component showcase only |
 | More (⋯) | Open the menu holding refresh, attach existing and run in parallel | Sidebar chip bar |
 | Search | Search a long list by typing; on the title bar's jump-to field, open the quick switcher | Branch search in the New worktree form, the title bar's jump-to field |
 | Project root | The repository's own working directory | Sidebar **Default** entry |
