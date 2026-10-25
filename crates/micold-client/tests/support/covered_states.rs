@@ -2968,6 +2968,7 @@ pub fn feat_short_drafts(state: &mut State, drafts: usize) {
         micold_client::features::changes::ReviewView {
             comments: (0..drafts).map(|_| comment()).collect(),
             sending: false,
+            marks: Default::default(),
         },
     );
 }
