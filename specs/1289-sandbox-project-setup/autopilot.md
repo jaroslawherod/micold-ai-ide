@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M3
-- **Next step**: M3 PR #1393 rebased onto main and force-pushed — wait on CI, merge (rebase)
+- **Next step**: M3 PR #1393 rebased onto main (protocol 70) and force-pushed — wait on CI, merge (rebase)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | merged |
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
-| M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | PR open |
+| M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | PR open |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
@@ -83,7 +83,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. M3 rebase (2026-10-25): #1393 rebased onto origin/main (af0d60077, 17 commits); one conflict, the `SessionLocation` derive in crates/micold-core/src/session.rs — main added `Hash`, M3 added `Serialize, Deserialize`; kept both. Main made no protocol version bump, so protocol 69 stands. Full gate (scripts/gate.sh) green at 2f1cfd93b.
+None. M3 rebase 1 (2026-10-25): onto af0d60077; `SessionLocation` derive conflict in session.rs (main `Hash`, M3 `Serialize, Deserialize`) — kept both.
+M3 rebase 2 (2026-10-25): onto 36459b958 (38 commits). Main's feature 1271 took protocol 69, so 1289 renumbered to 69 → 70: `PROTOCOL_VERSION`, `FEATURE_026_PROTOCOL_VERSION` (schema_hash.rs), `the_protocol_version_is_70` (protocol_roundtrip.rs), version.rs/schema_hash.rs history comments keep 1271's line and add 1289's; tasks.md, plan.md, research.md, contracts/wire-and-settings.md say 70. Conflicts only in those history comments; no shared logic. `cargo test -p micold-daemon -p micold-core -p micold-client --no-run` clean; full gate (scripts/gate.sh) green before the force-push (chained: push only on green).
 
 ## Open escalation
 
