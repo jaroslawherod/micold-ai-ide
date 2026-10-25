@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M2 implemented, reviews A and B clean, full gate green at fa639e9b on origin/main 35ac6de2; pushed, PR to open
-- **Next step**: orchestrator opens the M2 PR from the unit's pr-title.md / pr-body.md (gh not authenticated in the unit), records its number, waits on CI and merges. M3 after M2 merges.
+- **Phase**: M3 implemented on local branch `m3-1128` (worktree /home/user/wt-1128-m3, from the M2 head 3fa50c20); scoped gate and review A next
+- **Next step**: M3 unit: scoped gate + review A (code-review, high), commit, review snapshot, return for review B (no Agent tool). M2 PR #1429 open, in CI; M3 rebases onto main after it merges and re-records the fixture before the full gate.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -20,14 +20,15 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 |---|---|---|---|
 | #1365 | Design (spec, plan, tasks) | merged (rebase) | f955fbea3ac738910219cb0daf5c61bdf6a03415 |
 | #1372 | M1 — status bar and session area in the user guide | merged (rebase) | 1c69ea8bb8e8b6b755b21c167d23307e43b6a46c |
+| #1429 | M2 — sidebar and title bar in the user guide | open (CI) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
-| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | — | pushed on claude/project-thread-bznqpy; reviews A and B clean; full gate green at fa639e9b; PR to open |
-| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | after M2 (blockers #1125, #1127 merged) |
+| M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | open, in CI (branch claude/project-thread-bznqpy); reviews A and B clean; full gate green at fa639e9b |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | implemented on local `m3-1128`; reviews pending; not pushed (waits on #1429) |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
 ## Decisions
@@ -37,6 +38,11 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | D1 | clarify | Visual-pass defect in a shipped region: fix here or record? | Record as *differs by defect* + ledger follow-up; no code change | agent | spec#Context; 1124 ledger follow-ups; 1126 visual-pass.md |
 | D2 | clarify | Sweep removed-element mentions in user-guide pages outside the four? | Yes, only those sentences/rows, staged by region | agent | constitution VII; spec#Context (closing pass) |
 | D3 | clarify | Add two whole-window covered states or only regenerate? | Add both, then regenerate | agent | layout-snapshot.md#Adding a covered state, #What is covered |
+| D4 | M3 | What does W1/SC-004's "44 px" read now that #1127 shipped `app_bar::HEIGHT` 43 + `DIVIDER` 1? | W1 `title_bar.h == app_bar::HEIGHT` (43, the bar); W3 `title_bar.y + BOTTOM_EDGE (44) == shell.body.y`; the 44 px title bar of SC-004 is `BOTTOM_EDGE`, #1127's "one 44 px title bar, divider included" | agent | anatomy.rs `app_bar` docs; fixture `title_bar -> 0/0/0/0/0` 43, container 44; research R6 "W3 follows what ships" |
+| D5 | M3 | Which node is `sidebar`? | `0/0/0/1/0`, the sidebar column with its 6 px resize handle (266 wide): its right edge is where the session area starts (W4); the 260 px surface inside it stops short of it | agent | fixture `window-session-view` |
+| D6 | M3 | Overview row selection accessor (#1125 M3)? | None ships: `ui::sidebar::overview_row` draws the row selected exactly while `state.overview.open`, and `features::sidebar::row_selected` deselects every other row then. W5 asserts open, not full screen, a project active, and no session row selected through `row_selected` | agent | sidebar.rs:206, features/sidebar.rs:943 |
+| D7 | M3 | `strip_at` carries which fields of the replaced `feat-working` session? | lifecycle, activity and paused, not ActivitySignal alone: the Overview's card state reads `SessionLifecycle::Running` with `Working` | agent | micold-core overview.rs:992 |
+| D8 | M3 | Fixture failure named only the first differing state (main-shell-sidebar-expanded), so a 1 px sidebar edit did not name the whole-window states (SC-005) | `describe_difference` now also lists every covered state that differs; test `a_difference_past_the_detailed_ones_still_names_its_state` (red recorded, then green) | agent | mutation sidebar-1 log |
 
 ## Review rounds
 
@@ -71,6 +77,15 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M2 | A round 3 | `scene_menu_settings_y=145` measured with the theme item first | Pre-existing: the theme item was gone before this branch, and every scene coordinate predates the 44 px title bar and the tab strip; recorded as a follow-up, not caused by this diff. |
 | M2 | A round 3 | MINOR: `scene_start --preference` now unused; feature 028/006 tasks still name the theme-follow scene; Choosing your theme has no picture | Dead-option cleanup and a new picture are outside M2 (follow-ups); other features' tasks.md are historical records. |
 | — (design) | plan round 2 | MINOR: `contracts/covered-states.md:40` says each anchor is "held by W1–W4" under a W1–W5 table | W5 is a state-level assertion on the `State`, not on an anchor, so W1–W4 are the anchors' properties; the sentence is correct. |
+
+## M3 implementation evidence
+
+- T021–T023: `strip_at(base, dir, shells, helpers)` (strip_with calls it with `with_project()` and `feat-short`; its states byte-identical), `window_session_view()`, `window_overview()`, `WINDOW_ANCHORS` (paths from the fixture: title_bar 0/0/0/0/0, shell.body 0/0/0/1, sidebar 0/0/0/1/0, session.area 0/0/0/1/1, status_bar 0/0/0/2).
+- Red (no `tdd/test-list.md`: `tdd.plan` was skipped at the tasks stage; the red is the fixture and the mutation proof, research R6): registering the states before regenerating failed `the_layout_matches_the_committed_fixture`.
+- T024: regeneration only adds lines (0 removed; +804 at 33558, after `status-bar-disconnected`); a second regeneration is byte-identical; the run without the variable passes.
+- T026: `layout_snapshot` 146 pass, `layout_text_overflow` 3 pass. Warm cost: 9.49/9.50/8.98 s with the two states, 9.14/9.19/9.02 s without (mean 9.32 vs 9.12, ~0.2 s).
+- T027 mutation proof (each reverted): title bar +1 px (`Toolbar` bar height) → fixture names both window states, W1 (44 vs 43), W3 (45 vs 44); status bar +1 px (`Lane::new(HEIGHT + 1.0)`) → fixture, W2 (29 vs 28); sidebar 1 px narrower → fixture names both window states, W1–W5 hold; 1 px spacer under the title bar → fixture, W2 (status_bar 727) and W4 (anchor `sidebar` names no record) — W3 holds because the spacer shifts the column's children so `shell.body` resolves to the spacer; Overview closed in `window-overview` → fixture names `window-overview`, W5.
+- T029: `git diff --stat origin/main -- 'crates/*/src'` empty (FR-020). A1: `site/checks/links.sh --sources` exits 2 (lychee not installed); the M3 passage adds no link.
 
 ## Handover
 
