@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M1 reviewed (round 2 CLEAN), PR opening
+- **Phase**: M1 PR #1377 open
 - **Next step**: orchestrator waits on CI for the M1 PR and merges; then M2
 
 ## Pull requests
@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1343 | design (spec, plan, tasks) | merged | 56515707ebd3c2d9e078e059a5e791e16982a6c3 |
+| #1377 | M1 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | — | PR opening |
+| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | #1377 | PR open |
 | M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | — | planned |
 
 ## Decisions
