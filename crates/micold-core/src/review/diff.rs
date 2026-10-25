@@ -12,6 +12,7 @@ use super::changes::{content_of, Content};
 use super::expand::Shaped;
 use super::expand::{Gap, ShapedRef};
 use super::Side;
+use crate::settings::DiffLayout;
 use crate::tokens::Rgb;
 
 /// What a diff line is.
@@ -448,6 +449,28 @@ pub fn unified_rows<'a>(shaped: impl Into<ShapedRef<'a>>) -> Vec<UnifiedRow<'a>>
         hidden_before(shaped, shaped.hunks.len()).map(|gap| UnifiedRow::Gap { gap, open: false }),
     );
     rows
+}
+
+/// The row index of each hunk header in `layout`'s rows of `shaped`, in hunk order (#1274,
+/// research R9): where `n`/`p` scroll the diff to.
+pub fn header_rows<'a>(shaped: impl Into<ShapedRef<'a>>, layout: DiffLayout) -> Vec<usize> {
+    let shaped = shaped.into();
+    match layout {
+        DiffLayout::Unified => {
+            positions(unified_rows(shaped), |r| matches!(r, UnifiedRow::Header(_)))
+        }
+        DiffLayout::SideBySide => positions(side_by_side_rows(shaped), |r| {
+            matches!(r, SideRow::Header(_))
+        }),
+    }
+}
+
+fn positions<T>(rows: Vec<T>, header: impl Fn(&T) -> bool) -> Vec<usize> {
+    rows.iter()
+        .enumerate()
+        .filter(|(_, row)| header(row))
+        .map(|(i, _)| i)
+        .collect()
 }
 
 /// The unified layout's rows, found by index without listing them: one entry per header, hidden
@@ -1303,6 +1326,39 @@ mod tests {
                 assert_eq!(index.row(i).as_ref(), Some(row), "side row {i}");
             }
             assert_eq!(index.row(rows.len()), None);
+        }
+    }
+
+    #[test]
+    fn header_rows_name_each_hunk_headers_row_in_both_layouts() {
+        let FileDiff::Text(hunks) = parse_unified(TWO_HUNKS.as_bytes()) else {
+            panic!("TWO_HUNKS is a text diff");
+        };
+        let new_side = SideLines::from_bytes(
+            (1..=20)
+                .map(|i| format!("line {i}\n"))
+                .collect::<String>()
+                .as_bytes(),
+        )
+        .expect("text");
+        let sh = super::super::expand::shape(&hunks, &new_side, &Default::default());
+        assert!(
+            !sh.gaps.is_empty(),
+            "the fixture has a hidden run between the hunks"
+        );
+        // Unified: header, 4 lines, the hidden run between, header.
+        assert_eq!(
+            header_rows(&sh, DiffLayout::Unified),
+            vec![0, 6],
+            "each header's row, counting the gap row between the hunks"
+        );
+        // Side by side: header, 3 pairs (two|TWO paired), the hidden run, header.
+        assert_eq!(header_rows(&sh, DiffLayout::SideBySide), vec![0, 5]);
+        for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+            assert!(
+                header_rows(&Shaped::default(), layout).is_empty(),
+                "{layout:?}: no hunks, no headers"
+            );
         }
     }
 }

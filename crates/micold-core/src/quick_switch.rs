@@ -13,6 +13,8 @@ use std::ops::Range;
 use std::path::PathBuf;
 
 use crate::navigation::Dir;
+use crate::review::comment::CommentId;
+use crate::review::RelPath;
 use crate::session::{SessionId, SessionLocation};
 use crate::typeahead::{self, Folded, Query};
 
@@ -26,6 +28,10 @@ pub enum EntryKey {
     Session(SessionId),
     /// A known project other than the active one, by its root path.
     Project(PathBuf),
+    /// A file of the current entry's review (#1274, FR-016).
+    ReviewFile(RelPath),
+    /// A comment of the current entry's review (#1274, FR-016).
+    ReviewComment(CommentId),
 }
 
 /// One entry as the rules see it. Input order is FR-004's order.
@@ -33,8 +39,11 @@ pub enum EntryKey {
 pub struct Candidate {
     /// Unique in a list.
     pub key: EntryKey,
-    /// The displayed name, the only text matched.
+    /// The displayed name, matched first.
     pub name: String,
+    /// A second text, matched only when `name` does not match (a review file's path, #1274);
+    /// `None` for every other entry, which then ranks exactly as before (FR-019).
+    pub detail: Option<String>,
     /// A session's location candidate index; `None` for locations and projects. `parent` always
     /// points earlier in the list.
     pub parent: Option<usize>,
@@ -53,29 +62,43 @@ pub enum Rank {
     Scattered,
 }
 
-/// One kept candidate: its index in the input, its rank, and the byte ranges of its name to
-/// emphasise (empty for an empty query).
+/// Which of a candidate's texts matched. The derived Ord sorts every name match before every
+/// detail-only match (#1274, FR-017).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Via {
+    /// The name matched.
+    Name,
+    /// Only the detail matched.
+    Detail,
+}
+
+/// One kept candidate: its index in the input, which text matched and how, and the byte ranges of
+/// that text to emphasise (empty for an empty query).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ranked {
     /// The candidate's index in the input list.
     pub index: usize,
+    /// Which text matched: `spans` index the name for `Name`, the detail for `Detail`.
+    pub via: Via,
     /// How it matched.
     pub rank: Rank,
-    /// Byte ranges of the candidate's original name to emphasise.
+    /// Byte ranges of the matched text to emphasise.
     pub spans: Vec<Range<usize>>,
 }
 
-/// The candidates `query` keeps, best rank first and in input order within a rank (FR-005).
+/// The candidates `query` keeps: name matches before detail-only matches, then best rank first,
+/// and in input order within those (FR-005; #1274 FR-017).
 ///
 /// An empty query keeps every candidate in order, rank `Prefix`, nothing emphasised (FR-004).
-/// Otherwise a candidate is kept exactly when its name contains the query's characters in order,
-/// ignoring case; there is no typo tier. A matched location also keeps its sessions that did not
-/// match, listed right after it with its rank.
+/// Otherwise a candidate is kept exactly when its name, or else its detail, contains the query's
+/// characters in order, ignoring case; there is no typo tier. A matched location also keeps its
+/// sessions that did not match, listed right after it with its rank.
 pub fn filter(candidates: &[Candidate], query: &Query) -> Vec<Ranked> {
     if query.is_empty() {
         return (0..candidates.len())
             .map(|index| Ranked {
                 index,
+                via: Via::Name,
                 rank: Rank::Prefix,
                 spans: Vec::new(),
             })
@@ -86,12 +109,21 @@ pub fn filter(candidates: &[Candidate], query: &Query) -> Vec<Ranked> {
         .iter()
         .enumerate()
         .filter_map(|(index, candidate)| {
-            let (rank, spans) = rank_one(&Folded::new(&candidate.name), q)?;
-            Some(Ranked { index, rank, spans })
+            let by_name = rank_one(&Folded::new(&candidate.name), q).map(|m| (Via::Name, m));
+            let (via, (rank, spans)) = by_name.or_else(|| {
+                let detail = candidate.detail.as_deref()?;
+                rank_one(&Folded::new(detail), q).map(|m| (Via::Detail, m))
+            })?;
+            Some(Ranked {
+                index,
+                via,
+                rank,
+                spans,
+            })
         })
         .collect();
     // `sort_by_key` is stable: within a rank the input (FR-004) order is kept.
-    kept.sort_by_key(|ranked| ranked.rank);
+    kept.sort_by_key(|ranked| (ranked.via, ranked.rank));
     keep_sessions_of_matched_locations(candidates, kept)
 }
 
@@ -102,7 +134,7 @@ fn keep_sessions_of_matched_locations(candidates: &[Candidate], kept: Vec<Ranked
     let listed: HashSet<usize> = kept.iter().map(|r| r.index).collect();
     let mut out = Vec::with_capacity(kept.len());
     for ranked in kept {
-        let (index, rank) = (ranked.index, ranked.rank);
+        let (index, via, rank) = (ranked.index, ranked.via, ranked.rank);
         out.push(ranked);
         if candidates[index].parent.is_some() {
             continue;
@@ -118,6 +150,7 @@ fn keep_sessions_of_matched_locations(candidates: &[Candidate], kept: Vec<Ranked
                 .filter(|(i, _)| !listed.contains(i))
                 .map(|(i, _)| Ranked {
                     index: i,
+                    via,
                     rank,
                     spans: Vec::new(),
                 }),
@@ -175,6 +208,7 @@ mod tests {
         Candidate {
             key: EntryKey::Location(SessionLocation::Worktree(name.to_owned())),
             name: name.to_owned(),
+            detail: None,
             parent: None,
             selectable: true,
         }
@@ -184,6 +218,7 @@ mod tests {
         Candidate {
             key: EntryKey::Project(PathBuf::from(format!("/repos/{name}"))),
             name: name.to_owned(),
+            detail: None,
             parent: None,
             selectable,
         }
@@ -209,6 +244,7 @@ mod tests {
             (0..3)
                 .map(|index| Ranked {
                     index,
+                    via: Via::Name,
                     rank: Rank::Prefix,
                     spans: vec![]
                 })
@@ -371,6 +407,7 @@ mod tests {
         Candidate {
             key: EntryKey::Session(SessionId(uuid::Uuid::from_u128(id))),
             name: name.to_owned(),
+            detail: None,
             parent: Some(parent),
             selectable: true,
         }
@@ -462,5 +499,78 @@ mod tests {
                 ranked.len()
             );
         }
+    }
+
+    // --- review entries: a detail text matched after the name (#1274, contract J2, J3) ---
+
+    fn one_span(span: Range<usize>) -> Vec<Range<usize>> {
+        vec![span]
+    }
+
+    fn review_file(path: &str) -> Candidate {
+        let rel = crate::review::RelPath::from_native(path).expect("a relative path");
+        Candidate {
+            key: EntryKey::ReviewFile(rel),
+            name: path.rsplit('/').next().unwrap_or(path).to_owned(),
+            detail: Some(path.to_owned()),
+            parent: None,
+            selectable: true,
+        }
+    }
+
+    #[test]
+    fn a_candidate_without_detail_ranks_as_before() {
+        let candidates = list(&["xlog", "logs", "l-o-g"]);
+        let ranked = filter(&candidates, &Query::new("log"));
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["logs", "xlog", "l-o-g"],
+            "FR-019: prefix, run, scattered, as 968 ranks them"
+        );
+        assert!(
+            ranked.iter().all(|r| r.via == Via::Name),
+            "a candidate with no detail can only match on its name"
+        );
+    }
+
+    #[test]
+    fn a_name_match_sorts_before_any_detail_only_match() {
+        // `tests/one.rs` matches `tests` only on its path, as a prefix; `my_tests.rs` on its name,
+        // as a run, the worse rank.
+        let candidates = vec![review_file("tests/one.rs"), review_file("src/my_tests.rs")];
+        let ranked = filter(&candidates, &Query::new("tests"));
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["my_tests.rs", "one.rs"],
+            "FR-017: a file name match ranks before a directory-only match"
+        );
+        assert_eq!(
+            (ranked[0].via, ranked[0].rank),
+            (Via::Name, Rank::Run),
+            "the name match keeps its own rank"
+        );
+        assert_eq!((ranked[1].via, ranked[1].rank), (Via::Detail, Rank::Prefix));
+    }
+
+    #[test]
+    fn the_detail_is_matched_only_when_the_name_misses_and_spans_index_what_matched() {
+        let candidates = vec![review_file("daemon/tests.rs"), review_file("tests/one.rs")];
+        let ranked = filter(&candidates, &Query::new("tests"));
+        assert_eq!(ranked[0].index, 0);
+        assert_eq!(
+            (ranked[0].via, ranked[0].spans.clone()),
+            (Via::Name, one_span(0..5)),
+            "J3: a name match emphasises the name, though the path matches too"
+        );
+        assert_eq!(ranked[1].index, 1);
+        assert_eq!(
+            (ranked[1].via, ranked[1].spans.clone()),
+            (Via::Detail, one_span(0..5)),
+            "J3: a detail-only match emphasises the detail"
+        );
+        assert!(
+            filter(&candidates, &Query::new("zzz")).is_empty(),
+            "neither text matches: dropped"
+        );
     }
 }
