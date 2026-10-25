@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M5
-- **Next step**: M5 (T033–T039) implemented on local branch 1186-m5-wip (from 1186-m4-wip cc23db94); reviews, visual pass B8–B11 and the full gate next; then the orchestrator opens M4's PR, then M5's (title/body in the unit's scratchpad)
+- **Phase**: M5 PR
+- **Next step**: M5 done on local branch 1186-m5-wip (full gate green at e5c3e7a7; review A and B clean; visual pass B8–B11 PASS, screenshots /mnt/project-files/issue-1186/m5-*); the orchestrator pushes and opens M4's PR (1186-m4-wip at cc23db94), then M5's (title/body in the unit's scratchpad, stacked on M4); then the close unit (T040)
 
 ## Pull requests
 
@@ -19,9 +19,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1346 | design (spec, plan, tasks) | merged | 527d91b36196fda8950f2d3e1d6a193fe3a0f1d9 |
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
 | #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
-| #1379 | M3 Basic/Advanced switch, query field and results | open, CI running | — |
+| #1379 | M3 Basic/Advanced switch, query field and results | merged | 5a5bc7e1a7f244d276f0e2b55fbe3e43b8704043 |
 | (to open) | M4 Jira's error messages and Retry | full gate green at cc23db94 (after the rebase: layout snapshot re-recorded, `QUERY_FAILURE_CONTENT` path 0/6→0/8), local branch 1186-m4-wip, not pushed | — |
-| (to open) | M5 remember the last query and mode per project | local branch 1186-m5-wip, not pushed | — |
+| (to open) | M5 remember the last query and mode per project | full gate green at e5c3e7a7, local branch 1186-m5-wip (on 1186-m4-wip), not pushed | — |
 
 ## Milestones
 
@@ -29,9 +29,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
-| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | open, CI running (rebased onto main at e545d5f5) |
+| M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | merged |
 | M4 | T024–T032 | full | Jira's error messages and Retry | (to open) | full gate green at cc23db94 after the rebase onto 598fab89, not pushed |
-| M5 | T033–T039 | full | Remember last query and mode per project | (to open) | implemented, in review (local branch 1186-m5-wip) |
+| M5 | T033–T039 | full | Remember last query and mode per project | (to open) | full gate green at e5c3e7a7, reviews clean, visual pass B8–B11 PASS, not pushed |
 
 ## Decisions
 
@@ -71,12 +71,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (high) | 1 | 42865ee4f31bfa39fa99f5e3d0f7d8f1dda6ed39:8d16ddb3ad093ec30a9d914d907c8e59c6c5514d | CLEAN (1 MINOR declined: a 400's body is read on every path, not only the query's) |
 | M4 review B (conformance, sonnet) | 1 | d2a6954e44c9ed190f293e3dd3d12fa3094acd31:b6223f6f5bdaeebc38a4e5f39b7f54a3e5dadc5e | CLEAN, no findings; Verify: jira_query 30, jira_http_adapter 22, jira_query_state 26, layout_snapshot 114 passed |
 | M4 visual pass (quickstart §B B4–B6) | 1 | b6223f6f binary | PASS all three (Xvfb, tiny-skia, fake_jira `badjql`); screenshots /mnt/project-files/issue-1186/m4-*.png; noted, not defects: each run sends two requests because the fake always returns a next-page token (as in M3); one Retry click lost to xdotool on the slow renderer, the second worked |
+| M5 review A (high) | 1 | 0845a0010c46ea3d3e7d757923272d8495b64d4c:ac16fd29265e92a74e7333123d11e2752c94eb16 | CLEAN (1 MINOR declined: a failed query-file delete after the token's leaves the connection in settings) |
+| M5 review B (conformance, sonnet) | 1 | 3708e8aa1aec1da3404309f12ff2c11f9e00d27e:e5c3e7a761f0a172d1da50587bcfe481c07a0c8a | CLEAN (MINOR: same Remove ordering as A's, declined; Verify read from the full gate log — reviewers run no cargo here: jira_query 36, jira_query_state 34, jira_connection_shell 13, bin 715 passed) |
+| M5 visual pass (quickstart §B B8–B11) | 1 | e5c3e7a7 binary | PASS all four (Xvfb, tiny-skia, fake_jira); screenshots /mnt/project-files/issue-1186/m5-*.png; B11 directory listing: A's .query.json and .token gone, B's token kept; tiny-skia stalls noted, not defects |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M4 | A | `refusal_body` reads up to 64 KiB of every 400, also on the basic list and status bisection paths that drop it | T027 specifies `BadRequest(Vec<u8>)` read in `send`; a 400 body is a few hundred bytes and capped at 64 KiB, and a basic 400 is a failure path; splitting `send` per caller adds a second error shape for no observable gain |
+| M5 | A | On Remove, a query-file delete that fails after the token's returns `Err`, so the connection stays in settings without a token | Both files sit in the same owner-only directory, so a token delete that succeeded and a query delete that fails is an unlikely pair; the error names it and the user can retry. Splitting `apply`'s result into a change plus a warning would widen a 533 contract for that case |
 
 ## Handover
 
