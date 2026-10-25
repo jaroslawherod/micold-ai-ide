@@ -100,7 +100,8 @@ repository-relative; line numbers are as of the plan (2026-10-24, main after #11
   container `0/0/0/0` is 65 px, the bar `0/0/0/0/0` 64 px, the hairline `0/0/0/0/1` 1 px at y 64).
   The hairline is the title bar's own bottom edge (§7.1, `app_bar::BOTTOM_EDGE = HEIGHT +
   DIVIDER`), so SC-004's "title bar's bottom edge" is `BOTTOM_EDGE` and its "0 px gap" is between
-  that edge and `shell.body`'s top; its "44 px tall" is `HEIGHT`. The gate reads both constants. If
+  that edge and `shell.body`'s top. #1127 shipped `HEIGHT` 43 and `DIVIDER` 1, so its "44 px tall"
+  is `BOTTOM_EDGE` and the bar alone is `HEIGHT`. The gate reads both constants. If
   #1127 drops the divider (or the constant), the rule follows what #1127 ships: the bottom edge is
   then the bar's own, `BOTTOM_EDGE == HEIGHT`.
 - **Decision**: each new state anchors `shell.root`, `title_bar`, `shell.body`, `sidebar`,
