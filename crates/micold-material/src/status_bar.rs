@@ -17,7 +17,7 @@
 
 use iced::advanced::renderer;
 use iced::widget::{container, row, Space};
-use iced::{Alignment, Background, Element, Rectangle, Size};
+use iced::{Alignment, Background, Element, Rectangle};
 use micold_core::tokens::anatomy::status_bar::HEIGHT;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
@@ -263,7 +263,7 @@ mod tests {
     use iced::advanced::layout::{self, Layout};
     use iced::advanced::{mouse, Shell};
     use iced::window::RedrawRequest;
-    use iced::Event;
+    use iced::{Event, Size};
 
     const ROOM: Size = Size::new(1200.0, 600.0);
 
