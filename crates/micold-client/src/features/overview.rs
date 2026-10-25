@@ -575,7 +575,7 @@ pub struct Badge {
     pub label: String,
 }
 
-/// The Overview's tooltip, on the top bar's button and the sidebar's row alike (feature 1125, R9):
+/// The Overview's tooltip, on the sidebar's row (feature 1125, R9; feature 1127 removed the top bar's button):
 /// its name and chord, then the badge's words when there is one.
 pub fn overview_tooltip(badge: Option<&Badge>) -> String {
     let mut tooltip = format!("Overview ({})", crate::keymap::overview_chord_label());
