@@ -88,7 +88,9 @@ The caller passes only the files the list shows now (*m* follows the toggles).
 
 ### `MarkBlock` and `mark_block` (D4, provisional: research R7)
 
-`MarkBlock = Disconnected | NotRead | HiddenKind`, each with one tooltip constant.
+`MarkBlock = Disconnected | NotRead | Unreadable | HiddenKind`, each with one tooltip constant.
+`Unreadable` ("This file's change could not be read") is the client's: the whole-change read failed
+with none kept, or the file's hash failed (its `id` is `None` in a read whole change).
 `mark_block(origin: Option<Origin>, toggles: Toggles, scope: &ReviewScope) -> Option<MarkBlock>`
 answers `NotRead` for `origin == None` (no id yet) and `HiddenKind` when `origin` includes a kind
 the toggles hide (Committed hidden and origin Committed or Both; Uncommitted hidden and origin

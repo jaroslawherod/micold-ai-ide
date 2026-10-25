@@ -212,6 +212,15 @@ pub enum Icon {
     /// The sidebar chip bar's more action (feature 1125, research R11) — `more_horiz`, the
     /// horizontal ⋯; the vertical `more_vert` is [`Icon::Menu`]'s, the app bar's overflow menu.
     MoreHorizontal,
+    /// A review file row not reviewed and with no drafts, ○ (feature 1271, research R9) —
+    /// `circle`: `U+E836`, the same ring, is [`Icon::ActivityEnded`]'s.
+    ReviewUnseen,
+    /// A review file row with draft comments, ● (feature 1271) — `adjust`, a ring with a dot: the
+    /// Outlined font draws `circle` and `fiber_manual_record` as rings only.
+    ReviewDrafts,
+    /// A review file row marked reviewed on its current change, ✓ (feature 1271) — `done`:
+    /// `U+E5CA`, the same tick, is [`Icon::ChecksPassing`]'s.
+    ReviewDone,
 }
 
 impl Icon {
@@ -299,6 +308,9 @@ impl Icon {
         Icon::TaskDone,
         Icon::TaskOpen,
         Icon::MoreHorizontal,
+        Icon::ReviewUnseen,
+        Icon::ReviewDrafts,
+        Icon::ReviewDone,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -410,6 +422,10 @@ impl Icon {
             Icon::TaskOpen => '\u{e835}',
             // Feature 1125 (research R11): `more_horiz`.
             Icon::MoreHorizontal => '\u{e5d3}',
+            // Feature 1271 (research R9): `circle`, `adjust`, `done`.
+            Icon::ReviewUnseen => '\u{ef4a}',
+            Icon::ReviewDrafts => '\u{e39e}',
+            Icon::ReviewDone => '\u{e876}',
         }
     }
 }

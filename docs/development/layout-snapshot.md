@@ -113,6 +113,13 @@ same gate holds the button at the width it asks for, beside the title and chips,
 state, and the Review tab's mark, label, `99+` badge and × whole inside it at both windows and
 themes. The bar that sat under the terminal,
 and its `session-terminal-*` states, are gone.
+Feature 1271's `changes-review-marks` lists three files in the review, one per state (✓ reviewed
+and selected with **Reviewed** pressed in the diff header, ◉ with a draft, ○ unseen) and the
+view header's *1 of 3 reviewed* with a partial bar; `changes-review-marks-unavailable` is the same
+view with the session service not connected: the progress slot is laid out empty at its fixed
+width and **Mark reviewed** is unavailable. `gates/session_area_fits.rs` holds the view header's
+progress slot and the diff header's chips inside their rows, none overlapping another, in both
+states at both windows and themes.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session

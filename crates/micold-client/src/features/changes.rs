@@ -28,7 +28,10 @@ use micold_core::review::diff::{
 };
 use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
-use micold_core::review::marks::{EntryMarks, ReviewMark};
+use micold_core::review::marks::{
+    file_review, mark_block, progress, ChangeId, EntryMarks, FileReview, MarkBlock, ReviewMark,
+    ReviewState, WholeChange,
+};
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
@@ -37,6 +40,7 @@ use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::review_tabs::{EntryKey, Opened, ReviewTabs};
 use micold_core::session::{SessionId, SessionLocation};
 use micold_core::settings::DiffLayout;
+use micold_core::task_progress::Ratio;
 use micold_core::tokens::Rgb;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
 
@@ -362,6 +366,9 @@ pub struct OpenView {
     pub toggles: Toggles,
     /// The changed files.
     pub list: Load<ChangeList>,
+    /// The entry's whole working-tree change, whatever the toggles show, read with the list and
+    /// kept while a re-read runs: the current ids the marks are judged on (feature 1271, FR-005).
+    pub whole: Load<WholeChange>,
     /// The selected file, kept across a re-read while it is still listed.
     pub selected: Option<RelPath>,
     /// The file list's scroll offset, in pixels (L4: only the visible rows are built).
@@ -1339,7 +1346,11 @@ pub enum Msg {
         seq: u64,
         /// The list, or git's message.
         result: Result<ChangeList, String>,
+        /// The entry's whole working-tree change, or git's message (feature 1271, R2).
+        whole: Result<WholeChange, String>,
     },
+    /// The diff header's **Mark reviewed** / **Reviewed** was pressed (feature 1271, FR-002).
+    MarkToggled,
     /// The user selected a session: the terminal takes the main area back and the shown review
     /// is hidden, kept (feature 1269, U2).
     SessionSelected,
@@ -1847,6 +1858,7 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         entry,
         toggles: Toggles::default(),
         list: Load::Idle,
+        whole: Load::Idle,
         selected: None,
         list_offset: 0,
         list_viewport: 0,
@@ -1956,6 +1968,7 @@ fn reading(view: &OpenView) -> bool {
 /// it started, else nothing yet (U5). The browsed file is read again by the list's re-read.
 fn settle(view: &mut OpenView) {
     settle_load(&mut view.list);
+    settle_load(&mut view.whole);
     settle_load(&mut view.diff);
     settle_load(&mut view.files.tree);
     if let PrList::Loading { last, .. } = &mut view.pull_requests {
@@ -2537,7 +2550,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
-        Msg::ListRead { seq, result } => list_read(state, seq, result),
+        Msg::ListRead { seq, result, whole } => list_read(state, seq, result, whole),
+        Msg::MarkToggled => mark_toggled(state),
         Msg::WorktreesListed { project, names } => {
             state.tabs.drop_gone_worktrees(&project, &names);
             // Feature 1126: the header's worktree gone, it follows nothing until the root's follow
@@ -3266,11 +3280,21 @@ pub fn send_error_text(message: &str) -> String {
 
 /// Each file's pending-comment count in the open view's entry (L2).
 pub fn pending_counts(state: &State) -> BTreeMap<RelPath, usize> {
+    state
+        .tabs
+        .shown_view()
+        .map(|view| draft_counts(state, view))
+        .unwrap_or_default()
+}
+
+/// Each file's pending-comment count in `view`'s entry, in the scope of its shown source.
+fn draft_counts(state: &State, view: &OpenView) -> BTreeMap<RelPath, usize> {
     let mut counts = BTreeMap::new();
-    let view = state.tabs.shown_view();
-    let review = view.and_then(|view| review_of(state, view));
-    let scope = view.map_or(Scope::WorkingTree, view_scope);
-    for comment in review.into_iter().flat_map(|r| in_scope(r, scope)) {
+    let scope = view_scope(view);
+    for comment in review_of(state, view)
+        .into_iter()
+        .flat_map(|r| in_scope(r, scope))
+    {
         if is_pending(comment) {
             *counts.entry(comment.path.clone()).or_insert(0) += 1;
         }
@@ -3882,6 +3906,19 @@ fn request_read(state: &mut State) -> Effect {
         again: false,
         last,
     };
+    // Feature 1271: the whole change is read with the list, the last one kept meanwhile.
+    let last = match std::mem::take(&mut view.whole) {
+        Load::Ready(whole)
+        | Load::Loading {
+            last: Some(whole), ..
+        } => Some(whole),
+        _ => None,
+    };
+    view.whole = Load::Loading {
+        seq,
+        again: false,
+        last,
+    };
     state.next_seq += 1;
     Effect::ReadList {
         seq,
@@ -3891,13 +3928,30 @@ fn request_read(state: &mut State) -> Effect {
 }
 
 /// Read `seq` ended: show its answer unless a newer read replaced it, then run a queued read.
-fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) -> Effect {
+fn list_read(
+    state: &mut State,
+    seq: u64,
+    result: Result<ChangeList, String>,
+    whole: Result<WholeChange, String>,
+) -> Effect {
     let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
     };
     let again = match view.list {
         Load::Loading { seq: s, again, .. } if s == seq => again,
         _ => return Effect::None,
+    };
+    // A failed whole-change read keeps the last one: the marks stay judged on it.
+    view.whole = match (whole, std::mem::take(&mut view.whole)) {
+        (Ok(whole), _) => Load::Ready(whole),
+        (
+            Err(_),
+            Load::Loading {
+                last: Some(last), ..
+            }
+            | Load::Ready(last),
+        ) => Load::Ready(last),
+        (Err(message), _) => Load::Failed(message),
     };
     view.list = match result {
         Ok(list) => {
@@ -4138,6 +4192,190 @@ fn reanchor_effect(state: &State, moves: Vec<Move>) -> Effect {
         return Effect::None;
     }
     review_edit(view, ReviewEditOp::Reanchor { moves })
+}
+
+/// The whole change on screen: the ready one, or the one kept while a re-read runs.
+fn shown_whole(view: &OpenView) -> Option<&WholeChange> {
+    match &view.whole {
+        Load::Ready(whole) => Some(whole),
+        Load::Loading { last, .. } => last.as_ref(),
+        Load::Idle | Load::Failed(_) => None,
+    }
+}
+
+/// The current change id of each file of the shown source that has one (feature 1271, R1): the
+/// working tree's from its whole change. A pull request's come with US4 (M5): none yet.
+pub fn current_ids(view: &OpenView) -> BTreeMap<RelPath, ChangeId> {
+    if view.source != Source::Changes {
+        return BTreeMap::new();
+    }
+    shown_whole(view)
+        .into_iter()
+        .flat_map(|whole| whole.files.values())
+        .filter_map(|file| Some((file.path.clone(), file.id?)))
+        .collect()
+}
+
+/// The review state of each listed file of the shown working tree (FR-001, FR-004): judged on the
+/// entry's marks and the current ids every time it is asked. Disconnected, the marks are not
+/// known, so only drafts count (FR-013). Empty while a pull request is shown (US4, M5).
+pub fn file_reviews(
+    state: &State,
+    view: &OpenView,
+    connected: bool,
+) -> BTreeMap<RelPath, FileReview> {
+    let Some(list) = shown_list(view).filter(|_| view.source == Source::Changes) else {
+        return BTreeMap::new();
+    };
+    let drafts = draft_counts(state, view);
+    let ids = current_ids(view);
+    list.files
+        .iter()
+        .map(|file| {
+            let review = judged(state, view, connected, &file.path, &ids, &drafts);
+            (file.path.clone(), review)
+        })
+        .collect()
+}
+
+/// `path`'s review state from its mark (known only while `connected`), its current id and its
+/// draft count.
+fn judged(
+    state: &State,
+    view: &OpenView,
+    connected: bool,
+    path: &RelPath,
+    ids: &BTreeMap<RelPath, ChangeId>,
+    drafts: &BTreeMap<RelPath, usize>,
+) -> FileReview {
+    let mark = review_of(state, view)
+        .filter(|_| connected)
+        .and_then(|r| r.marks.get(Scope::WorkingTree, path));
+    let drafts = drafts.get(path).copied().unwrap_or(0);
+    file_review(mark, ids.get(path), drafts)
+}
+
+/// **Mark reviewed** / **Reviewed** in the diff header (FR-002).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkControl {
+    /// **Mark reviewed** or **Reviewed**.
+    pub label: &'static str,
+    /// Shown pressed: the file is Reviewed.
+    pub pressed: bool,
+    /// Why it cannot be pressed; `None`: it can. Unmarking is never blocked.
+    pub block: Option<MarkBlock>,
+}
+
+/// The control's tooltip while it can mark the file.
+pub const MARK_TOOLTIP: &str = "Mark this file reviewed on its current change";
+/// The control's tooltip while the file is Reviewed.
+pub const UNMARK_TOOLTIP: &str = "Reviewed on its current change; press to unmark";
+
+impl MarkControl {
+    /// What its tooltip says: why it is unavailable, else what pressing it does.
+    pub fn tooltip(&self) -> &'static str {
+        match self.block {
+            Some(block) => block.tooltip(),
+            None if self.pressed => UNMARK_TOOLTIP,
+            None => MARK_TOOLTIP,
+        }
+    }
+}
+
+/// The control's label while the file is not Reviewed.
+pub const MARK_REVIEWED: &str = "Mark reviewed";
+/// The control's label while the file is Reviewed.
+pub const REVIEWED: &str = "Reviewed";
+
+/// The selected file's mark control; `None` with no file of the working tree selected.
+pub fn mark_control(state: &State, view: &OpenView, connected: bool) -> Option<MarkControl> {
+    let path = selected_file(view)?;
+    let list = shown_list(view).filter(|list| {
+        view.source == Source::Changes && list.files.iter().any(|f| &f.path == path)
+    })?;
+    let ids = current_ids(view);
+    let review = judged(
+        state,
+        view,
+        connected,
+        path,
+        &ids,
+        &draft_counts(state, view),
+    );
+    if review.state == ReviewState::Reviewed {
+        return Some(MarkControl {
+            label: REVIEWED,
+            pressed: true,
+            block: None,
+        });
+    }
+    let block = if !connected {
+        Some(MarkBlock::Disconnected)
+    } else if matches!(view.whole, Load::Failed(_)) {
+        Some(MarkBlock::Unreadable)
+    } else {
+        match shown_whole(view).and_then(|whole| whole.files.get(path)) {
+            Some(file) if file.id.is_none() => Some(MarkBlock::Unreadable),
+            file => mark_block(file.map(|file| file.origin), view.toggles, &list.scope),
+        }
+    };
+    Some(MarkControl {
+        label: MARK_REVIEWED,
+        pressed: false,
+        block,
+    })
+}
+
+/// *n of m reviewed* of the shown working tree's listed files (FR-008, FR-009): `None` with no
+/// files, while disconnected (FR-013), and while a pull request is shown (US4, M5).
+pub fn header_progress(state: &State, view: &OpenView, connected: bool) -> Option<Ratio> {
+    reviews_progress(&file_reviews(state, view, connected), connected)
+}
+
+/// [`header_progress`] from the rows' `reviews`, for a caller that already judged them.
+pub fn reviews_progress(reviews: &BTreeMap<RelPath, FileReview>, connected: bool) -> Option<Ratio> {
+    if !connected {
+        return None;
+    }
+    progress(reviews.values().copied())
+}
+
+/// The header's progress figure.
+pub fn progress_label(ratio: Ratio) -> String {
+    format!("{} of {} reviewed", ratio.done, ratio.total)
+}
+
+/// The mark control was pressed: ask the service to mark the selected file on its current change,
+/// or to unmark it. Nothing changes here until `ReviewChanged` arrives (research R6). A press the
+/// control would not take (blocked) sends nothing; the shell's send says when no service is there.
+fn mark_toggled(state: &mut State) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let Some(control) = mark_control(state, view, true) else {
+        return Effect::None;
+    };
+    let Some(path) = selected_file(view) else {
+        return Effect::None;
+    };
+    let change = if control.pressed {
+        None
+    } else if control.block.is_some() {
+        return Effect::None;
+    } else {
+        match current_ids(view).get(path) {
+            Some(id) => Some(*id),
+            None => return Effect::None,
+        }
+    };
+    review_edit(
+        view,
+        ReviewEditOp::SetReviewed {
+            scope: Scope::WorkingTree,
+            path: path.as_str().to_owned(),
+            change,
+        },
+    )
 }
 
 /// Whether the Committed toggle can be used: not for the Default entry (L1, US1 s9).
@@ -4706,6 +4944,7 @@ mod tests {
             &mut state,
             Msg::ListRead {
                 seq,
+                whole: Ok(WholeChange::default()),
                 result: Ok(listing()),
             },
         );
@@ -4741,6 +4980,7 @@ mod tests {
         let answers = [
             Msg::ListRead {
                 seq,
+                whole: Ok(WholeChange::default()),
                 result: Ok(listing()),
             },
             Msg::DiffRead {
@@ -4810,6 +5050,7 @@ mod tests {
             &mut state,
             Msg::ListRead {
                 seq,
+                whole: Ok(WholeChange::default()),
                 result: Ok(listing()),
             },
         );
@@ -4833,6 +5074,7 @@ mod tests {
             &mut state,
             Msg::ListRead {
                 seq,
+                whole: Ok(WholeChange::default()),
                 result: Err("git failed".into()),
             },
         );

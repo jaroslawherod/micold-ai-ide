@@ -2000,6 +2000,40 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1271: reviewed marks in the review view (T032, FR-001, FR-008, FR-009) -----
+        //
+        // `feat-short`'s review listing three files: `src/a.rs` reviewed and selected (✓, the
+        // chip pressed), `src/b.rs` with a draft (●), `src/c.rs` unseen (○), and the header's
+        // *1 of 3 reviewed* with a partial bar; then the same view with the service not
+        // connected: no progress, the chip unavailable, the header's other boxes in place.
+        CoveredState {
+            name: "changes-review-marks",
+            build: review_marks,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
+        CoveredState {
+            name: "changes-review-marks-unavailable",
+            build: review_marks_unavailable,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
         // --- Feature 939: a structured session's pane is its transcript (T038) -------------------
         //
         // One card open and detached from the end, so the state holds every part a transcript
@@ -3124,6 +3158,116 @@ pub fn review_sessionless() -> StateUnderTest {
         SessionLocation::Worktree("fix-a-bug".to_string()),
     );
     under
+}
+
+/// [`review_shown`] with three files listed and read, `src/a.rs` reviewed and selected with its
+/// diff shown, `src/b.rs` holding a draft and `src/c.rs` unseen (feature 1271, T032).
+pub fn review_marks() -> StateUnderTest {
+    use micold_client::features::changes::{self, Load, Msg};
+    use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
+    use micold_core::review::comment::{CommentId, CommentState, ReviewComment, Scope};
+    use micold_core::review::diff::{parse_unified, LoadedDiff, SideLines};
+    use micold_core::review::marks::{ChangeId, EntryMarks, ReviewMark, WholeChange, WholeFile};
+    use micold_core::review::{LineRange, RelPath, Side};
+
+    let mut under = review_shown();
+    let path = |p: &str| RelPath::from_native(p).expect("a relative path");
+    let id = |n: u8| ChangeId::parse(&format!("{n:02x}").repeat(20)).expect("an id");
+    let paths = ["src/a.rs", "src/b.rs", "src/c.rs"];
+    let list = ChangeList {
+        files: paths
+            .iter()
+            .map(|p| ChangedFile {
+                path: path(p),
+                kind: ChangeKind::Modified,
+                content: Content::Text,
+                added: 4,
+                removed: 1,
+                large: false,
+                origin: Origin::Uncommitted,
+            })
+            .collect(),
+        scope: micold_core::review::base::ReviewScope::Worktree {
+            base: micold_core::review::base::Base::MergeBase {
+                branch: "main".into(),
+                commit: "0123456789abcdef0123456789abcdef01234567".into(),
+            },
+        },
+    };
+    let whole = WholeChange {
+        files: paths
+            .iter()
+            .zip(1u8..)
+            .map(|(p, n)| {
+                (
+                    path(p),
+                    WholeFile {
+                        path: path(p),
+                        kind: ChangeKind::Modified,
+                        origin: Origin::Uncommitted,
+                        id: Some(id(n)),
+                    },
+                )
+            })
+            .collect(),
+    };
+    let changes = &mut under.state.changes;
+    let Some(Load::Loading { seq, .. }) = changes.tabs.shown_view().map(|v| v.list.clone()) else {
+        panic!("the shown review reads its list");
+    };
+    changes::update(
+        changes,
+        Msg::ListRead {
+            seq,
+            result: Ok(list),
+            whole: Ok(whole),
+        },
+    );
+    if let changes::Effect::ReadDiff { seq, .. } =
+        changes::update(changes, Msg::FileSelected(path("src/a.rs")))
+    {
+        changes::update(
+            changes,
+            Msg::DiffRead {
+                seq,
+                result: Ok(LoadedDiff {
+                    diff: parse_unified(b"@@ -1,2 +1,2 @@\n a\n-b\n+B\n"),
+                    old: SideLines::from_bytes(b"a\nb\n"),
+                    new: SideLines::from_bytes(b"a\nB\n"),
+                    spans: Default::default(),
+                }),
+            },
+        );
+    }
+    changes.reviews.insert(
+        (PathBuf::from(PROJECT), "feat-short".to_string()),
+        micold_client::features::changes::ReviewView {
+            comments: vec![ReviewComment {
+                id: CommentId::new(),
+                path: path("src/b.rs"),
+                side: Side::New,
+                range: LineRange::new(1, 1).expect("a range"),
+                quote: vec!["line 1".into()],
+                text: "about it".into(),
+                state: CommentState::Draft,
+                created: 1,
+                pr: None,
+            }],
+            sending: false,
+            marks: EntryMarks::from_vec(vec![ReviewMark {
+                scope: Scope::WorkingTree,
+                path: path("src/a.rs"),
+                change: id(1),
+            }]),
+        },
+    );
+    under
+}
+
+/// [`review_marks`] with the session service not connected: no progress, the chip unavailable
+/// (feature 1271, FR-009, FR-013).
+pub fn review_marks_unavailable() -> StateUnderTest {
+    review_marks().connection(ConnectionStatus::Disconnected)
 }
 
 /// How many strip members (tabs and the "+") each strip state's keyed row holds (feature 1126,

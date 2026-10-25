@@ -22,11 +22,13 @@ use micold_client::ui::syntax;
 use micold_core::context_header::ChangeSummary;
 use micold_core::git::Git;
 use micold_core::github::GithubRepo;
+use micold_core::protocol::messages::ReviewEditOp;
 use micold_core::pull_request::{PullRequestSource, ReadingFailure, TreeListing};
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::browse::{self, Confined, FileReadFailure, FileSource, FileText};
 use micold_core::review::changes::ChangeList;
 use micold_core::review::diff::Spans;
+use micold_core::review::marks::WholeChange;
 use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
@@ -212,7 +214,11 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
         } => {
             // Service-owned (FR-020): the daemon stores it and pushes `ReviewChanged` to every
             // window, this one included; a refusal surfaces through the pending op.
-            crate::shell::daemon_sync::send_op(app, PendingOp::ReviewEdit, |req| {
+            let op = match edit {
+                ReviewEditOp::SetReviewed { .. } => PendingOp::ReviewMark,
+                _ => PendingOp::ReviewEdit,
+            };
+            crate::shell::daemon_sync::send_op(app, op, |req| {
                 micold_core::protocol::messages::ClientMsg::ReviewEdit {
                     req,
                     project,
@@ -286,7 +292,15 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             entry,
             toggles,
         } => {
-            let answer = move |result| Message::Changes(Msg::ListRead { seq, result });
+            // Feature 1271 (R2): the whole change beside the list, so the marks are judged on
+            // what the file's change is, whatever the toggles show.
+            let answer = move |read: Result<(ChangeList, Result<WholeChange, String>), String>| {
+                let (result, whole) = match read {
+                    Ok((list, whole)) => (Ok(list), whole),
+                    Err(message) => (Err(message.clone()), Err(message)),
+                };
+                Message::Changes(Msg::ListRead { seq, result, whole })
+            };
             let (dir, git) = match local(app, &entry) {
                 Ok(found) => found,
                 Err(why) => return Task::done(answer(Err(why.into()))),
@@ -294,7 +308,16 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             let label = format!("list seq={seq} entry={entry:?}");
             off_thread(
                 label,
-                move || read_list(&*git, &dir, &entry, toggles),
+                move || {
+                    let scope = review_scope(&*git, &dir, &entry);
+                    let list = git
+                        .change_list(&dir, scope.clone(), toggles)
+                        .map_err(|error| error.to_string())?;
+                    let whole = git
+                        .whole_change(&dir, &scope)
+                        .map_err(|error| error.to_string());
+                    Ok((list, whole))
+                },
                 answer,
             )
         }
@@ -628,12 +651,16 @@ fn read_list(
     entry: &SessionLocation,
     toggles: Toggles,
 ) -> Result<ChangeList, String> {
-    let scope = match entry {
+    git.change_list(dir, review_scope(git, dir, entry), toggles)
+        .map_err(|error| error.to_string())
+}
+
+/// `entry`'s scope: the project root's uncommitted changes, or a worktree over its base.
+fn review_scope(git: &(dyn Git + Send + Sync), dir: &Path, entry: &SessionLocation) -> ReviewScope {
+    match entry {
         SessionLocation::Default => ReviewScope::RootUncommitted,
         SessionLocation::Worktree(_) => ReviewScope::Worktree {
             base: git.review_base(dir),
         },
-    };
-    git.change_list(dir, scope, toggles)
-        .map_err(|error| error.to_string())
+    }
 }

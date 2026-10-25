@@ -95,6 +95,7 @@ fn ready(paths: &[&str]) -> State {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(paths)),
         },
     );
@@ -183,6 +184,7 @@ fn a_toggle_change_rereads_the_list() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs"])),
         },
     );
@@ -208,6 +210,7 @@ fn an_answer_with_a_stale_seq_is_dropped() {
         &mut state,
         Msg::ListRead {
             seq: first,
+            whole: Ok(Default::default()),
             result: Ok(list(&["stale.rs"])),
         },
     );
@@ -235,6 +238,7 @@ fn a_read_asked_while_one_runs_runs_once_after_it() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs"])),
         },
     );
@@ -256,6 +260,7 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["b.rs", "c.rs"])),
         },
     );
@@ -271,6 +276,7 @@ fn the_selection_is_kept_across_a_reread_while_still_listed() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["c.rs"])),
         },
     );
@@ -361,6 +367,7 @@ fn both_toggles_off_says_both_are_hidden() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs"])),
         },
     );
@@ -371,6 +378,7 @@ fn both_toggles_off_says_both_are_hidden() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&[])),
         },
     );
@@ -389,6 +397,7 @@ fn a_worktree_without_a_base_says_why() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(ChangeList {
                 files: vec![file("a.rs")],
                 scope: ReviewScope::Worktree {
@@ -417,6 +426,7 @@ fn loading_and_failure_have_their_own_bodies() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Err("fatal: not a git repository".into()),
         },
     );
@@ -528,6 +538,7 @@ fn a_renamed_file_is_read_with_its_old_path() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(renamed),
         },
     );
@@ -654,6 +665,7 @@ fn a_list_reread_keeps_the_selection_and_rereads_its_diff() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["b.rs"])),
         },
     );
@@ -686,6 +698,7 @@ fn a_list_reread_that_drops_the_selection_drops_its_diff() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs"])),
         },
     );
@@ -715,6 +728,7 @@ fn a_failed_list_reread_drops_the_selection_and_its_diff() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Err("fatal: not a git repository".into()),
         },
     );
@@ -1064,6 +1078,7 @@ fn the_composer_survives_a_list_and_diff_reread() {
         &mut state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs", "b.rs"])),
         },
     ) else {
@@ -1384,6 +1399,7 @@ fn answer_list(state: &mut State, effect: Effect, paths: &[&str]) -> Effect {
         state,
         Msg::ListRead {
             seq,
+            whole: Ok(Default::default()),
             result: Ok(list(paths)),
         },
     ) {
@@ -3028,6 +3044,7 @@ fn a_change_re_reads_the_browsed_file_and_the_tree() {
         &mut state,
         Msg::ListRead {
             seq: list_seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["a.rs"])),
         },
     ) else {
@@ -3087,6 +3104,7 @@ fn back_to_a_diff_whose_file_left_the_list_starts_at_the_top() {
         &mut state,
         Msg::ListRead {
             seq: list_seq,
+            whole: Ok(Default::default()),
             result: Ok(list(&["z.rs"])),
         },
     );
@@ -3497,6 +3515,7 @@ fn the_header_reads_the_counts_of_the_location_it_follows() {
     };
     app.update_changes(Msg::ListRead {
         seq: list_seq,
+        whole: Ok(Default::default()),
         result: Ok(list(&["a.rs"])),
     });
     let changes::Load::Loading { seq, .. } = app.changes.header.load else {
@@ -3658,6 +3677,7 @@ fn answer_reads(state: &mut State, effect: Effect, files: &[&str], diff: &Loaded
                 state,
                 Msg::ListRead {
                     seq,
+                    whole: Ok(Default::default()),
                     result: Ok(list(files)),
                 },
             ),
@@ -5135,4 +5155,388 @@ fn a_failed_send_drops_the_watch() {
         vec![reported(sent(&d1), Outcome::Applied, "done")],
     );
     assert!(!drawer(&state).state.open);
+}
+
+/// Feature 1271, M3 (T027): row states, the mark control and *n of m reviewed* (US1 s1–s7, FR-001,
+/// FR-002, FR-004, FR-008, FR-009, FR-013).
+mod reviewed_marks {
+    use super::*;
+    use micold_client::features::changes::{
+        file_reviews, header_progress, mark_control, MarkControl, OpenView, MARK_REVIEWED, REVIEWED,
+    };
+    use micold_core::review::marks::{
+        ChangeId, MarkBlock, ReviewMark, ReviewState, WholeChange, WholeFile as Whole,
+    };
+    use micold_core::task_progress::Ratio;
+
+    fn id(n: u8) -> ChangeId {
+        ChangeId::parse(&format!("{n:02x}").repeat(20)).expect("an id")
+    }
+
+    /// `(path, origin, id)` per file; id 0 is a file whose id could not be read.
+    type Spec<'a> = &'a [(&'a str, Origin, u8)];
+
+    fn listed(files: Spec<'_>) -> ChangeList {
+        ChangeList {
+            files: files
+                .iter()
+                .map(|(p, origin, _)| ChangedFile {
+                    origin: *origin,
+                    ..file(p)
+                })
+                .collect(),
+            scope: main_base(),
+        }
+    }
+
+    fn whole(files: Spec<'_>) -> WholeChange {
+        WholeChange {
+            files: files
+                .iter()
+                .map(|(p, origin, n)| {
+                    (
+                        path(p),
+                        Whole {
+                            path: path(p),
+                            kind: ChangeKind::Modified,
+                            origin: *origin,
+                            id: (*n > 0).then(|| id(*n)),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    const THREE: Spec<'static> = &[
+        ("a.rs", Origin::Uncommitted, 1),
+        ("b.rs", Origin::Uncommitted, 2),
+        ("c.rs", Origin::Uncommitted, 3),
+    ];
+
+    /// The worktree's view, its first read answered with `files` and their whole change.
+    fn opened(files: Spec<'_>) -> State {
+        let mut state = State::default();
+        let seq = open(&mut state, worktree());
+        answer(&mut state, seq, Ok(listed(files)), Ok(whole(files)));
+        state
+    }
+
+    fn answer(
+        state: &mut State,
+        seq: u64,
+        result: Result<ChangeList, String>,
+        whole: Result<WholeChange, String>,
+    ) -> Effect {
+        changes::update(state, Msg::ListRead { seq, result, whole })
+    }
+
+    /// The service pushes `feat-a`'s `drafts` (paths) and `marks` (path, id).
+    fn pushed(state: &mut State, drafts: &[&str], marks: &[(&str, u8)]) {
+        changes::update(
+            state,
+            Msg::ReviewChanged {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                comments: drafts
+                    .iter()
+                    .map(|p| comment(p, Side::New, 1, 1, CommentState::Draft))
+                    .collect(),
+                sending: false,
+                marks: marks
+                    .iter()
+                    .map(|(p, n)| ReviewMark {
+                        scope: Scope::WorkingTree,
+                        path: path(p),
+                        change: id(*n),
+                    })
+                    .collect(),
+            },
+        );
+    }
+
+    fn view(state: &State) -> &OpenView {
+        state.tabs.shown_view().expect("the review is shown")
+    }
+
+    fn states(state: &State, connected: bool) -> Vec<(String, ReviewState)> {
+        file_reviews(state, view(state), connected)
+            .into_iter()
+            .map(|(p, review)| (p.to_string(), review.state))
+            .collect()
+    }
+
+    fn progress_of(state: &State, connected: bool) -> Option<Ratio> {
+        header_progress(state, view(state), connected)
+    }
+
+    fn control(state: &State, connected: bool) -> Option<MarkControl> {
+        mark_control(state, view(state), connected)
+    }
+
+    fn ratio(done: u32, total: u32) -> Option<Ratio> {
+        Some(Ratio { done, total })
+    }
+
+    /// US1 s1, s4, s5, s6; FR-001. ○ for none, ● with a draft, ✓ when the mark is on the current
+    /// change (keeping the draft count), and a mark on another change is not Reviewed.
+    #[test]
+    fn rows_follow_the_marks_the_drafts_and_the_whole_change() {
+        use ReviewState::{HasDrafts, Reviewed, Unseen};
+        let mut state = opened(THREE);
+        let row = |p: &str, s: ReviewState| (p.to_string(), s);
+        assert_eq!(
+            states(&state, true),
+            vec![
+                row("a.rs", Unseen),
+                row("b.rs", Unseen),
+                row("c.rs", Unseen)
+            ],
+            "s1: every row ○"
+        );
+        assert_eq!(progress_of(&state, true), ratio(0, 3), "s1: 0 of 3");
+
+        pushed(&mut state, &["b.rs"], &[("a.rs", 1), ("c.rs", 9)]);
+        assert_eq!(
+            states(&state, true),
+            vec![
+                row("a.rs", Reviewed),
+                row("b.rs", HasDrafts),
+                row("c.rs", Unseen)
+            ],
+            "s4: a draft is ●, not counted; a mark on another change is not ✓"
+        );
+        assert_eq!(progress_of(&state, true), ratio(1, 3));
+
+        pushed(
+            &mut state,
+            &["b.rs"],
+            &[("a.rs", 1), ("b.rs", 2), ("c.rs", 3)],
+        );
+        assert_eq!(
+            states(&state, true),
+            vec![
+                row("a.rs", Reviewed),
+                row("b.rs", Reviewed),
+                row("c.rs", Reviewed)
+            ],
+            "s5: ✓ wins over the draft"
+        );
+        assert_eq!(
+            pending_counts(&state).get(&path("b.rs")),
+            Some(&1),
+            "s5: the draft count stays on the row"
+        );
+        assert_eq!(progress_of(&state, true), ratio(3, 3), "s6: 3 of 3");
+    }
+
+    /// US1 s2, s3; research R6. The press asks the service, with the current id or `None`, and
+    /// changes nothing before `ReviewChanged` arrives.
+    #[test]
+    fn the_mark_control_asks_the_service_and_changes_nothing_itself() {
+        let mut state = opened(THREE);
+        assert_eq!(control(&state, true), None, "no file selected, no control");
+        select(&mut state, "a.rs");
+        assert_eq!(
+            control(&state, true),
+            Some(MarkControl {
+                label: MARK_REVIEWED,
+                pressed: false,
+                block: None,
+            })
+        );
+        let before = state.clone();
+        let effect = changes::update(&mut state, Msg::MarkToggled);
+        assert_eq!(
+            effect,
+            Effect::ReviewEdit {
+                project: project(),
+                worktree_dir: "feat-a".into(),
+                edit: ReviewEditOp::SetReviewed {
+                    scope: Scope::WorkingTree,
+                    path: "a.rs".into(),
+                    change: Some(id(1)),
+                },
+            },
+            "s2: marked on its current change"
+        );
+        assert_eq!(state, before, "nothing changes before ReviewChanged");
+
+        pushed(&mut state, &[], &[("a.rs", 1)]);
+        assert_eq!(
+            control(&state, true),
+            Some(MarkControl {
+                label: REVIEWED,
+                pressed: true,
+                block: None,
+            }),
+            "s2: Reviewed, pressed"
+        );
+        assert_eq!(progress_of(&state, true), ratio(1, 3), "s2: 1 of 3");
+        let effect = changes::update(&mut state, Msg::MarkToggled);
+        let Effect::ReviewEdit {
+            edit: ReviewEditOp::SetReviewed { change, .. },
+            ..
+        } = effect
+        else {
+            panic!("an unmark is a SetReviewed, got {effect:?}");
+        };
+        assert_eq!(change, None, "s3: the mark is removed");
+    }
+
+    /// US1 s7 (D4, provisional A), FR-002, FR-013. Mark reviewed is unavailable for a file whose
+    /// change a toggle hides in part, before its change is read, and while disconnected; Reviewed
+    /// stays pressable.
+    #[test]
+    fn the_mark_control_says_why_it_is_unavailable() {
+        let files: Spec<'_> = &[
+            ("a.rs", Origin::Committed, 1),
+            ("c.rs", Origin::Both, 3),
+            ("d.rs", Origin::Uncommitted, 4),
+        ];
+        let mut state = opened(files);
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled)
+        else {
+            panic!("the toggle rereads the list");
+        };
+        let shown = &files[..2];
+        answer(&mut state, seq, Ok(listed(shown)), Ok(whole(files)));
+        let block = |state: &State| control(state, true).and_then(|c| c.block);
+
+        select(&mut state, "c.rs");
+        assert_eq!(
+            block(&state),
+            Some(MarkBlock::HiddenKind),
+            "s7: c has a hidden part"
+        );
+        assert_eq!(
+            changes::update(&mut state, Msg::MarkToggled),
+            Effect::None,
+            "a blocked press sends nothing"
+        );
+        select(&mut state, "a.rs");
+        assert_eq!(
+            block(&state),
+            None,
+            "s7: a committed-only file can be marked"
+        );
+
+        pushed(&mut state, &[], &[("c.rs", 3)]);
+        select(&mut state, "c.rs");
+        assert_eq!(
+            control(&state, true),
+            Some(MarkControl {
+                label: REVIEWED,
+                pressed: true,
+                block: None,
+            }),
+            "unmarking is never blocked"
+        );
+        assert_eq!(
+            control(&state, false).and_then(|c| c.block),
+            Some(MarkBlock::Disconnected),
+            "FR-013: not connected"
+        );
+
+        let mut unread = State::default();
+        let seq = open(&mut unread, worktree());
+        answer(
+            &mut unread,
+            seq,
+            Ok(listed(THREE)),
+            Err("fatal: bad object".into()),
+        );
+        select(&mut unread, "a.rs");
+        assert_eq!(
+            block(&unread),
+            Some(MarkBlock::Unreadable),
+            "the whole change could not be read: no id to mark on"
+        );
+        let unhashed: Spec<'_> = &[("a.rs", Origin::Uncommitted, 0)];
+        let mut state = opened(unhashed);
+        select(&mut state, "a.rs");
+        assert_eq!(
+            block(&state),
+            Some(MarkBlock::Unreadable),
+            "a file whose hash failed has no id"
+        );
+    }
+
+    /// FR-008, FR-009, FR-013. *m* follows the toggles; no files or no service, no progress.
+    #[test]
+    fn the_progress_counts_the_listed_files_while_connected() {
+        let files: Spec<'_> = &[
+            ("a.rs", Origin::Committed, 1),
+            ("c.rs", Origin::Both, 3),
+            ("d.rs", Origin::Uncommitted, 4),
+        ];
+        let mut state = opened(files);
+        pushed(&mut state, &[], &[("a.rs", 1), ("d.rs", 4)]);
+        assert_eq!(progress_of(&state, true), ratio(2, 3));
+        assert_eq!(progress_of(&state, false), None, "FR-013: disconnected");
+        assert!(
+            states(&state, false)
+                .iter()
+                .all(|(_, s)| *s != ReviewState::Reviewed),
+            "FR-013: disconnected rows show drafts only"
+        );
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::UncommittedToggled)
+        else {
+            panic!("the toggle rereads the list");
+        };
+        answer(&mut state, seq, Ok(listed(&files[..2])), Ok(whole(files)));
+        assert_eq!(
+            progress_of(&state, true),
+            ratio(1, 2),
+            "m follows the toggles"
+        );
+
+        let empty = opened(&[]);
+        assert_eq!(progress_of(&empty, true), None, "FR-009: no files");
+    }
+
+    /// FR-004, R2. The whole change loads with the list, stays on screen while a re-read runs, and
+    /// a failed whole-change read keeps the last one.
+    #[test]
+    fn the_whole_change_is_read_with_the_list_and_kept() {
+        let mut state = opened(THREE);
+        pushed(&mut state, &[], &[("a.rs", 1)]);
+        assert_eq!(view(&state).whole, Load::Ready(whole(THREE)));
+
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::Changed) else {
+            panic!("a change on disk rereads the list");
+        };
+        assert!(
+            matches!(&view(&state).whole, Load::Loading { last: Some(last), .. } if *last == whole(THREE)),
+            "kept while the re-read runs: {:?}",
+            view(&state).whole
+        );
+        assert_eq!(
+            progress_of(&state, true),
+            ratio(1, 3),
+            "the rows hold meanwhile"
+        );
+
+        answer(&mut state, seq, Ok(listed(THREE)), Err("timed out".into()));
+        assert_eq!(
+            view(&state).whole,
+            Load::Ready(whole(THREE)),
+            "a failed whole-change read keeps the last one"
+        );
+
+        let changed: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 7),
+            ("b.rs", Origin::Uncommitted, 2),
+            ("c.rs", Origin::Uncommitted, 3),
+        ];
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::Changed) else {
+            panic!("a change on disk rereads the list");
+        };
+        answer(&mut state, seq, Ok(listed(changed)), Ok(whole(changed)));
+        assert_eq!(
+            progress_of(&state, true),
+            ratio(0, 3),
+            "FR-004: re-judged on the new change"
+        );
+    }
 }

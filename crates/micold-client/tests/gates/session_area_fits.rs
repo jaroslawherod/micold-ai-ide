@@ -334,6 +334,8 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
     for name in [
         "session-area-review-shown",
         "session-area-review-sessionless",
+        "changes-review-marks",
+        "changes-review-marks-unavailable",
     ] {
         let covered = covered_states()
             .iter()
@@ -396,6 +398,137 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                 assert_button_unsqueezed(&what, &records, &state);
             }
         }
+    }
+}
+
+/// The Changes view's own header row, under the session area's view: its title column, the
+/// progress slot, the panel toggle, then the review buttons while the panel is closed.
+const VIEW_HEADER: &[usize] = &[2, 0, 0];
+/// The diff pane's header row: the layout and whole-file chips, then the mark control.
+const DIFF_HEADER: &[usize] = &[2, 0, 1, 1, 0, 0];
+/// The diff pane, which the diff header row must stay inside.
+const DIFF_PANE: &[usize] = &[2, 0, 1, 1];
+
+/// Feature 1271 T033 (FR-009, SC-005): at 1280×800 in both themes the view header's title, *n of
+/// m reviewed* slot and panel toggle, and the diff header's chips and **Mark reviewed**, each lie
+/// whole inside their row and none overlaps another; the slot is as wide, and the panel toggle in
+/// the same place, whether progress is shown or not.
+#[test]
+fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
+    let mut placed = Vec::new();
+    for name in ["changes-review-marks", "changes-review-marks-unavailable"] {
+        let covered = covered_states()
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("the covered state {name} exists"));
+        for theme in [ThemePreference::Light, ThemePreference::Dark] {
+            let mut under = (covered.build)();
+            under.state.settings.theme_pref = theme;
+            under.state.sidebar.width = SIDEBAR;
+            let records = records_of(under, WINDOW);
+            let what = format!("{name} {theme:?}");
+            for (row, host) in [
+                (
+                    [SESSION_AREA, VIEW_HEADER].concat(),
+                    [SESSION_AREA, &[2]].concat(),
+                ),
+                (
+                    [SESSION_AREA, DIFF_HEADER].concat(),
+                    [SESSION_AREA, DIFF_PANE].concat(),
+                ),
+            ] {
+                let row_rect = rect(
+                    at(&records, &row)
+                        .unwrap_or_else(|| panic!("{what}: the row {row:?} is laid out")),
+                );
+                let host_rect = rect(at(&records, &host).expect("the host is laid out"));
+                assert!(
+                    inside(&row_rect, &host_rect),
+                    "{what}: the row {row_rect:?} lies inside {host_rect:?}"
+                );
+                let parts: Vec<Rectangle> =
+                    children_of(&records, &row).into_iter().map(rect).collect();
+                assert!(
+                    parts.len() >= 2,
+                    "{what}: the row {row:?} has its parts: {parts:?}"
+                );
+                for (i, a) in parts.iter().enumerate() {
+                    assert!(
+                        inside(a, &row_rect),
+                        "{what}: part {i} {a:?} lies inside its row {row_rect:?}"
+                    );
+                    for b in &parts[i + 1..] {
+                        assert!(!overlap(a, b), "{what}: {a:?} overlaps {b:?}");
+                    }
+                }
+            }
+            let header = [SESSION_AREA, VIEW_HEADER].concat();
+            let part = |i: usize| {
+                rect(at(&records, &[header.as_slice(), &[i]].concat()).expect("a header part"))
+            };
+            placed.push((what, part(1), part(2)));
+        }
+    }
+    let (first, slot, toggle) = &placed[0];
+    for (what, other_slot, other_toggle) in &placed[1..] {
+        assert_eq!(
+            (other_slot.x, other_slot.width, other_toggle.x),
+            (slot.x, slot.width, toggle.x),
+            "{what}: the slot and the panel toggle stand where {first} has them (FR-009)"
+        );
+    }
+}
+
+/// The progress slot's bar, under the view header: the slot's two containers, its row, then the
+/// bar after the *n of m reviewed* words.
+const PROGRESS_BAR: &[usize] = &[1, 0, 0, 1];
+
+/// Feature 1271 (visual re-pass V2): the header's progress bar is drawn, at its full width where
+/// the slot has room for it beside its words. A `Fill` bar in the slot's `Shrink` row was laid out
+/// at zero width, so the words updated with no bar beside them.
+#[test]
+fn the_progress_bar_has_its_width_beside_its_words() {
+    let covered = covered_states()
+        .iter()
+        .find(|s| s.name == "changes-review-marks")
+        .expect("the covered state changes-review-marks exists");
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        let mut under = (covered.build)();
+        under.state.settings.theme_pref = theme;
+        under.state.sidebar.width = SIDEBAR;
+        // The drawer open, as the visual pass saw it: closed (feature 1270's default) the review
+        // buttons stand in the header too, and the slot's third leaves the bar under its 120.
+        let _ = micold_client::features::changes::update(
+            &mut under.state.changes,
+            micold_client::features::changes::Msg::Drawer(
+                micold_core::review::drawer::DrawerEvent::Toggle,
+            ),
+        );
+        assert!(under
+            .state
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(|v| v.drawer.state.open));
+        let records = records_of(under, WINDOW);
+        let header = [SESSION_AREA, VIEW_HEADER].concat();
+        let part = |path: &[usize]| {
+            rect(
+                at(&records, &[header.as_slice(), path].concat())
+                    .unwrap_or_else(|| panic!("{theme:?}: the header part {path:?} is laid out")),
+            )
+        };
+        let (slot, words, bar) = (part(&[1]), part(&[1, 0, 0, 0]), part(PROGRESS_BAR));
+        assert!(
+            (bar.width - micold_client::ui::PROGRESS_BAR_WIDTH).abs() <= TOLERANCE,
+            "{theme:?}: the bar {bar:?} is {} px wide, not its {} beside {words:?}",
+            bar.width,
+            micold_client::ui::PROGRESS_BAR_WIDTH
+        );
+        assert!(
+            bar.x >= words.x + words.width && inside(&bar, &slot) && inside(&words, &slot),
+            "{theme:?}: the words {words:?} then the bar {bar:?} lie inside the slot {slot:?}"
+        );
     }
 }
 

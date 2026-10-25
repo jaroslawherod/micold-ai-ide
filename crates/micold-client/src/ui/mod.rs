@@ -90,7 +90,7 @@ pub mod status_bar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
-pub use changes::DIFF_SCROLL_ID;
+pub use changes::{DIFF_SCROLL_ID, PROGRESS_BAR_WIDTH};
 pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
@@ -445,7 +445,13 @@ pub fn view_with<'a>(
         {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open;
             // feature 1126 R12, feature 1269 U16: under its own location's header.
-            session_area::over_review(state, changes::view(state, view, scheme, composer), scheme)
+            // Feature 1271 (FR-013): marks need the session service.
+            let connected = matches!(connection, ConnectionStatus::Connected);
+            session_area::over_review(
+                state,
+                changes::view(state, view, scheme, composer, connected),
+                scheme,
+            )
         } else if let Some(compare) = compare::view(state, scheme) {
             // Feature 483, C1: Compare stands there too; the Changes view sits over it.
             compare
