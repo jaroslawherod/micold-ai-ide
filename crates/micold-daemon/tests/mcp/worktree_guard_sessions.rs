@@ -338,40 +338,11 @@ async fn an_unguarded_launchs_settings_file_has_no_deny_rules() {
     }
 }
 
-/// A log sink the test can read back.
-#[derive(Clone, Default)]
-struct LogBuffer(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for LogBuffer {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
-    type Writer = LogBuffer;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
-}
-
 /// FR-009 and hooks.md rule 5: failing open is logged with its reason, never with the payload.
 #[tokio::test]
 async fn failing_open_is_logged_with_its_reason_and_never_the_payload() {
-    let buffer = LogBuffer::default();
-    // Global, not thread-local: the guard runs on a `spawn_blocking` thread. This is the only test
-    // in the binary that logs.
-    tracing::subscriber::set_global_default(
-        tracing_subscriber::fmt()
-            .with_writer(buffer.clone())
-            .with_ansi(false)
-            .finish(),
-    )
-    .expect("no other test installs a subscriber");
+    // The binary's one global subscriber: the guard runs on a `spawn_blocking` thread.
+    let buffer = crate::mcp_support::log();
     let f = fixture().await;
     let unreadable = json!({
         "hook_event_name": "PreToolUse",
@@ -382,7 +353,7 @@ async fn failing_open_is_logged_with_its_reason_and_never_the_payload() {
         f.post(IN_A, &unreadable.to_string()).await,
         (200, Value::Null)
     );
-    let log = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    let log = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
     let line = log
         .lines()
         .find(|l| l.contains("worktree guard allowed a call it could not read"))
