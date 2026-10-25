@@ -194,24 +194,8 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
                     left: 0.0,
                     right: 0.0,
                 }),
-            Anchor::Point(point) => placed
-                .align_x(iced::alignment::Horizontal::Left)
-                .align_y(iced::alignment::Vertical::Top)
-                .padding(Padding {
-                    top: point.y,
-                    left: point.x,
-                    right: 0.0,
-                    bottom: 0.0,
-                }),
-            Anchor::Below { at, bottom } => placed
-                .align_x(iced::alignment::Horizontal::Left)
-                .align_y(iced::alignment::Vertical::Top)
-                .padding(Padding {
-                    top: at.y,
-                    left: at.x,
-                    right: 0.0,
-                    bottom,
-                }),
+            Anchor::Point(at) => below(placed, at, 0.0),
+            Anchor::Below { at, bottom } => below(placed, at, bottom),
             Anchor::TopEnd { top, end } => placed
                 .align_x(iced::alignment::Horizontal::Right)
                 .align_y(iced::alignment::Vertical::Top)
@@ -312,4 +296,22 @@ impl<'a, M: Clone + 'a> From<Overlay<'a, M>> for Element<'a, M> {
         }
         stack(layers).into()
     }
+}
+
+/// A panel placed under `at`: its top-left corner there, with `bottom` kept clear above the window's
+/// bottom edge ([`Anchor::Point`] keeps none, [`Anchor::Below`] its own).
+fn below<'a, M>(
+    placed: iced::widget::Container<'a, M>,
+    at: Point,
+    bottom: f32,
+) -> iced::widget::Container<'a, M> {
+    placed
+        .align_x(iced::alignment::Horizontal::Left)
+        .align_y(iced::alignment::Vertical::Top)
+        .padding(Padding {
+            top: at.y,
+            left: at.x,
+            right: 0.0,
+            bottom,
+        })
 }
