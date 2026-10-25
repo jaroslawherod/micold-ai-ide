@@ -348,7 +348,10 @@ impl FilterState {
                 ));
                 rows.push(FilterRow::new(RowText::Retry, RowAction::Retry));
             }
-            Some(ChoiceLoad::Loaded(choices)) if choices.is_empty() => {
+            // The reporter's people come from a search, so none yet is no reason of the project's.
+            Some(ChoiceLoad::Loaded(choices))
+                if choices.is_empty() && kind != FilterKind::Reporter =>
+            {
                 rows.push(FilterRow::new(RowText::Empty, RowAction::Inert));
             }
             Some(ChoiceLoad::Loaded(choices)) => {
@@ -393,10 +396,11 @@ impl FilterState {
                     ChoiceLoad::Loaded(me) => me.len(),
                     _ => 0,
                 };
-                if self.reporter_choices().len() > me {
-                    Vec::new()
-                } else {
-                    vec![FilterRow::new(RowText::NoPerson, RowAction::Inert)]
+                // "You are still offered" only when the own user is.
+                match (self.reporter_choices().len() > me, me) {
+                    (true, _) => Vec::new(),
+                    (false, 0) => vec![FilterRow::new(RowText::NoMatch, RowAction::Inert)],
+                    (false, _) => vec![FilterRow::new(RowText::NoPerson, RowAction::Inert)],
                 }
             }
         }
@@ -631,8 +635,10 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
             if kind == FilterKind::Reporter {
                 // Text typed to find a person waits out the debounce before it is sent (FR-004);
                 // the chosen person's label in the field is not a search.
+                // Nor while the own user is not loaded: the list shows that state, not people.
                 let label = filters.chosen.shown(kind);
-                if text.trim().is_empty() || label.as_deref() == Some(text.as_str()) {
+                let me_loaded = matches!(filters.me, ChoiceLoad::Loaded(_));
+                if !me_loaded || text.trim().is_empty() || label.as_deref() == Some(text.as_str()) {
                     filters.people = ChoiceLoad::NotRequested;
                     filters.people_pending = None;
                 } else {

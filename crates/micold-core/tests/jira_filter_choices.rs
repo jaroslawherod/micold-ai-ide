@@ -363,7 +363,7 @@ fn the_own_user_is_read_from_myself_as_me() {
         .expect("an object")
         .expect("a usable user");
     assert_eq!(
-        named(&[me.clone()]),
+        named(std::slice::from_ref(&me)),
         [("5b10ac".into(), "Jane Doe".into(), true)]
     );
     assert_eq!(me.label(), "You (Jane Doe)");
