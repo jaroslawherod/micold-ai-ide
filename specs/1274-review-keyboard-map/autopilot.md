@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M2 (single-key switch, core) PR open, waiting on CI and merge. M3/M4 wait for #1269, #1270, #1271, #1273; M5 for #1127.
+- **Next step**: M2 PR #1415 open (gate green at c78577d96), waiting on CI and merge. M3/M4 wait for #1269, #1270, #1271, #1273; M5 for #1127.
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1366 | design (spec, plan, tasks) | merged | 76c1335e705aec8ebf02d278273bcc578d91112f |
 | #1404 | M1 core key map | merged | 8f38e9ca85309f92e24376c870038cd481eff913 |
+| #1415 | M2 single-key switch core (+ D4 design amendment) | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | #1404 | PR open, CI pending |
-| M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | — | in progress |
+| M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | #1415 | PR open, CI pending |
 | M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs — **blocked by #1269, #1270, #1271, #1273** | — | blocked |
 | M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | — | blocked |
 | M5 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M4 | — | blocked |
@@ -56,6 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | speckit-analyze (amendment) | — | — | 0 CRITICAL/HIGH; 5 MEDIUM + 5 LOW: C1–C8, C10 fixed in tasks/spec/plan/quickstart; C9 declined |
 | Review tasks 2 | 3 (sonnet, scoped to analyze fixes; not counted) | f0555a548 + working tree | CLEAN: 2 MINOR fixed, prose only (`?` closes the sheet only while single keys are on in research R8/contract K2; Scale/Scope M2/M3 lines) |
 | Review A M2 (code-review high) | 1 | 5d0dfa4de1f0e3e6bbdbfb83edf55e23bc661685:110db9b34069c52a9f73af2e6e6df4c0d4524846 | CLEAN: 7 findings, no BLOCKER/MAJOR; 2 fixed (one `ReviewKey::is_on` predicate shared by `resolve`/`sheet_rows`/`key_hint`; persist test: a form save keeps a stored `false`), 5 declined |
+| Review B M2 (conformance, sonnet) | 1 | 5d0dfa4de1f0e3e6bbdbfb83edf55e23bc661685:110db9b34069c52a9f73af2e6e6df4c0d4524846 | CHANGES: BLOCKER Verify not run (gate died, disk full); MINOR TDD red wording — fixed |
+| Review B M2 | 2 (sonnet) | tree of c78577d96 | CLEAN: gate GATE_EXIT=0, review::keys 18 ok, settings tests ok, settings_sections ok |
 
 ## Declined review findings
 
@@ -77,6 +80,7 @@ None.
 
 ## Follow-ups not done
 
+- M2: container disk (~29 GB free) ran out twice in the full gate; target-shared wiped and the gate run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`, `STRIP=symbols`. `gh` unauthenticated: branch-start.sh run without the PR argument after confirming M1's merge SHA is on origin/main; PR via GitHub MCP.
 - Plan review ran via headless `claude -p --agent autopilot-reviewer`: Bash is denied there (workspace untrusted), so the reviewer used Read/Grep/Glob; a first run that only had denied Bash calls returned a vacuous CLEAN and was rerun. Symbols it could not confirm (`UnifiedIndex`, `SideIndex`, `jump_offset`, `settings::DiffLayout`, `is_primary_shift`, `Msg::SendPressed`, `window.focused_field`, `overlay::registry::topmost`) were confirmed by the plan unit with grep.
 - Coordinator requirement from #1276 folded into the plan: public `micold_core::review::keys::REVIEW_KEYS` in M1; client binds only from it.
 
