@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree_form::jira_filters::{shows_filters, ChoiceLoad, FilterMsg};
+use micold_client::features::worktree_form::jira_query::{Msg as QueryMsg, QueryRun};
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, JiraAvailability, Msg, SearchState, WorktreeForm,
 };
@@ -16,6 +17,7 @@ use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::issue_types::default_mapping;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
 use micold_core::jira_filter::{FilterKind, VersionChoice};
+use micold_core::jira_query::QueryMode;
 use micold_core::typeahead::Direction;
 
 const COMPONENT: FilterKind = FilterKind::Component;
@@ -1109,4 +1111,49 @@ fn a_focus_while_another_filters_choices_are_out_awaits_its_own() {
     );
     assert_eq!(labels_of(&state, FIX_VERSION).len(), 3);
     assert_eq!(labels_of(&state, COMPONENT).len(), 4);
+// ---- Feature 1186 FR-002, FR-003: advanced mode hides the filters; Basic restores them ----
+
+#[test]
+fn advanced_mode_neither_applies_nor_drops_the_chosen_filters() {
+    let mut state = filtered();
+    let chosen = form(&state).jira_filters.chosen.clone();
+    let line = form(&state).jira_filters.active_line();
+    assert!(line.is_some(), "Payments is chosen");
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Advanced)),
+    );
+    assert!(form(&state).shows_advanced());
+    let before = state.worktree_form.issue_request_seq;
+    filter(&mut state, FilterMsg::ClearedAll);
+    filter(&mut state, FilterMsg::Cleared(COMPONENT));
+    assert_eq!(
+        form(&state).jira_filters.chosen,
+        chosen,
+        "a hidden filter is not cleared"
+    );
+    assert_eq!(
+        state.worktree_form.issue_request_seq, before,
+        "a hidden filter loads no basic list"
+    );
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::DraftChanged("assignee = currentUser()".into())),
+    );
+    send(&mut state, Msg::JiraQuery(QueryMsg::Run));
+    match &form(&state).jira_query.run {
+        QueryRun::Running { scoped, .. } => assert!(
+            !scoped.as_str().to_lowercase().contains("component"),
+            "the run carries no basic filter: {}",
+            scoped.as_str()
+        ),
+        other => panic!("expected a run in flight, found {other:?}"),
+    }
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Basic)),
+    );
+    assert_eq!(form(&state).jira_filters.chosen, chosen);
+    assert_eq!(form(&state).jira_filters.active_line(), line);
+    assert_eq!(shown_keys(&state), ["ABC-1", "ABC-3"]);
 }
