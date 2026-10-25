@@ -11,7 +11,7 @@ compile-time asset.
 | family | `Roboto` (typographic family, name ID 16, else ID 1) | the font's `name` table |
 | weight | 400, 500, 600 | OS/2 `usWeightClass` |
 | style | upright (`Normal`) or italic | OS/2 `fsSelection` italic bit |
-| bytes constant | `ROBOTO_*_BYTES` | `ui/material/roboto.rs` (contract C-1) |
+| bytes constant | `ROBOTO_*_BYTES` | `micold-material/src/roboto.rs` (contract C-1) |
 | provenance | upstream, upstream sha256, cut command, own sha256, weight, licence file | `assets/fonts/PROVENANCE.md` |
 
 **Validation rules** (asserted by `tests/roboto_font.rs`):

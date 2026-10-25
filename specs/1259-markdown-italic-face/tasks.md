@@ -57,21 +57,21 @@ Paths: `client` = `crates/micold-client`, `core` = `crates/micold-core`.
 ## Phase 2: Foundational — the Roboto module (plan D2; contract C-1, C-3)
 
 - [x] T005 Resolution tests, red first (fail to compile until T006), in a `#[cfg(test)] mod tests`
-  of a new `client/src/ui/material/roboto.rs`, on a bare `fontdb::Database`
+  of a new `micold-material/src/roboto.rs`, on a bare `fontdb::Database`
   (`iced::advanced::graphics::text::cosmic_text::fontdb`) holding the six `ROBOTO_FACES` loaded as
   `Source::Binary`: `Family::Name("Roboto")` italic at 400, 500, 600 resolves to
   `ROBOTO_ITALIC_BYTES`, `ROBOTO_MEDIUM_ITALIC_BYTES`, `ROBOTO_SEMIBOLD_ITALIC_BYTES`; italic at 700
   (`Weight::Bold`) and upright at 700 both resolve to faces whose `weight` is 600 (SC-002); upright
   400/500/600 resolve to the three upright bytes. Follow `mono.rs`' helpers (`monospace`, line 117;
   `assert_bundled_face`, line 71) for the query and the byte comparison
-- [x] T006 Implement `client/src/ui/material/roboto.rs` per contract C-1 and C-3: move `ROBOTO` and
-  the three `ROBOTO_*_BYTES` from `client/src/ui/material/text.rs` (lines 110–121, doc comments
+- [x] T006 Implement `micold-material/src/roboto.rs` per contract C-1 and C-3: move `ROBOTO` and
+  the three `ROBOTO_*_BYTES` from `micold-material/src/text.rs` (lines 110–121, doc comments
   with them); add `ROBOTO_FAMILY`, the three italic `ROBOTO_*_ITALIC_BYTES` (`include_bytes!` of
   T002's files), `ROBOTO_FACES` (upright then italic), `ROBOTO_WEIGHTS = [400, 500, 600]` and
   `install_roboto(fonts: &mut FontSystem)`, which loads each of `ROBOTO_FACES` with
   `load_font(Cow::Borrowed(..))` (no branch; the pin call joins it in T020). Declare `mod roboto;`
-  in `client/src/ui/material/mod.rs` (beside `mod mono;`, line 89) and re-export the new names
-  beside the moved ones (line 271) and from `client/src/ui/mod.rs` (line 158), so every existing
+  in `micold-material/src/lib.rs` (beside `pub mod mono;`; `client/src/ui/material/mod.rs`
+  before #1262) and re-export the new names beside the moved ones (line 271) and from `client/src/ui/mod.rs` (line 158), so every existing
   `ui::ROBOTO*` path (e.g. `mono.rs` line 137, `tests/add_worktree_form_survives_a_refusal.rs`)
   keeps compiling. T005 passes
 
@@ -88,13 +88,13 @@ US2 alone is the showcase sample (see the ledger, milestone cut).
 **Independent test**: T007, T012, T014 pass; `layout_snapshot` changes only in
 `session-transcript-rich`; quickstart §B B1–B4, B6, B7 on Linux.
 
-- [x] T007 [US1] Test, red until T008: in `client/src/ui/material/roboto.rs` tests, after
+- [x] T007 [US1] Test, red until T008: in `micold-material/src/roboto.rs` tests, after
   `test_support::renderer()`, `test_support::resolves_to_bundled` (line 638) holds for `ROBOTO`
   with `Slant::Italic` at weights 400, 500, 600 → the three italic bytes, and at `Weight::Bold` →
   `ROBOTO_SEMIBOLD_ITALIC_BYTES` (FR-001, FR-002, FR-003, FR-005); messages name the face
   (assumes no host Roboto italic: it resolves through the global font system, so on a machine
   with `fonts-roboto` installed it can fail until the pin joins `install_roboto` in T020)
-- [x] T008 [US1] `client/src/ui/material/test_support.rs::renderer`: replace the three
+- [x] T008 [US1] `micold-material/src/test_support.rs::renderer`: replace the three
   `load_font(ROBOTO_*)` lines (73–75) with `super::install_roboto(&mut fonts)` inside the `Once`.
   T007 passes
 - [x] T009 [US1] `client/tests/support/layout.rs::renderer`: replace the three Roboto `load_font`
@@ -108,12 +108,12 @@ US2 alone is the showcase sample (see the ledger, milestone cut).
   through the font system (the pin, T020)
 - [x] T011 [P] [US1] `client/src/showcase/main.rs`: the same change (install beside line 59, drop
   lines 81–83)
-- [x] T012 [US1] Span-font tests, red first, in `client/src/ui/material/link_text.rs` `mod tests`
+- [x] T012 [US1] Span-font tests, red first, in `micold-material/src/link_text.rs` `mod tests`
   (line 244), calling `painted` directly: an italic span is `Slant::Italic` at the base weight
   (FR-010); a bold+italic span is `Weight::Bold` + `Slant::Italic` (US2, FR-003); a code span with
   `italic` set is `Font::MONOSPACE` with `Slant::Normal` (Edge: inline code), and at `Weight::Bold`
   when also bold (contract C-4). The code case is red until T013
-- [x] T013 [US1] `client/src/ui/material/link_text.rs::painted` (line 114):
+- [x] T013 [US1] `micold-material/src/link_text.rs::painted` (line 114):
   `if s.style.italic && !s.style.code { font.style = Slant::Italic }`; nothing else changes. T012
   passes
 - [x] T014 [US2] Core test, red until T015: in `core/tests/markdown_subset.rs`, beside the
@@ -147,7 +147,7 @@ exception).
 
 **Independent test**: T019 passes; quickstart §B B5.
 
-- [ ] T019 [US3] Pin tests, red first (fail to compile until T020), in `client/src/ui/material/roboto.rs`
+- [ ] T019 [US3] Pin tests, red first (fail to compile until T020), in `micold-material/src/roboto.rs`
   tests, on a bare `fontdb::Database` seeded as contract C-2 says, in this order: a `tempfile` copy
   of `ROBOTO_ITALIC_BYTES`, a copy of `ROBOTO_REGULAR_BYTES` and a copy of `ROBOTO_SEMIBOLD_BYTES`
   with the OS/2 `usWeightClass` patched to 700 (find the `OS/2` record in the table directory,
@@ -158,11 +158,11 @@ exception).
   upright 700 → `ROBOTO_SEMIBOLD_BYTES`, upright 400/500/600 → the face it resolved to before the
   call); a face of another family (`FIRA_MONO_REGULAR_BYTES`) is kept; a second call returns 0
 - [ ] T020 [US3] Implement `pin_roboto_italics(db: &mut fontdb::Database) -> usize` in
-  `client/src/ui/material/roboto.rs` per contract C-2 (remove faces whose `families` contains
+  `micold-material/src/roboto.rs` per contract C-2 (remove faces whose `families` contains
   `ROBOTO_FAMILY`, whose `source` is not `Source::Binary`, and whose `style` is not `Normal` or
   whose `weight` is not in `ROBOTO_WEIGHTS`; return the count; the shape of `pin_monospace`,
   `mono.rs` line 35); `install_roboto` calls it on `fonts.raw().db_mut()` after loading the faces
-  (contract C-3). Re-export it from `client/src/ui/material/mod.rs` and `client/src/ui/mod.rs`
+  (contract C-3). Re-export it from `micold-material/src/lib.rs` and `client/src/ui/mod.rs`
   beside `install_roboto`. T019 passes; T007 stays green
 - [ ] T021 [US3] User guide: `docs/user-guide/appearance-theming.md` *The typeface*: a Roboto
   installed on the computer does not replace the bundled faces for emphasis or bold, so the

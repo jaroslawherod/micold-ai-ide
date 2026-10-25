@@ -1,8 +1,10 @@
 # Contract: the bundled Roboto faces, upright and italic
 
-Module `crates/micold-client/src/ui/material/roboto.rs` (new), re-exported from `ui::material` and
-`ui` beside `FIRA_MONO_*_BYTES` and `MATERIAL_SYMBOLS_BYTES`. The three upright byte constants and
-`ROBOTO` move here from `material/text.rs`; their public paths (`ui::material::*`, `ui::*`) stay.
+Module `crates/micold-material/src/roboto.rs` (new; in the `micold-material` crate since #1262
+split the generic building blocks out of the client), re-exported from `micold_material` (so from
+`ui::material`, which re-exports the crate whole) and from `ui` beside `FIRA_MONO_*_BYTES` and
+`MATERIAL_SYMBOLS_BYTES`. The three upright byte constants and `ROBOTO` move here from
+`micold-material/src/text.rs`; their public paths (`ui::material::*`, `ui::*`) stay.
 
 `fontdb` is `iced::advanced::graphics::text::cosmic_text::fontdb`, `FontSystem` is
 `iced::advanced::graphics::text::FontSystem` (no new dependency).
@@ -89,10 +91,10 @@ does today:
 |---|---|---|
 | the application | `shell/startup.rs`, beside `install_monospace`, before `iced::application(...)` | the three `.font(ROBOTO_*_BYTES)` calls |
 | the showcase | `showcase/main.rs`, likewise | the three `.font(ROBOTO_*_BYTES)` calls |
-| in-crate component tests | `material/test_support.rs::renderer`, inside its `Once` | the three `load_font(ROBOTO_*)` calls |
+| in-crate component tests | `micold-material/src/test_support.rs::renderer`, inside its `Once` | the three `load_font(ROBOTO_*)` calls |
 | layout snapshot and apparatus tests | `tests/support/layout.rs::renderer`, inside its `Once` | the three Roboto `load_font` calls (its `REFERENCE_FONT_*` constants stay for the apparatus guard) |
 
-## C-4 `painted` (existing, `material/link_text.rs`)
+## C-4 `painted` (existing, `micold-material/src/link_text.rs`)
 
 A span with `style.italic` gets `Slant::Italic` unless `style.code`; a code span is
 `Font::MONOSPACE`, upright, at bold weight when bold. Nothing else in `painted` changes.
