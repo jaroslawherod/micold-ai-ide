@@ -55,7 +55,7 @@ fn the_app_bar_is_the_small_variant() {
     assert_eq!(anatomy::app_bar::FIELD_MAX_WIDTH, 360.0);
     assert_eq!(
         anatomy::ALL.len(),
-        52,
+        55,
         "the four new app-bar figures are listed"
     );
 }
