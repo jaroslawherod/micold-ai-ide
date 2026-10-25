@@ -161,6 +161,11 @@ fn every_app_bar_action_is_one_of_the_contracts_action_shapes() {
                     .iter()
                     .find(|r| r.layer == action.layer && r.path == segment_path)
                 else {
+                    wrong.push(format!(
+                        "{}: the breadcrumb at {} lays out no project segment",
+                        covered.name,
+                        lay::path_token(&action.path),
+                    ));
                     continue;
                 };
                 (segment, leaves_of(records, segment).get(1).copied())

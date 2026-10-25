@@ -442,7 +442,12 @@ mod tests {
             session.terminal_focused(),
             "precondition: a session view holds the keyboard"
         );
-        assert_eq!(jump_press(&session), toggled(&session));
+        assert_eq!(
+            jump_press(&session),
+            Some(Message::QuickSwitch(QuickSwitchMsg::Toggled {
+                terminal_had_focus: true
+            }))
+        );
         assert_eq!(model(&session).jump, jump_press(&session));
 
         let mut overview = on_fix_1117();
@@ -490,24 +495,12 @@ mod tests {
         assert!(settings_press(&state).is_none(), "settings open");
     }
 
-    /// FR-016 (contract O1): no element of the bar publishes an `Overview` message, in any body
-    /// branch — Overview closed, open, full screen, and with Settings open. The Overview is
-    /// reached from the sidebar's row and the chord, so the bar's source names no Overview control.
+    /// FR-016 (contract O1): the bar's source builds no Overview control — no Overview message,
+    /// glyph or labelled button. That no built bar publishes an `Overview` message, with the
+    /// Overview closed, open and full screen, is `title_bar_keyboard`'s
+    /// `no_bar_control_publishes_an_overview_message`.
     #[test]
-    fn the_bar_has_no_overview_button_in_any_body_branch() {
-        let mut state = State::default();
-        state.workspace.active = Some(std::path::PathBuf::from("/repo"));
-        for (open, full_screen, settings) in [
-            (false, false, false),
-            (true, false, false),
-            (true, true, false),
-            (true, true, true),
-        ] {
-            state.overview.open = open;
-            state.overview.full_screen = full_screen;
-            state.settings.settings_draft = settings.then(Default::default);
-            let _bar = view(&state, ColorScheme::Light);
-        }
+    fn the_bars_source_builds_no_overview_control() {
         let source = include_str!("toolbar.rs");
         let production = source.split("#[cfg(test)]").next().unwrap();
         for gone in ["OverviewMsg", "Icon::Overview", "Button::text(\"Overview\""] {

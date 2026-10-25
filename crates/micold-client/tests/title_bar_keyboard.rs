@@ -227,6 +227,10 @@ fn no_bar_control_publishes_an_overview_message() {
         state.overview.open = open;
         state.overview.full_screen = full_screen;
         let stops = Mounted::new(view(&state)).bar_stops().len();
+        assert_eq!(
+            stops, 4,
+            "open {open}, full screen {full_screen}: the project segment, the field, Settings and ⋮"
+        );
         let mut m = Mounted::new(view(&state));
         for _ in 0..stops {
             m.tab();
