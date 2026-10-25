@@ -736,7 +736,7 @@ fn reviewed_paths(state: &State, view: &OpenView) -> BTreeSet<String> {
     files
         .iter()
         .filter(|file| {
-            let mark = review.marks.get(scope.clone(), &file.path);
+            let mark = review.marks.get(scope, &file.path);
             file_review(mark, ids.get(&file.path), 0).state == ReviewState::Reviewed
         })
         .map(|file| file.path.as_str().to_owned())
