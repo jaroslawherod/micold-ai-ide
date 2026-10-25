@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1186
 - **Worktree branch**: claude/project-thread-vf2ck6
 - **Started**: 2026-10-24
-- **Phase**: M4
-- **Next step**: M4 (T024–T032) implemented on local branch 1186-m4-wip; scoped gate and review A, then review B, visual pass (B5, B6), full gate; orchestrator pushes and opens the M4 PR after #1379 merges
+- **Phase**: M4 PR
+- **Next step**: M4 done on local branch 1186-m4-wip (full gate green at b6223f6f; review A and B clean; visual pass B4–B6 PASS, screenshots in /mnt/project-files/issue-1186/m4-*); after #1379 merges the orchestrator rebases onto main, re-gates, pushes and opens the M4 PR (title/body in the unit's scratchpad); then milestone M5 (T033–T039)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
 | #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
 | #1379 | M3 Basic/Advanced switch, query field and results | open, CI running | — |
-| (to open) | M4 Jira's error messages and Retry | local branch 1186-m4-wip, not pushed | — |
+| (to open) | M4 Jira's error messages and Retry | full gate green at b6223f6f, local branch 1186-m4-wip, not pushed | — |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | open, CI running (rebased onto main at e545d5f5) |
-| M4 | T024–T032 | full | Jira's error messages and Retry | (to open) | implementing on 1186-m4-wip (based on e545d5f5) |
+| M4 | T024–T032 | full | Jira's error messages and Retry | (to open) | full gate green at b6223f6f, not pushed (based on e545d5f5) |
 | M5 | T033–T039 | full | Remember last query and mode per project | — | planned |
 
 ## Decisions
@@ -68,6 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B (conformance, sonnet) | 1 | 158a6fb536deca830d63382549c53caefc87f7f1:a4eddeb72ddfa28cd1d169141c8fc4d7b03c752d | CLEAN (1 MINOR fixed: an empty result said "No issue matches this query." twice; the list's empty message dropped, the caption kept) |
 | M3 visual pass (quickstart §B B1–B3, B7) | 1 | 1c12b691 binary | PASS all four (Xvfb, tiny-skia, fake_jira); not run: B1's GitHub-source variant (no remote in the scratch repo), B3 sort order (the fake ignores ORDER BY); the fake repeats its page because it always returns a next-page token, not a client defect |
 | M4 review A (high) | 1 | 42865ee4f31bfa39fa99f5e3d0f7d8f1dda6ed39:8d16ddb3ad093ec30a9d914d907c8e59c6c5514d | CLEAN (1 MINOR declined: a 400's body is read on every path, not only the query's) |
+| M4 review B (conformance, sonnet) | 1 | d2a6954e44c9ed190f293e3dd3d12fa3094acd31:b6223f6f5bdaeebc38a4e5f39b7f54a3e5dadc5e | CLEAN, no findings; Verify: jira_query 30, jira_http_adapter 22, jira_query_state 26, layout_snapshot 114 passed |
+| M4 visual pass (quickstart §B B4–B6) | 1 | b6223f6f binary | PASS all three (Xvfb, tiny-skia, fake_jira `badjql`); screenshots /mnt/project-files/issue-1186/m4-*.png; noted, not defects: each run sends two requests because the fake always returns a next-page token (as in M3); one Retry click lost to xdotool on the slow renderer, the second worked |
 
 ## Declined review findings
 
