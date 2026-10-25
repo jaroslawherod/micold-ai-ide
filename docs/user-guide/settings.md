@@ -3,8 +3,8 @@
 Open **Settings** with the gear button at the right of the title bar, or from the overflow menu
 (the three-dots button) beside it. While Settings is open the gear is drawn selected, and pressing
 it again does nothing. Settings fills the
-main area, with a rail down the left listing seven sections. The app bar and the status bar
-stay where they are, so the way back out is always in view.
+main area, with a rail down the left listing seven sections. The [title bar](appearance-theming.md#title-bar) and the
+[status bar](appearance-theming.md#status-bar) stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
 section. Collapsed, the same control is drawn as the show-sidebar icon, and pressing it slides the
@@ -50,8 +50,6 @@ read.
 
 **Theme** — follow the system, or pin light or dark. Following the system switches with it while
 the app is running.
-
-The app bar's mode button cycles the same setting, for when you want it in one press.
 
 ### Reduce motion
 

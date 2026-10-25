@@ -18,16 +18,18 @@ tallest card in that row, so rows stay even and nothing is cut off.
 ## Opening and closing it
 
 Press the sidebar's first row, **Overview**: click it, or reach it with Tab and press Enter or
-Space. While the Overview is open the breadcrumb's place in the top bar reads **Overview**, the row
+Space; or press **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS). While the Overview is open the
+[breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb)'s place in the
+[title bar](appearance-theming.md#title-bar) reads **Overview**, the row
 looks selected and no worktree row does. The row only opens the Overview, it never closes it:
 pressing it while the Overview is open changes nothing. The row does nothing while
-[Settings](settings.md) is open, and with no project open the sidebar has no Overview row. An
+[Settings](settings.md) is open, and with no project open there is no sidebar, so no Overview row. An
 Overview that was open before Settings shows again when Settings closes. Selecting a session in the
 sidebar also closes the Overview and shows that session.
 
 The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) opens and closes it, also while a terminal
 has the keyboard; the app takes it and the terminal never receives it. The row's tooltip names it.
-**Escape** (with no card expanded) closes it too. The top bar has no Overview button.
+**Escape** (with no card expanded) closes it too. The [title bar](appearance-theming.md#title-bar) has no Overview button.
 
 ### The badge
 
@@ -36,14 +38,16 @@ example "2 need action". Red means *N* locations **need action**; if none does, 
 **need attention**. Hover the row for the same words in its tooltip. With neither, there is no
 badge. The badge shows whether or not the Overview is open.
 
-The Overview replaces the main area; the sidebar and the top bar stay. Switching project keeps it
+The Overview replaces the main area; the sidebar, the [title bar](appearance-theming.md#title-bar)
+and the [status bar](appearance-theming.md#status-bar) stay. Switching project keeps it
 open and shows the new project's cards.
 
 ## Full screen
 
 To give the cards the whole window, press **Full screen** at the right end of the Overview's
 header, or press **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS). The sidebar, its collapsed strip
-included, slides away and the cards fill the window's width; the top bar stays, with the breadcrumb.
+included, slides away and the cards fill the window's width; the [title bar](appearance-theming.md#title-bar) stays, with the
+breadcrumb, and so does the [status bar](appearance-theming.md#status-bar).
 The header control then reads **Exit full screen**; press it or the shortcut again and the sidebar
 slides back. Its tooltip names the shortcut, and Tab reaches it. While a card's menu is open, the shortcut does nothing.
 

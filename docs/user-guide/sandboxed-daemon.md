@@ -535,7 +535,7 @@ outside, the machine waking without it — it brings the sandbox up again itself
 - **Each attempt shows its stage**, the same as a first start: checking the runtime, getting the
   image (with its download progress), starting. The stage and the download's percentage appear in
   the sandbox item of the [status bar](./appearance-theming.md#status-bar) along the bottom edge, with a busy mark; point at the item for
-  the runtime's own last line. Nothing is drawn as a row under the app bar, so the window does not
+  the runtime's own last line. Nothing is drawn as a row under the [title bar](./appearance-theming.md#title-bar), so the window does not
   move while the sandbox comes up. While one is under way there is no
   "could not connect" banner — a sandbox that is coming up is not a lost connection.
 - **Why the last attempt failed stays on screen** as *Trying again: …* in the sandbox item's tooltip, with the stage of the next.

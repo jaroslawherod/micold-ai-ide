@@ -11,6 +11,11 @@ marked, and renaming a project's display name.
 
 When you launch Micold AI IDE for the first time, the main window shows an **empty state**
 inviting you to open a project. Click **Open a project** to bring up the project selector.
+With no project open, the window shows only the [title bar](appearance-theming.md#title-bar) and
+the [status bar](appearance-theming.md#status-bar) around this empty state: there is no sidebar.
+Besides **Open a project**, the empty state lists your **Known projects** to reopen one with
+**Open**, and the breadcrumb's **Select project** opens the
+[project switcher](#switching-projects-from-the-breadcrumb), whose last row is **Add project…**.
 
 The selector is an in-app folder browser:
 
@@ -67,14 +72,14 @@ again. To restore the file itself instead, fix it (it is plain JSON) and rename 
 itself [30 minutes after the last window closes](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
 A first launch, with no list saved yet, shows no message.
 
-## Switching projects from the top bar
+## Switching projects from the breadcrumb
 
-At the left of the top bar, after the app mark, a **breadcrumb** says where you are:
+At the left of the [title bar](appearance-theming.md#title-bar), after the app mark, a **breadcrumb** says where you are:
 `micold-ai-ide ▾ / fix/1117`. Its first part, the **project segment**, names your active project
 (or reads **Select project** when none is open) with a small drop-down arrow after it, and is the
 **project switcher** — the quickest way to change projects without opening the folder browser or
 scrolling the main-window list. Hover it for **Switch project**. Click it, or Tab to it and press
-Enter or Space, to drop down a panel listing your known projects, directly under the top bar and
+Enter or Space, to drop down a panel listing your known projects, directly under the [title bar](appearance-theming.md#title-bar) and
 lined up with the segment's left edge.
 
 After a `/`, the **place segment** names what the main area shows: the short branch of the
@@ -166,7 +171,8 @@ kept.
 When you no longer want a project in your list, you can **forget** it, from either of two places:
 
 - **From the Known projects list** — click **Forget** next to a project.
-- **From the project switcher** — open the switcher in the top bar, **right-click** the
+- **From the project switcher** — open the switcher from the breadcrumb's project segment
+  ([above](#switching-projects-from-the-breadcrumb)), **right-click** the
   project's row, and choose **Forget project**. The menu opens at your pointer, and stays fully
   on screen even when you right-click near the window's edge.
 
