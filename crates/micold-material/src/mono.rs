@@ -23,6 +23,29 @@ pub const FIRA_MONO_REGULAR_BYTES: &[u8] =
 /// Fira Mono Bold (700): bold code and bold terminal cells (FR-011).
 pub const FIRA_MONO_BOLD_BYTES: &[u8] = include_bytes!("../../../assets/fonts/FiraMono-Bold.ttf");
 
+/// Remove every face of `family` that was not loaded from memory (`Source::Binary`, which is how
+/// the bundled bytes are loaded) and for which `also` holds, and return how many went. Shared by
+/// the monospace and Roboto pins: host faces are loaded first and win `Database::query` ties.
+pub(crate) fn remove_host_faces(
+    db: &mut fontdb::Database,
+    family: &str,
+    also: impl Fn(&fontdb::FaceInfo) -> bool,
+) -> usize {
+    let foreign: Vec<fontdb::ID> = db
+        .faces()
+        .filter(|face| {
+            face.families.iter().any(|(name, _)| name == family)
+                && !matches!(face.source, fontdb::Source::Binary(_))
+                && also(face)
+        })
+        .map(|face| face.id)
+        .collect();
+    for &id in &foreign {
+        db.remove_face(id);
+    }
+    foreign.len()
+}
+
 /// Make `Family::Monospace` resolve to the bundled faces only, and return how many other faces of
 /// [`MONO_FAMILY`] it removed.
 ///
@@ -32,19 +55,9 @@ pub const FIRA_MONO_BOLD_BYTES: &[u8] = include_bytes!("../../../assets/fonts/Fi
 /// every other family stay, so characters Fira Mono lacks still fall back to a system face (FR-004).
 /// Idempotent: a second call removes nothing.
 pub fn pin_monospace(db: &mut fontdb::Database) -> usize {
-    let foreign: Vec<fontdb::ID> = db
-        .faces()
-        .filter(|face| {
-            face.families.iter().any(|(name, _)| name == MONO_FAMILY)
-                && !matches!(face.source, fontdb::Source::Binary(_))
-        })
-        .map(|face| face.id)
-        .collect();
-    for &id in &foreign {
-        db.remove_face(id);
-    }
+    let removed = remove_host_faces(db, MONO_FAMILY, |_| true);
     db.set_monospace_family(MONO_FAMILY);
-    foreign.len()
+    removed
 }
 
 /// Register the bundled monospace faces on `fonts` and pin the monospace family to them.

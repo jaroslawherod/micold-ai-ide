@@ -79,19 +79,9 @@ pub fn install_roboto(fonts: &mut FontSystem) {
 /// at 400, 500 and 600 stay (FR-004). Faces of other families stay, so characters Roboto lacks
 /// still fall back to a system face. Idempotent: a second call removes nothing.
 pub fn pin_roboto_italics(db: &mut fontdb::Database) -> usize {
-    let foreign: Vec<fontdb::ID> = db
-        .faces()
-        .filter(|face| {
-            face.families.iter().any(|(name, _)| name == ROBOTO_FAMILY)
-                && !matches!(face.source, fontdb::Source::Binary(_))
-                && (face.style != fontdb::Style::Normal || !ROBOTO_WEIGHTS.contains(&face.weight.0))
-        })
-        .map(|face| face.id)
-        .collect();
-    for &id in &foreign {
-        db.remove_face(id);
-    }
-    foreign.len()
+    super::mono::remove_host_faces(db, ROBOTO_FAMILY, |face| {
+        face.style != fontdb::Style::Normal || !ROBOTO_WEIGHTS.contains(&face.weight.0)
+    })
 }
 
 /// Register the bundled 600 faces a second time at weight 700, upright and italic.

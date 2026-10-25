@@ -49,3 +49,33 @@ B3. Private Xvfb, `ICED_BACKEND=tiny-skia`, light scheme.
 Dark scheme not re-run: the scheme changes colours, not font matching, and the worker's FAIL was the
 same in both schemes. The renderer-path unit tests (`roboto::tests::the_renderer_draws_each_weight_and_bold_in_the_bundled_faces`,
 `link_text::tests::emphasis_the_italic_lacks_draws_upright`) cover both fixes in the gate.
+
+## B5: host-installed Roboto (T022)
+
+Date 2026-10-25. Debug `micold-showcase` (`CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`) built from
+`2983ec92` (HEAD `4281f0f4` differs only in `autopilot.md`), pinned copy. Control: the same binary built
+from `dbe13ae2` (before the pin), exported with `git archive`. Private Xvfb 1600x1400, `ICED_BACKEND=tiny-skia`,
+private `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`. Light and dark (showcase toggle).
+
+Host fonts went into the private `$XDG_DATA_HOME/fonts` (fontconfig's `<dir prefix="xdg">fonts</dir>`), one
+set per launch, and were deleted with the run directories afterwards. Nothing went into `~/.local/share/fonts`.
+
+- **real**: `Roboto-Italic.ttf`, `Roboto-Bold.ttf` (700) and `Roboto-BoldItalic.ttf` from the googlefonts/roboto
+  v2.138 release. These files differ from the bundled ones (sha256 `2b4076dd…` vs `2f700a53…` for the italic).
+- **decoy**: FreeSerif Italic, Bold and Bold Italic renamed to family `Roboto` with the same styles and weights
+  (fontTools, `fc-scan`: Roboto Italic 400, Roboto Bold 700, Roboto Bold Italic 700). If the app picks a host
+  face, the text turns serif, which the eye catches at once.
+
+Each run captured the B1 paragraph (MarkdownView) and the B2 line (LinkText). The crops are pixel-compared
+(`compare -metric AE`) with the no-host-font baseline at identical geometry.
+
+| Check | Verdict | Evidence |
+|---|---|---|
+| B5 real host Roboto, light | PASS: B1 paragraph AE 0, LinkText AE 0 against the baseline | b5-host-roboto-light.png (row 2) |
+| B5 real host Roboto, dark | PASS: B1 paragraph AE 0, LinkText AE 0 | b5-host-roboto-dark.png (row 2) |
+| B5 decoy host Roboto, light | PASS: B1 paragraph AE 0, LinkText AE 0. `italic`, `bold`, `bold italic` stay bundled Roboto | b5-host-roboto-light.png (row 3) |
+| B5 decoy host Roboto, dark | PASS: B1 paragraph AE 0, LinkText AE 0 | b5-host-roboto-dark.png (row 3) |
+| Control: pre-fix build with the decoy | Decoy picked up as expected: `bold`, `italic` and `bold italic` draw in FreeSerif (B1 AE 4032, LinkText AE 1775, both schemes). This shows the app reads the fonts directory and the pin is what keeps the host faces out | b5-host-roboto-light/dark.png (row 4) |
+
+Not covered: host upright Roboto at 400/500/600 (FR-004 keeps it on purpose). B3 in the client, which
+uses the same `install_roboto` font system. Real GPU display, macOS and Windows.
