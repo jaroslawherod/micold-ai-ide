@@ -72,13 +72,26 @@ fn the_filter_row_clear_filters_and_the_active_line_fit_the_dialog() {
         "the dialog is not where this gate assumes: its heading starts at {:.1}",
         heading.origin.x
     );
-    // The field shows the chosen value inside the dialog.
+    // Each field shows its chosen value inside the dialog, the two side by side on one row.
     let value = find(&drawn, "Payments");
     assert_inside(value);
+    let version = find(&drawn, "2.4");
+    assert_inside(version);
+    assert!(
+        (value.origin.y - version.origin.y).abs() <= 2.0 && version.origin.x > value.origin.x,
+        "Fix version ({:.1}, {:.1}) does not follow Component ({:.1}, {:.1}) on its row",
+        version.origin.x,
+        version.origin.y,
+        value.origin.x,
+        value.origin.y
+    );
     // A capped list's caption follows the line in its paragraph, on one line.
     let line = drawn
         .iter()
-        .find(|d| d.content.starts_with("Filtered by component Payments"))
+        .find(|d| {
+            d.content
+                .starts_with("Filtered by component Payments, fix version 2.4")
+        })
         .expect("the active line is painted");
     let button = find(&drawn, "Clear filters");
     for text in [line, button] {
@@ -195,4 +208,43 @@ fn a_failed_choice_list_shows_its_whole_cause() {
             "the cause comes before Retry"
         );
     }
+}
+
+/// A filter with no choices says why in full: the reason row wraps in the field-wide list rather
+/// than being cut to "This project ha…" (spec Edge Cases, "Empty choices"; visual pass M2).
+#[test]
+fn an_empty_choice_list_shows_its_whole_reason() {
+    let mut under = (covered_states()
+        .iter()
+        .find(|c| c.name == "add-worktree-dialog-jira-loaded")
+        .expect("the loaded Jira state is covered")
+        .build)();
+    let filter = |under: &mut StateUnderTest, msg| {
+        under
+            .state
+            .update(Message::WorktreeForm(Msg::JiraFilter(msg)))
+    };
+    filter(&mut under, FilterMsg::Focused(FilterKind::FixVersion));
+    let (_, seq) = under
+        .state
+        .worktree_form
+        .awaited_choices()
+        .expect("the first focus asks for the versions");
+    filter(
+        &mut under,
+        FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(Vec::new()),
+        },
+    );
+    let drawn = painted(&under);
+    let reason = find(&drawn, "This project has no versions");
+    assert!(
+        reason.natural_width <= reason.allowed_width + TOLERANCE,
+        "the reason is cut: it wants {:.1} and has {:.1}",
+        reason.natural_width,
+        reason.allowed_width
+    );
+    assert_inside(reason);
+    find(&drawn, "No versions");
 }

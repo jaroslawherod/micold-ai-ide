@@ -15,6 +15,7 @@ use std::time::Duration;
 use jira_http::JiraCloud;
 use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, JiraConnection, JiraSource, ProjectKey};
+use micold_core::jira_filter::VersionChoice;
 use micold_core::jira_query::{QueryFailure, ScopedQuery, UserQuery};
 
 const SENTINEL: &str = "sentinel-token-value-9f3a";
@@ -741,6 +742,52 @@ fn a_components_failure_is_classified_as_a_search_failure_is() {
     assert_eq!(error, IssueLoadError::TimedOut);
     let error = JiraCloud::new()
         .components(&connection(&closed_origin()), &token())
+        .unwrap_err();
+    assert!(matches!(error, IssueLoadError::Unreachable(_)), "{error:?}");
+    assert!(!format!("{error:?}").contains(SENTINEL));
+}
+
+#[test]
+fn versions_get_the_projects_versions_from_the_site_only() {
+    let (origin, rx) = serve(Some(ok(
+        r#"[{"name":"1.0","archived":true,"released":true},{"name":"2.3","archived":false,"released":true},{"name":"2.4","archived":false,"released":false}]"#,
+    )));
+    let versions = JiraCloud::new()
+        .versions(&connection(&origin), &token())
+        .expect("versions");
+    let names: Vec<&str> = versions.iter().map(VersionChoice::name).collect();
+    assert_eq!(names, ["2.4", "2.3"]);
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert_eq!(line, "GET /rest/api/3/project/ABC/versions HTTP/1.1");
+    assert_our_headers(&headers, &origin, false);
+    assert!(body.is_empty(), "a GET sends no body: {body}");
+}
+
+#[test]
+fn a_versions_failure_is_classified_as_a_search_failure_is() {
+    for (code, expected) in [
+        (401, IssueLoadError::CredentialsRefused),
+        (403, IssueLoadError::CredentialsRefused),
+        (404, IssueLoadError::NoAccess),
+    ] {
+        let (origin, _rx) = serve(Some(status(code)));
+        let error = JiraCloud::new()
+            .versions(&connection(&origin), &token())
+            .unwrap_err();
+        assert_eq!(error, expected, "status {code}");
+    }
+    let (origin, _rx) = serve(Some(ok(r#"{"values":[]}"#)));
+    let error = JiraCloud::new()
+        .versions(&connection(&origin), &token())
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::NotJiraCloud);
+    let (origin, _rx) = serve(None);
+    let error = JiraCloud::with_timeout(Duration::from_millis(300))
+        .versions(&connection(&origin), &token())
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::TimedOut);
+    let error = JiraCloud::new()
+        .versions(&connection(&closed_origin()), &token())
         .unwrap_err();
     assert!(matches!(error, IssueLoadError::Unreachable(_)), "{error:?}");
     assert!(!format!("{error:?}").contains(SENTINEL));

@@ -22,6 +22,9 @@
 //! components `Payments`, `Auth` and `Ä "quoted" \ name`, and a search whose JQL holds a
 //! `component = "…"` clause is answered with that component's share of the page: every third
 //! issue, starting at the component's place in that list; an unknown component has none.
+//! `GET /rest/api/3/project/{key}/versions` answers `1.0` (archived), `2.3` (released) and `2.4`
+//! (unreleased), and a `fixVersion = "…"` clause keeps every second issue, starting at the
+//! version's place among the unarchived ones (`2.3`, `2.4`); `1.0` has none. Both clauses AND.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -77,9 +80,17 @@ fn status_answer(body: &str, tickets: &Tickets) -> Option<String> {
 /// The components the fake project has, in Jira's order (feature 1185).
 const COMPONENTS: [&str; 3] = ["Payments", "Auth", "Ä \"quoted\" \\ name"];
 
-/// The value of the JQL's `component = "…"` clause, unescaped, if it has one.
-fn component_clause(jql: &str) -> Option<String> {
-    let rest = jql.split_once("component = \"")?.1;
+/// The fix versions the fake project has, in Jira's order, as `(name, archived, released)`.
+const VERSIONS: [(&str, bool, bool); 3] = [
+    ("1.0", true, true),
+    ("2.3", false, true),
+    ("2.4", false, false),
+];
+
+/// The value of the JQL's `<field> = "…"` clause (`prefix` is `component = "`), unescaped, if it
+/// has one.
+fn clause_value(jql: &str, prefix: &str) -> Option<String> {
+    let rest = jql.split_once(prefix)?.1;
     let mut value = String::new();
     let mut chars = rest.chars();
     while let Some(c) = chars.next() {
@@ -92,21 +103,44 @@ fn component_clause(jql: &str) -> Option<String> {
     None
 }
 
-/// The page narrowed to `component`'s share, when the request's JQL names one.
-fn component_answer(body: &str) -> Option<String> {
+/// Whether issue `index` belongs to `value`'s share of `names` (every `names.len()`th issue,
+/// starting at the value's place), or `true` when the JQL names no value; an unknown value has
+/// none.
+fn in_share(index: usize, value: Option<&str>, names: &[&str]) -> bool {
+    value.is_none_or(|value| {
+        names
+            .iter()
+            .position(|name| *name == value)
+            .is_some_and(|place| index % names.len() == place)
+    })
+}
+
+/// The page narrowed to the component's and the fix version's shares, when the request's JQL
+/// names either (an archived version has no share).
+fn filtered_answer(body: &str) -> Option<String> {
     let json: serde_json::Value = serde_json::from_str(body).ok()?;
-    let component = component_clause(json["jql"].as_str()?)?;
+    let jql = json["jql"].as_str()?;
+    let component = clause_value(jql, "component = \"");
+    let version = clause_value(jql, "fixVersion = \"");
+    if component.is_none() && version.is_none() {
+        return None;
+    }
+    let live: Vec<&str> = VERSIONS
+        .iter()
+        .filter(|(_, archived, _)| !archived)
+        .map(|(name, _, _)| *name)
+        .collect();
     let mut page: serde_json::Value = serde_json::from_str(PAGE).ok()?;
-    let issues = page["issues"].as_array()?.clone();
-    let kept: Vec<serde_json::Value> = match COMPONENTS.iter().position(|c| *c == component) {
-        Some(place) => issues
-            .into_iter()
-            .enumerate()
-            .filter(|(i, _)| i % COMPONENTS.len() == place)
-            .map(|(_, issue)| issue)
-            .collect(),
-        None => Vec::new(),
-    };
+    let kept: Vec<serde_json::Value> = page["issues"]
+        .as_array()?
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| {
+            in_share(*i, component.as_deref(), &COMPONENTS)
+                && in_share(*i, version.as_deref(), &live)
+        })
+        .map(|(_, issue)| issue.clone())
+        .collect();
     page["issues"] = serde_json::Value::from(kept);
     page["isLast"] = serde_json::Value::from(true);
     Some(page.to_string())
@@ -141,8 +175,18 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
     let request = String::from_utf8_lossy(&seen).to_string();
     let request_body = request.split_once("\r\n\r\n").map_or("", |(_, b)| b);
     let status_page = status_answer(request_body, &tickets.lock().expect("tickets"))
-        .or_else(|| component_answer(request_body));
+        .or_else(|| filtered_answer(request_body));
     let components = request.starts_with("GET ") && request.contains("/components ");
+    let versions = request.starts_with("GET ") && request.contains("/versions ");
+    let version_list = serde_json::Value::from(
+        VERSIONS
+            .iter()
+            .map(|(name, archived, released)| {
+                serde_json::json!({ "name": name, "archived": archived, "released": released })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .to_string();
     let component_list = serde_json::Value::from(
         COMPONENTS
             .iter()
@@ -167,6 +211,7 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
         HTML => ("200 OK", "text/html", LOGIN_PAGE),
         BAD_JQL => ("400 Bad Request", "application/json", BAD_JQL_BODY),
         _ if components => ("200 OK", "application/json", component_list.as_str()),
+        _ if versions => ("200 OK", "application/json", version_list.as_str()),
         _ => match &status_page {
             Some(page) => ("200 OK", "application/json", page.as_str()),
             None => ("200 OK", "application/json", PAGE),

@@ -15841,7 +15841,7 @@ mod jira_filter_shell {
     use micold_core::jira::{
         connection_key, ChoiceCall, FakeJiraSource, FilteredAsk, JiraConnection,
     };
-    use micold_core::jira_filter::FilterKind;
+    use micold_core::jira_filter::{FilterKind, VersionChoice};
     use std::sync::Arc;
 
     const PROJECT: &str = "/repo/demo";
@@ -15939,6 +15939,42 @@ mod jira_filter_shell {
             [ChoiceCall::Components],
             "a second focus asks nothing"
         );
+    }
+
+    #[test]
+    fn the_first_fix_version_focus_asks_once_and_a_pick_ands_it_with_the_component() {
+        let version = |name: &str, released| VersionChoice::new(name, released).unwrap();
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2, 3], false))
+            .with_components(Ok(vec!["Payments".into()]))
+            .with_page(page(&[1, 3], false))
+            .with_versions(Ok(vec![version("2.4", false), version("2.3", true)]))
+            .with_page(page(&[3], false)));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Component));
+        filter(&mut rig.app, FilterMsg::Picked(FilterKind::Component, 1));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::FixVersion));
+        assert_eq!(
+            rig.source.choice_calls(),
+            [ChoiceCall::Components, ChoiceCall::Versions]
+        );
+        filter(&mut rig.app, FilterMsg::Dismissed(FilterKind::FixVersion));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::FixVersion));
+        assert_eq!(
+            rig.source.choice_calls(),
+            [ChoiceCall::Components, ChoiceCall::Versions],
+            "a second focus asks nothing"
+        );
+        filter(&mut rig.app, FilterMsg::Picked(FilterKind::FixVersion, 1));
+        let both = vec![PAYMENTS.to_string(), r#"fixVersion = "2.4""#.to_string()];
+        assert_eq!(
+            rig.source.filtered_calls().last(),
+            Some(&(both, FilteredAsk::List(None)))
+        );
+        let IssueList::Loaded { listing, .. } = &form(&rig.app).issues else {
+            panic!("the two-clause listing loaded");
+        };
+        assert_eq!(listing.issues.len(), 1);
     }
 
     #[test]

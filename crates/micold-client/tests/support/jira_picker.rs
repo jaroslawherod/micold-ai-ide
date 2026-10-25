@@ -66,7 +66,8 @@ pub fn state_with(form: WorktreeForm) -> StateUnderTest {
 }
 
 /// `state` (a project open) connected to Jira, its New worktree form on the Jira source with the
-/// component `Payments` chosen over a capped listing (feature 1185): the filter row, the active
+/// component `Payments` and the fix version `2.4` chosen over a capped listing (feature 1185, M2):
+/// the filter row, the active
 /// line with **Clear filters** and the cap caption all show. Driven through the reducer, as the
 /// application gets there, so the field shows the chosen value.
 pub fn jira_filtered(mut state: State) -> State {
@@ -130,5 +131,23 @@ pub fn jira_filtered(mut state: State) -> State {
     );
     filter(&mut state, FilterMsg::Picked(FilterKind::Component, 1));
     answer(&mut state, &[1, 3]);
+    filter(&mut state, FilterMsg::Focused(FilterKind::FixVersion));
+    let seq = state
+        .worktree_form
+        .awaited_choices()
+        .expect("versions in flight")
+        .1;
+    let version = |name: &str, released| {
+        micold_core::jira_filter::VersionChoice::new(name, released).expect("a version")
+    };
+    filter(
+        &mut state,
+        FilterMsg::VersionsLoaded {
+            seq,
+            result: Ok(vec![version("2.4", false), version("2.3", true)]),
+        },
+    );
+    filter(&mut state, FilterMsg::Picked(FilterKind::FixVersion, 1));
+    answer(&mut state, &[3]);
     state
 }

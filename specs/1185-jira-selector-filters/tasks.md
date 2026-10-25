@@ -210,14 +210,14 @@ unfiltered list.
 
 #### Tests (write first, must fail)
 
-- [ ] T023 [P] [US1] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
+- [x] T023 [P] [US1] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
   `VersionChoice { name, released }` ("non-empty, no control characters"); `parse_versions` on
   `[{"name", "archived", "released"}, …]` drops archived versions, orders unreleased (Jira order)
   then released (Jira order reversed), drops duplicates and control-character names, and answers
   `NotJiraCloud` for another shape; `FakeJiraSource::with_versions`.
-- [ ] T024 [P] [US1] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`: `versions`
+- [x] T024 [P] [US1] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`: `versions`
   sends `GET /rest/api/3/project/{key}/versions` with the contract §3 headers and classification.
-- [ ] T025 [P] [US1] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
+- [x] T025 [P] [US1] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`: the first focus of Fix
   version makes one `versions` request; it offers "Any fix version", `2.4` before `2.3` and no
   archived `1.0`; component `Payments` plus fix version `2.4` loads with both clauses ANDed (AS3)
@@ -229,18 +229,18 @@ unfiltered list.
 
 #### Implementation
 
-- [ ] T026 [US1] In `crates/micold-core/src/jira_filter.rs` implement `VersionChoice` and
+- [x] T026 [US1] In `crates/micold-core/src/jira_filter.rs` implement `VersionChoice` and
   `parse_versions`; in `crates/micold-core/src/jira.rs` add `JiraSource::versions` (default
   `Ok(vec![])`) and `FakeJiraSource::with_versions`. Makes T023 pass.
-- [ ] T027 [US1] In `crates/micold-client/src/shell/jira_http.rs` implement `versions` through
+- [x] T027 [US1] In `crates/micold-client/src/shell/jira_http.rs` implement `versions` through
   `request`. Makes T024 pass.
-- [ ] T028 [US1] Add the FixVersion filter: `versions: ChoiceLoad<VersionChoice>` and
+- [x] T028 [US1] Add the FixVersion filter: `versions: ChoiceLoad<VersionChoice>` and
   `VersionsLoaded { seq, result }` in `crates/micold-client/src/features/worktree_form/jira_filters.rs`, its
   focus/retry handler in `crates/micold-client/src/shell/jira_filters.rs`, its field in the row in
   `crates/micold-client/src/ui/worktree_form.rs`. Makes T025 pass.
-- [ ] T029 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve versions `2.4`
+- [x] T029 [P] [US1] In `crates/micold-client/examples/fake_jira.rs` serve versions `2.4`
   (unreleased), `2.3` (released), `1.0` (archived) and answer the `fixVersion` clause.
-- [ ] T030 [P] [US1] User guide: the fix-version filter (unreleased first, archived hidden, AND
+- [x] T030 [P] [US1] User guide: the fix-version filter (unreleased first, archived hidden, AND
   with the component) in `docs/user-guide/worktrees-and-sessions.md`.
 
 **Checkpoint**: US1 complete; SC-001 reachable (focus, pick, focus, pick).

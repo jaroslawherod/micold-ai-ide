@@ -8,7 +8,8 @@
 //! reporter is named only by its [`AccountId`], which can only be built by parsing and never
 //! prints in `Debug`, so neither a display name nor an account reaches a log (FR-006, FR-010).
 //!
-//! Choices are parsed here too: [`parse_components`] reads a project's components (§4).
+//! Choices are parsed here too: [`parse_components`] reads a project's components and
+//! [`parse_versions`] its fix versions (§4).
 
 use crate::github::IssueLoadError;
 
@@ -287,4 +288,63 @@ pub fn parse_components(body: &[u8]) -> Result<Vec<String>, IssueLoadError> {
         }
     }
     Ok(names)
+}
+
+/// A fix version offered by the fix-version filter (data-model §3): a usable name and whether it
+/// is released. Archived versions never become one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionChoice {
+    name: String,
+    released: bool,
+}
+
+impl VersionChoice {
+    /// The choice, when `name` is non-empty and holds no control character (FR-010).
+    pub fn new(name: &str, released: bool) -> Option<Self> {
+        is_usable(name).then(|| Self {
+            name: name.to_owned(),
+            released,
+        })
+    }
+
+    /// The version's name: what is shown and what a `fixVersion` clause names.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The version is released.
+    pub fn released(&self) -> bool {
+        self.released
+    }
+}
+
+/// The unarchived versions of `GET /rest/api/3/project/{key}/versions`: unreleased in Jira's
+/// order, then released in Jira's order reversed (newest first, research R3). Empty or
+/// control-character names and entries without a name are skipped, duplicates dropped (first
+/// kept). A body of another shape is [`IssueLoadError::NotJiraCloud`] (§4).
+pub fn parse_versions(body: &[u8]) -> Result<Vec<VersionChoice>, IssueLoadError> {
+    let json: serde_json::Value =
+        serde_json::from_slice(body).map_err(|_| IssueLoadError::NotJiraCloud)?;
+    let entries = json.as_array().ok_or(IssueLoadError::NotJiraCloud)?;
+    let mut held: Vec<VersionChoice> = Vec::new();
+    for entry in entries {
+        if entry["archived"].as_bool() == Some(true) {
+            continue;
+        }
+        let Some(name) = entry["name"].as_str() else {
+            continue;
+        };
+        let released = entry["released"].as_bool() == Some(true);
+        if let Some(choice) = VersionChoice::new(name, released) {
+            if !held.iter().any(|kept| kept.name == choice.name) {
+                held.push(choice);
+            }
+        }
+    }
+    let (unreleased, released): (Vec<_>, Vec<_>) =
+        held.into_iter().partition(|choice| !choice.released);
+    Ok(unreleased
+        .into_iter()
+        .chain(released.into_iter().rev())
+        .collect())
 }

@@ -1,5 +1,6 @@
 //! Filter choices and the filtered source (feature 1185, contracts/jira-filter-source.md §2 and
-//! §4): account ids, redaction, parsing a project's components, and loading a filtered listing
+//! §4): account ids, redaction, parsing a project's components and versions, and loading a
+//! filtered listing
 //! through `FakeJiraSource`.
 
 use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
@@ -7,7 +8,9 @@ use micold_core::jira::{
     load_filtered, ApiToken, ChoiceCall, FakeJiraSource, FilteredAsk, JiraConnection, JiraSource,
     FILTERS_UNSUPPORTED,
 };
-use micold_core::jira_filter::{parse_components, AccountId, JiraFilters, JiraUser};
+use micold_core::jira_filter::{
+    parse_components, parse_versions, AccountId, JiraFilters, JiraUser, VersionChoice,
+};
 
 fn conn() -> JiraConnection {
     JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.example").expect("valid")
@@ -173,6 +176,7 @@ fn a_source_without_filters_answers_unfiltered_requests_and_refuses_filtered_one
         refused
     );
     assert_eq!(Unfiltered.components(&conn(), &token()), Ok(vec![]));
+    assert_eq!(Unfiltered.versions(&conn(), &token()), Ok(vec![]));
     assert_eq!(
         FILTERS_UNSUPPORTED,
         "filters are not supported by this source"
@@ -253,5 +257,86 @@ fn the_fake_answers_scripted_components_and_records_the_request() {
     assert_eq!(
         source.choice_calls(),
         [ChoiceCall::Components, ChoiceCall::Components]
+    );
+}
+
+fn version(name: &str, released: bool) -> VersionChoice {
+    VersionChoice::new(name, released).expect("usable name")
+}
+
+#[test]
+fn a_version_choice_is_non_empty_without_control_characters() {
+    let choice = version("2.4", false);
+    assert_eq!(choice.name(), "2.4");
+    assert!(!choice.released());
+    assert!(version("2.3", true).released());
+    assert_eq!(VersionChoice::new("", false), None);
+    assert_eq!(VersionChoice::new("2.\u{7}4", true), None);
+    assert_eq!(VersionChoice::new("line\nbreak", false), None);
+}
+
+#[test]
+fn versions_drop_archived_and_list_unreleased_in_jiras_order_then_released_newest_first() {
+    let body = r#"[
+        {"name": "1.0", "archived": true, "released": true},
+        {"name": "2.2", "archived": false, "released": true},
+        {"name": "2.3", "archived": false, "released": true},
+        {"name": "2.4", "archived": false, "released": false},
+        {"name": "3.0", "archived": false, "released": false},
+        {"name": "0.9", "archived": true, "released": false}
+    ]"#
+    .as_bytes();
+    assert_eq!(
+        parse_versions(body),
+        Ok(vec![
+            version("2.4", false),
+            version("3.0", false),
+            version("2.3", true),
+            version("2.2", true),
+        ])
+    );
+    assert_eq!(parse_versions(b"[]"), Ok(vec![]));
+}
+
+#[test]
+fn versions_skip_duplicates_unusable_names_and_entries_without_a_name() {
+    let body = r#"[
+        {"name": "2.4", "archived": false, "released": false},
+        {"name": "2.4", "archived": false, "released": true},
+        {"name": "", "archived": false, "released": false},
+        {"name": "bad\u0007name", "archived": false, "released": false},
+        {"archived": false, "released": false},
+        {"name": "Ä \"q\" \\ v"}
+    ]"#
+    .as_bytes();
+    assert_eq!(
+        parse_versions(body),
+        Ok(vec![version("2.4", false), version("Ä \"q\" \\ v", false)])
+    );
+}
+
+#[test]
+fn a_versions_body_of_another_shape_is_not_jira_cloud() {
+    for body in [&b"<html>"[..], b"{\"values\": []}", b"\"2.4\"", b""] {
+        assert_eq!(parse_versions(body), Err(IssueLoadError::NotJiraCloud));
+    }
+}
+
+#[test]
+fn the_fake_answers_scripted_versions_and_records_the_request() {
+    let source = FakeJiraSource::new()
+        .with_versions(Ok(vec![version("2.4", false)]))
+        .with_versions(Err(IssueLoadError::TimedOut));
+    assert_eq!(
+        source.versions(&conn(), &token()),
+        Ok(vec![version("2.4", false)])
+    );
+    assert_eq!(
+        source.versions(&conn(), &token()),
+        Err(IssueLoadError::TimedOut)
+    );
+    assert_eq!(
+        source.choice_calls(),
+        [ChoiceCall::Versions, ChoiceCall::Versions]
     );
 }
