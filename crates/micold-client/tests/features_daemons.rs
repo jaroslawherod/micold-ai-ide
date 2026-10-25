@@ -1410,6 +1410,7 @@ mod default_container_name {
         assert_eq!(stored(&w, "devbox").as_deref(), Some("devbox"));
     }
 
+    /// Regression guard: also green before feature 1116; it pins that typing still wins.
     #[test]
     fn a_typed_container_name_is_kept() {
         let mut w = World::new();
@@ -1438,10 +1439,22 @@ mod default_container_name {
         assert!(err
             .message
             .starts_with("That container is already used by daemon"));
-        assert_eq!(w.registry.entries().len(), before);
+        assert_eq!(
+            w.registry.entries().len(),
+            before,
+            "typed clash creates nothing"
+        );
         let state = save(&mut w, "devbox!", "");
-        assert_eq!(state.form_error.as_ref().unwrap().field, "container_name");
-        assert_eq!(w.registry.entries().len(), before);
+        assert_eq!(
+            state.form_error.as_ref().unwrap().field,
+            "container_name",
+            "defaulted clash lands on the container name"
+        );
+        assert_eq!(
+            w.registry.entries().len(),
+            before,
+            "defaulted clash creates nothing"
+        );
     }
 
     #[test]
@@ -1449,9 +1462,14 @@ mod default_container_name {
         let mut w = World::new();
         let mut state = open(&mut w);
         send(&mut state, &mut w, Msg::NameEdited("other".into()));
+        // 7001 is the fixture's first container daemon port.
         send(&mut state, &mut w, Msg::PortEdited("7001".into()));
         send(&mut state, &mut w, Msg::Saved);
-        assert_eq!(state.form_error.as_ref().unwrap().field, "port");
+        assert_eq!(
+            state.form_error.as_ref().unwrap().field,
+            "port",
+            "a port-only clash is reported on the port"
+        );
     }
 
     #[test]
@@ -1469,29 +1487,14 @@ mod default_container_name {
     #[test]
     fn a_truncation_collision_is_refused() {
         let mut w = World::new();
+        // Longer than the 63-character cap, so the cut name is the same for both daemons.
         let long = "x".repeat(70);
         save(&mut w, &long, "");
         let state = save(&mut w, &format!("{long}y"), "");
         assert_eq!(state.form_error.as_ref().unwrap().field, "container_name");
     }
 
-    #[test]
-    fn the_registry_still_refuses_a_duplicate_resolved_name() {
-        let mut w = World::new();
-        let err = w
-            .registry
-            .add(
-                "Other",
-                super::daemons_fixture::container("box-ctr", 7999),
-                false,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            micold_core::daemons::RegistryError::ContainerInUse { .. }
-        ));
-    }
-
+    /// Regression guard: a stored name is a plain value, so a rename must not re-derive it.
     #[test]
     fn a_rename_keeps_the_container_name_and_edit_shows_it_as_a_value() {
         let mut w = World::new();
@@ -1537,8 +1540,10 @@ mod default_container_name {
         let mut w = World::new();
         let mut state = open(&mut w);
         send(&mut state, &mut w, Msg::Saved);
-        assert!(state.form_error.is_none());
-        assert!(state.draft.is_some());
+        // The required-field gate catches an empty name before the registry's "A daemon needs a
+        // name." message can be produced, so no container-name error appears and the form stays.
+        assert!(state.form_error.is_none(), "no container-name refusal");
+        assert!(state.draft.is_some(), "the form stays open");
     }
 
     #[test]

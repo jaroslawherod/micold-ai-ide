@@ -806,11 +806,7 @@ fn a_required_field_left_empty_keeps_connection_open() {
     use daemons::Section;
     let mut w = World::new();
     let mut state = State::default();
-    for runtime in [
-        DraftRuntime::Container,
-        DraftRuntime::Kubernetes,
-        DraftRuntime::Ssh,
-    ] {
+    for runtime in [DraftRuntime::Kubernetes, DraftRuntime::Ssh] {
         daemons::begin_add(&mut state);
         send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
         send(
@@ -819,11 +815,6 @@ fn a_required_field_left_empty_keeps_connection_open() {
             daemons::Msg::SectionToggled(Section::Connection),
         );
         assert!(!state.section_open(Section::Connection), "{runtime:?}");
-        // The container name is not required (feature 1116): a daemon name with no usable
-        // character leaves it unresolved, and the refusal on that field holds the section open.
-        if runtime == DraftRuntime::Container {
-            send(&mut state, &mut w, daemons::Msg::NameEdited("!!!".into()));
-        }
         // A refused save marks every empty required field missing at once.
         send(&mut state, &mut w, daemons::Msg::Saved);
         assert!(
@@ -831,6 +822,31 @@ fn a_required_field_left_empty_keeps_connection_open() {
             "{runtime:?}: the empty required field opens its section"
         );
     }
+}
+
+/// FR-004 for the container runtime (feature 1116): the container name is not required, so a
+/// daemon name with no usable character leaves it unresolved, and the refusal on that field
+/// holds `Connection` open.
+#[test]
+fn an_unresolvable_container_name_keeps_connection_open() {
+    use daemons::Section;
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Container),
+    );
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Connection),
+    );
+    assert!(!state.section_open(Section::Connection));
+    send(&mut state, &mut w, daemons::Msg::NameEdited("!!!".into()));
+    send(&mut state, &mut w, daemons::Msg::Saved);
+    assert!(state.section_open(Section::Connection));
 }
 
 /// Review A (M2): a click on a section an error holds open is not recorded, so the section is

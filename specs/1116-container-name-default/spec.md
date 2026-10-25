@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-23
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1297, #1362
 
 **Input**: GitHub issue #1116: "Container daemon: default the container name to the daemon name when none is specified". When creating a container daemon the container name is required ("Enter a container name."). If it is not specified, use the daemon's name as the container name instead of blocking Save.
 
