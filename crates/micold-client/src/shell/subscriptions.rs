@@ -412,7 +412,7 @@ mod tests {
     }
 
     /// Feature 1275 (Q8, Q9): a drag ends on the left button's release and is cancelled by Esc;
-    /// nothing else, not a pointer move, maps to a message.
+    /// nothing else, not a press nor another button, maps to a message.
     #[test]
     fn changes_drag_message_ends_on_release_and_cancels_on_esc() {
         use micold_client::features::changes::Msg as ChangesMsg;
@@ -439,9 +439,9 @@ mod tests {
             Some(Message::Changes(ChangesMsg::GutterDragCancelled))
         );
         assert_eq!(
-            map(iced::Event::Mouse(iced::mouse::Event::CursorMoved {
-                position: iced::Point::ORIGIN
-            })),
+            map(iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left
+            ))),
             None
         );
         assert_eq!(
