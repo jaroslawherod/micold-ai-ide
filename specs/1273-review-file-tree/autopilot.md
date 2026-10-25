@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: implement (M2)
-- **Next step**: M2 implemented (T007–T018 ticked), reviews A/B done, full gate green locally. #1367 merged at 78c2fc22; M2 rebased onto it and pushed; orchestrator opens the M2 PR (title/body in the unit's scratchpad). Then M3 waits for #1272. If the user's card on 4.3 picks "disabled with a reason", set `UNREVIEWED_UNTIL_MARKS` to `Offer::Disabled(..)` (tree.rs, its unit test) and update spec 4.3 and FR-012
+- **Phase**: implement (M3)
+- **Next step**: M3 implemented (T019–T023 ticked); review A, scoped gate, review B, full gate, then PR (title/body in the unit's scratchpad; the orchestrator opens it). Then M4 (T024–T030)
 
 ## Pull requests
 
@@ -18,17 +18,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
 | #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
-| — | M2 totals, bars, filter, sort | rebased on 78c2fc22, gated, pushed; orchestrator opens it | — |
+| #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
+| — | M3 tree state in the Changes reducer; Files on core | in progress | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
-| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | — | implemented, reviewed (A: 10 MINOR, B: CLEAN), gated, pushed; PR to open |
-| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | blocked: start after #1272 merges |
-| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | blocked: after M3 (#1272) |
-| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | blocked: after M4 (#1272) |
+| M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
+| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | implemented (T019–T023 ticked); reviews and gate next |
+| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | after M3 |
+| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | after M4 |
 
 ## Decisions
 
@@ -39,6 +40,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | clarify r2 | (scan) | No critical ambiguities; clarify done | agent | spec.md |
 | 4 | plan | Sort control: `Select` or `ToggleChip` row? | `ToggleChip` row; `Select` has no disabled options, so the 4.3 hide/disable switch stays one constant | agent | research.md R11, R3 |
 | 5 | tasks | Plan's M3 (all reducer msgs) / M4 (all drawing) / M5 (docs, snapshot, visual) layering? | Split client work by story instead: M3 tree state, M4 tree+bar drawing with its guide and snapshot, M5 filter+sort end to end; plan's milestone table updated | agent | milestones.md rules 4 (guide in the feat PR), 6 (no half-wired UI); a drawing change re-records the snapshot in the same PR |
+| 6 | M3 | #1271 merged (marks in `micold_core::review::marks`): does Unreviewed first stay hidden? | No: M5 offers `sort_options(marks)` with `marks` = marks known (connected), reviewed predicate from the marks `file_reviews` judges; `UNREVIEWED_UNTIL_MARKS` stays the offer while marks are unknown. M3 has no sort message, so its layout keeps an always-false predicate (T022). T034, T036 updated | agent (orchestrator's brief) | #1271 closed; `features::changes::file_reviews` takes `connected` |
+| 7 | M3 (T019) | Did #1272 move the list pane or rename its types? | List pane = the 260 px file column left of the diff (`ui::changes::FILE_COLUMN_WIDTH` 260.0); row height `ui::changes::ROW_HEIGHT` 36.0; `TreeView` indent step `spacing::MD`. `OpenView`, `ListBody`, `Msg::FileSelected`/`SourceChosen`/`ReferenceActivated`/`OpenFileDiff` unchanged; plan.md and contract §2 ("inside the left column #1272 provides") need no change | agent | `crates/micold-client/src/ui/changes.rs:57,69` |
+| 8 | M3 (T020) | M2 A F1: should a select while filtering reveal only in the active set? | No: `reveal` clears the ancestors from both sets. A file selected by any route must stay listed once the filter clears (scenario 3.4 "selected again when the filter is cleared", edge case "Selection inside a collapsed folder") | agent | spec.md scenario 3.4, data-model §2 |
+| 9 | M3 (T022) | `ReferenceActivated` browses rather than selects; reveal there? | Yes, when the reference names a file the shown source lists (edge case names "a reference followed from a diff") | agent | `reference_activated` in features/changes.rs |
+| 10 | M3 (T022) | Where does `refresh_change_rows` run? | Once in `update` beside `reshape`, after every non-scroll message on the shown view, skipped when a digest of the leaves and choices is unchanged: no arm can miss it, and typing elsewhere lays nothing out | agent | research R9 (never in `view`) |
 
 ## Review rounds
 
@@ -80,4 +86,4 @@ None.
 
 ## Follow-ups not done
 
-- #1272 (source dropdown, two-column layout) is not merged; the spec defers left-column chrome to it.
+- None.
