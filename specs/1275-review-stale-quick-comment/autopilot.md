@@ -16,19 +16,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M1
-- **Next step**: re-review of M1 review A round 2 (sonnet, fix diff from snapshot 4a00118f:19a082cc), then open the M1 PR with the body the M1 unit wrote. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: re-review the M1 rebase resolution (sonnet: `NameStatus`/`identify`/`hash_paths` in `review/{changes,git}.rs`, F4 test in `tests/review_git.rs`), then CI and merge of #1380. Rebase gate: `scripts/gate.sh` exit 0 on the rebased tree (core + workspace tests, script suites). FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
+| #1380 | M1 | open, rebased onto main 36459b95 (#1271 M1 conflicts resolved) | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | review A round 1 fixed, gated; A round 2 pending; B CLEAN |
+| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | PR #1380; rebased onto #1271 M1, rebase resolution to re-review |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | planned (builds now) |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
@@ -141,3 +142,22 @@ together within ~2 s.
   `56ae08e45f3bf70dfcbd5765e7d3d5f2bdede19c:31cc0ed72894052f56730d1f7c435baa3ce81dfd`.
 - M1 PR body (review A round 1 fixes): `$SCRATCHPAD/pr-body-1275-m1.md` of the M1 part-2 unit;
   the orchestrator opens the PR after A round 2.
+- M1 rebase onto main 36459b95 (2026-10-25, PR #1380 merge conflicts with #1271 M1: 31f760806,
+  df90fcb23, 2473fbb43). The A-r1 fix code is folded into the rebased feat commit (the fix commit
+  keeps only its ledger lines). Resolution, #1271 kept as it is: `NameStatus` keeps #1271's
+  `mode_changed: bool` and string `old_mode`/`new_mode`/`old_id`/`new_id` (all zeros as git
+  printed); ours reads them through `NameStatus::modes()` (octal) and `side_id(&str, absent)`
+  (zeros → `Absent`/`Unknown`), so our `modes: [u32; 2]` field and `Option` ids are gone and our
+  parse test duplicating #1271's was dropped. `untracked_paths` (#1271) takes our `paths` filter;
+  `whole_change` passes `&[]`. One shared `hash_paths` runner now quotes with #1271's
+  `stdin_path` and serves both `blob_ids` (#1271, behaviour unchanged) and `identify`.
+  Behaviour change in ours: `carried_verbatim` is gone, so a path with a leading `"`, a trailing
+  CR or a newline is now hashed (C-quoted) to its `Object` id instead of `Stat`; F4's test became
+  `a_path_git_would_unquote_or_trim_gets_its_own_id` (adds a newline path). #1271's test fixture
+  `marks::tests::pr_file` gained `identity: ChangeIdentity::Unknown` (new field only).
+- Follow-up (design, not done): unify `ChangeIdentity` (per-row identity, feature 1275) with
+  #1271's `ChangeId` (SHA-1 of a file's whole change record) and `WholeChange`; both read
+  `--raw --no-abbrev` and hash the same working-tree files in separate `hash-object` runs.
+- Follow-up (not done): #1271's `disk_mode`/`trusts_file_mode` could give untracked rows real
+  modes (the declined A-r1 F6 part); symlinks still take `Stat` in `identify`, where #1271's
+  `blob_ids` hashes their target as git stores it.
