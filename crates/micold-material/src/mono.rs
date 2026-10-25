@@ -60,9 +60,9 @@ pub fn install_monospace(fonts: &mut FontSystem) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{is_bundled, resolves_to_bundled};
+    use super::super::test_support::{is_bundled, query, resolves_to_bundled};
     use super::*;
-    use fontdb::{Family, Query, Source, Style, Weight};
+    use fontdb::{Family, Source, Style};
     use std::sync::Arc;
 
     /// C-1: the face parses, names itself `Fira Mono`, has the given weight, and is fixed-pitch at
@@ -114,13 +114,7 @@ mod tests {
     }
 
     fn monospace(db: &fontdb::Database, weight: u16, style: Style) -> fontdb::ID {
-        db.query(&Query {
-            families: &[Family::Monospace],
-            weight: Weight(weight),
-            style,
-            ..Query::default()
-        })
-        .unwrap_or_else(|| panic!("Family::Monospace resolves to no face (weight {weight})"))
+        query(db, Family::Monospace, weight, style)
     }
 
     #[test]

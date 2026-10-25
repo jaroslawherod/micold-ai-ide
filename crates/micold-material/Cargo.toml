@@ -22,8 +22,12 @@ iced = { workspace = true }
 # Design tokens, the colour scheme and the render-free models the components draw (tokens, theme,
 # required, typeahead, overlay, tooltip, notify, markdown) — nothing else; see the test above.
 micold-core = { workspace = true }
-# `mono::install_monospace` reads the bundled monospace font's family name.
+# `mono::install_monospace` reads the bundled monospace font's family name; `roboto` reads the
+# bundled italic's cmap (feature 1259).
 ttf-parser = { workspace = true }
+# Feature 1259: emphasis is split upright where Roboto's italic lacks a glyph, per grapheme so an
+# emoji sequence or a combining mark is never split (`link_text.rs`).
+unicode-segmentation = { workspace = true }
 iced_renderer = { workspace = true, optional = true }
 iced_tiny_skia = { workspace = true, optional = true }
 

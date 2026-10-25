@@ -67,8 +67,17 @@ bundled faces, as `mono.rs`'s host-copy test does.
 pub fn install_roboto(fonts: &mut FontSystem)
 ```
 
-Loads each of `ROBOTO_FACES` with `FontSystem::load_font`, then calls
-`pin_roboto_italics(fonts.raw().db_mut())`. Glue: no branch, no error path (`load_font` logs and
+Loads each of `ROBOTO_FACES` with `FontSystem::load_font`, then `alias_bold`: each bundled 600 face
+(upright and italic) is pushed again as a `FaceInfo` at weight 700 sharing the same bytes, once
+(D10). Then calls `pin_roboto_italics(fonts.raw().db_mut())`.
+
+Why the alias: cosmic-text 0.15 (`FontFallbackIter::default_font_match_key`) takes a face of the
+requested family only when its weight equals the requested weight; otherwise the run goes to the
+fallback lists, where any host face of exactly that weight and style wins. `Weight::Bold` asks for
+700, which no Roboto face ships, so before the alias bold drew in DejaVu Sans Bold and bold italic
+in DejaVu Sans Mono Bold Oblique (visual pass T018), on `origin/main` too for upright bold. A
+fontdb `Query` (nearest weight) hid this; the resolution tests shape through cosmic-text instead
+(`test_support::resolves_to_bundled`). Glue: no branch, no error path (`load_font` logs and
 skips bytes it cannot parse; `tests/roboto_font.rs` fails on such a file, so it cannot ship).
 
 Milestone note: M1 ships `install_roboto` without the pin call; the call joins in M2 (T020).
@@ -87,3 +96,11 @@ does today:
 
 A span with `style.italic` gets `Slant::Italic` unless `style.code`; a code span is
 `Font::MONOSPACE`, upright, at bold weight when bold. Nothing else in `painted` changes.
+
+Before `painted`, `LinkText` passes its spans through `upright_where_italic_lacks` (D11): an
+emphasis span (italic, not code) is split per grapheme where Roboto's italic has no glyph
+(`roboto::italic_has_glyph`, the 400 italic's cmap; the three italics cover the same characters),
+and those pieces lose `italic`. cosmic-text falls back only to faces of the requested style and
+hosts ship CJK upright only, so italic 漢字 drew boxes (T018 B6); upright, it falls back as upright
+text does (spec Edge: coverage). Pieces keep the span's link, so a split link stays one focus stop.
+Spans that need no split are borrowed unchanged.

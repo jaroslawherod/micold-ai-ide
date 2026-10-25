@@ -16,6 +16,7 @@
 //!
 //! Everything shown is owned, so the element is `'static` and can sit inside iced `lazy`.
 
+use std::borrow::Cow;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -27,8 +28,10 @@ use iced::widget::{rich_text, span};
 use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
 use micold_core::markdown::Span;
 use micold_core::tokens::{state, Rgb, Roles};
+use unicode_segmentation::UnicodeSegmentation;
 
 use super::keyboard_focus::{Indicator, Regions, TakesTheKeyboard};
+use super::roboto::italic_has_glyph;
 use super::{style, TypeRole};
 
 /// What a link press sends, from the link's address.
@@ -138,6 +141,48 @@ fn painted(
     }
 }
 
+/// `spans` with each emphasis run split where Roboto's italic has no glyph, those pieces upright.
+///
+/// cosmic-text falls back only to faces of the requested style, and hosts ship CJK (and most
+/// other scripts) upright only, so an italic run of 漢字 found no face and drew boxes (feature 1259
+/// visual pass B6). Upright, those characters fall back to a host face as upright text does (spec
+/// Edge: coverage). Decided per grapheme, by its first character, so an emoji sequence or a
+/// combining mark is never split. Borrowed when nothing needs splitting.
+fn upright_where_italic_lacks(spans: &[Span]) -> Cow<'_, [Span]> {
+    let slanted = |s: &Span| s.style.italic && !s.style.code;
+    let lacking = |s: &Span| slanted(s) && s.text.chars().any(|c| !italic_has_glyph(c));
+    if !spans.iter().any(lacking) {
+        return Cow::Borrowed(spans);
+    }
+    let mut out = Vec::with_capacity(spans.len() + 2);
+    for s in spans {
+        if !lacking(s) {
+            out.push(s.clone());
+            continue;
+        }
+        let piece = |text: &str, upright: bool| Span {
+            text: text.to_owned(),
+            style: micold_core::markdown::Style {
+                italic: !upright,
+                ..s.style
+            },
+            link: s.link.clone(),
+        };
+        let mut start = 0;
+        let mut upright = None;
+        for (at, g) in s.text.grapheme_indices(true) {
+            let lacks = g.chars().next().is_some_and(|c| !italic_has_glyph(c));
+            if let Some(was) = upright.filter(|&was| was != lacks) {
+                out.push(piece(&s.text[start..at], was));
+                start = at;
+            }
+            upright = Some(lacks);
+        }
+        out.push(piece(&s.text[start..], upright.unwrap_or(false)));
+    }
+    Cow::Owned(out)
+}
+
 /// Where spans `run` of `spans` fall when the text is laid out in `room`, relative to the text's
 /// top-left: one rectangle per line fragment. The text widget keeps its own paragraph out of reach,
 /// so this lays out an identical one (same spans, size, line height, font, wrapping and width).
@@ -184,8 +229,8 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
     fn from(t: LinkText<'a, M>) -> Self {
         let r = t.roles;
         let opens = t.on_link.is_some();
-        let shown: Vec<TextSpan<'static, String, Font>> = t
-            .spans
+        let spans = upright_where_italic_lacks(t.spans);
+        let shown: Vec<TextSpan<'static, String, Font>> = spans
             .iter()
             .map(|s| painted(s, t.role.font(), r, t.muted, t.strong, opens))
             .collect();
@@ -207,7 +252,7 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
         // link: one stop.
         let mut targets: Vec<(&str, Range<usize>)> = Vec::new();
         let mut previous = None;
-        for (i, s) in t.spans.iter().enumerate() {
+        for (i, s) in spans.iter().enumerate() {
             let link = s.link.as_ref().filter(|l| l.activatable);
             if let Some(l) = link.filter(|_| previous != Some(link)) {
                 targets.push((l.target.as_str(), i..i + 1));
@@ -346,6 +391,44 @@ mod tests {
             bold.style,
             Slant::Normal,
             "bold code inside emphasis is slanted"
+        );
+    }
+
+    /// Edge (coverage), FR-013 of feature 018: characters Roboto's italic lacks (CJK, emoji) leave
+    /// the emphasis run upright, so they fall back to a host face as upright text does; cosmic-text
+    /// only falls back to faces of the requested style, and hosts ship no italic CJK. The Latin word
+    /// stays italic, and a split link stays one link.
+    #[test]
+    fn emphasis_the_italic_lacks_draws_upright() {
+        let target = "https://example.com/";
+        let mut emphasis = styled(false, true, false);
+        // An emoji, built at run time: `tests/ui_glyph_literals.rs` rejects an emoji literal.
+        let emoji = char::from_u32(0x1F642)
+            .expect("U+1F642 is a scalar value")
+            .to_string();
+        emphasis.text = format!("漢字 and {emoji}");
+        emphasis.link = link("x", target, true).link;
+        let split = upright_where_italic_lacks(std::slice::from_ref(&emphasis));
+        let runs: Vec<(&str, bool)> = split
+            .iter()
+            .map(|s| (s.text.as_str(), s.style.italic))
+            .collect();
+        assert_eq!(
+            runs,
+            [("漢字", false), (" and ", true), (emoji.as_str(), false)]
+        );
+        assert!(
+            split.iter().all(|s| s.link == emphasis.link),
+            "a split link lost its target"
+        );
+        let mut plain_italic = styled(false, true, false);
+        plain_italic.text = "only Latin".to_owned();
+        assert!(
+            matches!(
+                upright_where_italic_lacks(std::slice::from_ref(&plain_italic)),
+                Cow::Borrowed(_)
+            ),
+            "emphasis the italic covers was copied"
         );
     }
 

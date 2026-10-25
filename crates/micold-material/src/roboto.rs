@@ -8,7 +8,9 @@
 //! [`install_roboto`] registers all six; see `assets/fonts/PROVENANCE.md` for where they come from.
 
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
+use iced::advanced::graphics::text::cosmic_text::fontdb;
 use iced::advanced::graphics::text::FontSystem;
 use iced::Font;
 
@@ -60,14 +62,58 @@ pub fn install_roboto(fonts: &mut FontSystem) {
     for bytes in ROBOTO_FACES {
         fonts.load_font(Cow::Borrowed(bytes));
     }
+    alias_bold(fonts.raw().db_mut());
+}
+
+/// Register the bundled 600 faces a second time at weight 700, upright and italic.
+///
+/// cosmic-text (0.15) draws a run in the requested family only from a face of exactly the
+/// requested weight; any other weight sends the run to the fallback list, where a host face that
+/// is exactly 700 wins (DejaVu Sans Bold, or DejaVu Sans Mono Bold Oblique for bold italic, in the
+/// feature 1259 visual pass). Markdown bold asks for `Weight::Bold` (700), which no Roboto face
+/// ships, so without these aliases bold left Roboto altogether. Each alias shares its 600 face's
+/// bytes, so bold draws in Roboto SemiBold and bold italic in Roboto SemiBold Italic. Idempotent.
+fn alias_bold(db: &mut fontdb::Database) {
+    let bundled_600 = |db: &fontdb::Database, face: &fontdb::FaceInfo| {
+        [ROBOTO_SEMIBOLD_BYTES, ROBOTO_SEMIBOLD_ITALIC_BYTES]
+            .iter()
+            .any(|bytes| db.with_face_data(face.id, |data, _| data == *bytes) == Some(true))
+    };
+    let faces: Vec<fontdb::FaceInfo> = db
+        .faces()
+        .filter(|f| matches!(f.source, fontdb::Source::Binary(_)) && bundled_600(db, f))
+        .cloned()
+        .collect();
+    let has_alias = |style| {
+        faces
+            .iter()
+            .any(|f| f.weight == fontdb::Weight::BOLD && f.style == style)
+    };
+    for mut face in faces.iter().filter(|f| f.weight.0 == 600).cloned() {
+        if has_alias(face.style) {
+            continue;
+        }
+        face.weight = fontdb::Weight::BOLD;
+        db.push_face_info(face);
+    }
+}
+
+/// Whether Roboto's italic has a glyph for `c`. The three italics cover the same characters
+/// (asserted below), so the 400 face answers for all of them.
+pub fn italic_has_glyph(c: char) -> bool {
+    static ITALIC: LazyLock<Option<ttf_parser::Face<'static>>> =
+        LazyLock::new(|| ttf_parser::Face::parse(ROBOTO_ITALIC_BYTES, 0).ok());
+    ITALIC
+        .as_ref()
+        .is_some_and(|face| face.glyph_index(c).is_some())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{is_bundled, resolves_to_bundled};
+    use super::super::test_support::{is_bundled, query, resolves_to_bundled};
     use super::*;
-    use fontdb::{Family, Query, Source, Style, Weight};
-    use iced::advanced::graphics::text::cosmic_text::fontdb;
+    use fontdb::{Family, Source, Style, Weight};
+    use iced::font::Weight as W;
     use std::sync::Arc;
 
     /// The six bundled faces, loaded from memory as `install_roboto` loads them.
@@ -80,13 +126,7 @@ mod tests {
     }
 
     fn roboto(db: &fontdb::Database, weight: u16, style: Style) -> fontdb::ID {
-        db.query(&Query {
-            families: &[Family::Name(ROBOTO_FAMILY)],
-            weight: Weight(weight),
-            style,
-            ..Query::default()
-        })
-        .unwrap_or_else(|| panic!("Roboto resolves to no face (weight {weight}, {style:?})"))
+        query(db, Family::Name(ROBOTO_FAMILY), weight, style)
     }
 
     const UPRIGHT: [(u16, &[u8], &str); 3] = [
@@ -118,55 +158,95 @@ mod tests {
         }
     }
 
-    /// SC-002: bold (700, which no face ships) resolves to a 600 face upright and italic alike, so
-    /// bold italic is exactly as heavy as bold.
+    /// C-3: `alias_bold` adds a weight-700 face over the bundled 600 bytes, upright and italic, so
+    /// a bold request has a Roboto face at the exact weight cosmic-text matches on.
     #[test]
-    fn bold_and_bold_italic_resolve_to_faces_of_the_same_weight() {
-        let db = bundled();
-        let weight_of = |id| db.face(id).expect("resolved face exists").weight.0;
+    fn bold_aliases_the_bundled_semibold_faces() {
+        let mut db = bundled();
+        alias_bold(&mut db);
+        alias_bold(&mut db);
+        let at_700: Vec<_> = db.faces().filter(|f| f.weight == Weight::BOLD).collect();
+        assert_eq!(
+            at_700.len(),
+            2,
+            "expected one 700 alias upright and one italic, once each"
+        );
         let upright = roboto(&db, Weight::BOLD.0, Style::Normal);
         let italic = roboto(&db, Weight::BOLD.0, Style::Italic);
-        assert_eq!(weight_of(upright), 600, "upright bold is not the 600 face");
-        assert_eq!(weight_of(italic), 600, "bold italic is not the 600 face");
+        assert!(
+            is_bundled(&db, upright, ROBOTO_SEMIBOLD_BYTES),
+            "bold is not Roboto-SemiBold"
+        );
         assert!(
             is_bundled(&db, italic, ROBOTO_SEMIBOLD_ITALIC_BYTES),
-            "bold italic is not the bundled Roboto-SemiBoldItalic"
+            "bold italic is not Roboto-SemiBoldItalic"
         );
     }
 
-    /// FR-001, FR-002, FR-003, FR-005 through the renderer every in-crate test shares: italic
-    /// `ROBOTO` resolves to the bundled italic of each weight, and bold italic to the 600 italic.
-    ///
-    /// Resolves through the global font system, which also holds the host's fonts: on a machine
-    /// with its own Roboto Italic installed this can fail until the pin joins `install_roboto`
-    /// (feature 1259 T020).
+    /// Whether the global font system holds a Roboto face the application did not bundle, which
+    /// can win a match until `pin_roboto_italics` joins `install_roboto` (feature 1259 T020).
+    fn host_roboto_present() -> bool {
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system lock was poisoned");
+        let host = fonts.raw().db().faces().any(|f| {
+            !matches!(f.source, Source::Binary(_))
+                && f.families.iter().any(|(name, _)| name == ROBOTO_FAMILY)
+        });
+        host
+    }
+
+    /// FR-001, FR-002, FR-003, FR-005, SC-002 through the renderer's own matching (cosmic-text
+    /// shaping, not a fontdb `Query`): upright and italic `ROBOTO` draw in the bundled face of each
+    /// weight, and bold (700) in the 600 faces, upright and italic alike.
     #[test]
-    fn the_global_font_system_resolves_italic_roboto_to_the_bundled_italics() {
+    fn the_renderer_draws_each_weight_and_bold_in_the_bundled_faces() {
         let _ = super::super::test_support::renderer();
-        let italic = |weight| Font {
-            weight,
-            style: iced::font::Style::Italic,
-            ..ROBOTO
-        };
-        use iced::font::Weight as W;
-        for (weight, bytes, what) in [
-            (W::Normal, ROBOTO_ITALIC_BYTES, "Roboto-Italic"),
-            (W::Medium, ROBOTO_MEDIUM_ITALIC_BYTES, "Roboto-MediumItalic"),
-            (
-                W::Semibold,
-                ROBOTO_SEMIBOLD_ITALIC_BYTES,
-                "Roboto-SemiBoldItalic",
-            ),
-            (
-                W::Bold,
-                ROBOTO_SEMIBOLD_ITALIC_BYTES,
-                "Roboto-SemiBoldItalic",
-            ),
+        if host_roboto_present() {
+            eprintln!("skipped: the host has its own Roboto faces (feature 1259 T020 pins them)");
+            return;
+        }
+        for (style, faces) in [
+            (iced::font::Style::Normal, &UPRIGHT),
+            (iced::font::Style::Italic, &ITALIC),
         ] {
+            let semibold = faces[2];
+            for (weight, (_, bytes, what)) in [
+                (W::Normal, faces[0]),
+                (W::Medium, faces[1]),
+                (W::Semibold, semibold),
+                (W::Bold, semibold),
+            ] {
+                let font = Font {
+                    weight,
+                    style,
+                    ..ROBOTO
+                };
+                assert!(
+                    resolves_to_bundled(font, bytes),
+                    "{style:?} ROBOTO at {weight:?} is not drawn in the bundled {what}"
+                );
+            }
+        }
+    }
+
+    /// The three italics cover the same characters, so [`italic_has_glyph`] (which reads the 400
+    /// italic) answers for every weight.
+    #[test]
+    fn the_italics_cover_the_same_characters() {
+        let faces: Vec<_> = ITALIC
+            .iter()
+            .map(|(_, bytes, _)| ttf_parser::Face::parse(bytes, 0).expect("bundled font parses"))
+            .collect();
+        for c in (0u32..0x3_0000).filter_map(char::from_u32) {
+            let covered: Vec<bool> = faces.iter().map(|f| f.glyph_index(c).is_some()).collect();
             assert!(
-                resolves_to_bundled(italic(weight), bytes),
-                "italic ROBOTO at {weight:?} does not resolve to the bundled {what}"
+                covered.iter().all(|&h| h == covered[0]),
+                "the italics disagree on {c:?}: {covered:?}"
             );
         }
+        assert!(italic_has_glyph('a') && italic_has_glyph('é'));
+        let emoji = char::from_u32(0x1F642).expect("U+1F642 is a scalar value");
+        assert!(!italic_has_glyph('漢') && !italic_has_glyph(emoji));
     }
 }

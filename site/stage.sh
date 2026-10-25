@@ -292,7 +292,9 @@ MD
 
 ## SIL Open Font License 1.1
 
-This covers Roboto — `Roboto-Regular.ttf`, `Roboto-Medium.ttf` and `Roboto-SemiBold.ttf`.
+This covers Roboto — every `Roboto-*.ttf`: `Roboto-Regular.ttf`, `Roboto-Medium.ttf`,
+`Roboto-SemiBold.ttf` and their italics, `Roboto-Italic.ttf`, `Roboto-MediumItalic.ttf` and
+`Roboto-SemiBoldItalic.ttf`.
 
 MD
   printf '```text\n'

@@ -639,22 +639,46 @@ impl iced::advanced::widget::Operation<usize> for Focusables {
     }
 }
 
-/// Whether iced's global font system resolves `font` (converted the way iced shapes text) to a
+/// Whether iced's global font system draws `font` (converted the way iced shapes text) in a
 /// `Source::Binary` face whose bytes are exactly `bytes`. For the tests of every font user
-/// (`mono.rs`, the terminal).
+/// (`mono.rs`, `roboto.rs`, the terminal).
+///
+/// Shapes a Latin sample through cosmic-text itself, so it sees the renderer's own matching and
+/// fallback: cosmic-text takes a face of the requested family only at the exact weight asked for,
+/// which a fontdb `Query` (nearest weight) does not show (feature 1259 visual pass T018).
 pub fn resolves_to_bundled(font: iced::Font, bytes: &[u8]) -> bool {
+    use iced::advanced::graphics::text::cosmic_text::{Buffer, Metrics, Shaping};
     let attrs = iced::advanced::graphics::text::to_attributes(font);
     let mut fonts = iced::advanced::graphics::text::font_system()
         .write()
         .expect("the global font system lock was poisoned");
-    let db = fonts.raw().db();
-    let query = fontdb::Query {
-        families: &[attrs.family],
-        weight: attrs.weight,
-        stretch: attrs.stretch,
-        style: attrs.style,
-    };
-    db.query(&query).is_some_and(|id| is_bundled(db, id, bytes))
+    let fs = fonts.raw();
+    let mut buffer = Buffer::new(fs, Metrics::new(14.0, 20.0));
+    buffer.set_text(fs, "Hamburgefonstiv", &attrs, Shaping::Advanced, None);
+    buffer.shape_until_scroll(fs, false);
+    let faces: Vec<fontdb::ID> = buffer
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter().map(|g| g.font_id))
+        .collect();
+    let db = fs.db();
+    !faces.is_empty() && faces.iter().all(|&id| is_bundled(db, id, bytes))
+}
+
+/// The face a fontdb `Query` picks for `family` at `weight` and `style` in `db`: the database
+/// tests' view, nearest weight first. Panics when nothing matches.
+pub fn query(
+    db: &fontdb::Database,
+    family: fontdb::Family<'_>,
+    weight: u16,
+    style: fontdb::Style,
+) -> fontdb::ID {
+    db.query(&fontdb::Query {
+        families: &[family],
+        weight: fontdb::Weight(weight),
+        style,
+        ..fontdb::Query::default()
+    })
+    .unwrap_or_else(|| panic!("{family:?} resolves to no face (weight {weight}, {style:?})"))
 }
 
 /// Whether face `id` is a `Source::Binary` face whose bytes are exactly `bytes`.

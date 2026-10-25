@@ -132,7 +132,7 @@ US2 alone is the showcase sample (see the ledger, milestone cut).
 - [x] T017 [US1] User guide: `docs/user-guide/appearance-theming.md` *The typeface* (around line
   87): emphasis in agent replies is drawn in Roboto's own italic, which ships with the application,
   at the weight of the text around it (bold italic stays bold); code inside emphasis stays upright
-- [ ] T018 [US1] Visual pass, quickstart §B B1–B4, B6, B7, light and dark, through the
+- [x] T018 [US1] Visual pass, quickstart §B B1–B4, B6, B7, light and dark, through the
   `visual-pass` skill; evidence in `specs/1259-markdown-italic-face/visual-pass/`
 
 **Checkpoint**: the app and the showcase draw emphasis in the bundled italic, bold italic at 600.
