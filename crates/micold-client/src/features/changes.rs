@@ -3302,9 +3302,6 @@ fn follow_pick(view: &mut OpenView, pick: Pick) {
     }
 }
 
-/// A drag ended with the button's release (feature 1275, contracts/quick-comment.md Q4–Q7): a
-/// click only picks; a range picks and opens a new comment's box under the line released on, or
-/// moves the open one keeping its text, and leaves an edit's or a note's box as it is.
 /// End the shown view's drag over the line numbers as **Esc** does, putting back the pick and box
 /// from before its press (FR-020): the window lost focus, or the tab is left (review A M4 F3).
 pub fn cancel_drag(state: &mut State) {
@@ -3316,6 +3313,9 @@ pub fn cancel_drag(state: &mut State) {
     }
 }
 
+/// A drag ended with the button's release (feature 1275, contracts/quick-comment.md Q4–Q7): a
+/// click only picks; a range picks and opens a new comment's box under the line released on, or
+/// moves the open one keeping its text, and leaves an edit's or a note's box as it is.
 fn gutter_drag_released(state: &mut State) -> Effect {
     let Some(view) = state.tabs.shown_view_mut() else {
         return Effect::None;
