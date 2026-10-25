@@ -7,8 +7,10 @@
 //!
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
+use super::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::style;
 use crate::{Ellipsized, Text, TypeRole};
+use iced::keyboard::key::Named;
 use iced::widget::button;
 use iced::{Background, Border, Color, Element};
 use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
@@ -44,6 +46,7 @@ pub struct ToggleChip<M> {
     count: usize,
     disabled: bool,
     one_line: bool,
+    keyboard: bool,
 }
 
 impl<M> ToggleChip<M> {
@@ -59,6 +62,7 @@ impl<M> ToggleChip<M> {
             count: 0,
             disabled: false,
             one_line: false,
+            keyboard: false,
         }
     }
 
@@ -97,6 +101,15 @@ impl<M> ToggleChip<M> {
     /// reviewed** in a narrow diff pane).
     pub fn one_line(mut self) -> Self {
         self.one_line = true;
+        self
+    }
+
+    /// Make the chip a keyboard stop (#1275, FR-027): Tab reaches it, it draws the focus ring,
+    /// and Enter or Space presses it, as `AttachmentChip`'s remove control does. A disabled chip
+    /// stays out of the traversal. Off by default, so the chips that never asked for a stop keep
+    /// the keyboard order they have.
+    pub fn takes_the_keyboard(mut self) -> Self {
+        self.keyboard = true;
         self
     }
 
@@ -143,6 +156,7 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         let active = chip.active;
         let disabled = chip.disabled;
         let on_press = chip.press();
+        let keyboard = chip.keyboard.then(|| on_press.clone()).flatten();
         // §7.6 gives a chip `label_large`. It was `SidebarTag` (`label_small`, 11dp), which was
         // right while the chip had no height of its own — but T060 gave it §7.6's 32dp, and an 11dp
         // word in a 32dp pill leaves so much empty height that a short label renders as a circle
@@ -257,7 +271,20 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         if disabled {
             return chip_button.into();
         }
-        super::Ripple::new(chip_button, ripple_tint, shape::FULL).into()
+        let chip_element: Element<'a, M> =
+            super::Ripple::new(chip_button, ripple_tint, shape::FULL).into();
+        match keyboard {
+            Some(message) => TakesTheKeyboard::new(chip_element, true)
+                .key(Named::Enter, message.clone())
+                .key(Named::Space, message)
+                .indicator(Indicator {
+                    outline: r.secondary,
+                    layer: ripple_tint,
+                    radius: shape::FULL,
+                })
+                .into(),
+            None => chip_element,
+        }
     }
 }
 
@@ -280,6 +307,45 @@ mod tests {
                 "{scheme:?}: a neutral chip's label measures {ratio:.2}:1 pressed, below AA"
             );
         }
+    }
+
+    /// #1275 (FR-027): a chip that takes the keyboard is one Tab stop, answers Enter and Space
+    /// with its press, and keeps the plain chip's size; a plain chip, or a disabled one, is no stop.
+    #[test]
+    fn a_keyboard_chip_is_one_stop_answering_enter_and_space_at_the_plain_size() {
+        use super::super::test_support::{named_key, size_of, Focusables, Mounted};
+        use iced::advanced::mouse;
+        use iced::keyboard::key::Named;
+        let r = roles(ColorScheme::Light);
+        let chip = || ToggleChip::new("Add test", "pressed".to_string(), r);
+
+        for key in [Named::Enter, Named::Space] {
+            let mut m = Mounted::new(chip().takes_the_keyboard());
+            assert_eq!(m.drive(Focusables(0)), Some(1));
+            m.focus_next();
+            let out = m.send(named_key(key), mouse::Cursor::Unavailable);
+            assert_eq!(out, vec!["pressed".to_string()], "{key:?}");
+        }
+
+        let mut plain = Mounted::new(chip());
+        assert_eq!(
+            plain.drive(Focusables(0)),
+            Some(0),
+            "a plain chip is no stop"
+        );
+        let mut disabled = Mounted::new(chip().disabled(true).takes_the_keyboard());
+        assert_eq!(
+            disabled.drive(Focusables(0)),
+            Some(0),
+            "nor is a disabled one"
+        );
+
+        let room = iced::Size::new(400.0, 100.0);
+        assert_eq!(
+            size_of(chip().takes_the_keyboard().into(), room),
+            size_of(chip().into(), room),
+            "the focus wrapper adds no size"
+        );
     }
 
     /// A disabled chip has nowhere to send a press, and an enabled one does (feature 034, U64):

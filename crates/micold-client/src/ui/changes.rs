@@ -111,6 +111,10 @@ pub fn view<'a>(
     connected: bool,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
+    let composer = ComposerEditor {
+        content: composer,
+        chips: changes::chips_shown(&state.changes),
+    };
     let title = match &view.entry {
         SessionLocation::Default => crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
         SessionLocation::Worktree(dir) => state.worktree_display_name(dir),
@@ -309,7 +313,7 @@ pub const OVERFLOW_ITEMS: [&str; 2] = ["Clear sent", "Discard drafts\u{2026}"];
 fn comments_drawer<'a>(
     state: &'a State,
     view: &'a OpenView,
-    composer: Option<&'a text_editor::Content>,
+    composer: ComposerEditor<'a>,
     r: Roles,
 ) -> Element<'a, Message> {
     let tab = view.drawer.state.tab;
@@ -395,7 +399,7 @@ fn drawer_row<'a>(
     view: &'a OpenView,
     item: DrawerRow,
     heading: Option<&str>,
-    composer: Option<&'a text_editor::Content>,
+    composer: ComposerEditor<'a>,
     r: Roles,
 ) -> Element<'a, Message> {
     let place = format!("{} · {}", item.path.as_str(), item.lines);
@@ -1030,7 +1034,7 @@ fn diff_pane<'a>(
     state: &'a State,
     view: &'a OpenView,
     scheme: ColorScheme,
-    composer: Option<&'a text_editor::Content>,
+    composer: ComposerEditor<'a>,
     connected: bool,
 ) -> Element<'a, Message> {
     let body = diff_pane_body(state, view, scheme, composer, connected);
@@ -1091,7 +1095,7 @@ fn diff_pane_body<'a>(
     state: &'a State,
     view: &'a OpenView,
     scheme: ColorScheme,
-    composer: Option<&'a text_editor::Content>,
+    composer: ComposerEditor<'a>,
     connected: bool,
 ) -> Element<'a, Message> {
     let layout = state.changes.layout;
@@ -1331,7 +1335,7 @@ fn comment_or_editor<'a>(
     view: &'a OpenView,
     comment: &'a ReviewComment,
     sending: bool,
-    composer: Option<&'a text_editor::Content>,
+    composer: ComposerEditor<'a>,
     r: Roles,
 ) -> Element<'a, Message> {
     // A composer the drawer opened is drawn in its row while that row is shown (feature 1270, D6).
@@ -1379,18 +1383,26 @@ fn comment_or_editor<'a>(
     }
 }
 
-/// The composer (C2): the text area, Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
+/// The composer's editor, which only the binary holds, and whether the suggestion chips show under
+/// it (#1275, FR-023): passed down together to wherever the one open composer is drawn.
+#[derive(Clone, Copy)]
+struct ComposerEditor<'a> {
+    content: Option<&'a text_editor::Content>,
+    chips: bool,
+}
+
+/// The composer (C2): the text area, the suggestion chips when on (#1275), Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
 /// text, the service refuses an empty comment (W1), and only while `placed` on lines (C4).
 fn composer_box<'a>(
     text: &'a str,
-    editor: Option<&'a text_editor::Content>,
+    editor: ComposerEditor<'a>,
     placed: bool,
     placeholder: &'a str,
     r: Roles,
 ) -> Element<'a, Message> {
     let has_text = placed && !text.trim().is_empty();
     let save = Message::Changes(Msg::ComposerSaved);
-    let area: Element<'a, Message> = match editor {
+    let area: Element<'a, Message> = match editor.content {
         Some(content) => {
             let mut area = TextArea::new(content, r)
                 .id(COMPOSER_ID.clone())
@@ -1410,9 +1422,26 @@ fn composer_box<'a>(
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::Center);
-    column![area, actions]
+    let mut parts = column![area].spacing(spacing::SM).padding(spacing::SM);
+    if editor.chips {
+        parts = parts.push(suggestion_chips(r));
+    }
+    parts.push(actions).into()
+}
+
+/// *Rename*, *Add test* and *Why?* (#1275, FR-023, FR-027): after the text area in keyboard order,
+/// each a Tab stop with the focus ring that Enter or Space presses.
+fn suggestion_chips<'a>(r: Roles) -> Element<'a, Message> {
+    let chips = micold_core::review::chips::CHIPS
+        .iter()
+        .enumerate()
+        .map(|(index, chip)| {
+            ToggleChip::new(chip.label, Message::Changes(Msg::ChipPressed(index)), r)
+                .takes_the_keyboard()
+                .into()
+        });
+    iced::widget::Row::with_children(chips)
         .spacing(spacing::SM)
-        .padding(spacing::SM)
         .into()
 }
 

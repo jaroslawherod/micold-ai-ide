@@ -458,6 +458,20 @@ let go on with the cursor in it, so you can type at once. If a new comment's box
 the drag moves it to the new lines and keeps what you wrote. While you are editing a comment or
 writing a note, a drag changes only the pick; that box and its text stay.
 
+With [**Suggestion chips**](settings.md#suggestion-chips) on (Settings → Appearance; off by
+default), three chips sit under every comment box, between the text and **Cancel**/**Save**:
+
+| Chip | Puts in the box |
+|---|---|
+| *Rename* | "Rename this to " — finish it with the new name |
+| *Add test* | "Add a test that covers this." |
+| *Why?* | "Why is this needed?" |
+
+In an empty box the chip's text becomes the comment; in a box with text it goes on a new line after
+what you wrote. The cursor stays in the box, at the end, and the text counts as typed: **Save**
+becomes available and you can edit it before saving. **Tab** from the text box reaches each chip in
+turn; **Enter** or **Space** presses the focused one.
+
 The comment then shows as a card under its last line, marked **Draft** until it is sent. The text you are
 writing is kept while the list or the diff is read again.
 If a change removes the lines you picked, the box moves above the diff with the note "The lines

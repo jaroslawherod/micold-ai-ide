@@ -56,3 +56,18 @@ handled.
 | `m4-c-3-moved-and-clicked-{light,dark}-1280.png` | then the pointer moved with no button over the numbers of lines 3–8 and a plain click on the diff text: the screen is pixel-identical to the one above (pick still line 2, no box opened, nothing focused) — before the fix the drag stayed on, the pick followed the pointer and the next release opened a box | PASS |
 
 A full drag afterwards (2 → 5) still opens the box under the released line, as in §B.
+
+## M5 — suggestion chips (T043)
+
+Real client (debug build of the M5 tree, client and daemon pair) on a cloud Xvfb display at
+1280x800, driven with Xlib XTest. Fixture: the M4 repository, its **Default** entry's Review tab,
+`a.txt` open, a new comment's box opened by a drag over new lines 2–7 (quickstart §B step 5). The
+data directory starts with no `suggestion_chips` key (a fresh install's value).
+
+| File | Shows | Verdict |
+|---|---|---|
+| `m5-b5-1-chips-off-{light,dark}-1280.png` | switch off: the box is as before M5, text area then Cancel/Save, no chips (SC-004) | PASS |
+| `m5-b5-2-settings-switch-on-{light,dark}-1280.png` | Settings → Appearance: **Suggestion chips** under **Reduce motion** with its note, ticked; after **Save** `settings.json` holds `"suggestion_chips": true` | PASS |
+| `m5-b5-3-tab-order-light-crop.png` (four frames stacked), `m5-b5-3-tab-add-test-dark-1280.png` | the box already open shows the chips once saved (FR-026); **Tab** from the text area reaches *Rename*, *Add test*, *Why?*, then **Cancel**, each with the focus ring (FR-027) | PASS |
+| `m5-b5-4-add-test-filled-light-1280.png`, `m5-b5-4-add-test-by-key-dark-1280.png` | *Add test* pressed in the empty box (light: clicked; dark: **Space** on the focused chip): the box reads *Add a test that covers this.* with the caret at the end and **Save** available; typing ` ok` then appended at the end | PASS |
+| `m5-b5-5-notice-dot-chips-{light,dark}-1280.png` | `b.txt` and `c.txt` appended to from a shell with the box open: *2 files changed since you looked*, the two dots and the chips together (SC-006); in light, **Space** on the focused *Why?* had added *Why is this needed?* on a new line after the text, the caret back in the box | PASS |

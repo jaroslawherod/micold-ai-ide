@@ -60,6 +60,14 @@ and disappear at once instead of easing in and out over 150 ms. Other animations
 unchanged. Like the other settings it applies when you press **Save** and is discarded by
 **Cancel**. The operating system's reduced-motion setting is not read.
 
+### Suggestion chips
+
+Off by default. Turn it on and press **Save**, and every comment box in a review — a new comment,
+**Edit** and **Answer…** — shows three chips under the text: *Rename*, *Add test* and *Why?*.
+Pressing one puts its text in the box (see [Reviewing changes → Writing a
+comment](reviewing-changes.md#writing-a-comment)). A box already open shows or hides the chips as
+soon as you save; **Cancel** discards the change.
+
 ## Terminal
 
 **Scrollback lines** controls how many lines of earlier output each session's terminal keeps for

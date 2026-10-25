@@ -82,6 +82,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     run(app, effect)
 }
 
+/// Put **Suggestion chips** in force (#1275, FR-026): in the window's settings and in the Changes
+/// view, at start and after a save, so every comment box drawn afterwards follows it.
+pub fn suggestion_chips_in_force(core: &mut micold_client::app::State, on: bool) {
+    core.settings.suggestion_chips = on;
+    core.update_changes(Msg::SuggestionChipsInForce(on));
+}
+
 /// The address of pull request `number` of the open Changes view, when it is a GitHub one
 /// (FR-014): the held address, never one built from the number.
 pub fn pull_request_address(app: &App, number: u64) -> Option<String> {

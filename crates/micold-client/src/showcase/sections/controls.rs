@@ -280,7 +280,8 @@ pub fn checkbox<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
     arrange(rows, Layout::Inline)
 }
 
-/// `ToggleChip` — active and inactive, with an explicit accent, and disabled (feature 034).
+/// `ToggleChip` — active and inactive, with an explicit accent, disabled (feature 034), and a
+/// keyboard stop (#1275).
 pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -307,6 +308,12 @@ pub fn toggle_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             posed(
                 "disabled",
                 material::ToggleChip::new("GitHub issue", Message::NoOp, roles).disabled(true),
+                roles,
+            ),
+            // #1275 (FR-027): a suggestion chip is a Tab stop with the focus ring.
+            posed(
+                "keyboard stop",
+                material::ToggleChip::new("Add test", Message::NoOp, roles).takes_the_keyboard(),
                 roles,
             ),
         ],

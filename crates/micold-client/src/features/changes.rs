@@ -1442,6 +1442,9 @@ pub struct State {
     pub remembered: BTreeMap<(PathBuf, SessionLocation), u64>,
     /// What the session area's context header follows (feature 1126, data-model *HeaderCounts*).
     pub header: HeaderCounts,
+    /// **Suggestion chips** in force (#1275, FR-023, FR-026): the saved setting, sent by the shell
+    /// at start and after a save. Off by default.
+    pub suggestion_chips: bool,
 }
 
 /// The location the session area's header is for and its change counts (feature 1126, R5, R6;
@@ -1470,6 +1473,37 @@ impl HeaderCounts {
             _ => CountsReading::Unknown,
         }
     }
+}
+
+/// Whether the open comment box shows the suggestion chips (#1275, FR-023, Q10): the setting is
+/// on and a box (new, **Edit** or **Answer…**) is open.
+pub fn chips_shown(state: &State) -> bool {
+    state.suggestion_chips
+        && state
+            .tabs
+            .shown_view()
+            .is_some_and(|view| view.composer.is_some())
+}
+
+/// A chip was pressed (#1275, FR-024, FR-025, Q11): the box takes the chip's text as typed text,
+/// and the shell gives it the keyboard back with the cursor at the end. Nothing with the chips not
+/// shown, or an index past them.
+fn chip_pressed(state: &mut State, index: usize) -> Effect {
+    if !chips_shown(state) {
+        return Effect::None;
+    }
+    let Some(chip) = micold_core::review::chips::CHIPS.get(index) else {
+        return Effect::None;
+    };
+    let Some(composer) = state
+        .tabs
+        .shown_view_mut()
+        .and_then(|view| view.composer.as_mut())
+    else {
+        return Effect::None;
+    };
+    composer.text = micold_core::review::chips::insert(&composer.text, chip);
+    Effect::FocusComposer
 }
 
 /// What this feature is told.
@@ -1657,6 +1691,11 @@ pub enum Msg {
     ComposerAction(crate::app::EditorAction),
     /// The composer's text changed.
     ComposerEdited(String),
+    /// A suggestion chip under the composer was pressed: an index into `review::chips::CHIPS`
+    /// (#1275, FR-024).
+    ChipPressed(usize),
+    /// **Suggestion chips** in force, at start and after a settings save (#1275, FR-026).
+    SuggestionChipsInForce(bool),
     /// Save (or Ctrl/Cmd+Enter) in the composer.
     ComposerSaved,
     /// Cancel in the composer.
@@ -2977,6 +3016,11 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ComposerAction(_) => Effect::None,
+        Msg::ChipPressed(index) => chip_pressed(state, index),
+        Msg::SuggestionChipsInForce(on) => {
+            state.suggestion_chips = on;
+            Effect::None
+        }
         Msg::ComposerEdited(text) => {
             if let Some(composer) = state
                 .tabs

@@ -14837,6 +14837,53 @@ fn reduce_motion_is_applied_by_save_and_discarded_by_cancel() {
     );
 }
 
+/// #1275 (FR-022, FR-026): Save applies **Suggestion chips** to the window and the Changes view,
+/// and Cancel discards it.
+#[test]
+fn suggestion_chips_are_applied_by_save_and_discarded_by_cancel() {
+    let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(
+        micold_core::settings::Settings::default(),
+    ));
+    let mut app = base_app();
+    app.caps = app.caps.clone().with_settings(store.clone());
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::SuggestionChipsToggled(true)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Cancelled));
+    assert!(
+        !app.core.settings.suggestion_chips,
+        "Cancel discards the edit"
+    );
+    assert!(!app.core.changes.suggestion_chips);
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::SuggestionChipsToggled(true)),
+    );
+    assert!(
+        !app.core.changes.suggestion_chips,
+        "the draft alone changes nothing"
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    assert!(app.core.settings.suggestion_chips, "Save applies it");
+    assert!(
+        app.core.changes.suggestion_chips,
+        "and the Changes view's comment boxes follow it"
+    );
+    assert!(
+        store
+            .saves()
+            .last()
+            .is_some_and(|saved| saved.suggestion_chips),
+        "and writes it"
+    );
+}
+
 /// T021 (feature 939, research R9): the shell routes a structured session's events to its
 /// transcript, performs the transcript view's scroll requests, and drops the transcript with the
 /// session.

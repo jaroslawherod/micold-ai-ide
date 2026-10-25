@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: review M4
-- **Next step**: orchestrator: merge the M4 PR on green CI, then dispatch M5 (T035–T043).
+- **Next step**: orchestrator: merge the M4 PR (#1443) on green CI; M5 is coded on local branch `1275-m5` (stacked on M4, worktree /home/user/wt-1275-m5, not pushed): rebase it onto main after the M4 merge, run reviews A/B on its range, then push and open its PR (body in the session scratchpad, `pr-body-1275-m5.md`).
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | reviews done (A round 2 clean); gate green; PR open |
-| M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
+| M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | coded on local `1275-m5` (stacked on M4); gate pending; reviews not run |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
 
 ## Decisions
@@ -175,3 +175,4 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
 - Full `scripts/gate.sh` on pushed 2f0606e03 (main d84e94860): exit 0.
 - M4 (unit, 2026-10-25): T026–T034 done on b582c2563. Deviations: press stays `.on_gutter`, over is `.on_gutter_over` + `.dragging`; Q5 focus as `Effect::FocusComposer`; slots stay under the pre-press pick while dragging (`slot_pick`, visual-pass finding); a click retargets a new box on release (C4); `AddComment` and `close_new` end a drag. Carried MINORs: `Drag::span` clamps 0 (core d9), `chose_gone` reset with the hold (`forget_hold`, apply, `SourceChosen`), Decisions row 1 *By* fixed. Layout snapshot unchanged (passes). Full `scripts/gate.sh` exit 0 on 3dc34ba63 (main b582c2563, unmoved); pushed. TDD log `tdd/cycle-log.md`.
 - M4 review round 1 fixes (unit, 2026-10-25): A F1 (MAJOR) widget-level release, F2 Esc via `on_escape`, F3 cancel on unfocus (the drag listener maps `Window(Unfocused)` to `GutterDragCancelled`; a main.rs call and a root arm were refused by `feature_registration_cost` / `root_is_routing_only`) and `cancel_drag` in `hide_shown`; B1 red runs logged, B3 clause dropped. Fix commits d0f058f13, 44676ab5b, 66c7ca0fb (fix diff a47ef1e52..66c7ca0fb), rebased onto origin/main acefceb57 (main moved: #1431, 1185 M3–M5, docs). Visual check of a fast click: PASS (`visual-pass/m4-c-*`). Layout snapshot unchanged (`layout_snapshot` passed after the rebase). Full `scripts/gate.sh` exit 0 on 66c7ca0fb; pushed.
+- M5 (unit, 2026-10-25): T035–T043 on local branch `1275-m5`, stacked on M4's tip 8dba8f621 (M4 PR #1443 still in CI; `branch-start.sh` not run, per the orchestrator). Deviations: `ToggleChip` joins the keyboard **opt-in** (`.takes_the_keyboard()`), not for every chip, so the sidebar, diff-pane and form chips keep their Tab order; `ChipPressed` returns `Effect::FocusComposer` (the shell's existing `sync_composer` moves the cursor to the end) instead of a separate shell arm; `shell::changes::suggestion_chips_in_force` sets the window's `settings.suggestion_chips` and sends `SuggestionChipsInForce`, called at start (`startup.rs`) and from the save (`save_and_prepare_check`). Chips show under every box (new, Edit, Answer, card or drawer) via a `ComposerEditor { content, chips }` threaded through `ui/changes.rs`. Layout snapshot: new state `changes-review-held-chips`, plus the switch's row in the three Settings → Appearance states (523+/0-). Visual pass PASS (`visual-pass/m5-*`, README § M5).

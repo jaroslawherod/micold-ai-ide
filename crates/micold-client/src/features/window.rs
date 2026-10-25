@@ -250,6 +250,8 @@ pub enum FieldId {
     SettingsDesktopNotifications,
     /// Settings → Appearance: the "Reduce motion" checkbox (feature 970, FR-008).
     SettingsReduceMotion,
+    /// Settings → Appearance → **Suggestion chips** (#1275).
+    SettingsSuggestionChips,
     /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
     SettingsCpuLimit,
     /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).
