@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1350 | M1 core rules + advanced request | merged | 3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 |
 | #1364 | M2 render-free selector state and the run | merged | 5b5064bc72729361327aabc63581311b92d0815f |
 | #1379 | M3 Basic/Advanced switch, query field and results | merged | 5a5bc7e1a7f244d276f0e2b55fbe3e43b8704043 |
-| (to open) | M4 Jira's error messages and Retry | full gate green at cc23db94 (after the rebase: layout snapshot re-recorded, `QUERY_FAILURE_CONTENT` path 0/6→0/8), local branch 1186-m4-wip, not pushed | — |
+| #1388 | M4 Jira's error messages and Retry | merged | 9ce7e702237d496464a4e7e2ce290f3b7bf22cef |
 | (to open) | M5 remember the last query and mode per project | full gate green at e5c3e7a7, local branch 1186-m5-wip (on 1186-m4-wip), not pushed | — |
 
 ## Milestones
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012 | full | Core rules + advanced request (no UI) | #1350 | merged |
 | M2 | T013–T017 | full | Render-free selector state and the run (no view yet) | #1364 | merged |
 | M3 | T018–T023 | full | Basic/Advanced switch, query field, results, pick | #1379 | merged |
-| M4 | T024–T032 | full | Jira's error messages and Retry | (to open) | full gate green at cc23db94 after the rebase onto 598fab89, not pushed |
+| M4 | T024–T032 | full | Jira's error messages and Retry | #1388 | merged |
 | M5 | T033–T039 | full | Remember last query and mode per project | (to open) | full gate green at e5c3e7a7, reviews clean, visual pass B8–B11 PASS, not pushed |
 
 ## Decisions

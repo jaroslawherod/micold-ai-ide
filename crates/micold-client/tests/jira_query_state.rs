@@ -420,7 +420,11 @@ fn switching_back_to_basic_restores_the_basic_state_and_keeps_the_draft() {
         None,
         "nothing to load"
     );
-    assert!(state.worktree_form.issue_request_seq >= before);
+    assert_eq!(
+        state.worktree_form.issue_request_seq,
+        before + 1,
+        "the discard of a run hands out exactly one seq"
+    );
     query(
         &mut state,
         QueryMsg::Ran {
@@ -1055,10 +1059,10 @@ fn a_run_in_flight_lands_nowhere_once_jira_is_off_or_disconnected() {
                 result: Ok(listing(basic_issues())),
             },
         );
-        assert!(
-            !matches!(jq(&state).run, QueryRun::Loaded { .. }),
-            "the stale answer was applied: {:?}",
-            jq(&state).run
+        assert_eq!(
+            jq(&state).run,
+            QueryRun::Idle,
+            "the stale answer was applied or the run kept"
         );
     }
 }

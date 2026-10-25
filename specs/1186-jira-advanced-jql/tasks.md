@@ -138,7 +138,7 @@ empty).
 
 ## Phase 6: Polish
 
-- [ ] T040 Run quickstart §B B1–B13 with the `visual-pass` skill and record the results in `specs/1186-jira-advanced-jql/visual/close.md`
+- [x] T040 Run quickstart §B B1–B13 with the `visual-pass` skill and record the results in `specs/1186-jira-advanced-jql/visual/close.md`
 
 ---
 
@@ -240,3 +240,18 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 T040 (Polish) changes no code: the close unit runs it in the close PR.
+
+---
+
+## Phase 7: TDD remediation
+
+**Purpose**: findings of `specs/1186-jira-advanced-jql/tdd/verification.md` (verdict FAIL). The
+feature is not done until T041 and T042 (the HIGH findings) are cleared. No task adds behaviour.
+
+- [x] T041 [US2] Finding 1: in `crates/micold-client/tests/jira_http_adapter.rs` add a loopback test where a `400` carries a JSON `errorMessages` entry longer than 64 KiB and `query_page` gives `Rejected(Vec::new())` (truncated body), then confirm it fails with `.take(MAX_REFUSAL_BYTES)` in `crates/micold-client/src/shell/jira_http.rs:188` replaced by `.take(u64::MAX)` and passes restored; proof: `cargo test -p micold-client --test jira_http_adapter`
+- [x] T042 [US1] Finding 2: run `retry_of_a_failed_basic_list_loads_nothing_while_advanced_mode_shows` and `an_advanced_pick_keeps_its_title_in_the_prompt_after_a_switch_to_basic` (`crates/micold-client/tests/jira_query_state.rs:633,657`) against the source of `fe4b263b^` and record the failure output in `tdd/cycle-log.md:17`; where one passes before the fix, strengthen it until it fails there; proof: `cargo test -p micold-client --test jira_query_state`
+- [x] T043 Finding 3: delete `EMPTY`, `CAPPED` and `PROMPT` from `crates/micold-core/src/jira_query.rs:24,27,30` and `the_selector_texts_are_spelled_as_the_contract` (`crates/micold-core/tests/jira_query.rs:289`); add a unit test in `crates/micold-client/src/ui/jira_query.rs` pinning `PROMPT`, `NO_MATCH` and the cap caption (extract the caption into a function); amend `contracts/jql-rules.md:91` to the shipped prompt; proof: `cargo test -p micold-core --test jira_query` and `cargo test -p micold-client --lib jira_query`
+- [x] T044 Findings 4, 5: in `crates/micold-client/tests/jira_query_state.rs` replace `>= before` (line 423) with an equality that fails if the discard hands out a seq, and assert `run == QueryRun::Idle` at line 1058; proof: `cargo test -p micold-client --test jira_query_state`
+- [x] T045 [P] Finding 6: split `a_query_page_is_the_basic_post_with_the_scoped_jql` (`crates/micold-client/tests/jira_http_adapter.rs:415`) into request-shape and scoped-jql/cursor tests; proof: `cargo test -p micold-client --test jira_http_adapter`
+- [x] T046 [P] Findings 7, 8: say in `docs/user-guide/settings.md:821` that removing the connection also deletes the remembered Jira query file, and in `docs/development/architecture.md:539` that the advanced JQL rules are in `micold_core::jira_query`; proof: `grep -n "remembered" docs/user-guide/settings.md`
+- [x] T047 [P] Finding 9: add cycle-log rows for `fc7ff284`, `c40218ed`, T031, T023/T032 in `specs/1186-jira-advanced-jql/tdd/cycle-log.md`

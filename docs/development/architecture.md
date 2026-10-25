@@ -537,7 +537,8 @@ verifier, no JSON feature) and `base64` for the Basic header. The blocking clien
 built for Windows-host sandbox placements and stay free of a TLS stack. The daemon only stores and
 echoes the two settings fields (the integration switch and the per-project connection without its
 token); it never contacts Jira. The pure parts (site origin, JQL, response parsing, failure
-classification) are in `micold_core::jira`. The decision record is
+classification) are in `micold_core::jira`; the advanced JQL rules (cleaning, the sort split,
+the project scope, Jira's error messages, the remembered query) are in `micold_core::jira_query`. The decision record is
 `specs/533-jira-issue-worktrees/research.md` R2.
 
 ### What you do *not* do

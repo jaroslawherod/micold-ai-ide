@@ -822,7 +822,8 @@ readable only by you, one per project, in the `jira` folder beside the settings 
 | macOS | `~/Library/Application Support/micold-ai-ide/jira/` |
 | Windows | `%APPDATA%\micold-ai-ide\data\jira\` |
 
-Removing the connection deletes the file.
+Removing the connection deletes the file, and with it the query and mode the issue selector
+remembers for that project (`<project id>.query.json` in the same folder).
 
 ## Where settings are stored
 

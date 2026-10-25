@@ -88,11 +88,13 @@ object values (strings) in key order; each cleaned (§1), trimmed, empty ones dr
 | `TooLong` | `The query is longer than 2,000 characters. Shorten it and run the query again.` |
 | `Rejected([])` | `Jira did not accept the query: it is not valid JQL.` |
 | Empty result (FR-012) | `No issue matches this query.` |
-| Prompt (FR-004a) | `Type a JQL query and press Enter to list issues.` |
+| Prompt (FR-004a) | `Type a JQL query, then press Enter or Run` |
 | Cap (FR-006) | `Showing the first 1,000 issues this query returns.` |
 
-These are constants of `jira_query`, so the reducer tests and the view share one spelling. None of
-them contains the user query (FR-016).
+The first four are in `micold_core::jira_query` (`QueryRefusal::message`, `NOT_VALID_JQL`). The last
+three live in the view, `crates/micold-client/src/ui/jira_query.rs` (`NO_MATCH`, `PROMPT`, which is
+also the field's placeholder, and `cap_caption`), pinned by a unit test there. None of them contains
+the user query (FR-016).
 
 ## 6. The advanced load (FR-006, FR-008)
 
