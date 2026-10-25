@@ -16,7 +16,7 @@ use micold_core::git::GitRemote;
 use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::issue_types::default_mapping;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
-use micold_core::jira_filter::{FilterKind, VersionChoice};
+use micold_core::jira_filter::{AccountId, FilterKind, JiraUser, VersionChoice};
 use micold_core::jira_query::QueryMode;
 use micold_core::typeahead::Direction;
 
@@ -793,6 +793,58 @@ fn a_filter_list_closes_even_behind_a_running_create() {
     );
 }
 
+// ---- Feature 1186 FR-002, FR-003: advanced mode hides the filters; Basic restores them ----
+
+#[test]
+fn advanced_mode_neither_applies_nor_drops_the_chosen_filters() {
+    let mut state = filtered();
+    let chosen = form(&state).jira_filters.chosen.clone();
+    let line = form(&state).jira_filters.active_line();
+    assert!(line.is_some(), "Payments is chosen");
+    filter(&mut state, FilterMsg::Focused(COMPONENT));
+    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Au".into()));
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Advanced)),
+    );
+    assert!(form(&state).shows_advanced());
+    let field = form(&state).jira_filters.field(COMPONENT);
+    assert!(!field.open, "a hidden filter's list closes");
+    assert_eq!(field.query, "Payments", "its unpicked text gives way");
+    let before = state.worktree_form.issue_request_seq;
+    filter(&mut state, FilterMsg::ClearedAll);
+    filter(&mut state, FilterMsg::Cleared(COMPONENT));
+    assert_eq!(
+        form(&state).jira_filters.chosen,
+        chosen,
+        "a hidden filter is not cleared"
+    );
+    assert_eq!(
+        state.worktree_form.issue_request_seq, before,
+        "a hidden filter loads no basic list"
+    );
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::DraftChanged("assignee = currentUser()".into())),
+    );
+    send(&mut state, Msg::JiraQuery(QueryMsg::Run));
+    match &form(&state).jira_query.run {
+        QueryRun::Running { scoped, .. } => assert!(
+            !scoped.as_str().to_lowercase().contains("component"),
+            "the run carries no basic filter: {}",
+            scoped.as_str()
+        ),
+        other => panic!("expected a run in flight, found {other:?}"),
+    }
+    send(
+        &mut state,
+        Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Basic)),
+    );
+    assert_eq!(form(&state).jira_filters.chosen, chosen);
+    assert_eq!(form(&state).jira_filters.active_line(), line);
+    assert_eq!(shown_keys(&state), ["ABC-1", "ABC-3"]);
+}
+
 // Feature 1185 M2: the fix-version filter (US1 AS3, AS5; FR-003; SC-001).
 
 fn version(name: &str, released: bool) -> VersionChoice {
@@ -1042,17 +1094,19 @@ fn typing_in_fix_version_narrows_its_choices() {
     assert_eq!(labels_of(&state, FIX_VERSION), ["Any fix version", "2.3"]);
 }
 
-/// SC-001: from the dialog opened on Jira, four interactions (focus Component, pick, focus Fix
-/// version, pick) reach the listing of one component and one fix version, with no typing. The
-/// shell's answers are fed between them; they are not interactions.
+/// SC-001 (as amended by ledger D15): from the dialog opened on Jira, five interactions (open
+/// Filters, focus Component, pick, focus Fix version, pick) reach the listing of one component and
+/// one fix version, with no typing; the panel stays open between the picks. The shell's answers are
+/// fed between them; they are not interactions.
 #[test]
-fn four_interactions_reach_the_two_clause_listing() {
+fn five_interactions_reach_the_two_clause_listing() {
     let mut state = loaded();
     let mut interactions = 0;
     let mut act = |state: &mut State, msg: FilterMsg| {
         interactions += 1;
         filter(state, msg);
     };
+    act(&mut state, FilterMsg::PanelToggled);
     act(&mut state, FilterMsg::Focused(COMPONENT));
     let seq = choice_seq(&state);
     filter(
@@ -1073,7 +1127,8 @@ fn four_interactions_reach_the_two_clause_listing() {
         },
     );
     act(&mut state, FilterMsg::Picked(FIX_VERSION, 1));
-    assert_eq!(interactions, 4);
+    assert_eq!(interactions, 5);
+    assert!(form(&state).jira_filters.panel_open, "the panel stays open");
     assert_eq!(
         state.worktree_form.jira_filters().clauses(),
         [r#"component = "Payments""#, r#"fixVersion = "2.4""#]
@@ -1113,54 +1168,360 @@ fn a_focus_while_another_filters_choices_are_out_awaits_its_own() {
     assert_eq!(labels_of(&state, COMPONENT).len(), 4);
 }
 
-// ---- Feature 1186 FR-002, FR-003: advanced mode hides the filters; Basic restores them ----
+// Feature 1185 M3: the Filters panel (ledger D15) and the reporter filter (US2; FR-004, FR-006).
+
+const REPORTER: FilterKind = FilterKind::Reporter;
+
+fn person(account: &str, name: &str) -> JiraUser {
+    JiraUser {
+        account: AccountId::parse(account).expect("an account id"),
+        name: name.to_string(),
+        is_me: false,
+    }
+}
+
+fn jane() -> JiraUser {
+    JiraUser {
+        is_me: true,
+        ..person("me-1", "Jane Doe")
+    }
+}
+
+/// The own user's request in flight.
+fn me_seq(state: &State) -> u64 {
+    match &form(state).jira_filters.me {
+        ChoiceLoad::Loading { seq } => *seq,
+        other => panic!("expected the own user in flight, found {other:?}"),
+    }
+}
+
+/// Focus Reporter and answer `/myself` with `result`.
+fn focus_reporter(state: &mut State, result: Result<Option<JiraUser>, IssueLoadError>) {
+    filter(state, FilterMsg::Focused(REPORTER));
+    let seq = me_seq(state);
+    filter(state, FilterMsg::MeLoaded { seq, result });
+}
+
+/// Type `text` into Reporter, let the debounce end, and answer the search with `result`.
+fn search_people(state: &mut State, text: &str, result: Result<Vec<JiraUser>, IssueLoadError>) {
+    filter(state, FilterMsg::QueryChanged(REPORTER, text.into()));
+    let seq = state
+        .worktree_form
+        .pending_people_search()
+        .expect("the search waits out its debounce");
+    filter(state, FilterMsg::PeopleSearchDue { seq });
+    assert_eq!(
+        state.worktree_form.awaited_people_search(),
+        Some((seq, text.trim().to_string()))
+    );
+    filter(state, FilterMsg::PeopleLoaded { seq, result });
+}
 
 #[test]
-fn advanced_mode_neither_applies_nor_drops_the_chosen_filters() {
-    let mut state = filtered();
-    let chosen = form(&state).jira_filters.chosen.clone();
-    let line = form(&state).jira_filters.active_line();
-    assert!(line.is_some(), "Payments is chosen");
+fn the_filters_button_opens_and_closes_the_panel_and_a_close_closes_its_lists() {
+    let mut state = loaded();
+    assert!(!form(&state).jira_filters.panel_open, "closed at first");
+    filter(&mut state, FilterMsg::PanelToggled);
+    assert!(form(&state).jira_filters.panel_open);
     filter(&mut state, FilterMsg::Focused(COMPONENT));
-    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Au".into()));
+    filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Pa".into()));
+    filter(&mut state, FilterMsg::PanelDismissed);
+    let filters = &form(&state).jira_filters;
+    assert!(!filters.panel_open);
+    assert!(!filters.field(COMPONENT).open, "its open list closes too");
+    assert_eq!(
+        filters.field(COMPONENT).query,
+        "",
+        "the unpicked text gives way"
+    );
+    filter(&mut state, FilterMsg::PanelToggled);
+    filter(&mut state, FilterMsg::PanelToggled);
+    assert!(
+        !form(&state).jira_filters.panel_open,
+        "a second press closes it"
+    );
+}
+
+#[test]
+fn the_panel_does_not_open_without_the_jira_source_or_in_advanced_mode() {
+    let mut state = jira_form();
+    filter(&mut state, FilterMsg::PanelToggled);
+    assert!(
+        !form(&state).jira_filters.panel_open,
+        "no listing asked for, no filters"
+    );
+    let mut state = filtered();
+    filter(&mut state, FilterMsg::PanelToggled);
+    filter(&mut state, FilterMsg::Focused(COMPONENT));
     send(
         &mut state,
         Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Advanced)),
     );
-    assert!(form(&state).shows_advanced());
-    let field = form(&state).jira_filters.field(COMPONENT);
-    assert!(!field.open, "a hidden filter's list closes");
-    assert_eq!(field.query, "Payments", "its unpicked text gives way");
+    let filters = &form(&state).jira_filters;
+    assert!(
+        !filters.panel_open,
+        "the switch to Advanced closes the panel"
+    );
+    assert!(!filters.field(COMPONENT).open);
+    filter(&mut state, FilterMsg::PanelToggled);
+    assert!(
+        !form(&state).jira_filters.panel_open,
+        "advanced mode refuses to open it"
+    );
+}
+
+#[test]
+fn a_reload_under_the_open_panel_leaves_the_issue_list_shut() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::PanelToggled);
+    focus_and_answer(&mut state, Ok(names()));
+    pick(&mut state, "Payments");
+    let seq = awaited(&state);
+    answer(&mut state, seq, Ok(listing(payments_issues(), true)));
+    assert!(form(&state).jira_filters.panel_open);
+    assert!(
+        !form(&state).issue_list_open,
+        "the issue list would open under the panel"
+    );
+}
+
+/// US2 AS1: the first focus of Reporter asks for the own user once; "Any reporter", then "You
+/// (name)" first.
+#[test]
+fn focusing_reporter_asks_for_the_own_user_once_and_offers_you_first() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::Focused(REPORTER));
+    let seq = me_seq(&state);
+    assert_eq!(state.worktree_form.awaited_choices(), Some((REPORTER, seq)));
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "Loading people…"]
+    );
+    filter(
+        &mut state,
+        FilterMsg::MeLoaded {
+            seq,
+            result: Ok(Some(jane())),
+        },
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)"]
+    );
+    filter(&mut state, FilterMsg::Dismissed(REPORTER));
+    filter(&mut state, FilterMsg::Focused(REPORTER));
+    assert_eq!(state.worktree_form.awaited_choices(), None, "asked once");
+    assert_eq!(
+        state.worktree_form.pending_people_search(),
+        None,
+        "nothing typed, nobody searched"
+    );
+}
+
+#[test]
+fn typing_waits_for_the_debounce_and_a_newer_text_discards_an_older_result() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    filter(&mut state, FilterMsg::QueryChanged(REPORTER, "sa".into()));
+    let first = state
+        .worktree_form
+        .pending_people_search()
+        .expect("pending");
+    assert_eq!(
+        state.worktree_form.awaited_people_search(),
+        None,
+        "nothing is sent before the debounce ends"
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)", "Searching people…"]
+    );
+    filter(&mut state, FilterMsg::PeopleSearchDue { seq: first });
+    assert_eq!(
+        state.worktree_form.awaited_people_search(),
+        Some((first, "sa".to_string()))
+    );
+    filter(&mut state, FilterMsg::QueryChanged(REPORTER, "sam".into()));
+    let second = state
+        .worktree_form
+        .pending_people_search()
+        .expect("pending");
+    assert!(second > first);
+    filter(
+        &mut state,
+        FilterMsg::PeopleLoaded {
+            seq: first,
+            result: Ok(vec![person("a9", "Sasha Old")]),
+        },
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)", "Searching people…"],
+        "an answer for text typed over is dropped"
+    );
+    filter(&mut state, FilterMsg::PeopleSearchDue { seq: first });
+    assert_eq!(
+        state.worktree_form.awaited_people_search(),
+        None,
+        "a stale due starts nothing"
+    );
+    filter(&mut state, FilterMsg::PeopleSearchDue { seq: second });
+    filter(
+        &mut state,
+        FilterMsg::PeopleLoaded {
+            seq: first,
+            result: Ok(vec![person("a9", "Sasha Old")]),
+        },
+    );
+    filter(
+        &mut state,
+        FilterMsg::PeopleLoaded {
+            seq: second,
+            result: Ok(vec![person("a2", "Sam Lee"), jane()]),
+        },
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)", "Sam Lee"],
+        "the older answer is dropped and the own user is offered once"
+    );
+}
+
+/// US2 AS2: picking a person loads the list by their account.
+#[test]
+fn picking_a_person_loads_with_their_account() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    search_people(&mut state, "sam", Ok(vec![person("a2", "Sam Lee")]));
     let before = state.worktree_form.issue_request_seq;
-    filter(&mut state, FilterMsg::ClearedAll);
-    filter(&mut state, FilterMsg::Cleared(COMPONENT));
+    pick_in(&mut state, REPORTER, "Sam Lee");
+    assert!(state.worktree_form.issue_request_seq > before);
     assert_eq!(
-        form(&state).jira_filters.chosen,
-        chosen,
-        "a hidden filter is not cleared"
+        state.worktree_form.jira_filters().clauses(),
+        [r#"reporter = "a2""#]
     );
+    let filters = &form(&state).jira_filters;
+    assert_eq!(filters.field(REPORTER).query, "Sam Lee");
     assert_eq!(
-        state.worktree_form.issue_request_seq, before,
-        "a hidden filter loads no basic list"
+        filters.active_line().as_deref(),
+        Some("Filtered by reporter Sam Lee")
     );
-    send(
-        &mut state,
-        Msg::JiraQuery(QueryMsg::DraftChanged("assignee = currentUser()".into())),
-    );
-    send(&mut state, Msg::JiraQuery(QueryMsg::Run));
-    match &form(&state).jira_query.run {
-        QueryRun::Running { scoped, .. } => assert!(
-            !scoped.as_str().to_lowercase().contains("component"),
-            "the run carries no basic filter: {}",
-            scoped.as_str()
-        ),
-        other => panic!("expected a run in flight, found {other:?}"),
-    }
-    send(
-        &mut state,
-        Msg::JiraQuery(QueryMsg::ModeChanged(QueryMode::Basic)),
-    );
-    assert_eq!(form(&state).jira_filters.chosen, chosen);
-    assert_eq!(form(&state).jira_filters.active_line(), line);
+    let reported: Vec<Issue> = payments_issues()
+        .into_iter()
+        .map(|issue| issue.reported_by("Sam Lee"))
+        .collect();
+    let seq = awaited(&state);
+    answer(&mut state, seq, Ok(listing(reported, true)));
     assert_eq!(shown_keys(&state), ["ABC-1", "ABC-3"]);
+    pick_in(&mut state, REPORTER, "You (Jane Doe)");
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"reporter = "me-1""#]
+    );
+}
+
+/// US2 AS3: two people sharing a display name stay two choices; only the picked one's account is
+/// sent.
+#[test]
+fn two_people_sharing_a_name_stay_distinct() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    search_people(
+        &mut state,
+        "alex",
+        Ok(vec![person("a1", "Alex Kim"), person("a5", "Alex Kim")]),
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)", "Alex Kim", "Alex Kim"]
+    );
+    filter(&mut state, FilterMsg::Picked(REPORTER, 3));
+    assert_eq!(
+        state.worktree_form.jira_filters().clauses(),
+        [r#"reporter = "a5""#]
+    );
+    assert_eq!(
+        form(&state).jira_filters.selected_row(REPORTER),
+        Some(3),
+        "the picked person, not the first of that name, is marked"
+    );
+}
+
+#[test]
+fn a_search_that_finds_no_one_still_offers_you() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    search_people(&mut state, "zz", Ok(vec![jane()]));
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        [
+            "Any reporter",
+            "You (Jane Doe)",
+            "No project user matches; you are still offered"
+        ]
+    );
+}
+
+#[test]
+fn a_myself_failure_shows_its_cause_and_retry_on_reporter_only() {
+    let mut state = loaded();
+    focus_and_answer(&mut state, Ok(names()));
+    focus_reporter(&mut state, Err(IssueLoadError::TimedOut));
+    let labels = labels_of(&state, REPORTER);
+    assert_eq!(labels.len(), 3, "{labels:?}");
+    assert_eq!(labels[0], "Any reporter");
+    assert_eq!(labels[2], "Retry");
+    assert_eq!(row_labels(&state).len(), 4, "the components are untouched");
+    let before = state.worktree_form.filter_request_seq;
+    filter(&mut state, FilterMsg::ChoicesRetry(REPORTER));
+    let seq = me_seq(&state);
+    assert!(seq > before);
+    assert_eq!(state.worktree_form.awaited_choices(), Some((REPORTER, seq)));
+}
+
+#[test]
+fn a_people_search_failure_keeps_the_own_user_offered() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    search_people(&mut state, "sam", Err(IssueLoadError::TimedOut));
+    let labels = labels_of(&state, REPORTER);
+    assert_eq!(labels[..2], ["Any reporter", "You (Jane Doe)"]);
+    assert_eq!(labels.last().map(String::as_str), Some("Retry"));
+    let retry = labels.len() - 1;
+    filter(&mut state, FilterMsg::Picked(REPORTER, retry));
+    let (seq, text) = state
+        .worktree_form
+        .awaited_people_search()
+        .expect("Retry searches again");
+    assert_eq!(text, "sam");
+    assert_eq!(
+        state.worktree_form.awaited_choices(),
+        None,
+        "not the own user"
+    );
+    filter(
+        &mut state,
+        FilterMsg::PeopleLoaded {
+            seq,
+            result: Ok(vec![person("a2", "Sam Lee")]),
+        },
+    );
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)", "Sam Lee"]
+    );
+}
+
+#[test]
+fn clearing_the_typed_text_forgets_the_search() {
+    let mut state = loaded();
+    focus_reporter(&mut state, Ok(Some(jane())));
+    filter(&mut state, FilterMsg::QueryChanged(REPORTER, "sa".into()));
+    filter(&mut state, FilterMsg::QueryChanged(REPORTER, "  ".into()));
+    assert_eq!(state.worktree_form.pending_people_search(), None);
+    assert_eq!(form(&state).jira_filters.people, ChoiceLoad::NotRequested);
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "You (Jane Doe)"]
+    );
 }

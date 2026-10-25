@@ -16300,6 +16300,69 @@ mod jira_filter_shell {
         );
     }
 
+    /// M3 (T033, T034): the first Reporter focus asks `/myself` once; typed text waits out the
+    /// debounce, then the people search sends it; a pick loads by the account.
+    #[test]
+    fn the_first_reporter_focus_asks_myself_once_and_typing_searches_after_the_debounce() {
+        use micold_core::jira_filter::{AccountId, JiraUser};
+        let user = |account: &str, name: &str, is_me| JiraUser {
+            account: AccountId::parse(account).unwrap(),
+            name: name.to_string(),
+            is_me,
+        };
+        let mut rig = rig(FakeJiraSource::new()
+            .with_page(page(&[1, 2], false))
+            .with_myself(Ok(Some(user("me-1", "Jane Doe", true))))
+            .with_users(Ok(vec![
+                user("a2", "Sam Lee", false),
+                user("me-1", "Jane Doe", false),
+            ]))
+            .with_page(page(&[2], false)));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        filter(&mut rig.app, FilterMsg::PanelToggled);
+        assert!(
+            rig.source.choice_calls().is_empty(),
+            "opening the panel asks nothing"
+        );
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Reporter));
+        assert_eq!(rig.source.choice_calls(), [ChoiceCall::Myself]);
+        filter(&mut rig.app, FilterMsg::Dismissed(FilterKind::Reporter));
+        filter(&mut rig.app, FilterMsg::Focused(FilterKind::Reporter));
+        assert_eq!(
+            rig.source.choice_calls(),
+            [ChoiceCall::Myself],
+            "a second focus asks nothing"
+        );
+        let started = std::time::Instant::now();
+        filter(
+            &mut rig.app,
+            FilterMsg::QueryChanged(FilterKind::Reporter, " sam ".into()),
+        );
+        assert!(
+            started.elapsed() >= shell::issues::ISSUE_SEARCH_DEBOUNCE,
+            "the search waited out the debounce"
+        );
+        assert_eq!(
+            rig.source.choice_calls(),
+            [ChoiceCall::Myself, ChoiceCall::People("sam".into())]
+        );
+        let names: Vec<String> = form(&rig.app)
+            .jira_filters
+            .reporter_choices()
+            .iter()
+            .map(JiraUser::label)
+            .collect();
+        assert_eq!(names, ["You (Jane Doe)", "Sam Lee"]);
+        filter(&mut rig.app, FilterMsg::Picked(FilterKind::Reporter, 2));
+        assert_eq!(
+            rig.source.filtered_calls().last(),
+            Some(&(
+                vec![r#"reporter = "a2""#.to_string()],
+                FilteredAsk::List(None)
+            ))
+        );
+    }
+
     #[test]
     fn with_the_switch_off_a_choice_request_asks_nothing() {
         let mut rig = rig(FakeJiraSource::new().with_page(page(&[1], false)));

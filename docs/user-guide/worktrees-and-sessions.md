@@ -777,10 +777,11 @@ from your Atlassian account, the Jira integration switched on, and a connection 
 in **Settings → Jira** (see [Jira](settings.md#jira)).
 
 **What is sent, and where.** Only the connection's own site is contacted. The request carries the
-project key, the search text you typed, the filters you choose and your credentials (account email
-and API token), and nothing else from your project. The dialog says so above the list: *Reads open
-issues of project KEY from `https://…`. Sends the project key, your search text, the filters you
-choose and your credentials, …*; while a filter is chosen, the line under the issue search names
+project key, the search text you typed, the filters you choose, the name you type to find a
+reporter and your credentials (account email and API token), and nothing else from your project.
+The dialog says so above the list: *Reads open issues of project KEY from `https://…`. Sends the
+project key, your search text, the filters you choose, a name typed to find a reporter and your
+credentials, …*; while a filter is chosen, the line under the issue search names
 what is sent: *Filtered by component Payments,
 fix version 2.4.*
 
@@ -800,24 +801,33 @@ loaded and offers **Retry**. Pick an issue
 with the pointer or with the arrow keys and Enter; a pick replaces the ticket and name, which stay
 editable.
 
-**Filters.** Beside **Issue** sit a **Component** and a **Fix version** field. Focus one and it
-offers the project's components, or its fix versions, read from the Jira site the first time you
-open that field in the dialog; its first row, **Any component** or **Any fix version**, clears that
-filter. **Fix version** lists the versions that are not archived: unreleased ones first, in the
+**Filters.** Beside **Issue** sits a **Filters** button; while filters are chosen it says how many
+(*Filters · 2*). It opens a panel over the dialog with a **Reporter**, a **Component** and a **Fix
+version** field; the button again, Escape or a click outside closes it, and the panel stays open
+while you pick, so you can choose several filters in a row. Focus **Component** or **Fix version**
+and it offers the project's components, or its fix versions, read from the Jira site the first time
+you open that field in the dialog; its first row, **Any component** or **Any fix version**, clears
+that filter. **Reporter** offers you first, as *You (your name)*, read from the Jira site the first
+time you open it; type a name and, after a moment's pause, it also lists the people who can browse
+the project and whose name matches (*No project user matches; you are still offered* when no one
+else does). Two people with the same name are listed separately, and only the one you pick counts:
+the list then holds the open issues that person reported. **Any reporter** clears it. **Fix version** lists the versions that are not archived: unreleased ones first, in the
 project's order, then released ones, newest first. Pick a component and the list reloads from Jira
 with only that component's open issues, most recently updated first and up to 1,000, and typing in
 **Issue** then narrows within them (a search on the Jira site carries the filters too). Pick a fix
 version as well and the list holds only the issues that have both. While a filter is chosen, a line
-under the fields names the chosen ones, for example *Filtered by component Payments, fix version
-2.4*, and a **Clear filters** button beside **Basic / Advanced** restores the unfiltered list;
-clearing one field keeps the other. If the list fails to load, the fields step aside and the line
-naming the filters sits beside **Retry**. When no open issue matches the chosen filters the list
+under the issue search names the chosen ones, for example *Filtered by component Payments, fix
+version 2.4*, and a **Clear filters** button beside **Basic / Advanced** restores the unfiltered
+list; clearing one field keeps the others. If the list fails to load, the line naming the filters
+sits beside **Retry**, with the **Filters** button after it. When no open issue matches the chosen filters the list
 says *No open issue matches the filters.*; a search with no match says *No open issue matches the
 search and filters.* A long name is cut with an ellipsis in the list and shown whole when you rest
-the pointer on it. The fields work from the keyboard too: Tab to one, use the arrow keys and Enter
-to pick, Escape to close the list without changing the filter. If a field's choices can't be read,
+the pointer on it. The fields work from the keyboard too: Tab to the **Filters** button and press Enter, Tab between the
+fields, use the arrow keys and Enter to pick, Escape to close a list without changing the filter and
+Escape again to close the panel. If a field's choices can't be read,
 its list shows why and a **Retry** row; a project with none says so (*This project has no
-versions*). The other field, the issue list, the search and creating a worktree by hand keep
+versions*). When the people search fails, you are still offered and **Retry** searches again. The
+other fields, the issue list, the search and creating a worktree by hand keep
 working. The filters are forgotten when you switch the source to GitHub, leave **Issue** or close
 the dialog.
 

@@ -128,6 +128,14 @@
   picker list past its field (changes `cdk::picker`, the one overlay every picker uses, for one
   consumer).
 
+- **Superseded in part (M3, ledger D15, awaiting jaro's confirmation)**: the row did not hold
+  even two fields at a usable width (D14), so a **Filters** button beside the issue search opens a
+  floating panel of the fields. The panel is `material::MenuSelect` with a new controls line and a
+  panel width (`cdk::picker::Picker::panel`: a menu wider than its trigger, trailing edge on the
+  trigger's, Tab moving between the controls), so no new overlay exists; the fields' lists float
+  from inside it as nested overlays. SC-001 grows to five interactions (the "Filters" toggle cost
+  rejected above, accepted now that the alternative does not fit).
+
 ## R9: Redaction and what is sent
 - **Decision**: `JiraUser { account: AccountId, name: String }` with a hand-written `Debug` that
   prints `JiraUser(<redacted>)`; `AccountId` likewise. Every type holding a reporter choice

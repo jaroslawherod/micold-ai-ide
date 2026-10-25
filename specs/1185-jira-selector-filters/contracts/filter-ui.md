@@ -7,8 +7,8 @@ Reducer: `crates/micold-client/src/features/worktree_form/jira_filters.rs` (rend
 ## 1. When filters show
 - Shown only while `form.jira_site().is_some()` and `form.source == BranchSource::Issue`, for every
   `IssueList` state but `NotRequested` (filters stay during a load or after a failure, FR-013).
-  *As built (ledger D12):* after a failed listing the fields are not seated (a field is taller
-  than **Retry**); the chosen filters stay, named beside **Retry**, with **Clear filters** above.
+  *As built (ledger D12, D15):* after a failed listing the **Filters** button trails **Retry**,
+  the chosen filters named between them, with **Clear filters** above.
 - Never shown for GitHub; never shown with Jira off or unconnected (no request either, 533 FR-020).
 - Leaving Jira, leaving the Issue source, a Jira availability change, or opening the form resets
   `FilterState` (FR-016).
@@ -28,6 +28,26 @@ Reads open issues of project KEY from ORIGIN. Sends …       ← statement, unc
 [Issue search typeahead …]          [Component ▾] …        ← fields trail the main row
 Filtered by component Payments. Showing the 1,000 most recently updated.   ← one line
 ```
+*As built from M3 (ledger D15, awaiting jaro's confirmation):* the fields left the main row for a
+panel, and the search has the row's width less one button:
+```
+[Basic] [Advanced]                                         [Clear filters]   ← while any is chosen
+Reads open issues of project KEY from ORIGIN. Sends …       ← statement
+[Issue search typeahead ……………………………]  [Filters · 2 ▾]     ← button: count while any is chosen
+Filtered by component Payments. Showing the 1,000 most recently updated.   ← one line
+                                ┌───────────────────────┐
+                                │ [Reporter ▾]          │  ← panel, 360 px, floats under the
+                                │ [Component ▾]         │    button, trailing edges aligned;
+                                │ [Fix version ▾]       │    one field per filter, stacked
+                                └───────────────────────┘
+```
+- The button (`PanelToggled`) opens and closes the panel; Escape or a press outside closes it
+  (`PanelDismissed`), and closing it closes any open field list (text back to the chosen value).
+  Tab moves between the panel's fields. The panel stays open across picks and the reloads they
+  start; a reload answered while it is open does not open the issue list under it. Opening it asks
+  Jira nothing: each field still asks for its choices on its own first focus.
+- Feature 1186: the switch to Advanced closes the panel and its lists; the reducer refuses every
+  filter message but a close while advanced mode shows.
 - Field label = filter name; field text = chosen value's label (reporter: "You (name)" for the own
   user, else the display name), else the typed text, else empty with the label resting.
 - List rows: row 0 "Any <filter>"; then ranked choices; each row truncates and has the full text as
@@ -59,4 +79,9 @@ your credentials, and, with this dialog closed, the keys of the tickets your wor
 to, to show their status." While filters are chosen, followed by "Filters sent: <same list as the
 active line>." *As built (ledger D12):* no suffix; the statement says it sends "the filters you
 choose" and the active line under the issue search names the values sent, so a fourth line of
-statement does not push the tallest dialog over the app bar.
+statement does not push the tallest dialog over the app bar. *As built from M3 (ledger D15):* "Reads
+open issues of project KEY from ORIGIN. Sends the project key, your search text, the filters you
+choose, a name typed to find a reporter and your credentials, and, with this dialog closed, linked
+tickets' keys, to show their status." — the §4 wording one line too long for the tallest dialog
+(`panel_placement` red by 8 px), so "the name you type" became "a name typed" and feature 1101's
+clause "the keys of the tickets your worktrees are linked to" became "linked tickets' keys".

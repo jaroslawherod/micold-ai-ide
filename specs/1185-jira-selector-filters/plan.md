@@ -14,8 +14,9 @@ issue #1186 (advanced JQL, built in parallel on the same functions) meets this f
 site. Choices come from Jira on first focus of a filter (components, versions, own user, project
 users by typed name) or, for labels, from the unfiltered listing already loaded. A filter change
 reloads the listing through the existing issue-load seq, which already discards stale results. The
-dialog gains one row of four `Typeahead` fields and, while filters are active, one line naming them
-with **Clear filters**. Design: [research.md](research.md), [data-model.md](data-model.md),
+dialog gains a **Filters** button beside the issue search that opens a floating panel of four
+`Typeahead` fields (as built from M3, ledger D15; the planned row of four did not fit, D9, D14) and,
+while filters are active, one line naming them with **Clear filters**. Design: [research.md](research.md), [data-model.md](data-model.md),
 [contracts/](contracts/), [quickstart.md](quickstart.md).
 
 ## Technical Context
@@ -140,7 +141,7 @@ additive hunks.
 | FR-015 | typeahead focus stops, Any row, Clear filters button, active line |
 | FR-016 | `FilterState` reset points ([data-model §7](data-model.md)) |
 | FR-017 | pick path unchanged |
-| SC-001 | one row, focus + pick ×2; quickstart B3 |
+| SC-001 | open Filters, then focus + pick ×2 (five, ledger D15); quickstart B3 |
 | SC-002, SC-003 | core unit: 16 combinations, ≥20-value corpus; client: fake answers per clause set |
 | SC-004 | client: each failure cause on each filter, then search, pick, create |
 | SC-005 | client: scripted rapid changes, out-of-order answers, only the last shown |
@@ -163,8 +164,8 @@ additive hunks.
   dialogs (Principle II), statement text (FR-014). Extended `jira_is_requested_only_on_named_events`
   (no choice request until focus; one per first focus) and `jira_token_never_leaks` (no reporter
   name/account in `{:?}` of form, messages, or captured logs).
-- **Geometry gates**: `gates/jira_filters_fit.rs` (four fields fit the row; lists anchor under
-  their fields; the active line and Clear filters fit one line) and a `panel_placement.rs`
+- **Geometry gates**: `gates/jira_filters_fit.rs` (the Filters button fits the search's row and
+  the panel stacks the fields under it, ledger D15; lists anchor under their fields; the active line and Clear filters fit one line) and a `panel_placement.rs`
   scenario with the Jira source, filters active and the cap caption shown (footer reachable).
 - **Quickstart Part B** (visual pass): look, keyboard path, narrow-list tooltips, quoted names.
 

@@ -8,8 +8,9 @@
 //! reporter is named only by its [`AccountId`], which can only be built by parsing and never
 //! prints in `Debug`, so neither a display name nor an account reaches a log (FR-006, FR-010).
 //!
-//! Choices are parsed here too: [`parse_components`] reads a project's components and
-//! [`parse_versions`] its fix versions (§4).
+//! Choices are parsed here too: [`parse_components`] reads a project's components,
+//! [`parse_versions`] its fix versions, [`parse_myself`] the connected account's own user and
+//! [`parse_users`] a project user search (§4).
 
 use crate::github::IssueLoadError;
 
@@ -347,4 +348,54 @@ pub fn parse_versions(body: &[u8]) -> Result<Vec<VersionChoice>, IssueLoadError>
         .into_iter()
         .chain(released.into_iter().rev())
         .collect())
+}
+
+/// The user an entry of `/myself` or a user search names: a usable account id and display name.
+fn user_of(entry: &serde_json::Value, is_me: bool) -> Option<JiraUser> {
+    let account = AccountId::parse(entry["accountId"].as_str()?)?;
+    let name = entry["displayName"]
+        .as_str()
+        .filter(|name| is_usable(name))?;
+    Some(JiraUser {
+        account,
+        name: name.to_owned(),
+        is_me,
+    })
+}
+
+/// The connected account's own user from `GET /rest/api/3/myself`: `None` when its account id or
+/// display name is missing or unusable. A body that is not a JSON object is
+/// [`IssueLoadError::NotJiraCloud`] (contracts/jira-filter-source.md §4).
+pub fn parse_myself(body: &[u8]) -> Result<Option<JiraUser>, IssueLoadError> {
+    let json: serde_json::Value =
+        serde_json::from_slice(body).map_err(|_| IssueLoadError::NotJiraCloud)?;
+    if !json.is_object() {
+        return Err(IssueLoadError::NotJiraCloud);
+    }
+    Ok(user_of(&json, true))
+}
+
+/// The users of `GET /rest/api/3/user/viewissue/search`, in Jira's order: entries without an
+/// account id or with an empty or control-character display name skipped, duplicates by account
+/// dropped (first kept). A body of another shape is [`IssueLoadError::NotJiraCloud`] (§4).
+pub fn parse_users(body: &[u8]) -> Result<Vec<JiraUser>, IssueLoadError> {
+    let json: serde_json::Value =
+        serde_json::from_slice(body).map_err(|_| IssueLoadError::NotJiraCloud)?;
+    let entries = json.as_array().ok_or(IssueLoadError::NotJiraCloud)?;
+    let mut users: Vec<JiraUser> = Vec::new();
+    for user in entries.iter().filter_map(|entry| user_of(entry, false)) {
+        if !users.contains(&user) {
+            users.push(user);
+        }
+    }
+    Ok(users)
+}
+
+/// `people` without the connected account's own user, which the reporter filter offers once, first
+/// (research R4).
+pub fn others(people: Vec<JiraUser>, me: Option<&JiraUser>) -> Vec<JiraUser> {
+    people
+        .into_iter()
+        .filter(|person| Some(person) != me)
+        .collect()
 }

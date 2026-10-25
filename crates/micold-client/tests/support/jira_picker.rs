@@ -67,9 +67,8 @@ pub fn state_with(form: WorktreeForm) -> StateUnderTest {
 
 /// `state` (a project open) connected to Jira, its New worktree form on the Jira source with the
 /// component `Payments` and the fix version `2.4` chosen over a capped listing (feature 1185, M2):
-/// the filter row, the active
-/// line with **Clear filters** and the cap caption all show. Driven through the reducer, as the
-/// application gets there, so the field shows the chosen value.
+/// the Filters button ("Filters · 2"), the active line with **Clear filters** and the cap caption
+/// all show. Driven through the reducer, as the application gets there.
 pub fn jira_filtered(mut state: State) -> State {
     use micold_client::app::Message;
     use micold_client::features::worktree_form::jira_filters::FilterMsg;
@@ -149,5 +148,60 @@ pub fn jira_filtered(mut state: State) -> State {
     );
     filter(&mut state, FilterMsg::Picked(FilterKind::FixVersion, 1));
     answer(&mut state, &[3]);
+    state
+}
+
+/// The connected account's own user, as `/myself` answers it in the Jira states (feature 1185).
+pub fn jane() -> micold_core::jira_filter::JiraUser {
+    micold_core::jira_filter::JiraUser {
+        account: micold_core::jira_filter::AccountId::parse("5b10ac8d82e05b22cc7d4ef5")
+            .expect("an account id"),
+        name: "Jane Doe".to_string(),
+        is_me: true,
+    }
+}
+
+/// [`jira_filtered`] with the Filters panel open and the reporter chosen as the own user (feature
+/// 1185, M3, ledger D15): the panel's three fields show their chosen values over the dialog.
+pub fn jira_filters_panel(state: State) -> State {
+    use micold_client::app::Message;
+    use micold_client::features::worktree_form::jira_filters::FilterMsg;
+    use micold_client::features::worktree_form::Msg;
+    use micold_core::jira_filter::FilterKind;
+    let mut state = jira_filtered(state);
+    let filter = |state: &mut State, msg: FilterMsg| {
+        state.update(Message::WorktreeForm(Msg::JiraFilter(msg)));
+    };
+    filter(&mut state, FilterMsg::PanelToggled);
+    filter(&mut state, FilterMsg::Focused(FilterKind::Reporter));
+    let seq = state
+        .worktree_form
+        .awaited_choices()
+        .expect("the own user in flight")
+        .1;
+    filter(
+        &mut state,
+        FilterMsg::MeLoaded {
+            seq,
+            result: Ok(Some(jane())),
+        },
+    );
+    filter(&mut state, FilterMsg::Picked(FilterKind::Reporter, 1));
+    let seq = state
+        .worktree_form
+        .awaited_issue_load()
+        .expect("a load in flight");
+    state.update(Message::WorktreeForm(Msg::IssuesLoaded {
+        seq,
+        result: Ok((
+            IssueListing {
+                issues: vec![ticket(3, "Refund is charged twice", None)],
+                total_open: 1,
+                complete: false,
+            },
+            PathBuf::new(),
+        )),
+        resolved_env: None,
+    }));
     state
 }

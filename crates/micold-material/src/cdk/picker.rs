@@ -61,6 +61,7 @@ pub struct Picker<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     on_dismiss: Option<M>,
     on_focus: Option<M>,
     in_flow: bool,
+    panel_width: Option<f32>,
 }
 
 impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
@@ -88,6 +89,7 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
             on_dismiss: None,
             on_focus: None,
             in_flow: false,
+            panel_width: None,
         }
     }
 
@@ -99,6 +101,15 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
     /// Dismissing by a press elsewhere is the caller's (a dialog's scrim does it).
     pub fn in_flow(mut self, in_flow: bool) -> Self {
         self.in_flow = in_flow;
+        self
+    }
+
+    /// Float the menu as a panel of controls `width` wide rather than a list as wide as the field:
+    /// its trailing edge on the field's (never past the window's leading edge), as a panel opened
+    /// from a button at the end of a row sits. Tab then moves between the panel's controls rather
+    /// than closing it; Escape and a press outside still do.
+    pub fn panel(mut self, width: f32) -> Self {
+        self.panel_width = Some(width);
         self
     }
 
@@ -173,6 +184,7 @@ impl<M: Clone, Theme, Renderer> Picker<'_, M, Theme, Renderer> {
             on_move: self.on_move.as_deref(),
             on_pick: self.on_pick.clone(),
             on_dismiss: self.on_dismiss.clone(),
+            tab_closes: self.panel_width.is_none(),
         }
     }
 }
@@ -436,12 +448,14 @@ where
             on_move: self.on_move.as_deref(),
             on_pick: self.on_pick.clone(),
             on_dismiss: self.on_dismiss.clone(),
+            tab_closes: self.panel_width.is_none(),
         };
         let (menu, state) = (&mut self.menu, &mut tree.children[1]);
         Some(overlay::Element::new(Box::new(Menu {
             content: menu,
             state,
             field,
+            panel_width: self.panel_width,
             gap: self.gap,
             leaving,
             on_dismiss: self.on_dismiss.clone(),
@@ -479,6 +493,8 @@ struct Keys<'a, M> {
     on_move: Option<&'a dyn Fn(Direction) -> M>,
     on_pick: Option<M>,
     on_dismiss: Option<M>,
+    /// Whether Tab closes the menu: a list's does, a panel of controls' moves between them.
+    tab_closes: bool,
 }
 
 impl<M: Clone> Keys<'_, M> {
@@ -490,6 +506,9 @@ impl<M: Clone> Keys<'_, M> {
     /// capture is what stops Enter also submitting the dialog behind it.
     fn message_for(&self, key: &keyboard::Key) -> Option<(M, Claim)> {
         let key = key_for(key);
+        if key == Key::Tab && !self.tab_closes {
+            return None;
+        }
 
         let message = match intent_for(key, self.highlight, self.rows, self.highlighted_enabled)? {
             Intent::Move(direction) => self.on_move.map(|f| f(direction)),
@@ -523,6 +542,8 @@ struct Menu<'a, 'b, M, Theme, Renderer> {
     state: &'b mut Tree,
     /// The field's on-screen rectangle — everything below is measured from it.
     field: Rectangle,
+    /// A panel's own width, its trailing edge on the field's ([`Picker::panel`]).
+    panel_width: Option<f32>,
     gap: f32,
     /// Whether the list is on its way out. A leaving list is drawn and animated but takes no input.
     leaving: bool,
@@ -542,8 +563,12 @@ where
         let above = self.field.y - self.gap;
         let room = below.max(above).max(0.0);
 
-        let limits = layout::Limits::new(Size::ZERO, Size::new(self.field.width, room))
-            .width(self.field.width);
+        let width = self.panel_width.unwrap_or(self.field.width);
+        let x = match self.panel_width {
+            Some(width) => (self.field.x + self.field.width - width).max(0.0),
+            None => self.field.x,
+        };
+        let limits = layout::Limits::new(Size::ZERO, Size::new(width, room)).width(width);
         let node = self
             .content
             .as_widget_mut()
@@ -556,7 +581,7 @@ where
             (self.field.y - self.gap - height).max(0.0)
         };
 
-        node.move_to(Point::new(self.field.x, y))
+        node.move_to(Point::new(x, y))
     }
 
     fn draw(

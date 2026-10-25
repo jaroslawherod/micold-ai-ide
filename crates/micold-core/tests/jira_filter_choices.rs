@@ -1,7 +1,6 @@
 //! Filter choices and the filtered source (feature 1185, contracts/jira-filter-source.md §2 and
-//! §4): account ids, redaction, parsing a project's components and versions, and loading a
-//! filtered listing
-//! through `FakeJiraSource`.
+//! §4): account ids, redaction, parsing a project's components, versions and users, and loading
+//! a filtered listing through `FakeJiraSource`.
 
 use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
 use micold_core::jira::{
@@ -9,7 +8,8 @@ use micold_core::jira::{
     FILTERS_UNSUPPORTED,
 };
 use micold_core::jira_filter::{
-    parse_components, parse_versions, AccountId, JiraFilters, JiraUser, VersionChoice,
+    others, parse_components, parse_myself, parse_users, parse_versions, AccountId, JiraFilters,
+    JiraUser, VersionChoice,
 };
 
 fn conn() -> JiraConnection {
@@ -338,5 +338,143 @@ fn the_fake_answers_scripted_versions_and_records_the_request() {
     assert_eq!(
         source.choice_calls(),
         [ChoiceCall::Versions, ChoiceCall::Versions]
+    );
+}
+
+/// The accounts and names of `users`, in order: what a test can compare, `JiraUser`'s `Debug`
+/// being redacted.
+fn named(users: &[JiraUser]) -> Vec<(String, String, bool)> {
+    users
+        .iter()
+        .map(|user| {
+            (
+                user.account.as_str().to_owned(),
+                user.name.clone(),
+                user.is_me,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_own_user_is_read_from_myself_as_me() {
+    let body = br#"{"accountId": "5b10ac", "displayName": "Jane Doe", "emailAddress": "x"}"#;
+    let me = parse_myself(body)
+        .expect("an object")
+        .expect("a usable user");
+    assert_eq!(
+        named(&[me.clone()]),
+        [("5b10ac".into(), "Jane Doe".into(), true)]
+    );
+    assert_eq!(me.label(), "You (Jane Doe)");
+}
+
+#[test]
+fn an_own_user_without_a_usable_account_or_name_is_none() {
+    for body in [
+        &br#"{"displayName": "Jane"}"#[..],
+        br#"{"accountId": "", "displayName": "Jane"}"#,
+        br#"{"accountId": "5b10ac"}"#,
+        br#"{"accountId": "5b10ac", "displayName": ""}"#,
+        br#"{"accountId": "5b10ac", "displayName": "Ja\u0007ne"}"#,
+    ] {
+        assert!(parse_myself(body).expect("an object").is_none());
+    }
+}
+
+#[test]
+fn a_myself_body_of_another_shape_is_not_jira_cloud() {
+    for body in [&b"<html>"[..], b"[]", b"\"me\"", b""] {
+        assert_eq!(
+            parse_myself(body).map(|me| me.is_some()),
+            Err(IssueLoadError::NotJiraCloud)
+        );
+    }
+}
+
+#[test]
+fn users_are_read_in_jiras_order_skipping_unusable_entries_and_duplicate_accounts() {
+    let body = br#"[
+        {"accountId": "a2", "displayName": "Sam Lee"},
+        {"displayName": "No Account"},
+        {"accountId": "a3", "displayName": ""},
+        {"accountId": "a4", "displayName": "Bad\u0001Name"},
+        {"accountId": "a1", "displayName": "Alex Kim"},
+        {"accountId": "a2", "displayName": "Sam Lee (again)"},
+        {"accountId": "a5", "displayName": "Alex Kim"}
+    ]"#;
+    let users = parse_users(body).expect("an array");
+    assert_eq!(
+        named(&users),
+        [
+            ("a2".into(), "Sam Lee".into(), false),
+            ("a1".into(), "Alex Kim".into(), false),
+            ("a5".into(), "Alex Kim".into(), false),
+        ]
+    );
+}
+
+#[test]
+fn a_users_body_of_another_shape_is_not_jira_cloud() {
+    for body in [&b"<html>"[..], b"{\"values\": []}", b"\"Sam\"", b""] {
+        assert_eq!(
+            parse_users(body).map(|users| users.len()),
+            Err(IssueLoadError::NotJiraCloud)
+        );
+    }
+}
+
+#[test]
+fn the_own_user_is_removed_from_the_people_results() {
+    let me = JiraUser {
+        is_me: true,
+        ..user("a1", "Jane Doe")
+    };
+    let people = vec![
+        user("a2", "Sam Lee"),
+        user("a1", "Jane Doe"),
+        user("a3", "Jane Doe"),
+    ];
+    assert_eq!(
+        named(&others(people.clone(), Some(&me))),
+        [
+            ("a2".into(), "Sam Lee".into(), false),
+            ("a3".into(), "Jane Doe".into(), false),
+        ]
+    );
+    assert_eq!(others(people, None).len(), 3);
+}
+
+#[test]
+fn the_fake_answers_scripted_users_and_records_the_requests() {
+    let source = FakeJiraSource::new()
+        .with_myself(Ok(Some(user("a1", "Jane Doe"))))
+        .with_users(Ok(vec![user("a2", "Sam Lee")]))
+        .with_users(Err(IssueLoadError::TimedOut));
+    assert_eq!(
+        source
+            .myself(&conn(), &token())
+            .map(|me| me.map(|me| me.name)),
+        Ok(Some("Jane Doe".to_string()))
+    );
+    assert_eq!(
+        source
+            .project_users(&conn(), &token(), "sa")
+            .map(|u| named(&u)),
+        Ok(vec![("a2".into(), "Sam Lee".into(), false)])
+    );
+    assert_eq!(
+        source
+            .project_users(&conn(), &token(), "x")
+            .map(|u| u.len()),
+        Err(IssueLoadError::TimedOut)
+    );
+    assert_eq!(
+        source.choice_calls(),
+        [
+            ChoiceCall::Myself,
+            ChoiceCall::People("sa".into()),
+            ChoiceCall::People("x".into()),
+        ]
     );
 }

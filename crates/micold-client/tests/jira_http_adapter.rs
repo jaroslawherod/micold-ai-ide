@@ -817,3 +817,123 @@ fn a_versions_failure_is_classified_as_a_search_failure_is() {
     assert!(matches!(error, IssueLoadError::Unreachable(_)), "{error:?}");
     assert!(!format!("{error:?}").contains(SENTINEL));
 }
+
+/// The query pairs of a request line, percent- and `+`-decoded, in the order sent.
+fn query_pairs(line: &str) -> Vec<(String, String)> {
+    let target = line.split(' ').nth(1).unwrap_or_default();
+    let query = target.split_once('?').map_or("", |(_, query)| query);
+    let decode = |part: &str| {
+        let bytes = part.replace('+', " ").into_bytes();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap();
+                out.push(u8::from_str_radix(hex, 16).unwrap());
+                i += 3;
+            } else {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+        String::from_utf8(out).unwrap()
+    };
+    query
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (decode(key), decode(value))
+        })
+        .collect()
+}
+
+#[test]
+fn myself_gets_the_own_user_from_the_site_only() {
+    let (origin, rx) = serve(Some(ok(
+        r#"{"accountId":"5b10ac","displayName":"Jane Doe","emailAddress":"x@acme"}"#,
+    )));
+    let me = JiraCloud::new()
+        .myself(&connection(&origin), &token())
+        .expect("myself")
+        .expect("a usable user");
+    assert_eq!(
+        (me.account.as_str(), me.name.as_str(), me.is_me),
+        ("5b10ac", "Jane Doe", true)
+    );
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert_eq!(line, "GET /rest/api/3/myself HTTP/1.1");
+    assert_our_headers(&headers, &origin, false);
+    assert!(body.is_empty(), "a GET sends no body: {body}");
+}
+
+#[test]
+fn project_users_search_the_projects_browsers_by_the_typed_text() {
+    let (origin, rx) = serve(Some(ok(
+        r#"[{"accountId":"a1","displayName":"Ann & Bo"},{"accountId":"a2","displayName":"Ann & Bo"}]"#,
+    )));
+    let people = JiraCloud::new()
+        .project_users(&connection(&origin), &token(), "Ann & Bo=?")
+        .expect("people");
+    let accounts: Vec<&str> = people.iter().map(|p| p.account.as_str()).collect();
+    assert_eq!(accounts, ["a1", "a2"]);
+    let (line, headers, body) = parts(&rx.recv().unwrap());
+    assert!(
+        line.starts_with("GET /rest/api/3/user/viewissue/search?") && line.ends_with(" HTTP/1.1"),
+        "{line}"
+    );
+    assert!(
+        !line.contains("Ann & Bo"),
+        "the text is percent-encoded: {line}"
+    );
+    assert_eq!(
+        query_pairs(&line),
+        [
+            ("projectKey".to_string(), "ABC".to_string()),
+            ("query".to_string(), "Ann & Bo=?".to_string()),
+            ("maxResults".to_string(), "50".to_string()),
+        ]
+    );
+    assert_our_headers(&headers, &origin, false);
+    assert!(body.is_empty(), "a GET sends no body: {body}");
+}
+
+#[test]
+fn an_empty_people_search_sends_nothing() {
+    for text in ["", "   ", "\t"] {
+        let people = JiraCloud::new()
+            .project_users(&connection(&closed_origin()), &token(), text)
+            .expect("no request, no failure");
+        assert!(people.is_empty());
+    }
+}
+
+#[test]
+fn a_people_failure_is_classified_as_a_search_failure_is() {
+    for (code, expected) in [
+        (401, IssueLoadError::CredentialsRefused),
+        (403, IssueLoadError::CredentialsRefused),
+        (404, IssueLoadError::NoAccess),
+    ] {
+        let (origin, _rx) = serve(Some(status(code)));
+        let error = JiraCloud::new()
+            .project_users(&connection(&origin), &token(), "sam")
+            .unwrap_err();
+        assert_eq!(error, expected, "status {code}");
+        let (origin, _rx) = serve(Some(status(code)));
+        let error = JiraCloud::new()
+            .myself(&connection(&origin), &token())
+            .unwrap_err();
+        assert_eq!(error, expected, "myself, status {code}");
+    }
+    let (origin, _rx) = serve(Some(ok(r#"{"values":[]}"#)));
+    let error = JiraCloud::new()
+        .project_users(&connection(&origin), &token(), "sam")
+        .unwrap_err();
+    assert_eq!(error, IssueLoadError::NotJiraCloud);
+    let error = JiraCloud::new()
+        .myself(&connection(&closed_origin()), &token())
+        .unwrap_err();
+    assert!(matches!(error, IssueLoadError::Unreachable(_)), "{error:?}");
+    assert!(!format!("{error:?}").contains(SENTINEL));
+}

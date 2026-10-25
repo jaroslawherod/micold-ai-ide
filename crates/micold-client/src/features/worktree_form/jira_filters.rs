@@ -1,9 +1,11 @@
 //! The Jira filters of the add-worktree form's issue picker (feature 1185): their state, their
 //! messages and their reducer. Render-free, like every module here.
 //!
-//! While the Jira source shows, the picker offers a row of filter fields above the issue search
-//! (contracts/filter-ui.md). Each field is a typeahead over the filter's choices, whose first row
-//! is "Any <filter>" and clears it. A filter's choices are asked for only when the field first
+//! While the Jira source shows, a **Filters** button beside the issue search opens a panel of filter
+//! fields (contracts/filter-ui.md, ledger D15). Each field is a typeahead over the filter's
+//! choices, whose first row is "Any <filter>" and clears it. The reporter's choices are the
+//! connected account's own user, asked for on the field's first focus, and the people a debounced
+//! search of the typed text finds ([`FilterMsg::PeopleSearchDue`]). A filter's choices are asked for only when the field first
 //! takes focus ([`ChoiceLoad`], research R7), under a seq of their own, so a late answer for an
 //! earlier request is dropped. Choosing, changing or clearing a filter hands out a fresh issue-load
 //! seq and puts the list back to loading (research R6): the shell then loads the listing with the
@@ -14,7 +16,7 @@
 
 use crate::features::worktree_form::{IssueList, WorktreeForm, WorktreeFormStatus};
 use micold_core::github::{Issue, IssueLoadError, NoticeSource};
-use micold_core::jira_filter::{FilterKind, JiraFilters, VersionChoice};
+use micold_core::jira_filter::{others, FilterKind, JiraFilters, JiraUser, VersionChoice};
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 
 /// A filter's choices, from never asked to loaded (data-model §6).
@@ -58,6 +60,14 @@ impl<T> ChoiceLoad<T> {
         true
     }
 
+    /// The seq the choices are awaited under, while in flight.
+    fn awaited(&self) -> Option<u64> {
+        match self {
+            ChoiceLoad::Loading { seq } => Some(*seq),
+            _ => None,
+        }
+    }
+
     /// The same state with each choice named by `name`: what the field ranks and shows.
     fn named(&self, name: impl Fn(&T) -> String) -> ChoiceLoad<String> {
         match self {
@@ -72,7 +82,8 @@ impl<T> ChoiceLoad<T> {
 }
 
 /// One filter field's typeahead: its own typed text, ranked matches, highlight and open list.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// `Debug` leaves the text out: a picked reporter's name is the Reporter field's text (FR-006).
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct FilterField {
     /// The field's text: what was typed, or the chosen value's label.
     pub query: String,
@@ -84,6 +95,17 @@ pub struct FilterField {
     pub open: bool,
 }
 
+impl std::fmt::Debug for FilterField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilterField")
+            .field("query", &"<redacted>")
+            .field("matches", &self.matches.len())
+            .field("highlight", &self.highlight)
+            .field("open", &self.open)
+            .finish()
+    }
+}
+
 /// The filters of one open form (data-model §7).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterState {
@@ -93,6 +115,15 @@ pub struct FilterState {
     pub components: ChoiceLoad<String>,
     /// The project's unarchived fix versions, unreleased first.
     pub versions: ChoiceLoad<VersionChoice>,
+    /// The connected account's own user: none or one, offered first by the reporter filter.
+    pub me: ChoiceLoad<JiraUser>,
+    /// The people the last reporter search found, as Jira answered (the own user is offered once,
+    /// first: [`FilterState::reporter_choices`]).
+    pub people: ChoiceLoad<JiraUser>,
+    /// The reporter search waiting out its debounce, by its seq.
+    pub people_pending: Option<u64>,
+    /// Whether the Filters panel is open.
+    pub panel_open: bool,
     /// Each filter's field, in [`FilterKind::ALL`] order.
     fields: [FilterField; 4],
     /// The picked issue as it was when a filter change reloaded the list, so the form keeps its
@@ -100,8 +131,13 @@ pub struct FilterState {
     pub kept_pick: Option<Issue>,
 }
 
-/// The filters this build offers in the row, in order (M2: the component and the fix version).
-pub const OFFERED: [FilterKind; 2] = [FilterKind::Component, FilterKind::FixVersion];
+/// The filters this build offers in the Filters panel, in order (M3: the reporter, the component
+/// and the fix version).
+pub const OFFERED: [FilterKind; 3] = [
+    FilterKind::Reporter,
+    FilterKind::Component,
+    FilterKind::FixVersion,
+];
 
 /// The position of `kind` in [`FilterKind::ALL`].
 fn slot(kind: FilterKind) -> usize {
@@ -135,6 +171,10 @@ pub enum RowText {
     Choice(String),
     /// "Loading components…".
     Loading,
+    /// "Searching people…": a reporter search is waiting out its debounce or running.
+    Searching,
+    /// "No project user matches; you are still offered": the reporter search found no one else.
+    NoPerson,
     /// Why the choices failed to load.
     Failed(IssueLoadError),
     /// "Retry".
@@ -187,6 +227,8 @@ impl FilterRow {
             RowText::Any => format!("Any {}", kind.noun()),
             RowText::Choice(text) => text.clone(),
             RowText::Loading => format!("Loading {}…", plural(kind)),
+            RowText::Searching => format!("Searching {}…", plural(kind)),
+            RowText::NoPerson => "No project user matches; you are still offered".to_string(),
             RowText::Failed(error) => match source {
                 Some(source) => error.message(source),
                 None => self.summary(kind).unwrap_or_default(),
@@ -224,7 +266,43 @@ impl FilterState {
         match kind {
             FilterKind::Component => Some(self.components.clone()),
             FilterKind::FixVersion => Some(self.versions.named(|v| v.name().to_owned())),
-            FilterKind::Reporter | FilterKind::Label => None,
+            // The own user's load stands for the reporter's: the people search only adds to it.
+            FilterKind::Reporter => Some(match &self.me {
+                ChoiceLoad::Loaded(_) => ChoiceLoad::Loaded(
+                    self.reporter_choices()
+                        .iter()
+                        .map(JiraUser::label)
+                        .collect(),
+                ),
+                load => load.named(JiraUser::label),
+            }),
+            FilterKind::Label => None,
+        }
+    }
+
+    /// The people the reporter filter offers, in order: the own user, then the last search's
+    /// people without the own user (FR-004, research R4).
+    pub fn reporter_choices(&self) -> Vec<JiraUser> {
+        let me = match &self.me {
+            ChoiceLoad::Loaded(me) => me.clone(),
+            _ => Vec::new(),
+        };
+        let people = match &self.people {
+            ChoiceLoad::Loaded(people) => others(people.clone(), me.first()),
+            _ => Vec::new(),
+        };
+        me.into_iter().chain(people).collect()
+    }
+
+    /// The reporter search in flight (not one waiting out its debounce): its seq and the text it
+    /// sends, the Reporter field's text without surrounding whitespace.
+    pub fn awaited_people(&self) -> Option<(u64, String)> {
+        match (&self.people, self.people_pending) {
+            (ChoiceLoad::Loading { seq }, None) => Some((
+                *seq,
+                self.field(FilterKind::Reporter).query.trim().to_owned(),
+            )),
+            _ => None,
         }
     }
 
@@ -234,20 +312,25 @@ impl FilterState {
         match kind {
             FilterKind::Component => self.components.start(seq, retry),
             FilterKind::FixVersion => self.versions.start(seq, retry),
-            FilterKind::Reporter | FilterKind::Label => false,
+            // A focus asks for the own user; a Retry repeats whichever failed, the own user first.
+            FilterKind::Reporter => {
+                self.me.start(seq, retry) || (retry && self.people.start(seq, true))
+            }
+            FilterKind::Label => false,
         }
     }
 
     /// The newest choice request awaited, with its filter: the one a focus or a Retry just put in
     /// flight, even while another filter's request is still out.
     pub fn awaited_choices(&self) -> Option<(FilterKind, u64)> {
-        OFFERED
-            .into_iter()
-            .filter_map(|kind| match self.choices(kind)? {
-                ChoiceLoad::Loading { seq } => Some((kind, seq)),
-                _ => None,
-            })
-            .max_by_key(|(_, seq)| *seq)
+        [
+            (FilterKind::Reporter, self.me.awaited()),
+            (FilterKind::Component, self.components.awaited()),
+            (FilterKind::FixVersion, self.versions.awaited()),
+        ]
+        .into_iter()
+        .filter_map(|(kind, seq)| Some((kind, seq?)))
+        .max_by_key(|(_, seq)| *seq)
     }
 
     /// The rows of `kind`'s list: "Any <filter>" first, then the matching choices, or the state the
@@ -270,7 +353,7 @@ impl FilterState {
             }
             Some(ChoiceLoad::Loaded(choices)) => {
                 let field = self.field(kind);
-                if field.matches.is_empty() {
+                if field.matches.is_empty() && kind != FilterKind::Reporter {
                     rows.push(FilterRow::new(RowText::NoMatch, RowAction::Inert));
                 }
                 for (index, matched) in &field.matches {
@@ -282,19 +365,58 @@ impl FilterState {
                         });
                     }
                 }
+                if kind == FilterKind::Reporter {
+                    rows.extend(self.people_rows());
+                }
             }
         }
         rows
     }
 
+    /// What the reporter's list says of its search, under the people it offers: running, failed
+    /// with **Retry** (the own user stays offered), or found no one else.
+    fn people_rows(&self) -> Vec<FilterRow> {
+        if self.people_pending.is_some() {
+            return vec![FilterRow::new(RowText::Searching, RowAction::Inert)];
+        }
+        match &self.people {
+            ChoiceLoad::NotRequested => Vec::new(),
+            ChoiceLoad::Loading { .. } => {
+                vec![FilterRow::new(RowText::Searching, RowAction::Inert)]
+            }
+            ChoiceLoad::Failed { error } => vec![
+                FilterRow::new(RowText::Failed(error.clone()), RowAction::Inert),
+                FilterRow::new(RowText::Retry, RowAction::Retry),
+            ],
+            ChoiceLoad::Loaded(_) => {
+                let me = match &self.me {
+                    ChoiceLoad::Loaded(me) => me.len(),
+                    _ => 0,
+                };
+                if self.reporter_choices().len() > me {
+                    Vec::new()
+                } else {
+                    vec![FilterRow::new(RowText::NoPerson, RowAction::Inert)]
+                }
+            }
+        }
+    }
+
     /// The row of `kind`'s list that holds the chosen value, if it is shown.
     pub fn selected_row(&self, kind: FilterKind) -> Option<usize> {
         let chosen = self.chosen.shown(kind);
-        self.rows(kind).iter().position(|row| match &row.text {
-            RowText::Any => chosen.is_none(),
-            RowText::Choice(text) => chosen.as_ref() == Some(text),
-            _ => false,
-        })
+        let people = self.reporter_choices();
+        self.rows(kind)
+            .iter()
+            .position(|row| match (&row.text, &row.action) {
+                (RowText::Any, _) => chosen.is_none(),
+                // A person by account: two people may share a display name (FR-004).
+                (_, RowAction::Choice(index)) if kind == FilterKind::Reporter => {
+                    self.chosen.reporter().is_some() && people.get(*index) == self.chosen.reporter()
+                }
+                (RowText::Choice(text), _) => chosen.as_ref() == Some(text),
+                _ => false,
+            })
     }
 
     /// The line naming the chosen filters, while any is chosen: "Filtered by component Payments".
@@ -313,11 +435,13 @@ impl FilterState {
             _ => Vec::new(),
         };
         let field = self.field_mut(kind);
-        let text = if chosen.as_deref() == Some(field.query.as_str()) {
-            ""
-        } else {
-            field.query.as_str()
-        };
+        // The reporter's people are already those Jira found for the text: none is ranked out.
+        let text =
+            if kind == FilterKind::Reporter || chosen.as_deref() == Some(field.query.as_str()) {
+                ""
+            } else {
+                field.query.as_str()
+            };
         field.matches = rank(&choices, |choice| choice.as_str(), &Query::new(text));
         let rows = self.rows(kind).len();
         let field = self.field_mut(kind);
@@ -343,6 +467,26 @@ impl FilterState {
         accepted && self.chosen != before
     }
 
+    /// Choose `user` as the reporter (or clear it with `None`); `true` when the chosen filters
+    /// changed.
+    fn choose_reporter(&mut self, user: Option<JiraUser>) -> bool {
+        let before = self.chosen.clone();
+        let accepted = self.chosen.set_reporter(user);
+        self.restore_query(FilterKind::Reporter);
+        accepted && self.chosen != before
+    }
+
+    /// Put `kind`'s field text back to the chosen value's label, or empty. A reporter search still
+    /// waiting out its debounce is dropped with the text it was for.
+    fn restore_query(&mut self, kind: FilterKind) {
+        let shown = self.chosen.shown(kind).unwrap_or_default();
+        self.field_mut(kind).query = shown;
+        if kind == FilterKind::Reporter {
+            self.people_pending = None;
+        }
+        self.rematch(kind);
+    }
+
     /// Close every filter's list, its text back to the chosen value's label, as a dismissal does:
     /// advanced mode hides the fields (feature 1186, FR-002), so nothing could close them there.
     pub fn close_lists(&mut self) {
@@ -350,13 +494,7 @@ impl FilterState {
             self.field_mut(kind).open = false;
             self.restore_query(kind);
         }
-    }
-
-    /// Put `kind`'s field text back to the chosen value's label, or empty.
-    fn restore_query(&mut self, kind: FilterKind) {
-        let shown = self.chosen.shown(kind).unwrap_or_default();
-        self.field_mut(kind).query = shown;
-        self.rematch(kind);
+        self.panel_open = false;
     }
 }
 
@@ -398,6 +536,23 @@ pub enum FilterMsg {
         seq: u64,
         result: Result<Vec<VersionChoice>, IssueLoadError>,
     },
+    /// The connected account's own user answered. Applies only while awaited under `seq`.
+    MeLoaded {
+        seq: u64,
+        result: Result<Option<JiraUser>, IssueLoadError>,
+    },
+    /// The reporter search pending under `seq` waited out its debounce: it starts, when still
+    /// pending.
+    PeopleSearchDue { seq: u64 },
+    /// The reporter search answered. Applies only while it is the one in flight under `seq`.
+    PeopleLoaded {
+        seq: u64,
+        result: Result<Vec<JiraUser>, IssueLoadError>,
+    },
+    /// The **Filters** button: open the panel, or close it when open.
+    PanelToggled,
+    /// The panel closed without the button (Escape, a press outside).
+    PanelDismissed,
 }
 
 /// Whether the open form shows the filters: the Jira source is showing, its list asked for.
@@ -430,15 +585,41 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
                 filters.rematch(FilterKind::FixVersion);
             }
         }
-        // Closing a list is never refused: a list left open behind a prompt would reappear.
+        FilterMsg::MeLoaded { seq, result } => {
+            let filters = &mut form.jira_filters;
+            if filters.me.answer(seq, result.map(Vec::from_iter)) {
+                filters.rematch(FilterKind::Reporter);
+            }
+        }
+        FilterMsg::PeopleLoaded { seq, result } => {
+            let filters = &mut form.jira_filters;
+            // A search typed over while it ran is stale: the newer one is pending.
+            if filters.people_pending.is_none() && filters.people.answer(seq, result) {
+                filters.rematch(FilterKind::Reporter);
+            }
+        }
+        // Closing a list or the panel is never refused: one left open behind a prompt would
+        // reappear.
         FilterMsg::Dismissed(kind) => {
             let filters = &mut form.jira_filters;
             filters.field_mut(kind).open = false;
             filters.restore_query(kind);
         }
+        FilterMsg::PanelDismissed => form.jira_filters.close_lists(),
+        FilterMsg::PanelToggled if form.jira_filters.panel_open => {
+            form.jira_filters.close_lists();
+        }
         // Feature 1186 (FR-002): advanced mode hides the filters and neither applies nor clears
         // them; switching back to Basic finds them as they were (FR-003).
         _ if !editing || !shows_filters(form) || form.shows_advanced() => return,
+        FilterMsg::PanelToggled => form.jira_filters.panel_open = true,
+        FilterMsg::PeopleSearchDue { seq } => {
+            let filters = &mut form.jira_filters;
+            if filters.people_pending == Some(seq) {
+                filters.people_pending = None;
+                filters.people = ChoiceLoad::Loading { seq };
+            }
+        }
         FilterMsg::Focused(kind) => {
             let filters = &mut form.jira_filters;
             filters.field_mut(kind).open = true;
@@ -447,6 +628,18 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
         }
         FilterMsg::QueryChanged(kind, text) => {
             let filters = &mut form.jira_filters;
+            if kind == FilterKind::Reporter {
+                // Text typed to find a person waits out the debounce before it is sent (FR-004);
+                // the chosen person's label in the field is not a search.
+                let label = filters.chosen.shown(kind);
+                if text.trim().is_empty() || label.as_deref() == Some(text.as_str()) {
+                    filters.people = ChoiceLoad::NotRequested;
+                    filters.people_pending = None;
+                } else {
+                    filters.people_pending = Some(next_filter_seq);
+                    asked = true;
+                }
+            }
             let field = filters.field_mut(kind);
             field.query = text;
             field.open = true;
@@ -469,6 +662,13 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
                 RowAction::Any => {
                     filters.field_mut(kind).open = false;
                     reload = filters.choose(kind, None);
+                }
+                RowAction::Choice(choice) if kind == FilterKind::Reporter => {
+                    let Some(user) = filters.reporter_choices().into_iter().nth(choice) else {
+                        return;
+                    };
+                    filters.field_mut(kind).open = false;
+                    reload = filters.choose_reporter(Some(user));
                 }
                 RowAction::Choice(choice) => {
                     let Some(value) = (match filters.choices(kind) {
