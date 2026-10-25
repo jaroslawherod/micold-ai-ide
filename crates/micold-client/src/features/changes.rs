@@ -1000,6 +1000,33 @@ fn in_scope(review: &ReviewView, scope: Scope) -> impl Iterator<Item = &ReviewCo
     review.comments.iter().filter(move |c| c.scope() == scope)
 }
 
+/// The shown view's key, the drawer's tab and that tab's offset while the drawer is open: its list
+/// is on screen.
+fn drawer_list_shown(state: &State) -> Option<(EntryKey, DrawerTab, u32)> {
+    let key = state.tabs.shown_key()?.clone();
+    let drawer = &state.tabs.shown_view()?.drawer.state;
+    drawer
+        .open
+        .then(|| (key, drawer.tab, drawer.offset(drawer.tab)))
+}
+
+/// Whether the open composer is drawn in its drawer row (feature 1270, D6): opened from the drawer,
+/// and its row shown — the drawer open on the tab that lists it. Otherwise it is drawn on its card,
+/// so its text is never out of sight (Edge Cases "Unsaved text in the drawer").
+pub fn composer_in_drawer(view: &OpenView) -> bool {
+    let Some(composer) = view.composer.as_ref() else {
+        return false;
+    };
+    let tab = match composer.target {
+        ComposerTarget::Edit(_) => DrawerTab::Drafts,
+        ComposerTarget::Answer(_) => DrawerTab::Replies,
+        ComposerTarget::New(_) => return false,
+    };
+    composer.place == ComposerPlace::Drawer
+        && view.drawer.state.open
+        && view.drawer.state.tab == tab
+}
+
 /// What the panel says with no comment (US3 s5).
 pub const PANEL_EMPTY_TEXT: &str =
     "No review comments yet. Click a line number in the diff to write one.";
@@ -1619,6 +1646,12 @@ pub enum Effect {
         /// The offset.
         offset: u32,
     },
+    /// Scroll the comments drawer's list to this offset, in pixels: its tab's kept offset, as the
+    /// list comes into view (feature 1270, FR-019).
+    ScrollDrawer {
+        /// The offset.
+        offset: u32,
+    },
     /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
     SetLayout(DiffLayout),
     /// Send `ClientMsg::ReviewEdit` for the entry (contracts/review-wire.md).
@@ -1669,6 +1702,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         )
     });
     let wants_tree = matches!(msg, Msg::DiffRead { .. } | Msg::PullRequestDiffRead { .. });
+    let list_before = drawer_list_shown(state);
     if !scroll && !matches!(msg, Msg::ReferenceActivated(..)) {
         if let Some(view) = state.tabs.shown_view_mut() {
             view.notice = None;
@@ -1676,6 +1710,13 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     }
     let mut effect = apply(state, msg);
     let mut extras = reread_after_source_change(state, before).unwrap_or_default();
+    // FR-019: the drawer's list keeps no scroll position of its own once it leaves the screen, so
+    // it is scrolled back to its tab's offset whenever it comes into view.
+    if let Some((key, tab, offset)) = drawer_list_shown(state) {
+        if list_before.as_ref().map(|(k, t, _)| (k, *t)) != Some((&key, tab)) {
+            extras.push(Effect::ScrollDrawer { offset });
+        }
+    }
     if wants_tree {
         extras.extend(tree_for_references(state));
     }

@@ -193,6 +193,13 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 y: offset as f32,
             },
         ),
+        Effect::ScrollDrawer { offset } => iced::widget::operation::scroll_to(
+            micold_client::ui::DRAWER_SCROLL_ID.clone(),
+            iced::widget::scrollable::AbsoluteOffset {
+                x: 0.0,
+                y: offset as f32,
+            },
+        ),
         Effect::SetLayout(layout) => {
             // Service-owned (R12): the daemon stores it and echoes `SettingsChanged` to every
             // window. Disconnected, the choice holds for this run only, as the reducer set it.

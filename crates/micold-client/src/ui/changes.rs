@@ -21,10 +21,10 @@ use micold_core::typeahead::{match_one, Query};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
-    committed_available, composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups,
-    drawer_rows, file_comments, file_diff_available, file_reviews, list_body, mark_control,
-    pending_counts, picker_matches, pr_header, progress_label, review_bar, review_of,
-    reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody, ComposerPlace,
+    committed_available, composer_in_drawer, composer_placed, diff_body, discard_prompt,
+    drawer_counts, drawer_groups, drawer_rows, file_comments, file_diff_available, file_reviews,
+    list_body, mark_control, pending_counts, picker_matches, pr_header, progress_label, review_bar,
+    review_of, reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody,
     ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, PrSection, ReviewBarModel,
     Source, Step, TreeKind, WholeFile, DEFAULT_ENTRY_NOTE, WHOLE_FILE_UNAVAILABLE,
 };
@@ -72,6 +72,11 @@ pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
 /// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
 pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
     std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-diff"));
+
+/// The comments drawer's list viewport, by name: shown again, it is scrolled back to its tab's
+/// offset (feature 1270, FR-019).
+pub static DRAWER_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-drawer"));
 
 /// The Changes view of `view`'s entry. `composer` is the review composer's editor, which only the
 /// binary holds; without it an open composer shows its text read-only. `connected`: the session
@@ -206,20 +211,17 @@ fn bar_of<'a>(bar: ReviewBarModel, r: Roles) -> Element<'a, Message> {
 pub fn overflow_menu<'a>(state: &'a State, r: Roles) -> Option<Surface<'a, Message>> {
     let view = state.changes.tabs.shown_view()?;
     let bar = review_bar(&state.changes)?;
-    let items = vec![
-        MenuItem::labeled(OVERFLOW_ITEMS[0], Message::Changes(Msg::ClearSentPressed)),
-        MenuItem::labeled(
-            OVERFLOW_ITEMS[1],
-            Message::Changes(Msg::DiscardPendingPressed),
-        ),
-    ];
-    let enabled = [bar.overflow.clear_sent, bar.overflow.discard_drafts];
-    let items: Vec<MenuItem<Message>> = items
+    let items: Vec<MenuItem<Message>> = OVERFLOW_ITEMS
         .into_iter()
-        .zip(enabled)
-        .map(|(item, on)| MenuItem {
-            message: item.message.filter(|_| on),
-            ..item
+        .zip([
+            bar.overflow.clear_sent.then_some(Msg::ClearSentPressed),
+            bar.overflow
+                .discard_drafts
+                .then_some(Msg::DiscardPendingPressed),
+        ])
+        .map(|(label, msg)| MenuItem {
+            message: msg.map(Message::Changes),
+            ..MenuItem::labeled(label, Message::Changes(Msg::OverflowDismissed))
         })
         .collect();
     let panel = menu_panel_size(items.len());
@@ -303,6 +305,7 @@ fn comments_drawer<'a>(
         // column rather than `VirtualRows`; it reports its offset per tab (FR-019).
         pane = pane.push(
             Scrollable::new(list, r)
+                .id(DRAWER_SCROLL_ID.clone())
                 .height(Length::Fill)
                 .on_scroll_metrics(move |offset, viewport, _| {
                     Message::Changes(Msg::DrawerScrolled {
@@ -370,11 +373,7 @@ fn drawer_row<'a>(
             .on_answer(Message::Changes(Msg::DrawerAnswer(id)));
     }
     let row_: Element<'a, Message> = row_.into();
-    let Some(open) = view
-        .composer
-        .as_ref()
-        .filter(|open| open.place == ComposerPlace::Drawer)
-    else {
+    let Some(open) = view.composer.as_ref().filter(|_| composer_in_drawer(view)) else {
         return row_;
     };
     let placeholder = match open.target {
@@ -1067,11 +1066,8 @@ fn comment_or_editor<'a>(
     composer: Option<&'a text_editor::Content>,
     r: Roles,
 ) -> Element<'a, Message> {
-    // A composer the drawer opened is drawn in its row instead (feature 1270, D6).
-    let on_card = view
-        .composer
-        .as_ref()
-        .filter(|open| open.place == ComposerPlace::Card);
+    // A composer the drawer opened is drawn in its row while that row is shown (feature 1270, D6).
+    let on_card = view.composer.as_ref().filter(|_| !composer_in_drawer(view));
     if let Some(open) = on_card {
         if open.target == ComposerTarget::Edit(comment.id) {
             return composer_box(&open.text, composer, true, "Comment", r);

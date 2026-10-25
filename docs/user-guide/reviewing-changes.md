@@ -633,8 +633,9 @@ does not open it.
   base version), its status and the start of the comment. Rows are ordered by file, then by line. A
   row whose file is no longer among the changes is marked *Not in the current diff* and keeps its
   status.
-- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** opens the comment's text in the row;
-  closing the drawer keeps what you wrote, and it is there again when you reopen it. No row offers
+- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** opens the comment's text in the row.
+  Closing the drawer (or switching its tab) keeps what you wrote: meanwhile it is shown under the
+  comment's card in the diff, and it is back in the row when you reopen the drawer. No row offers
   them while a send is under way.
 - **Replies.** A row shows the whole reply, wrapped; a reply longer than 4,000 characters shows its
   start and **Show all**. A Sent row offers **Mark applied** and **Answer…**, as its card does
