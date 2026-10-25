@@ -178,8 +178,8 @@ example that builds with `docker build` or `podman build` as given.
 - **Architectures and host platforms** (Principle VI): the basic image is published for
   `linux/amd64` and `linux/arm64`; `mise` and the build tools are present and work on both, so a
   daemon on an Apple-silicon Mac, on Windows (Docker/Podman) and on Linux behaves the same.
-- **A project that needs system libraries the basic image does not carry** (for example the
-  libraries of FR-007): the user builds an own image `FROM` the basic image that adds them (FR-012).
+- **A project that needs system libraries the basic image does not carry** (anything beyond
+  FR-003 and FR-007's set, for example a database client library): the user builds an own image `FROM` the basic image that adds them (FR-012).
 - **An own image** (**My own image**) is not changed by this feature; an own image built `FROM` the
   basic image inherits `mise` and the build tools.
 - **A sandbox home created before this feature**, holding tools a user installed by hand: they keep
