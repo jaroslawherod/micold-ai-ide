@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M2
-- **Next step**: M2 PR CI and merge (orchestrator)
+- **Phase**: M3
+- **Next step**: M3 implement T018–T030
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1347 | design (spec, plan, tasks) | merged | 86fcb6b28cfe72ea680999550251409cbfa0921f |
 | #1353 | M1 sandbox PATH | merged (rebase) | 31a863fd3191b73aaea8000c244864413a5a1ad2 |
-| #1385 | M2 setup core | open | — |
+| #1385 | M2 setup core | merged (rebase) | 47997d190a6ee8533f9bf0c71d34185fc66276b2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | merged |
-| M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | PR open |
-| M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | pending |
+| M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
+| M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | in progress |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
@@ -45,6 +45,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 7 | M1 | FR-006 "a script that sets PATH MAY put entries ahead": does it? | No: the order is computed after environment-include, so the script's PATH is `rest`; the guide says its folders keep their order after the home folders. FR-006 is permissive (MAY), and the MUST half (folders survive env-include) holds | unit | state.rs `with_sandbox_path`; test `a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins` |
 | 8 | M1 | Empty `PATH` entries in `rest` | Dropped (an empty entry means the cwd); also `HOME=""` counts as unset | unit | data-model "An empty value counts as unset"; test `an_empty_rest_adds_no_empty_entry` |
 | 9 | M1 (red CI) | `sandbox_real_history` host phase found no `claude`: the host daemon read the container's `offered.json` through the shared state directory, and `only_offered` now needs the CLI in the (container-path) offered `bin` | `offered_clis` ignores an offer naming a `bin` outside the daemon's own `ai-clis` dir (another daemon's); research R2 amended. An empty offer still counts as own | unit (systematic-debugging) | CI job 121003684367; test `another_daemons_offer_in_a_shared_state_directory_changes_nothing` (red without the guard) |
+| 10 | M3 | `SetupChanged` to clients "attached to the project": the daemon holds one attachment per project, so other windows would miss it | Broadcast to every connected client, as `CatalogChanged` is; a client filters by project | unit | `state.rs` `attachments` (one per project) |
+| 11 | M3 | Batching "through `ProgressThrottle`": it admits one line per gap and drops the rest | A 250 ms flush tick in the run task sends each watcher every line it has not had (`setup::BATCH_EVERY`); nothing is dropped | unit | `progress.rs` `admit` returns `None` inside the gap |
+| 12 | M3 | `create_worktree_with_session` "keeps its own return", but MCP needs its `SetupStart` | Its `Ok` gains the `SetupStart` as a third element; the app's handler ignores it | unit | C4 needs `setup` on a create with a session too |
+| 13 | M3 | Watchers inside `Entry` cannot hold a watch before the first run or across runs | `SetupRuns.watchers: (project, location) → {ClientId → next line}`; a watch with no record registers and sends nothing (there is no `RunId` to send). The reason line is stored as the output's last line, so a backlog after the end ends with it | unit | contract C1 "a new run on the same location keeps the watch" |
+| 14 | M3 | `Entry.done` / `stop_and_wait`; where setup runs for a worktree | `done` left to M4 with `stop_and_wait`, its only reader. The folder is the worktree's `path` from the catalog's last refresh (so an included worktree runs in its own folder), `Default` the project repo; unknown → `NotFound` *There is no <location> here.* | unit | data-model §Daemon; T036 |
 
 ## Review rounds
 
@@ -74,7 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 unit part 1. Done: T018–T030 implemented, Verify tests green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32). Next: workspace clippy, commit, push, review snapshot; then reviews A/B (orchestrator), full gate, PR.
 
 ## Open escalation
 

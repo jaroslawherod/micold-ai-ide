@@ -34,6 +34,7 @@ pub mod review;
 pub mod runs;
 pub mod runtime_status;
 pub mod server;
+pub mod setup;
 pub mod singleton;
 pub mod state;
 pub mod status_relay;
