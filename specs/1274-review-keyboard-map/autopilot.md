@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M1 implemented (22 tasks ticked, core tests green); gate and reviews, then M1 PR. M2/M3 wait for #1269, #1270, #1271, #1273; M4 for #1127. D4 still provisional.
+- **Next step**: M1 PR open, waiting on CI and merge. M2/M3 wait for #1269, #1270, #1271, #1273; M4 for #1127. D4 still provisional.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | — | in progress |
+| M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | PR pending | review done, full gate green |
 | M2 | T012–T021, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, docs — **blocked by #1269, #1270, #1271, #1273** | — | blocked |
 | M3 | T033–T047 | full | ]/[, c, send chord, shortcut sheet, full docs — after M2 (same blockers) | — | blocked |
 | M4 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M3 | — | blocked |
@@ -45,9 +45,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 1 | 2f7c3dc307d7f818f4c2995e0ffd0af13213bfa9:3a333f7f1ddf23ad4d26f471cfd59f155bed3ff2 | CLEAN: 3 MINOR, all fixed (FR-002 scope, FR-004 p/n with no current hunk, checklist note) |
 | Review plan | 1 | 209eba49689ebf46a4457c2a5dd880637479b3d2:5ca86ffe05655dc3708ecbaa3676d58bdfc4f439 | CLEAN: 3 MINOR, all fixed (R7 why not `.key_binding`; timing bound 50 ms; pending edge keyed to its path) |
 | Review tasks | 1 | 7aa12f7058288de6231b9f39a7ed2953013b393a:dbe223deca1c5b2b34bb6d6d28a4e81151b49cd2 | CLEAN: 2 MINOR, fixed, prose only (T019/T020 test coverage note; T018 wording) |
+| Review A M1 (code-review high) | 1 | a103038eb262768a10b41d932d46c9ca30051309:624a8eef02ba1008484c115d155023c9f0081051 | CLEAN: 8 findings, no BLOCKER/MAJOR; 1 fixed (`p` from a stale hunk past a shrunken diff now takes the last hunk, test added), 7 declined |
+| Review B M1 (conformance, sonnet) | 1 | 570a8d0e8d03a8b98d1152198e00110d247a8c22:624a8eef02ba1008484c115d155023c9f0081051 | CLEAN: Verify (`cargo test -p micold-core --all-targets`) green, core lib 1707 passed; 1 MINOR (commit the review-A fix) — done in the M1 commit |
 
 ## Declined review findings
 
+- Review A M1: declined (1) AltGr heuristic lets Ctrl+Alt+key act — contract K3 / research R7 say Ctrl+Alt without logo counts as none, on purpose (AltGr layouts); (2) comment `name` is whole text — contract J1 says text with lines joined by spaces; (3) jump-to uses the stored `range.start()`, not the located line — jump-to lists comments of unloaded files, whose located line is unknown; revisit in M4 when it is wired; (4) `header_rows` builds all rows — research R9's choice, once per `n`/`p`, MINOR; (5) `Press.primary` derivable from `ctrl`/`logo` — contract K5's shape, taste; (6) placeholder `has_hunks`/`in_diff` in `review_candidates` — `comment_order` reads neither, MINOR; (7) client `resolve` returns `None` for review keys — M4 (T052–T057) wires it.
 - speckit-analyze (tasks): 0 CRITICAL/HIGH. Fixed C1 (SC-005 rank test in T050), C2 (SC-003 reducer timing in T017/T033/T041), C3 (SC-001 walk in T024/T038). Declined I1 (SC-004 counts FR-001/FR-010 keys; the sheet listing the save-comment chord too is a superset, not a conflict), U2 (T058 left to the close unit per milestones.md rule 4), S1 (M1 size: see D6), I2/C4/I3/U1/S2/P1 (LOW, no change).
 
 | Milestone | Review | Finding | Why declined |
@@ -55,23 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done** (unit M1, 2026-10-25): all 22 M1 tasks implemented test-first and ticked; commit
-  `2f158e10` on `claude/project-thread-m7gq7k` (local, **not pushed**, no PR yet). Red/green
-  evidence in `tdd/cycle-log.md`. `cargo test -p micold-core --lib -- review:: quick_switch`:
-  311 passed; `cargo clippy -p micold-core --all-targets -D warnings` clean; `cargo fmt` applied.
-  Client change limited to `detail: None` in the three `Candidate` literals and a refusing
-  `ReviewFile | ReviewComment => None` arm in `features/quick_switch.rs::resolve` (not listed until M4).
-- **Next step**: verify.md step 1: scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A
-  (`code-review` high on `origin/main...HEAD`), then review B (conformance, sonnet), then the full
-  gate (`scripts/gate.sh`; `mise` is not installed here), then pr.md. PR title exactly
-  `#1274: Review UI: keyboard map for reviewing (M1: core key map)`; body opens with the
-  orchestrator's attribution lines, `Refs #1274`; open it with the GitHub MCP tools (gh is
-  unauthenticated).
-- **Notes**: `branch-start.sh 1366` reports `PREVIOUS-PR-OPEN: UNKNOWN` only because gh is
-  unauthenticated; #1366's merge SHA is an ancestor of origin/main. Run `branch-start.sh` with no
-  argument (it rebases `2f158e10`). Disk had 15 GB free: sweep before the full gate. 968's
-  `quick_switch` test fixtures gained `detail: None` / `via: Via::Name` only (assertions unchanged).
-- **Open findings**: none (no review has run yet).
+None.
 
 ## Open escalation
 
