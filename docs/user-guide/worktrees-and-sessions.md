@@ -834,9 +834,9 @@ search and filters.* A long name is cut with an ellipsis in the list and shown w
 the pointer on it. The fields work from the keyboard too: Tab to the **Filters** button and press
 Enter; while the panel is open, Tab and Shift+Tab cycle through its fields and back to the button.
 In a field, start typing or press Down or Enter to open its list (its choices load the first time),
-then use the arrow keys and Enter to pick, Escape to close a list without changing the filter, and Escape
-again to close the panel with the keyboard back on the button. If a field's choices can't be read,
-its list shows why and a **Retry** row; a project with none says so (*This project has no
+then use the arrow keys and Enter to pick, Escape to close a list without changing the filter, and
+Escape again to close the panel with the keyboard back on the button. If a field's choices can't
+be read, its list shows why and a **Retry** row; a project with none says so (*This project has no
 versions*). When the people search fails, you are still offered and **Retry** searches again. The
 other fields, the issue list, the search and creating a worktree by hand keep
 working. The filters are forgotten when you switch the source to GitHub, leave **Issue** or close

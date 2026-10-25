@@ -725,7 +725,9 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
             }
         }
         FilterMsg::Focused(kind) => {
-            asked = open_field(&mut form.jira_filters, kind, next_filter_seq);
+            let filters = &mut form.jira_filters;
+            asked = open_field(filters, kind, next_filter_seq);
+            filters.rematch(kind);
         }
         FilterMsg::QueryChanged(kind, text) => {
             let filters = &mut form.jira_filters;
@@ -751,6 +753,9 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
         FilterMsg::HighlightMoved(kind, direction) => {
             let filters = &mut form.jira_filters;
             asked = open_field(filters, kind, next_filter_seq);
+            if asked {
+                filters.rematch(kind);
+            }
             let rows = filters.rows(kind).len();
             let field = filters.field_mut(kind);
             if let Some(next) = move_highlight(field.highlight, direction, rows) {
@@ -825,12 +830,11 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
 }
 
 /// Open `kind`'s list; its first opening by any message (a focus, typed text, a move of the
-/// highlight) asks for its choices under `seq` (FR-006). `true` when a request was handed `seq`.
+/// highlight) asks for its choices under `seq` (FR-006). `true` when a request was handed `seq`;
+/// the caller then rematches, once its own change to the field is made.
 fn open_field(filters: &mut FilterState, kind: FilterKind, seq: u64) -> bool {
     filters.field_mut(kind).open = true;
-    let asked = filters.start(kind, seq, false);
-    filters.rematch(kind);
-    asked
+    filters.start(kind, seq, false)
 }
 
 /// Ask for `kind`'s choices again when they failed; `true` when a request was handed `seq`.

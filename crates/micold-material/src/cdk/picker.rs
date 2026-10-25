@@ -196,7 +196,7 @@ impl<M: Clone, Theme, Renderer> Picker<'_, M, Theme, Renderer>
 where
     Renderer: renderer::Renderer,
 {
-    /// Down or Enter on a closed field that holds the keyboard opens it: `on_focus` is published
+    /// Down or Enter, unmodified, on a closed field that holds the keyboard opens it: `on_focus` is published
     /// and the key goes no further. A field reached by Tab never sees the press that `on_focus`
     /// otherwise comes from, so without this its list could not open from the keyboard, and Enter
     /// went on to whatever is behind the dialog (feature 1185 M5, quickstart Part B step 9). A key
@@ -209,11 +209,12 @@ where
         renderer: &Renderer,
         shell: &mut Shell<'_, M>,
     ) {
-        let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event else {
+        let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event else {
             return;
         };
-        if self.open || shell.is_event_captured() || !matches!(key_for(key), Key::Down | Key::Enter)
-        {
+        // Unmodified only: Ctrl+Enter or Shift+Down stay free for whatever binds them.
+        let opens = modifiers.is_empty() && matches!(key_for(key), Key::Down | Key::Enter);
+        if self.open || shell.is_event_captured() || !opens {
             return;
         }
         let Some(message) = self.on_focus.clone() else {
@@ -1219,6 +1220,24 @@ mod tests {
             assert!(
                 messages.iter().all(|m| !m.ends_with("opened")),
                 "{key:?} on the trigger opened a field: {messages:?}"
+            );
+        }
+    }
+
+    /// A modified Down or Enter (Ctrl+Enter, Shift+Down) is left to whatever binds it.
+    #[test]
+    fn a_modified_down_or_enter_opens_no_field() {
+        for (key, modifiers) in [
+            (Named::Enter, Modifiers::CTRL),
+            (Named::ArrowDown, Modifiers::SHIFT),
+        ] {
+            let mut open = Open::of(panel_of_lists());
+            open.focus_trigger();
+            open.press(Named::Tab, Modifiers::empty());
+            let (messages, _) = open.press(key, modifiers);
+            assert!(
+                messages.iter().all(|m| !m.ends_with("opened")),
+                "{modifiers:?}+{key:?} opened Reporter: {messages:?}"
             );
         }
     }
