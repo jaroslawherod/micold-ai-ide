@@ -324,3 +324,85 @@ fn an_empty_choice_list_shows_its_whole_reason() {
     assert_inside(reason);
     find(&drawn, "No versions");
 }
+
+/// The pixels of `area` in an RGBA frame [`lay::WINDOW`] wide.
+fn pixels_in(frame: &[u8], area: iced::Rectangle) -> Vec<[u8; 4]> {
+    let width = lay::WINDOW.width as usize;
+    let (x0, y0) = (area.x as usize, area.y as usize);
+    let (x1, y1) = (x0 + area.width as usize, y0 + area.height as usize);
+    (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (y * width + x) * 4))
+        .map(|i| [frame[i], frame[i + 1], frame[i + 2], frame[i + 3]])
+        .collect()
+}
+
+/// Visual pass M3 B2/B3 (ledger D16): a field's list opened inside the Filters panel is a layer
+/// floated by a layer, and the window must still show the dialog's surface, the panel over it and
+/// the list over both — composed by the runtime, not by this harness's own overlay walk.
+#[test]
+fn a_list_opened_in_the_panel_keeps_the_dialog_and_the_panel_drawn() {
+    let shut = filtered();
+    let closed = panel();
+    let mut open = panel();
+    filter(&mut open, FilterMsg::Focused(FilterKind::Component));
+    let before = lay::runtime_frame(|| lay::view_of(&closed), lay::WINDOW);
+    let after = lay::runtime_frame(|| lay::view_of(&open), lay::WINDOW);
+
+    // Where the panel's top row, Reporter, sits: under the Filters button, above the Component
+    // field whose list opens (`the_filters_panel_stacks_every_field_under_the_button`).
+    let drawn = painted(&closed);
+    let reporter = find(&drawn, "You (Jane Doe)");
+    let row = iced::Rectangle {
+        x: reporter.origin.x - 8.0,
+        y: reporter.origin.y - 4.0,
+        width: 160.0,
+        height: 24.0,
+    };
+    assert_eq!(
+        pixels_in(&before, row),
+        pixels_in(&after, row),
+        "the panel's Reporter row changed when Component's list opened"
+    );
+    assert_ne!(
+        pixels_in(
+            &lay::runtime_frame(|| lay::view_of(&shut), lay::WINDOW),
+            row
+        ),
+        pixels_in(&after, row),
+        "the panel is not drawn over the dialog"
+    );
+
+    let (left, right) = dialog_span();
+    let dialog = iced::Rectangle {
+        x: left + 4.0,
+        y: 80.0,
+        width: right - left - 8.0,
+        height: 600.0,
+    };
+    let dark = |frame: &[u8]| {
+        let all = pixels_in(frame, dialog);
+        let dark = all
+            .iter()
+            .filter(|[r, g, b, _]| u32::from(*r) + u32::from(*g) + u32::from(*b) < 180)
+            .count();
+        dark as f32 / all.len() as f32
+    };
+    assert!(
+        dark(&after) < 0.1,
+        "{:.0}% of the dialog is dark with the list open",
+        dark(&after) * 100.0
+    );
+    let drawn_open = painted(&open);
+    let any = find(&drawn_open, "Any component");
+    let first_row = iced::Rectangle {
+        x: any.origin.x,
+        y: any.origin.y,
+        width: 80.0,
+        height: 14.0,
+    };
+    assert_ne!(
+        pixels_in(&before, first_row),
+        pixels_in(&after, first_row),
+        "the list's first row is not drawn"
+    );
+}
