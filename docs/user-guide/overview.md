@@ -17,7 +17,8 @@ tallest card in that row, so rows stay even and nothing is cut off.
 
 ## Opening and closing it
 
-Press **Overview** in the top bar, next to the project switcher. Press it again to close the
+Press **Overview** in the top bar, after the `project / place` breadcrumb; while it is open the
+breadcrumb's place reads **Overview**. Press it again to close the
 Overview. The button is greyed out while [Settings](settings.md) is open; an Overview that was open
 before Settings shows again when Settings closes. Selecting a session in the sidebar also closes
 the Overview and shows that session.
@@ -48,8 +49,8 @@ open and shows the new project's cards.
 
 To give the cards the whole window, press **Full screen** at the right end of the Overview's
 header, or press **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS). The sidebar, its collapsed strip
-included, slides away and the cards fill the window's width; the top bar stays, with the Overview
-button, its badge and the project switcher. The button then reads **Exit full screen**; press it or
+included, slides away and the cards fill the window's width; the top bar stays, with the breadcrumb,
+the Overview button and its badge. The button then reads **Exit full screen**; press it or
 the shortcut again and the sidebar slides back. The button's tooltip names the shortcut, and Tab
 reaches it. While a card's menu is open, the shortcut does nothing.
 

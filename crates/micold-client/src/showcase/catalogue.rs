@@ -878,6 +878,21 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::app_mark,
     },
     Entry {
+        module: "material/breadcrumb.rs",
+        component: "Breadcrumb",
+        variants: &[],
+        density: &[],
+        posed: &["project alone", "project / place", "open, with unread", "narrowed"],
+        live: &[
+            "press the project segment",
+            "hover a segment: its tooltip, the full text once shortened",
+        ],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::surfaces::breadcrumb,
+    },
+    Entry {
         module: "material/connection_banner.rs",
         component: "ConnectionBanner",
         // `Info`/`Error` are `style::NoticeLevel`, which the Material crate declares (feature 1262).

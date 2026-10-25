@@ -10,7 +10,9 @@
 //! **Compiled into the `layout_snapshot` binary** for the `support::layout` passes; it builds its
 //! own state and reads no cache.
 
-use crate::support::covered_states::{title_bar_crowded, SIXTY_CHARACTER_PROJECT};
+use crate::support::covered_states::{
+    title_bar_crowded, SIXTY_CHARACTER_BRANCH, SIXTY_CHARACTER_PROJECT,
+};
 use crate::support::layout::{self as lay, StateUnderTest};
 use iced::Size;
 use micold_client::icons::Icon;
@@ -57,7 +59,7 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
             assert_eq!(
                 children.len(),
                 5,
-                "{at}: mark, switcher, Overview, Settings, overflow: {children:?}"
+                "{at}: mark, breadcrumb, Overview, Settings, overflow: {children:?}"
             );
             for (i, a) in children.iter().enumerate() {
                 assert!(
@@ -85,13 +87,30 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 in_bar.contains(&"3"),
                 "{at}: the unread mark's count is not drawn: {in_bar:?}"
             );
-            assert!(
+            // T032 (FR-007): the project and the place, whole or shortened; the place shortens
+            // before the project, and at 640 both have, each keeping its `…`.
+            let segment = |full: &str| {
                 in_bar
                     .iter()
-                    .any(|c| c.len() > 4
-                        && SIXTY_CHARACTER_PROJECT.starts_with(c.trim_end_matches('…'))),
-                "{at}: the project name, whole or shortened, is not drawn: {in_bar:?}"
+                    .copied()
+                    .find(|c| c.chars().count() > 1 && full.starts_with(c.trim_end_matches('…')))
+                    .unwrap_or_else(|| panic!("{at}: {full:?} is not drawn: {in_bar:?}"))
+            };
+            let (project, place) = (
+                segment(SIXTY_CHARACTER_PROJECT),
+                segment(SIXTY_CHARACTER_BRANCH),
             );
+            assert!(
+                !project.ends_with('…') || place.ends_with('…'),
+                "{at}: the project shortened before the place: {project:?} / {place:?}"
+            );
+            if window.width < 1000.0 {
+                assert!(
+                    project.ends_with('…') && place.ends_with('…'),
+                    "{at}: both segments shorten with `…`: {project:?} / {place:?}"
+                );
+            }
+            assert!(in_bar.contains(&"/"), "{at}: the separator: {in_bar:?}");
             let settings = Icon::Settings.glyph().to_string();
             let menu = Icon::Menu.glyph().to_string();
             for wanted in ["Overview", settings.as_str(), menu.as_str()] {

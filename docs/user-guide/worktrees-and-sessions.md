@@ -10,8 +10,9 @@ branch (see [The "Default" entry](#the-default-entry-sessions-without-a-worktree
 
 ## Opening a project (git repositories only)
 
-Open a project with **Open a project** (empty state) or **Open another project** (app bar), then
-choose a folder.
+Open a project with **Open a project** (empty state), **Open another project** (the active
+project's page), or **Add project…** at the end of the project switcher that the top bar's project
+segment opens, then choose a folder.
 
 - Only **git repositories** can be opened as projects. If you choose a folder that is not a git
   repository, opening is refused with a message and nothing is opened.

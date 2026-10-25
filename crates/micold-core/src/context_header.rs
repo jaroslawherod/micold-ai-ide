@@ -136,7 +136,10 @@ pub fn changes_label(counts: CountsReading) -> String {
 }
 
 /// The branch chip (H3): the short form when the branch has one, the full branch on hover.
-fn branch_chip(branch: &str) -> Chip {
+///
+/// Two readers: this header's own chip, and the title bar's place segment (feature 1127, R7), so
+/// the bar and the header cannot disagree on a branch's short form (SC-005).
+pub fn branch_chip(branch: &str) -> Chip {
     Chip {
         text: crate::overview_text::short_branch(branch).unwrap_or_else(|| branch.to_string()),
         tooltip: branch.to_string(),

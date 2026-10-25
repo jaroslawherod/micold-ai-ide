@@ -341,6 +341,12 @@ pub fn session_view_visible(state: &State) -> bool {
         && state.session.active.is_some()
 }
 
+/// Where the project switcher's panel hangs from when the keyboard opened it (feature 1127, R8):
+/// the project segment's leading edge: the bar's padding, the app mark and the gap after it.
+fn switcher_fallback_x() -> u16 {
+    (anatomy::app_bar::PADDING + anatomy::app_bar::MARK + anatomy::app_bar::GAP) as u16
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty state),
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
@@ -588,10 +594,15 @@ pub fn view_with<'a>(
     // Hung from the trigger that opened it, not the window's trailing edge, and slid back in so the
     // panel cannot run off the window (BUG-1023).
     //
-    // Only the reported `x` is kept (feature 1127, R8): the switcher is a 40dp button inside the
-    // 43dp bar, so its own bottom is 1.5dp above the bar's, and FR-005 puts the panel's top edge
-    // at the bar's bottom edge.
-    .hung_from(state.project.switcher_anchor.map(|(x, _)| {
+    // Only the reported `x` is kept (feature 1127, R8): the project segment is a 40dp button inside
+    // the 43dp bar, so its own bottom is 1.5dp above the bar's, and FR-005 puts the panel's top edge
+    // at the bar's bottom edge. A keyboard press reports no corner, so the panel hangs from the
+    // segment's computed leading edge, after the app mark, rather than the window's trailing edge.
+    .hung_from(Some({
+        let x = state
+            .project
+            .switcher_anchor
+            .map_or(switcher_fallback_x(), |(x, _)| x);
         let anchor = (x, anatomy::app_bar::BOTTOM_EDGE as u16);
         let (x, y) = crate::features::project::clamp_menu_anchor(
             anchor,

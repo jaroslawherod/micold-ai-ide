@@ -578,9 +578,10 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
         )
     };
     let leading = || {
-        material::Button::text("micold-ai-ide", roles)
-            .leading(Icon::OpenProject)
+        material::Breadcrumb::new("micold-ai-ide", roles)
+            .tooltip("Switch project")
             .on_press(Message::NoOp)
+            .place("fix/1117", None)
     };
     arrange(
         vec![
@@ -630,6 +631,40 @@ pub fn app_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
             ),
             roles,
         )],
+        Layout::Inline,
+    )
+}
+
+/// `Breadcrumb` — the title bar's `project / place` path (feature 1127, R4): the project alone, with
+/// a place, open with an unread mark, and narrowed so the place shortens first.
+pub fn breadcrumb<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let crumb = || {
+        material::Breadcrumb::new("micold-ai-ide", roles)
+            .tooltip("Switch project")
+            .on_press(Message::NoOp)
+    };
+    let narrowed = iced::widget::container(
+        crumb().place("feat/1127-a-long-branch-name-for-the-title-bar", None),
+    )
+    .width(iced::Length::Fixed(240.0));
+    arrange(
+        vec![
+            posed("project alone", crumb(), roles),
+            posed(
+                "project / place",
+                crumb().place("fix/1117", Some("fix/1117-title-bar".to_string())),
+                roles,
+            ),
+            posed(
+                "open, with unread",
+                crumb()
+                    .trailing_mark(3, "3 unread sessions in other projects")
+                    .place("Overview", None)
+                    .open(true),
+                roles,
+            ),
+            posed("narrowed", narrowed, roles),
+        ],
         Layout::Inline,
     )
 }

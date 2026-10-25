@@ -69,10 +69,23 @@ A first launch, with no list saved yet, shows no message.
 
 ## Switching projects from the top bar
 
-Next to the menu button in the top bar is the **project switcher** — a button showing a folder
-icon and the name of your active project, and the quickest way to change projects without
-opening the folder browser or scrolling the main-window list. Click it to drop down a panel
-listing your known projects. Each row shows:
+At the left of the top bar, after the app mark, a **breadcrumb** says where you are:
+`micold-ai-ide ▾ / fix/1117`. Its first part, the **project segment**, names your active project
+(or reads **Select project** when none is open) with a small drop-down arrow after it, and is the
+**project switcher** — the quickest way to change projects without opening the folder browser or
+scrolling the main-window list. Hover it for **Switch project**. Click it, or Tab to it and press
+Enter or Space, to drop down a panel listing your known projects, directly under the top bar and
+lined up with the segment's left edge.
+
+After a `/`, the **place segment** names what the main area shows: the short branch of the
+worktree you are in (for example `fix/1117` for `fix/1117-title-bar`; hover it for the full
+branch), the location's name when it has no branch (such as **Default**), **Overview** while the
+Overview is open, or **Settings** while Settings is open. It is not a button. With no project
+open, or a project open but no location selected, the breadcrumb shows the project segment alone.
+When the window is narrow, the place shortens with an ellipsis first, then the project name; hover
+a shortened segment to read it whole.
+
+Each row of the panel shows:
 
 - the project's name, with the **active** project marked;
 - a **running** count when the project has terminal sessions running in the background
@@ -84,14 +97,15 @@ listing your known projects. Each row shows:
   you have closed. A project with no unread session shows no count;
 - an **unavailable** badge for folders that are missing on disk (these cannot be selected).
 
-The switcher's button itself shows a filled dot and a number after the project's name, for
+The project segment itself shows a filled dot and a number after the project's name, for
 example "● 3", when sessions in your **other** projects are unread. You see it without opening the
 panel, and it stays while the panel is open. Unread sessions of the active project are not in that
 number: the sidebar already marks them. A session you have closed is not in it either. Hover over
-the button to read what the number counts ("3 unread sessions in other projects"). When no other project has an unread session, the button
-shows its name alone.
+the segment to read what the number counts ("3 unread sessions in other projects"), under
+**Switch project**. When no other project has an unread session, the segment shows its name
+alone.
 
-A row's count falls as soon as you open one of its unread sessions. The button's number changes
+A row's count falls as soon as you open one of its unread sessions. The segment's number changes
 when you switch projects: it then counts the projects you are no longer in. See
 [Worktrees & Sessions → Unread sessions](worktrees-and-sessions.md#unread-sessions) for when a
 session becomes unread and what clears it.
