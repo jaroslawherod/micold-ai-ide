@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M4 implemented on local branch `m4-1128` (worktree /home/user/wt-1128-m4, from M3 head ad1fc7b3); visual pass recorded; review A clean after round 2 (fixes prose and evidence, checked); review B clean, its 3 MINORs fixed
-- **Next step**: after #1431 (M3) merges, rebase `m4-1128` onto main (`branch-start.sh 1431`), run the specs-only gate and open the M4 PR. Frames were drawn at ad1fc7b3; M3 merging by rebase changes no `src`, so they stand.
+- **Phase**: M4 rebased onto main (#1431 merged as 653370c6) and pushed on claude/project-thread-bznqpy; reviews A and B clean; specs-only gate green; M4 PR not opened yet
+- **Next step**: orchestrator opens the M4 PR (title and body in the session scratchpad), records its number, waits on CI and merges; then the close unit (T035). Frames were drawn at ad1fc7b3; `git diff --stat origin/main -- crates` is empty after the rebase, so they stand.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -21,7 +21,8 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | #1365 | Design (spec, plan, tasks) | merged (rebase) | f955fbea3ac738910219cb0daf5c61bdf6a03415 |
 | #1372 | M1 — status bar and session area in the user guide | merged (rebase) | 1c69ea8bb8e8b6b755b21c167d23307e43b6a46c |
 | #1429 | M2 — sidebar and title bar in the user guide | merged (rebase) | 58ef1146da2e1cd31d7def7217c08b7132538dd3 |
-| #1431 | M3 — whole-window covered states and gate W | open (CI) | — |
+| #1431 | M3 — whole-window covered states and gate W | merged (rebase) | 653370c6d7b6fe901a626985d52ebc02f08f261d |
+| (M4, not opened yet) | M4 — visual pass | pushed on claude/project-thread-bznqpy; PR opened by the orchestrator | — |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | merged (rebase) as 58ef1146 |
-| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | #1431 | open, in CI |
-| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | implemented on `m4-1128`; review A clean (2 rounds); review B clean (3 MINOR fixed); PR after #1431 merges |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | #1431 | merged (rebase) as 653370c6 |
+| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | rebased onto main 653370c6 and pushed on claude/project-thread-bznqpy; reviews A and B clean; specs-only gate green; PR to open |
 
 ## Decisions
 
@@ -104,7 +105,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-M4 unit: on local branch `m4-1128` in the second worktree /home/user/wt-1128-m4 (from M3 head ad1fc7b3; M3 is #1431, open in CI on claude/project-thread-bznqpy). T030–T034 done: 4 frames, `visual-pass.md` 20 verdicts (6 matches, 10 on purpose, 4 by defect), two defect follow-ups. Reviews A (code-review, high) and B (conformance) run, their fixes in. Next: after #1431 merges, `branch-start.sh 1431` on `m4-1128`, specs-only gate, and the M4 PR. No push made.
+M4 PR unit: #1431 merged as 653370c6. `m4-1128` reset onto claude/project-thread-bznqpy and rebased onto origin/main: M3's two commits were skipped as already applied, 5 M4 commits are left, and `git diff --stat origin/main -- crates` is empty. Specs-only gate (`scripts/check-criteria-observables.sh`) exits 0. Pushed. The second worktree /home/user/wt-1128-m4 and `m4-1128` are removed. Next: the orchestrator opens the M4 PR (`gh` is not authenticated).
 
 ## Open escalation
 
