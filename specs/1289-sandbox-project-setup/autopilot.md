@@ -56,6 +56,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 16 | M4 | How does the daemon reach the setup files without the state lock? | `ProjectStore::setup_files() -> Option<&JsonFileStore>` (default `None`), and `Catalog::setup_files()` hands out a `SetupFiles` clone of the store's `Arc`; `DaemonState.setup_store` writes outside both locks | unit | catalog.rs `OrderedStore` behind `Arc` |
 | 17 | M4 | Delete: forget the run when git's remove fails? | No: `stop_and_wait` runs before git, `forget` only on a successful (or partial) remove; a failed delete keeps the `Stopped` record | unit | FR-016 "kept … until the worktree is deleted" |
 | 18 | M4 | What does a start refused while the daemon stops, or while a delete holds the worktree, answer? | `Busy` (*try later*): no new `SetupStart` variant, so no protocol bump; both windows are short | unit | M4 review A-F1, A-F4 |
+| 19 | M5 | Which path is a daemon's `ProjectSetupSet.project` for a mapped container daemon? | The path in that daemon's catalog (`daemon_catalogs[id].projects[].path`), matched to the settings key by `connection_key`. The client has no path translation today (`PATHS_MAPPED` is a row label; catalogs hold the same path the client sends in `ProjectAdd`), so A16's mapped case asserts the catalog's path is sent | unit | contract C3; `links.rs` |
+| 20 | M5 | Where does a connect read the commands from? | The settings store, re-read on each connect and when Settings opens or refreshes (another window may have saved), else the window's copy | unit | FR-009 "survive restarts", BUG-475 pattern |
+| 21 | M5 | What does the notification call the Default location, and an inactive project's worktree? | *Default*, as the sidebar's first line; a worktree of the open project its display name, otherwise `naming::display_name(dir)` | unit | contract U5; user guide "Reading a worktree" |
+| 22 | M5 | How does the tag avoid moving a row (G1)? | `Tag::max_width(160)`: its label then takes the second line's own text height; a plain `Tag` grew the Default row by 1.7 dp and moved its title (cycle log M5 cycle 1) | unit | G1 |
 
 ## Review rounds
 
@@ -83,6 +87,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `interrupt_all` sets `stopping`/`stop_requested`, `spawned` ends a shell of an ended run, `start` refuses while stopping; F2 `Persist::seq` + `SetupStore::in_order` drop stale writes (interrupt rewrites the log whole); F3 record and log written independently; F4 `DeleteHold` refuses starts during a delete, `forget` ends a live tree; cycle log M4 cycle 3 |
 | M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CLEAN (Verify all pass); MINORs: B-F1 fixed with A-F2; B-F2 compaction red logged (cycle log M4 cycle 3) |
 | M4 A | 2 (sonnet, scoped) | 72c712a70e67a2419c9c2df0782306822ca21f05:c311173c2197557a5791e3e920f1b279c7268633 | CLEAN, no findings |
+| M5 A, M5 B | 1 (pending) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | dispatched by the orchestrator |
 
 ## Declined review findings
 
@@ -91,6 +96,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M5 ready for review (2026-10-25): pushed 6cf38804d; snapshot 476492d0:6cf38804; full `cargo test -p micold-client -p micold-material` green after cycle 2 (guards, layout fixture). Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings, then full gate (`scripts/gate.sh`), rebase on origin/main, PR.
 M5 implemented (2026-10-25) on 8a49a7780 (#1407 merged by rebase): T040–T049 ticked; features_setup 9, features_settings 155, setup_tag_geometry 3, settings_sections 24 passed; clippy client+material clean (cycle log § M5 cycle 1). Next: full client suite, push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
 M4 PR (2026-10-25): rebased onto main 8eceb3ad7 (1 commit, sandbox image pin; no conflict, protocol stays 70); full gate (scripts/gate.sh) green at ed8ecde5b on the 2nd run (1st: flaky `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`, 5/5 green alone, untouched by M4); pushed; PR #1407 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M5.
 M4 review round 1 fixed (2026-10-25) at c311173c2: A-F1–A-F4, B-F1, B-F2 (cycle log M4 cycle 3); full gate (scripts/gate.sh) green and pushed. Next: review A round 2 (scoped) on 72c712a7:c311173c; then rebase onto main, PR.
