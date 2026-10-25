@@ -18,7 +18,7 @@ use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::bar::{self, Overflow, ScopeCounts, SendButton};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::browse::{BrowseStack, FileReadFailure, FileText, Frame};
-use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
+use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content};
 use micold_core::review::comment::{
     CommentId, CommentState, Move, Outcome, PrAnchor, ReviewComment, Scope, Status,
 };
@@ -36,6 +36,9 @@ use micold_core::review::pr_diff::{pr_change_ids, PrDiff};
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::source_menu::{self, MenuInput, Shown, Stop};
+use micold_core::review::tree::{
+    self, LayoutOptions, Leaf, Openness, Row, RowKind, TreeChoices, TreeSort,
+};
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::review_tabs::{EntryKey, Opened, ReviewTabs};
 use micold_core::session::{SessionId, SessionLocation};
@@ -453,6 +456,19 @@ pub struct OpenView {
     /// A line saying a followed reference named no file of the repository (FR-012); cleared by
     /// the next message.
     pub notice: Option<&'static str>,
+    /// The changed-file tree's folds, filter and sort (feature 1273, data-model §6): kept while
+    /// the view is, across list re-reads and source switches, and never shared (FR-004, FR-013).
+    pub tree: TreeChoices,
+    /// The changed-file tree's visible rows, laid out by [`update`] whenever the shown files or
+    /// [`OpenView::tree`] change, never while drawing (research R9); empty unless the list pane
+    /// shows files.
+    pub change_rows: Vec<Row>,
+    /// The bar scale: the largest change over the whole shown list, filtered or not (spec
+    /// Assumptions, research R8).
+    pub change_scale: u64,
+    /// What [`OpenView::change_rows`] was laid out from, so a message that changes neither the
+    /// files nor the choices lays nothing out again.
+    change_key: u64,
 }
 
 /// A repository file opened from the tree or the picker (feature 1150, data-model §8).
@@ -573,61 +589,123 @@ fn tree_files(view: &OpenView) -> &[RelPath] {
     }
 }
 
-/// A folder's contents while the tree is laid out.
-#[derive(Default)]
-struct Folder {
-    folders: BTreeMap<String, Folder>,
-    files: Vec<(String, RelPath)>,
+/// The tree's visible rows: folders before files at each level, a folder's contents only while it
+/// is open (FR-011), laid out by the changed-file tree's core layout without chaining (feature
+/// 1273, FR-017).
+pub fn tree_rows(view: &OpenView) -> Vec<TreeRow> {
+    let files = tree_files(view);
+    let leaves: Vec<Leaf> = files
+        .iter()
+        .map(|file| Leaf {
+            path: file.as_str(),
+            added: 0,
+            removed: 0,
+        })
+        .collect();
+    let options = LayoutOptions {
+        chain: false,
+        openness: Openness::DefaultClosed {
+            open: &view.files.open_folders,
+        },
+        sort: TreeSort::Path,
+        query: None,
+        reviewed: &|_| false,
+    };
+    tree::layout(&leaves, &options)
+        .into_iter()
+        .map(|row| {
+            let kind = match row.kind {
+                // Unchained, a folder row stands for one folder.
+                RowKind::Folder(folder) => TreeKind::Folder {
+                    path: folder.paths.into_iter().next().unwrap_or_default(),
+                    open: folder.open,
+                },
+                RowKind::File { leaf } => TreeKind::File(files[leaf].clone()),
+            };
+            TreeRow {
+                depth: row.depth,
+                name: row.label,
+                kind,
+            }
+        })
+        .collect()
 }
 
-/// The tree's visible rows: folders before files at each level, a folder's contents only while it
-/// is open (FR-011).
-pub fn tree_rows(view: &OpenView) -> Vec<TreeRow> {
-    let mut root = Folder::default();
-    for file in tree_files(view) {
-        let mut at = &mut root;
-        let mut parts = file.as_str().split('/').peekable();
-        while let Some(part) = parts.next() {
-            if parts.peek().is_some() {
-                at = at.folders.entry(part.to_owned()).or_default();
-            } else {
-                at.files.push((part.to_owned(), file.clone()));
-            }
-        }
+/// What the list pane draws of the changed-file tree (feature 1273, data-model §6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreePane {
+    /// No tree, filter box or sort control: the list is reading, failed, empty or a pull request
+    /// that cannot be shown (FR-016).
+    Hidden,
+    /// [`OpenView::change_rows`].
+    Rows,
+    /// The filter matches no file: the line saying so and its way out (FR-011).
+    NoMatch,
+}
+
+/// What the list pane draws of the changed-file tree for `view`.
+pub fn tree_pane(view: &OpenView) -> TreePane {
+    if !matches!(list_body(view), ListBody::Files(_)) {
+        TreePane::Hidden
+    } else if view.change_rows.is_empty() && !Query::new(&view.tree.filter).is_empty() {
+        TreePane::NoMatch
+    } else {
+        TreePane::Rows
     }
-    fn walk(
-        folder: &Folder,
-        prefix: &str,
-        depth: u16,
-        open: &BTreeSet<String>,
-        out: &mut Vec<TreeRow>,
-    ) {
-        for (name, inner) in &folder.folders {
-            let path = format!("{prefix}{name}");
-            let is_open = open.contains(&path);
-            out.push(TreeRow {
-                depth,
-                name: name.clone(),
-                kind: TreeKind::Folder {
-                    path: path.clone(),
-                    open: is_open,
-                },
-            });
-            if is_open {
-                walk(inner, &format!("{path}/"), depth + 1, open, out);
+}
+
+/// The changed files as the tree lays them out (data-model §1): counts only for a text change, so
+/// binary, not-text and Mode-only files count 0 and 0 (a pure rename already does).
+fn change_leaves(files: &[ChangedFile]) -> Vec<Leaf<'_>> {
+    files
+        .iter()
+        .map(|file| {
+            let counted =
+                file.content == Content::Text && !matches!(file.kind, ChangeKind::ModeOnly);
+            Leaf {
+                path: file.path.as_str(),
+                added: if counted { file.added } else { 0 },
+                removed: if counted { file.removed } else { 0 },
             }
-        }
-        for (name, path) in &folder.files {
-            out.push(TreeRow {
-                depth,
-                name: name.clone(),
-                kind: TreeKind::File(path.clone()),
-            });
-        }
+        })
+        .collect()
+}
+
+/// A digest of what the changed-file tree is laid out from: the leaves and the choices.
+fn change_key(leaves: &[Leaf], choices: &TreeChoices) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for leaf in leaves {
+        (leaf.path, leaf.added, leaf.removed).hash(&mut hasher);
     }
-    let mut out = Vec::new();
-    walk(&root, "", 0, &view.files.open_folders, &mut out);
-    out
+    leaves.len().hash(&mut hasher);
+    choices.filter.hash(&mut hasher);
+    std::mem::discriminant(&choices.sort).hash(&mut hasher);
+    choices.collapsed.hash(&mut hasher);
+    choices.filter_collapsed.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Lay the changed-file tree out again when the shown files or the choices changed (research R9):
+/// [`update`] calls it after every message, so every arm that changes the list, the source or the
+/// choices is covered, and drawing never lays out. Reviewed marks do not steer it until the sort
+/// control offers **Unreviewed first** (M5).
+fn refresh_change_rows(view: &mut OpenView) {
+    let files = match list_body(view) {
+        ListBody::Files(files) => files,
+        _ => &[],
+    };
+    let leaves = change_leaves(files);
+    let key = change_key(&leaves, &view.tree);
+    if key == view.change_key {
+        return;
+    }
+    let query = Query::new(&view.tree.filter);
+    let rows = tree::layout(&leaves, &view.tree.options(&query, &|_| false));
+    let scale = tree::bar_scale(&leaves);
+    view.change_rows = rows;
+    view.change_scale = scale;
+    view.change_key = key;
 }
 
 /// The most files the path picker lists.
@@ -1375,6 +1453,9 @@ pub enum Msg {
     FilesPaneToggled,
     /// A folder of the tree was opened or closed.
     FolderToggled(String),
+    /// A folder row of the changed-file tree was pressed, by the real folders it stands for
+    /// (feature 1273, FR-003): an open row collapses, a collapsed one expands.
+    TreeFolderToggled(Vec<String>),
     /// Tree read `seq` ended.
     TreeRead {
         /// The read it answers.
@@ -1759,6 +1840,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
     if !scroll {
         if let Some(view) = state.tabs.shown_view_mut() {
             reshape(view);
+            refresh_change_rows(view);
             // R2: a pick stays only while its lines are still rows of the diff (a collapsed
             // revealed run takes its rows away too).
             if let Some(pick) = view.pick {
@@ -1955,6 +2037,10 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         files: FilesPane::default(),
         source_menu: SourceMenu::default(),
         notice: None,
+        tree: TreeChoices::default(),
+        change_rows: Vec::new(),
+        change_scale: 0,
+        change_key: 0,
     }
 }
 
@@ -2326,6 +2412,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
+            // FR-008: the selected file's row is listed, whichever way it was selected.
+            view.tree.reveal(path.as_str());
             // Choosing a changed file leaves the browser and forgets where Back led.
             let was_browsing = view.browse.take().is_some();
             view.stack.clear();
@@ -2404,6 +2492,19 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             if let Some(view) = state.tabs.shown_view_mut() {
                 if !view.files.open_folders.remove(&folder) {
                     view.files.open_folders.insert(folder);
+                }
+            }
+            Effect::None
+        }
+        Msg::TreeFolderToggled(paths) => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                // The row as laid out says whether it is open; a row no longer shown changes nothing.
+                let row = view.change_rows.iter().find_map(|row| match &row.kind {
+                    RowKind::Folder(folder) if folder.paths == paths => Some(folder),
+                    _ => None,
+                });
+                if let Some(row) = row.cloned() {
+                    view.tree.toggle(&row);
                 }
             }
             Effect::None
@@ -3690,6 +3791,11 @@ fn reference_activated(state: &mut State, path: RelPath, line: Option<u32>) -> E
     if !view.files.listed.contains(path.as_str()) {
         view.notice = Some(NO_SUCH_FILE);
         return Effect::None;
+    }
+    // FR-008, edge case "Selection inside a collapsed folder": a changed file reached by a
+    // reference has its row listed.
+    if file_kind(view, &path).is_some() {
+        view.tree.reveal(path.as_str());
     }
     browse_open(state, path, line)
 }
