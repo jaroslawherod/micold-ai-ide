@@ -200,7 +200,7 @@ at 4 lines with Show all; quickstart §B step 6.
 - [x] T054 Re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and check its diff holds only the Review tab's states (quickstart §A)
 - [x] T055 Rewrite `docs/user-guide/reviewing-changes.md` for the bar and drawer: *Sending a review* (the bar, its counts, Send review, the error), *The review panel* → *The comments drawer* (tabs, rows, Esc, auto-open), *Clearing and discarding* (the overflow menu; acts on what is shown, fixing the stale "the entry" wording), *Statuses and replies*; it supersedes the interim wording of T040 and T051 (FR-024)
 - [x] T056 Run quickstart §B with the `visual-pass` skill at 1280×800 in light and dark and save its screenshots and notes in `specs/1270-review-bar-drawer/visual-pass/` (SC-007)
-- [ ] T057 Run `mise run gate` green on the final tree
+- [x] T057 Run `mise run gate` green on the final tree
 
 ---
 

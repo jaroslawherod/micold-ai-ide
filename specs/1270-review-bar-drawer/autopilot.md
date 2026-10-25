@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | merged; full gate green at e0c0e828; reviews A, B clean |
 | M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | #1382 | merged; full gate green at 0b8e6365; reviews A, B clean; visual pass recorded |
 | M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | #1402 (open, CI running) | full gate green at 5358a2b7; reviews A (r2), B clean; visual pass recorded (`visual-pass-m3.md`) |
-| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — (branch `m4-1270`, not pushed; PR title/body in the scratchpad `pr-title-m4.md`, `pr-body-m4.md`) | implemented; visual pass recorded (`visual-pass-m4.md`); reviews and gate below |
+| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — (branch `m4-1270`, not pushed; PR title/body in the scratchpad `pr-title-m4.md`, `pr-body-m4.md`) | full gate green at 8b16f5e3 (split gate: fmt, clippy core + workspace, every package's tests, root-only tests, scripts/tests); reviews A (r3 CLEAN), B (r2 CLEAN); visual pass recorded (`visual-pass-m4.md`); not rebased |
 
 ## Decisions
 
@@ -84,6 +84,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code review high, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (a drawer composer was drawn nowhere while the drawer was closed or on the other tab; now on its card then, `composer_in_drawer`, test); F2 MINOR fixed (overflow items built once) |
 | Review B M4 (conformance, sonnet, headless, diff inline) | 1 | 2297e2fabf3bfb8d73d667925ef6948621f0d213:612524e931fad5e60f0b5d204d0b1334268f648a | CHANGES: F1 MAJOR fixed (the drawer's scroll was kept but never restored: `Effect::ScrollDrawer` when its list comes into view, test); F2 MINOR fixed, prose only (visual-pass-m4.md names where steps 4, 5, 7–9 are checked and how to regenerate); F3 MINOR = A F2 |
 | Review A M4 (scoped, sonnet, headless) | 2 | 2d4a173b876a71cc1210bdfdd42d2af8c0949533:75b826c75bba3fb940b4e5c34c768c76b7212b60 | CHANGES: F1 MAJOR fixed (a drawer composer of a comment in a file other than the selected one had no card to show on: a row's Edit / Answer… now jumps to the comment first, test `edit_or_answer_in_a_drawer_row_selects_the_comments_file`); F2 MINOR declined (an empty list's offset is 0) |
+| Review A M4 (scoped, sonnet, headless) | 3 | 9a586d0a5a5b1e5e3bbc605251976eee92c0ded2:8b16f5e3786a411ff8dafdd53674b1349570b48d | CLEAN: 1 MINOR left (a refused jump — file hidden by a toggle or not in the diff — still opens the drawer composer; its text is kept and is back in the row when the drawer reopens). Recorded in *Follow-ups not done* |
 | Review B M4 (scoped, sonnet, headless) | 2 | 2d4a173b876a71cc1210bdfdd42d2af8c0949533:75b826c75bba3fb940b4e5c34c768c76b7212b60 | CLEAN |
 
 ## Declined review findings
@@ -108,4 +109,5 @@ None.
 
 ## Follow-ups not done
 
+- A drawer row's Edit / Answer… on a comment whose jump is refused (file hidden by Committed/Uncommitted, or not in the diff) opens the composer with no card to show it on while the drawer is closed; the text is kept and reappears in the row on reopen (review A M4 r3 MINOR).
 - docs/user-guide/reviewing-changes.md "Clearing and discarding" says Clear sent / Discard drafts act on "the entry"; they act on what is shown (PR or working tree). The R1 docs rewrite (FR-024) should fix it.
