@@ -10,7 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
 - **Phase**: tasks
-- **Next step**: tasks review round 2 (re-review of the fix diff from snapshot 0010f978…:9a68b76a, sonnet; orchestrator dispatches); then specs-only gate, design PR
+- **Next step**: design PR (orchestrator opens it via GitHub MCP from the prepared title/body), CI, merge; then milestone M1 once #1435 and #1289 have merged
+- **Gate**: specs-only `scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md` exit 0 (spec has no criteria table; not opted in); every changed file is under `specs/`
 
 ## Pull requests
 
@@ -49,7 +50,7 @@ T034 (publish and pin, D7) goes to the close unit.
 | Review plan | 1 | af5ff41a6aea3437938c9f5176c59cdfd38c8f28:fc2ae166b80b5b08990a56af109bf79b1406f498 | CHANGES: 1 MAJOR (F1 no step obtains/verifies mise checksums; README update step unspecific), 2 MINOR (F2 SC-001/002/005 rows; F3 hung holder blocks setups) — all fixed: plan D1a (signed SHASUMS256, two lines, npm cross-check, provenance in ledger), M1 row, D6 README steps, D7, R1; requirement-map rows SC-001/002/005 + B3 reads the section; setup-turn S2/S3 + D6 sentence + A4 case |
 | Review plan | 2 | e09cd372e8cfa3fbb30220e2448a3333f6565b25:e81fbb8fe8ff14ae09217d96f48c4f69f3853cf3 | CLEAN |
 | Review tasks | 1 | 0010f9786fa9af34eb25056d18835b54ca350499:9a68b76ae2e005a488eb37c80654e92131ce0b64 | CHANGES: 2 MAJOR, 3 MINOR — all fixed. F1 (US2/FR-009/SC-001/SC-002 in no milestone; T032 may change code): T032, T033 moved into M4 (Phase 9 now US2, in M4), M4 Satisfies/Verify add US2 AS1–AS4, FR-009, SC-001, SC-002, B1, B2, B6; M4 depends on M2; only T034 left to the close unit. F2 (no speckit-analyze record): run inline, see below. F3: checklist item ticked (confirmed no markers), note says FR-007 provisional option A (D3) — fixed, prose only. F4 (three edge cases uncovered): T027 + A7 stopped-mid-download rerun case; T012 + A6 `~/.local/bin` mise stub wins on PATH; T033 + B2 two concurrent `cargo build`s; plan requirement map rows for all three. F5: D7 records why US3 rides in M1 — fixed, prose only |
-| Review tasks | 2 | e730638a6a858dd31b1e9a1ca2182700ff53f73c:a340a65ab195ba153e293986c0e198f4c6046b90 | pending (re-review of fix diff from round 1's snapshot; orchestrator dispatches) |
+| Review tasks | 2 | e730638a6a858dd31b1e9a1ca2182700ff53f73c:a340a65ab195ba153e293986c0e198f4c6046b90 | CLEAN; 1 MINOR: T034 (publish and pin) is in no milestone — kept as is: it ships via the separate pin PR of plan D7 after M4 merges, as tasks.md's Milestones section already says (no change) |
 
 speckit-analyze (run inline on spec/plan/tasks before tasks review round 2; the skill is not invocable through the Skill tool in this cloud session; no analyze hooks in `.specify/extensions.yml`): 0 CRITICAL; 1 HIGH — C1 coverage: FR-009, SC-001, SC-002 and US2 AS1–AS4 mapped only to Phase 9 tasks outside any milestone (same as review F1) — fixed by moving T032–T033 into M4. MEDIUM: C2 three edge cases with no test/quickstart row (= F4, fixed); I1 checklist item unticked though no markers remain (= F3, fixed). LOW: none acted on. Coverage after fixes: FR-001–FR-013 and SC-001–SC-005 each have ≥1 task in a milestone (SC-004 via T015/T019); every task maps to a story or requirement; constitution I (tests first in each milestone), VI (two arches, daemon code on three CI platforms) and VII (user guide in M1 T009/T014, M2 T018, M3 T025, M4 T030) hold.
 
