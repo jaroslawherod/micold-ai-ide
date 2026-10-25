@@ -65,6 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 | 2 | 0d413f1eb3734c94a2a821b230a9af57614c8b0b:ce1824d5b6ba7a0abbee39001253c20de53f34b1 | CLEAN (sonnet, fix diff) |
 | Review B M4 (conformance, sonnet) | 1 | 3774ec77d04bfe2614c9cad100c5e61a00b26e7a:eb23f5694258e542bdc7ee9e5a5da44d0427f3c3 | CLEAN: 2 MINOR — F1 no mutation red for the A-F1 test (left; cycle log says so), F2 A-F1 fix not named under an M4 task (fixed, prose only: *As built (M4)*) |
 | Review M4 visual-pass fixes (sonnet) | 1 | 6df14dbe:4f2a601e | CHANGES: MAJOR drain target (`from_start` vs offset) untested in the binary — fixed: pure `session_strip::tab_reveal_target` + unit test, and a test that a review open moving `header.entry` (no session select) arms the reveal from the start (red with the arm removed); MINOR mid-tab hand-scroll and exact-width boundary assertions (fixed); MINOR `feature_registration_cost` doc now names published messages (fixed, prose only); MINOR resetting `tab_strip_viewport_width` on a location change (declined, below) |
+| Review M4 visual-pass fixes | 2 | 4f2a601e:abb47375 | CLEAN (sonnet, fix diff; decline stands) |
 
 ## Declined review findings
 
