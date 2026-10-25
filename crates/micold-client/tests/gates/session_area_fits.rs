@@ -401,18 +401,18 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
     }
 }
 
-/// The Changes view's own header row, under the session area's view: its title column, the
-/// progress slot, the panel toggle, then the review buttons while the panel is closed.
+/// The Changes view's own header row, under the session area's view: its title column, then the
+/// progress slot (feature 1270 moved the panel toggle and the review buttons to the review bar).
 const VIEW_HEADER: &[usize] = &[2, 0, 0];
 /// The diff pane's header row: the layout and whole-file chips, then the mark control.
-const DIFF_HEADER: &[usize] = &[2, 0, 1, 1, 0, 0];
-/// The diff pane, which the diff header row must stay inside.
-const DIFF_PANE: &[usize] = &[2, 0, 1, 1];
+const DIFF_HEADER: &[usize] = &[2, 1, 1, 0, 0, 0];
+/// The diff pane, the diff area's first layer, which the diff header row must stay inside.
+const DIFF_PANE: &[usize] = &[2, 1, 1, 0];
 
-/// Feature 1271 T033 (FR-009, SC-005): at 1280×800 in both themes the view header's title, *n of
-/// m reviewed* slot and panel toggle, and the diff header's chips and **Mark reviewed**, each lie
-/// whole inside their row and none overlaps another; the slot is as wide, and the panel toggle in
-/// the same place, whether progress is shown or not.
+/// Feature 1271 T033 (FR-009, SC-005): at 1280×800 in both themes the view header's title and *n
+/// of m reviewed* slot, and the diff header's chips and **Mark reviewed**, each lie whole inside
+/// their row and none overlaps another; the slot is as wide, and the title as wide, whether
+/// progress is shown or not.
 #[test]
 fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
     let mut placed = Vec::new();
@@ -466,15 +466,15 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
             let part = |i: usize| {
                 rect(at(&records, &[header.as_slice(), &[i]].concat()).expect("a header part"))
             };
-            placed.push((what, part(1), part(2)));
+            placed.push((what, part(1), part(0)));
         }
     }
-    let (first, slot, toggle) = &placed[0];
-    for (what, other_slot, other_toggle) in &placed[1..] {
+    let (first, slot, title) = &placed[0];
+    for (what, other_slot, other_title) in &placed[1..] {
         assert_eq!(
-            (other_slot.x, other_slot.width, other_toggle.x),
-            (slot.x, slot.width, toggle.x),
-            "{what}: the slot and the panel toggle stand where {first} has them (FR-009)"
+            (other_slot.x, other_slot.width, other_title.width),
+            (slot.x, slot.width, title.width),
+            "{what}: the slot and the title stand where {first} has them (FR-009)"
         );
     }
 }
@@ -496,8 +496,8 @@ fn the_progress_bar_has_its_width_beside_its_words() {
         let mut under = (covered.build)();
         under.state.settings.theme_pref = theme;
         under.state.sidebar.width = SIDEBAR;
-        // The drawer open, as the visual pass saw it: closed (feature 1270's default) the review
-        // buttons stand in the header too, and the slot's third leaves the bar under its 120.
+        // The drawer open, as the visual pass saw it; since feature 1270 the header holds only the
+        // title and the slot either way (the review buttons moved to the review bar).
         let _ = micold_client::features::changes::update(
             &mut under.state.changes,
             micold_client::features::changes::Msg::Drawer(
