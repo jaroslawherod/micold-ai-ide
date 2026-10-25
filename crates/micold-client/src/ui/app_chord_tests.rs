@@ -43,7 +43,7 @@ fn press_the_overview_chord(overview: &mut crate::features::overview::State) {
 /// same from the session view (terminal focused) and from Changes; the Overview opens on the first press and
 /// closes on the second.
 #[test]
-fn the_overview_chord_opens_and_closes_it_from_the_session_view_and_changes() {
+fn the_overview_chord_opens_and_closes_it() {
     let mut overview = crate::features::overview::State::default();
     assert!(!overview.open);
     press_the_overview_chord(&mut overview);

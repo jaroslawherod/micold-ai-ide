@@ -204,8 +204,8 @@ fn pressable_sessions<T>(main: Option<T>, sessions: &[Session]) -> &[Session] {
 }
 
 /// The Overview row (feature 1125, S2, R9), or `None` with no project open: selected exactly while
-/// the Overview is open, pressable only while Settings is closed, and carrying the top bar button's
-/// badge and tooltip, read from the same cards.
+/// the Overview is open, pressable only while Settings is closed, and carrying the Overview's badge
+/// and tooltip, read from the same cards.
 fn overview_row(state: &State, r: Roles) -> Option<Element<'static, Message>> {
     use crate::features::overview::{self, Msg};
     state.workspace.active.as_ref()?;
