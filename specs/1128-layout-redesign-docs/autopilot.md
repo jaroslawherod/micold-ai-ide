@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M3 implemented, reviews A and B clean, rebased onto origin/main 58ef1146 (after #1429), fixture re-recorded (additions only), full gate green at 65ececb4; pushed, PR to open
-- **Next step**: orchestrator opens the M3 PR from the unit's pr-title.md / pr-body.md (gh not authenticated in the unit), label `docs-not-needed`, records its number, waits on CI and merges. M4 (visual pass) after M3 merges.
+- **Phase**: M4 implemented on local branch `m4-1128` (worktree /home/user/wt-1128-m4, from M3 head ad1fc7b3); visual pass recorded; review A run; review B awaiting dispatch by the orchestrator
+- **Next step**: orchestrator dispatches review B on the M4 snapshot; after #1431 (M3) merges, rebase `m4-1128` onto main (`branch-start.sh 1431`), run the specs-only gate and open the M4 PR. Frames were drawn at ad1fc7b3; M3 merging by rebase changes no `src`, so they stand.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -21,6 +21,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | #1365 | Design (spec, plan, tasks) | merged (rebase) | f955fbea3ac738910219cb0daf5c61bdf6a03415 |
 | #1372 | M1 — status bar and session area in the user guide | merged (rebase) | 1c69ea8bb8e8b6b755b21c167d23307e43b6a46c |
 | #1429 | M2 — sidebar and title bar in the user guide | merged (rebase) | 58ef1146da2e1cd31d7def7217c08b7132538dd3 |
+| #1431 | M3 — whole-window covered states and gate W | open (CI) | — |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | merged (rebase) as 58ef1146 |
-| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | pushed on claude/project-thread-bznqpy; reviews A and B clean; full gate green at 65ececb4; PR to open |
-| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | #1431 | open, in CI |
+| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | implemented on `m4-1128`; review A done; review B pending; PR after #1431 merges |
 
 ## Decisions
 
@@ -108,6 +109,10 @@ None.
 
 ## Follow-ups not done
 
+- M4 defect (visual pass, D1, FR-016): **Sidebar** — the worktree row's *no daemon* label chip reads 4.40:1 in light (`#625B71` `secondary` text on its `#DAD3DC` tint, `ui/sidebar.rs` row tags with accent `r.secondary`), under 4.5:1; dark reads 6.25:1. No composition-contrast test holds the row label chips. Screenshot `specs/1128-layout-redesign-docs/visual-pass/session-view-light-1280.png`. Needs its own bug issue (chip text role or tint, and a test in `composition_contrast.rs`).
+- M4 defect (same issue, second board): **Sidebar** — *no daemon* chip 4.40:1 in light on `specs/1128-layout-redesign-docs/visual-pass/overview-light-1280.png`.
+- M4: harness note for the next visual pass drawn headless: an `iced` button keeps its status on the widget, not in the tree, so a tree rebuilt from a cache draws every button *Disabled* (38% alpha) until it sees one `RedrawRequested`; the first frames showed *Full screen* at 1.78:1 for that reason alone. Hand the final tree a redraw before `draw`.
+- M4 unit: no Agent tool, so review B was not dispatched (snapshot in *Review rounds*); `visual-pass` skill not used (no display needed: research R8's headless route). Harness: `zz_visual_pass_1128.rs` copied into `crates/micold-client/tests/` only while it ran, removed before commit (in the session scratchpad).
 - M2 (T012): #1127 kept plan usage in the status bar (its FR-002 and *Out of scope*), so FR-001 and FR-010 stand unchanged. Removed list as shipped: the title bar's Overview button and badge, the app-name title text, the switcher button next to the menu button (now the breadcrumb's project segment), the sidebar's filter button and tag-filter panel (now the chip bar and its ⋯ menu), type/issue chips on rows (now two-line rows). Owning sections: title bar → new `appearance-theming.md#title-bar` (#1127 wrote a bullet, not a section); breadcrumb → `project-selection.md#switching-projects-from-the-breadcrumb` (renamed; no inbound links to the old anchor); Overview row → `overview.md#opening-and-closing-it`; chip bar → `worktrees-and-sessions.md#filtering-worktrees-by-tag`; groups → `#browsing-worktrees`; two-line rows → `#reading-a-worktree-name--tags`. Spec Edge case *Project with no worktrees* and doc-edits S15 corrected to what #1125 shipped (Default under its state's group, chip bar with All, "No worktrees yet" hint).
 - M2 extra hits beyond S1–S15: `help-about.md` toolbar wording and its About steps, `docs/README.md` Help entry, the overflow theme toggle (removed before #1127: `toolbar.rs` module doc) in `appearance-theming.md#choosing-your-theme`, `settings.md` mode-button sentence and `icons.md` rows; the `theme-follow` clip, manifest entry and scene were removed with it. Also beyond FR-011: the `icons.md` "adding an icon" contributor steps were re-pathed to the current files (review B F2; paths verified).
 - M2: `site/capture/scenes/lib.sh` coordinates (overflow menu items, `scene_tab_y` "bottom bar", menu at y=32) predate the 44 px title bar and the tab strip; the capture needs re-measuring before the next release's screenshots. `scene_start --preference` is now unused. `Choosing your theme` could take a Settings → Appearance picture. `Icon::DarkMode`/`Icon::AutoMode` have no rendered call site.
