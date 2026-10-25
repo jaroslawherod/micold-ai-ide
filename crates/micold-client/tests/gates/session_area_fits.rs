@@ -336,6 +336,7 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
         "session-area-review-sessionless",
         "changes-review-marks",
         "changes-review-marks-unavailable",
+        "changes-review-held",
     ] {
         let covered = covered_states()
             .iter()

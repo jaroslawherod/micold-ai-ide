@@ -1555,16 +1555,22 @@ mod review_comments {
         )
     }
 
+    /// Answer the head refresh `effect` asked for with `raw`, then press the notice when the
+    /// new diff is held (feature 1275): the effect of whichever showed it.
     fn answer_head(state: &mut State, effect: Effect, raw: &str) -> Effect {
         let seq = diff_seq(effect, 7);
-        changes::update(
+        let effect = changes::update(
             state,
             Msg::PullRequestDiffRead {
                 seq,
                 number: 7,
                 result: Ok(split_pr_diff(raw)),
             },
-        )
+        );
+        match shown(state).held {
+            Some(_) => changes::update(state, Msg::StaleApplied),
+            None => effect,
+        }
     }
 
     fn shown(state: &State) -> &micold_client::features::changes::PullRequestView {
@@ -1703,6 +1709,129 @@ mod review_comments {
                 LineRange::new(2, 2).unwrap()
             );
         }
+    }
+
+    // ---- 1275 M3: a new head's diff is held like the working tree's (H11–H14) ----
+
+    /// Answer the head refresh `effect` asked for with `raw`, leaving a held diff held.
+    fn answer_unapplied(state: &mut State, effect: Effect, raw: &str) -> Effect {
+        let seq = diff_seq(effect, 7);
+        changes::update(
+            state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Ok(split_pr_diff(raw)),
+            },
+        )
+    }
+
+    // H11, US1 AS8: a differing head refresh is held; the diff, selection and file stay.
+    #[test]
+    fn a_differing_head_refresh_is_held() {
+        let mut state = showing_seven();
+        let before = shown(&state).clone();
+        let effect = head_moves(&mut state);
+        answer_unapplied(&mut state, effect, &patch_a(1, "newer"));
+        let pr = shown(&state);
+        assert!(pr.held.is_some());
+        assert_eq!(pr.diff, before.diff);
+        assert_eq!(pr.selected, before.selected);
+        assert_eq!(pr.file, before.file);
+        assert_eq!(pr.head, HEAD, "comments still record the shown head");
+        let view = state.tabs.shown_view().unwrap();
+        assert_eq!(
+            changes::stale_notice(view).as_deref(),
+            Some("2 files changed since you looked"),
+            "a.rs changed, b.rs left the pull request"
+        );
+        assert!(changes::changed_since_you_looked(
+            view,
+            &RelPath::from_native("a.rs").unwrap()
+        ));
+        assert_eq!(
+            head_moves(&mut state),
+            Effect::None,
+            "the held head is not read again"
+        );
+    }
+
+    // H12, FR-009: selecting a held file shows its latest patch and it leaves the set.
+    #[test]
+    fn selecting_a_held_file_shows_its_latest_patch() {
+        let mut state = showing_seven();
+        let before = shown(&state).file.clone();
+        let effect = head_moves(&mut state);
+        answer_unapplied(&mut state, effect, &patch_a(1, "newer"));
+        changes::update(
+            &mut state,
+            Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
+        );
+        let pr = shown(&state);
+        assert_ne!(pr.file, before, "the latest patch");
+        assert_eq!(pr.head, HEAD, "b.rs is still held");
+        let view = state.tabs.shown_view().unwrap();
+        assert_eq!(
+            changes::stale_notice(view).as_deref(),
+            Some("1 file changed since you looked")
+        );
+        assert!(!changes::changed_since_you_looked(
+            view,
+            &RelPath::from_native("a.rs").unwrap()
+        ));
+    }
+
+    // H13, FR-010: the notice shows the latest diff and keeps the selected file.
+    #[test]
+    fn the_notice_shows_the_new_heads_diff_keeping_the_selection() {
+        let mut state = showing_seven();
+        let effect = head_moves(&mut state);
+        answer_unapplied(&mut state, effect, &patch_a(1, "newer"));
+        changes::update(&mut state, Msg::StaleApplied);
+        let pr = shown(&state);
+        assert_eq!(pr.held, None);
+        assert_eq!(pr.head, NEWER);
+        assert_eq!(pr.selected, Some(RelPath::from_native("a.rs").unwrap()));
+        assert_eq!(pr.diff, {
+            let mut fresh = showing_seven();
+            let effect = head_moves(&mut fresh);
+            answer_unapplied(&mut fresh, effect, &patch_a(1, "newer"));
+            changes::update(&mut fresh, Msg::StaleApplied);
+            shown(&fresh).diff.clone()
+        });
+    }
+
+    // H14, FR-011: while held the composer keeps its text and a save quotes the lines shown.
+    #[test]
+    fn while_held_a_comment_quotes_the_lines_on_screen() {
+        let mut state = showing_seven();
+        changes::update(
+            &mut state,
+            Msg::GutterPressed {
+                old: None,
+                new: Some(2),
+                extend: false,
+            },
+        );
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("half".into()));
+        let effect = head_moves(&mut state);
+        answer_unapplied(&mut state, effect, &patch_a(1, "newer"));
+        let view = state.tabs.shown_view().unwrap();
+        assert_eq!(
+            view.composer.as_ref().map(|c| c.text.as_str()),
+            Some("half")
+        );
+        changes::update(&mut state, Msg::ComposerEdited("whole".into()));
+        let ReviewEditOp::Add {
+            quote, text, pr, ..
+        } = add_of(changes::update(&mut state, Msg::ComposerSaved))
+        else {
+            panic!("an add");
+        };
+        assert_eq!(quote, vec!["new".to_string()], "the line on screen");
+        assert_eq!(text, "whole");
+        assert_eq!(pr.map(|p| p.head_commit), Some(HEAD.to_string()));
     }
 
     #[test]
@@ -2713,6 +2842,8 @@ diff --git a/b.rs b/b.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b
                 result: Ok(split_pr_diff(PUSHED)),
             },
         );
+        // Feature 1275: the new head's diff is held until the notice is pressed.
+        changes::update(&mut state, Msg::StaleApplied);
         assert_eq!(
             states(&state),
             vec![

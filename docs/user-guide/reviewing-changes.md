@@ -298,12 +298,33 @@ led.
 
 ### Keeping up with changes
 
-The view keeps itself current while it is shown. When a file in the entry is created, edited,
+The view keeps watching the entry while it is shown. When a file in the entry is created, edited,
 deleted or renamed, or a change is staged or committed — by you in a terminal or editor, or by
-the agent — the list and the diff on screen are read again within about two seconds, with nothing
-to press. A burst of edits (a build, an agent rewriting several files) is read once when it
-settles, not once per file. Files git ignores do not trigger a refresh, and the Default entry does
-not react to changes inside its worktrees.
+the agent — the changes are read again within about two seconds. A burst of edits (a build, an
+agent rewriting several files) is read once when it settles, not once per file. Files git ignores
+do not trigger a read, and the Default entry does not react to changes inside its worktrees.
+
+What you are reading does not move while the agent works. Once the list has files, a read that
+finds something new is held: the file list, its counts and the diff on screen stay exactly as they
+were, scroll position included. Instead the view's header says **3 files changed since you looked**
+(**1 file changed since you looked** for one), and the row of each of those files carries a dot
+at its end (tooltip: "Changed since you looked"; the same dot a reviewed file gets when it changes,
+see *Marking files reviewed*).
+The count includes files the list does not show yet (a new file) and files whose changes were
+undone; each file counts once however often it changes, and a file whose content goes back to what
+you are looking at leaves the count. Press the notice to show the latest list and diff in one step:
+the file you had selected stays selected while it is still listed, and the dots and the notice go.
+
+You do not have to apply everything to look at one file. Selecting a file without a dot shows its
+diff as before. Selecting a file with a dot reads and shows its latest diff, its row takes the
+latest counts and loses its dot, and the other changes stay held. If a dotted file has no changes
+any more (they were undone, or the file was removed), the diff area says so and the row keeps its
+dot until you press the notice.
+
+What you change yourself shows at once and leaves nothing held: switching the source between the
+working tree and a pull request, or turning **Committed** or **Uncommitted** on or off. A list that
+is empty, not read yet or failed is replaced at once too, since nothing on screen would move. A
+read that fails while changes are held keeps the list and the notice, with no error.
 
 The **Pull requests** list follows the same pull request status refresh as the sidebar: a pull
 request opened, merged or closed while the view is open shows its new state within that refresh
@@ -316,14 +337,15 @@ reopening the view. The pull request you are reading stays shown and keeps its p
 while the list changes; its header follows its state and checks. It is replaced by the working
 tree only when it leaves the list.
 
-The text you are writing in a comment box is kept across a refresh. Picked lines are kept while
-they are still in the diff; when they are gone, the pick is dropped.
+The text you are writing in a comment box is kept while changes are held and when you apply them.
+Picked lines are kept while they are still in the diff; when applying removes them, the pick is
+dropped. While changes are held, a comment you save quotes the lines on screen.
 
 A review put aside is not read while it is hidden. When you show it again it is read once more if
 its files may have changed meanwhile (they changed while its location was shown, its location was
-not shown, or the Overview or Settings covered it), so it never shows an older read as current;
-the selected file, scroll positions, comment text and picked lines are kept as any refresh keeps
-them.
+not shown, or the Overview or Settings covered it). That read is held like any other: you come
+back to the list and diff you left, with **n files changed since you looked** in the header when
+something changed meanwhile.
 
 ## Marking files reviewed
 
@@ -524,7 +546,11 @@ comments were written against is not in the worktree, one says so.
 
 A pull request's branch can gain commits (the agent's push, a colleague's) or be force-pushed while
 your comments are drafts. When the pull request list refreshes and shows a new head for the
-pull request you are looking at, its diff is read again; the file you had selected stays selected.
+pull request you are looking at, its diff is read again. When it differs from the diff on screen it
+is held, as for the working tree (see *Keeping up with changes*): the header says how many files
+changed since you looked and their rows carry a dot. Selecting a dotted file shows its latest patch;
+pressing the notice shows the new diff, and the file you had selected stays selected. Comments you
+write before that record the commit of the diff on screen.
 
 Each comment keeps the commit it was written against. It follows its code: where the quoted lines
 are still in the new diff the comment stays or moves with them, and where they are gone the comment

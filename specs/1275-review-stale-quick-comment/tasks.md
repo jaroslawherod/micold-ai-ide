@@ -172,7 +172,7 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
 you looked* and a dot per changed row, and applies on a press. **Independent test**:
 `cargo test -p micold-client --test features_changes` runs H1–H15; quickstart §A.
 
-- [ ] T015 [P] [US1] Write failing tests H1–H6 and H15 in
+- [x] T015 [P] [US1] Write failing tests H1–H6 and H15 in
   `crates/micold-client/tests/features_changes.rs`: a differing watch read leaves `list`,
   `selected`, `diff`, `diff_offset`, `pick`, `composer`, `anchors` unchanged and issues no
   `ReadDiff`; a `Same` read replaces silently; a user read (toggle, source, reopen, and one queued
@@ -180,21 +180,21 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
   held like a watch read (research R9); `stale_notice` singular/plural/`None`;
   `changed_since_you_looked`; no list on screen applies at once; a failed watch read keeps list and
   hold and shows no error.
-- [ ] T016 [P] [US1] Write failing tests H7–H10a in `crates/micold-client/tests/features_changes.rs`:
+- [x] T016 [P] [US1] Write failing tests H7–H10a in `crates/micold-client/tests/features_changes.rs`:
   selecting outside the set reads under the shown scope; inside the set and listed reads under the
   latest scope (`from` of a rename) and adopts `DiffRow::Row`; inside the set and no longer listed
   issues no read and `no_longer_changed` is true with the dot kept; with nothing held a
   working-tree `Row` writes into the shown list; `NotRead` adopts nothing; `Unlisted` under a hold
   acts as H9, with nothing held leaves the list. Also a unit test of `DiffRow::from_read` (T019):
   `Err` → `NotRead`, a list without the path → `Unlisted`, a list with it (or its rename) → `Row`.
-- [ ] T017 [P] [US1] Write failing tests H11–H14 in `crates/micold-client/tests/features_changes.rs`:
+- [x] T017 [P] [US1] Write failing tests H11–H14 in `crates/micold-client/tests/features_changes.rs`:
   a differing pull request head refresh sets `pr.held` and leaves `pr.diff`, `pr.selected`,
   `pr.file`; selecting a held PR file shows the latest patch and leaves the set; `StaleApplied`
   applies, keeps the selected file while listed and re-reads its diff keeping the old one meanwhile,
   re-judges anchors, re-parses `pr.file`; composer text and picks are kept by today's refresh rules
   (`composer_placed`), an unsaved new comment on a removed file closes; while held,
   `ComposerEdited`/`ComposerSaved` behave as without a hold and quote the lines shown.
-- [ ] T018 [US1] Implement the working-tree hold in `crates/micold-client/src/features/changes.rs`
+- [x] T018 [US1] Implement the working-tree hold in `crates/micold-client/src/features/changes.rs`
   (data-model §10, §12, §13; research R3, R4): `OpenView.held: Option<Held<ChangeList>>`,
   `OpenView.apply_next: bool` set by every user-caused read and kept by a queued `again`;
   `list_read` goes through `stale::observe` unless `apply_next` is set or no list is on screen, and
@@ -202,32 +202,32 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
   (`refresh_browsed` still runs); `Msg::StaleApplied` → `Held::apply` then the refresh path
   (`request_diff(state, true)`); helpers `stale_notice`, `changed_since_you_looked`,
   `no_longer_changed`. The show-time re-read #1269 added must not set `apply_next`.
-- [ ] T019 [US1] Implement selection under a hold (FR-009, research R5): `enum DiffRow { NotRead,
+- [x] T019 [US1] Implement selection under a hold (FR-009, research R5): `enum DiffRow { NotRead,
   Unlisted, Row(ChangedFile) }` on `Msg::DiffRead.row` and `FileSelected`/`DiffRead` adoption via
   `Held::adopt` in `crates/micold-client/src/features/changes.rs`; in
   `crates/micold-client/src/shell/changes.rs` the working-tree `ReadDiff` job also runs
   `GitCli::change_list_of(dir, scope, toggles, &[path, from])` and maps the result with the pure
   `DiffRow::from_read(io::Result<ChangeList>, path)` defined in `features/changes.rs` (a failure →
   `NotRead`, error not shown), so the shell job holds no logic of its own.
-- [ ] T020 [US1] Implement the pull request hold (research R6, data-model §11) in
+- [x] T020 [US1] Implement the pull request hold (research R6, data-model §11) in
   `crates/micold-client/src/features/changes.rs`: `PullRequestView.held: Option<Held<PrDiff>>` set
   when a head refresh answers with differences; selection of a held file adopts row and patch from
   `held.latest`; `StaleApplied` makes `pr.diff` the latest and re-parses `pr.file`. Choose whether
   `PrDiffLoad::Ready` holds a `PrDiff` or converts at the hold boundary, and say which in the PR.
-- [ ] T021 [P] [US1] Add the `ChangedDot` primitive in `crates/micold-material/src/changed_dot.rs`
+- [x] T021 [P] [US1] (Replaced in M3: #1271 already draws the row dot with `UnreadMark` in `file_row`; M3 reuses it with its own tooltip via `RowDot` in `ui/changes.rs`, no new primitive.) Add the `ChangedDot` primitive in `crates/micold-material/src/changed_dot.rs`
   (exported from `crates/micold-material/src/lib.rs`), a builder ending in `.into()`, drawn with
   `unread_mark`'s `filled_circle` and `DIAMETER` (`crates/micold-material/src/unread_mark.rs`) rather
   than a new circle style, with an in-file geometry test; show it in
   `crates/micold-client/src/showcase/sections/review.rs`.
-- [ ] T022 [US1] Draw it in `crates/micold-client/src/ui/changes.rs` (glue, after #1269 the Review
+- [x] T022 [US1] Draw it in `crates/micold-client/src/ui/changes.rs` (glue, after #1269 the Review
   tab's view): the notice as the shared `Button` text variant labelled `stale_notice(view)` in the
   view header, pressing it sends `Msg::StaleApplied`; `ChangedDot` on each file row where
   `changed_since_you_looked` is true (the tree row of #1273, if merged, places the same primitive);
   the diff area says the file has no changes any more when `no_longer_changed`.
-- [ ] T023 [US1] Update *Keeping up with changes* in `docs/user-guide/reviewing-changes.md`: the
+- [x] T023 [US1] Update *Keeping up with changes* in `docs/user-guide/reviewing-changes.md`: the
   list and diff stay put, the notice and its count, the dots, what selecting a dotted file does,
   what applies at once (toggles, source, no list on screen).
-- [ ] T024 [US1] Add the notice and a dotted row to the scene in
+- [x] T024 [US1] Add the notice and a dotted row to the scene in
   `crates/micold-client/tests/layout_snapshot.rs` and regenerate
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1`; the
   fixture diff shows only those additions.

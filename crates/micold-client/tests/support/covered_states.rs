@@ -2036,6 +2036,25 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1275: the hold in the review view (T024, FR-007, FR-008) ----------------
+        //
+        // `changes-review-marks` after a background read found `src/b.rs` edited and `src/d.rs`
+        // new: the list and the diff stay, the header shows *2 files changed since you looked*
+        // beside the source control, and `src/b.rs`'s row carries the dot.
+        CoveredState {
+            name: "changes-review-held",
+            build: review_held,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
         // --- Feature 1272: the review's source control (T024, FR-012) -------------------------
         //
         // `feat-short`'s review with the source control in its header and the file column at its
@@ -3458,6 +3477,7 @@ pub fn review_marks() -> StateUnderTest {
                     new: SideLines::from_bytes(b"a\nB\n"),
                     spans: Default::default(),
                 }),
+                row: changes::DiffRow::NotRead,
             },
         );
     }
@@ -3489,6 +3509,38 @@ pub fn review_marks() -> StateUnderTest {
                     change: id(9),
                 },
             ]),
+        },
+    );
+    under
+}
+
+/// [`review_marks`] after a background read found `src/b.rs` edited and `src/d.rs` new: the list
+/// and the diff held, the header's *2 files changed since you looked* and `src/b.rs`'s dot
+/// (feature 1275, T024, FR-007, FR-008).
+pub fn review_held() -> StateUnderTest {
+    use micold_client::features::changes::{self, shown_list, Load, Msg};
+    use micold_core::review::changes::ChangedFile;
+    use micold_core::review::RelPath;
+
+    let mut under = review_marks();
+    let changes = &mut under.state.changes;
+    changes::update(changes, Msg::Changed);
+    let view = changes.tabs.shown_view().expect("the review is shown");
+    let Load::Loading { seq, .. } = view.list else {
+        panic!("a change on disk reads the list");
+    };
+    let mut latest = shown_list(view).expect("a list on screen").clone();
+    latest.files[1].added += 3;
+    latest.files.push(ChangedFile {
+        path: RelPath::from_native("src/d.rs").expect("a relative path"),
+        ..latest.files[2].clone()
+    });
+    changes::update(
+        changes,
+        Msg::ListRead {
+            seq,
+            result: Ok(latest),
+            whole: Err("kept".into()),
         },
     );
     under

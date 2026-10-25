@@ -36,6 +36,7 @@ use micold_core::review::pr_diff::{pr_change_ids, PrDiff};
 use micold_core::review::reference::{self, Reference};
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::source_menu::{self, MenuInput, Shown, Stop};
+use micold_core::review::stale::Held;
 use micold_core::review::tree::{
     self, LayoutOptions, Leaf, Openness, Row, RowKind, TreeChoices, TreeSort,
 };
@@ -46,6 +47,10 @@ use micold_core::settings::DiffLayout;
 use micold_core::task_progress::Ratio;
 use micold_core::tokens::Rgb;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
+
+mod stale;
+
+pub use stale::{changed_since_you_looked, no_longer_changed, stale_notice, DiffRow, HeldPr};
 
 /// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9), worded in core.
 pub use micold_core::review::source_menu::DEFAULT_ENTRY_NOTE;
@@ -242,6 +247,9 @@ pub struct PullRequestView {
     pub shown_large: BTreeSet<RelPath>,
     /// The selected file's head version, which revealed lines come from (feature 1150, FR-005).
     pub head_text: HeadText,
+    /// A head refresh that differs from the diff on screen, held until the notice is pressed
+    /// (feature 1275, research R6).
+    pub held: Option<HeldPr>,
 }
 
 /// The selected pull request file's version at the pull request's head (feature 1150, FR-005).
@@ -390,6 +398,12 @@ pub struct OpenView {
     pub toggles: Toggles,
     /// The changed files.
     pub list: Load<ChangeList>,
+    /// The latest background read held back while it differs from the list on screen, which
+    /// stays one snapshot until the notice applies it (feature 1275, FR-005, FR-014).
+    pub held: Option<Held<ChangeList>>,
+    /// The list read under way or queued was caused by the user (toggles, a source change): it
+    /// is shown, never held (feature 1275, research R3).
+    pub apply_next: bool,
     /// The entry's whole working-tree change, whatever the toggles show, read with the list and
     /// kept while a re-read runs: the current ids the marks are judged on (feature 1271, FR-005).
     pub whole: Load<WholeChange>,
@@ -1476,7 +1490,12 @@ pub enum Msg {
         seq: u64,
         /// The diff, or git's message.
         result: Result<LoadedDiff, String>,
+        /// The file's current row, read with the diff (feature 1275, research R5).
+        row: DiffRow,
     },
+    /// The header's *n files changed since you looked* was pressed: show what is held (feature
+    /// 1275, FR-007).
+    StaleApplied,
     /// Read `seq` ended.
     ListRead {
         /// The read it answers.
@@ -2010,6 +2029,8 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         entry,
         toggles: Toggles::default(),
         list: Load::Idle,
+        held: None,
+        apply_next: false,
         whole: Load::Idle,
         selected: None,
         list_offset: 0,
@@ -2278,7 +2299,15 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         }
         Msg::SourceChosen(None) => {
             close_source_menu(state);
+            let from_pr = state
+                .tabs
+                .shown_view()
+                .is_some_and(|v| v.source != Source::Changes);
             show_working_tree(state);
+            // Feature 1275 (FR-009): a source the user picks shows at once, nothing held.
+            if from_pr {
+                return stale::applied(state);
+            }
             Effect::None
         }
         Msg::SourceChosen(Some(number)) => {
@@ -2337,16 +2366,11 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 let Ok(diff) = result else {
                     return Effect::None;
                 };
-                pr.diff = pr_diff_ready(diff);
-                pr.head = head;
-                let dropped = pr.selected.as_ref().is_some_and(|p| !pr_lists(pr, p));
-                if dropped {
-                    pr.selected = None;
-                }
-                pr.file = pr_file_diff(pr);
-                if dropped {
-                    reset_diff_pane(view);
-                }
+                // Feature 1275 (research R6): a diff that differs from the one on screen is held.
+                let Some((diff, head)) = stale::hold_pr_refresh(pr, diff, head) else {
+                    return Effect::None;
+                };
+                stale::show_pr_diff(view, diff, head);
             } else if pr.diff == (PrDiffLoad::Loading { seq }) {
                 pr.diff = match result {
                     Ok(diff) => pr_diff_ready(diff),
@@ -2397,7 +2421,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             };
             view.toggles.committed = !view.toggles.committed;
             view.drawer.hidden = None;
-            request_read(state)
+            request_user_read(state)
         }
         Msg::UncommittedToggled => {
             show_working_tree(state);
@@ -2406,7 +2430,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             };
             view.toggles.uncommitted = !view.toggles.uncommitted;
             view.drawer.hidden = None;
-            request_read(state)
+            request_user_read(state)
         }
         Msg::FileSelected(path) => {
             let Some(view) = state.tabs.shown_view_mut() else {
@@ -2422,6 +2446,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             if let Source::PullRequest(pr) = &mut view.source {
                 // A pull request's patches are held: choosing a file parses one, reads nothing.
+                // One changed since the user looked shows its latest patch (feature 1275, FR-009).
+                stale::adopt_pr_selection(pr, &path);
                 pr.selected = Some(path);
                 pr.file = pr_file_diff(pr);
                 pr.head_text = HeadText::NotRead;
@@ -2614,13 +2640,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
-        Msg::DiffRead { seq, result } => {
+        Msg::DiffRead { seq, result, row } => {
             if let Some(view) = state.tabs.shown_view_mut() {
                 if matches!(view.diff, Load::Loading { seq: s, .. } if s == seq) {
                     view.diff = match result {
                         Ok(diff) => Load::Ready(diff),
                         Err(message) => Load::Failed(message),
                     };
+                    stale::adopt_row(view, row);
                     reshape(view);
                 }
             }
@@ -2713,6 +2740,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             Effect::None
         }
         Msg::ListRead { seq, result, whole } => list_read(state, seq, result, whole),
+        Msg::StaleApplied => stale::applied(state),
         Msg::MarkToggled => mark_toggled(state),
         Msg::WorktreesListed { project, names } => {
             state.tabs.drop_gone_worktrees(&project, &names);
@@ -3626,6 +3654,7 @@ fn follow_head(state: &mut State) -> Option<Effect> {
     let listed = listed_pull_request(view, number)?.head.clone();
     if listed.is_empty()
         || listed == pr.head
+        || pr.held.as_ref().is_some_and(|held| held.head == listed)
         || !matches!(pr.diff, PrDiffLoad::Ready { .. })
         || pr.refresh.as_ref().is_some_and(|(_, head)| *head == listed)
     {
@@ -3991,6 +4020,7 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
         file: None,
         shown_large: BTreeSet::new(),
         head_text: HeadText::NotRead,
+        held: None,
     }));
     reset_diff_pane(view);
     state.next_seq += 1;
@@ -4111,7 +4141,20 @@ fn request_read(state: &mut State) -> Effect {
     }
 }
 
-/// Read `seq` ended: show its answer unless a newer read replaced it, then run a queued read.
+/// Start a read the user caused (feature 1275, research R3): its answer is shown, not held, and
+/// what was held goes, since it was read under what the user just changed.
+fn request_user_read(state: &mut State) -> Effect {
+    if let Some(view) = state.tabs.shown_view_mut() {
+        view.apply_next = true;
+        view.held = None;
+    }
+    request_read(state)
+}
+
+/// Read `seq` ended: show its answer unless a newer read replaced it, then run a queued read. A
+/// background read with a list on screen is held instead (feature 1275, research R3, R4): it
+/// neither re-reads the diff nor touches the selection, the picked lines, the composer or the
+/// anchors.
 fn list_read(
     state: &mut State,
     seq: u64,
@@ -4137,17 +4180,26 @@ fn list_read(
         ) => Load::Ready(last),
         (Err(message), _) => Load::Failed(message),
     };
-    view.list = match result {
-        Ok(list) => {
-            if let Some(selected) = &view.selected {
-                if !list.files.iter().any(|f| &f.path == selected) {
-                    view.selected = None;
-                    view.diff = Load::Idle;
-                    close_new(view);
-                }
-            }
-            Load::Ready(list)
+    // A queued read was asked for after this one: the user's wish carries over to it.
+    let apply = view.apply_next;
+    if !again {
+        view.apply_next = false;
+    }
+    if let Some(shown) = stale::list_on_screen(view).filter(|_| !apply).cloned() {
+        stale::hold_read(view, shown, result);
+        if again {
+            return request_read(state);
         }
+        let mut effects = refresh_browsed(state);
+        return match effects.len() {
+            0 => Effect::None,
+            1 => effects.remove(0),
+            _ => Effect::Batch(effects),
+        };
+    }
+    view.held = None;
+    view.list = match result {
+        Ok(list) => Load::Ready(list),
         Err(message) => {
             // Nothing listed backs the selection any more.
             view.selected = None;
@@ -4156,6 +4208,7 @@ fn list_read(
             Load::Failed(message)
         }
     };
+    stale::drop_unlisted_selection(view);
     judge_anchors(state);
     if again {
         request_read(state)
@@ -4183,13 +4236,20 @@ fn request_diff(state: &mut State, keep: bool) -> Effect {
     let Some(path) = view.selected.clone() else {
         return Effect::None;
     };
-    let Some(list) = shown_list(view) else {
-        return Effect::None;
+    // Feature 1275 (FR-009): a file changed since the user looked is read as the latest read
+    // lists it; one the latest read no longer lists is not read (the pane says so).
+    let held = view.held.as_ref().filter(|held| held.contains(&path));
+    let list = match held.map(Held::latest) {
+        Some(latest) => latest,
+        None => match shown_list(view) {
+            Some(list) => list,
+            None => return Effect::None,
+        },
     };
     let Some(file) = list.files.iter().find(|f| f.path == path) else {
         // No read is in flight and none will start: an idle pane would say "loading" for good
         // (#771). A later list that has the file asks again and replaces this.
-        if matches!(view.diff, Load::Idle) {
+        if held.is_none() && matches!(view.diff, Load::Idle) {
             view.diff = Load::Failed(format!("{path} is not among the changed files"));
         }
         return Effect::None;
@@ -4691,10 +4751,20 @@ pub enum DiffBody<'a> {
     Failed(&'a str),
     /// The diff on screen (the ready one, or the one kept while it is re-read).
     Diff(&'a LoadedDiff),
+    /// The selected file changed since the user looked and the latest read no longer lists it
+    /// (feature 1275, US1 AS11).
+    NoLongerChanged,
 }
+
+/// What the diff pane says of a file that has no changes any more (feature 1275, US1 AS11).
+pub const NO_LONGER_CHANGED: &str =
+    "This file has no changes any more. Apply the changes above to update the list.";
 
 /// What the diff pane shows for `view`.
 pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
+    if no_longer_changed(view) {
+        return DiffBody::NoLongerChanged;
+    }
     if let Source::PullRequest(pr) = &view.source {
         return match (&pr.selected, &pr.file) {
             (None, _) => DiffBody::NoSelection,
@@ -5180,6 +5250,7 @@ mod tests {
             Msg::DiffRead {
                 seq,
                 result: Err("late".into()),
+                row: DiffRow::NotRead,
             },
             Msg::PullRequestsRead {
                 seq,
