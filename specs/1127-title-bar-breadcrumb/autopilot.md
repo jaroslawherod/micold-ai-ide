@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iwrht0
 - **Started**: 2026-10-24
 - **Phase**: done
-- **Next step**: handoff — the orchestrator moves the close commits (branch `wip/1127-close`, on M4's head 13beef6d) onto the PR branch after M3 and M4 merge and opens the close PR (title and body in the scratchpad: `pr-title-close.md`, `pr-body-close.md`); the run ends when it merges
+- **Next step**: handoff — M4 and the close ship together in one PR (fewer layout-snapshot races with parallel threads); the run ends when it merges
 
 ## Pull requests
 
@@ -19,9 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1357 | design (spec, plan, tasks) | merged | 1076eede8a911518582fcfcbeb95fc08c4949d58 |
 | #1376 | M1 | merged | 9fc835a0 |
 | #1409 | M2 | merged | be3819ab |
-| #1416 | M3 | open (CI) | — |
-| — | M4 | built on `wip/1127-m4`, no PR yet | — |
-| — | close | built on `wip/1127-close`, gated; the orchestrator opens it after M4 | — |
+| #1416 | M3 | merged | cb7d512f |
+| (this PR) | M4 + close | open | — |
 
 ## Milestones
 
@@ -29,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T021 | full | 44 px bar: app mark, switcher, Overview button, Settings, overflow; panel at the bar's edge | #1376 | merged 9fc835a0 |
 | M2 | T022–T033 | full | `project / place` breadcrumb; switcher under the project segment | #1409 | merged be3819ab |
-| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | — | PR open |
-| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | — | done on `wip/1127-m4` (on M3's head b7bd60ec); gated, reviewed, PR text in scratchpad; orchestrator opens the PR |
+| M3 | T034–T045 | full | Jump-to field opens the quick switcher, gives way first | #1416 | merged cb7d512f |
+| M4 | T046–T050 | light | Overview button leaves the bar (only after #1125 M3 merges) | (with close) | gated, reviewed |
 
 ## Decisions
 
