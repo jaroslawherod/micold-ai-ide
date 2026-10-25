@@ -156,6 +156,22 @@ else
   fi
 fi
 
+# --- the basic image installs the tools an agent session expects (1435) -------------------------
+# `gh` for PR and issue work from inside a session, plus the everyday tools a script or an AI CLI
+# reaches for. The apt-get install list is what builds them in, so this reads it.
+
+cases=$((cases + 1))
+instructions="$(grep -v '^[[:space:]]*#' "$BASIC/Containerfile")"
+missing=""
+for pkg in gh curl wget jq ripgrep make python3; do
+  printf '%s\n' "$instructions" | grep -Eq "^[[:space:]]+$pkg([[:space:]]|\\|$)" || missing="$missing $pkg"
+done
+if [ -n "$missing" ]; then
+  fail "Containerfile installs gh, curl, wget, jq, ripgrep, make and python3" "missing:$missing"
+else
+  pass "Containerfile installs gh, curl, wget, jq, ripgrep, make and python3"
+fi
+
 # --- no image sets XDG_DATA_HOME (1286) ---------------------------------------------------------
 # Every process in the container inherits an image-wide ENV, and `/var/lib` is not writable by the
 # session user, so XDG-aware tools (mise) fail. The daemon is pointed at its state directory through

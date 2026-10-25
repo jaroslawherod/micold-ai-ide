@@ -15,12 +15,22 @@
 FROM docker.io/library/node:24-trixie-slim
 
 # Session tooling, as the sandbox image has it, plus the SSH server the client provisions through
-# and `util-linux` for `flock`, which serialises the AI CLI installs.
+# and `util-linux` for `flock`, which serialises the AI CLI installs. `gh` (Debian's build) lets a
+# session run `gh pr create`, `gh pr checks` and `gh issue view`; it carries no login, so it reads
+# `GH_TOKEN` or `GITHUB_TOKEN` from the run-time environment, and nothing is baked in (1435).
+# `curl`, `wget`, `jq`, `ripgrep`, `make` and `python3` are what scripts and AI CLIs reach for.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       git \
       git-lfs \
+      gh \
+      curl \
+      wget \
+      jq \
+      ripgrep \
+      make \
+      python3 \
       openssh-client \
       openssh-server \
       util-linux \
