@@ -27,8 +27,8 @@ caption = "The same window in the dark theme."
 kind    = "still"
 scene   = "worktree-sidebar"
 scheme  = "light"
-alt     = "The worktree sidebar listing the project's own checkout and three worktrees, each tagged with the kind of branch it holds -- docs, feat and fix. The second worktree is expanded, and the session open inside it is selected; the terminal beside it says the session is working in that worktree, on its branch."
-caption = "A session open in the second worktree. The sidebar and the terminal name the same branch."
+alt     = "The worktree sidebar: the Overview row and the chip bar at the top, then the project's own checkout and three worktrees -- docs, feat and fix -- as two-line rows under the header of their state's group, each with its short branch and its sessions on the second line. The feat worktree's row, whose session is working, is selected; the terminal beside it says the session is working in that worktree, on its branch."
+caption = "A session open in the feat worktree. The sidebar and the terminal name the same branch."
 
 [media.worktree-sidebar-dark]
 kind    = "still"

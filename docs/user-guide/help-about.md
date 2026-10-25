@@ -1,20 +1,20 @@
 # Help & About
 
-This page covers the Micold AI IDE application window, its **Help** toolbar entry, and the
+This page covers the Micold AI IDE application window, its **overflow menu** in the title bar, and the
 **About** dialog.
 
 ## The application window
 
-When you launch Micold AI IDE, a single main window opens with a **toolbar across the top**.
-On the right of the toolbar is an **overflow menu** — a three-dots (⋮) icon button.
+When you launch Micold AI IDE, a single main window opens with a
+[**title bar**](appearance-theming.md#title-bar) across the top. At its right end is an **overflow menu** — a three-dots (⋮) icon button.
 
 ## Opening About
 
-1. In the toolbar, select the **overflow menu** (the three-dots icon on the right). An
+1. In the title bar, select the **overflow menu** (the three-dots icon on the right). An
    **About** item appears beneath it.
 2. Select **About**. The About dialog opens as a modal overlay centered in the window.
 
-While the dialog is open, the rest of the window (including the toolbar) is dimmed and does
+While the dialog is open, the rest of the window (including the title bar) is dimmed and does
 not respond to input.
 
 ## What the About dialog shows

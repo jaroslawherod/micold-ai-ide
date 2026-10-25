@@ -1,7 +1,7 @@
 # Appearance & Theming
 
 Micold AI IDE uses a single Material Design layout and a shared design system, so every
-screen — the top app bar, the project view, the known-projects list, and every dialog —
+screen — the title bar, the project view, the known-projects list, and every dialog —
 shares one consistent look. The application ships light and dark themes, and by default
 follows your operating system's preference.
 
@@ -9,15 +9,9 @@ follows your operating system's preference.
 
 The window is organised as a Material Design layout:
 
-- A 44 px **title bar** across the top holds, from the left: the app mark (hover it for the
-  application's name), a `project / place` **breadcrumb**: the open project (press it to switch
-  projects) and, after a `/` in a quieter tone, the branch or view the main area shows;
-  in the middle of the free space, the **Jump to location, session or
-  project** field with its shortcut (Ctrl+Shift+P, Cmd+Shift+P on macOS), which opens the quick
-  switcher; at the right, a **Settings** button (the gear) and the **overflow menu** (three dots).
-  It shows no title text. When the window narrows, the field gives way first — it narrows to fit
-  its words, then drops its words, then its shortcut, keeping a pressable search glyph — then the
-  place shortens with an ellipsis, then the project name, and every control stays in the bar.
+- A 44 px **title bar** across the top holds the app mark, the `project / place` breadcrumb, the
+  **Jump to location, session or project** field, **Settings** and the overflow menu — see
+  [Title bar](#title-bar).
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
 - A thin **status bar** along the bottom edge says whether the window is connected and whether the
@@ -28,6 +22,32 @@ The window is organised as a Material Design layout:
   action, **outlined** and **text** buttons for secondary and low-emphasis actions. Buttons
   visibly respond to hover, focus, and press, and appear dimmed when disabled. They are
   **fully rounded** (pill-shaped), as Material specifies.
+
+### Title bar
+
+A 44 px bar runs across the top of the window in every view. Its **Jump to location, session or
+project** field, in the middle, opens the [quick
+switcher](worktrees-and-sessions.md#interacting-with-the-terminal) as Ctrl+Shift+P (Cmd+Shift+P on
+macOS) does; the `project / place` **breadcrumb** at its left is where you switch projects. From
+the left, it holds:
+
+- **App mark** — the application's icon; hover it for the application's name. It is not a button.
+- **Breadcrumb** — the open project (press it to switch projects) and, after a `/` in a quieter
+  tone, the branch or view the main area shows — see [Switching projects from the
+  breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb).
+- **Jump to location, session or project** — in the middle of the free space, with its shortcut
+  (Ctrl+Shift+P, Cmd+Shift+P on macOS). Press it, or Tab to it and press Enter or Space; it is
+  pressed, not typed into. While Settings is open it is greyed out and does nothing.
+- **Settings** — the gear, at the right; it opens [Settings](settings.md) and is drawn selected
+  while Settings is open.
+- **Overflow menu** — the three dots at the right end, holding Settings, Session service
+  diagnostics and [About](help-about.md).
+
+It shows no title text and no Overview button: the Overview opens from the sidebar's first row —
+see [Opening and closing it](overview.md#opening-and-closing-it). When the window narrows, the field
+gives way first — it narrows to fit its words, then drops its words, then its shortcut, keeping a
+pressable search glyph — then the place shortens with an ellipsis, then the project name, and every
+control stays in the bar.
 
 ### Status bar
 
@@ -64,7 +84,7 @@ shortened item's tooltip still holds its full text.
 
 Conditions that need you to act — another window holding the project or taking it over, a service
 of a different version or an older build to restart, a sandbox that failed or is out of date, a
-session running without the sandbox — still appear as a banner under the app bar, in every view,
+session running without the sandbox — still appear as a banner under the [title bar](#title-bar), in every view,
 with the button that ends them ("Take over", "Restart service", "Run without it for now", "Restart
 the sandbox", "Try the sandbox again"). The bar shows the same condition in amber at the same time,
 and both go away when the condition ends.
@@ -192,7 +212,7 @@ open in it, that session's terminal, and Settings:
 
 ## Choosing your theme
 
-Open the **overflow menu** (the three-dots icon on the right of the toolbar). Its first item
+Open the **overflow menu** (the three-dots icon at the right end of the [title bar](#title-bar)). Its first item
 is a **theme-mode toggle** showing the current mode with an icon; **each click cycles to the
 next mode**:
 

@@ -121,7 +121,7 @@ linked elsewhere; `worktrees-and-sessions.md` opens with the four regions.
 **Independent test**: quickstart A2 stage-2 rows, A1, and the five SC-007 answers each in the first
 paragraph of its owning section.
 
-- [ ] T012 [US2] Read #1125's and #1127's merged specs and user-guide changes: write down the final
+- [x] T012 [US2] Read #1125's and #1127's merged specs and user-guide changes: write down the final
   removed-element list (spec Terms) and the patterns for anything they removed beyond
   [doc-edits §Patterns](contracts/doc-edits.md#patterns) stage 2; record the title bar's and the
   sidebar's owning sections (research R2). If #1127 wrote no title-bar section, add `### Title bar`
@@ -130,36 +130,36 @@ paragraph of its owning section.
   usage in the title bar, update FR-001 and FR-010 in `specs/1128-layout-redesign-docs/spec.md` to
   match (spec Edge cases) and say so in the ledger. Run all stage-2 patterns over
   `docs/user-guide/*.md site/media.toml` and match the hits to S1–S15 in the scratchpad list
-- [ ] T013 [US2] S2, S3 in `docs/user-guide/overview.md` (~20, ~36, ~43): open and close the
+- [x] T013 [US2] S2, S3 in `docs/user-guide/overview.md` (~20, ~36, ~43): open and close the
   Overview by the sidebar's Overview row and Ctrl+Shift+O (Cmd+Shift+O on macOS); which regions
   stay while it is open and while it is full screen, as shipped (FR-006, US2 scenario 1)
-- [ ] T014 [P] [US2] S4, S5, S14 in `docs/user-guide/project-selection.md`: `## Switching projects
+- [x] T014 [P] [US2] S4, S5, S14 in `docs/user-guide/project-selection.md`: `## Switching projects
   from the top bar` (~70) gets a heading naming the breadcrumb, and its text says where the panel
   opens, without "top bar" or "next to the menu button" (FR-007); ~155 names the breadcrumb's
   project part; `#opening-a-project` says the empty screen shows the title bar and the status bar
   only, and where the open-project actions are. Re-point every inbound link to
   `#switching-projects-from-the-top-bar` (`grep -rn` over `docs/ site/`) (FR-019)
-- [ ] T015 [US2] S1, S6, S14, S15 in `docs/user-guide/worktrees-and-sessions.md`: **Open another
+- [x] T015 [US2] S1, S6, S14, S15 in `docs/user-guide/worktrees-and-sessions.md`: **Open another
   project** (~13) where #1127 put it, linked; tag filtering (~320) describes the chip bar, with no
   filter button or tag-filter panel (US2 scenario 4); `#opening-a-project-git-repositories-only`
   describes the empty screen; where the groups are described: a project with no worktrees shows the
   Overview row, Default and no group, and a row moves between groups as its state changes (spec
   Edge cases, Principle II)
-- [ ] T016 [US2] S12 in `docs/user-guide/worktrees-and-sessions.md`: a short opening section before
+- [x] T016 [US2] S12 in `docs/user-guide/worktrees-and-sessions.md`: a short opening section before
   `## Opening a project (git repositories only)` naming the regions top to bottom (title bar,
   sidebar beside the session area, status bar), each linked to its owning section (FR-009, US2
   scenario 5)
-- [ ] T017 [US2] S13 across the four pages: wherever the quick switcher is opened, name the jump-to
+- [x] T017 [US2] S13 across the four pages: wherever the quick switcher is opened, name the jump-to
   field in the title bar and Ctrl+Shift+P (Cmd+Shift+P on macOS) (FR-008, US2 scenario 3)
-- [ ] T018 [P] [US2] S7–S10 outside the four pages, those sentences and rows only (FR-011):
+- [x] T018 [P] [US2] S7–S10 outside the four pages, those sentences and rows only (FR-011):
   `docs/user-guide/appearance-theming.md` (~4, ~12, ~58), `docs/user-guide/icons.md` (~12, ~30,
   ~41, ~86), `docs/user-guide/settings.md` (~4, ~52), `docs/user-guide/sandboxed-daemon.md` (~505):
   each removed element becomes the shipped one and links to its owning section; a hit that says the
   element is gone stays (historical)
-- [ ] T019 [P] [US2] S11 in `site/media.toml`: the alt text and captions of the four pages' media
+- [x] T019 [P] [US2] S11 in `site/media.toml`: the alt text and captions of the four pages' media
   that name a removed element (`worktree-sidebar-light`: "each tagged with the kind of branch it
   holds") describe what shipped (research R4)
-- [ ] T020 [US2] Verify stage 2: all patterns (stage 1 and 2, plus T012's) return only owning
+- [x] T020 [US2] Verify stage 2: all patterns (stage 1 and 2, plus T012's) return only owning
   sections, linked mentions and historical hits (SC-001, SC-002); the five SC-007 answers are each in
   the first paragraph of their owning section; every chord has its macOS form (FR-018); A1 passes;
   `scripts/tests/media-references.test.sh` and `site/checks/media-references.sh` pass after T019's

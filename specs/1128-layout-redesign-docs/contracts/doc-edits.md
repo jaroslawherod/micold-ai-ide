@@ -65,7 +65,7 @@ Read again after #1125 and #1127 merge; each may already be fixed by them.
 | S12 | `worktrees-and-sessions.md` new opening section | — | FR-009: names title bar, sidebar beside the session area, status bar, top to bottom, each linked; placed before `## Opening a project (git repositories only)` |
 | S13 | quick-switcher mentions | — | jump-to field and Ctrl+Shift+P (Cmd+Shift+P on macOS) both named (FR-008) |
 | S14 | empty states: `project-selection.md#opening-a-project`, `worktrees-and-sessions.md#opening-a-project-git-repositories-only` | — | what the empty screen shows (title bar and status bar only) and where the open-project actions are (Edge cases) |
-| S15 | sidebar groups | — | a project with no worktrees shows the Overview row, Default and no group; a row moves between groups as its state changes (Edge cases) |
+| S15 | sidebar groups | — | a project with no worktrees shows the Overview row, the chip bar (**All** only) and Default under its state's group, with the "No worktrees yet" hint (as #1125 shipped); a row moves between groups as its state changes (Edge cases) |
 
 ## Done when
 

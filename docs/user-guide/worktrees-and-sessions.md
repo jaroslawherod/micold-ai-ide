@@ -8,12 +8,25 @@ active session. The sidebar also always shows one **Default** entry —
 a session location that isn't a worktree at all, for work you don't want to isolate onto its own
 branch (see [The "Default" entry](#the-default-entry-sessions-without-a-worktree) below).
 
+## The window
+
+From top to bottom, the window has four regions: the [title bar](appearance-theming.md#title-bar)
+(the breadcrumb, the jump-to field, Settings and the overflow menu); below it, the
+[sidebar](#browsing-worktrees) on the left beside the [session area](terminal-panes.md) on the right, where the
+[header](terminal-panes.md#the-header-above-the-terminal) and the [tab
+strip](terminal-panes.md#the-tab-strip-above-the-terminal) sit above the terminal; and the
+[status bar](appearance-theming.md#status-bar) along the bottom edge.
+
 ## Opening a project (git repositories only)
 
 Open a project with **Open a project** (empty state), **Open another project** (the active
-project's page), or **Add project…** at the end of the project switcher that the top bar's project
-segment opens, then choose a folder.
+project's page), or **Add project…** at the end of the project switcher that the title bar's
+[breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb) opens, then choose a
+folder.
 
+- With no project open, the window shows only the [title bar](appearance-theming.md#title-bar), the empty state and the
+  [status bar](appearance-theming.md#status-bar):
+  there is no sidebar until a project is open.
 - Only **git repositories** can be opened as projects. If you choose a folder that is not a git
   repository, opening is refused with a message and nothing is opened.
 - Once opened, the project becomes the active context and the sidebar lists its worktrees.
@@ -29,6 +42,9 @@ segment opens, then choose a folder.
   attention (failing checks, a failed session) is listed under **Needs action**; there is no
   separate group for it. Inside a group, rows keep the sidebar's usual order: *Default* first, then
   the worktrees as before, and a run group counts as one row.
+- **A project with no worktrees** shows the [Overview](overview.md#opening-and-closing-it) row, the
+  [chip bar](#filtering-worktrees-by-tag) with **All** only, and the *Default* row under its state's
+  header, with the hint "No worktrees yet. Add one to get started." below.
 - **Done starts collapsed**, unless it holds the session you are looking at; the other groups start
   open. Press a header, or press Enter or Space while it has the keyboard, to collapse or expand
   that group. Your choice holds for the rest of the run, per project: rows moving in and out, the
@@ -1959,7 +1975,8 @@ strip's right end keep their full size and position however many tabs are open.
 ## Sessions in the background
 
 Switching to a different project **does not stop your sessions**. When you change the active
-project — from the top-bar project switcher, the **Known projects** list, or the folder browser —
+project — from the project switcher under the title bar's
+[breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb), the **Known projects** list, or the folder browser —
 the project you leave keeps all its sessions running in the background: their AI CLI processes
 stay alive and their output keeps accumulating while you are away.
 
@@ -2225,11 +2242,11 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   project, in the order of the project switcher, exactly as picking it there does. Projects that
   are unavailable are skipped, and with only one available project nothing changes. All three
   levels wrap: past the last entry the next press goes to the first, and back.
-- **Quick-switcher**: **Ctrl+Shift+P** (Cmd+Shift+P on macOS) opens a search box over the list of
-  the active project's locations, each followed by its open sessions, then the other known
-  projects, also from a focused terminal;
-  the app takes it and the terminal never sees it. The **Jump to location, session or project**
-  field in the middle of the title bar opens it too: press it, or Tab to it and press Enter or
+- **Quick-switcher**: **Ctrl+Shift+P** (Cmd+Shift+P on macOS), or the **Jump to location, session
+  or project** field in the middle of the [title bar](appearance-theming.md#title-bar), opens a
+  search box over the list of the active project's locations, each followed by its open sessions,
+  then the other known projects. The shortcut works also from a focused terminal;
+  the app takes it and the terminal never sees it. Press the field, or Tab to it and press Enter or
   Space, wherever the shortcut works. While Settings is open the field is greyed out and does
   nothing, as the shortcut does nothing there; while the switcher is open, pressing the field
   closes it like any click outside. The tag filter applies, as it does to the
@@ -2315,7 +2332,7 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
 ### One press does what you pressed
 
 Every control in the window acts on the **first** press, whatever the terminal was holding. Press
-a tab and the pane switches to it; press a session in the sidebar and it opens; press a toolbar
+a tab and the pane switches to it; press a session in the sidebar and it opens; press a [title bar](appearance-theming.md#title-bar)
 button and it fires. You never press something twice — once to get out of the terminal, once to
 actually use it.
 
@@ -2331,8 +2348,8 @@ What a press does to the keyboard depends only on what you pressed:
 
 ### While you are typing somewhere else
 
-The terminal never takes the keyboard out from under you. A dialog, a menu, the project switcher,
-the sidebar's filter panel or a text field holds it for as long as it is open, and hands it back
+The terminal never takes the keyboard out from under you. A dialog, a menu, the project switcher
+or a text field holds it for as long as it is open, and hands it back
 when it closes — unless you had released the terminal first, in which case the keyboard stays with
 the application.
 

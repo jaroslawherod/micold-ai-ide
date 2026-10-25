@@ -233,8 +233,10 @@ its follow-up.
   The pages that describe the empty state (`project-selection.md#opening-a-project`,
   `worktrees-and-sessions.md#opening-a-project-git-repositories-only`) describe what that screen
   shows after the redesign and where the open-project actions now are.
-- **Project with no worktrees** (empty input): the sidebar shows the Overview row, the Default
-  entry and no group; the pages say so where they describe the groups.
+- **Project with no worktrees** (empty input): the sidebar shows the Overview row, the chip bar
+  with **All** only, and the Default entry under its state's group header, with the "No worktrees
+  yet" hint (as #1125 shipped, its spec's Edge cases); the pages say so where they describe the
+  groups.
 - **Failure**: daemon disconnected or sandbox failed. The pages say where the failure appears (the
   banner or notification #1124 kept) and what the status bar shows meanwhile; the visual pass does
   not need a failure screenshot, since #1124's pass recorded those (`specs/1124-bottom-status-bar/visual`).
