@@ -10,22 +10,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-43e62l
 - **Started**: 2026-10-24
 - **Phase**: milestone M3
-- **Next step**: orchestrator merges #1368 and the M2 PR, moves the M3 commits (branch m1272-m3 in /home/user/wt-1272-m1, on M2 head b2d70127) onto the run branch, pushes and opens the M3 PR (title/body in scratchpad m3/; full gate green at c2d58524); then M4 once #1270 has merged
+- **Next step**: orchestrator waits on CI for #1383 (M2+M3, rebased onto #1269, full gate green at a5750fb0) and merges it; then M4 once #1270 has merged
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1355 | Design PR: spec, plan, tasks | merged | db1c1bcf |
-| #1368 | M1: core `review::source_menu` model | open (CI running) when M2 started | |
+| #1368 | M1: core `review::source_menu` model | merged | ae314336 |
+| #1383 | M2 + M3: reducer state and picks; shared `MenuSelect` | open; rebased onto #1269 (origin/main 7844dde4) | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | core `review::source_menu` model + unit tests; client PR section/wording from core | #1368 | done, gate green at 703c8ff5; PR open |
-| M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | | done, gate green at 1eaf6de8; PR to open |
-| M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | | done, gate green at c2d58524; PR to open |
+| M2 | T009–T015 | full | reducer: control state, picks via SourceChosen/FilesPaneToggled, chips keep open, chip-while-PR | #1383 | done; ported onto #1269's kept Review tabs (decision 5) |
+| M3 | T016–T018 | full | shared `MenuSelect` + geometry gate + showcase | #1383 | done |
 | M4 | T019–T026 | full | header control, emptied left column, 260 px two columns, snapshot, guide, visual pass — **not before #1270 (and #1269 if open) merged** (decision 2) | | blocked on #1270 |
 
 ## Decisions
@@ -36,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | plan | How to sequence against unmerged #1270/#1269? | M1 core model, M2 reducer, M3 shared `MenuSelect` ship first; M4 view wiring (header, left column, 260 px two columns, snapshot, docs, visual pass) waits on #1270 merged | agent | plan.md#Milestones and sequencing; research.md R8 |
 | 3 | tasks | Milestones by story (milestones.md rules 1–2) or by layer? | By layer, per plan and decision 2: M1 ships the P1 stories' (US1, US2) core decisions and tests under milestones.md rule 6, M2 their reducer behaviour, both unreachable from the UI until M4; no story's UI can land before #1270, so a per-story cut would put every milestone behind it. T027 (Polish, no code) left to the close unit | agent | plan.md#Milestones and sequencing; tasks.md header note |
 | 4 | M3 | Where does the core `Row` → `MenuSelectRow` mapping live, given T018 needs it before T021? | `ui/source_menu.rs` (`menu_rows`, `control`), added in M3 for the showcase poses; T021 (M4) wires the header through it rather than writing its own | agent | review B M3 F1; Principle VIII (one mapping for header and showcase) |
+| 5 | M2 rebase | How does M2 sit on #1269's kept Review tabs? | Main's structure kept: `source_menu` built in `fresh_view`; every `state.open` use is `state.tabs.shown_view{,_mut}()`; since a kept tab is re-shown rather than rebuilt, `opened()` closes the source list so data-model §8 (a view opens with the list closed) still holds. #1269's tests unchanged | agent | `opening_a_view_resets_the_control`; M2 rebase review |
 
 ## Review rounds
 
@@ -54,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B (conformance, sonnet, headless) | 1 | a5076ddfcb5a1f1d65c7ba6c1e637859be9fabe9:1eaf6de89bd3c1bf198ff6a5218cd2413a9c8ec4 | CLEAN, no findings; first run returned a bare CLEAN, re-run with a required evidence block (Checked: per rubric item, cited tests and lines). Ran beside A and the gate; reviewers could not run cargo, Verify output supplied by the implementer |
 | M3 A (code-review high, headless claude -p) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 2 MINOR (F1 redundant strut and extra gap before the option marker, fixed; F2 declined) |
 | M3 B (conformance, sonnet, headless) | 1 | fc06ceaf2f00956c51b2455fb7cfea50ac9f1d93:b46fbc163a7abfa9e0a73c9ae182acb6d24f7182 | CLEAN: 3 MINOR, all taken (F1 mapper scope recorded as decision 4; F2 visual pass run on the showcase under Xvfb, `visual-pass/m3.md`; F3 `OPEN_POSE_ROOM` named). Ran beside A; Verify output supplied by the implementer |
+| M2 rebase (conflict resolution only, sonnet, headless claude -p) | 1 | diff vs origin/main 7844dde4 of changes.rs, tests/support/source_menu.rs, ui/mod.rs | CLEAN: 2 MINOR (F1 a cover leaves the list open, declined; F2 local `opened` shadowed the fn name, renamed `outcome`) |
 
 ## Declined review findings
 
@@ -64,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | — | Analyze | U2 split T021 | T021 is one view function's wiring; M4 has 8 tasks. No change. |
 | M2 | A | F1 `menu_input` computes `stale` at `now = 0` then clears it | correct and commented (`None` never marks it); a refactor would re-run the full gate for no behaviour change |
 | M2 | A | F2 inline `Source` → `Stop` mapping in `SourceMenuToggled` | used once; the other mapping (`menu_input`) builds a `Shown`, not a `Stop` |
+| M2 rebase | re-review | F1 a cover (Overview, Settings, Compare) leaves an open source list open | outside data-model §8; before #1269 a cover did not rebuild the view either, so no behaviour change from the port |
 | M3 | A | F2 keyboard ring drawn on the disabled Committed chip | intended: a disabled stop stays reachable so the highlight can land on it (research R7, `source_menu::stops`); `Enter` there does nothing |
 
 ## Handover
