@@ -58,6 +58,12 @@ pub struct Glyph<'a, M> {
 }
 
 impl<'a, M: 'a> Glyph<'a, M> {
+    /// How wide a glyph drawn at `role` is: the role's size, as icons are square. For a row that
+    /// keeps a glyph's slot in its sums (feature 1273's name room).
+    pub fn extent(role: TypeRole) -> f32 {
+        role.size()
+    }
+
     /// `icon` drawn at `role`'s size, themed by `roles`. Tinted `on_surface` unless told otherwise.
     pub fn new(icon: Icon, role: TypeRole, roles: Roles) -> Self {
         Self {
