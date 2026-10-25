@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: orchestrator opens the M3 PR from scratchpad m3-pr-title.md / m3-pr-body.md
+- **Next step**: M4 implement (T040–T045) on wip-1185-m4, prepared on top of the unmerged M3 (PR #1406, draft, CI green, held until jaro confirms D15); the orchestrator rebases and pushes after M3 merges
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | #1381 | done; rebased onto #1186 M3, refit (D12), gate passed at aa3b2c52; merged 3b7ae99f |
 | M2 | T023–T030 | full | Fix-version filter, AND with component | #1396 | done; merged d1bd9fe4 |
 | M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) + Filters panel (D15) | — | done on 9177522b (rebased; #1397 merged, its guard no longer duplicated); visual B2/B3 black dialog = tiny-skia defect (D16), visual pass 2 on lavapipe passes; gate green at f89fa72f (rebased onto 9177522b, fixture auto-merged); pushed, PR pending |
-| M4 | T040–T045 | full | Label filter from loaded issues; all four in one row | — | pending |
+| M4 | T040–T045 | full | Label filter from loaded issues; all four in the Filters panel (D15) | — | in progress on wip-1185-m4, stacked on unmerged M3 (PR #1406 head 1d4c65cb, held for D15) |
 
 ## Decisions
 

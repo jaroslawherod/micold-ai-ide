@@ -29,7 +29,9 @@
 //! /rest/api/3/user/viewissue/search?query=…` answers the people whose name holds the typed text
 //! (any case): `Dev Fake`, two `Alex Kim`s with different accounts and `Sam Lee`. A
 //! `reporter = "<account>"` clause keeps every fourth issue, starting at the person's place in
-//! that list; an unknown account has none. All three clauses AND.
+//! that list; an unknown account has none. A `labels = "…"` clause keeps the issues carrying that
+//! label (the page's labels: `backend`, `security`, `ui`); an unknown label has none. All four
+//! clauses AND.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -171,15 +173,16 @@ fn in_share(index: usize, value: Option<&str>, names: &[&str]) -> bool {
     })
 }
 
-/// The page narrowed to the component's and the fix version's shares, when the request's JQL
-/// names either (an archived version has no share).
+/// The page narrowed to the component's, the fix version's and the reporter's shares and to the
+/// issues carrying the label, when the request's JQL names any (an archived version has no share).
 fn filtered_answer(body: &str) -> Option<String> {
     let json: serde_json::Value = serde_json::from_str(body).ok()?;
     let jql = json["jql"].as_str()?;
     let component = clause_value(jql, "component = \"");
     let version = clause_value(jql, "fixVersion = \"");
     let reporter = clause_value(jql, "reporter = \"");
-    if component.is_none() && version.is_none() && reporter.is_none() {
+    let label = clause_value(jql, "labels = \"");
+    if component.is_none() && version.is_none() && reporter.is_none() && label.is_none() {
         return None;
     }
     let accounts: Vec<&str> = PEOPLE.iter().map(|(account, _)| *account).collect();
@@ -197,6 +200,13 @@ fn filtered_answer(body: &str) -> Option<String> {
             in_share(*i, component.as_deref(), &COMPONENTS)
                 && in_share(*i, version.as_deref(), &live)
                 && in_share(*i, reporter.as_deref(), &accounts)
+        })
+        .filter(|(_, issue)| {
+            label.as_deref().is_none_or(|label| {
+                issue["fields"]["labels"]
+                    .as_array()
+                    .is_some_and(|labels| labels.iter().any(|held| held.as_str() == Some(label)))
+            })
         })
         .map(|(_, issue)| issue.clone())
         .collect();

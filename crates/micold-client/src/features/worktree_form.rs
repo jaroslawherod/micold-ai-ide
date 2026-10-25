@@ -1556,7 +1556,15 @@ pub fn issues_loaded(
     result: Result<(IssueListing, PathBuf), IssueLoadError>,
 ) {
     with_form(state, |form| {
-        if form.issues != (IssueList::Loading { seq }) {
+        let awaited = form.issues == (IssueList::Loading { seq });
+        // Feature 1185 (FR-005): the label choices come from the unfiltered listing, even one a
+        // filter superseded as the list.
+        if form.provider == IssueProvider::Jira {
+            let unfiltered = awaited && form.jira_filters.chosen.is_empty();
+            let listing = result.as_ref().map(|(listing, _)| listing);
+            form.jira_filters.take_labels(seq, unfiltered, listing);
+        }
+        if !awaited {
             return;
         }
         match result {
@@ -1665,6 +1673,7 @@ pub fn issue_retry(state: &mut crate::app::State) {
         match &mut form.issues {
             IssueList::Failed { .. } => {
                 form.issues = IssueList::Loading { seq: next_seq };
+                form.jira_filters.wait_for_labels(next_seq, None);
                 started = true;
             }
             IssueList::Loaded { search, .. } if matches!(search, SearchState::Failed { .. }) => {

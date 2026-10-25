@@ -10,9 +10,10 @@
 //!
 //! Choices are parsed here too: [`parse_components`] reads a project's components,
 //! [`parse_versions`] its fix versions, [`parse_myself`] the connected account's own user and
-//! [`parse_users`] a project user search (§4).
+//! [`parse_users`] a project user search (§4). [`label_choices`] takes the label filter's choices
+//! from a loaded listing, with no request (research R5).
 
-use crate::github::IssueLoadError;
+use crate::github::{IssueListing, IssueLoadError};
 
 /// A value Jira may send and this feature may show or send: non-empty, no control character
 /// (FR-010).
@@ -398,4 +399,46 @@ pub fn others(people: Vec<JiraUser>, me: Option<&JiraUser>) -> Vec<JiraUser> {
         .into_iter()
         .filter(|person| Some(person) != me)
         .collect()
+}
+
+/// The label filter's choices (FR-005, research R5): the labels of a loaded listing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LabelChoices {
+    labels: Vec<String>,
+    partial: bool,
+}
+
+impl LabelChoices {
+    /// Every usable label once, sorted case-insensitively, ties by exact text.
+    pub fn labels(&self) -> &[String] {
+        &self.labels
+    }
+
+    /// The listing was cut (the 1,000-issue cap), so these are the labels of the most recently
+    /// updated issues only.
+    pub fn partial(&self) -> bool {
+        self.partial
+    }
+}
+
+/// The labels of every issue of `listing`, each once; empty or control-character labels skipped;
+/// sorted case-insensitively with ties by exact text; partial when the listing is incomplete.
+pub fn label_choices(listing: &IssueListing) -> LabelChoices {
+    let mut labels: Vec<String> = listing
+        .issues
+        .iter()
+        .flat_map(|issue| issue.labels())
+        .filter(|label| is_usable(label))
+        .cloned()
+        .collect();
+    labels.sort_by(|a, b| {
+        a.to_lowercase()
+            .cmp(&b.to_lowercase())
+            .then_with(|| a.cmp(b))
+    });
+    labels.dedup();
+    LabelChoices {
+        labels,
+        partial: !listing.complete,
+    }
 }

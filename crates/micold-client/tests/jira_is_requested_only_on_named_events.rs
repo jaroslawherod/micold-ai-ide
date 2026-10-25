@@ -267,3 +267,12 @@ fn filter_choices_and_filtered_loads_start_only_from_their_handlers() {
     assert!(handler.contains(".pending_people_search()"));
     assert!(handler.contains(".filter(|(seq, _)| *seq > choice_before || Some(*seq) == due)"));
 }
+
+/// Feature 1185 M4 (FR-005, research R5): the label filter's choices come from the loaded issues;
+/// no code asks Jira for labels.
+#[test]
+fn labels_are_never_asked_of_jira() {
+    for needle in ["/rest/api/3/label", "fn labels(connection"] {
+        assert_eq!(occurrences(needle), Vec::new(), "{needle}");
+    }
+}

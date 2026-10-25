@@ -14,11 +14,21 @@ use super::layout::StateUnderTest;
 
 /// A Jira-shaped ticket with `status` (a name and a `statusCategory.key`), if any.
 pub fn ticket(number: u64, title: &str, status: Option<(&str, &str)>) -> Issue {
+    labelled_ticket(number, title, status, &[])
+}
+
+/// [`ticket`] carrying `labels`.
+pub fn labelled_ticket(
+    number: u64,
+    title: &str,
+    status: Option<(&str, &str)>,
+    labels: &[&str],
+) -> Issue {
     Issue::jira(
         &format!("ABC-{number}"),
         number,
         title.to_string(),
-        Vec::new(),
+        labels.iter().map(|label| (*label).to_string()).collect(),
         "2026-10-14T00:00:00Z".to_string(),
     )
     .reported_by("mia")
@@ -68,7 +78,9 @@ pub fn state_with(form: WorktreeForm) -> StateUnderTest {
 /// `state` (a project open) connected to Jira, its New worktree form on the Jira source with the
 /// component `Payments` and the fix version `2.4` chosen over a capped listing (feature 1185, M2):
 /// the Filters button ("Filters · 2"), the active line with **Clear filters** and the cap caption
-/// all show. Driven through the reducer, as the application gets there.
+/// all show. The unfiltered listing's tickets carry the labels `backend`, `payments` and `ui`, for
+/// the label filter (M4); the filtered ones shown carry none. Driven through the reducer, as the
+/// application gets there.
 pub fn jira_filtered(mut state: State) -> State {
     use micold_client::app::Message;
     use micold_client::features::worktree_form::jira_filters::FilterMsg;
@@ -88,10 +100,23 @@ pub fn jira_filtered(mut state: State) -> State {
     send(Msg::SessionCliChosen(None));
     send(Msg::RemotesListed(Ok(Vec::new())));
     send(Msg::SourceChanged(BranchSource::Issue));
+    let labels = |n: u64, unfiltered: bool| match (n, unfiltered) {
+        (1, true) => &["backend"][..],
+        (2, true) => &["ui", "backend"][..],
+        (3, true) => &["payments"][..],
+        _ => &[][..],
+    };
     let capped = |numbers: &[u64]| IssueListing {
         issues: numbers
             .iter()
-            .map(|n| ticket(*n, "Refund is charged twice", None))
+            .map(|n| {
+                labelled_ticket(
+                    *n,
+                    "Refund is charged twice",
+                    None,
+                    labels(*n, numbers.len() == 3),
+                )
+            })
             .collect(),
         total_open: numbers.len() as u64,
         complete: false,
@@ -161,8 +186,9 @@ pub fn jane() -> micold_core::jira_filter::JiraUser {
     }
 }
 
-/// [`jira_filtered`] with the Filters panel open and the reporter chosen as the own user (feature
-/// 1185, M3, ledger D15): the panel's three fields show their chosen values over the dialog.
+/// [`jira_filtered`] with the Filters panel open, the reporter chosen as the own user (feature 1185,
+/// M3, ledger D15) and the label `backend` (M4): the panel's four fields show their chosen values
+/// over the dialog.
 pub fn jira_filters_panel(state: State) -> State {
     use micold_client::app::Message;
     use micold_client::features::worktree_form::jira_filters::FilterMsg;
@@ -187,21 +213,28 @@ pub fn jira_filters_panel(state: State) -> State {
         },
     );
     filter(&mut state, FilterMsg::Picked(FilterKind::Reporter, 1));
-    let seq = state
-        .worktree_form
-        .awaited_issue_load()
-        .expect("a load in flight");
-    state.update(Message::WorktreeForm(Msg::IssuesLoaded {
-        seq,
-        result: Ok((
-            IssueListing {
-                issues: vec![ticket(3, "Refund is charged twice", None)],
-                total_open: 1,
-                complete: false,
-            },
-            PathBuf::new(),
-        )),
-        resolved_env: None,
-    }));
+    let answer = |state: &mut State| {
+        let seq = state
+            .worktree_form
+            .awaited_issue_load()
+            .expect("a load in flight");
+        state.update(Message::WorktreeForm(Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                IssueListing {
+                    issues: vec![ticket(3, "Refund is charged twice", None)],
+                    total_open: 1,
+                    complete: false,
+                },
+                PathBuf::new(),
+            )),
+            resolved_env: None,
+        }));
+    };
+    answer(&mut state);
+    // Row 1 of the label list: "backend", the first of the unfiltered listing's labels.
+    filter(&mut state, FilterMsg::Focused(FilterKind::Label));
+    filter(&mut state, FilterMsg::Picked(FilterKind::Label, 1));
+    answer(&mut state);
     state
 }

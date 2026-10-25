@@ -2,14 +2,14 @@
 //! §4): account ids, redaction, parsing a project's components, versions and users, and loading
 //! a filtered listing through `FakeJiraSource`.
 
-use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
+use micold_core::github::{Issue, IssueListing, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
 use micold_core::jira::{
     load_filtered, ApiToken, ChoiceCall, FakeJiraSource, FilteredAsk, JiraConnection, JiraSource,
     FILTERS_UNSUPPORTED,
 };
 use micold_core::jira_filter::{
-    others, parse_components, parse_myself, parse_users, parse_versions, AccountId, JiraFilters,
-    JiraUser, VersionChoice,
+    label_choices, others, parse_components, parse_myself, parse_users, parse_versions, AccountId,
+    JiraFilters, JiraUser, VersionChoice,
 };
 
 fn conn() -> JiraConnection {
@@ -477,4 +477,57 @@ fn the_fake_answers_scripted_users_and_records_the_requests() {
             ChoiceCall::People("x".into()),
         ]
     );
+}
+
+fn labelled(n: u64, labels: &[&str]) -> Issue {
+    Issue::jira(
+        &format!("ABC-{n}"),
+        n,
+        format!("Issue {n}"),
+        labels.iter().map(|label| (*label).to_owned()).collect(),
+        String::new(),
+    )
+}
+
+fn listing(issues: Vec<Issue>, complete: bool) -> IssueListing {
+    IssueListing {
+        total_open: issues.len() as u64,
+        issues,
+        complete,
+    }
+}
+
+#[test]
+fn label_choices_hold_every_label_once_sorted_case_insensitively_ties_by_exact_text() {
+    let choices = label_choices(&listing(
+        vec![
+            labelled(1, &["backend", "Zeta", "ui"]),
+            labelled(2, &["Backend", "alpha", "backend"]),
+            labelled(3, &[]),
+            labelled(4, &["ui", "Alpha"]),
+        ],
+        true,
+    ));
+    assert_eq!(
+        choices.labels(),
+        ["Alpha", "alpha", "Backend", "backend", "ui", "Zeta"]
+    );
+    assert!(!choices.partial());
+}
+
+#[test]
+fn label_choices_skip_empty_and_control_character_labels() {
+    let choices = label_choices(&listing(
+        vec![labelled(1, &["", "bad\u{7}label", "line\nbreak", "ok"])],
+        true,
+    ));
+    assert_eq!(choices.labels(), ["ok"]);
+}
+
+#[test]
+fn label_choices_of_an_incomplete_listing_are_partial() {
+    let choices = label_choices(&listing(vec![labelled(1, &["backend"])], false));
+    assert_eq!(choices.labels(), ["backend"]);
+    assert!(choices.partial());
+    assert!(label_choices(&listing(vec![], false)).labels().is_empty());
 }

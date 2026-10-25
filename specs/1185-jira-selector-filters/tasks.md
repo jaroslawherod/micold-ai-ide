@@ -320,11 +320,11 @@ type a summary word and the results narrow within them.
 
 ### Tests (write first, must fail)
 
-- [ ] T040 [P] [US3] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
+- [x] T040 [P] [US3] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
   `label_choices(&IssueListing)` returns every label of every issue once, control-character labels
   skipped, sorted case-insensitively with ties by exact text, `partial = !listing.complete`
   (research R5).
-- [ ] T041 [P] [US3] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
+- [x] T041 [P] [US3] Client tests in `crates/micold-client/tests/jira_filters_picker.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs`: the Label filter offers
   "Any label" then the labels of the first unfiltered load alphabetically, with no request (AS1);
   "Labels load with the issues" while that load runs, "Labels need the issue list: retry it above"
@@ -338,15 +338,15 @@ type a summary word and the results narrow within them.
 
 ### Implementation
 
-- [ ] T042 [US3] In `crates/micold-core/src/jira_filter.rs` implement `LabelChoices { labels,
+- [x] T042 [US3] In `crates/micold-core/src/jira_filter.rs` implement `LabelChoices { labels,
   partial }` and `label_choices`. Makes T040 pass.
-- [ ] T043 [US3] Add the Label filter: `labels: LabelSource` (`Waiting { seq } | Failed |
+- [x] T043 [US3] Add the Label filter: `labels: LabelSource` (`Waiting { seq } | Failed |
   Ready(LabelChoices)`) taken from the unfiltered Jira load of that seq, even when superseded, in
   `crates/micold-client/src/features/worktree_form/jira_filters.rs` and
   `crates/micold-client/src/features/worktree_form.rs`; its field in
   `crates/micold-client/src/ui/worktree_form.rs`. Makes T041 pass.
-- [ ] T044 [P] [US3] In `crates/micold-client/examples/fake_jira.rs` answer the `labels` clause.
-- [ ] T045 [P] [US3] User guide: the label filter (labels of the loaded issues, the "most recent
+- [x] T044 [P] [US3] In `crates/micold-client/examples/fake_jira.rs` answer the `labels` clause.
+- [x] T045 [P] [US3] User guide: the label filter (labels of the loaded issues, the "most recent
   issues" notice, typing a label still searches) in `docs/user-guide/worktrees-and-sessions.md`.
 
 **Checkpoint**: all four filters work; FR-001 met in full.

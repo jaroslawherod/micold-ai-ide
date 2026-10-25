@@ -802,8 +802,8 @@ with the pointer or with the arrow keys and Enter; a pick replaces the ticket an
 editable.
 
 **Filters.** Beside **Issue** sits a **Filters** button; while filters are chosen it says how many
-(*Filters · 2*). It opens a panel over the dialog with a **Reporter**, a **Component** and a **Fix
-version** field; the button again, Escape or a click outside closes it, and the panel stays open
+(*Filters · 2*). It opens a panel over the dialog with a **Reporter**, a **Label**, a **Component**
+and a **Fix version** field; the button again, Escape or a click outside closes it, and the panel stays open
 while you pick, so you can choose several filters in a row. Focus **Component** or **Fix version**
 and it offers the project's components, or its fix versions, read from the Jira site the first time
 you open that field in the dialog; its first row, **Any component** or **Any fix version**, clears
@@ -811,7 +811,15 @@ that filter. **Reporter** offers you first, as *You (your name)*, read from the 
 time you open it; type a name and, after a moment's pause, it also lists the people who can browse
 the project and whose name matches (*No project user matches; you are still offered* when no one
 else does). Two people with the same name are listed separately, and only the one you pick counts:
-the list then holds the open issues that person reported. **Any reporter** clears it. **Fix version** lists the versions that are not archived: unreleased ones first, in the
+the list then holds the open issues that person reported. **Any reporter** clears it. **Label** asks the Jira site nothing: it
+offers, alphabetically, the labels of the open issues the dialog loaded with no filter chosen, and
+keeps them while you choose filters, so picking one never shrinks the list of labels. While that
+list loads it says *Labels load with the issues*; if it failed, *Labels need the issue list: retry
+it above*; when none of those issues has a label, *No labels on the loaded issues*. When the project
+has more than 1,000 open issues, its last row says *Only labels of the 1,000 most recent issues*: a
+label only older issues carry is not offered, but typing it in **Issue** still searches for it. Pick
+`backend` and the list holds only the issues carrying it; typing *login* in **Issue** then narrows
+to those whose key, summary or a label matches. **Fix version** lists the versions that are not archived: unreleased ones first, in the
 project's order, then released ones, newest first. Pick a component and the list reloads from Jira
 with only that component's open issues, most recently updated first and up to 1,000, and typing in
 **Issue** then narrows within them (a search on the Jira site carries the filters too). Pick a fix

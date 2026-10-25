@@ -11,12 +11,18 @@
 //! seq and puts the list back to loading (research R6): the shell then loads the listing with the
 //! filters now chosen, and the existing seq check drops every older listing.
 //!
+//! The label filter asks Jira nothing: its choices are the labels of the form's first unfiltered
+//! listing ([`LabelSource`], research R5), taken even when a filter chosen meanwhile superseded that
+//! listing, and kept while the form shows Jira.
+//!
 //! Nothing here is serialised or kept between openings of the form (FR-006, FR-016): the state
 //! lives on [`WorktreeForm`] and is reset with its issues.
 
 use crate::features::worktree_form::{IssueList, WorktreeForm, WorktreeFormStatus};
-use micold_core::github::{Issue, IssueLoadError, NoticeSource};
-use micold_core::jira_filter::{others, FilterKind, JiraFilters, JiraUser, VersionChoice};
+use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource, ISSUE_LOAD_CAP};
+use micold_core::jira_filter::{
+    label_choices, others, FilterKind, JiraFilters, JiraUser, LabelChoices, VersionChoice,
+};
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 
 /// A filter's choices, from never asked to loaded (data-model §6).
@@ -81,6 +87,25 @@ impl<T> ChoiceLoad<T> {
     }
 }
 
+/// Where the label filter's choices stand (data-model §7): they come with the unfiltered listing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LabelSource {
+    /// Awaiting the unfiltered listing: the one loading now while no filter is chosen, or the one
+    /// of `seq`, which a filter chosen while it loaded superseded as the list (FR-005). `0` names
+    /// none: no seq is ever 0.
+    Waiting { seq: u64 },
+    /// The unfiltered listing failed; the issue list's own Retry asks for it again.
+    Failed,
+    /// The labels of the first unfiltered listing, kept while the form shows Jira (D5).
+    Ready(LabelChoices),
+}
+
+impl Default for LabelSource {
+    fn default() -> Self {
+        LabelSource::Waiting { seq: 0 }
+    }
+}
+
 /// One filter field's typeahead: its own typed text, ranked matches, highlight and open list.
 /// `Debug` leaves the text out: a picked reporter's name is the Reporter field's text (FR-006).
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -122,6 +147,8 @@ pub struct FilterState {
     pub people: ChoiceLoad<JiraUser>,
     /// The reporter search waiting out its debounce, by its seq.
     pub people_pending: Option<u64>,
+    /// The label filter's choices, from the unfiltered listing.
+    pub labels: LabelSource,
     /// Whether the Filters panel is open.
     pub panel_open: bool,
     /// Each filter's field, in [`FilterKind::ALL`] order.
@@ -131,13 +158,8 @@ pub struct FilterState {
     pub kept_pick: Option<Issue>,
 }
 
-/// The filters this build offers in the Filters panel, in order (M3: the reporter, the component
-/// and the fix version).
-pub const OFFERED: [FilterKind; 3] = [
-    FilterKind::Reporter,
-    FilterKind::Component,
-    FilterKind::FixVersion,
-];
+/// The filters the Filters panel offers, in order (FR-001).
+pub const OFFERED: [FilterKind; 4] = FilterKind::ALL;
 
 /// The position of `kind` in [`FilterKind::ALL`].
 fn slot(kind: FilterKind) -> usize {
@@ -183,6 +205,12 @@ pub enum RowText {
     Empty,
     /// "No component matches".
     NoMatch,
+    /// "Labels load with the issues": the unfiltered listing is loading.
+    LabelsWaiting,
+    /// "Labels need the issue list: retry it above": the unfiltered listing failed.
+    LabelsNeedList,
+    /// "Only labels of the 1,000 most recent issues": the listing the labels came from was capped.
+    LabelsPartial,
 }
 
 /// One row of a filter's list.
@@ -234,8 +262,17 @@ impl FilterRow {
                 None => self.summary(kind).unwrap_or_default(),
             },
             RowText::Retry => "Retry".to_string(),
+            RowText::Empty if kind == FilterKind::Label => {
+                "No labels on the loaded issues".to_string()
+            }
             RowText::Empty => format!("This project has no {}", plural(kind)),
             RowText::NoMatch => format!("No {} matches", kind.noun()),
+            RowText::LabelsWaiting => "Labels load with the issues".to_string(),
+            RowText::LabelsNeedList => "Labels need the issue list: retry it above".to_string(),
+            RowText::LabelsPartial => format!(
+                "Only labels of the {} most recent issues",
+                micold_core::format::group_digits(ISSUE_LOAD_CAP as u64)
+            ),
         }
     }
 }
@@ -260,8 +297,8 @@ impl FilterState {
         &mut self.fields[slot(kind)]
     }
 
-    /// `kind`'s choice load with each choice by the name it shows and sends, for the filters that
-    /// ask Jira for their choices.
+    /// `kind`'s choice load with each choice by the name it shows and sends: the labels only once
+    /// they are ready, since they are not asked of Jira.
     pub fn choices(&self, kind: FilterKind) -> Option<ChoiceLoad<String>> {
         match kind {
             FilterKind::Component => Some(self.components.clone()),
@@ -276,7 +313,48 @@ impl FilterState {
                 ),
                 load => load.named(JiraUser::label),
             }),
-            FilterKind::Label => None,
+            FilterKind::Label => match &self.labels {
+                LabelSource::Ready(choices) => Some(ChoiceLoad::Loaded(choices.labels().to_vec())),
+                LabelSource::Waiting { .. } | LabelSource::Failed => None,
+            },
+        }
+    }
+
+    /// Take the label choices from a listing that answered issue load `seq`. `unfiltered` says the
+    /// form awaits `seq` with no filter chosen; otherwise only the superseded unfiltered load the
+    /// labels wait on applies. Labels once ready stay (D5).
+    pub fn take_labels(
+        &mut self,
+        seq: u64,
+        unfiltered: bool,
+        result: Result<&IssueListing, &IssueLoadError>,
+    ) {
+        let awaited = match self.labels {
+            LabelSource::Waiting { seq: waited } => unfiltered || waited == seq,
+            LabelSource::Failed => unfiltered,
+            LabelSource::Ready(_) => false,
+        };
+        if !awaited {
+            return;
+        }
+        self.labels = match result {
+            Ok(listing) => LabelSource::Ready(label_choices(listing)),
+            Err(_) => LabelSource::Failed,
+        };
+        self.rematch(FilterKind::Label);
+    }
+
+    /// An issue load of `seq` replaced the one in flight: when no filter is chosen it is the
+    /// unfiltered one the labels wait on, unless they are ready. `superseded` names the load it
+    /// replaced when that one was unfiltered: its answer still brings the labels (FR-005).
+    pub fn wait_for_labels(&mut self, seq: u64, superseded: Option<u64>) {
+        if matches!(self.labels, LabelSource::Ready(_)) {
+            return;
+        }
+        if let Some(old) = superseded {
+            self.labels = LabelSource::Waiting { seq: old };
+        } else if self.chosen.is_empty() {
+            self.labels = LabelSource::Waiting { seq };
         }
     }
 
@@ -337,6 +415,17 @@ impl FilterState {
     /// choices are in (contracts/filter-ui.md §2).
     pub fn rows(&self, kind: FilterKind) -> Vec<FilterRow> {
         let mut rows = vec![FilterRow::new(RowText::Any, RowAction::Any)];
+        if kind == FilterKind::Label {
+            let state = match self.labels {
+                LabelSource::Waiting { .. } => Some(RowText::LabelsWaiting),
+                LabelSource::Failed => Some(RowText::LabelsNeedList),
+                LabelSource::Ready(_) => None,
+            };
+            if let Some(text) = state {
+                rows.push(FilterRow::new(text, RowAction::Inert));
+                return rows;
+            }
+        }
         match &self.choices(kind) {
             None | Some(ChoiceLoad::NotRequested) | Some(ChoiceLoad::Loading { .. }) => {
                 rows.push(FilterRow::new(RowText::Loading, RowAction::Inert));
@@ -372,6 +461,10 @@ impl FilterState {
                     rows.extend(self.people_rows());
                 }
             }
+        }
+        if matches!(&self.labels, LabelSource::Ready(choices) if kind == FilterKind::Label && choices.partial())
+        {
+            rows.push(FilterRow::new(RowText::LabelsPartial, RowAction::Inert));
         }
         rows
     }
@@ -574,6 +667,12 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
         return;
     };
     let editing = form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting();
+    // The unfiltered load in flight, if any: a filter chosen now supersedes it as the list, but
+    // its answer still brings the label choices (FR-005).
+    let unfiltered_load = match form.issues {
+        IssueList::Loading { seq } if form.jira_filters.chosen.is_empty() => Some(seq),
+        _ => None,
+    };
     let mut reload = false;
     let mut asked = false;
     match msg {
@@ -716,6 +815,8 @@ pub fn update(state: &mut crate::app::State, msg: FilterMsg) {
         form.issues = IssueList::Loading {
             seq: next_issue_seq,
         };
+        form.jira_filters
+            .wait_for_labels(next_issue_seq, unfiltered_load);
         form.issue_highlight = None;
         state.worktree_form.issue_request_seq = next_issue_seq;
     }
