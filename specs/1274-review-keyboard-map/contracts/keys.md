@@ -1,7 +1,7 @@
 # Contract: Review keys (#1274)
 
 The user-facing key map and how a press is decided. Rules K1–K4 are core (`review::keys`, M1);
-K5–K7 are client (M2, M3). Data shapes: [data-model.md](../data-model.md).
+K5–K7 are client (M3, M4). Data shapes: [data-model.md](../data-model.md).
 
 ## K1 — The table (`micold_core::review::keys::REVIEW_KEYS`, public, sheet order)
 
@@ -23,7 +23,11 @@ user guide against it. `primary` = Cmd on macOS, Ctrl elsewhere.
 | `Enter` | yes | yes | `Ctrl+Shift+Enter` · `Cmd+Shift+Enter` | `Send` | no | Send review |
 | `Enter` | yes | no | `Ctrl+Enter` · `Cmd+Enter` | — (composer's) | no | Save comment |
 
-## K2 — `resolve(press, holder)`
+## K2 — `resolve(press, holder, single_keys)`
+
+`single_keys` is the window's single-key switch (spec FR-022). When it is false, every row with
+`primary: false` resolves to none under every holder; the table below then applies to the `primary`
+rows only. `REVIEW_KEYS` itself never changes.
 
 | Holder | Press | Result |
 |---|---|---|
@@ -47,6 +51,14 @@ user guide against it. `primary` = Cmd on macOS, Ctrl elsewhere.
 `ReviewKey::labels()` → `(linux_windows, macos)`: a char is itself in both; primary + shift + Enter is
 (`Ctrl+Shift+Enter`, `Cmd+Shift+Enter`); primary + Enter is (`Ctrl+Enter`, `Cmd+Enter`). The client
 shows the running platform's form (sheet, tooltips); the user guide lists both forms.
+
+## K4a — Rows shown (sheet, tooltips)
+
+- `sheet_rows(single_keys)`: the rows of `REVIEW_KEYS` in table order; with `single_keys` false only
+  the `primary` rows (`Send`, save comment). With it false the sheet also shows
+  `SINGLE_KEYS_OFF_NOTE` = "Single-key shortcuts are off (Settings → Appearance)".
+- `key_hint(action, single_keys)`: the row whose action is `action`; `None` when that row is a single
+  key and `single_keys` is false (a tooltip then names no key, FR-013, FR-022).
 
 ## K5 — Building a press (client `keymap.rs`)
 

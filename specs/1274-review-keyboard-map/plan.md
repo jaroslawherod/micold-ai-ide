@@ -12,10 +12,12 @@ review's files and comments. Every rule a press decides lives in `micold-core` o
 in a public key table `micold_core::review::keys::REVIEW_KEYS` that the client binds from, the sheet
 renders and #1276's guide test reads, plus navigation rules that reuse #803's `navigation::step`.
 That core is milestone **M1** and depends on no blocker. The client wiring, sheet, tooltips, docs,
-layout snapshot and visual pass come in **M2** (moving and marking) and **M3** (comments, send
-chord, sheet), both after #1269, #1270, #1271, #1273, and the jump-to entries in **M4** (after
-#1127) ([research R1](./research.md)). Ledger D4 (keys on, no setting) is
-provisional; a setting would be one argument on `resolve` and one filter on the sheet (R4).
+layout snapshot and visual pass come in **M3** (moving and marking) and **M4** (comments, send
+chord, sheet), both after #1269, #1270, #1271, #1273, and the jump-to entries in **M5** (after
+#1127) ([research R1](./research.md)). The user decided D4: the single keys are on by default and
+a Settings → Appearance switch turns them off (spec FR-022). Its core part, the persisted
+`review_single_keys` field and the `single_keys` argument of `resolve` with the sheet and tooltip
+filters, is milestone **M2**, blocker-free; its Settings row comes with the keys in **M3** (R4).
 
 ## Technical Context
 
@@ -24,9 +26,11 @@ provisional; a setting would be one argument on `resolve` and one filter on the 
 **Primary Dependencies**: iced 0.14 (`keyboard::listen`, `KeyPressed { text, repeat, .. }`); no new
 crate
 
-**Storage**: none; positions are per-window view state of the Review tab (Principle IV)
+**Storage**: positions are per-window view state of the Review tab (Principle IV); the single-key
+switch is one `bool` in the app's settings file (`micold_core::settings`, client-held like
+`reduce_motion`, R4)
 
-**Testing**: `mise run test-core` (M1); `mise run gate` (M2–M4: client `tests/keymap.rs`,
+**Testing**: `mise run test-core` (M1); `mise run gate` (M3–M5: client `tests/keymap.rs`,
 `tests/review_keys.rs` new, `tests/quick_switch.rs`, `tests/overlay_registry.rs`, docs test, layout
 snapshot)
 
@@ -42,8 +46,8 @@ snapshot)
 OS branch (Principle VI); no stand-in for a blocker's work
 
 **Scale/Scope**: M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
-2 extended (`quick_switch.rs`, `review/diff.rs`). M2/M3: `keymap.rs`, `features/changes.rs` (or #1269's
-Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M4:
+2 extended (`quick_switch.rs`, `review/diff.rs`). M3/M4: `keymap.rs`, `features/changes.rs` (or #1269's
+Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M5:
 `features/quick_switch.rs`, the switcher's row view, 1 doc section.
 
 ## Constitution Check
@@ -52,13 +56,13 @@ Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet su
 
 | Principle | Status | How |
 |---|---|---|
-| I. Test-First | PASS | Red first in core (M1) for every rule: table and `resolve` (holders, modifiers, AltGr, no text, repeat), file/hunk/comment steps with wrap and empty/none cases, pending edge, `has_hunks`, `next_unreviewed`, `comment_target`, `hunk_change_range`, `header_rows`, `filter` with `detail`, `review_candidates`, timing. Client decisions (holder gate, press → effect, select clears hunk, chord ≡ `SendPressed`, list position) in render-free modules with tests (M2–M4). Only view glue (sheet layout, hunk mark drawing) is covered by quickstart §B. |
+| I. Test-First | PASS | Red first in core (M1, M2) for every rule: table and `resolve` (holders, modifiers, AltGr, no text, repeat), file/hunk/comment steps with wrap and empty/none cases, pending edge, `has_hunks`, `next_unreviewed`, `comment_target`, `hunk_change_range`, `header_rows`, `filter` with `detail`, `review_candidates`, timing. Client decisions (holder gate, press → effect, select clears hunk, chord ≡ `SendPressed`, list position) in render-free modules with tests (M3–M5). Only view glue (sheet layout, hunk mark drawing) is covered by quickstart §B. |
 | II. Multi-Session | PASS | Positions are per Review tab view; keys act on the shown entry only and read files, marks and comments at each press (FR-014); no session started or stopped beyond what **Send review** does. |
 | III. Worktree Integration | PASS | Read-only over the entry's review; no worktree operation. |
-| IV. Local-First | PASS | No persistence, no network; marks are stored by #1271. |
+| IV. Local-First | PASS | No network; marks are stored by #1271; the single-key switch is one field of the local settings file (R4). |
 | V. Rust + iced | PASS | iced only; closed enums `ReviewAction`, `Holder`, `HunkMove`, `CommentOpen`, `Unreviewed`; a pending edge is `Option<(RelPath, Edge)>`, keyed to the file it was set for, so a diff that arrives for another file cannot apply it; `select_file` also clears it, covered by a test. |
 | VI. Cross-Platform | PASS | Single keys by produced character on all three; the primary modifier decided only in `keymap::primary_held`; AltGr rule; quickstart §C; CI on three platforms. |
-| VII. Documentation | PASS | `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md` in the PR that ships each key (M2, M3) and jump-to entry (M4); docs test tied to `REVIEW_KEYS` labels (SC-004). |
+| VII. Documentation | PASS | `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`, and `settings.md` for the switch, in the PR that ships each key (M3, M4) and jump-to entry (M5); docs test tied to `REVIEW_KEYS` labels (SC-004). |
 | VIII. Components | PASS | Sheet built from `ui/material` parts on the overlay registry (as `QuickSwitcherDialog`); `TextArea` gains a builder option `.on_press(..)` rather than a composer-local text area; hunk buttons (if added) are the shared icon button. |
 
 Post-design re-check: unchanged, all PASS.
@@ -68,12 +72,13 @@ Post-design re-check: unchanged, all PASS.
 | ID | Needs merged | Delivers | User-visible |
 |---|---|---|---|
 | **M1 core** | nothing | D1–D3: `REVIEW_KEYS`, `resolve`, navigation rules, jump-to candidates and ranking, `header_rows`; unit tests | no (core only; the client gains `detail: None` in existing `Candidate` literals, no behaviour change) |
-| **M2 move and mark** | #1269, #1270, #1271, #1273 | D4–D6: press building, listener and holder, Review tab reducer for `j k n p v g`, current-hunk mark, hunk and **Mark reviewed** tooltips, docs, `review-current-hunk` snapshot, visual pass | US1, US2 |
-| **M3 comments, send, sheet** | M2 | D5 for `] [ c`, composer chord, D7 sheet and overflow item, **Send review** tooltip, full docs and docs test, `review-shortcut-sheet` snapshot, showcase, visual pass | US3, US4, US5 |
-| **M4 jump-to** | #1127 (and M3) | D8: review entries in the quick-switcher, choosing, docs section, visual pass row B14 | US6 |
+| **M2 single-key switch (core)** | nothing | D10 core: `Settings.review_single_keys` (default on, missing → on, round trip), `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, `SINGLE_KEYS_OFF_NOTE`; unit tests | no (core only; client `Settings` literals and the `set_changed` destructure gain the field, no behaviour change) |
+| **M3 move and mark** | #1269, #1270, #1271, #1273 | D4–D6: press building, listener and holder, Review tab reducer for `j k n p v g`, current-hunk mark, hunk and **Mark reviewed** tooltips, docs, `review-current-hunk` snapshot, visual pass; D10 client: the Settings → Appearance row, its draft, save and load, the listener passing the switch | US1, US2; FR-022 (switch, those keys) |
+| **M4 comments, send, sheet** | M3 | D5 for `] [ c`, composer chord, D7 sheet and overflow item, **Send review** tooltip, full docs and docs test, `review-shortcut-sheet` snapshot, showcase, visual pass | US3, US4, US5 |
+| **M5 jump-to** | #1127 (and M4) | D8: review entries in the quick-switcher, choosing, docs section, visual pass row B14 | US6 |
 
-The tasks unit split the client work into M2 and M3 by story (milestone rule: one story per
-milestone, about 10 tasks each). If #1127 merges before M3 starts, M3 and M4 may ship as one PR;
+The tasks unit split the client work into M3 and M4 by story (milestone rule: one story per
+milestone, about 10 tasks each). If #1127 merges before M4 starts, M4 and M5 may ship as one PR;
 M1 never waits.
 
 ## Design
@@ -101,7 +106,7 @@ row builders.
 ([contracts/jump-to.md](./contracts/jump-to.md) J1–J3). Existing literals in
 `crates/micold-client/src/features/quick_switch.rs::candidates` gain `detail: None`.
 
-### D4 — Presses (client, M2) — R2, R7
+### D4 — Presses (client, M3) — R2, R7
 
 `crates/micold-client/src/keymap.rs`: `primary_held`, `review_press` (K5); no key match.
 `ui/mod.rs`: a `review_key_listener` subscribed while the holder is `Review` or `Sheet`, mapping
@@ -112,7 +117,7 @@ terminal focus. `ui/material/text_area.rs`: `.on_press(..)`, and Ctrl/Cmd+Enter 
 Shift (today it saves on Ctrl+Shift+Enter); the composer in `ui/changes.rs` sets
 `.on_press` to `resolve(_, Holder::Composer)` → `SendPressed`.
 
-### D5 — Review tab reducer (client, M2; M3 for `] [ c` and Send) — R5, R9
+### D5 — Review tab reducer (client, M3; M4 for `] [ c` and Send) — R5, R9
 
 The Review tab view (#1269) gains `current_hunk`, `pending_edge`, `last_comment`. One `select_file`
 path (tree click, `j`/`k`, `g`, `n`/`p` crossing, `]`/`[`, jump-to) clears the hunk and the pending
@@ -120,31 +125,51 @@ edge, brings the row into view and expands a collapsed directory (#1273's tree).
 action as K7. Hunk scroll reuses `jump_offset`'s arithmetic and the pending-jump flag; `v` sends
 #1271's **Mark reviewed** message; `Send` sends `Msg::SendPressed`.
 
-### D6 — Current hunk mark and hunk controls (client, M2; **Send review** tooltip M3) — R9
+### D6 — Current hunk mark and hunk controls (client, M3; **Send review** tooltip M4) — R9
 
 `ui/changes.rs` (or #1270's diff header): the current hunk's header row drawn with a theme-role
 accent; previous / next hunk icon buttons in the diff header if #1270/#1273 did not add them, sending
 the `n`/`p` messages. Tooltips on those, **Mark reviewed** and **Send review (n)** read
 `ReviewKey::labels` (FR-013).
 
-### D7 — Shortcut sheet (client, M3) — R8
+### D7 — Shortcut sheet (client, M4) — R8
 
 `ShortcutSheet` (`floating_surface!` on `Layer::Dialog`, `Registered`) in the Review tab feature;
 one `REGISTERED` line in `overlay/registry.rs`; view `ui/shortcut_sheet.rs` renders `REVIEW_KEYS` in
 order with the platform's labels from `ui/material` parts. Overflow menu (#1270) item **Keyboard
 shortcuts** sends the same open message. Showcase `sections/review.rs` gains the sheet.
 
-### D8 — Jump-to entries (client, M4) — R6
+### D8 — Jump-to entries (client, M5) — R6
 
 `crates/micold-client/src/features/quick_switch.rs`: `candidates` inserts `review_candidates` for
 the current entry's Review tab after the active project's locations and sessions; the U3 choice
 resolution gains the two keys, returning a Review-tab step (show tab, `select_file` or the comment
 effect). The row view shows the reviewed state, or status and `path:line`.
 
-### D9 — Docs, snapshot, visual pass (M2, M3; M4 for jump-to)
+### D10 — Single-key switch (core M2, client M3; sheet M4) — R4
+
+Core (M2): `crates/micold-core/src/settings.rs` gains `review_single_keys: bool` on `Settings` and
+`StoredSettings` with `default_review_single_keys() -> bool { true }`, carried by both conversions
+and `Settings::default()`; `crates/micold-core/tests/settings_issue_mapping.rs` lists the field.
+`review/keys.rs`: `resolve(press, holder, single_keys)` refuses every `primary: false` row when
+false; `ReviewKey::is_single`, `sheet_rows(single_keys)`, `key_hint(action, single_keys)`,
+`SINGLE_KEYS_OFF_NOTE` (contract K2, K4a). The client compiles unchanged in behaviour: the
+`set_changed` destructure in `shell/persist.rs` names the field as not yet saved (M3 saves it), and
+`Settings` struct literals in client tests gain it.
+
+Client (M3), following `reduce_motion` end to end: `features/settings.rs` (`AppearanceDraft`
+field, `Msg::ReviewSingleKeysToggled`, draft ↔ settings), `ui/settings/appearance.rs` (`Checkbox`
+**Single-key shortcuts in the Review tab** with `field_note` "j, k, n, p, ], [, v, g, c and ? in the
+Review tab; Ctrl+Shift+Enter keeps sending", its `SETTINGS` entry, a `FieldId`), `shell/persist.rs`
+(`persist_settings`, `set!`, the saving window's copy), `shell/startup.rs` (load), the window copy
+read by the listener and the composer for `resolve` and by the tooltips via `key_hint`;
+`docs/user-guide/settings.md#appearance` gains *Single-key shortcuts in the Review tab*. M4's sheet
+renders `sheet_rows` and, when off, `SINGLE_KEYS_OFF_NOTE`.
+
+### D9 — Docs, snapshot, visual pass (M3, M4; M5 for jump-to)
 
 `docs/user-guide/reviewing-changes.md` new section *Reviewing from the keyboard* (table of
-`REVIEW_KEYS`, sheet, jump-to entries in M4); send chord row in
+`REVIEW_KEYS`, sheet, jump-to entries in M5); send chord row in
 `docs/user-guide/terminal-panes.md#keyboard-shortcuts` and bullet in
 `docs/user-guide/worktrees-and-sessions.md#interacting-with-the-terminal`. Layout snapshot states
 `review-current-hunk` and `review-shortcut-sheet` in `tests/support/covered_states.rs`, listed in
@@ -174,6 +199,7 @@ effect). The row view shows the reviewed state, or status and `path:line`.
 | FR-019 | D3 `detail: None` unchanged; D8 no tab → none | R6 |
 | FR-020, SC-004 | D9 + docs test over `REVIEW_KEYS` | R3 |
 | FR-021 | D9 snapshot states, visual pass | R10 |
+| FR-022 | D10 core (setting, `resolve` argument, `sheet_rows`, `key_hint`); D10 client (Settings row, save/load, listener); D7 sheet note | R4 |
 | SC-001 | `j`/`g` + `v` per file + chord; quickstart B1, B5, B6, B10 | R5 |
 | SC-003 | D2 timing test; quickstart | R10 |
 | SC-005 | D3 ranking; quickstart B14 | R6 |
@@ -183,14 +209,16 @@ effect). The row view shows the reviewed state, or status and `path:line`.
 | Layer | Where | What it proves | FR |
 |---|---|---|---|
 | Core unit (M1) | `review/keys.rs` tests | every table row resolves under `Review`; `Other` nothing; `Sheet` only `?`; `Composer` only `Send`; Ctrl/Alt/Cmd alone refuse a single key, Ctrl+Alt (AltGr) allows; Shift ignored for chars, `J` unbound; no text → none; repeat only for steppers; chord needs primary+shift, not Alt; labels both forms; table has 12 unique rows | 001, 002, 010, 012, 015 |
+| Core unit (M2) | `review/keys.rs`, `settings.rs` tests, `tests/settings_issue_mapping.rs` | `single_keys` off: no single row resolves under any holder, the send chord still does; `sheet_rows` on = 12 rows in order, off = the two chord rows; `key_hint` per action and switch; note text; setting default on, missing key → on, `false` round-trips; field list | 022, SC-004 |
+| Client settings (M3) | `features/settings.rs` and `shell/persist.rs` unit tests, `tests/settings_sections.rs` | toggle edits the draft only; Save writes it and keeps every other field; Cancel discards; startup loads it; the Appearance section lists it; listener refuses `j` when off | 022 |
 | Core unit (M1) | `review/navigate.rs` tests | spec scenarios US1 s1–s5, US2 s3–s5, US3 s1–s6 and edge cases (empty review, nothing selected, no comments, file without hunks, diff loading/failed, selection no longer listed, only-unreviewed is selected, unlisted file's comment → drawer); 200 files / 500 comments under 50 ms (generous, not flaky on loaded CI) | 003, 004, 006, 008, 009, SC-003 |
 | Core unit (M1) | `review/diff.rs`, `quick_switch.rs`, `review/jump.rs` tests | `header_rows` per layout with gaps; name before detail; detail spans; `detail: None` keeps 968 order (existing tests untouched); candidate texts and order | 004, 016, 017, 019 |
-| Client keys (M2, M3) | `tests/keymap.rs` | `primary_held` per platform; `review_press` from text/Enter/dead key; send chord conflicts (803 FR-006 lists, app chords); docs list every `REVIEW_KEYS` label | 011, 015, 020, SC-004 |
-| Client state (M2, M3) | `tests/review_keys.rs` (new) | holder per surface/field/Settings/Overview/terminal; each action's effect on a Review tab state; `select_file` clears hunk + edge; pending edge resolved on `DiffRead`; chord ≡ `SendPressed` effect; composer text kept; hidden tab of another entry untouched | 001–015, SC-006 |
-| Client state (M3) | `tests/features_composer.rs` | Ctrl/Cmd+Enter saves, with Shift it does not; `.on_press` message | 010 |
-| Registry (M3) | `tests/overlay_registry.rs` | `ShortcutSheet` identity, Dialog layer, Escape / outside click | 012 |
-| Client state (M4) | `tests/quick_switch.rs` | entries present only with a Review tab, position, choice → step, no session change | 016–019 |
-| Snapshot (M2, M3) | `tests/support/covered_states.rs` + gates | `review-current-hunk`, `review-shortcut-sheet` | 021 |
+| Client keys (M3, M4) | `tests/keymap.rs` | `primary_held` per platform; `review_press` from text/Enter/dead key; send chord conflicts (803 FR-006 lists, app chords); docs list every `REVIEW_KEYS` label | 011, 015, 020, SC-004 |
+| Client state (M3, M4) | `tests/review_keys.rs` (new) | holder per surface/field/Settings/Overview/terminal; each action's effect on a Review tab state; `select_file` clears hunk + edge; pending edge resolved on `DiffRead`; chord ≡ `SendPressed` effect; composer text kept; hidden tab of another entry untouched | 001–015, SC-006 |
+| Client state (M4) | `tests/features_composer.rs` | Ctrl/Cmd+Enter saves, with Shift it does not; `.on_press` message | 010 |
+| Registry (M4) | `tests/overlay_registry.rs` | `ShortcutSheet` identity, Dialog layer, Escape / outside click | 012 |
+| Client state (M5) | `tests/quick_switch.rs` | entries present only with a Review tab, position, choice → step, no session change | 016–019 |
+| Snapshot (M3, M4) | `tests/support/covered_states.rs` + gates | `review-current-hunk`, `review-shortcut-sheet` | 021 |
 | Visual pass | quickstart §B (visual-pass skill), 1280×800, both themes | B1–B15 | all |
 | Platforms | CI on three; quickstart §C | primary modifier, AltGr layouts, terminal untouched | VI, 015 |
 
@@ -214,16 +242,18 @@ specs/1274-review-keyboard-map/
 
 ```text
 crates/micold-core/src/
-├── review/{keys.rs (new), navigate.rs (new), jump.rs (new), diff.rs, mod.rs}   # M1
-└── quick_switch.rs                                                             # M1
+├── review/{keys.rs (new), navigate.rs (new), jump.rs (new), diff.rs, mod.rs}   # M1; keys.rs M2
+├── quick_switch.rs                                                             # M1
+└── settings.rs                                                                 # M2
 crates/micold-client/src/
-├── keymap.rs                                   # M2: primary_held, review_press
-├── features/{changes.rs or #1269's review tab module, quick_switch.rs (M1 literals; M4)}
-├── overlay/registry.rs                         # M3: ShortcutSheet
-├── ui/{mod.rs, changes.rs, shortcut_sheet.rs (new)}, ui/material/text_area.rs   # M2, M3
-└── showcase/sections/review.rs                 # M3
+├── keymap.rs                                   # M3: primary_held, review_press
+├── features/settings.rs, ui/settings/appearance.rs, shell/{persist.rs, startup.rs}   # M3: switch (persist.rs literal M2)
+├── features/{changes.rs or #1269's review tab module, quick_switch.rs (M1 literals; M5)}
+├── overlay/registry.rs                         # M4: ShortcutSheet
+├── ui/{mod.rs, changes.rs, shortcut_sheet.rs (new)}, ui/material/text_area.rs   # M3, M4
+└── showcase/sections/review.rs                 # M4
 crates/micold-client/tests/{keymap.rs, review_keys.rs (new), quick_switch.rs, overlay_registry.rs, support/covered_states.rs}
-docs/user-guide/{reviewing-changes.md, terminal-panes.md, worktrees-and-sessions.md}
+docs/user-guide/{reviewing-changes.md, terminal-panes.md, worktrees-and-sessions.md, settings.md}
 docs/development/layout-snapshot.md
 ```
 
@@ -234,8 +264,8 @@ Review tab's render-free feature module; the sheet on the overlay registry; draw
 
 ## Risks
 
-- **Blocker shapes**: M2 and M3 name #1269's view module and #1270/#1271/#1273 controls by role,
-  not by type; the M2 unit re-reads them once merged (tasks T012), M4 re-reads #1127 (T052). M1 is insulated by plain inputs.
+- **Blocker shapes**: M3 and M4 name #1269's view module and #1270/#1271/#1273 controls by role,
+  not by type; the M3 unit re-reads them once merged (tasks T012), M5 re-reads #1127 (T052). M1 is insulated by plain inputs.
 - **AltGr on Linux/macOS**: Linux reports AltGr as neither Ctrl nor Alt; macOS Option produces
   characters but is Alt, so Option+`[` is refused there (layouts that need Option for `[` lose
   `[`/`]` on macOS). Checked in quickstart §C; a follow-up if a user reports it.

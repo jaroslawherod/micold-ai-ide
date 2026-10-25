@@ -1,7 +1,7 @@
 # Data Model: Keyboard Map for Reviewing Changes (#1274)
 
-All core types are render-free, in-memory and per window; nothing is persisted or sent on the wire
-(Principle IV). Core types take plain inputs so they do not depend on the blockers (research R1).
+All core types are render-free, in-memory and per window; nothing is sent on the wire (Principle
+IV). The one persisted value is the single-key switch, a field of the app's settings file (below). Core types take plain inputs so they do not depend on the blockers (research R1).
 
 ## Core — `micold-core/src/review/keys.rs` (new, M1)
 
@@ -15,7 +15,17 @@ All core types are render-free, in-memory and per window; nothing is persisted o
 | `PressKey` | `Char(char)`, `Enter`, `Other` | `Char` from iced's produced `text` |
 | `Press` | `key: PressKey`, `primary: bool`, `ctrl: bool`, `alt: bool`, `logo: bool`, `shift: bool`, `repeat: bool` | built by the client; `primary` from `keymap::primary_held` |
 | `Holder` | `Review`, `Composer`, `Sheet`, `Other` | computed by the client (R7) |
-| `resolve(press, holder) -> Option<ReviewAction>` | — | `Other` → none; `Sheet` → only `?` (`ToggleSheet`); `Composer` → only `Send`; `Review` → any entry of `REVIEW_KEYS` with an action. Matching per research R2 (modifiers, AltGr, repeat) |
+| `resolve(press, holder, single_keys: bool) -> Option<ReviewAction>` | — | `Other` → none; `Sheet` → only `?` (`ToggleSheet`); `Composer` → only `Send`; `Review` → any entry of `REVIEW_KEYS` with an action. Matching per research R2 (modifiers, AltGr, repeat). `single_keys == false` → none for every `primary: false` row, under every holder (FR-022) |
+| `ReviewKey::is_single() -> bool` | — | `!mods.primary` |
+| `sheet_rows(single_keys: bool) -> impl Iterator<Item = &'static ReviewKey>` | — | `REVIEW_KEYS` in order; off → only the two `primary` rows (send, save comment) |
+| `key_hint(action, single_keys: bool) -> Option<&'static ReviewKey>` | — | the row whose `action` is `Some(action)`; `None` for a single key when off (FR-013 tooltips) |
+| `SINGLE_KEYS_OFF_NOTE` | `&str` | `"Single-key shortcuts are off (Settings → Appearance)"` |
+
+## Core — `micold-core/src/settings.rs` (extended, M2)
+
+| Field | Type | Rules |
+|---|---|---|
+| `Settings.review_single_keys` | `bool`, `#[serde(default = "default_review_single_keys")]` | default `true`; also on `StoredSettings`, carried both ways by its conversions; a file without the key reads as `true`; client-held like `reduce_motion` (no wire change) |
 
 ## Core — `micold-core/src/review/navigate.rs` (new, M1)
 
@@ -57,7 +67,7 @@ side-by-side rows, in hunk order (R9).
 | `Via { Name, Detail }`, `Ranked.via` | sort `(via, rank, index)`; spans index the matched text (R6, FR-017) |
 | `jump::review_candidates(files: &[RelPath], is_reviewed, comments: &[ReviewComment]) -> Vec<(Candidate, ReviewEntry)>` | file: name = file name, detail = path; comment: name = text joined by spaces, detail = path; `ReviewEntry` carries what the row shows (reviewed state; status, path, line, first text line) |
 
-## Client — Review tab view state (M2, M3; on #1269's per-entry view)
+## Client — Review tab view state (M3, M4; on #1269's per-entry view)
 
 | Field | Type | Rules |
 |---|---|---|
@@ -70,8 +80,18 @@ side-by-side rows, in hunk order (R9).
 Kept with the tab's view, so hidden tabs keep their position (#1269); keys act on the shown tab's
 entry only (FR-014).
 
-## Client — `keymap.rs` (M2)
+## Client — `keymap.rs` (M3)
 
 `primary_held(Mods) -> bool` (Cmd on macOS, Ctrl elsewhere) and `review_press(&KeyInput, repeat) ->
-Press`; no key is matched here, `resolve` does it from `REVIEW_KEYS`. `TextArea::on_press(..)` and the
+Press`; no key is matched here, `resolve` does it from `REVIEW_KEYS`, given the window's
+`review_single_keys`. `TextArea::on_press(..)` and the
 Shift exclusion on its submit (R7).
+
+## Client — Settings → Appearance (M3)
+
+| Field / message | Where | Rules |
+|---|---|---|
+| `AppearanceDraft.review_single_keys` | `features/settings.rs` | from the window's settings on open; into `Settings` on Save; discarded by Cancel |
+| `Msg::ReviewSingleKeysToggled(bool)` | `features/settings.rs` | edits the draft only, as `ReduceMotionToggled` |
+| `FieldId::SettingsReviewSingleKeys` | focus tracking | as `SettingsReduceMotion` |
+| window copy `review_single_keys` | the window's settings state (beside `reduce_motion`) | set at startup from the file and on Save; read by the listener and the composer for `resolve`, and by the sheet and tooltips |
