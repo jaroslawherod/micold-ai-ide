@@ -904,7 +904,9 @@ fn build_items(
             .worktree
             .hovered
             .as_ref()
-            .is_some_and(|(hovered, at)| *hovered == dir && hover_holds(state, &dir, *at));
+            .is_some_and(|(hovered, entered)| {
+                *hovered == dir && hover_holds(state, &dir, *entered)
+            });
         let cluster = row_actions_cluster(
             &dir,
             // FR-004: no start action on a worktree that has a session.
@@ -1620,7 +1622,7 @@ mod tests {
             state.sidebar_groups(),
             tokens::roles(ColorScheme::Dark),
         );
-        let keys: Vec<Option<u64>> = items.iter().map(TreeItem::key_of).collect();
+        let keys: Vec<Option<u64>> = items.iter().map(|item| item.key).collect();
         assert!(
             keys.len() >= 6,
             "headers, locations and session rows: {keys:?}"
