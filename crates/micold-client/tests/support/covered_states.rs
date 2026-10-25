@@ -2034,6 +2034,111 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1272: the review's source control (T024, FR-012) -------------------------
+        //
+        // `feat-short`'s review with the source control in its header and the file column at its
+        // fixed width: the list open over the working tree with two pull requests listed (the
+        // newer with a long title), with the list being read, unavailable and empty; open while
+        // the long-titled pull request is shown; and open with Files on. Closed, the long title
+        // ends in `…` after its whole `#12 · `.
+        CoveredState {
+            name: "review-source-pull-request",
+            build: || review_source(SourcePose::PullRequest, false),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open",
+            build: || review_source(SourcePose::Listed, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open-loading",
+            build: || review_source(SourcePose::Loading, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open-unavailable",
+            build: || review_source(SourcePose::Unavailable, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open-empty",
+            build: || review_source(SourcePose::Empty, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open-pull-request",
+            build: || review_source(SourcePose::PullRequest, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-source-open-files",
+            build: || review_source(SourcePose::FilesOn, true).settled(),
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.source",
+                    path: REVIEW_SOURCE,
+                },
+            ],
+        },
         // --- Feature 1270: the review bar and the comments drawer (T053, FR-024) ---------------
         //
         // `feat-short`'s Review tab with 3 drafts, 2 sent, 1 applied and 1 answered comment: the
@@ -3389,6 +3494,127 @@ pub fn review_marks_unavailable() -> StateUnderTest {
     review_marks().connection(ConnectionStatus::Disconnected)
 }
 
+/// What the review's source control is posed over (feature 1272, T019, T024): `feat-short`'s
+/// review with its three files, in each pull-request list state the control's rows are built from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourcePose {
+    /// Two pull requests listed, the working tree shown.
+    Listed,
+    /// The list's first read under way.
+    Loading,
+    /// The list could not be read, and none was before.
+    Unavailable,
+    /// The worktree's branches have no pull request.
+    Empty,
+    /// The PR status setting off: no pull-request part.
+    SettingOff,
+    /// The listed pull request #12 (the long title) shown.
+    PullRequest,
+    /// The two listed and the repository's files browsed.
+    FilesOn,
+    /// The project root's review, whose Committed kind is unavailable.
+    DefaultEntry,
+}
+
+impl SourcePose {
+    /// Every pose, in the order the states are recorded.
+    pub const ALL: [SourcePose; 8] = [
+        SourcePose::Listed,
+        SourcePose::Loading,
+        SourcePose::Unavailable,
+        SourcePose::Empty,
+        SourcePose::SettingOff,
+        SourcePose::PullRequest,
+        SourcePose::FilesOn,
+        SourcePose::DefaultEntry,
+    ];
+}
+
+/// The long title of the newer listed pull request, which the closed control ends in `…`.
+pub const SOURCE_LONG_TITLE: &str =
+    "Move the review source into the header and give the diff the width it needs";
+
+/// The pull requests `feat-short`'s branch lists in [`review_source`], newest first.
+fn feat_short_pull_requests() -> Vec<micold_core::pull_request::BranchPullRequest> {
+    use micold_core::pull_request::{BranchPrState, BranchPullRequest, CheckStatus};
+    let pr = |number: u64, title: &str, state, checks| BranchPullRequest {
+        number,
+        title: title.to_string(),
+        url: format!("https://github.com/o/r/pull/{number}"),
+        state,
+        created_at: "2026-10-20T09:00:00Z".to_string(),
+        base: "main".to_string(),
+        head: "abc".to_string(),
+        head_branch: "feat/short".to_string(),
+        checks,
+    };
+    vec![
+        pr(
+            12,
+            SOURCE_LONG_TITLE,
+            BranchPrState::Open,
+            CheckStatus::Passing,
+        ),
+        pr(
+            9,
+            "Split the toggles",
+            BranchPrState::Draft,
+            CheckStatus::None,
+        ),
+    ]
+}
+
+/// `feat-short`'s review (the project root's, for [`SourcePose::DefaultEntry`]) posed as `pose`,
+/// with the source control's list open when `open` (feature 1272).
+pub fn review_source(pose: SourcePose, open: bool) -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg, PrList};
+    let mut under = if pose == SourcePose::DefaultEntry {
+        let mut under = strip_with(1, 1);
+        under.state = with_review_of(under.state, SessionLocation::Default);
+        under
+    } else {
+        review_marks()
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
+    let state = &mut under.state.changes;
+    state.pr_enabled = pose != SourcePose::SettingOff;
+    let view = state.tabs.shown_view_mut().expect("the review is shown");
+    view.pull_requests = match pose {
+        SourcePose::Loading => PrList::Loading {
+            seq: 1,
+            again: false,
+            last: None,
+        },
+        SourcePose::Unavailable => PrList::Unavailable { last: None },
+        SourcePose::Empty => PrList::Ready {
+            prs: vec![],
+            read_at: now,
+        },
+        SourcePose::SettingOff | SourcePose::DefaultEntry => PrList::Absent,
+        SourcePose::Listed | SourcePose::PullRequest | SourcePose::FilesOn => PrList::Ready {
+            prs: feat_short_pull_requests(),
+            read_at: now,
+        },
+    };
+    match pose {
+        SourcePose::PullRequest => {
+            let _ = changes::update(state, Msg::SourceChosen(Some(12)));
+        }
+        SourcePose::FilesOn => {
+            let _ = changes::update(state, Msg::FilesPaneToggled);
+        }
+        _ => {}
+    }
+    if open {
+        let _ = changes::update(state, Msg::SourceMenuToggled);
+    }
+    under
+}
+
+/// The review header's source control (feature 1272): the view's header row's second child.
+pub const REVIEW_SOURCE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
 /// The Review tab's bar: the Changes view's last row (feature 1270, B1), under the session area's
 /// header and strip.
 pub const REVIEW_BAR: &[usize] = &[0, 0, 1, 1, 2, 2];

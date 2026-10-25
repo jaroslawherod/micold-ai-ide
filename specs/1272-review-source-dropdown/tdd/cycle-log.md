@@ -24,3 +24,11 @@ task pair it covers.
 | Task | Behaviour | Red evidence | Green |
 |---|---|---|---|
 | T016, T017, T018 | `menu_select_fits` (8 tests, both schemes): list floats below the trigger and the body keeps its place; long title ends in `…` with `#n · ` whole inside the trigger; list caps at `max_list_height` with later rows past it; Working tree option holds its chips and the Default-entry note above the next row; heading and note take no press; trigger press/`Enter`/`Space` toggle; outside press/`Esc`/`Tab` dismiss; chip press sends only the chip's stop, a row its pick, `Enter` the pick | written before `MenuSelect`, the showcase sample and `runtime_messages` existed (compile red); mutation check (list `in_flow`, no `on_dismiss`, title as plain `Text`): 7 of 8 FAILED, only the trigger test (the library `Button`'s own keys) passing | `layout_snapshot menu_select_fits` 8 passed |
+
+## M4
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T019, T021, T022 | every source pose (2 PRs listed, loading, unavailable, empty, setting off, PR shown, Files on, Default entry), both themes: the left column holds one child at its top, none of `Pull requests`, `Committed`, `Uncommitted`, `Files` or the Default-entry note painted in it; the header holds the control reading the label's fixed part; the tooltip carries the base line | run on the pre-M4 view (constants and helpers only): `the_left_column_starts_with_the_file_list_and_the_header_holds_the_source_control` FAILED at the one-child assertion | `layout_snapshot session_area_fits` green |
+| T020, T023 | body two columns; file column 260 px at 1280, 1600 and 900 wide; diff area ≥ 70% of the body at 1280; control keeps its 280 px in the header while the title column narrows at 900 | same run: `the_file_column_keeps_its_width_and_the_diff_takes_the_rest` FAILED at the 260 px assertion | same run |
+| T024 | `review-source-*` covered states (closed with PR shown; open over each list state, with a PR shown, with Files on), recorded with their overlay through the new `StateUnderTest::settled` | new states | `layout_snapshot` 137 passed after re-record |

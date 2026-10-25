@@ -323,11 +323,20 @@ pub fn resolve_pressing<'a, M: 'a>(
         press_and_settle(&mut element, &mut tree, &mut node, renderer, &limits, path);
     }
 
-    let mut records = walk(Layout::new(&node), Layer::Base);
+    walk_layers(&mut element, &mut tree, &node, renderer)
+}
 
+/// The base tree's records of `node`, then those of the widget-attached overlay, if any.
+fn walk_layers<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    tree: &mut Tree,
+    node: &layout::Node,
+    renderer: &iced::Renderer,
+) -> Vec<LayoutRecord> {
+    let mut records = walk(Layout::new(node), Layer::Base);
     if let Some(mut overlay) = element.as_widget_mut().overlay(
-        &mut tree,
-        Layout::new(&node),
+        tree,
+        Layout::new(node),
         renderer,
         &Rectangle::with_size(WINDOW),
         Vector::ZERO,
@@ -335,7 +344,6 @@ pub fn resolve_pressing<'a, M: 'a>(
         let overlay_node = overlay.as_overlay_mut().layout(renderer, WINDOW);
         records.extend(walk(Layout::new(&overlay_node), Layer::Overlay));
     }
-
     records
 }
 
@@ -501,6 +509,8 @@ pub struct StateUnderTest {
     pub panes: Option<micold_core::pane_layout::PaneLayout>,
     /// A node to press before recording. See [`StateUnderTest::pressing`].
     pub press_at: Option<&'static [usize]>,
+    /// Settle entrances before recording. See [`StateUnderTest::settled`].
+    pub settled: bool,
 }
 
 impl StateUnderTest {
@@ -511,6 +521,7 @@ impl StateUnderTest {
             sandbox: micold_client::features::sandbox::Sandbox::default(),
             panes: None,
             press_at: None,
+            settled: false,
         }
     }
 
@@ -551,6 +562,15 @@ impl StateUnderTest {
         self.press_at = Some(path);
         self
     }
+
+    /// Settle entrances before recording, for a floating list whose openness is the caller's state
+    /// (feature 1272: the review's source control, `MenuSelect`). Opened by the state rather than
+    /// by a press, the list still enters on frame ticks, and `cdk::picker` reports no overlay until
+    /// one has been handed over, so without this the overlay pass records nothing.
+    pub fn settled(mut self) -> Self {
+        self.settled = true;
+        self
+    }
 }
 
 /// Resolve one covered state in a given colour scheme.
@@ -565,7 +585,33 @@ pub fn records_for(
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };
 
+    if under.settled && under.press_at.is_none() {
+        return resolve_settled(view_of(&under), renderer);
+    }
     resolve_pressing(view_of(&under), renderer, under.press_at)
+}
+
+/// As [`resolve`], with entrances settled first (see [`StateUnderTest::settled`]).
+pub fn resolve_settled<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &iced::Renderer,
+) -> Vec<LayoutRecord> {
+    let mut element = element;
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let origin = std::time::Instant::now();
+    settle(
+        &mut element,
+        &mut tree,
+        &node,
+        renderer,
+        origin,
+        0..SETTLE_FRAMES,
+        WINDOW,
+    );
+    node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    walk_layers(&mut element, &mut tree, &node, renderer)
 }
 
 // --- Mid-reveal resolution (BUG-001) -----------------------------------------------------------
