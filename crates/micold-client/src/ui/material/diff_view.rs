@@ -1497,7 +1497,7 @@ mod tests {
             "no drag on, no over"
         );
         assert_eq!(
-            gutter_messages(false, &[press.clone()]),
+            gutter_messages(false, std::slice::from_ref(&press)),
             vec!["press Some(4) Some(5) shift=false"]
         );
         assert_eq!(
