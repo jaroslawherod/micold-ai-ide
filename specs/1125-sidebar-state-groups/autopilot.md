@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: milestone M5
-- **Next step**: M5 PR: orchestrator opens it from the pushed branch, waits on CI and merges
+- **Phase**: done
+- **Next step**: handoff (the close PR is the run's last; the orchestrator opens it from the pushed branch, merges it and closes #1125)
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1345 | M2: two-line rows, primary selection | merged (rebase) | b54fa75959d6535260875f8859776e458e3851aa |
 | #1359 | M3: Overview row, top-bar badge | merged (rebase) | 9c2e5b7b70c182522eeb41eeaac4df0aea9e26bb |
 | #1378 | M4: chip bar and ⋯ menu | merged (rebase) | 219cbd4590b8fcaaf660f77acc30bc7b6ebef049 |
+| #1386 | M5: keyboard and hover follow a moved row | merged (rebase) | 42c0960482407d95862c7552ffb9ba53c1938f27 |
+| — | Close: T059–T060, tdd-verify (T061), spec closed | pending (orchestrator opens) | — |
 
 ## Milestones
 
@@ -30,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | #1345 | done |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | #1359 | done |
 | M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | #1378 | done |
-| M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | in progress |
+| M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | #1386 | done |
 
 Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (grouping, collapse and reveal-into-collapsed only work together; tasks.md M1 *Size*). M2 kept whole at 12 (two lines and dropped chips are one row change). US3 before US2 (both P1): US2's selected look uses US3's `Selection::Primary`.
 
@@ -93,6 +95,9 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M5 review B (conformance, sonnet) | 1 | 5f5e657bbba5820353a00c1602e088993000a23b:11749fecef664bb0f5a648d37708be2b45b46267 | CLEAN (2 MINOR: F1 hover tests said to be in the wrong file, declined: they are in `tests/sidebar_tree.rs` as T053 asks; F2 no `tdd/cycle-log.md`, as M1–M4: T052/T053 were run red first, by compile) |
 | M5 visual pass | — | 11749fec | B6 (Tab order, Enter/Space on a header, chords onto rows), B7 (ring stays on a row that moves to Working and back; hover action dropped) PASS, light; chord into Done not seen (no merged PR). User guide's Tab bullet corrected (fixed, prose only): `visual-pass/m5-record.md` |
 | M5 full gate | — | 34e43948 | `scripts/gate.sh` green after rebasing onto origin/main 7844dde4 (target-shared/debug wiped first for disk) |
+| Close tdd-verify | 1 | (inline; smell pass by a fresh `autopilot-reviewer`) | FAIL: no red kept, 12 behaviors TEST_AFTER (accepted: history); 6 deliberate mutants, 6 caught; HIGH smell `each_entrys_group_is_its_card_states` could pass empty (fixed, T061); MED/LOW left as recorded: `tdd/verification.md` |
+| Close diff review | 1 | 4cea9af07bc1e8a9956e7f9d3f732f61b4f772b2:42c0960482407d95862c7552ffb9ba53c1938f27 | CLEAN (2 MINOR: a line citation and the frontmatter's finding numbers in verification.md; fixed, prose only) |
+| Close full gate | — | (close commit) | `scripts/gate.sh` green on the final tree (10789 passed) after rebasing onto origin/main af0d6007 |
 
 ## Declined review findings
 
@@ -112,6 +117,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M4 | A r1 F8 | a stale `more_anchor` could survive a close | every close path (toggle, Escape/outside/displacement via `cancelled_by: MoreMenuToggled`, choose) clears it |
 | M5 | A r1 F2 | the row-menu test passes without M5 code | MINOR; it is the Edge Case's regression test (T057: the menu keeps its anchor and location), which needs no new code |
 | M5 | A r1 F3 | the key-distinctness test has no run group or Default row | MINOR; `RowKey` hashes a variant tag with the id, so kinds cannot collide, and run ids are distinct `GroupId`s |
+| close | tdd-verify smell pass F2 | `row_metrics_count_headers_and_skip_closed_groups` asserts only inside `if matches!(row, Header)` | misread: it is a `match` whose both arms assert, so every row is checked |
 
 ## Handover
 

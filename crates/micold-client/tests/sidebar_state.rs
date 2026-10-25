@@ -926,6 +926,7 @@ mod state_groups {
     #[test]
     fn each_entrys_group_is_its_card_states() {
         let state = five_states();
+        let mut checked = 0;
         for group in state.sidebar_groups() {
             for entry in &group.entries {
                 let SidebarEntry::Worktree(node) = entry else {
@@ -934,8 +935,13 @@ mod state_groups {
                 let (card, _) =
                     location_card_state(&state, &node.location(), node.worktree.branch.as_deref());
                 assert_eq!(StateGroup::of(card), group.group, "{:?}", node.location());
+                checked += 1;
             }
         }
+        assert_eq!(
+            checked, 5,
+            "every one of the five worktrees is checked, so the loop cannot pass empty"
+        );
     }
 
     /// T005 (US1.4, FR-002): a group whose only worktree a filter hides is absent.
