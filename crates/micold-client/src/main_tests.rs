@@ -1440,6 +1440,9 @@ fn app_creating_a_worktree() -> (
         },
         micold_core::worktree::CreateMode::NewBranch,
     );
+    // The registration that precedes the create (bug 1423) is not what these tests are about.
+    app.pending_ops
+        .retain(|_, op| !matches!(op, PendingOp::ProjectAdd));
     (app, rx)
 }
 
@@ -14181,6 +14184,67 @@ mod two_daemons {
         };
         assert!(created(&mut rx2), "the container daemon got the create");
         assert!(!created(&mut rx1), "the host daemon heard nothing");
+    }
+
+    /// Bug 1423: the chosen daemon is told the project before the create, or it answers "unknown
+    /// project" (its catalog is its own).
+    #[test]
+    fn a_worktree_create_registers_the_project_on_the_chosen_daemon_first() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.update(Message::WorktreeForm(FormMsg::Opened));
+        app.core
+            .update(Message::WorktreeForm(FormMsg::DaemonChosen(DaemonId(2))));
+        crate::shell::daemon_sync::send_worktree_create(
+            &mut app,
+            project.clone(),
+            micold_core::naming::DerivedNames {
+                dir_name: "feat-x".into(),
+                branch: "feat/x".into(),
+            },
+            micold_core::worktree::CreateMode::NewBranch,
+        );
+        let sent = drain(&mut rx2);
+        let add = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::ProjectAdd { path, .. } if *path == project));
+        let create = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::WorktreeCreate { .. }));
+        assert!(
+            add.is_some() && add < create,
+            "ProjectAdd must precede the create; sent {sent:?}"
+        );
+        assert!(drain(&mut rx1).is_empty(), "the host daemon heard nothing");
+    }
+
+    /// Bug 1423: a session started at a location bound to another daemon registers the project
+    /// there first.
+    #[test]
+    fn a_session_start_registers_the_project_on_the_bound_daemon_first() {
+        let (mut app, _rx1, mut rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        app.core.workspace.active = Some(project.clone());
+        app.core.workspace.bind(&project, "w", DaemonId(2));
+        let _ = crate::shell::daemon_sync::on_session_start_requested(
+            &mut app,
+            micold_core::session::SessionLocation::Worktree("w".into()),
+            micold_core::session::AiCli::ClaudeCode,
+            micold_core::session::SessionKind::default(),
+            true,
+        );
+        let sent = drain(&mut rx2);
+        let add = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::ProjectAdd { .. }));
+        let create = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::SessionCreate { .. }));
+        assert!(
+            add.is_some() && add < create,
+            "ProjectAdd must precede the create; sent {sent:?}"
+        );
     }
 
     /// Bug 1159: a worktree create for a down chosen daemon fails visibly, reaches no other daemon,

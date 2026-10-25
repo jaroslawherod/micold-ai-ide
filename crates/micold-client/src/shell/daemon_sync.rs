@@ -738,6 +738,25 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
 /// any session starts there. Idempotent, so a connect that finds everything registered sends
 /// nothing; a project bound to a daemon that is down waits for that daemon's own connect.
 pub fn register_projects(app: &mut App, daemon: DaemonId) {
+    let bindings = app.all_bindings();
+    register_bound_projects(app, &bindings, Some(daemon));
+}
+
+/// Bug 1423: a create sent to a daemon that has no location of `project` bound yet (a worktree
+/// chosen in the form, a session at a location bound elsewhere than the project's own daemon)
+/// registers the project there first. The daemon answers a project its catalog does not hold with
+/// "unknown project", and the connection handles messages in order, so the `ProjectAdd` lands
+/// before the create that follows it.
+fn register_project_for(app: &mut App, project: &Path, binding: micold_core::daemons::Binding) {
+    register_bound_projects(app, &[(project.to_path_buf(), binding)], None);
+}
+
+/// [`register_projects`] for `bindings`, limited to `only` when given.
+fn register_bound_projects(
+    app: &mut App,
+    bindings: &[(PathBuf, micold_core::daemons::Binding)],
+    only: Option<DaemonId>,
+) {
     let catalogs: std::collections::BTreeMap<DaemonId, std::collections::BTreeSet<PathBuf>> = app
         .daemon_catalogs
         .iter()
@@ -746,10 +765,13 @@ pub fn register_projects(app: &mut App, daemon: DaemonId) {
     let wanted = micold_client::links::registrations(
         &app.core.settings.links,
         &app.core.settings.daemons,
-        &app.all_bindings(),
+        bindings,
         &catalogs,
     );
-    for (to, path) in wanted.into_iter().filter(|(to, _)| *to == daemon) {
+    for (to, path) in wanted
+        .into_iter()
+        .filter(|(to, _)| only.is_none_or(|d| d == *to))
+    {
         send_op_bound(
             app,
             micold_core::daemons::Binding::Bound(to),
@@ -2923,6 +2945,7 @@ fn start_session(
             automatic,
             permission_mode: mode,
         };
+        register_project_for(app, &project, binding);
         send_op_bound(app, binding, op, |req| {
             session_create(req, project, &location, provider, kind, mode, false)
         });
@@ -3857,6 +3880,7 @@ pub fn send_worktree_create(
             .update(Message::WorktreeForm(FormMsg::CreateFailed(message)));
         return;
     }
+    register_project_for(app, &project, binding);
     send_op_bound(
         app,
         binding,
@@ -6165,7 +6189,9 @@ pub(crate) mod tests {
         fn sent_one(
             rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
         ) -> ClientMsg {
+            // The project's registration (bug 1423) precedes a create; it is not the request.
             let mut sent = drain_sent(rx);
+            sent.retain(|m| !matches!(m, ClientMsg::ProjectAdd { .. }));
             assert_eq!(sent.len(), 1, "one request: {sent:?}");
             sent.remove(0)
         }
