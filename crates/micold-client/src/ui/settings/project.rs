@@ -42,7 +42,7 @@ pub fn view<'a>(
                     TextArea::new(draft.project.editor.content(), roles)
                         .monospace()
                         .rows(ROWS.0, ROWS.1)
-                        .placeholder("mise trust && mise install")
+                        .placeholder("e.g. mise trust && mise install")
                         .on_action(|a| {
                             Message::Settings(SettingsMsg::SetupCommandAction(EditorAction(a)))
                         }),

@@ -5203,6 +5203,22 @@ fn availability_requests(rx: &mut SentRx) -> Vec<(u64, Option<PathBuf>)> {
     })
 }
 
+/// M5 review A-F2 (feature 1289, contract C3): a connect tells the daemon every project it holds
+/// its command, `None` included, so a command cleared while it was away does not keep running
+/// there (an SSH or container daemon outlives the client's connection).
+#[test]
+fn a_connect_clears_the_setup_command_of_a_held_project_that_has_none() {
+    let mut app = app_on_demo(&[]);
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let sets = sent_matching(&mut rx, |msg| match msg {
+        ClientMsg::ProjectSetupSet {
+            project, command, ..
+        } => Some((project, command)),
+        _ => None,
+    });
+    assert_eq!(sets, vec![(PathBuf::from(DEMO), None)]);
+}
+
 /// The service's reply to `req`.
 fn availability_answer(app: &mut App, req: u64, available: &[AiCli]) {
     let _ = update_inner(

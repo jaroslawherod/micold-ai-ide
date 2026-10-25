@@ -222,13 +222,9 @@ fn open_verified_project(app: &mut App, path: PathBuf) -> Task<Message> {
     // The daemon is the single writer: tell it to learn this project (persist + discover),
     // and switch this client's attachment to it. No local `persist()`, no local
     // transcript-reconcile — sessions come from the daemon catalog via reconcile_catalog.
-    let add_path = path.clone();
-    send_op(app, PendingOp::ProjectAdd, move |req| {
-        ClientMsg::ProjectAdd {
-            req,
-            path: add_path,
-        }
-    });
+    // The project's setup command follows it (feature 1289, C3).
+    let binding = app.active_binding();
+    crate::shell::setup::add_project(app, binding, path.clone());
     switch_daemon_attachment(app, previous, &path);
     Task::none()
 }
@@ -413,6 +409,75 @@ mod tests {
         assert!(
             app.core.workspace.active.is_none(),
             "an answer about another folder must not open one"
+        );
+    }
+
+    /// The `ProjectAdd` and `ProjectSetupSet` sent since the last drain, as `(path, command)`;
+    /// `None` for an add.
+    fn adds_and_setup_sets(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<(PathBuf, Option<Option<String>>)> {
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .filter_map(|msg| match msg {
+                ClientMsg::ProjectAdd { path, .. } => Some((path, None)),
+                ClientMsg::ProjectSetupSet {
+                    project, command, ..
+                } => Some((project, Some(command.map(|c| c.as_str().to_owned())))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// M5 review A-F1 (feature 1289, contract C3): a project opened by browsing takes its setup
+    /// command with it, right behind its `ProjectAdd`. Forgetting a project drops its command on
+    /// the daemon, so one forgotten and opened again would otherwise lose it there while Settings
+    /// still shows it.
+    #[test]
+    fn opening_a_project_hands_the_daemon_its_setup_command_behind_the_add() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/thing");
+        app.core.settings.setup_commands.insert(
+            micold_core::jira::connection_key(&chosen),
+            micold_core::setup::SetupCommand::parse("mise install").unwrap(),
+        );
+        let _ = on_folder_chosen(&mut app, chosen.clone());
+        reply_repo_root(&mut app, &mut rx, chosen.clone(), true);
+        assert_eq!(
+            adds_and_setup_sets(&mut rx),
+            vec![
+                (chosen.clone(), None),
+                (chosen, Some(Some("mise install".to_owned()))),
+            ]
+        );
+    }
+
+    /// M5 review A-F4 (decision 20): the command sent is the stored one, which another window may
+    /// have replaced since this one loaded it.
+    #[test]
+    fn the_command_sent_behind_an_add_is_read_from_the_store() {
+        let (mut app, mut rx) = client_without_local_git();
+        let chosen = PathBuf::from("/repo/thing");
+        let key = micold_core::jira::connection_key(&chosen);
+        let parse = |t| micold_core::setup::SetupCommand::parse(t).unwrap();
+        let mut stored = micold_core::settings::Settings::default();
+        stored
+            .setup_commands
+            .insert(key.clone(), parse("make deps"));
+        app.caps = app.caps.clone().with_settings(std::sync::Arc::new(
+            micold_core::settings::FakeSettingsStore::loaded(stored),
+        ));
+        app.core
+            .settings
+            .setup_commands
+            .insert(key, parse("mise install"));
+        let _ = on_folder_chosen(&mut app, chosen.clone());
+        reply_repo_root(&mut app, &mut rx, chosen.clone(), true);
+        assert_eq!(
+            adds_and_setup_sets(&mut rx),
+            vec![
+                (chosen.clone(), None),
+                (chosen, Some(Some("make deps".to_owned()))),
+            ]
         );
     }
 

@@ -12,22 +12,56 @@ use micold_core::session::SessionLocation;
 use micold_core::settings::SetupCommandChange;
 use micold_core::setup::{SetupCommand, SetupRunSummary};
 
-use crate::shell::daemon_sync::{send_op_bound, PendingOp};
+use crate::shell::daemon_sync::{send_op_bound, send_op_bound_req, PendingOp};
 use crate::App;
 use iced::Task;
 use micold_client::app::Message;
 
-/// Tell `daemon`, which just connected, the command of every project it holds: those its catalog
-/// lists and those `registered` was just sent in `ProjectAdd` (contract C3). The commands are read
-/// from the store, so a save in another window since this one started is what is sent.
-pub fn on_connect(app: &mut App, daemon: DaemonId, registered: Vec<PathBuf>) {
-    in_force(app);
+/// Tell `daemon`, which just connected, the command of every project its catalog holds, or that
+/// it has none (contract C3; M5 review A-F2). The commands are read from the store, so a save in
+/// another window since this one started is what is sent. Projects registered on this connect took
+/// theirs with their `ProjectAdd` ([`add_project`]).
+pub fn on_connect(app: &mut App, daemon: DaemonId) {
     let held: Vec<PathBuf> = app
         .daemon_catalogs
         .get(&daemon)
         .map(|catalog| catalog.projects.iter().map(|p| p.path.clone()).collect())
         .unwrap_or_default();
-    send_commands(app, daemon, held.into_iter().chain(registered));
+    for (project, command) in setup::on_connect(in_force(app), held) {
+        send_setup_set(app, Binding::Bound(daemon), project, command);
+    }
+}
+
+/// Register `path` on the daemon `binding` routes to (`ProjectAdd`), and hand it the project's
+/// stored setup command right behind it (contract C3): the daemon applies frames in order (C1), and
+/// forgetting a project drops its command there, so every add carries it (M5 review A-F1). Nothing
+/// follows an add that could not be sent.
+pub fn add_project(app: &mut App, binding: Binding, path: PathBuf) {
+    let added = path.clone();
+    let sent = send_op_bound_req(app, binding, PendingOp::ProjectAdd, move |req| {
+        ClientMsg::ProjectAdd { req, path: added }
+    });
+    if sent.is_none() {
+        return;
+    }
+    if let Some(command) = setup::command_for(in_force(app), &path).cloned() {
+        send_setup_set(app, binding, path, Some(command));
+    }
+}
+
+fn send_setup_set(
+    app: &mut App,
+    binding: Binding,
+    project: PathBuf,
+    command: Option<SetupCommand>,
+) {
+    send_op_bound(app, binding, PendingOp::ProjectSetupSet, move |req| {
+        ClientMsg::ProjectSetupSet {
+            req,
+            project,
+            command,
+        }
+    });
 }
 
 /// Each project's setup command as stored, re-read from the store when there is one (another
@@ -47,23 +81,6 @@ pub fn open_project(app: &App) -> Option<(PathBuf, String)> {
         .map(|p| (p.path.clone(), p.display_name.clone()))
 }
 
-/// Tell `daemon` the command of each project in `paths` that has one: projects just registered
-/// there, in the order their `ProjectAdd` went (the daemon applies frames in order, contract C1).
-pub fn send_commands(app: &mut App, daemon: DaemonId, paths: impl IntoIterator<Item = PathBuf>) {
-    for (project, command) in setup::on_connect(&app.core.settings.setup_commands, paths) {
-        send_op_bound(
-            app,
-            Binding::Bound(daemon),
-            PendingOp::ProjectSetupSet,
-            move |req| ClientMsg::ProjectSetupSet {
-                req,
-                project,
-                command: Some(command),
-            },
-        );
-    }
-}
-
 /// A save changed one project's command: tell each connected daemon whose catalog holds it, with
 /// its own catalog's path (contract C3).
 pub fn on_saved(app: &mut App, change: &SetupCommandChange) {
@@ -79,16 +96,7 @@ pub fn on_saved(app: &mut App, change: &SetupCommandChange) {
         })
         .collect();
     for (daemon, project, command) in setup::on_change(change, &catalogs) {
-        send_op_bound(
-            app,
-            Binding::Bound(daemon),
-            PendingOp::ProjectSetupSet,
-            move |req| ClientMsg::ProjectSetupSet {
-                req,
-                project,
-                command,
-            },
-        );
+        send_setup_set(app, Binding::Bound(daemon), project, command);
     }
 }
 

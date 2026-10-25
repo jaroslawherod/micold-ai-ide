@@ -742,10 +742,10 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
 /// any session starts there. Idempotent, so a connect that finds everything registered sends
 /// nothing; a project bound to a daemon that is down waits for that daemon's own connect.
 ///
-/// Answers the paths it sent, so their setup commands can follow them (feature 1289, C3).
-pub fn register_projects(app: &mut App, daemon: DaemonId) -> Vec<PathBuf> {
+/// Each add carries the project's setup command behind it (feature 1289, C3).
+pub fn register_projects(app: &mut App, daemon: DaemonId) {
     let bindings = app.all_bindings();
-    register_bound_projects(app, &bindings, Some(daemon))
+    register_bound_projects(app, &bindings, Some(daemon));
 }
 
 /// Bug 1423: a create sent to a daemon that has no location of `project` bound yet (a worktree
@@ -757,12 +757,12 @@ fn register_project_for(app: &mut App, project: &Path, binding: micold_core::dae
     register_bound_projects(app, &[(project.to_path_buf(), binding)], None);
 }
 
-/// [`register_projects`] for `bindings`, limited to `only` when given. Answers the paths it sent.
+/// [`register_projects`] for `bindings`, limited to `only` when given.
 fn register_bound_projects(
     app: &mut App,
     bindings: &[(PathBuf, micold_core::daemons::Binding)],
     only: Option<DaemonId>,
-) -> Vec<PathBuf> {
+) {
     let catalogs: std::collections::BTreeMap<DaemonId, std::collections::BTreeSet<PathBuf>> = app
         .daemon_catalogs
         .iter()
@@ -774,20 +774,12 @@ fn register_bound_projects(
         bindings,
         &catalogs,
     );
-    let mut sent = Vec::new();
     for (to, path) in wanted
         .into_iter()
         .filter(|(to, _)| only.is_none_or(|d| d == *to))
     {
-        sent.push(path.clone());
-        send_op_bound(
-            app,
-            micold_core::daemons::Binding::Bound(to),
-            PendingOp::ProjectAdd,
-            move |req| ClientMsg::ProjectAdd { req, path },
-        );
+        crate::shell::setup::add_project(app, micold_core::daemons::Binding::Bound(to), path);
     }
-    sent
 }
 
 /// Whether `daemon` is the one the binary's sandbox state and boot plan describe: the same
@@ -2435,9 +2427,10 @@ pub fn on_connected(
     app.daemon_catalogs.insert(daemon, catalog.clone());
     // First bind and each (re)connect (feature 491, T026): the projects with a location bound to
     // this daemon that its catalog does not hold are added before anything starts on it.
-    let registered = register_projects(app, daemon);
-    // Feature 1289 (C3): every project it holds learns its setup command, after its `ProjectAdd`.
-    crate::shell::setup::on_connect(app, daemon, registered);
+    register_projects(app, daemon);
+    // Feature 1289 (C3): every project it already holds learns its setup command, or that it has
+    // none.
+    crate::shell::setup::on_connect(app, daemon);
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).
     //
@@ -4019,13 +4012,7 @@ fn on_repo_clone_reply(app: &mut App, daemon: DaemonId, reply: &DaemonMsg) {
     let binding = micold_core::daemons::Binding::Bound(daemon);
     for output in pending.on_reply(connected, reply).unwrap_or_default() {
         match output {
-            Output::ProjectAdd { path } => {
-                let registered = path.clone();
-                send_op_bound(app, binding, PendingOp::ProjectAdd, move |req| {
-                    ClientMsg::ProjectAdd { req, path }
-                });
-                crate::shell::setup::send_commands(app, daemon, [registered]);
-            }
+            Output::ProjectAdd { path } => crate::shell::setup::add_project(app, binding, path),
             Output::WorktreeCreate {
                 project,
                 branch,

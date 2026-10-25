@@ -1229,12 +1229,6 @@ fn session_tree_item(
     item
 }
 
-/// The "Default" (project-root) row + its session sub-items when expanded (feature 010, US1).
-/// Always present when a project is open (`sidebar_entries`'s first entry); its "start a
-/// session" action reuses the same `IconButton`/`Icon::AddSession` affordance as a worktree row,
-/// but — unlike worktree rows' hover-revealed cluster — is always shown, since it is the row's
-/// sole action and there is only ever one Default row to keep tidy (no reflow/clutter concern
-/// that motivated the fade-on-hover treatment for the potentially-many worktree rows).
 /// The setup tag of `location` in the active project, with its tooltip (feature 1289, contract
 /// U2), from the run its daemon reports; `None` with no run record.
 fn setup_chip(
@@ -1270,6 +1264,12 @@ fn setup_chip(
 /// The widest a setup tag grows: room for its longest label, *Setup interrupted*.
 const SETUP_TAG_MAX_WIDTH: f32 = 160.0;
 
+/// The "Default" (project-root) row + its session sub-items when expanded (feature 010, US1).
+/// Always present when a project is open (`sidebar_entries`'s first entry); its "start a
+/// session" action reuses the same `IconButton`/`Icon::AddSession` affordance as a worktree row,
+/// but — unlike worktree rows' hover-revealed cluster — is always shown, since it is the row's
+/// sole action and there is only ever one Default row to keep tidy (no reflow/clutter concern
+/// that motivated the fade-on-hover treatment for the potentially-many worktree rows).
 fn build_default_item(
     state: &State,
     node: &crate::features::sidebar::DefaultNode,

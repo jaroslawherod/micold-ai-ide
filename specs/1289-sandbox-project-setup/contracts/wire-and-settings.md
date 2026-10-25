@@ -44,7 +44,10 @@ Order guarantee: a connection's frames are handled in order. A `ProjectSetupSet`
   service-settings write keeps it: the field is in core `Settings` and in its on-disk mirror.
 - After a save that changes a project's command, the client sends `ProjectSetupSet` to every
   connected daemon whose catalog holds that project. On every connect it sends one per project
-  registered there. Commands are never sent to a daemon that does not hold the project.
+  registered there, `command: None` for one without a command, so a command cleared while the
+  daemon was disconnected is cleared there too. Each `ProjectAdd` is followed by the project's
+  `ProjectSetupSet` when it has a command: forgetting a project drops its command on the daemon.
+  Commands are never sent to a daemon that does not hold the project.
 - `ProjectSetupSet.project` is the project's path **in that daemon's catalog**, the same path the
   client sends that daemon in `ProjectAdd` and session messages, not the `settings.json` key. For
   a container daemon on a Windows host (`links.rs` `PATHS_MAPPED`) that is the mapped path; the

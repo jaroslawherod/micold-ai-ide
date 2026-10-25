@@ -25,7 +25,8 @@ under the state lock), before the run's record is written. At start it loads the
 `max(counter, highest loaded record id + 1)`, so a lost counter file cannot repeat an id. A
 worktree deleted and recreated under the same `dir_name` (`ops.rs`: "a worktree recreated for the
 same branch reuses this exact path") gets a fresh id, because a delete removes the record but not
-the counter. The client keys "already notified" by `(daemon, project, location, RunId)` (R11).
+the counter. The client notifies a failure only when the summary it held for that location was
+the same `RunId`, still running (R11; M5 review A-F3).
 The ephemeral catalog (tests) keeps the counter in memory.
 
 ### `SetupState` (NEW)
@@ -190,7 +191,7 @@ Operations, each under the state lock and with no I/O under it:
 | Field | Type | Notes |
 |---|---|---|
 | `summaries` | `BTreeMap<(DaemonId, PathBuf, SessionLocation), SetupRunSummary>` | From `SetupChanged`. Not `runs`: that name is the Run in parallel feature's state, and the write-isolation guard reads it so. |
-| `notified` | `BTreeSet<(DaemonId, PathBuf, SessionLocation, RunId)>` | FR-017: one notification per run per client. |
+| (no `notified` set) | — | FR-017: one notification per run per client. A `Failed` summary notifies only when it replaces a `Running` one of the same `RunId`: the daemon tells every connected client a run started, and replays its records on each attach, so a run first seen already failed ended before this client was connected (M5 review A-F3). |
 | `view` | `Option<OutputView>` | `OutputView { key, run: RunId, first_line: u64, lines: Vec<String>, dropped: u64, follow: bool }` |
 
 Messages (`Msg`): `Changed`, `Output`, `RunRequested`, `StopRequested`, `ViewOpened`,

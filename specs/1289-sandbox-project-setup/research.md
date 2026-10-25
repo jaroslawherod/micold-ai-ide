@@ -271,8 +271,10 @@ creates while no app is connected, and two windows would race to start it.
 - **Failure notification**: each client posts one error notification (through `app.core.notify_error`,
   `crates/micold-client/src/app.rs`) the first time it learns that a given `RunId` ended `Failed`,
   whether it saw the change live or in the catch-up it gets on attach. The text is *Setup failed
-  in <project> / <location>: <exit status or reason>.* The client remembers notified `RunId`s for
-  its own lifetime, so the same run never notifies it twice (FR-017, SC-004). One client process
+  in <project> / <location>: <exit status or reason>.* The client notifies a failure only when it held
+  that run as running: the daemon replays its records on every attach, so a run first seen already
+  failed ended before the client was connected, and the same run never notifies twice (FR-017,
+  SC-004; M5 review A-F3). One client process
   is one window (no multi-window process exists), so "one per app" is "one per connected client".
 
 **Rationale**: The design reuses existing shared primitives only (Principle VIII). `Tag` is the
