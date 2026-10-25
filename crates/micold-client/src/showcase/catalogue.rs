@@ -386,6 +386,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::review::menu_select,
     },
     Entry {
+        module: "material/change_bar.rs",
+        component: "ChangeBar",
+        variants: &[],
+        density: &[],
+        posed: &["4:1", "one large and one small", "minimum one-line"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::review::change_bar,
+    },
+    Entry {
         module: "material/overview_card.rs",
         component: "OverviewCard",
         // BUG-1298 FR-026: the status words' tones, posed by the "pull request rows" pose.

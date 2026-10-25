@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: implement (M3)
-- **Next step**: M3 reviewed (A, B), full gate, pushed; PR title/body in the unit's scratchpad for the orchestrator to open. Then M4 (T024–T030)
+- **Phase**: implement (M4)
+- **Next step**: M4 implemented (T024–T029); reviews A, B, visual pass (T030), full gate; push after #1426 merges
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1354 | design (spec, plan, tasks) | merged (rebase) | 9c8473afbb8e49aaa8853892a6df818df3fdd138 |
 | #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
 | #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
-| — | M3 tree state in the Changes reducer; Files on core | in progress | — |
+| #1426 | M3 tree state in the Changes reducer; Files on core | open | — |
+| — | M4 tree rows + ChangeBar drawn; guide; snapshot; visual pass | in progress (waits on #1426) | — |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
-| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | reviewed; PR to open |
-| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | after M3 |
+| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | open |
+| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | in progress |
 | M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | after M4 |
 
 ## Decisions
@@ -44,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 7 | M3 (T019) | Did #1272 move the list pane or rename its types? | List pane = the 260 px file column left of the diff (`ui::changes::FILE_COLUMN_WIDTH` 260.0); row height `ui::changes::ROW_HEIGHT` 36.0; `TreeView` indent step `spacing::MD`. `OpenView`, `ListBody`, `Msg::FileSelected`/`SourceChosen`/`ReferenceActivated`/`OpenFileDiff` unchanged; plan.md and contract §2 ("inside the left column #1272 provides") need no change | agent | `crates/micold-client/src/ui/changes.rs:57,69` |
 | 8 | M3 (T020) | M2 A F1: should a select while filtering reveal only in the active set? | No: `reveal` clears the ancestors from both sets. A file selected by any route must stay listed once the filter clears (scenario 3.4 "selected again when the filter is cleared", edge case "Selection inside a collapsed folder") | agent | spec.md scenario 3.4, data-model §2 |
 | 9 | M3 (T022) | `ReferenceActivated` browses rather than selects; reveal there? | Yes, when the reference names a file the shown source lists (edge case names "a reference followed from a diff") | agent | `reference_activated` in features/changes.rs |
+| 11 | M4 (T027) | A 24-character name, the kind tag, the bar and `+a −r` do not fit one line of the 260 px column (name ≈ 170 px in the emphasised role; trailing cluster ≥ 100 px) | Two-line tree rows, `ROW_HEIGHT` 36 → 48: a file's name (review glyph first) over its tags, bar, counts and comment tag; a folder's label over its totals. Name keeps the row's width less padding and the glyph slot (SC-006 test) | agent | spec SC-006, edge case "Long file names"; `ui::changes::tests` |
+| 12 | M4 (T025) | Bar colours (R7 left the family open) | added `success`, removed `error`: the scheme's green and red roles, both themes; `diff_added` / `diff_removed` are pale row fills | agent | research R7; tokens `success`, `error` |
 | 10 | M3 (T022) | Where does `refresh_change_rows` run? | Once in `update` beside `reshape`, after every non-scroll message on the shown view, skipped when a digest of the leaves and choices is unchanged: no arm can miss it, and typing elsewhere lays nothing out | agent | research R9 (never in `view`) |
 
 ## Review rounds

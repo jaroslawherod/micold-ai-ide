@@ -25,22 +25,24 @@ use crate::features::changes::{
     drawer_counts, drawer_groups, drawer_rows, file_comments, file_diff_available, file_reviews,
     list_body, mark_control, pending_counts, picker_matches, pr_header, progress_label, review_bar,
     review_of, reviews_progress, selected_file, source_control_tooltip, source_menu_input,
-    stale_notice, stop_message, tree_rows, whole_file, BrowseBody, ComposerTarget, DiffBody,
-    DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel, Source, Step, TreeKind, WholeFile,
-    NO_LONGER_CHANGED, WHOLE_FILE_UNAVAILABLE,
+    stale_notice, stop_message, tree_pane, tree_rows, whole_file, BrowseBody, ComposerTarget,
+    DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, ReviewBarModel, Source, Step, TreeKind,
+    TreePane, WholeFile, NO_LONGER_CHANGED, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::cdk::overlay::Surface;
+use crate::ui::material::shaped_text::width_of;
 use crate::ui::material::{
     menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
-    CardState, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay, ProgressBar,
-    PullRequestIndicator, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable, SideSheet,
-    StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip, TooltipPosition,
-    TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark, VirtualRows,
-    REVIEW_BAR_COMMENTS as COMMENTS,
+    CardState, ChangeBar, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay,
+    ProgressBar, PullRequestIndicator, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable,
+    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip,
+    TooltipPosition, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, UnreadMark,
+    VirtualRows, CHANGE_BAR_WIDTH, REVIEW_BAR_COMMENTS as COMMENTS,
 };
 use micold_core::review::drawer::{DrawerEvent, DrawerTab, START_HINT};
 use micold_core::review::marks::{FileReview, ReviewState};
+use micold_core::review::tree::{self, BarParts, RowKind};
 use micold_core::review::RelPath;
 use micold_core::task_progress::Ratio;
 
@@ -54,8 +56,10 @@ pub const PR_TOO_LARGE: &str = "This pull request is too large to show here";
 pub const PR_UNREAD: &str = "The pull request's diff could not be read; select it again to retry";
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
-/// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
-pub const ROW_HEIGHT: f32 = 36.0;
+/// One tree row's height: fixed, which is what lets `VirtualRows` build only the visible rows. Two
+/// lines: a file's name over its tags, bar and counts; a folder's label over its totals (feature
+/// 1273, SC-006).
+pub const ROW_HEIGHT: f32 = 48.0;
 
 /// The header's *n of m reviewed* slot at its widest: laid out the same width shown or empty, so
 /// the header's other controls never move with it (feature 1271, FR-009). In a narrow header it
@@ -466,26 +470,11 @@ fn list_pane<'a>(
             }
             lines.into()
         }
-        ListBody::Files(files) => {
-            let selected = selected_file(view);
-            let counts = pending_counts(&state.changes);
-            VirtualRows::new(
-                files.len(),
-                ROW_HEIGHT,
-                move |index| {
-                    let file = &files[index];
-                    let pending = counts.get(&file.path).copied().unwrap_or(0);
-                    let review = reviews.get(&file.path).copied();
-                    let dot = RowDot::of(review, changed_since_you_looked(view, &file.path));
-                    file_row(file, selected == Some(&file.path), pending, review, dot, r)
-                },
-                r,
-            )
-            .offset(view.list_offset)
-            .viewport(view.list_viewport)
-            .on_scroll(|offset, viewport| Message::Changes(Msg::ListScrolled { offset, viewport }))
-            .into()
-        }
+        ListBody::Files(files) => match tree_pane(view) {
+            // M5 draws the no-match line; nothing of the tree shows unless it has rows (FR-016).
+            TreePane::Hidden | TreePane::NoMatch => Space::new().into(),
+            TreePane::Rows => change_tree(state, view, files, reviews, r),
+        },
     };
     pane.push(list).into()
 }
@@ -618,69 +607,219 @@ fn browsed_pane<'a>(
         .into()
 }
 
-/// One file (L2): its review state (feature 1271, FR-001), path, kind tag, content tag when not
-/// text, `+a −r`, and its pending comments.
-fn file_row(
-    file: &ChangedFile,
+/// The changed files as a tree (feature 1273, contract §2.3): [`OpenView::change_rows`] on
+/// `VirtualRows`, so only the rows on screen are built (FR-015).
+fn change_tree<'a>(
+    state: &'a State,
+    view: &'a OpenView,
+    files: &'a [ChangedFile],
+    reviews: BTreeMap<RelPath, FileReview>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let selected = selected_file(view);
+    let counts = pending_counts(&state.changes);
+    let rows = &view.change_rows;
+    let scale = view.change_scale;
+    let cap = tree_indent_cap(FILE_COLUMN_WIDTH);
+    VirtualRows::new(
+        rows.len(),
+        ROW_HEIGHT,
+        move |index| {
+            let row = &rows[index];
+            let levels = tree::indent_levels(row.depth, cap);
+            match &row.kind {
+                RowKind::Folder(folder) => folder_row(row, folder, levels, r),
+                RowKind::File { leaf } => {
+                    let file = &files[*leaf];
+                    let bar = counted(file)
+                        .then(|| tree::bar(file.added, file.removed, scale, CHANGE_BAR_WIDTH))
+                        .flatten();
+                    let review = reviews.get(&file.path).copied();
+                    let facts = FileFacts {
+                        selected: selected == Some(&file.path),
+                        pending: counts.get(&file.path).copied().unwrap_or(0),
+                        review,
+                        dot: RowDot::of(review, changed_since_you_looked(view, &file.path)),
+                        bar,
+                    };
+                    file_row(file, &row.label, levels, facts, r)
+                }
+            }
+        },
+        r,
+    )
+    .offset(view.list_offset)
+    .viewport(view.list_viewport)
+    .on_scroll(|offset, viewport| Message::Changes(Msg::ListScrolled { offset, viewport }))
+    .into()
+}
+
+/// Whether a file's `+a −r` are line counts the bar draws: a text change other than a Mode one
+/// (FR-006), as the tree's leaves count them.
+fn counted(file: &ChangedFile) -> bool {
+    file.content == Content::Text && !matches!(file.kind, ChangeKind::ModeOnly)
+}
+
+/// The changed-file tree's indentation step: the `TreeView`'s (ledger decision 7).
+pub const TREE_INDENT_STEP: f32 = spacing::MD;
+/// A 24-character file name (SC-006: names up to 24 characters show whole at the default list width), measured for the room a name keeps before the
+/// indentation stops growing (edge case "Very deep paths").
+const NAME_SAMPLE: &str = "review_file_tree_test.rs";
+/// A file row's name: emphasised, the row's most prominent text (FR-005).
+const NAME_ROLE: TypeRole = TypeRole::Action;
+
+/// The room a row's name has at depth 0 in a list `list_width` wide: the list less the row's
+/// padding and the review state's slot.
+pub fn name_room(list_width: f32) -> f32 {
+    list_width - 2.0 * anatomy::button::PADDING_TEXT - (TypeRole::Body.size() + spacing::SM)
+}
+
+/// How many indentation steps a row may take in a list `list_width` wide, so a
+/// 24-character name keeps its room (SC-006).
+pub fn tree_indent_cap(list_width: f32) -> u16 {
+    tree::max_indent_levels(
+        name_room(list_width),
+        TREE_INDENT_STEP,
+        width_of(NAME_SAMPLE, NAME_ROLE),
+    )
+}
+
+/// The indentation of a row `levels` steps in.
+fn indent(levels: u16) -> Space {
+    Space::new().width(Length::Fixed(f32::from(levels) * TREE_INDENT_STEP))
+}
+
+/// `+a −r`, as a row's caption.
+fn counts_caption(added: u64, removed: u64, r: Roles) -> Text<'static, Message> {
+    Text::new(format!("+{added} \u{2212}{removed}"), TypeRole::Caption, r)
+        .muted()
+        .wrapping(iced::widget::text::Wrapping::None)
+}
+
+/// A folder row (FR-001–FR-003, FR-007): its disclosure chevron and label over the summed
+/// `+a −r` of the files listed below it; a press folds or unfolds it.
+fn folder_row(
+    row: &tree::Row,
+    folder: &tree::FolderRow,
+    levels: u16,
+    r: Roles,
+) -> Element<'static, Message> {
+    let chevron = if folder.open {
+        Icon::SelectChevron
+    } else {
+        Icon::ChevronRight
+    };
+    let text = column![
+        Ellipsized::<Message>::at_role(row.label.clone(), TypeRole::Body, r.on_surface),
+        counts_caption(folder.added, folder.removed, r),
+    ];
+    let line = row![
+        indent(levels),
+        Glyph::new(chevron, TypeRole::Body, r).tint(r.on_surface_variant),
+        text,
+    ]
+    .spacing(spacing::SM)
+    .align_y(Alignment::Center);
+    container(
+        Button::with_content(
+            container(line).width(Length::Fill).clip(true),
+            ButtonVariant::Text,
+            r,
+        )
+        .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
+        .width(Length::Fill)
+        .on_press(Message::Changes(Msg::TreeFolderToggled(
+            folder.paths.clone(),
+        ))),
+    )
+    .height(Length::Fixed(ROW_HEIGHT))
+    .width(Length::Fill)
+    .align_y(Alignment::Center)
+    .into()
+}
+
+/// What a file row shows besides the file itself.
+struct FileFacts {
     selected: bool,
     pending: usize,
     review: Option<FileReview>,
     dot: Option<RowDot>,
+    bar: Option<BarParts>,
+}
+
+/// One file (L2, FR-005): its review state (feature 1271, FR-001) and its name first, emphasised;
+/// under them its kind tag, content tag when not text, change bar with `+a −r` when it has
+/// counted lines, and its pending comments. The full path is on hover.
+fn file_row(
+    file: &ChangedFile,
+    name: &str,
+    levels: u16,
+    facts: FileFacts,
     r: Roles,
 ) -> Element<'static, Message> {
-    let (kind, accent) = kind_tag(&file.kind, r);
-    let variant = if selected {
+    let variant = if facts.selected {
         ButtonVariant::Outlined
     } else {
         ButtonVariant::Text
     };
-    let mut line = row![].spacing(spacing::SM).align_y(Alignment::Center);
-    if let Some(review) = review {
-        line = line.push(review_glyph(review.state, r));
+    let mut title = row![].spacing(spacing::SM).align_y(Alignment::Center);
+    if let Some(review) = facts.review {
+        title = title.push(review_glyph(review.state, r));
     }
-    let mut line = line
-        // One line, cut from the directory side where the row's tags leave too little room, so
-        // the file name stays while it fits (1271 V1).
-        .push(
-            Ellipsized::<Message>::at_role_spaced(
-                file.path.to_string(),
-                TypeRole::Body,
-                variant.content(r, None),
-            )
-            .path(),
-        )
-        .push(Tag::new(kind, accent).one_line());
+    // One line, ellipsised at its end: the name keeps the row's room before the indentation
+    // grows (SC-006), and a longer one is cut where the tags below cannot reach it.
+    let title = title.push(Ellipsized::<Message>::at_role(
+        name.to_owned(),
+        NAME_ROLE,
+        variant.content(r, None),
+    ));
+    let mut details = row![].spacing(spacing::SM).align_y(Alignment::Center);
+    if let Some((kind, accent)) = kind_tag(&file.kind, r) {
+        details = details.push(Tag::new(kind, accent).one_line());
+    }
     match file.content {
         Content::Text => {}
-        Content::Binary => line = line.push(Tag::new("Binary", r.secondary).one_line()),
-        Content::NotUtf8 => line = line.push(Tag::new("Not text", r.secondary).one_line()),
+        Content::Binary => details = details.push(Tag::new("Binary", r.secondary).one_line()),
+        Content::NotUtf8 => details = details.push(Tag::new("Not text", r.secondary).one_line()),
     }
-    line = line.push(
-        Text::new(
-            format!("+{} \u{2212}{}", file.added, file.removed),
-            TypeRole::Caption,
-            r,
-        )
-        .muted()
-        .wrapping(iced::widget::text::Wrapping::None),
-    );
-    if pending > 0 {
-        line = line.push(Tag::new(pending_label(pending), r.tertiary).one_line());
+    if let Some(parts) = facts.bar {
+        details = details
+            .push(ChangeBar::new(parts, r).max_width(CHANGE_BAR_WIDTH))
+            .push(counts_caption(
+                u64::from(file.added),
+                u64::from(file.removed),
+                r,
+            ));
     }
-    let button = container(
+    if facts.pending > 0 {
+        details = details.push(Tag::new(pending_label(facts.pending), r.tertiary).one_line());
+    }
+    let line = row![
+        indent(levels),
+        column![title, details].spacing(spacing::XS / 2.0)
+    ]
+    .align_y(Alignment::Center);
+    let renamed_from = match &file.kind {
+        ChangeKind::Renamed { from } => Some(from.as_str()),
+        _ => None,
+    };
+    let button = container(Tooltip::new(
         // The row's inset is the list's, not the variant's: selecting a row outlines it without
-        // taking 24 px from its path (1271 visual re-pass V1).
-        // The content is clipped to the button's content box: in a list too narrow for the path
+        // taking 24 px from its name (1271 visual re-pass V1).
+        // The content is clipped to the button's content box: in a list too narrow for the name
         // and the tags, the overflow is cut there and never reaches the padding the changed dot is
         // drawn over (1271 round 3, V4).
         Button::with_content(container(line).width(Length::Fill).clip(true), variant, r)
             .padding([0.0, tokens::anatomy::button::PADDING_TEXT])
             .width(Length::Fill)
             .on_press(Message::Changes(Msg::FileSelected(file.path.clone()))),
-    )
+        tree::hover_text(file.path.as_str(), renamed_from),
+        r,
+    ))
     .height(Length::Fixed(ROW_HEIGHT))
-    .width(Length::Fill);
-    let Some(dot) = dot else {
+    .width(Length::Fill)
+    .align_y(Alignment::Center);
+    let Some(dot) = facts.dot else {
         return button.into();
     };
     // FR-003: the changed dot sits in the button's trailing padding, over it rather than in the
@@ -755,14 +894,15 @@ fn review_glyph(state: ReviewState, r: Roles) -> Element<'static, Message> {
         .into()
 }
 
-/// The kind's label and accent (L2). An untracked file is new to the reviewer: Added.
-fn kind_tag(kind: &ChangeKind, r: Roles) -> (String, Rgb) {
+/// The kind's tag and accent (L2, FR-005): none for Modified. An untracked file is new to the
+/// reviewer: Added. A rename names its old path on hover, not in the tag.
+fn kind_tag(kind: &ChangeKind, r: Roles) -> Option<(&'static str, Rgb)> {
     match kind {
-        ChangeKind::Added | ChangeKind::Untracked => ("Added".into(), r.primary),
-        ChangeKind::Modified => ("Modified".into(), r.secondary),
-        ChangeKind::Deleted => ("Deleted".into(), r.error),
-        ChangeKind::Renamed { from } => (format!("Renamed from {from}"), r.tertiary),
-        ChangeKind::ModeOnly => ("Mode".into(), r.secondary),
+        ChangeKind::Added | ChangeKind::Untracked => Some(("Added", r.primary)),
+        ChangeKind::Modified => None,
+        ChangeKind::Deleted => Some(("Deleted", r.error)),
+        ChangeKind::Renamed { .. } => Some(("Renamed", r.tertiary)),
+        ChangeKind::ModeOnly => Some(("Mode", r.secondary)),
     }
 }
 
@@ -1214,4 +1354,27 @@ pub fn reply_dialog_surface<'a, M: Clone + 'a>(
     )
     .width(Length::Fixed(560.0))
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SC-006, edge case "Very deep paths": at the default list width the tree indents, and at any
+    /// depth the indentation it takes leaves a 24-character name its whole width.
+    #[test]
+    fn a_24_character_name_keeps_its_room_at_every_depth() {
+        assert_eq!(NAME_SAMPLE.chars().count(), 24);
+        let name = width_of(NAME_SAMPLE, NAME_ROLE);
+        let cap = tree_indent_cap(FILE_COLUMN_WIDTH);
+        assert!(cap >= 2, "the tree indents at the default width: cap {cap}");
+        for depth in 0..20 {
+            let levels = tree::indent_levels(depth, cap);
+            let room = name_room(FILE_COLUMN_WIDTH) - f32::from(levels) * TREE_INDENT_STEP;
+            assert!(
+                room >= name,
+                "depth {depth}: {room} px of room for a {name} px name"
+            );
+        }
+    }
 }
