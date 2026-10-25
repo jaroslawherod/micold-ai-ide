@@ -15,22 +15,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: implement M1
-- **Next step**: re-review the M1 rebase resolution (sonnet: `NameStatus`/`identify`/`hash_paths` in `review/{changes,git}.rs`, F4 test in `tests/review_git.rs`), then CI and merge of #1380. Rebase gate: `scripts/gate.sh` exit 0 on the rebased tree (core + workspace tests, script suites). FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Phase**: implement M2
+- **Next step**: M2 (T009–T014) implemented TDD on main 8c071118; full `scripts/gate.sh`, push, then reviews A/B on M2 (the unit had no Agent tool) and open the M2 PR from the prepared body. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
-| #1380 | M1 | open, rebased onto main 8eceb3ad (#1271 M1 conflicts resolved); gate green, pushed | |
+| #1380 | M1 | merged | 8c0711181531461916b4e025a22d3da0b615f577 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | | PR #1380; rebased onto #1271 M1, rebase resolution to re-review |
-| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | planned (builds now) |
+| M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
+| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | implemented T009–T014; reviews A/B pending |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |

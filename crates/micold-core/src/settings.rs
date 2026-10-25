@@ -250,6 +250,10 @@ pub struct Settings {
     /// preference is not read.
     #[serde(default)]
     pub reduce_motion: bool,
+    /// Whether the review comment box shows suggestion chips (#1275, FR-022). Off by default; a
+    /// file written before the key existed reads as off. Client-owned: the daemon never reads it.
+    #[serde(default)]
+    pub suggestion_chips: bool,
     /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).
     #[serde(default = "default_scrollback")]
     pub scrollback_lines: usize,
@@ -443,6 +447,7 @@ impl Default for Settings {
         Self {
             theme: ThemePreference::default(),
             reduce_motion: false,
+            suggestion_chips: false,
             scrollback_lines: DEFAULT_SCROLLBACK_LINES,
             env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: default_env_include_script_path_string(),
@@ -799,6 +804,9 @@ struct StoredSettings {
     /// Missing in files written before feature 970 → off.
     #[serde(default)]
     reduce_motion: bool,
+    /// Missing in files written before #1275 → off.
+    #[serde(default)]
+    suggestion_chips: bool,
     /// Missing in v1 files → defaults to [`DEFAULT_SCROLLBACK_LINES`] (backward compatible).
     #[serde(default = "default_scrollback")]
     scrollback_lines: usize,
@@ -946,6 +954,7 @@ impl StoredSettings {
             settings_version: SETTINGS_VERSION,
             theme: settings.theme,
             reduce_motion: settings.reduce_motion,
+            suggestion_chips: settings.suggestion_chips,
             scrollback_lines: settings.scrollback_lines,
             env_include_enabled: settings.env_include_enabled,
             env_include_script_path: settings.env_include_script_path.clone(),
@@ -994,6 +1003,7 @@ impl StoredSettings {
         Settings {
             theme: self.theme,
             reduce_motion: self.reduce_motion,
+            suggestion_chips: self.suggestion_chips,
             scrollback_lines: clamp_scrollback(self.scrollback_lines),
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
@@ -1568,6 +1578,41 @@ mod reduce_motion_tests {
             "the file holds the user's choice"
         );
         assert!(store.load().settings.reduce_motion, "and loads back on");
+    }
+
+    /// #1275 K5 (FR-022): **Suggestion chips** is off by default, an older file reads as off,
+    /// and on survives a save and a load under the key `suggestion_chips`.
+    #[test]
+    fn suggestion_chips_default_off_and_round_trip() {
+        assert!(!Settings::default().suggestion_chips, "off by default");
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark" }"#,
+        )
+        .unwrap();
+        assert!(
+            !store.load().settings.suggestion_chips,
+            "a file without the key reads as off"
+        );
+
+        store
+            .save(&Settings {
+                suggestion_chips: true,
+                ..Settings::default()
+            })
+            .unwrap();
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("settings.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            written.get("suggestion_chips"),
+            Some(&serde_json::Value::Bool(true)),
+            "the file holds the user's choice"
+        );
+        assert!(store.load().settings.suggestion_chips, "and loads back on");
     }
 }
 

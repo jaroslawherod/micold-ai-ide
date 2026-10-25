@@ -55,6 +55,8 @@ const DEFERRED: &[(&str, &str)] = &[
     ("jira_connections", "M2 (T022) connect form"),
     // Feature 1289: stored from M2; Settings › Project's setup command field lands with M5.
     ("setup_commands", "1289 M5 (T046) Settings › Project"),
+    // #1275: stored from M2; the Suggestion chips switch in Settings › Appearance lands with M5.
+    ("suggestion_chips", "1275 M5 (T038) Settings › Appearance"),
     // Read-repair state (`#[serde(skip)]`): shown through `ContainerSettings.migration`'s notice.
     (
         "daemon.sandbox.moved_off_released",

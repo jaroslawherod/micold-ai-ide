@@ -795,6 +795,8 @@ impl ValidSettings {
         Settings {
             theme: self.theme,
             reduce_motion: self.reduce_motion,
+            // Not on the form until #1275 M5; the save path never writes it (`set_changed`).
+            suggestion_chips: false,
             scrollback_lines: self.scrollback_lines,
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,

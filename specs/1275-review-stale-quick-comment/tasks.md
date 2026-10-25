@@ -113,8 +113,8 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
 **Goal**: `review::drag` turns press, rows passed and release into a click or a range.
 **Independent test**: `mise run test-core` runs D1–D8.
 
-- [ ] T009 [P] [US2] Create `crates/micold-core/src/review/drag.rs` (declared by T010) with failing unit tests D1–D8 from contracts/core-api.md in its `mod tests`.
-- [ ] T010 [US2] Add `pub mod drag;` to `crates/micold-core/src/review/mod.rs` and implement
+- [x] T009 [P] [US2] Create `crates/micold-core/src/review/drag.rs` (declared by T010) with failing unit tests D1–D8 from contracts/core-api.md in its `mod tests`.
+- [x] T010 [US2] Add `pub mod drag;` to `crates/micold-core/src/review/mod.rs` and implement
   `review::drag` (data-model §7) over the existing `review::Side` and
   `review::LineRange` (`crates/micold-core/src/review/mod.rs:67,77`): `gutter_line(old, new) ->
   Option<(Side, u32)>` (C1: new number first, else old, `None` for neither; the same rule as the
@@ -130,19 +130,19 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
 **Goal**: the three chips, their insertion rule and the off-by-default setting live in the core.
 **Independent test**: `mise run test-core` runs K1–K5.
 
-- [ ] T011 [P] [US3] Create `crates/micold-core/src/review/chips.rs` (declared by T012) with failing unit tests K1–K4 in its `mod tests`.
-- [ ] T012 [US3] Add `pub mod chips;` to `crates/micold-core/src/review/mod.rs` and implement
+- [x] T011 [P] [US3] Create `crates/micold-core/src/review/chips.rs` (declared by T012) with failing unit tests K1–K4 in its `mod tests`.
+- [x] T012 [US3] Add `pub mod chips;` to `crates/micold-core/src/review/mod.rs` and implement
   `review::chips` (data-model §8): `SuggestionChip { label: &'static str,
   text: &'static str }`, `CHIPS: [SuggestionChip; 3]` = *Rename* → "Rename this to ", *Add test* →
   "Add a test that covers this.", *Why?* → "Why is this needed?"; `insert(text, chip) -> String`
   (empty or whitespace-only → the chip's text; otherwise appended on a new line, no blank line when
   the text already ends with a newline).
-- [ ] T013 [P] [US3] Write failing test K5 in the tests of `crates/micold-core/src/settings.rs`,
+- [x] T013 [P] [US3] Write failing test K5 in the tests of `crates/micold-core/src/settings.rs`,
   beside `reduce_motion_round_trips`: default false, a `settings.json` without the key reads false,
   true round-trips through `StoredSettings` as `suggestion_chips`. Add `"suggestion_chips"` to the
   pinned key list in `crates/micold-core/tests/settings_issue_mapping.rs` (`:185-210`, sorted) in
   the same commit, so that test fails until T014 adds the key.
-- [ ] T014 [US3] Implement `Settings::suggestion_chips: bool` with `#[serde(default)]` in
+- [x] T014 [US3] Implement `Settings::suggestion_chips: bool` with `#[serde(default)]` in
   `crates/micold-core/src/settings.rs`, on `StoredSettings` (`settings.rs:742`) too, carried by
   `StoredSettings::from_settings` and the conversion back (`StoredSettings::into_settings`,
   `settings.rs:935`), as `reduce_motion` is. Fix every exhaustive `Settings` literal or destructure
@@ -160,6 +160,8 @@ read. **Independent test**: `mise run test-core` runs S1–S10.
     (`:1171`): add `suggestion_chips: false`.
   The other test literals (`persist.rs:1238`, `features/settings.rs:2727`) end in `..Settings::default()`,
   so they need no change; the compiler finds any further exhaustive literal. The client shows nothing new.
+  `tests/settings_sections.rs` requires every persisted key to be rendered or listed in its
+  `DEFERRED`: list `suggestion_chips` there, naming T038.
 
 **Checkpoint**: M2 done. `mise run test-core` and `mise run gate` green; no visible change.
 
@@ -299,7 +301,8 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
   window's applied state instead of `stored`, and `set_changed` sets it (`set!(suggestion_chips)`),
   with a test in `persist.rs` that saving it keeps every other setting, as
   `saving_reduce_motion_keeps_every_other_setting` does; add the **Suggestion chips** `Checkbox` under **Reduce motion** in
-  `crates/micold-client/src/ui/settings/appearance.rs` with a new `FieldId`.
+  `crates/micold-client/src/ui/settings/appearance.rs` with a new `FieldId`; delete T014's
+  `suggestion_chips` entry from `DEFERRED` in `crates/micold-client/tests/settings_sections.rs`.
 - [ ] T039 [US3] Implement in `crates/micold-client/src/features/changes.rs`:
   `State.suggestion_chips`, `Msg::SuggestionChipsInForce(bool)`, `Msg::ChipPressed(usize)` →
   `composer.text = chips::insert(..)` (nothing with no composer or the setting off),

@@ -205,6 +205,7 @@ fn other_writers_preserve_the_mapping() {
             "save_terminal_history",
             "scrollback_lines",
             "settings_version",
+            "suggestion_chips",
             "theme",
             "tool_server_enabled",
             "worktree_guard_enabled",
