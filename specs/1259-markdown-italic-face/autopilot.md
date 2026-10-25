@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: M2 PR #1389 open
-- **Next step**: orchestrator waits on CI for #1389 and merges; then the close unit (T023-T024)
+- **Phase**: close unit — T023–T024 done; checks pending
+- **Next step**: orchestrator dispatches speckit-tdd-verify and speckit-converge (M2 review B has no CLEAN round) and the close-diff review; a close unit then acts on them, sets spec **Status** Closed, finishes the ledger and opens the close PR
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1343 | design (spec, plan, tasks) | merged | 56515707ebd3c2d9e078e059a5e791e16982a6c3 |
 | #1377 | M1 | merged | dbe13ae2425575a7b112d3c9eceaffb6ceb58f27 |
-| #1389 | M2 | open | — |
+| #1389 | M2 | merged | e0536872b0c734f02206e8111b78d3196e956b31 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | #1377 | PR open |
-| M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | — | implemented (T019-T021); T022 B5 pending |
+| M1 | T001–T018 | full | emphasis draws in the bundled Roboto italic at the surrounding weight; bold italic as heavy as bold; code in emphasis upright; showcase shows both | #1377 | merged |
+| M2 | T019–T022 | light | `pin_roboto_italics`: a host Roboto italic or off-weight upright never replaces the bundled faces | #1389 | merged |
 
 ## Decisions
 
