@@ -165,6 +165,10 @@ impl SessionInsights {
             }
             Digest::Autocompact { threshold } => self.context.threshold(*threshold),
             Digest::Init => self.tasks.init(),
+            Digest::Reset => {
+                self.context.reset();
+                self.tasks.init();
+            }
             Digest::Task(event) => self.tasks.event(event),
             Digest::LiveSet(live) => self.tasks.live_set(live),
             Digest::Parented { parent, tool_uses } => self.threads.message(seq, parent, tool_uses),

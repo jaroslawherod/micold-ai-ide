@@ -1455,3 +1455,67 @@ fn a_subagent_task_that_ended_without_a_report_ended_without_a_result() {
         SubagentState::EndedWithoutResult
     );
 }
+
+/// The daemon's `conversation_reset` note: the CLI started a new conversation (`/clear`).
+fn conversation_reset() -> StructuredEvent {
+    StructuredEvent::ConversationReset {
+        trigger: Some("clear".to_string()),
+        raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.to_string(),
+    }
+}
+
+#[test]
+fn a_clear_empties_the_context_reading_until_the_next_response() {
+    let mut events = vec![
+        result(
+            0.01,
+            Some(usage(1, 0, 0, 1)),
+            json!({ "a": model_usage(1, 1, 0.01, 1000) }),
+        ),
+        response("a", usage(100, 0, 0, 50), None),
+        conversation_reset(),
+    ];
+    let cleared = built(0, &numbered(events.clone(), 0));
+    assert_eq!(cleared.context().state(), ContextState::NoData);
+    assert_eq!(cleared.context().model, None);
+
+    // The next conversation's first response is measured against the model's window again.
+    events.push(response("a", usage(10, 0, 0, 5), None));
+    assert_eq!(
+        built(0, &numbered(events, 0)).context().state(),
+        reading(15, 1000, None)
+    );
+}
+
+#[test]
+fn a_clear_ends_the_running_tasks_of_the_old_conversation() {
+    let events = numbered(
+        [
+            task_started("bg", "toolu_1", "local_bash", true),
+            task_started("fg", "toolu_2", "local_agent", false),
+            conversation_reset(),
+        ],
+        0,
+    );
+    let insights = built(0, &events);
+    assert_eq!(
+        task_of(&insights, "bg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(
+        task_of(&insights, "fg").state,
+        TaskState::EndedWithoutReport
+    );
+    assert_eq!(insights.running_background(true), 0);
+}
+
+#[test]
+fn a_clear_survives_eviction_refolds() {
+    let mut events = vec![response("a", usage(100, 0, 0, 50), None)];
+    events.push(conversation_reset());
+    let mut all = numbered(events, 0);
+    all.extend(fillers(2, MAX_EVENTS));
+    // Evicting the oldest events refolds the digests still held: the clear stays applied.
+    let held = built(0, &all);
+    assert_eq!(held.context().state(), ContextState::NoData);
+}
