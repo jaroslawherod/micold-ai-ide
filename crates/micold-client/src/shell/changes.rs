@@ -236,7 +236,9 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 project: project.clone(),
                 worktree_dir: worktree_dir.clone(),
             };
-            crate::shell::daemon_sync::send_op(app, op, |req| {
+            let binding = app.active_binding();
+            let (key_project, key_dir) = (project.clone(), worktree_dir.clone());
+            let sent = crate::shell::daemon_sync::send_op_bound_req(app, binding, op, |req| {
                 micold_core::protocol::messages::ClientMsg::ReviewSend {
                     req,
                     project,
@@ -245,6 +247,20 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                     pr,
                 }
             });
+            // Feature 1270 (FR-006, R10): a send that never left also fails in the bar, beside the
+            // route's snackbar, and drops the drawer's watch.
+            if sent.is_none() {
+                let message = match app.route(binding) {
+                    micold_client::links::Route::Unavailable { message }
+                    | micold_client::links::Route::NoDaemon { message } => message,
+                    micold_client::links::Route::To(_) => "the service is not connected".into(),
+                };
+                let _ = app.core.update_changes(Msg::SendFailed {
+                    project: key_project,
+                    worktree_dir: key_dir,
+                    message,
+                });
+            }
             Task::none()
         }
         Effect::ReadCounts { seq, entry } => {

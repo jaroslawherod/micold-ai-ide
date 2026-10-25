@@ -4823,6 +4823,14 @@ fn the_overflow_menu_opens_closes_and_its_items_close_it() {
     changes::update(&mut state, Msg::OverflowToggled);
     changes::update(&mut state, Msg::OverflowDismissed);
     assert_eq!(state.tabs.shown_view().cloned(), before, "nothing else");
+
+    changes::update(&mut state, Msg::OverflowToggled);
+    changes::update(&mut state, Msg::SessionSelected);
+    show_worktree(&mut state);
+    assert!(
+        !open_menu(&state),
+        "the menu does not outlive the tab's showing"
+    );
 }
 
 /// T032, FR-008, FR-012, FR-019, B8. Drawer events act on the shown view's drawer, closed when the

@@ -1892,6 +1892,11 @@ fn hide_shown(state: &mut State) {
     };
     let unwatched =
         state.tabs.shown_view().is_some_and(reading) || state.header.entry.as_ref() != Some(&key);
+    // The bar's overflow menu is a popover of the shown tab: it does not outlive the tab's showing
+    // (feature 1270, R8).
+    if let Some(view) = state.tabs.shown_view_mut() {
+        view.overflow_open = false;
+    }
     state.tabs.hide();
     if unwatched {
         state.tabs.location_left(&key);
@@ -2621,11 +2626,6 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
         }
         Msg::SendPressed => {
-            // B5: a new send starts, so the last one's error goes.
-            let Some(view) = state.tabs.shown_view_mut() else {
-                return Effect::None;
-            };
-            view.send_error = None;
             let Some(view) = state.tabs.shown_view() else {
                 return Effect::None;
             };
@@ -2671,6 +2671,9 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 })
                 .unwrap_or_default();
             if let Some(view) = state.tabs.shown_view_mut() {
+                // B5: a new send starts, so the last one's error goes.
+                view.send_error = None;
+                view.overflow_open = false;
                 view.drawer.state.apply(DrawerEvent::SendStarted(sent));
             }
             effect

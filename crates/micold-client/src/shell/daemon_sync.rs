@@ -6582,6 +6582,46 @@ pub(crate) mod tests {
             );
         }
 
+        /// Review A M3 F1: a send with no daemon to reach fails in the bar too, and drops the
+        /// drawer's watch.
+        #[test]
+        fn a_send_with_no_daemon_fails_in_the_bar_and_drops_the_watch() {
+            use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+            use micold_core::review::{LineRange, RelPath, Side};
+            let mut app = app_sending();
+            app.pending_ops.clear();
+            let draft = ReviewComment {
+                id: CommentId::new(),
+                path: RelPath::from_native("a.rs").unwrap(),
+                side: Side::New,
+                range: LineRange::new(1, 1).unwrap(),
+                quote: vec!["a".into()],
+                text: "rename this".into(),
+                state: CommentState::Draft,
+                created: 1,
+                pr: None,
+            };
+            let _ = app.core.update_changes(ChangesMsg::ReviewChanged {
+                project: PathBuf::from("/repo"),
+                worktree_dir: "w".into(),
+                comments: vec![draft],
+                sending: false,
+                marks: Vec::new(),
+            });
+            let _ = crate::shell::changes::update(&mut app, ChangesMsg::SendPressed);
+            assert!(app.pending_ops.is_empty(), "nothing was sent");
+            let view = app.core.changes.tabs.shown_view().expect("shown");
+            assert!(
+                view.send_error
+                    .as_deref()
+                    .is_some_and(|e| e.starts_with("Couldn't send the review: ")),
+                "{:?}",
+                view.send_error
+            );
+            assert_eq!(view.drawer.state.watch, None);
+            assert!(snackbar(&app).is_some(), "the route's snackbar stays");
+        }
+
         #[test]
         fn a_delivered_send_keeps_the_success_snackbar() {
             let mut app = app_sending();
