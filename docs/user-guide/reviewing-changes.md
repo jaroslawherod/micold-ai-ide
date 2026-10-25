@@ -567,13 +567,22 @@ long; **Close** (or Esc) returns to the diff. The dialog closes by itself when i
 ### The review panel
 
 The panel on the right of the diff lists every comment of the entry, across all its files. It is
-open by default; the **Review (n)** button in the header, *n* being the number of comments, closes
-and reopens it.
+closed when you open the review; the **Review (n)** button in the header, *n* being the number of
+comments, opens and closes it, and **Esc** closes it when no menu or dialog is open above it (a
+menu or dialog open above it closes first). Whether it is open, its tab and where it was scrolled
+are kept with the entry's Review tab, so they are as you left them when you come back to it.
 
+The panel opens by itself, on **Replies**, when the agent first reports on a review you sent from
+this window: once per send, only while that entry's Review tab is shown, and not if you closed the
+panel since sending. A report on a review sent from another window does not open it.
+
+- **Tabs.** **Drafts** lists the comments not sent yet; **Replies** lists sent, applied and
+  answered comments. Each tab's label carries its count (*Drafts 3*, *Replies 4*); a tab with no
+  rows says "No drafts" or "No replies yet".
 - **What a row shows.** The file and the lines (*Lines 3–5*, or *Old lines 3–5* for the base
   version), the start of the comment, its status (Draft, Sent, Applied or Answered) and, once the
-  agent has reported, the start of its reply. Rows are ordered by file, then by line. A row whose
-  file is no longer among the changes is marked *Not in the current diff* and keeps its status.
+  agent has reported, its reply. Rows are ordered by file, then by line. A row whose file is no
+  longer among the changes is marked *Not in the current diff* and keeps its status.
 - **Counts.** Under the panel's title, how many comments are in each status.
 - **Jumping.** Press a row to select its file and scroll the diff to the comment's first line; the
   comment's card is outlined. A jump can be refused: when the file is hidden because the

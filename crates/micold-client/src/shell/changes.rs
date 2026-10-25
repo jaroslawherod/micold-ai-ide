@@ -231,7 +231,12 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
         } => {
             // W6: the service pushes `sending` to every window, then answers once the prompt was
             // typed or refused (S2).
-            crate::shell::daemon_sync::send_op(app, PendingOp::ReviewSend { count }, |req| {
+            let op = PendingOp::ReviewSend {
+                count,
+                project: project.clone(),
+                worktree_dir: worktree_dir.clone(),
+            };
+            crate::shell::daemon_sync::send_op(app, op, |req| {
                 micold_core::protocol::messages::ClientMsg::ReviewSend {
                     req,
                     project,

@@ -263,10 +263,15 @@ pub enum PendingOp {
     /// refusal or a failed write reaches the user.
     ReviewEdit,
     /// A `ReviewSend` (feature 482, S2) of `count` pending comments: the answer names the session
-    /// that received them, for the success snackbar.
+    /// that received them, for the success snackbar. The entry's key routes a failure to the
+    /// view that sent (feature 1270, R10).
     ReviewSend {
         /// How many comments the send carries.
         count: usize,
+        /// The entry's project.
+        project: PathBuf,
+        /// The entry's wire worktree dir; `""` is the Default entry.
+        worktree_dir: String,
     },
     /// An `AttachDiscover` (feature 582), carrying the project so a report that outlived its
     /// dialog, or was asked for another project, is dropped by the reducer.
@@ -1409,7 +1414,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             }
             // Feature 482 (S2): the comments' new state arrives as `ReviewChanged`; this says
             // where they went.
-            Some(PendingOp::ReviewSend { count }) => {
+            Some(PendingOp::ReviewSend { count, .. }) => {
                 if let OperationResult::ReviewSent { session, started } = result {
                     let label = app
                         .core
@@ -1944,10 +1949,23 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         .update(Message::Attach(AttachMsg::ApplyFailed(message)));
                 }
                 Some(PendingOp::AttachOfferDiscover { .. }) => {}
-                // Feature 482 (S2): the service's message, the comments still pending.
-                Some(PendingOp::ReviewSend { .. }) => {
+                // Feature 482 (S2): the service's message, the comments still pending; feature
+                // 1270 (FR-006, R10) also keeps it in the sending view's bar.
+                Some(PendingOp::ReviewSend {
+                    project,
+                    worktree_dir,
+                    ..
+                }) => {
                     app.core
                         .notify_error(micold_client::features::changes::send_error_text(&message));
+                    // Pure state: a failure starts no read.
+                    let _ = app.core.update_changes(
+                        micold_client::features::changes::Msg::SendFailed {
+                            project,
+                            worktree_dir,
+                            message,
+                        },
+                    );
                 }
                 Some(PendingOp::AttachOfferApply) => {
                     app.core
@@ -6502,6 +6520,88 @@ pub(crate) mod tests {
             let _ = on_daemon_event(&mut app, DAEMON, requested(session));
             let _ = on_disconnected(&mut app, DAEMON);
             assert!(!app.core.permission_prompts.waiting(session));
+        }
+    }
+
+    /// Feature 1270 T013 (FR-006, research R10): a send's answer reaches the view that sent it.
+    mod review_send {
+        use super::*;
+        use micold_client::features::changes::Msg as ChangesMsg;
+        use micold_core::protocol::messages::ErrorKind;
+
+        const REQ: u64 = 41;
+        const DAEMON: micold_core::daemons::DaemonId = micold_core::daemons::DaemonId(1);
+
+        /// A window showing the Review tab of `/repo`'s worktree `w`, its send `REQ` pending.
+        fn app_sending() -> App {
+            let mut app = base_app();
+            let _ = app.core.update_changes(ChangesMsg::Opened {
+                project: PathBuf::from("/repo"),
+                entry: SessionLocation::Worktree("w".into()),
+            });
+            app.pending_ops.insert(
+                REQ,
+                PendingOp::ReviewSend {
+                    count: 2,
+                    project: PathBuf::from("/repo"),
+                    worktree_dir: "w".into(),
+                },
+            );
+            app
+        }
+
+        fn snackbar(app: &App) -> Option<String> {
+            app.core
+                .notifications
+                .queue
+                .visible()
+                .map(|n| n.message.clone())
+        }
+
+        #[test]
+        fn a_failed_send_reaches_its_entrys_view_and_keeps_the_error_snackbar() {
+            let mut app = app_sending();
+            let _ = on_daemon_event(
+                &mut app,
+                DAEMON,
+                DaemonMsg::OperationError {
+                    req: REQ,
+                    kind: ErrorKind::Refused,
+                    message: "no session is running in this entry".into(),
+                    detail: None,
+                },
+            );
+            let view = app.core.changes.tabs.shown_view().expect("shown");
+            assert_eq!(
+                view.send_error.as_deref(),
+                Some("Couldn't send the review: no session is running in this entry")
+            );
+            assert_eq!(
+                snackbar(&app).as_deref(),
+                Some("Couldn't send the review: no session is running in this entry")
+            );
+        }
+
+        #[test]
+        fn a_delivered_send_keeps_the_success_snackbar() {
+            let mut app = app_sending();
+            let _ = on_daemon_event(
+                &mut app,
+                DAEMON,
+                DaemonMsg::OperationOk {
+                    req: REQ,
+                    result: OperationResult::ReviewSent {
+                        session: SessionId::new(),
+                        started: true,
+                    },
+                },
+            );
+            assert_eq!(
+                snackbar(&app).as_deref(),
+                Some("Started a session and sent a review of 2 comments")
+            );
+            let view = app.core.changes.tabs.shown_view().expect("shown");
+            assert_eq!(view.send_error, None);
         }
     }
 }

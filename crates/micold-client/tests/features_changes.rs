@@ -1251,7 +1251,7 @@ fn slot_heights_are_kept_for_the_shown_file_and_layout_only() {
 
 // --- M5: Send review (482 S1, S2; renamed by 946 FR-009) ---
 
-use micold_client::features::changes::{send_action, send_error_text, sent_text, SendAction};
+use micold_client::features::changes::{send_error_text, sent_text};
 
 fn sending(state: &mut State, dir: &str, comments: Vec<ReviewComment>, on: bool) {
     changes::update(
@@ -1270,13 +1270,11 @@ fn sending(state: &mut State, dir: &str, comments: Vec<ReviewComment>, on: bool)
 /// comments; reads "Sending…" while a send is open (US2 s5, FR-018).
 #[test]
 fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
+    let send = |s: &State| review_bar(s).map(|b| (b.send.label, b.send.enabled));
     let mut state = showing(commentable());
     assert_eq!(
-        send_action(&state),
-        Some(SendAction {
-            label: "Send review (0)".into(),
-            enabled: false,
-        }),
+        send(&state),
+        Some(("Send review (0)".into(), false)),
         "no comments: unavailable (US2 s5)"
     );
     let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
@@ -1289,7 +1287,7 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
     );
     push(&mut state, "feat-a", vec![sent.clone()]);
     assert_eq!(
-        send_action(&state).map(|a| (a.label, a.enabled)),
+        send(&state),
         Some(("Send review (0)".into(), false)),
         "only sent comments here, and another entry's pending one does not count (FR-021)"
     );
@@ -1298,23 +1296,14 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
         "feat-a",
         vec![sent.clone(), pending_a.clone(), pending_b.clone()],
     );
-    assert_eq!(
-        send_action(&state),
-        Some(SendAction {
-            label: "Send review (2)".into(),
-            enabled: true,
-        })
-    );
+    assert_eq!(send(&state), Some(("Send review (2)".into(), true)));
     sending(&mut state, "feat-a", vec![sent, pending_a, pending_b], true);
     assert_eq!(
-        send_action(&state),
-        Some(SendAction {
-            label: "Sending…".into(),
-            enabled: false,
-        }),
+        send(&state),
+        Some(("Sending…".into(), false)),
         "a send open in any window disables it (FR-018)"
     );
-    assert_eq!(send_action(&State::default()), None, "no view, no action");
+    assert_eq!(send(&State::default()), None, "no view, no action");
 }
 
 /// S1. Pressing it sends `ReviewSend` for the open entry (no comment outdated here: the shown
@@ -1663,58 +1652,40 @@ fn a_refresh_that_drops_the_selected_file_closes_a_new_comment() {
 
 // ---- Clear sent and Discard pending (M8, T092, contracts/changes-view.md S3) ----
 
-use micold_client::features::changes::{discard_prompt, tidy_actions, TidyActions};
+use micold_client::features::changes::discard_prompt;
 
 /// S3. **Clear sent** is enabled iff the open entry has a sent comment, **Discard drafts…** iff
 /// it has a pending one and no send is open; another entry's comments do not count (FR-021).
 #[test]
 fn clear_sent_and_discard_pending_are_enabled_only_with_comments_to_act_on() {
+    let tidy = |s: &State| review_bar(s).map(|b| b.overflow);
+    let items = |clear_sent, discard_drafts| {
+        Some(Overflow {
+            clear_sent,
+            discard_drafts,
+        })
+    };
     let mut state = showing(commentable());
-    assert_eq!(
-        tidy_actions(&state),
-        Some(TidyActions {
-            clear_sent: false,
-            discard_pending: false,
-        }),
-        "no comments: neither"
-    );
+    assert_eq!(tidy(&state), items(false, false), "no comments: neither");
     let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
     let pending = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
     push(&mut state, "", vec![sent.clone(), pending.clone()]);
     assert_eq!(
-        tidy_actions(&state),
-        Some(TidyActions {
-            clear_sent: false,
-            discard_pending: false,
-        }),
+        tidy(&state),
+        items(false, false),
         "another entry's comments do not count"
     );
     push(&mut state, "feat-a", vec![sent.clone()]);
-    assert_eq!(
-        tidy_actions(&state),
-        Some(TidyActions {
-            clear_sent: true,
-            discard_pending: false,
-        })
-    );
+    assert_eq!(tidy(&state), items(true, false));
     push(&mut state, "feat-a", vec![pending.clone()]);
-    assert_eq!(
-        tidy_actions(&state),
-        Some(TidyActions {
-            clear_sent: false,
-            discard_pending: true,
-        })
-    );
+    assert_eq!(tidy(&state), items(false, true));
     sending(&mut state, "feat-a", vec![sent, pending], true);
     assert_eq!(
-        tidy_actions(&state),
-        Some(TidyActions {
-            clear_sent: true,
-            discard_pending: false,
-        }),
+        tidy(&state),
+        items(true, false),
         "no discarding while a send is open"
     );
-    assert_eq!(tidy_actions(&State::default()), None, "no view, no actions");
+    assert_eq!(tidy(&State::default()), None, "no view, no actions");
 }
 
 /// S3. **Clear sent** sends `ClearSent` for the open entry; with nothing sent it sends nothing.
@@ -2132,12 +2103,13 @@ fn show_all_opens_the_full_reply_and_closing_or_losing_the_comment_clears_it() {
 
 // --- Feature 946, M4: the review panel (FR-016 to FR-019, US3) ---
 
-use micold_client::features::changes::{
-    jump_target, panel_rows, review_toolbar_label, status_counts, Jump, Why, PANEL_EMPTY_TEXT,
-};
+use micold_client::features::changes::{jump_target, Jump, Why, PANEL_EMPTY_TEXT};
 
-fn panel(state: &State) -> &changes::Panel {
-    &state.tabs.shown_view().unwrap().panel
+/// Every row of the drawer, drafts first: what the review panel listed.
+fn panel_rows(state: &State) -> Vec<changes::DrawerRow> {
+    let mut rows = drawer_rows(state, DrawerTab::Drafts);
+    rows.extend(drawer_rows(state, DrawerTab::Replies));
+    rows
 }
 
 /// FR-016. Rows are ordered by file (bytewise), first line, side (current first), created, and
@@ -2163,19 +2135,19 @@ fn panel_rows_are_ordered_and_describe_their_comments() {
     );
     let rows = panel_rows(&state);
     let ids: Vec<_> = rows.iter().map(|r| r.id).collect();
-    assert_eq!(ids, vec![c.id, sent.id, b.id, a.id, done.id]);
+    assert_eq!(ids, vec![c.id, b.id, a.id, sent.id, done.id]);
     let labels: Vec<_> = rows.iter().map(|r| r.lines.as_str()).collect();
     assert_eq!(
         labels,
-        ["Line 9", "Line 1", "Lines 2–4", "Old line 2", "Line 4"],
+        ["Line 9", "Lines 2–4", "Old line 2", "Line 1", "Line 4"],
         "`done`'s code is not in the file: shown at its last place within the 4 lines (FR-021)"
     );
     assert_eq!(rows[0].text, "about a.rs:9");
-    assert_eq!(rows[1].status, Status::Sent);
+    assert_eq!(rows[3].status, Status::Sent);
     assert_eq!(rows[4].status, Status::Answered);
     assert_eq!(rows[4].reply.as_deref(), Some("because"));
-    assert!(rows[2].editable && !rows[1].editable && !rows[4].editable);
-    assert!(rows[4].has_full_reply && !rows[0].has_full_reply);
+    assert!(rows[1].editable && !rows[3].editable && !rows[4].editable);
+    assert!(!rows[4].has_full_reply, "a short reply is whole (D7)");
 }
 
 /// Edge "file gone". A row whose file is not listed is marked and keeps its status.
@@ -2198,41 +2170,21 @@ fn status_counts_and_the_empty_state() {
     let mut state = showing(commentable());
     assert!(panel_rows(&state).is_empty());
     assert!(PANEL_EMPTY_TEXT.contains("No review comments"));
-    assert_eq!(review_toolbar_label(&state), "Review (0)");
+    assert_eq!(bar(&state).counts, ScopeCounts::default());
     let sent = comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
     let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
     let draft2 = comment("b.rs", Side::New, 3, 3, CommentState::Draft);
     let applied = reported(sent.clone(), Outcome::Applied, "done");
     push(&mut state, "feat-a", vec![sent, draft, draft2, applied]);
     assert_eq!(
-        status_counts(&state),
-        [
-            (Status::Draft, 2),
-            (Status::Sent, 1),
-            (Status::Applied, 1),
-            (Status::Answered, 0)
-        ]
+        bar(&state).counts,
+        ScopeCounts {
+            draft: 2,
+            sent: 1,
+            applied: 1,
+            answered: 0,
+        }
     );
-    assert_eq!(review_toolbar_label(&state), "Review (4)");
-}
-
-/// FR-016. The panel is open by default; the toolbar toggle closes and reopens it.
-#[test]
-fn the_toolbar_toggle_closes_and_reopens_the_panel() {
-    let mut state = showing(commentable());
-    assert!(panel(&state).open);
-    changes::update(&mut state, Msg::PanelToggled);
-    assert!(!panel(&state).open);
-    changes::update(&mut state, Msg::PanelToggled);
-    assert!(panel(&state).open);
-    changes::update(
-        &mut state,
-        Msg::PanelScrolled {
-            offset: 40,
-            viewport: 300,
-        },
-    );
-    assert_eq!((panel(&state).offset, panel(&state).viewport), (40, 300));
 }
 
 /// FR-017, US3 s2. Pressing a row selects its file, scrolls its lines into view and focuses it.
@@ -2248,7 +2200,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
             line: 4
         })
     );
-    let effect = changes::update(&mut state, Msg::PanelRowSelected(target.id));
+    let effect = changes::update(&mut state, Msg::DrawerRowSelected(target.id));
     let Effect::ReadDiff {
         seq, path: asked, ..
     } = effect
@@ -2256,7 +2208,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
         panic!("the file's diff is read first, got {effect:?}");
     };
     assert_eq!(asked, path("b.rs"));
-    assert_eq!(panel(&state).focus, Some(target.id));
+    assert_eq!(drawer(&state).focus, Some(target.id));
     let effect = changes::update(
         &mut state,
         Msg::DiffRead {
@@ -2267,7 +2219,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
     // Unified rows: header, a, -b, +B, c, -x, +d: line 4 is row 6; two rows above it stay.
     assert_eq!(sans_tree(effect), Effect::ScrollDiff { offset: 4 * 20 });
     assert_eq!(state.tabs.shown_view().unwrap().diff_offset, 80);
-    assert!(!panel(&state).to_show);
+    assert!(!drawer(&state).to_show);
     assert!(panel_rows(&state)[0].selected);
     // With the file already shown, the press scrolls at once.
     changes::update(
@@ -2277,7 +2229,7 @@ fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
             viewport: 100,
         },
     );
-    let effect = changes::update(&mut state, Msg::PanelRowSelected(target.id));
+    let effect = changes::update(&mut state, Msg::DrawerRowSelected(target.id));
     assert_eq!(effect, Effect::ScrollDiff { offset: 80 });
 }
 
@@ -2292,11 +2244,11 @@ fn a_hidden_comment_gives_a_reason_and_no_jump() {
         Some(Jump::Hidden(Why::NotListed))
     );
     assert_eq!(
-        changes::update(&mut state, Msg::PanelRowSelected(gone.id)),
+        changes::update(&mut state, Msg::DrawerRowSelected(gone.id)),
         Effect::None
     );
-    assert_eq!(panel(&state).hidden, Some(Why::NotListed));
-    assert_eq!(panel(&state).focus, None);
+    assert_eq!(drawer(&state).hidden, Some(Why::NotListed));
+    assert_eq!(drawer(&state).focus, None);
     assert!(state.tabs.shown_view().unwrap().selected.is_none());
     changes::update(&mut state, Msg::CommittedToggled);
     assert_eq!(
@@ -2342,12 +2294,12 @@ fn rows_edit_and_delete_drafts_and_open_replies() {
 #[test]
 fn a_push_changes_the_rows_and_the_buttons_follow_the_toolbar() {
     let mut state = showing(commentable());
-    assert!(!changes::send_action(&state).unwrap().enabled);
+    assert!(!bar(&state).send.enabled);
     let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
     push(&mut state, "feat-a", vec![draft.clone()]);
     assert_eq!(panel_rows(&state).len(), 1);
-    assert!(changes::send_action(&state).unwrap().enabled);
-    assert!(changes::tidy_actions(&state).unwrap().discard_pending);
+    assert!(bar(&state).send.enabled);
+    assert!(bar(&state).overflow.discard_drafts);
     push(&mut state, "feat-a", vec![]);
     assert!(panel_rows(&state).is_empty());
 }
@@ -2362,10 +2314,10 @@ fn rows_and_counts_for_200_comments_stay_within_the_budget() {
     push(&mut state, "feat-a", many);
     let started = std::time::Instant::now();
     let rows = panel_rows(&state);
-    let counts = status_counts(&state);
+    let counts = bar(&state).counts;
     assert!(started.elapsed() < std::time::Duration::from_millis(100));
     assert_eq!(rows.len(), 200);
-    assert_eq!(counts[0], (Status::Draft, 200));
+    assert_eq!(counts.draft, 200);
 }
 
 /// A refused jump's reason goes when the toggle is pressed; a jump to a file the user then leaves
@@ -2376,13 +2328,13 @@ fn a_reason_clears_with_the_toggle_and_an_abandoned_jump_does_not_scroll() {
     let gone = comment("gone.rs", Side::New, 1, 1, CommentState::Draft);
     let target = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
     push(&mut state, "feat-a", vec![gone.clone(), target.clone()]);
-    changes::update(&mut state, Msg::PanelRowSelected(gone.id));
-    assert!(panel(&state).hidden.is_some());
+    changes::update(&mut state, Msg::DrawerRowSelected(gone.id));
+    assert!(drawer(&state).hidden.is_some());
     changes::update(&mut state, Msg::UncommittedToggled);
-    assert_eq!(panel(&state).hidden, None);
+    assert_eq!(drawer(&state).hidden, None);
     changes::update(&mut state, Msg::UncommittedToggled);
     let Effect::ReadDiff { seq, .. } =
-        changes::update(&mut state, Msg::PanelRowSelected(target.id))
+        changes::update(&mut state, Msg::DrawerRowSelected(target.id))
     else {
         panic!("reads the diff");
     };
@@ -2512,7 +2464,7 @@ fn the_panel_row_and_the_jump_use_the_shown_lines() {
     let about_b = quoting("b.rs", Side::New, 2, &["B"]);
     push(&mut state, "feat-a", vec![about_b.clone()]);
     refresh_effect(&mut state, pushed_down(5));
-    let rows = changes::panel_rows(&state);
+    let rows = panel_rows(&state);
     assert_eq!(rows[0].lines, "Line 7");
     assert_eq!(
         changes::jump_target(&state, about_b.id),
@@ -3339,7 +3291,7 @@ fn an_unlisted_target_shows_a_notice_and_changes_nothing() {
     let view = view_of(&state);
     assert_eq!(view.notice, Some(changes::NO_SUCH_FILE));
     assert!(browse_body(view).is_none() && !can_go_back(view));
-    changes::update(&mut state, Msg::PanelToggled);
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
     assert_eq!(view_of(&state).notice, None);
 }
 
@@ -3793,7 +3745,7 @@ fn edit_view(state: &mut State, entry: SessionLocation, follow: bool, file: &str
     gutter(state, None, Some(10), false);
     changes::update(state, Msg::AddComment);
     changes::update(state, Msg::ComposerEdited(text.into()));
-    changes::update(state, Msg::PanelToggled);
+    changes::update(state, Msg::Drawer(DrawerEvent::Toggle));
     let effect = changes::update(state, Msg::FilesPaneToggled);
     answer_reads(state, effect, &files, &diff);
     let effect = changes::update(state, Msg::BrowseOpen(path("a.rs")));
@@ -4655,4 +4607,521 @@ mod source_menu {
         assert!(menu(&state).open);
         assert_eq!(menu_label(&state), "Files · Working tree");
     }
+}
+
+// ---- Feature 1270, M3: the review bar, the comments drawer and auto-open (T011, T019, T032,
+// T036, T038; contracts/review-bar-ui.md B1–B8, contracts/comments-drawer-ui.md D5–D13) ----
+
+use micold_client::features::changes::{
+    drawer_counts, drawer_rows, review_bar, ComposerPlace, ReviewBarModel, ReviewDrawer,
+};
+use micold_core::review::bar::{Overflow, ScopeCounts, SendButton};
+use micold_core::review::drawer::{DrawerEvent, DrawerTab, SendWatch};
+
+fn bar(state: &State) -> ReviewBarModel {
+    review_bar(state).expect("the Review tab is shown")
+}
+
+fn drawer(state: &State) -> &ReviewDrawer {
+    &state.tabs.shown_view().unwrap().drawer
+}
+
+fn send_failed(state: &mut State, dir: &str, message: &str) {
+    changes::update(
+        state,
+        Msg::SendFailed {
+            project: project(),
+            worktree_dir: dir.into(),
+            message: message.into(),
+        },
+    );
+}
+
+/// Show the worktree's Review tab again (feature 1269 T1).
+fn show_worktree(state: &mut State) {
+    changes::update(
+        state,
+        Msg::Opened {
+            project: project(),
+            entry: worktree(),
+        },
+    );
+}
+
+fn sent(comment: &ReviewComment) -> ReviewComment {
+    ReviewComment {
+        state: CommentState::Sent { at: 5 },
+        ..comment.clone()
+    }
+}
+
+/// T011, FR-001, B1. The bar is the shown Review tab's: none while a session tab is shown.
+#[test]
+fn the_review_bar_shows_only_while_a_review_tab_is_shown() {
+    let mut state = showing(commentable());
+    assert!(review_bar(&state).is_some());
+    changes::update(&mut state, Msg::SessionSelected);
+    assert_eq!(review_bar(&state), None, "a session tab is shown");
+    assert_eq!(review_bar(&State::default()), None, "no Review tab");
+}
+
+/// T011, B4, FR-002, FR-005. The counts are the shown scope's only; the send button and the
+/// overflow items come from core, "Sending…" while a send of the entry is under way.
+#[test]
+fn the_review_bar_counts_the_shown_scope_and_offers_send() {
+    let mut state = showing(commentable());
+    assert_eq!(
+        bar(&state),
+        ReviewBarModel {
+            counts: ScopeCounts::default(),
+            send: SendButton {
+                label: "Send review (0)".into(),
+                enabled: false,
+                primary: false,
+            },
+            overflow: Overflow {
+                clear_sent: false,
+                discard_drafts: false,
+            },
+            error: None,
+            drawer_open: false,
+        }
+    );
+    let one = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let d1 = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    let d2 = comment("b.rs", Side::Old, 2, 2, CommentState::Draft);
+    let applied = reported(sent(&d1), Outcome::Applied, "done");
+    push(&mut state, "", vec![d1.clone()]);
+    let comments = vec![one, d1.clone(), d2, applied];
+    push(&mut state, "feat-a", comments.clone());
+    let model = bar(&state);
+    assert_eq!(
+        model.counts,
+        ScopeCounts {
+            draft: 2,
+            sent: 1,
+            applied: 1,
+            answered: 0,
+        },
+        "another entry's draft does not count (FR-021)"
+    );
+    assert_eq!(
+        model.send,
+        SendButton {
+            label: "Send review (2)".into(),
+            enabled: true,
+            primary: true,
+        }
+    );
+    assert_eq!(
+        model.overflow,
+        Overflow {
+            clear_sent: true,
+            discard_drafts: true,
+        }
+    );
+    sending(&mut state, "feat-a", comments, true);
+    let model = bar(&state);
+    assert_eq!(
+        (model.send.label.as_str(), model.send.enabled),
+        ("Sending…", false)
+    );
+    assert!(
+        !model.overflow.discard_drafts,
+        "no discarding while sending"
+    );
+}
+
+/// T011, Edge Cases "Files browser shown". Browsing a file keeps the scope of the source the
+/// browser was opened from.
+#[test]
+fn the_review_bar_keeps_its_scope_while_a_file_is_browsed() {
+    let mut state = showing(commentable());
+    push(
+        &mut state,
+        "feat-a",
+        vec![comment("a.rs", Side::New, 2, 2, CommentState::Draft)],
+    );
+    let before = bar(&state);
+    changes::update(&mut state, Msg::BrowseOpen(path("a.rs")));
+    assert!(state.tabs.shown_view().unwrap().browse.is_some());
+    assert_eq!(bar(&state), before);
+}
+
+/// T011, FR-006, B5, B6. A failed send's message lands on its entry's view only, and stays until
+/// the next send starts or the user dismisses it.
+#[test]
+fn a_failed_send_shows_its_error_on_its_own_view_until_the_next_send_or_dismissal() {
+    let mut state = showing(commentable());
+    let draft = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![draft]);
+    send_failed(&mut state, "other", "nope");
+    assert_eq!(bar(&state).error, None, "another entry's failure");
+    send_failed(&mut state, "feat-a", "no session is running in this entry");
+    assert_eq!(
+        bar(&state).error.as_deref(),
+        Some("Couldn't send the review: no session is running in this entry")
+    );
+    changes::update(&mut state, Msg::SendErrorDismissed);
+    assert_eq!(bar(&state).error, None, "dismissed");
+    send_failed(&mut state, "feat-a", "again");
+    assert!(matches!(
+        changes::update(&mut state, Msg::SendPressed),
+        Effect::ReviewSend { .. }
+    ));
+    assert_eq!(bar(&state).error, None, "the next send clears it");
+
+    // A failure of a hidden view's send lands there, not on the shown view.
+    open(&mut state, SessionLocation::Default);
+    send_failed(&mut state, "feat-a", "late");
+    assert_eq!(bar(&state).error, None, "the shown view is another entry's");
+    show_worktree(&mut state);
+    assert_eq!(
+        bar(&state).error.as_deref(),
+        Some("Couldn't send the review: late")
+    );
+}
+
+/// T019, Story 2 #1–#4, FR-007. The overflow menu opens and closes; its items act on the shown
+/// scope and close it; dismissing it changes nothing else.
+#[test]
+fn the_overflow_menu_opens_closes_and_its_items_close_it() {
+    let mut state = showing(commentable());
+    let draft = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    let one = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    push(&mut state, "feat-a", vec![draft, one]);
+    let open_menu = |s: &State| s.tabs.shown_view().unwrap().overflow_open;
+    assert!(!open_menu(&state));
+    changes::update(&mut state, Msg::OverflowToggled);
+    assert!(open_menu(&state));
+    changes::update(&mut state, Msg::OverflowToggled);
+    assert!(!open_menu(&state));
+
+    changes::update(&mut state, Msg::OverflowToggled);
+    assert_eq!(
+        changes::update(&mut state, Msg::ClearSentPressed),
+        Effect::ReviewEdit {
+            project: project(),
+            worktree_dir: "feat-a".into(),
+            edit: ReviewEditOp::ClearSent {
+                scope: Scope::WorkingTree,
+            },
+        }
+    );
+    assert!(!open_menu(&state), "Clear sent closes the menu");
+
+    changes::update(&mut state, Msg::OverflowToggled);
+    changes::update(&mut state, Msg::DiscardPendingPressed);
+    assert!(!open_menu(&state), "Discard drafts… closes the menu");
+    assert_eq!(
+        discard_prompt(&state).as_deref(),
+        Some("Discard 1 draft comment? This cannot be undone.")
+    );
+    changes::update(&mut state, Msg::DiscardCancelled);
+
+    let before = state.tabs.shown_view().cloned();
+    changes::update(&mut state, Msg::OverflowToggled);
+    changes::update(&mut state, Msg::OverflowDismissed);
+    assert_eq!(state.tabs.shown_view().cloned(), before, "nothing else");
+}
+
+/// T032, FR-008, FR-012, FR-019, B8. Drawer events act on the shown view's drawer, closed when the
+/// tab is made; the bar's flag follows it.
+#[test]
+fn drawer_events_act_on_the_shown_views_drawer() {
+    let mut state = showing(commentable());
+    assert_eq!(drawer(&state), &ReviewDrawer::default());
+    assert!(!drawer(&state).state.open, "closed on creation (FR-011)");
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    assert!(drawer(&state).state.open && bar(&state).drawer_open);
+    changes::update(
+        &mut state,
+        Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies)),
+    );
+    changes::update(
+        &mut state,
+        Msg::DrawerScrolled {
+            tab: DrawerTab::Replies,
+            offset: 40,
+            viewport: 300,
+        },
+    );
+    assert_eq!(drawer(&state).state.tab, DrawerTab::Replies);
+    assert_eq!(drawer(&state).state.offset(DrawerTab::Replies), 40);
+    assert_eq!(drawer(&state).state.offset(DrawerTab::Drafts), 0);
+    assert_eq!(drawer(&state).viewport, 300);
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Close));
+    assert!(!drawer(&state).state.open && !bar(&state).drawer_open);
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Escape));
+    assert!(!drawer(&state).state.open, "Esc closes it");
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    assert!(!drawer(&state).state.open, "Comments closes it again");
+}
+
+/// T032, FR-019, D10. The drawer and the text of a composer opened from it belong to the entry's
+/// view: kept across switching away and back and closing the drawer, dropped with the tab.
+#[test]
+fn the_drawer_and_its_composer_text_survive_switching_and_go_with_the_tab() {
+    let mut state = showing(commentable());
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![draft.clone()]);
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Toggle));
+    changes::update(
+        &mut state,
+        Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies)),
+    );
+    changes::update(
+        &mut state,
+        Msg::DrawerScrolled {
+            tab: DrawerTab::Replies,
+            offset: 24,
+            viewport: 200,
+        },
+    );
+    changes::update(&mut state, Msg::DrawerEdit(draft.id));
+    changes::update(&mut state, Msg::ComposerEdited("half written".into()));
+    let composer = |s: &State| s.tabs.shown_view().unwrap().composer.clone().unwrap();
+    assert_eq!(composer(&state).place, ComposerPlace::Drawer);
+    assert_eq!(composer(&state).target, ComposerTarget::Edit(draft.id));
+    let kept = drawer(&state).clone();
+
+    changes::update(&mut state, Msg::SessionSelected);
+    show_worktree(&mut state);
+    assert_eq!(drawer(&state), &kept, "back from a session");
+    open(&mut state, SessionLocation::Default);
+    assert!(!drawer(&state).state.open, "the other entry has its own");
+    show_worktree(&mut state);
+    assert_eq!(drawer(&state), &kept, "back from another entry");
+    assert_eq!(composer(&state).text, "half written");
+
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Close));
+    assert_eq!(
+        composer(&state).text,
+        "half written",
+        "closing keeps the text"
+    );
+
+    close_tab(&mut state);
+    open(&mut state, worktree());
+    assert_eq!(
+        drawer(&state),
+        &ReviewDrawer::default(),
+        "dropped with the tab"
+    );
+    assert!(state.tabs.shown_view().unwrap().composer.is_none());
+}
+
+/// T032. Edit and Answer… on a card open the composer on the card.
+#[test]
+fn a_composer_opened_from_a_card_is_placed_on_the_card() {
+    let mut state = showing(commentable());
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let waiting = comment("b.rs", Side::New, 3, 3, CommentState::Sent { at: 5 });
+    push(&mut state, "feat-a", vec![draft.clone(), waiting.clone()]);
+    let place = |s: &State| {
+        s.tabs
+            .shown_view()
+            .unwrap()
+            .composer
+            .as_ref()
+            .map(|c| c.place)
+    };
+    changes::update(&mut state, Msg::EditComment(draft.id));
+    assert_eq!(place(&state), Some(ComposerPlace::Card));
+    changes::update(&mut state, Msg::DrawerAnswer(waiting.id));
+    assert_eq!(place(&state), Some(ComposerPlace::Drawer));
+    assert_eq!(
+        state
+            .tabs
+            .shown_view()
+            .unwrap()
+            .composer
+            .as_ref()
+            .map(|c| c.target),
+        Some(ComposerTarget::Answer(waiting.id))
+    );
+    changes::update(&mut state, Msg::AnswerComment(waiting.id));
+    assert_eq!(place(&state), Some(ComposerPlace::Card));
+}
+
+/// T036, FR-013–FR-016, D5–D7. Each tab's rows: drafts in Drafts, the rest in Replies, in group
+/// order; Edit/Delete withheld while a send holds a draft; Mark applied on Sent rows; the whole
+/// reply up to the card cap, with Show all past it; tab counts over the whole entry.
+#[test]
+fn drawer_rows_split_by_tab_and_describe_their_comments() {
+    let mut state = showing(commentable());
+    let mut a = comment("b.rs", Side::Old, 2, 2, CommentState::Draft);
+    a.created = 1;
+    let mut b = comment("b.rs", Side::New, 2, 4, CommentState::Draft);
+    b.created = 2;
+    let c = comment("a.rs", Side::New, 9, 9, CommentState::Draft);
+    let waiting = comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let done = reported(
+        comment("b.rs", Side::New, 7, 7, CommentState::Sent { at: 5 }),
+        Outcome::Answered,
+        "because",
+    );
+    let long = reported(
+        comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 }),
+        Outcome::Applied,
+        &"x".repeat(CARD_CHARS + 10),
+    );
+    let comments = vec![
+        a.clone(),
+        b.clone(),
+        c.clone(),
+        waiting.clone(),
+        done.clone(),
+        long.clone(),
+    ];
+    push(&mut state, "feat-a", comments.clone());
+    let ids = |rows: &[changes::DrawerRow]| rows.iter().map(|r| r.id).collect::<Vec<_>>();
+    let drafts = drawer_rows(&state, DrawerTab::Drafts);
+    assert_eq!(ids(&drafts), vec![c.id, b.id, a.id]);
+    assert!(drafts.iter().all(|r| r.editable && !r.markable));
+    let replies = drawer_rows(&state, DrawerTab::Replies);
+    assert_eq!(ids(&replies), vec![long.id, waiting.id, done.id]);
+    assert!(replies[1].markable && !replies[0].markable && !replies[2].markable);
+    assert!(replies.iter().all(|r| !r.editable));
+    assert_eq!(replies[2].reply.as_deref(), Some("because"));
+    assert!(!replies[2].has_full_reply, "a short reply is whole");
+    assert!(replies[0].has_full_reply, "past the card cap: Show all");
+    assert_eq!(
+        replies[0].reply.as_ref().map(|r| r.chars().count()),
+        Some(CARD_CHARS)
+    );
+    assert_eq!(drawer_counts(&state), (3, 3));
+    sending(&mut state, "feat-a", comments, true);
+    assert!(
+        drawer_rows(&state, DrawerTab::Drafts)
+            .iter()
+            .all(|r| !r.editable),
+        "a send holds the drafts"
+    );
+}
+
+/// T036, FR-017. A row press does today's jump, and a refused jump says why.
+#[test]
+fn a_drawer_row_press_jumps_or_says_why_not() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let target = comment("b.rs", Side::New, 4, 4, CommentState::Draft);
+    let gone = comment("gone.rs", Side::New, 1, 1, CommentState::Draft);
+    push(&mut state, "feat-a", vec![target.clone(), gone.clone()]);
+    assert_eq!(
+        changes::update(&mut state, Msg::DrawerRowSelected(gone.id)),
+        Effect::None
+    );
+    assert_eq!(drawer(&state).hidden, Some(Why::NotListed));
+    let effect = changes::update(&mut state, Msg::DrawerRowSelected(target.id));
+    assert!(matches!(effect, Effect::ReadDiff { .. }), "got {effect:?}");
+    assert_eq!(drawer(&state).focus, Some(target.id));
+    assert_eq!(drawer(&state).hidden, None);
+}
+
+/// T036, FR-022, D13. A push recomputes rows and counts at once; a focused comment that is gone
+/// loses the focus, and its open Show all dialog closes.
+#[test]
+fn a_push_that_removes_the_focused_comment_drops_its_focus_and_dialog() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let target = reported(
+        comment("b.rs", Side::New, 4, 4, CommentState::Sent { at: 5 }),
+        Outcome::Answered,
+        "because",
+    );
+    push(&mut state, "feat-a", vec![target.clone()]);
+    changes::update(&mut state, Msg::DrawerRowSelected(target.id));
+    changes::update(&mut state, Msg::ShowReply(target.id));
+    assert_eq!(drawer(&state).focus, Some(target.id));
+    assert_eq!(drawer_counts(&state), (0, 1));
+    push(&mut state, "feat-a", vec![]);
+    assert_eq!(drawer(&state).focus, None);
+    assert_eq!(state.tabs.shown_view().unwrap().reply_open, None);
+    assert!(drawer_rows(&state, DrawerTab::Replies).is_empty());
+    assert_eq!(drawer_counts(&state), (0, 0));
+}
+
+/// T038, FR-020, B5, D11. Send review starts the drawer's watch with the drafts it sends; the
+/// first report of that send opens the drawer on Replies, once.
+#[test]
+fn the_first_report_of_this_windows_send_opens_the_drawer_on_replies_once() {
+    let mut state = showing(commentable());
+    let d1 = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    let d2 = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![d1.clone(), d2.clone()]);
+    changes::update(&mut state, Msg::SendPressed);
+    assert_eq!(
+        drawer(&state).state.watch,
+        Some(SendWatch {
+            ids: BTreeSet::from([d1.id, d2.id]),
+        })
+    );
+    push(&mut state, "feat-a", vec![sent(&d1), sent(&d2)]);
+    assert!(!drawer(&state).state.open, "sent is not a report");
+    let applied = reported(sent(&d1), Outcome::Applied, "done");
+    push(&mut state, "feat-a", vec![applied.clone(), sent(&d2)]);
+    assert!(drawer(&state).state.open, "the first report opens it");
+    assert_eq!(drawer(&state).state.tab, DrawerTab::Replies);
+    assert_eq!(drawer(&state).state.watch, None, "consumed");
+    changes::update(&mut state, Msg::Drawer(DrawerEvent::Close));
+    let answered = reported(sent(&d2), Outcome::Answered, "no");
+    push(&mut state, "feat-a", vec![applied, answered]);
+    assert!(
+        !drawer(&state).state.open,
+        "a later report does not reopen it"
+    );
+}
+
+/// T038, FR-020, Edge Cases "Two windows". A report of a send this window did not start opens
+/// nothing.
+#[test]
+fn a_report_of_another_windows_send_does_not_open_the_drawer() {
+    let mut state = showing(commentable());
+    let d1 = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![d1.clone()]);
+    push(&mut state, "feat-a", vec![sent(&d1)]);
+    push(
+        &mut state,
+        "feat-a",
+        vec![reported(sent(&d1), Outcome::Applied, "done")],
+    );
+    assert!(!drawer(&state).state.open);
+}
+
+/// T038, FR-020. A report while the Review tab is not shown consumes the watch and opens nothing,
+/// then or later.
+#[test]
+fn a_report_while_the_tab_is_hidden_consumes_the_watch() {
+    let mut state = showing(commentable());
+    let d1 = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![d1.clone()]);
+    changes::update(&mut state, Msg::SendPressed);
+    changes::update(&mut state, Msg::SessionSelected);
+    push(
+        &mut state,
+        "feat-a",
+        vec![reported(sent(&d1), Outcome::Applied, "done")],
+    );
+    show_worktree(&mut state);
+    assert!(!drawer(&state).state.open);
+    assert_eq!(drawer(&state).state.watch, None);
+}
+
+/// T038, FR-020. A failed send drops the watch.
+#[test]
+fn a_failed_send_drops_the_watch() {
+    let mut state = showing(commentable());
+    let d1 = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![d1.clone()]);
+    changes::update(&mut state, Msg::SendPressed);
+    assert!(drawer(&state).state.watch.is_some());
+    send_failed(&mut state, "feat-a", "refused");
+    assert_eq!(drawer(&state).state.watch, None);
+    push(
+        &mut state,
+        "feat-a",
+        vec![reported(sent(&d1), Outcome::Applied, "done")],
+    );
+    assert!(!drawer(&state).state.open);
 }

@@ -1160,9 +1160,13 @@ impl State {
             Message::Changes(crate::features::changes::Msg::TabClosed { project, entry }) => {
                 self.review_tab_closed(project, entry);
             }
+            // Feature 1270: the review bar's overflow menu is a registered popover, opened and
+            // closed (outside click, a scroll beneath, a dialog opening) as pure state too.
             Message::Changes(
                 msg @ (crate::features::changes::Msg::DiscardCancelled
-                | crate::features::changes::Msg::ReplyClosed),
+                | crate::features::changes::Msg::ReplyClosed
+                | crate::features::changes::Msg::OverflowToggled
+                | crate::features::changes::Msg::OverflowDismissed),
             ) => {
                 let _ = crate::features::changes::update(&mut self.changes, msg);
             }
@@ -1904,11 +1908,20 @@ pub fn on_escape(state: &State) -> Option<Message> {
                 micold_core::overview_expansion::Event::Escape,
             ),
         )),
-        // Feature 813 (FR-014): last, so a dialog or the Settings draft over it is answered first.
+        // Feature 813 (FR-014): after a dialog or the Settings draft over it.
+        None if state.overview.open => {
+            Some(Message::Overview(crate::features::overview::Msg::Closed))
+        }
+        // Feature 1270 (FR-012, SC-003, R8): last, so every registered surface above the shown
+        // Review tab's comments drawer closes first; a closed drawer leaves Esc unused.
         None => state
-            .overview
-            .open
-            .then_some(Message::Overview(crate::features::overview::Msg::Closed)),
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(|view| view.drawer.state.open)
+            .then_some(Message::Changes(crate::features::changes::Msg::Drawer(
+                micold_core::review::drawer::DrawerEvent::Escape,
+            ))),
     }
 }
 

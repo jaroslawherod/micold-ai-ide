@@ -248,3 +248,120 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Feature 1270 T033 (FR-012, SC-003, research R8): Esc closes what is open above the comments
+// drawer first, then the drawer, and with the drawer closed does what it did before.
+// ---------------------------------------------------------------------------
+
+/// A window showing a worktree's Review tab with its drawer open, its view changed by `with`.
+fn drawer_open(with: impl FnOnce(&mut micold_client::features::changes::OpenView)) -> State {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::drawer::DrawerEvent;
+    let mut state = State::default();
+    changes::update(
+        &mut state.changes,
+        Msg::Opened {
+            project: std::path::PathBuf::from("/p"),
+            entry: micold_core::session::SessionLocation::Worktree("w".into()),
+        },
+    );
+    changes::update(&mut state.changes, Msg::Drawer(DrawerEvent::Toggle));
+    with(state.changes.tabs.shown_view_mut().expect("shown"));
+    state
+}
+
+#[test]
+fn escape_closes_what_is_above_the_drawer_then_the_drawer() {
+    use micold_client::features::changes::Msg as ChangesMsg;
+    use micold_core::review::drawer::DrawerEvent;
+    let changes = |msg| Some(Message::Changes(msg));
+    assert_eq!(
+        on_escape(&drawer_open(|view| view.overflow_open = true)),
+        changes(ChangesMsg::OverflowDismissed),
+        "the overflow menu first"
+    );
+    assert_eq!(
+        on_escape(&drawer_open(|view| view.confirm_discard = true)),
+        changes(ChangesMsg::DiscardCancelled),
+        "the discard dialog first"
+    );
+    assert_eq!(
+        on_escape(&with_reply_open()),
+        changes(ChangesMsg::ReplyClosed),
+        "the Show all dialog first"
+    );
+    let mut state = drawer_open(|_| {});
+    assert_eq!(
+        on_escape(&state),
+        changes(ChangesMsg::Drawer(DrawerEvent::Escape)),
+        "with nothing above it, the drawer"
+    );
+    // Applied to the review alone: this bare window has no project for the root's follow step.
+    micold_client::features::changes::update(
+        &mut state.changes,
+        ChangesMsg::Drawer(DrawerEvent::Escape),
+    );
+    assert!(!state.changes.tabs.shown_view().unwrap().drawer.state.open);
+    assert_eq!(
+        on_escape(&state),
+        None,
+        "the drawer closed: Esc does what it did before"
+    );
+    let mut over_overview = drawer_open(|_| {});
+    over_overview.overview.open = true;
+    assert_eq!(
+        on_escape(&over_overview),
+        Some(Message::Overview(
+            micold_client::features::overview::Msg::Closed
+        )),
+        "the Overview, open over the review, closes before the drawer"
+    );
+}
+
+/// [`drawer_open`] with a reported comment's whole reply open in its Show all dialog.
+fn with_reply_open() -> State {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::comment::{
+        CommentId, CommentState, EntryReview, Outcome, Reporter, ReviewComment,
+    };
+    use micold_core::review::{LineRange, RelPath, Side};
+    let comment = ReviewComment {
+        id: CommentId::new(),
+        path: RelPath::from_native("a.rs").unwrap(),
+        side: Side::New,
+        range: LineRange::new(1, 1).unwrap(),
+        quote: vec!["a".into()],
+        text: "rename this".into(),
+        state: CommentState::Sent { at: 5 },
+        created: 1,
+        pr: None,
+    };
+    let reference = comment.reference();
+    let mut entry = EntryReview::from_comments(vec![comment]);
+    entry
+        .report(
+            reference,
+            Outcome::Answered,
+            "because",
+            Reporter::Agent {
+                session: uuid::Uuid::nil(),
+            },
+            9,
+        )
+        .unwrap();
+    let reported = entry.comments()[0].clone();
+    let mut state = drawer_open(|_| {});
+    changes::update(
+        &mut state.changes,
+        Msg::ReviewChanged {
+            project: std::path::PathBuf::from("/p"),
+            worktree_dir: "w".into(),
+            comments: vec![reported.clone()],
+            sending: false,
+            marks: Vec::new(),
+        },
+    );
+    changes::update(&mut state.changes, Msg::ShowReply(reported.id));
+    state
+}

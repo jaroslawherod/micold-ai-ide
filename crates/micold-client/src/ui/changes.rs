@@ -21,20 +21,20 @@ use micold_core::typeahead::{match_one, Query};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, adjacent, base_line, browse_body, can_go_back, card_model,
-    committed_available, composer_placed, diff_body, discard_prompt, file_comments,
-    file_diff_available, list_body, panel_groups, panel_rows, pending_counts, picker_matches,
-    pr_header, review_of, review_toolbar_label, section, selected_file, send_action, status_counts,
-    tidy_actions, tree_rows, whole_file, BrowseBody, ComposerTarget, DiffBody, ListBody, Load, Msg,
-    OpenView, PrSection, Source, Step, TreeKind, WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
-    WHOLE_FILE_UNAVAILABLE,
+    committed_available, composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups,
+    drawer_rows, file_comments, file_diff_available, list_body, pending_counts, picker_matches,
+    pr_header, review_bar, review_of, section, selected_file, tree_rows, whole_file, BrowseBody,
+    ComposerTarget, DiffBody, ListBody, Load, Msg, OpenView, PrSection, Source, Step, TreeKind,
+    WholeFile, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    status_label, BrowseBar, Button, ButtonVariant, CardState, DiffView, IconButton,
-    PullRequestIndicator, PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag,
-    Text, TextArea, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow,
-    VirtualRows,
+    BrowseBar, Button, ButtonVariant, CardState, DiffView, IconButton, PullRequestIndicator,
+    PullRequestRow, ReviewCommentCard, ReviewPanelRow, StageProgress, Tag, Text, TextArea,
+    ToggleChip, Tooltip, TreeItem, TreeView, TypeRole, Typeahead, TypeaheadRow, VirtualRows,
 };
+use micold_core::review::bar::{counts_text, CountsForm};
+use micold_core::review::drawer::{DrawerEvent, DrawerTab};
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
 pub const NOT_IN_DIFF: &str = "Not in the current diff";
@@ -84,16 +84,22 @@ pub fn view<'a>(
     }
     // S1: Send review (n), "Sending…" while a send of this entry is open in any window.
     let mut header = row![container(heading).width(Length::Fill)];
-    // FR-016: the toolbar toggle that closes and reopens the review panel.
+    // FR-016: the toolbar toggle that closes and reopens the review panel, which draws the
+    // comments drawer's state until feature 1270's bar and drawer replace it (M4).
+    let bar = review_bar(&state.changes);
+    let open = view.drawer.state.open;
+    let total = bar
+        .as_ref()
+        .map_or(0, |b| b.counts.draft + b.counts.reported_or_sent());
     header = header.push(
         ToggleChip::new(
-            review_toolbar_label(&state.changes),
-            Message::Changes(Msg::PanelToggled),
+            format!("Review ({total})"),
+            Message::Changes(Msg::Drawer(DrawerEvent::Toggle)),
             r,
         )
-        .active(view.panel.open),
+        .active(open),
     );
-    if !view.panel.open {
+    if !open {
         header = header.push(review_buttons(state, r));
     }
     // Feature 1269 (FR-007, U13): no **Close** here; the Review tab's × closes the review.
@@ -105,7 +111,7 @@ pub fn view<'a>(
     ]
     .spacing(spacing::LG)
     .height(Length::Fill);
-    if view.panel.open {
+    if open {
         body = body.push(container(review_panel(state, view, r)).width(Length::FillPortion(2)));
     }
 
@@ -124,60 +130,84 @@ pub fn view<'a>(
 /// gave it (FR-019). In the panel's header while it is open, in the view's header otherwise.
 fn review_buttons<'a>(state: &'a State, r: Roles) -> iced::widget::Row<'a, Message> {
     let mut buttons = row![].spacing(spacing::SM).align_y(Alignment::Center);
-    if let Some(tidy) = tidy_actions(&state.changes) {
+    if let Some(bar) = review_bar(&state.changes) {
         buttons = buttons
             .push(
                 Button::text("Clear sent", r).on_press_maybe(
-                    tidy.clear_sent
+                    bar.overflow
+                        .clear_sent
                         .then_some(Message::Changes(Msg::ClearSentPressed)),
                 ),
             )
             .push(
                 Button::text("Discard drafts…", r).on_press_maybe(
-                    tidy.discard_pending
+                    bar.overflow
+                        .discard_drafts
                         .then_some(Message::Changes(Msg::DiscardPendingPressed)),
                 ),
+            )
+            .push(
+                Button::filled(bar.send.label, r).on_press_maybe(
+                    bar.send
+                        .enabled
+                        .then_some(Message::Changes(Msg::SendPressed)),
+                ),
             );
-    }
-    if let Some(action) = send_action(&state.changes) {
-        buttons = buttons.push(
-            Button::filled(action.label, r)
-                .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed))),
-        );
     }
     buttons
 }
 
-/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, and a row
-/// per comment. `VirtualRows` has one row height, so the file path is in each row's label rather
-/// than in a group header.
+/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, the
+/// comments drawer's two tabs (feature 1270, until M4 draws the drawer itself) and a row per
+/// comment of the selected tab. `VirtualRows` has one row height, so the file path is in each
+/// row's label rather than in a group header.
 fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
     let buttons = review_buttons(state, r);
-    let counts = status_counts(&state.changes)
-        .iter()
-        .filter(|(_, n)| *n > 0)
-        .map(|(status, n)| format!("{n} {}", status_label(*status).to_lowercase()))
-        .collect::<Vec<_>>()
-        .join(" · ");
+    let counts = review_bar(&state.changes)
+        .and_then(|bar| counts_text(&bar.counts, CountsForm::Full))
+        .unwrap_or_default();
+    let tab = view.drawer.state.tab;
+    let (drafts, replies) = drawer_counts(&state.changes);
+    let tabs = row![
+        ToggleChip::new(
+            DrawerTab::Drafts.label(drafts),
+            Message::Changes(Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Drafts))),
+            r,
+        )
+        .active(tab == DrawerTab::Drafts),
+        ToggleChip::new(
+            DrawerTab::Replies.label(replies),
+            Message::Changes(Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies))),
+            r,
+        )
+        .active(tab == DrawerTab::Replies),
+    ]
+    .spacing(spacing::SM);
     let mut pane = column![
         Text::new("Review", TypeRole::Title, r),
         buttons.wrap(),
         Text::new(counts, TypeRole::Body, r).muted(),
+        tabs,
     ]
     .spacing(spacing::SM)
     .height(Length::Fill);
-    if let Some(why) = view.panel.hidden {
+    if let Some(why) = view.drawer.hidden {
         pane = pane.push(Text::new(why.message(), TypeRole::Body, r));
     }
-    let rows = panel_rows(&state.changes);
+    let rows = drawer_rows(&state.changes, tab);
     // `VirtualRows` has one row height, so a pull request's heading leads each of its rows.
-    let headings: BTreeMap<Scope, String> = panel_groups(&state.changes)
+    let headings: BTreeMap<Scope, String> = drawer_groups(&state.changes)
         .into_iter()
         .filter_map(|group| Some((group.scope, group.heading()?)))
         .collect();
     if rows.is_empty() {
+        let empty = if drafts + replies == 0 {
+            PANEL_EMPTY_TEXT
+        } else {
+            tab.empty_text()
+        };
         return pane
-            .push(Text::new(PANEL_EMPTY_TEXT, TypeRole::Body, r).muted())
+            .push(Text::new(empty, TypeRole::Body, r).muted())
             .into();
     }
     let list = VirtualRows::new(
@@ -199,7 +229,7 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
             )
             .selected(item.selected)
             .not_in_diff(item.not_in_diff)
-            .on_press(Message::Changes(Msg::PanelRowSelected(item.id)));
+            .on_press(Message::Changes(Msg::DrawerRowSelected(item.id)));
             if let Some(reply) = &item.reply {
                 card = card.reply(reply.clone());
             }
@@ -212,9 +242,15 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
         },
         r,
     )
-    .offset(view.panel.offset)
-    .viewport(view.panel.viewport)
-    .on_scroll(|offset, viewport| Message::Changes(Msg::PanelScrolled { offset, viewport }));
+    .offset(view.drawer.state.offset(tab))
+    .viewport(view.drawer.viewport)
+    .on_scroll(move |offset, viewport| {
+        Message::Changes(Msg::DrawerScrolled {
+            tab,
+            offset,
+            viewport,
+        })
+    });
     pane.push(list).into()
 }
 
@@ -851,7 +887,7 @@ fn comment_or_editor<'a>(
     };
     let mut card = ReviewCommentCard::new(&comment.text, state, r)
         .outdated(crate::features::changes::is_outdated(view, comment))
-        .highlighted(view.panel.focus == Some(comment.id));
+        .highlighted(view.drawer.focus == Some(comment.id));
     if let Some((reply, shortened)) = model.reply {
         card = card.reply(reply, shortened);
         if shortened {

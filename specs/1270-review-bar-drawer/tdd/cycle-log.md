@@ -25,3 +25,17 @@ task pair it covers.
 | T048, T049 | Card reply through `LineClamped` (4 lines), Show all when cut or shortened, none for a short reply | `a_reply_over_four_lines_is_cut_there_and_offers_show_all` failed (`reply.content.ends_with('…')`, review_comment.rs:437) before the card change | `review_comment` 13 passed; `ui::material::` 613 passed |
 | T010, T031, T050 | showcase `review_bar`, `side_sheet`, card and row poses | structural | `showcase_completeness` 46, `showcase_captions` 7, `material_boundary` 6 passed |
 | T052 | layout snapshot | — | `layout_snapshot` 112 passed unchanged: no covered state shows a card with a long reply, so no re-record |
+
+## M3
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T011, T012 | `review_bar`: none on a session tab, shown scope's counts, `send_button`/`overflow` from core, files browser keeps the scope; `SendFailed` sets the error on its entry's view (shown or hidden), next send or `SendErrorDismissed` clears it | `cargo test -p micold-client --test features_changes --no-run`: 32 errors, `unresolved imports … review_bar, ReviewBarModel, ReviewDrawer, ComposerPlace, drawer_rows, drawer_counts`, `no variant SendFailed / SendErrorDismissed` | `features_changes` 151 passed |
+| T013, T014 | a failed `ReviewSend` answer reaches `Msg::SendFailed` of its entry and keeps the error snackbar; a delivered one keeps the success snackbar | `PendingOp::ReviewSend` had no `project`/`worktree_dir` fields (the module did not compile) | `shell::daemon_sync::tests::review_send` 2 passed |
+| T019, T021 | `OverflowToggled`/`OverflowDismissed`; Clear sent and Discard drafts… close the menu | same red run: `no variant OverflowToggled` (5), `OverflowDismissed` (3), `no field overflow_open` (4) | `features_changes` 151 passed |
+| T020 | `review_overflow` is a registered `Popover`; outside click, Esc and scroll beneath send `OverflowDismissed`; a dialog over it takes Esc first | `cargo test --test overlay_registry --no-run`: 3 errors (`overflow_open`, `OverflowDismissed`) | `overlay_registry` 25 passed; `popover_displacement` 4 passed with the `review_overflow` row |
+| T032, T034 | `Msg::Drawer` / `DrawerScrolled` on the shown view's drawer; drawer and `ComposerPlace::Drawer` text survive switching and closing, dropped with the tab; `review_bar.drawer_open` follows | same red run: `no variant Drawer` (13), `DrawerScrolled` (2), `DrawerEdit`, `DrawerAnswer`, `no field drawer`, `no field place` | `features_changes` 151 passed |
+| T033, T035 | Esc: overflow menu, discard dialog, Show all dialog first; then the drawer; closed drawer → `None`; the Overview before the drawer | `cargo test --test overlay_dispatch_ordering --no-run`: 5 errors (`no variant Drawer`, `no field drawer`) | `overlay_dispatch_ordering` passed |
+| T036, T037 | `drawer_rows(state, tab)` order and fields (`markable`, whole reply to `CARD_CHARS`, `has_full_reply` past it), `drawer_counts`; `DrawerRowSelected` jump and reason; a push drops a gone focus and its Show all dialog | same red run: `cannot find type DrawerRow`, `no variant DrawerRowSelected` (3) | `features_changes` 151 passed; `features_pr_changes` 81 passed (`drawer_groups`) |
+| T038, T039 | `SendPressed` starts the watch with the sent drafts; first report opens on Replies once; another window's send, a hidden tab and a failed send open nothing | same red run (`drawer` field, `SendWatch` reached through it) | `features_changes` 151 passed |
+| T040 | user guide "The review panel": closed at first, Esc, tabs, auto-open | — (docs) | — |
