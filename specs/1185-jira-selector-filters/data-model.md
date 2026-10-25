@@ -68,6 +68,7 @@ NotRequested ──focus──▶ Loading{seq} ──ok──▶ Loaded(Vec<T>)
 | `queries` | per-kind typed text | each field's own text |
 | `matches`, `highlight`, `open` | per-kind | as the issue typeahead (`rank`, `clamp_highlight`); row 0 of every list is "Any <filter>" |
 | `people_pending` | `Option<u64>` | the debounced reporter search awaiting its due time |
+| `panel_open` | `bool` | the Filters panel is open (ledger D15) |
 - Reset to `FilterState::default()` whenever the issue provider leaves Jira, the source leaves
   Issue, the Jira availability changes, or the form opens (FR-016).
 - `filter_request_seq: u64` lives on `features::worktree_form::State`, beside
@@ -78,6 +79,6 @@ NotRequested ──focus──▶ Loading{seq} ──ok──▶ Loaded(Vec<T>)
 Direction)`, `Dismissed(FilterKind)`, `Picked(FilterKind, usize)` (row 0 = Any: clears), `Cleared(FilterKind)`,
 `ClearedAll`, `ChoicesRetry(FilterKind)`, `PeopleSearchDue { seq }`,
 `ComponentsLoaded { seq, result }`, `VersionsLoaded { seq, result }`, `MeLoaded { seq, result }`,
-`PeopleLoaded { seq, result }`.
+`PeopleLoaded { seq, result }`, `PanelToggled`, `PanelDismissed` (ledger D15).
 - `Picked`, `Cleared`, `ClearedAll` that change `chosen` bump `issue_request_seq` and set
   `IssueList::Loading { seq }` (research R6). Picking the value already chosen changes nothing.

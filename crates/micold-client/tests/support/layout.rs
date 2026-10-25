@@ -1555,6 +1555,60 @@ enum Before<'p> {
     Scrolled(iced::Point),
 }
 
+/// Settle, lay out and draw one floated overlay, then whatever it floats in turn (a field's list
+/// inside a floating panel, feature 1185's Filters panel), as the runtime nests them. A nested
+/// overlay's records carry `depth` extra leading path steps, so where it overlaps the overlay that
+/// floated it, its own deeper nodes own the text it drew.
+fn paint_overlay<M>(
+    overlay: &mut iced::advanced::overlay::Element<'_, M, iced::Theme, iced::Renderer>,
+    renderer: &mut iced::Renderer,
+    window: Size,
+    depth: usize,
+    boxes: &mut Vec<LayoutRecord>,
+) {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let mut overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
+    let origin = std::time::Instant::now();
+    let mut messages: Vec<M> = Vec::new();
+    for frame in 0..SETTLE_FRAMES {
+        let mut shell = Shell::new(&mut messages);
+        overlay.as_overlay_mut().update(
+            &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
+            Layout::new(&overlay_node),
+            mouse::Cursor::Unavailable,
+            &*renderer,
+            &mut clipboard::Null,
+            &mut shell,
+        );
+    }
+    overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
+
+    overlay.as_overlay_mut().draw(
+        renderer,
+        &iced::Theme::Light,
+        &iced::advanced::renderer::Style::default(),
+        Layout::new(&overlay_node),
+        iced::advanced::mouse::Cursor::Unavailable,
+    );
+    boxes.extend(
+        walk(Layout::new(&overlay_node), Layer::Overlay)
+            .into_iter()
+            .map(|mut record| {
+                record
+                    .path
+                    .splice(0..0, std::iter::repeat_n(usize::MAX, depth));
+                record
+            }),
+    );
+    if let Some(mut nested) = overlay
+        .as_overlay_mut()
+        .overlay(Layout::new(&overlay_node), &*renderer)
+    {
+        paint_overlay(&mut nested, renderer, window, depth + 1, boxes);
+    };
+}
+
 fn painted<'a, M: 'a>(
     element: Element<'a, M>,
     renderer: &mut iced::Renderer,
@@ -1650,34 +1704,7 @@ fn painted<'a, M: 'a>(
             &viewport,
             Vector::ZERO,
         ) {
-            use iced::advanced::{clipboard, mouse, Shell};
-
-            let mut overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
-            let origin = std::time::Instant::now();
-            let mut messages: Vec<M> = Vec::new();
-            for frame in 0..SETTLE_FRAMES {
-                let mut shell = Shell::new(&mut messages);
-                overlay.as_overlay_mut().update(
-                    &iced::Event::Window(iced::window::Event::RedrawRequested(
-                        origin + FRAME * frame,
-                    )),
-                    Layout::new(&overlay_node),
-                    mouse::Cursor::Unavailable,
-                    &*renderer,
-                    &mut clipboard::Null,
-                    &mut shell,
-                );
-            }
-            overlay_node = overlay.as_overlay_mut().layout(&*renderer, window);
-
-            overlay.as_overlay_mut().draw(
-                renderer,
-                &iced::Theme::Light,
-                &iced::advanced::renderer::Style::default(),
-                Layout::new(&overlay_node),
-                iced::advanced::mouse::Cursor::Unavailable,
-            );
-            overlay_boxes = walk(Layout::new(&overlay_node), Layer::Overlay);
+            paint_overlay(&mut overlay, renderer, window, 0, &mut overlay_boxes);
         }
     }
 

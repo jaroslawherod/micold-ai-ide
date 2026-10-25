@@ -124,3 +124,104 @@ fn a_failed_token_write_does_not_echo_the_token() {
     let error = jira::apply(Some(&blocker), &valid.jira).unwrap_err();
     assert!(!error.contains(SENTINEL), "{error}");
 }
+
+/// Feature 1185 (FR-006): a reporter choice's name and account print in no `Debug` of the form,
+/// of the module state or of a filter message, as the own user, a searched person or the pick.
+#[test]
+fn no_reporter_name_or_account_prints_in_the_form_or_its_messages() {
+    use micold_client::app::Message;
+    use micold_client::features::worktree_form::jira_filters::FilterMsg;
+    use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
+    use micold_core::github::IssueListing;
+    use micold_core::jira::{connection_key, JiraConnection};
+    use micold_core::jira_filter::{AccountId, FilterKind, JiraUser};
+
+    const NAME: &str = "Reporter Sentinel Name";
+    const ACCOUNT: &str = "account-sentinel-5b10ac";
+    let user = |account: &str, is_me| JiraUser {
+        account: AccountId::parse(account).unwrap(),
+        name: NAME.to_owned(),
+        is_me,
+    };
+    let project = PathBuf::from("/work/app");
+    let mut state = micold_client::app::State::default();
+    state.workspace.active = Some(project.clone());
+    state.settings.jira_enabled = true;
+    state.settings.jira_connections.insert(
+        connection_key(&project),
+        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+    );
+    let assert_clean = |what: &str, debug: String| {
+        assert!(
+            !debug.contains(NAME) && !debug.contains(ACCOUNT) && !debug.contains("Sentinel"),
+            "{what} prints a reporter: {debug}"
+        );
+    };
+    let send = |state: &mut micold_client::app::State, msg: FormMsg| {
+        assert_clean("a message", format!("{msg:?}"));
+        state.update(Message::WorktreeForm(msg));
+    };
+    send(&mut state, FormMsg::Opened);
+    send(&mut state, FormMsg::RemotesListed(Ok(Vec::new())));
+    send(&mut state, FormMsg::SourceChanged(BranchSource::Issue));
+    let seq = state.worktree_form.awaited_issue_load().unwrap();
+    send(
+        &mut state,
+        FormMsg::IssuesLoaded {
+            seq,
+            result: Ok((
+                IssueListing {
+                    issues: Vec::new(),
+                    total_open: 0,
+                    complete: true,
+                },
+                PathBuf::new(),
+            )),
+            resolved_env: None,
+        },
+    );
+    send(&mut state, FormMsg::JiraFilter(FilterMsg::PanelToggled));
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::Focused(FilterKind::Reporter)),
+    );
+    let seq = state.worktree_form.awaited_choices().unwrap().1;
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::MeLoaded {
+            seq,
+            result: Ok(Some(user("me-account-sentinel", true))),
+        }),
+    );
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::QueryChanged(FilterKind::Reporter, "Rep".into())),
+    );
+    let seq = state.worktree_form.pending_people_search().unwrap();
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::PeopleSearchDue { seq }),
+    );
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::PeopleLoaded {
+            seq,
+            result: Ok(vec![user(ACCOUNT, false)]),
+        }),
+    );
+    send(
+        &mut state,
+        FormMsg::JiraFilter(FilterMsg::Picked(FilterKind::Reporter, 2)),
+    );
+    let form = state.worktree_form.form.as_ref().unwrap();
+    assert_eq!(
+        form.jira_filters
+            .chosen
+            .reporter()
+            .map(|u| u.account.as_str()),
+        Some(ACCOUNT),
+        "the searched person is chosen"
+    );
+    assert_clean("the form", format!("{form:?}"));
+    assert_clean("the module state", format!("{:?}", state.worktree_form));
+}

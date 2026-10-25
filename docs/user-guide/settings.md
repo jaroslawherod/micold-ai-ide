@@ -749,7 +749,10 @@ open one. Once a project is connected, Micold contacts that connection's Jira si
 project key, the search text you type, the filters you choose in the issue list and your account
 email with its API token. To offer the **Component** filter's choices it asks the site for the
 project's components, sending only the project key and your credentials, and only when you first
-open that filter in the New worktree dialog (see
+open that filter in the New worktree dialog. For the **Reporter** filter it asks, on its first
+open, for your own Jira user (sending only your credentials) and, when you type a name into it and
+pause, for the project's people whose name matches (sending the project key, the text you typed
+and your credentials) (see
 [From a Jira issue](worktrees-and-sessions.md#from-a-jira-issue)).
 
 It also does so with no dialog open, to show the status of the tickets your worktrees are linked to

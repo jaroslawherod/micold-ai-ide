@@ -10,7 +10,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
-use crate::jira_filter::{JiraFilters, VersionChoice};
+use crate::jira_filter::{JiraFilters, JiraUser, VersionChoice};
 use crate::jira_query::{QueryFailure, ScopedQuery};
 use crate::jira_status::{KeyedStatus, TicketStatus};
 use crate::settings::Settings;
@@ -700,6 +700,27 @@ pub trait JiraSource: Send + Sync {
     ) -> Result<Vec<VersionChoice>, IssueLoadError> {
         Ok(Vec::new())
     }
+
+    /// The connected account's own user, offered first by the reporter filter (feature 1185);
+    /// `None` when Jira named no usable user.
+    fn myself(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Option<JiraUser>, IssueLoadError> {
+        Ok(None)
+    }
+
+    /// The users who can browse the connected project whose name matches `text`, in Jira's order
+    /// (feature 1185). Empty or whitespace-only `text` asks nothing and answers no one.
+    fn project_users(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        _text: &str,
+    ) -> Result<Vec<JiraUser>, IssueLoadError> {
+        Ok(Vec::new())
+    }
 }
 
 /// What a source that cannot filter answers a filtered request with (research R10).
@@ -754,6 +775,10 @@ pub enum ChoiceCall {
     Components,
     /// The project's fix versions.
     Versions,
+    /// The connected account's own user.
+    Myself,
+    /// The project users matching this typed text.
+    People(String),
 }
 
 fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -778,6 +803,8 @@ pub struct FakeJiraSource {
     filtered_calls: std::sync::Mutex<Vec<(Vec<String>, FilteredAsk)>>,
     components: Script<Vec<String>>,
     versions: Script<Vec<VersionChoice>>,
+    myself: Script<Option<JiraUser>>,
+    users: Script<Vec<JiraUser>>,
     choice_calls: std::sync::Mutex<Vec<ChoiceCall>>,
 }
 
@@ -869,6 +896,28 @@ impl FakeJiraSource {
     /// Answer the next unanswered `versions` call, after construction.
     pub fn script_versions(&self, result: Result<Vec<VersionChoice>, IssueLoadError>) {
         locked(&self.versions).push_back(result);
+    }
+
+    /// Answer the next unanswered `myself` call with `result`.
+    pub fn with_myself(self, result: Result<Option<JiraUser>, IssueLoadError>) -> Self {
+        self.script_myself(result);
+        self
+    }
+
+    /// Answer the next unanswered `myself` call, after construction.
+    pub fn script_myself(&self, result: Result<Option<JiraUser>, IssueLoadError>) {
+        locked(&self.myself).push_back(result);
+    }
+
+    /// Answer the next unanswered `project_users` call with `result`.
+    pub fn with_users(self, result: Result<Vec<JiraUser>, IssueLoadError>) -> Self {
+        self.script_users(result);
+        self
+    }
+
+    /// Answer the next unanswered `project_users` call, after construction.
+    pub fn script_users(&self, result: Result<Vec<JiraUser>, IssueLoadError>) {
+        locked(&self.users).push_back(result);
     }
 
     /// Every choice request so far.
@@ -979,6 +1028,33 @@ impl JiraSource for FakeJiraSource {
         locked(&self.versions).pop_front().unwrap_or_else(|| {
             Err(IssueLoadError::Other(
                 "FakeJiraSource: no versions scripted for this call".into(),
+            ))
+        })
+    }
+
+    fn myself(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+    ) -> Result<Option<JiraUser>, IssueLoadError> {
+        locked(&self.choice_calls).push(ChoiceCall::Myself);
+        locked(&self.myself).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no own user scripted for this call".into(),
+            ))
+        })
+    }
+
+    fn project_users(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        text: &str,
+    ) -> Result<Vec<JiraUser>, IssueLoadError> {
+        locked(&self.choice_calls).push(ChoiceCall::People(text.to_owned()));
+        locked(&self.users).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no users scripted for this call".into(),
             ))
         })
     }

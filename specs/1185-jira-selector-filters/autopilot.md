@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xwkotj
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M2 rebased onto main (3b7ae99f) and pushed; orchestrator opens the M2 PR (title and body in the scratchpad: m2-pr-title.md, m2-pr-body.md), waits on CI, merges; then M3 (T031–T039) — first resolve the D14 row-width follow-up and jaro's open question (one Filters button with a panel?)
+- **Next step**: M3 (T031–T039 + Filters panel, D15) implementing on d1bd9fe4: gate, reviews A and B, visual pass, push; orchestrator opens the M3 PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1344 | Design (spec, plan, tasks) | merged (rebase) | 4e204fd4b00deed3feaa8a30d519b5ad7b03cc48 |
 | #1381 | M1 component filter + mechanism | merged (rebase, squashed) | 3b7ae99fdd8794db201a16b9732f0ce441d85cdc |
+| #1396 | M2 fix-version filter | merged (rebase) | d1bd9fe4ebf1d8b5a842ce09e8f400dc82fdf32f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T022 | full | Component filter + filter mechanism (row, active line, Clear filters) | #1381 | done; rebased onto #1186 M3, refit (D12), gate passed at aa3b2c52; merged 3b7ae99f |
-| M2 | T023–T030 | full | Fix-version filter, AND with component | — (pushed to claude/project-thread-xwkotj; orchestrator opens the PR) | done; rebased onto main 3b7ae99f (D13), Jira layouts re-recorded, rebase review CLEAN, gate passed at ea884360 |
-| M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) | — | pending |
+| M2 | T023–T030 | full | Fix-version filter, AND with component | #1396 | done; merged d1bd9fe4 |
+| M3 | T031–T039 | full | Reporter filter (own user, typed people search, by account) + Filters panel (D15) | — | implementing on d1bd9fe4 |
 | M4 | T040–T045 | full | Label filter from loaded issues; all four in one row | — | pending |
 
 ## Decisions
@@ -45,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D11 | M1 gate | `feature_registration_cost` counts each `features/*.rs` file as a feature, so `features/jira_filters.rs` failed it as an unregistered feature | The filter reducer is part of the New worktree form: it lives at `features/worktree_form/jira_filters.rs`, declared in `features/worktree_form.rs`; tasks.md, plan.md, data-model.md, contracts/filter-ui.md, quickstart.md paths updated | agent-resolved | gate-2 failure; review B M1 F2 |
 | D12 | M1 rebase | After rebasing onto #1186's M3 (Basic/Advanced switch above the picker, 32 px), `panel_placement` failed: `jira-filtered` panel y=50 (15 px into the app bar), `jira-credentials-refused` y=62 (3 px). Not #1186's: origin/main 5a5bc7e1's fixture has `credentials-refused` at y=70 | Fit M1 beside the switch, #1186 untouched: (1) **Clear filters** trails the switch's row (+8 px: a button is 40, the chips 32); (2) the active line is text only and carries the values sent — the statement no longer appends "Filters sent: …" (a 4th line, +16 px); FR-014 amended in spec.md (clarification entry) to say so: the statement says the filters are sent, the active line names the values (review D12 r1 F1); (3) a filtered cap caption reads "Showing the N most recently updated." so "Filtered by … . Showing …" keeps one line; (4) a failed listing seats no filter field (a field is 56, Retry 40) and names the chosen filters beside **Retry** (FR-013: filters left in place to retry or clear). Result: filtered y=66, refused y=70. Plan's placeholder fallback rejected: a label adds no height (D9). contracts/filter-ui.md §1, §2, §4, tasks T011/T012, plan FR-014 row, user guide updated | agent-resolved | layout fixture re-recorded for the Jira states only (loading, credentials-refused, loaded, no-open-issues, filtered); `gates/jira_filters_fit.rs` |
 | D13 | M2 implement | Start M2 before #1381 (M1) merges? | Yes: M2 was prepared on local branch wip-1185-m2 stacked on M1's head e265593f while #1381's CI ran; no branch-start.sh, rebased onto main after #1381 merged as 3b7ae99f, keeping M1's D12 layout (Clear filters on the switch's row, text-only active line naming the values, no field beside Retry) | orchestrator | orchestrator prompt |
+| D15 | M3 implement | The inline filter fields no longer fit (D14: search ~83 px, a chosen value ~31 px; Reporter and Label cannot join the row). Where do the filters go? | One **Filters** button trails the issue search (fixed 160 px, "Filters · N" while N are chosen) and opens a floating 360 px panel, trailing edge on the button's, holding one field per filter, stacked (Reporter, Component, Fix version; Label in M4). Built on `material::MenuSelect` (new `MenuSelectRow::controls`, `panel_width`) over `cdk::picker::Picker::panel` (menu wider than its trigger; Tab moves between the panel's controls) — no new overlay; the fields' lists float as nested overlays. Kept: active line + Clear filters on the switch row (D12), lazy loads on each field's first focus, Retry per filter, #1186's guard (PR #1397's `shows_advanced` refusal and `close_lists` on the switch to Advanced, now also closing the panel; its test `advanced_mode_neither_applies_nor_drops_the_chosen_filters` carried here). After a failed listing the button trails Retry (FR-013 in full again). A reload answered under the open panel leaves the issue list shut. SC-001 amended to five interactions; spec clarification, research R8 note, plan, filter-ui §1/§2, data-model §7/§8, tasks T034/T037/T041/M4, quickstart, user guide updated | orchestrator (recommended option; **awaiting jaro's confirmation**) | orchestrator prompt; covered state `add-worktree-dialog-jira-filters-panel`; `gates/jira_filters_fit.rs` |
 | D14 | M2 implement | Two filter fields at the M1 shares (main 2 : 1 per field) left each ~110 px: the text input overflowed its share by 16.7 px (containment gate) and "Any component" was cut | The picker's main control and each filter field take equal shares (`PICKER_MAIN` = FillPortion(1)), ~150 px each, as M1's single field had; height unchanged (panel_placement green); the loading line wraps to two lines. M3/M4 cannot add fields to this row at these widths: they need a row of their own or a narrower control (follow-up kept) | agent-resolved | containment + jira_filters_fit red at 2:1:1; ui/worktree_form.rs `PICKER_MAIN` |
 
 ## Review rounds
@@ -78,5 +80,5 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Follow-ups not done
 
 - After #1185 and #1186 both merge: implement `JiraSource::load`/`JiraCloud::list_open`/`search_open` through their filtered forms with empty filters (review A M1, declined for R10).
-- M2 (D14): with two fields the issue search shows ~83 px of its placeholder and a chosen value ~31 px ("Payments" scrolls; the active line names it whole). M3/M4 cannot add the Reporter and Label fields to this row: they need a row of their own (finding vertical room in the 800 px window, panel_placement) or narrower field chrome.
+- ~~M2 (D14): with two fields the issue search shows ~83 px …~~ resolved in M3 by the Filters panel (D15), pending jaro's confirmation.
 - M2–M4 add fields to the picker's main row (D9) and values to the one-line active line (D12: the filtered form is at y=66, 1 px of slack; a second line of "Filtered by …" pushes it over the app bar): re-check `gates/jira_filters_fit.rs` and `panel_placement`. The visual pass of M1 found the Component field ~153 px wide, so a chosen value scrolls in a 35 px text area beside the search icon and the clear action (the active line under it names it in full); the four-field row M4 builds has to give each field room or move the fields to a row of their own.

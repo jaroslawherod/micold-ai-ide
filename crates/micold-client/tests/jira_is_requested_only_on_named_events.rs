@@ -212,7 +212,8 @@ fn the_advanced_query_is_never_logged_or_notified() {
 }
 
 /// Feature 1185 (FR-006, FR-014): a filter's choices are asked for only from the filter handler,
-/// when the reducer handed out a new filter seq (a first focus, a Retry), and a filtered listing
+/// when the reducer handed out a new filter seq (a first focus, a Retry, a reporter search that
+/// waited out its debounce), and a filtered listing
 /// is loaded only by the load path, from the named events above or a filter change. Opening the
 /// form or showing the Jira source asks no choice: the behaviour is driven over `FakeJiraSource`
 /// in `main_tests.rs` (`jira_filter_shell`); what stays here is the structure.
@@ -230,6 +231,16 @@ fn filter_choices_and_filtered_loads_start_only_from_their_handlers() {
         versions[0].0,
         "crates/micold-client/src/shell/jira_filters.rs"
     );
+    // M3: the own user only from the reporter's first focus (or its Retry), the people only from
+    // a search the reducer said is due (typed text that waited out the debounce) or a Retry.
+    for call in [
+        ".myself(connection, token)",
+        ".project_users(connection, token",
+    ] {
+        let asks: Vec<_> = occurrences(call);
+        assert_eq!(asks.len(), 1, "{call}: {asks:?}");
+        assert_eq!(asks[0].0, "crates/micold-client/src/shell/jira_filters.rs");
+    }
     let starters: Vec<_> = occurrences("start_choices(")
         .into_iter()
         .filter(|(_, line)| !line.starts_with("fn start_choices("))
@@ -253,4 +264,6 @@ fn filter_choices_and_filtered_loads_start_only_from_their_handlers() {
             .unwrap();
     assert!(handler.contains(".filter(|seq| *seq > issue_before)"));
     assert!(handler.contains(".filter(|(_, seq)| *seq > choice_before)"));
+    assert!(handler.contains(".pending_people_search()"));
+    assert!(handler.contains(".filter(|(seq, _)| *seq > choice_before || Some(*seq) == due)"));
 }

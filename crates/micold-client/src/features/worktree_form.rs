@@ -185,6 +185,17 @@ impl State {
         self.form.as_ref()?.jira_filters.awaited_choices()
     }
 
+    /// The reporter search waiting out its debounce, by its seq (feature 1185).
+    pub fn pending_people_search(&self) -> Option<u64> {
+        self.form.as_ref()?.jira_filters.people_pending
+    }
+
+    /// The reporter search in flight: its seq and the text typed into the Reporter field
+    /// (feature 1185, FR-014: the only text a people search sends).
+    pub fn awaited_people_search(&self) -> Option<(u64, String)> {
+        self.form.as_ref()?.jira_filters.awaited_people()
+    }
+
     /// The read of the picked issue's details the open form awaits (837 form-details §1).
     ///
     /// `Some` only while `Loading`, the list is loaded and the repository known, so the shell can
@@ -816,7 +827,7 @@ impl WorktreeForm {
             return Some(jira_query::notice(site));
         }
         let notice = format!(
-            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
+            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials, and, with this dialog closed, linked tickets' keys, to show their status.",
             site.key, site.origin
         );
         // Feature 1185 (FR-014): the values sent are named by the active line under the picker's
@@ -1579,7 +1590,8 @@ pub fn issues_loaded(
                     search,
                     descriptions,
                 };
-                form.issue_list_open = true;
+                // Not under the open Filters panel (feature 1185): the panel floats over it.
+                form.issue_list_open = !form.jira_filters.panel_open;
                 form.rematch_issues();
                 form.refresh_default_prompt();
             }
@@ -2339,7 +2351,7 @@ mod tests {
         let mut form = jira_form();
         let statement = form.jira_notice().expect("a statement");
         assert!(
-            statement.contains("Sends the project key, your search text, the filters you choose and your credentials"),
+            statement.contains("Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials"),
             "{statement}"
         );
         assert!(!statement.contains("Filters sent"), "{statement}");

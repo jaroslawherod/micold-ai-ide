@@ -25,7 +25,8 @@ use micold_core::jira::{
     classify, list_jql, parse_page, search_jql, ApiToken, JiraConnection, JiraSource, Outcome,
 };
 use micold_core::jira_filter::{
-    narrowed, parse_components, parse_versions, JiraFilters, VersionChoice,
+    narrowed, parse_components, parse_myself, parse_users, parse_versions, JiraFilters, JiraUser,
+    VersionChoice,
 };
 use micold_core::jira_query::{rejection_messages, QueryFailure, ScopedQuery};
 use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
@@ -356,7 +357,36 @@ impl JiraSource for JiraCloud {
         let path = format!("/rest/api/3/project/{}/versions", conn.project_key);
         parse_versions(&self.get(conn, token, &path, &[])?)
     }
+
+    fn myself(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+    ) -> Result<Option<JiraUser>, IssueLoadError> {
+        parse_myself(&self.get(conn, token, "/rest/api/3/myself", &[])?)
+    }
+
+    fn project_users(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        text: &str,
+    ) -> Result<Vec<JiraUser>, IssueLoadError> {
+        if text.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let key = conn.project_key.to_string();
+        let query = [
+            ("projectKey", key.as_str()),
+            ("query", text),
+            ("maxResults", PEOPLE_SIZE),
+        ];
+        parse_users(&self.get(conn, token, "/rest/api/3/user/viewissue/search", &query)?)
+    }
 }
+
+/// How many people one reporter search asks for (contracts/jira-filter-source.md §3).
+const PEOPLE_SIZE: &str = "50";
 
 #[cfg(test)]
 mod tests {

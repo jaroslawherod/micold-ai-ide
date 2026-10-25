@@ -42,7 +42,7 @@ pub const DEFAULT_LIST_HEIGHT: f32 = density::MENU_ITEM_BASE * MAX_ROWS_BEFORE_S
 const NOTE_ROLE: TypeRole = TypeRole::Caption;
 
 /// One line of a [`MenuSelect`]'s list. Built with [`Self::option`], [`Self::option_with_chips`],
-/// [`Self::heading`] or [`Self::note`].
+/// [`Self::heading`], [`Self::note`] or [`Self::controls`].
 ///
 /// An option is a keyboard stop, and each of its chips is one more, in order; a heading or a note
 /// is none and takes no press. That order is what [`MenuSelect::keyboard`]'s highlight counts in.
@@ -60,6 +60,7 @@ enum Line<'a, M> {
     },
     Heading(Cow<'a, str>),
     Note(Cow<'a, str>),
+    Controls(Element<'a, M>),
 }
 
 impl<'a, M> MenuSelectRow<'a, M> {
@@ -102,11 +103,20 @@ impl<'a, M> MenuSelectRow<'a, M> {
         }
     }
 
+    /// Controls of the caller's own (fields, a row of them) on the list: they take the keyboard
+    /// and presses themselves, so the line is no stop of the list's (feature 1185: the Jira
+    /// Filters panel).
+    pub fn controls(content: impl Into<Element<'a, M>>) -> Self {
+        Self {
+            line: Line::Controls(content.into()),
+        }
+    }
+
     /// How many keyboard stops this row holds.
     fn stops(&self) -> usize {
         match &self.line {
             Line::Option { chips, .. } => 1 + chips.len(),
-            Line::Heading(_) | Line::Note(_) => 0,
+            Line::Heading(_) | Line::Note(_) | Line::Controls(_) => 0,
         }
     }
 }
@@ -131,6 +141,7 @@ pub struct MenuSelect<'a, M> {
     on_pick: Option<M>,
     max_list_height: f32,
     width: Length,
+    panel_width: Option<f32>,
 }
 
 impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
@@ -161,6 +172,7 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
             on_pick: None,
             max_list_height: DEFAULT_LIST_HEIGHT,
             width: Length::Fill,
+            panel_width: None,
         }
     }
 
@@ -213,6 +225,16 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
     /// The trigger's width, which the list takes too. `Fill` unless set.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
+        self
+    }
+
+    /// Open the list as a panel of [controls](MenuSelectRow::controls) `width` wide, its trailing
+    /// edge on the trigger's, rather than as wide as the trigger; Tab then moves between the
+    /// controls instead of closing it ([`cdk::picker::Picker::panel`]).
+    ///
+    /// [`cdk::picker::Picker::panel`]: crate::ui::cdk::picker::Picker::panel
+    pub fn panel_width(mut self, width: f32) -> Self {
+        self.panel_width = Some(width);
         self
     }
 }
@@ -301,6 +323,10 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
                 } => option_element(content, chosen, on_pick, chips, note, stop, s.highlight, r),
                 Line::Heading(text) => line_element(Text::new(text, TypeRole::Section, r)),
                 Line::Note(text) => line_element(Text::new(text, NOTE_ROLE, r).muted()),
+                Line::Controls(content) => container(content)
+                    .width(Length::Fill)
+                    .padding([spacing::XS, spacing::SM])
+                    .into(),
             });
             stop += stops;
         }
@@ -337,6 +363,9 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
         }
         if let (Some(on_pick), true) = (s.on_pick, s.highlighted_enabled) {
             behaviour = behaviour.on_pick(on_pick);
+        }
+        if let Some(width) = s.panel_width {
+            behaviour = behaviour.panel(width);
         }
         let element: Element<'a, M> = behaviour.into();
         match s.tooltip {

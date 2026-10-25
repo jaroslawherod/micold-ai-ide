@@ -25,6 +25,11 @@
 //! `GET /rest/api/3/project/{key}/versions` answers `1.0` (archived), `2.3` (released) and `2.4`
 //! (unreleased), and a `fixVersion = "…"` clause keeps every second issue, starting at the
 //! version's place among the unarchived ones (`2.3`, `2.4`); `1.0` has none. Both clauses AND.
+//! `GET /rest/api/3/myself` answers the own user `Dev Fake`; `GET
+//! /rest/api/3/user/viewissue/search?query=…` answers the people whose name holds the typed text
+//! (any case): `Dev Fake`, two `Alex Kim`s with different accounts and `Sam Lee`. A
+//! `reporter = "<account>"` clause keeps every fourth issue, starting at the person's place in
+//! that list; an unknown account has none. All three clauses AND.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -87,6 +92,57 @@ const VERSIONS: [(&str, bool, bool); 3] = [
     ("2.4", false, false),
 ];
 
+/// The project's people as `(account, display name)`, in Jira's order; the first is the own user
+/// (feature 1185, M3). Two share a display name, as US2 AS3 needs.
+const PEOPLE: [(&str, &str); 4] = [
+    ("fake-me-0001", "Dev Fake"),
+    ("fake-alex-0002", "Alex Kim"),
+    ("fake-alex-0003", "Alex Kim"),
+    ("fake-sam-0004", "Sam Lee"),
+];
+
+/// A query value of the request line, `+` and percent escapes decoded.
+fn query_value(request: &str, name: &str) -> Option<String> {
+    let target = request.lines().next()?.split(' ').nth(1)?;
+    let query = target.split_once('?')?.1;
+    let raw = query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix(&format!("{name}=")))?;
+    let bytes = raw.replace('+', " ").into_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%' && i + 2 < bytes.len())
+            .then(|| std::str::from_utf8(&bytes[i + 1..i + 3]).ok())
+            .flatten()
+            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+        match hex {
+            Some(byte) => {
+                out.push(byte);
+                i += 3;
+            }
+            None => {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// The people whose display name holds `text`, any case, as Jira's user search answers them.
+fn people_answer(text: &str) -> String {
+    let text = text.to_lowercase();
+    serde_json::Value::from(
+        PEOPLE
+            .iter()
+            .filter(|(_, name)| name.to_lowercase().contains(&text))
+            .map(|(account, name)| serde_json::json!({ "accountId": account, "displayName": name }))
+            .collect::<Vec<_>>(),
+    )
+    .to_string()
+}
+
 /// The value of the JQL's `<field> = "…"` clause (`prefix` is `component = "`), unescaped, if it
 /// has one.
 fn clause_value(jql: &str, prefix: &str) -> Option<String> {
@@ -122,9 +178,11 @@ fn filtered_answer(body: &str) -> Option<String> {
     let jql = json["jql"].as_str()?;
     let component = clause_value(jql, "component = \"");
     let version = clause_value(jql, "fixVersion = \"");
-    if component.is_none() && version.is_none() {
+    let reporter = clause_value(jql, "reporter = \"");
+    if component.is_none() && version.is_none() && reporter.is_none() {
         return None;
     }
+    let accounts: Vec<&str> = PEOPLE.iter().map(|(account, _)| *account).collect();
     let live: Vec<&str> = VERSIONS
         .iter()
         .filter(|(_, archived, _)| !archived)
@@ -138,6 +196,7 @@ fn filtered_answer(body: &str) -> Option<String> {
         .filter(|(i, _)| {
             in_share(*i, component.as_deref(), &COMPONENTS)
                 && in_share(*i, version.as_deref(), &live)
+                && in_share(*i, reporter.as_deref(), &accounts)
         })
         .map(|(_, issue)| issue.clone())
         .collect();
@@ -178,6 +237,12 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
         .or_else(|| filtered_answer(request_body));
     let components = request.starts_with("GET ") && request.contains("/components ");
     let versions = request.starts_with("GET ") && request.contains("/versions ");
+    let myself = request.starts_with("GET /rest/api/3/myself ");
+    let people = request
+        .starts_with("GET /rest/api/3/user/viewissue/search?")
+        .then(|| people_answer(&query_value(&request, "query").unwrap_or_default()));
+    let me =
+        serde_json::json!({ "accountId": PEOPLE[0].0, "displayName": PEOPLE[0].1 }).to_string();
     let version_list = serde_json::Value::from(
         VERSIONS
             .iter()
@@ -212,6 +277,12 @@ fn respond(mut stream: TcpStream, mode: u8, tickets: &Mutex<Tickets>) {
         BAD_JQL => ("400 Bad Request", "application/json", BAD_JQL_BODY),
         _ if components => ("200 OK", "application/json", component_list.as_str()),
         _ if versions => ("200 OK", "application/json", version_list.as_str()),
+        _ if myself => ("200 OK", "application/json", me.as_str()),
+        _ if people.is_some() => (
+            "200 OK",
+            "application/json",
+            people.as_deref().unwrap_or("[]"),
+        ),
         _ => match &status_page {
             Some(page) => ("200 OK", "application/json", page.as_str()),
             None => ("200 OK", "application/json", PAGE),

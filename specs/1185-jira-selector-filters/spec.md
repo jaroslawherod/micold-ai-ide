@@ -21,6 +21,8 @@ Feature 533 (`specs/533-jira-issue-worktrees`) added a Jira source to the create
 - Q: Once a filter replaces the unfiltered listing, where do the label choices come from? → A: From the unfiltered listing as it loaded when the Jira source was shown; the choices are kept for the open dialog and do not shrink to the filtered list. _(agent-resolved: spec.md#FR-005, #FR-007 — the filtered listing replaces the unfiltered one, so label choices are taken at the unfiltered load)_
 - Q: Where are the filter values sent named, once feature 1186's Basic / Advanced switch leaves the tallest dialog no line for a fourth line of statement? → A: The statement says "the filters you choose" are sent; the values sent are named by the active line under the issue search ("Filtered by component Payments"), which FR-015 already requires, rather than by a "Filters sent: …" suffix on the statement. _(agent-resolved: `gates/panel_placement.rs` failed with the suffix by 14 px; naming the values inline in the statement fits only for short values (measured); autopilot ledger D12)_
 
+- Q: The inline filter fields no longer fit beside the issue search (two fields left the search ~83 px; Reporter and Label cannot join the row) — where do the filters go? → A: One **Filters** button trails the issue search, naming how many filters are chosen ("Filters · 2"); it opens a floating panel holding every filter field. The search gets its full width back; the active line and **Clear filters** stay as they are. SC-001 counts opening the panel as one more interaction. _(orchestrator, recommended option, awaiting jaro's confirmation; autopilot ledger D15)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Narrow the Jira list by component or fix version (Priority: P1)
@@ -123,7 +125,7 @@ A developer chooses the label `backend` from the label filter rather than typing
 
 ### Measurable Outcomes
 
-- **SC-001**: A user in a project with over 1,000 not-Done issues reaches a list of only the issues of one component and one fix version with at most four interactions (open filter, choose, open filter, choose), without typing.
+- **SC-001**: A user in a project with over 1,000 not-Done issues reaches a list of only the issues of one component and one fix version with at most five interactions (open Filters, open filter, choose, open filter, choose), without typing (amended from four by the Filters panel, ledger D15).
 - **SC-002**: For every combination of the four filters (16 combinations, including none), the listed issues are exactly those Jira returns for the project's not-Done issues with those restrictions, verified against a scripted Jira source.
 - **SC-003**: For a test corpus of at least 20 filter values containing `"`, `\`, edge spaces, over 100 characters or non-Latin text, choosing each value lists exactly the issues carrying that value: never an error, never other issues; a Jira value containing a control character is never offered in any filter.
 - **SC-004**: When a filter's choices fail to load, the user can still search, pick an issue and create a worktree, in 100% of the failure causes listed in FR-012.

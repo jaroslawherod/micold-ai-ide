@@ -256,17 +256,17 @@ person reported, identified by account, not name.
 
 ### Tests (write first, must fail)
 
-- [ ] T031 [P] [US2] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
+- [x] T031 [P] [US2] Core tests in `crates/micold-core/tests/jira_filter_choices.rs`:
   `parse_myself` on `{"accountId", "displayName"}` returns `Some(JiraUser { is_me: true, … })` and
   `None` when unusable; `parse_users` returns users in Jira order, skips entries without
   `accountId` or with an empty or control-character display name, drops duplicates by account;
   both answer `NotJiraCloud` for another shape; the own user is removed from the people results
   (research R4); `FakeJiraSource::with_myself` / `with_users`.
-- [ ] T032 [P] [US2] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`: `myself`
+- [x] T032 [P] [US2] Adapter tests in `crates/micold-client/tests/jira_http_adapter.rs`: `myself`
   sends `GET /rest/api/3/myself`; `project_users` sends
   `GET /rest/api/3/user/viewissue/search?projectKey={key}&query={text}&maxResults=50` with the
   typed text percent-encoded; empty or whitespace-only text answers `Ok([])` with no request.
-- [ ] T033 [P] [US2] Client tests in `crates/micold-client/tests/jira_filters_picker.rs`: the first
+- [x] T033 [P] [US2] Client tests in `crates/micold-client/tests/jira_filters_picker.rs`: the first
   focus of Reporter makes one `myself` request and offers "Any reporter", then "You (name)" first
   (AS1); typing waits 300 ms (`ISSUE_SEARCH_DEBOUNCE`) before `project_users(text)` and a newer
   text discards an older result; picking a person loads with `reporter = "<accountId>"` and every
@@ -274,30 +274,34 @@ person reported, identified by account, not name.
   only the picked one's account is sent (AS3); no match shows "No project user matches; you are
   still offered"; a `myself` failure shows cause and **Retry** on that filter only; a people-search
   failure keeps the own user offered.
-- [ ] T034 [P] [US2] Extend `crates/micold-client/tests/jira_token_never_leaks.rs` (no reporter
+- [x] T034 [P] [US2] Extend `crates/micold-client/tests/jira_token_never_leaks.rs` (no reporter
   name or account in `{:?}` of the form, of `FilterMsg`, or in captured logs; FR-006) and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` (`myself` only on first
   focus; `project_users` only after typed text); `crates/micold-client/tests/gates/jira_filters_fit.rs`
-  expects the third field; the `jira_notice` unit test in
+  expects the third field (as built, ledger D15: in the Filters panel, covered state
+  `add-worktree-dialog-jira-filters-panel`); the `jira_notice` unit test in
   `crates/micold-client/src/features/worktree_form.rs` expects the full filter-ui §4 text with "the
   name you type to find a reporter" (both fail until T037/T039).
 
 ### Implementation
 
-- [ ] T035 [US2] In `crates/micold-core/src/jira_filter.rs` implement `parse_myself` and
+- [x] T035 [US2] In `crates/micold-core/src/jira_filter.rs` implement `parse_myself` and
   `parse_users`; in `crates/micold-core/src/jira.rs` add `JiraSource::myself` (default
   `Ok(None)`) and `project_users` (default `Ok(vec![])`) and `FakeJiraSource::with_myself` /
   `with_users`. Makes T031 pass.
-- [ ] T036 [US2] In `crates/micold-client/src/shell/jira_http.rs` implement `myself` and
+- [x] T036 [US2] In `crates/micold-client/src/shell/jira_http.rs` implement `myself` and
   `project_users` through `request`, query values set with `.query()`. Makes T032 pass.
-- [ ] T037 [US2] Add the Reporter filter: `me` / `people: ChoiceLoad<JiraUser>`,
+- [x] T037 [US2] Add the Reporter filter: `me` / `people: ChoiceLoad<JiraUser>`,
   `people_pending`, `PeopleSearchDue { seq }`, `MeLoaded`, `PeopleLoaded` in
   `crates/micold-client/src/features/worktree_form/jira_filters.rs`; the debounced search and handlers in
   `crates/micold-client/src/shell/jira_filters.rs`; the field ("You (name)" for the own user) in
-  `crates/micold-client/src/ui/worktree_form.rs`. Makes T033 and T034 pass.
-- [ ] T038 [P] [US2] In `crates/micold-client/examples/fake_jira.rs` serve `/myself` and a user
+  `crates/micold-client/src/ui/worktree_form.rs`. Makes T033 and T034 pass. *As built (ledger
+  D15):* the fields move from the main row into a Filters panel (`panel_open`, `PanelToggled`,
+  `PanelDismissed`; `material::MenuSelect` with `MenuSelectRow::controls` and `panel_width`,
+  `cdk::picker::Picker::panel`), the button naming the chosen count.
+- [x] T038 [P] [US2] In `crates/micold-client/examples/fake_jira.rs` serve `/myself` and a user
   search with two people sharing a display name, and answer the `reporter` clause.
-- [ ] T039 [P] [US2] Statement and guide: `WorktreeForm::jira_notice` in
+- [x] T039 [P] [US2] Statement and guide: `WorktreeForm::jira_notice` in
   `crates/micold-client/src/features/worktree_form.rs` gains "the name you type to find a
   reporter" (makes T034's statement test pass); the reporter filter in
   `docs/user-guide/worktrees-and-sessions.md` and the people search in
@@ -329,8 +333,8 @@ type a summary word and the results narrow within them.
   choices (D5); a component picked before the unfiltered load returns still gets the label
   choices from that load's result, which is not shown as the list (FR-005); label `backend` plus search "login" loads with `labels = "backend"` and the results
   match "login" by key, summary or label (AS2); `crates/micold-client/tests/gates/jira_filters_fit.rs`
-  asserts all four fields, equal widths, fit the row and each list anchors under its field (fails
-  until T043).
+  asserts all four fields fit the Filters panel, stacked, and each list anchors under its field
+  (fails until T043; ledger D15).
 
 ### Implementation
 
@@ -438,7 +442,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T040–T045
 - **Deliverable**: a Label filter offers the loaded issues' labels alphabetically without a
-  request; choosing one lists only issues with it, and all four filters sit in one row.
+  request; choosing one lists only issues with it, and all four filters sit in the Filters panel
+  (ledger D15).
 - **Satisfies**: US3 acceptance scenarios 1–2; FR-001 (all four), FR-005
 - **Verify**: `cargo test -p micold-core --test jira_filter_choices`; `cargo test -p micold-client
   --test jira_filters_picker --test layout_snapshot`; quickstart Part B step 6

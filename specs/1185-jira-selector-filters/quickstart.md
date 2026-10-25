@@ -30,15 +30,17 @@ Prerequisite: `cargo run -p micold-client --example fake_jira` (extended: serves
 `1.0` (archived), `/myself`, a user search with two people sharing a display name, and answers
 filtered searches by the clauses it understands); a debug build with a project connected to it.
 
-1. Open New worktree, Issue source, Jira: the filter row shows four empty fields above the picker.
+1. Open New worktree, Issue source, Jira: a **Filters** button trails the issue search; it opens a
+   panel of empty filter fields over the dialog (ledger D15).
 2. Focus Component: list shows Any, Payments, Auth, the quoted name. Pick Payments: list reloads;
-   the line reads "Filtered by component Payments".
-3. Focus Fix version: 2.4 before 2.3, no 1.0. Pick 2.4: both in the line (SC-001: four
-   interactions since the dialog opened on Jira).
+   the line reads "Filtered by component Payments"; the button reads "Filters · 1".
+3. Focus Fix version: 2.4 before 2.3, no 1.0. Pick 2.4: both in the line (SC-001: five
+   interactions since the dialog opened on Jira, opening the panel the first).
 4. Type in the issue search: results narrow within the filtered list.
 5. Reporter: own user first as "You (…)"; type a name, two same-named people appear; pick one.
 6. Label: alphabetical labels of the loaded issues.
 7. Stop the fake, focus an unopened filter: cause + Retry on that filter only; picker still works.
 8. Clear filters: unfiltered list returns, line gone.
-9. Keyboard only: Tab reaches every field and Clear filters; Up/Down/Enter pick; Esc dismisses.
+9. Keyboard only: Tab reaches the Filters button, every field in the panel and Clear filters;
+   Up/Down/Enter pick; Esc closes a list, a second Esc the panel.
 Record screenshots under `specs/1185-jira-selector-filters/visual/`.

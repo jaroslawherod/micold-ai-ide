@@ -513,10 +513,13 @@ fn issue_row(issue: &Issue, spans: &[std::ops::Range<usize>], board: &StatusBoar
         .tooltip(issue.description())
 }
 
-/// The share of the issue picker's main row its own control (the issue search, the loading line,
-/// an empty list's words) takes beside the Jira filter fields, which take one share each
-/// (feature 1185, ledger D9, D14).
-const PICKER_MAIN: Length = Length::FillPortion(1);
+/// The width of the Jira **Filters** button beside the issue search: "Filters · 4" and its chevron
+/// whole (feature 1185, ledger D15).
+const FILTERS_BUTTON_WIDTH: f32 = 160.0;
+
+/// The width of the Filters panel the button opens, its trailing edge on the button's: a field
+/// wide enough for "No project user matches; you are still offered" in its list (ledger D15).
+const FILTERS_PANEL_WIDTH: f32 = 360.0;
 
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
@@ -560,25 +563,20 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     let Some(source) = form.notice_source() else {
         return col.into();
     };
-    // Feature 1185: the Jira filters ride on the picker's main row, trailing, whatever the list's
-    // state but unasked: beside the search, the Retry or the loading line. A row of their own took
-    // a line the tallest dialog does not have (`gates/panel_placement.rs`; ledger D9). The main
-    // control and each field share the row equally ([`PICKER_MAIN`]): narrower, a field's text
-    // input does not fit its icon and clear action (`gates/containment.rs`). A failed listing
-    // seats none: see its arm below.
-    let failed = matches!(form.issues, IssueList::Failed { .. });
-    let mut filters = (shows_filters(form) && !failed).then(|| jira_filter_row(form, source, r));
-    let mut seat = |main: Element<'a, Message>, width: Length| -> Element<'a, Message> {
-        let Some(fields) = filters.take() else {
+    // Feature 1185 (ledger D15): one **Filters** button trails the picker's main row, whatever the
+    // list's state but unasked: beside the search, the loading line or Retry. It opens a floating
+    // panel of the filter fields, so the fields cost the tallest dialog neither a line
+    // (`gates/panel_placement.rs`; D9) nor the search's width (D14).
+    let has_filters = shows_filters(form);
+    let mut filters = has_filters.then(|| jira_filters_control(form, source, r));
+    let mut seat = |main: Element<'a, Message>| -> Element<'a, Message> {
+        let Some(control) = filters.take() else {
             return main;
         };
-        row![
-            iced::widget::container(main).width(width),
-            iced::widget::container(fields).width(Length::FillPortion(OFFERED.len() as u16)),
-        ]
-        .spacing(spacing::SM)
-        .align_y(iced::Alignment::Center)
-        .into()
+        row![iced::widget::container(main).width(Length::Fill), control]
+            .spacing(spacing::SM)
+            .align_y(iced::Alignment::Center)
+            .into()
     };
     // The line naming the chosen filters under the main row (FR-014, FR-015).
     let active = |caption: Option<String>| {
@@ -601,23 +599,26 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 Some(site) => format!("Loading issues from {}…", site.host),
                 None => "Loading issues from GitHub…".to_string(),
             };
-            col = col.push(seat(StageProgress::new(loading, r).into(), PICKER_MAIN));
+            col = col.push(seat(StageProgress::new(loading, r).into()));
             col = col.extend(active(None));
         }
-        // A failed listing seats no filter field: a field is taller than Retry, and the form has
-        // no line to spare under a two-line cause (`gates/panel_placement.rs`). The chosen filters
-        // stay, named beside Retry, so the user can retry or clear them (FR-013; ledger D12).
+        // The chosen filters stay, named beside Retry, with the Filters button, so the user can
+        // retry, change or clear them (FR-013; ledger D12, D15).
         IssueList::Failed { error } => {
             let retry =
                 Button::text("Retry", r).on_press(Message::WorktreeForm(FormMsg::IssueRetry));
             col = col.push(Text::new(error.message(source), TypeRole::Caption, r).tint(r.error));
-            col = match active(None) {
-                Some(line) => col.push(
-                    row![retry, line]
-                        .spacing(spacing::SM)
-                        .align_y(iced::Alignment::Center),
-                ),
-                None => col.push(retry),
+            col = match (active(None), has_filters) {
+                (None, false) => col.push(retry),
+                (line, _) => col.push(seat(
+                    row![
+                        retry,
+                        line.unwrap_or_else(|| Space::new().width(Length::Fill).into())
+                    ]
+                    .spacing(spacing::SM)
+                    .align_y(iced::Alignment::Center)
+                    .into(),
+                )),
             };
         }
         // Feature 1185 (FR-011): the filters chose nothing; the active line above clears them.
@@ -625,10 +626,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             if listing.issues.is_empty() && form.filtered_empty_text().is_some() =>
         {
             let empty = form.filtered_empty_text().unwrap_or_default();
-            col = col.push(seat(
-                Text::new(empty, TypeRole::Caption, r).muted().into(),
-                PICKER_MAIN,
-            ));
+            col = col.push(seat(Text::new(empty, TypeRole::Caption, r).muted().into()));
             col = col.extend(active(None));
         }
         IssueList::Loaded { listing, .. } if listing.issues.is_empty() => {
@@ -640,10 +638,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                         .map_or_else(String::new, ToString::to_string)
                 ),
             };
-            col = col.push(seat(
-                Text::new(empty, TypeRole::Caption, r).muted().into(),
-                PICKER_MAIN,
-            ));
+            col = col.push(seat(Text::new(empty, TypeRole::Caption, r).muted().into()));
             col = col.extend(active(None));
         }
         IssueList::Loaded { .. } => {
@@ -666,7 +661,6 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 .on_dismiss(Message::WorktreeForm(FormMsg::IssueDismissed))
                 .on_pick(|index| Message::WorktreeForm(FormMsg::IssueRowPicked(index)))
                 .into(),
-                PICKER_MAIN,
             ));
             // FR-004: say the list is capped rather than presenting a part as the whole. With
             // filters chosen it follows the active line in one paragraph (1185, D9, D12).
@@ -709,71 +703,98 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     col.into()
 }
 
-/// The Jira filter fields, one per offered filter, side by side at equal widths (feature 1185,
-/// contracts/filter-ui.md §2), seated by `issue_picker` at the end of the picker's main row. Each is a typeahead whose first row is "Any <filter>"; a row cut
-/// short by the field's width carries its full text as a tooltip. The choices' state (loading,
-/// failed with Retry, none) stands in the list as rows, so it adds no line to the dialog.
-fn jira_filter_row<'a>(
+/// The Jira **Filters** button and the panel it opens (feature 1185, contracts/filter-ui.md §2,
+/// ledger D15): a [`material::MenuSelect`] whose list is a panel of the filter fields, one per
+/// offered filter, stacked. The button names how many filters are chosen ("Filters · 2").
+fn jira_filters_control<'a>(
     form: &'a WorktreeForm,
     source: micold_core::github::NoticeSource<'_>,
     r: Roles,
 ) -> Element<'a, Message> {
     let filters = &form.jira_filters;
-    let fields = OFFERED.into_iter().map(|kind| {
-        let field = filters.field(kind);
-        let rows: Vec<TypeaheadRow> = filters
-            .rows(kind)
-            .iter()
-            .map(|row| {
-                let label = row.label(kind, Some(source));
-                let built = match row.summary(kind) {
-                    // A failure's cause, or why there is nothing to choose, is the row's second
-                    // line, wrapped in full: the list is as narrow as its field, and a cut reason
-                    // says nothing (FR-012; spec Edge Cases, "Empty choices").
-                    Some(summary) => {
-                        TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new())
-                    }
-                    None => TypeaheadRow::new(label.clone(), row.spans.clone())
-                        .single_line()
-                        .tooltip(label),
-                };
-                if row.enabled() {
-                    built
-                } else {
-                    built.disabled()
-                }
-            })
-            .collect();
-        let filter = move |msg: FilterMsg| Message::WorktreeForm(FormMsg::JiraFilter(msg));
-        let typeahead: Element<'a, Message> = material::Typeahead::new(
-            &field.query,
-            rows,
-            move |text| filter(FilterMsg::QueryChanged(kind, text)),
-            r,
-        )
-        .placeholder(kind.title())
-        .label(kind.title())
-        .open(field.open)
-        .highlighted(field.highlight)
-        .selected(filters.selected_row(kind))
-        .on_focus(filter(FilterMsg::Focused(kind)))
-        .on_move(move |direction| filter(FilterMsg::HighlightMoved(kind, direction)))
-        .on_dismiss(filter(FilterMsg::Dismissed(kind)))
-        .on_pick(move |index| filter(FilterMsg::Picked(kind, index)))
-        .into();
-        iced::widget::container(typeahead)
-            .width(Length::FillPortion(1))
-            .into()
-    });
-    iced::widget::Row::with_children(fields)
-        .spacing(spacing::SM)
-        .into()
+    let filter = |msg: FilterMsg| Message::WorktreeForm(FormMsg::JiraFilter(msg));
+    let fields = OFFERED
+        .into_iter()
+        .map(|kind| material::MenuSelectRow::controls(jira_filter_field(form, kind, source, r)))
+        .collect();
+    material::MenuSelect::new(
+        filters_label(filters.chosen.active().len()),
+        fields,
+        filters.panel_open,
+        filter(FilterMsg::PanelToggled),
+        filter(FilterMsg::PanelDismissed),
+        r,
+    )
+    .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
+    .panel_width(FILTERS_PANEL_WIDTH)
+    .into()
 }
 
-/// The line naming the active filters (feature 1185, FR-014, FR-015): the values sent to Jira,
-/// in full where the fields are too narrow to show them. A capped list's caption follows the line
-/// in the same paragraph rather than taking a line of its own; **Clear filters** trails the
-/// switch's row above (ledger D12).
+/// The Filters button's words: "Filters", or "Filters · 2" while two are chosen.
+pub fn filters_label(chosen: usize) -> String {
+    match chosen {
+        0 => "Filters".to_string(),
+        n => format!("Filters · {n}"),
+    }
+}
+
+/// One filter's field in the Filters panel: a typeahead whose first row is "Any <filter>"; a row
+/// cut short by the field's width carries its full text as a tooltip. The choices' state
+/// (loading, searching, failed with Retry, none) stands in the list as rows.
+fn jira_filter_field<'a>(
+    form: &'a WorktreeForm,
+    kind: micold_core::jira_filter::FilterKind,
+    source: micold_core::github::NoticeSource<'_>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let filters = &form.jira_filters;
+    let field = filters.field(kind);
+    let rows: Vec<TypeaheadRow> = filters
+        .rows(kind)
+        .iter()
+        .map(|row| {
+            let label = row.label(kind, Some(source));
+            let built = match row.summary(kind) {
+                // A failure's cause, or why there is nothing to choose, is the row's second line,
+                // wrapped in full: a cut reason says nothing (FR-012; spec Edge Cases, "Empty
+                // choices").
+                Some(summary) => TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new()),
+                None => TypeaheadRow::new(label.clone(), row.spans.clone())
+                    .single_line()
+                    .tooltip(label),
+            };
+            if row.enabled() {
+                built
+            } else {
+                built.disabled()
+            }
+        })
+        .collect();
+    let filter = move |msg: FilterMsg| Message::WorktreeForm(FormMsg::JiraFilter(msg));
+    material::Typeahead::new(
+        &field.query,
+        rows,
+        move |text| filter(FilterMsg::QueryChanged(kind, text)),
+        r,
+    )
+    .placeholder(kind.title())
+    .label(kind.title())
+    .open(field.open)
+    .highlighted(field.highlight)
+    .selected(filters.selected_row(kind))
+    .on_focus(filter(FilterMsg::Focused(kind)))
+    .on_move(move |direction| filter(FilterMsg::HighlightMoved(kind, direction)))
+    .on_dismiss(filter(FilterMsg::Dismissed(kind)))
+    .on_pick(move |index| filter(FilterMsg::Picked(kind, index)))
+    .into()
+}
+
+/// The line naming the active filters (feature 1185, FR-014, FR-015): the values sent to Jira. A
+/// capped list's caption follows the line in the same paragraph rather than taking a line of its
+/// own; **Clear filters** trails the switch's row above (ledger D12). One line always: a second is
+/// one the tallest dialog lacks (`gates/panel_placement.rs`), so a line too long for the dialog (three
+/// filters and the cap, a long name) ends in an ellipsis, whole in its tooltip and the values whole
+/// in the Filters panel's fields (ledger D15).
 fn active_filters_line<'a>(
     line: String,
     caption: Option<String>,
@@ -783,10 +804,10 @@ fn active_filters_line<'a>(
         Some(caption) => format!("{line}. {caption}"),
         None => line,
     };
-    Text::new(text, TypeRole::Caption, r)
-        .muted()
-        .width(Length::Fill)
-        .into()
+    let shown: Element<'a, Message> =
+        material::Ellipsized::at_role_spaced(text.clone(), TypeRole::Caption, r.on_surface_variant)
+            .into();
+    material::Tooltip::new(shown, text, r).into()
 }
 
 /// The width the label column of the picked issue's details takes: "Closing pull requests" at the

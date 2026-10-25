@@ -8,7 +8,9 @@
 //! # When Jira is asked, and why only then
 //!
 //! A filter's choices are asked for when the reducer accepted the field's first focus or a
-//! **Retry** of a failed request, and handed out a new filter seq for it (FR-006, research R7);
+//! **Retry** of a failed request, and handed out a new filter seq for it (FR-006, research R7); the
+//! reporter's people when text typed into its field waited out [`ISSUE_SEARCH_DEBOUNCE`] and was
+//! still the newest (FR-004, FR-014: the typed text is all a people search sends);
 //! the listing is reloaded when the reducer accepted a pick, a clear or **Clear filters** that
 //! changed the chosen filters and handed out a new issue seq (FR-008, research R6). Nothing else
 //! here sends anything: not opening the form, not showing the Jira source, not a redraw.
@@ -21,7 +23,7 @@ use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, JiraConnection, JiraSource};
 use micold_core::jira_filter::FilterKind;
 
-use crate::shell::issues::{jira_request, start_jira_load};
+use crate::shell::issues::{jira_request, start_jira_load, ISSUE_SEARCH_DEBOUNCE};
 use crate::App;
 
 /// A filter message: the reducer takes it, then the choice request or the listing reload it newly
@@ -29,6 +31,10 @@ use crate::App;
 pub fn on_filter(app: &mut App, msg: FilterMsg) -> Task<Message> {
     let issue_before = app.core.worktree_form.issue_request_seq;
     let choice_before = app.core.worktree_form.filter_request_seq;
+    let due = match msg {
+        FilterMsg::PeopleSearchDue { seq } => Some(seq),
+        _ => None,
+    };
     app.core
         .update(Message::WorktreeForm(FormMsg::JiraFilter(msg)));
     let mut work = Vec::new();
@@ -48,6 +54,32 @@ pub fn on_filter(app: &mut App, msg: FilterMsg) -> Task<Message> {
     {
         work.push(start_choices(app, kind, seq));
     }
+    if let Some(seq) = app
+        .core
+        .worktree_form
+        .pending_people_search()
+        .filter(|seq| *seq > choice_before)
+    {
+        work.push(Task::perform(
+            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
+            move |()| {
+                Message::WorktreeForm(FormMsg::JiraFilter(FilterMsg::PeopleSearchDue { seq }))
+            },
+        ));
+    }
+    // A search starts when its debounce ended (its seq is the one due) or on a Retry (a new seq).
+    if let Some((seq, text)) = app
+        .core
+        .worktree_form
+        .awaited_people_search()
+        .filter(|(seq, _)| *seq > choice_before || Some(*seq) == due)
+    {
+        work.push(ask(
+            app,
+            move |source, connection, token| source.project_users(connection, token, &text),
+            move |result| FilterMsg::PeopleLoaded { seq, result },
+        ));
+    }
     Task::batch(work)
 }
 
@@ -65,8 +97,14 @@ fn start_choices(app: &mut App, kind: FilterKind, seq: u64) -> Task<Message> {
             |source, connection, token| source.versions(connection, token),
             move |result| FilterMsg::VersionsLoaded { seq, result },
         ),
-        // The reporter and the label are not offered in this build: neither awaits choices.
-        FilterKind::Reporter | FilterKind::Label => Task::none(),
+        // A focus asks for the own user; the people come from the typed search.
+        FilterKind::Reporter => ask(
+            app,
+            |source, connection, token| source.myself(connection, token),
+            move |result| FilterMsg::MeLoaded { seq, result },
+        ),
+        // The label is not offered in this build: it awaits no choices.
+        FilterKind::Label => Task::none(),
     }
 }
 
@@ -74,10 +112,10 @@ fn start_choices(app: &mut App, kind: FilterKind, seq: u64) -> Task<Message> {
 /// stopped thread as an error, so the field shows it with **Retry**).
 fn ask<T: Send + 'static>(
     app: &mut App,
-    request_choices: impl FnOnce(&dyn JiraSource, &JiraConnection, &ApiToken) -> Result<Vec<T>, IssueLoadError>
+    request_choices: impl FnOnce(&dyn JiraSource, &JiraConnection, &ApiToken) -> Result<T, IssueLoadError>
         + Send
         + 'static,
-    answer: impl Fn(Result<Vec<T>, IssueLoadError>) -> FilterMsg + Send + 'static,
+    answer: impl Fn(Result<T, IssueLoadError>) -> FilterMsg + Send + 'static,
 ) -> Task<Message> {
     let answer = move |result| Message::WorktreeForm(FormMsg::JiraFilter(answer(result)));
     let request = match jira_request(app) {
