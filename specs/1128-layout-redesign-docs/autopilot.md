@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M4 implemented on local branch `m4-1128` (worktree /home/user/wt-1128-m4, from M3 head ad1fc7b3); visual pass recorded; review A clean after round 2 (fixes prose and evidence, checked); review B pending (snapshot in *Review rounds*)
-- **Next step**: orchestrator dispatches review B on the M4 snapshot; after #1431 (M3) merges, rebase `m4-1128` onto main (`branch-start.sh 1431`), run the specs-only gate and open the M4 PR. Frames were drawn at ad1fc7b3; M3 merging by rebase changes no `src`, so they stand.
+- **Phase**: M4 implemented on local branch `m4-1128` (worktree /home/user/wt-1128-m4, from M3 head ad1fc7b3); visual pass recorded; review A clean after round 2 (fixes prose and evidence, checked); review B clean, its 3 MINORs fixed
+- **Next step**: after #1431 (M3) merges, rebase `m4-1128` onto main (`branch-start.sh 1431`), run the specs-only gate and open the M4 PR. Frames were drawn at ad1fc7b3; M3 merging by rebase changes no `src`, so they stand.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -30,7 +30,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | merged (rebase) as 58ef1146 |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | #1431 | open, in CI |
-| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | implemented on `m4-1128`; review A clean (2 rounds); review B pending; PR after #1431 merges |
+| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | implemented on `m4-1128`; review A clean (2 rounds); review B clean (3 MINOR fixed); PR after #1431 merges |
 
 ## Decisions
 
@@ -71,7 +71,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M3 review B (conformance) | 1 | `55012b98799571e4ba1c20e7eecb3c04647547bf:fda91d7211b016e78b22856c5c05d8bf9c98b8f3` (Sonnet) | CLEAN, 3 MINORs: F1 A1 link check for `layout-snapshot.md` not observed (lychee missing) — left to CI's link check (the passage adds no link); F2 W5 cannot assert the Overview row's selection (no accessor, D6) — accepted, see Declined; F3 SC-004 said "title bar is 44 px" while W1 checks 43 (HEIGHT) and W3 44 (BOTTOM_EDGE) — fixed, prose only (note on SC-004 pointing at D4). |
 | M4 review A (code-review, high) | 1 | — (`ad1fc7b3...759574ae`) | 10 findings, all fixed: contrast column missed the lowest texts (Idle band type words 5.04:1 light / 4.77:1 dark, selected row annotation 5.48:1 dark) — re-measured with more texts; badge *1 need action* passed over — now *differs by defect* on all four frames + follow-up; status bar's *Daemon connected · no daemon* explained; record's SHA is rewritten by #1431's rebase — header notes `crates/*/src` equals main 58ef1146; ledger lacked this row and a fresh *Handover*; chip follow-up widened to the `secondary` tag accent (run-group tags); defect rows name region issue #1125. Round 2 on the fix diff. |
 | M4 review A (code-review, high) | 2 | — (fix diff `759574ae..b1d8af26`) | Fixes hold (ratios re-measured and match). 8 findings, all fixed, prose and evidence checked against the frames and code: chip follow-up's cause is `style::chip`'s 20% tint for every accent (widened); pending review B row added; Phase/milestone said A done while round 2 open; header's "tests and specs only" omitted `docs/development/layout-snapshot.md`; contrast-column rule restated; badge follow-up names 813's contract, guide and tests; group count vs badge explained (1125 Clarifications); status-bar citation now the code's `shown_location()`. Clean: no new round (round 3 would be the last; remaining items were wording). |
-| M4 review B (conformance) | 1 | `4a4882cc59b569f780c8a7a06f3b9bbdd75515e3:4f45ef704b29b2a6c1f046d869857fd51da92027` (diff `ad1fc7b3...m4-1128`) | Pending: not dispatched (no Agent tool in the unit); orchestrator dispatches on Sonnet. |
+| M4 review B (conformance) | 1 | `4a4882cc59b569f780c8a7a06f3b9bbdd75515e3:4f45ef704b29b2a6c1f046d869857fd51da92027` (diff `ad1fc7b3...m4-1128`) | CLEAN, 3 MINOR, all fixed in `visual-pass.md` (prose only): F1 *Done · 1* at the sidebar's fold not described — named as at the fold of the scrolling sidebar, not sampled, on all four frames; F2 shell *2* underlined while the sidebar selects the main session, and the strip's gaps — the fixture marks the second shell (`strip_at` `select_shell`), gaps from the fixed `tab::SESSION_WIDTH`; F3 jump field ~12 px left on the Overview — centred in the free space between breadcrumb and right-hand buttons (`ui/toolbar.rs`). No round 2 (minor prose). |
 | M2 review B (conformance) | 1 | `86ed9f3eebb0fd4ed330dee693d4cddfa1392404:02f788dccc6541db122fee7aa38c8f9b2ce52d3a` | CLEAN, 2 MINORs: F1 icons.md Filter row named the removed tag-filter panel — fixed, prose only (glyph shown only in the component showcase); F2 icons.md "adding an icon" steps re-pathed beyond FR-011 — paths correct, recorded as an extra in *Follow-ups not done*. |
 
 ## Declined review findings
@@ -104,7 +104,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-M4 unit: on local branch `m4-1128` in the second worktree /home/user/wt-1128-m4 (from M3 head ad1fc7b3; M3 is #1431, open in CI on claude/project-thread-bznqpy). T030–T034 done: 4 frames, `visual-pass.md` 20 verdicts (6 matches, 10 on purpose, 4 by defect), two defect follow-ups. Review A (code-review, high) run, its fixes in. Next: review B on the snapshot in *Review rounds*; then, after #1431 merges, `branch-start.sh 1431` on `m4-1128`, specs-only gate, and the M4 PR. No push made.
+M4 unit: on local branch `m4-1128` in the second worktree /home/user/wt-1128-m4 (from M3 head ad1fc7b3; M3 is #1431, open in CI on claude/project-thread-bznqpy). T030–T034 done: 4 frames, `visual-pass.md` 20 verdicts (6 matches, 10 on purpose, 4 by defect), two defect follow-ups. Reviews A (code-review, high) and B (conformance) run, their fixes in. Next: after #1431 merges, `branch-start.sh 1431` on `m4-1128`, specs-only gate, and the M4 PR. No push made.
 
 ## Open escalation
 
