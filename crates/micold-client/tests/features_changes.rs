@@ -5984,7 +5984,10 @@ mod tree_state {
             Ok(list(&["lib/c.rs", "lib/d.rs", "new/e.rs", "src/a.rs"])),
         );
         assert_eq!(collapsed(&state), ["lib"]);
-        assert_eq!(rows(&state), ["0:lib/-", "0:new/", "1:e.rs", "0:src/", "1:a.rs"]);
+        assert_eq!(
+            rows(&state),
+            ["0:lib/-", "0:new/", "1:e.rs", "0:src/", "1:a.rs"]
+        );
         let view = view_of(&state);
         assert_eq!(view.selected, Some(path("src/a.rs")));
         assert_eq!(view.list_offset, 40);
