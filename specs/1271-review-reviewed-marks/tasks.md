@@ -145,11 +145,11 @@ restart, the mark is still shown (spec US3).
 **Independent Test**: mark a file in pull request #12, switch to the working tree: the same path
 is not marked; switch back: it is (spec US4).
 
-- [ ] T040 [P] [US4] Write failing unit tests for `pr_change_ids(files, patches)` in `crates/micold-core/src/review/pr_diff.rs`: one id per file with a patch; a file's id changes only when its own patch section changes (US4 s3); a file without a patch has no id
-- [ ] T041 [US4] Implement `pr_change_ids(files: &[ChangedFile], patches: &BTreeMap<RelPath, Vec<u8>>) -> BTreeMap<RelPath, ChangeId>` by `ChangeId::of_patch` in `crates/micold-core/src/review/pr_diff.rs`
-- [ ] T042 [US4] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: with pull request #12 shown, rows, `mark_control` and `header_progress` use `PullRequest(12)` marks and the ids of the ready diff; marking sends `SetReviewed { scope: PullRequest(12), .. }`; the working tree's same path is unaffected; a mark of a pull request that left the list is kept and shown when its diff is shown again (US4 s1, s2); `NotRead` while the diff is not ready
-- [ ] T043 [US4] Make `current_ids` answer `pr_change_ids` of `PrDiffLoad::Ready` for a pull request view, and `file_reviews` / `mark_control` / `header_progress` read `of_scope(view_scope(view))`, in `crates/micold-client/src/features/changes.rs`
-- [ ] T044 [US4] Add a paragraph under *Pull requests* in `docs/user-guide/reviewing-changes.md`: a pull request's files have their own marks and progress, kept when it is merged, closed or leaves the list, and a new head commit that changes a file's diff drops its mark
+- [x] T040 [P] [US4] Write failing unit tests for `pr_change_ids(files, patches)` in `crates/micold-core/src/review/pr_diff.rs`: one id per file with a patch; a file's id changes only when its own patch section changes (US4 s3); a file without a patch has no id
+- [x] T041 [US4] Implement `pr_change_ids(files: &[ChangedFile], patches: &BTreeMap<RelPath, Vec<u8>>) -> BTreeMap<RelPath, ChangeId>` by `ChangeId::of_patch` in `crates/micold-core/src/review/pr_diff.rs`
+- [x] T042 [US4] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: with pull request #12 shown, rows, `mark_control` and `header_progress` use `PullRequest(12)` marks and the ids of the ready diff; marking sends `SetReviewed { scope: PullRequest(12), .. }`; the working tree's same path is unaffected; a mark of a pull request that left the list is kept and shown when its diff is shown again (US4 s1, s2); `NotRead` while the diff is not ready
+- [x] T043 [US4] Make `current_ids` answer `pr_change_ids` of `PrDiffLoad::Ready` for a pull request view, and `file_reviews` / `mark_control` / `header_progress` read `of_scope(view_scope(view))`, in `crates/micold-client/src/features/changes.rs`
+- [x] T044 [US4] Add a paragraph under *Pull requests* in `docs/user-guide/reviewing-changes.md`: a pull request's files have their own marks and progress, kept when it is merged, closed or leaves the list, and a new head commit that changes a file's diff drops its mark
 
 **Checkpoint**: US4's independent test passes in the app.
 
