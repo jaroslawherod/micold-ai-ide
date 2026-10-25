@@ -72,7 +72,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit at 177k context (over 150k). Done: T008–T017 implemented and ticked, red→green per behaviour in
+`tdd/cycle-log.md` (M2 cycles 1–5, with mutant reds), full `scripts/gate.sh` green at d5272e0d (exit 0),
+pushed. Review snapshot 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90.
+Next: M2 review A (high) and review B round 1 on that snapshot; fix BLOCKER/MAJOR; scoped gate between
+rounds (as root, `scoped-gate.sh` trips the root-only `settings_refuses_save_over_failed_read` test:
+use `scripts/gate.sh`, which runs it unprivileged); full gate; open the PR (title, body and
+assignee per the orchestrator's prompt; Refs #1289). No PR open yet.
 
 ## Open escalation
 
