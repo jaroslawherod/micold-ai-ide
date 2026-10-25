@@ -698,6 +698,7 @@ mod tests {
             changes_press(&state, &location).1.tooltip,
             "The review is shown"
         );
+        let current = state.session.active.expect("a session is shown");
         state.update(Message::Sidebar(SidebarMsg::ReviewChangesRequested(
             SessionLocation::Default,
         )));
@@ -706,7 +707,6 @@ mod tests {
             (open.clone(), ChangesButton::of(true, false)),
             "another location's review shown: shows this one's kept tab, not selected"
         );
-        let current = state.session.active.expect("a session is shown");
         state.update(Message::Session(SessionMsg::Selected(current)));
         assert_eq!(
             changes_press(&state, &location),
