@@ -18,13 +18,12 @@ tallest card in that row, so rows stay even and nothing is cut off.
 ## Opening and closing it
 
 Press the sidebar's first row, **Overview**: click it, or reach it with Tab and press Enter or
-Space; or press **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS). While the Overview is open the
-[breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb)'s place in the
+Space. While the Overview is open the [breadcrumb](project-selection.md#switching-projects-from-the-breadcrumb)'s place in the
 [title bar](appearance-theming.md#title-bar) reads **Overview**, the row
 looks selected and no worktree row does. The row only opens the Overview, it never closes it:
 pressing it while the Overview is open changes nothing. The row does nothing while
-[Settings](settings.md) is open, and with no project open there is no sidebar, so no Overview row. An
-Overview that was open before Settings shows again when Settings closes. Selecting a session in the
+[Settings](settings.md) is open, and with no project open there is no sidebar, so no Overview
+row. An Overview that was open before Settings shows again when Settings closes. Selecting a session in the
 sidebar also closes the Overview and shows that session.
 
 The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) opens and closes it, also while a terminal

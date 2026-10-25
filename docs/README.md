@@ -20,7 +20,7 @@ follows describes the version you are reading it from (constitution, Principle V
   back after an update, and why clearing it on the disk image does not help. Then what starts
   automatically, what happens when you log out, updating, removing it, and the permission prompts
   (Files and Folders, and the optional Full Disk Access) with what declining each one costs.
-- [Help & About](user-guide/help-about.md) — the application window, the Help toolbar entry,
+- [Help & About](user-guide/help-about.md) — the application window, the title bar's overflow menu,
   and the About dialog.
 - [Project Selection & Workspace Management](user-guide/project-selection.md) — opening a
   project, the known-projects list, git repository marking, and renaming.
