@@ -86,8 +86,8 @@ button's bounds equal across drawer, counts and error states (SC-001); quickstar
 
 ### Layer B — Review tab layout (blocked until #1269 merges)
 
-- [ ] T015 [US1] *Layer B* Red: create `crates/micold-client/tests/gates/review_bar_fixed.rs` and register it in `crates/micold-client/tests/layout_snapshot.rs` with `#[path = "gates/review_bar_fixed.rs"] mod review_bar_fixed;`; assert SC-001's drawer-independent cases: **Send review (n)**'s bounds are equal across 0 and 99 drafts, "Sending…" and error on/off, and the bar is `review_bar::HEIGHT` high, directly above the status bar at full tab width (the drawer-open case is added by T041)
-- [ ] T016 [US1] *Layer B* In `crates/micold-client/src/ui/changes.rs` remove **Review (n)** and **Send review** from the Changes header (FR-009, B9) and draw `ReviewBar` from `review_bar(state)` as the last row of the Review tab's body, wiring Send, the error's × (`SendErrorDismissed`) and **Comments** (`Drawer(DrawerEvent::Toggle)`, B8), until T015 passes
+- [x] T015 [US1] *Layer B* Red: create `crates/micold-client/tests/gates/review_bar_fixed.rs` and register it in `crates/micold-client/tests/layout_snapshot.rs` with `#[path = "gates/review_bar_fixed.rs"] mod review_bar_fixed;`; assert SC-001's drawer-independent cases: **Send review (n)**'s bounds are equal across 0 and 99 drafts, "Sending…" and error on/off, and the bar is `review_bar::HEIGHT` high, directly above the status bar at full tab width (the drawer-open case is added by T041)
+- [x] T016 [US1] *Layer B* In `crates/micold-client/src/ui/changes.rs` remove **Review (n)** and **Send review** from the Changes header (FR-009, B9) and draw `ReviewBar` from `review_bar(state)` as the last row of the Review tab's body, wiring Send, the error's × (`SendErrorDismissed`) and **Comments** (`Drawer(DrawerEvent::Toggle)`, B8), until T015 passes
 
 **Checkpoint**: US1 core (M1), bar component (M2), wiring (M3) and layout (M4) each green on their own.
 
@@ -114,7 +114,7 @@ discard, and close the menu with Esc; quickstart §B step 3.
 
 ### Layer B — layout (blocked until #1269 merges)
 
-- [ ] T022 [US2] *Layer B* In `crates/micold-client/src/ui/changes.rs` draw the overflow menu with the app's `MenuOverlay`, anchored to the bar's ⋮ `MenuTrigger`, items enabled per `Overflow`
+- [x] T022 [US2] *Layer B* In `crates/micold-client/src/ui/changes.rs` draw the overflow menu with the app's `MenuOverlay`, anchored to the bar's ⋮ `MenuTrigger`, items enabled per `Overflow`
 
 **Checkpoint**: US2 core (M1), reducer (M3), menu drawn (M4).
 
@@ -159,9 +159,9 @@ steps 4, 6–9, 11.
 
 ### Layer B — layout (blocked until #1269 merges)
 
-- [ ] T041 [US3] *Layer B* Red: in `crates/micold-client/tests/gates/review_bar_fixed.rs` add SC-001's drawer case (**Send review (n)**'s bounds equal with the drawer closed and open), SC-002 (the diff pane's bounds and first visible row are equal with the drawer closed and open), SC-004 (at 1280×800 with the drawer closed the diff spans the tab body beside the file list), and FR-017's line start (the drawer's left edge is at or right of the diff area's middle, so a jumped-to line starts left of it)
-- [ ] T042 [US3] *Layer B* In `crates/micold-client/src/ui/changes.rs` replace the right-hand review column by the diff and a `SideSheet` stacked over its right side, from under the review header to the top of the bar, opened and closed by the drawer state, × sending `Drawer(DrawerEvent::Close)`, until T041 passes
-- [ ] T043 [US3] *Layer B* In `crates/micold-client/src/ui/changes.rs` draw the drawer's content: the Drafts/Replies `TabStrip` with `DrawerTab::label` counts, each tab's rows from `drawer_rows` through `ReviewPanelRow` (whole-reply mode on Replies, Mark applied and Answer… on Sent rows, the composer in the row for `ComposerPlace::Drawer`), `empty_text` and `START_HINT`; checked by the `drawer-drafts` and `drawer-replies` covered states (T053) and quickstart §B steps 4, 6, 8
+- [x] T041 [US3] *Layer B* Red: in `crates/micold-client/tests/gates/review_bar_fixed.rs` add SC-001's drawer case (**Send review (n)**'s bounds equal with the drawer closed and open), SC-002 (the diff pane's bounds and first visible row are equal with the drawer closed and open), SC-004 (at 1280×800 with the drawer closed the diff spans the tab body beside the file list), and FR-017's line start (the drawer's left edge is at or right of the diff area's middle, so a jumped-to line starts left of it)
+- [x] T042 [US3] *Layer B* In `crates/micold-client/src/ui/changes.rs` replace the right-hand review column by the diff and a `SideSheet` stacked over its right side, from under the review header to the top of the bar, opened and closed by the drawer state, × sending `Drawer(DrawerEvent::Close)`, until T041 passes
+- [x] T043 [US3] *Layer B* In `crates/micold-client/src/ui/changes.rs` draw the drawer's content: the Drafts/Replies `TabStrip` with `DrawerTab::label` counts, each tab's rows from `drawer_rows` through `ReviewPanelRow` (whole-reply mode on Replies, Mark applied and Answer… on Sent rows, the composer in the row for `ComposerPlace::Drawer`), `empty_text` and `START_HINT`; checked by the `drawer-drafts` and `drawer-replies` covered states (T053) and quickstart §B steps 4, 6, 8
 
 **Checkpoint**: US3 core (M1), components (M2), reducer and Esc (M3), drawer drawn (M4).
 
@@ -196,10 +196,10 @@ at 4 lines with Show all; quickstart §B step 6.
 
 ## Phase 7: Polish & Cross-Cutting Concerns (Layer B, blocked until #1269 merges)
 
-- [ ] T053 Red, first task of M4: add the `review-bar`, `drawer-drafts`, `drawer-replies` and `overflow` covered states to `crates/micold-client/tests/support/covered_states.rs` (FR-024); the layout snapshot fails until T054 re-records it
-- [ ] T054 Re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and check its diff holds only the Review tab's states (quickstart §A)
-- [ ] T055 Rewrite `docs/user-guide/reviewing-changes.md` for the bar and drawer: *Sending a review* (the bar, its counts, Send review, the error), *The review panel* → *The comments drawer* (tabs, rows, Esc, auto-open), *Clearing and discarding* (the overflow menu; acts on what is shown, fixing the stale "the entry" wording), *Statuses and replies*; it supersedes the interim wording of T040 and T051 (FR-024)
-- [ ] T056 Run quickstart §B with the `visual-pass` skill at 1280×800 in light and dark and save its screenshots and notes in `specs/1270-review-bar-drawer/visual-pass/` (SC-007)
+- [x] T053 Red, first task of M4: add the `review-bar`, `drawer-drafts`, `drawer-replies` and `overflow` covered states to `crates/micold-client/tests/support/covered_states.rs` (FR-024); the layout snapshot fails until T054 re-records it
+- [x] T054 Re-record `crates/micold-client/tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and check its diff holds only the Review tab's states (quickstart §A)
+- [x] T055 Rewrite `docs/user-guide/reviewing-changes.md` for the bar and drawer: *Sending a review* (the bar, its counts, Send review, the error), *The review panel* → *The comments drawer* (tabs, rows, Esc, auto-open), *Clearing and discarding* (the overflow menu; acts on what is shown, fixing the stale "the entry" wording), *Statuses and replies*; it supersedes the interim wording of T040 and T051 (FR-024)
+- [x] T056 Run quickstart §B with the `visual-pass` skill at 1280×800 in light and dark and save its screenshots and notes in `specs/1270-review-bar-drawer/visual-pass/` (SC-007)
 - [ ] T057 Run `mise run gate` green on the final tree
 
 ---

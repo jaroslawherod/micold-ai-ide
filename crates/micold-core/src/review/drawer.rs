@@ -90,7 +90,13 @@ pub fn rows_of(
 /// The drawer's width over a diff area `area` px wide: 360, but at most half (FR-010, Edge Cases
 /// "Narrow window").
 pub fn width(area: f32) -> f32 {
-    anatomy::comments_drawer::WIDTH.min(area / 2.0).max(0.0)
+    capped(anatomy::comments_drawer::WIDTH, area)
+}
+
+/// A sheet `wanted` px wide over an area `area` px wide: `wanted`, but at most half the area
+/// (FR-010). [`width`] is the comments drawer's.
+pub fn capped(wanted: f32, area: f32) -> f32 {
+    wanted.min(area / 2.0).max(0.0)
 }
 
 /// A send this window started and has not yet seen a report of (research R9).

@@ -181,14 +181,6 @@ const RECORDED: &[(&str, &str, &str)] = &[
         "4dp — `Toolbar` has no leading-icon slot; its leading element is the app mark, which \
          takes `app_bar::PADDING`",
     ),
-    // Feature 1270 lands its core rules (M1) before the Review tab lays the drawer out (M4), which
-    // removes this entry; M2's `ReviewBar` binds the review bar's two figures.
-    (
-        "anatomy::comments_drawer::WIDTH",
-        gap::NOT_BUILT,
-        "360dp — feature 1270's comments drawer; only core's `review::drawer::width` reads it \
-         until the Review tab lays the drawer out",
-    ),
 ];
 
 /// The categories an entry may claim.

@@ -2034,6 +2034,116 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1270: the review bar and the comments drawer (T053, FR-024) ---------------
+        //
+        // `feat-short`'s Review tab with 3 drafts, 2 sent, 1 applied and 1 answered comment: the
+        // bar above the status bar with the drawer closed; the drawer open on Drafts, then on
+        // Replies (the answered reply wraps over several lines); and the bar's overflow menu open,
+        // hung from its ⋮.
+        CoveredState {
+            name: "review-bar",
+            build: review_bar,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
+                Anchor {
+                    name: "review.bar.send",
+                    path: REVIEW_BAR_SEND,
+                },
+            ],
+        },
+        CoveredState {
+            name: "drawer-drafts",
+            build: drawer_drafts,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
+                Anchor {
+                    name: "review.bar.send",
+                    path: REVIEW_BAR_SEND,
+                },
+                Anchor {
+                    name: "review.diff_area",
+                    path: REVIEW_DIFF_AREA,
+                },
+                Anchor {
+                    name: "review.drawer",
+                    path: REVIEW_DRAWER,
+                },
+            ],
+        },
+        CoveredState {
+            name: "drawer-replies",
+            build: drawer_replies,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
+                Anchor {
+                    name: "review.bar.send",
+                    path: REVIEW_BAR_SEND,
+                },
+                Anchor {
+                    name: "review.diff_area",
+                    path: REVIEW_DIFF_AREA,
+                },
+                Anchor {
+                    name: "review.drawer",
+                    path: REVIEW_DRAWER,
+                },
+            ],
+        },
+        CoveredState {
+            name: "overflow",
+            build: review_overflow,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
+                Anchor {
+                    name: "review.bar.send",
+                    path: REVIEW_BAR_SEND,
+                },
+            ],
+        },
         // --- Feature 939: a structured session's pane is its transcript (T038) -------------------
         //
         // One card open and detached from the end, so the state holds every part a transcript
@@ -3269,6 +3379,130 @@ pub fn review_marks() -> StateUnderTest {
 /// (feature 1271, FR-009, FR-013).
 pub fn review_marks_unavailable() -> StateUnderTest {
     review_marks().connection(ConnectionStatus::Disconnected)
+}
+
+/// The Review tab's bar: the Changes view's last row (feature 1270, B1), under the session area's
+/// header and strip.
+pub const REVIEW_BAR: &[usize] = &[0, 0, 1, 1, 2, 2];
+/// **Send review (n)**: the bar's container → column → strip → trailing group → its third control.
+pub const REVIEW_BAR_SEND: &[usize] = &[0, 0, 1, 1, 2, 2, 0, 1, 1, 2];
+/// The Changes view's body: the file list beside the diff area.
+pub const REVIEW_BODY: &[usize] = &[0, 0, 1, 1, 2, 1];
+/// The diff area: the stack of the diff pane and, while open, the drawer (FR-010).
+pub const REVIEW_DIFF_AREA: &[usize] = &[0, 0, 1, 1, 2, 1, 1];
+/// The diff pane, the diff area's first layer.
+pub const REVIEW_DIFF_PANE: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0];
+/// The drawer's panel: the diff area's second layer, the sheet's only child.
+pub const REVIEW_DRAWER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 1, 0];
+
+/// The mixed review of `feat-short`'s working tree the feature 1270 states show: 3 drafts, 2 sent,
+/// 1 applied with a one-line reply and 1 answered with a reply that wraps over several lines.
+pub fn feat_short_mixed_review(state: &mut State) {
+    use micold_core::review::comment::{
+        CommentId, CommentState, EntryReview, Outcome, Reporter, ReviewComment,
+    };
+    use micold_core::review::{LineRange, RelPath, Side};
+    let comment = |line: u32, text: &str, state: CommentState| ReviewComment {
+        id: CommentId::new(),
+        path: RelPath::from_native("src/lib.rs").expect("a relative path"),
+        side: Side::New,
+        range: LineRange::new(line, line).expect("a range"),
+        quote: vec![format!("line {line}")],
+        text: text.into(),
+        state,
+        created: u64::from(line),
+        pr: None,
+    };
+    let sent = CommentState::Sent { at: 5 };
+    let mut entry = EntryReview::from_comments(vec![
+        comment(1, "Name this after what it holds.", CommentState::Draft),
+        comment(2, "This branch is never taken.", CommentState::Draft),
+        comment(3, "Log the path that failed.", CommentState::Draft),
+        comment(4, "Split this function.", sent.clone()),
+        comment(5, "Add a test for the empty list.", sent.clone()),
+        comment(6, "Use the shared helper.", sent.clone()),
+        comment(7, "Why is this a loop?", sent),
+    ]);
+    let reports = [
+        (5, Outcome::Applied, "Added the test.".to_string()),
+        (
+            6,
+            Outcome::Answered,
+            "The shared helper takes a borrowed list and this one is owned, so using it here \
+             would copy every item. I kept the local version and left a comment saying why, \
+             and opened a follow-up to make the helper generic over both."
+                .to_string(),
+        ),
+    ];
+    for (line, outcome, reply) in reports {
+        let reference = entry
+            .comments()
+            .iter()
+            .find(|c| c.range.start() == line)
+            .expect("the comment on that line")
+            .reference();
+        entry
+            .report(
+                reference,
+                outcome,
+                &reply,
+                Reporter::Agent {
+                    session: uuid::Uuid::nil(),
+                },
+                9,
+            )
+            .expect("a sent comment takes a report");
+    }
+    state.changes.reviews.insert(
+        (PathBuf::from(PROJECT), "feat-short".to_string()),
+        micold_client::features::changes::ReviewView {
+            comments: entry.comments().to_vec(),
+            sending: false,
+            marks: Default::default(),
+        },
+    );
+}
+
+/// [`review_shown`] with [`feat_short_mixed_review`]: the bar reads "3 drafts · 2 sent · 1 applied
+/// · 1 answered" over **Send review (3)**, the drawer closed (feature 1270, `review-bar`).
+pub fn review_bar() -> StateUnderTest {
+    let mut under = review_shown();
+    feat_short_mixed_review(&mut under.state);
+    under
+}
+
+/// [`review_bar`] with the drawer open on Drafts (feature 1270, `drawer-drafts`).
+pub fn drawer_drafts() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::drawer::DrawerEvent;
+    let mut under = review_bar();
+    changes::update(&mut under.state.changes, Msg::Drawer(DrawerEvent::Toggle));
+    under
+}
+
+/// [`drawer_drafts`] on the Replies tab (feature 1270, `drawer-replies`).
+pub fn drawer_replies() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::drawer::{DrawerEvent, DrawerTab};
+    let mut under = drawer_drafts();
+    changes::update(
+        &mut under.state.changes,
+        Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies)),
+    );
+    under
+}
+
+/// [`review_bar`] with the bar's overflow menu open, in a window the size the fixture lays out, so
+/// the menu hangs from the ⋮ (feature 1270, `overflow`).
+pub fn review_overflow() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    let mut under = review_bar();
+    under.state.window.window_size = (
+        super::layout::WINDOW.width as u16,
+        super::layout::WINDOW.height as u16,
+    );
+    changes::update(&mut under.state.changes, Msg::OverflowToggled);
+    under
 }
 
 /// How many strip members (tabs and the "+") each strip state's keyed row holds (feature 1126,

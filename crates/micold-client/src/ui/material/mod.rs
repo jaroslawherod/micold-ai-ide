@@ -141,7 +141,7 @@ pub use prompt_card::PromptCard;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
 pub use queue_row::QueueRow;
-pub use review_bar::ReviewBar;
+pub use review_bar::{overflow_trigger_right, ReviewBar, COMMENTS as REVIEW_BAR_COMMENTS};
 pub use review_comment::{CardState, ReviewCommentCard};
 pub use review_panel_row::{ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT};
 pub use select::Select;

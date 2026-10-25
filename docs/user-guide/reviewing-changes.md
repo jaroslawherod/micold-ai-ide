@@ -49,7 +49,7 @@ The review is kept while you work elsewhere. Selecting a session (in the sidebar
 chord or the quick switcher), switching to another worktree or project, or opening the Overview or
 Settings puts the review aside without losing anything: the selected file, both scroll positions,
 revealed lines, the whole-file and **Committed**/**Uncommitted** toggles, the comment you are
-writing, picked lines, the review panel, the chosen pull request and a browsed file all stay as
+writing, picked lines, the comments drawer, the chosen pull request and a browsed file all stay as
 you left them. Each location keeps its own review. Press the **Review** tab, **Changes** or
 **Review changes** to show it again exactly as left; while it is shown, pressing **Changes** or
 the tab changes nothing.
@@ -403,33 +403,45 @@ non-text and too-large files take no comments, as before.
 
 - A comment belongs to the pull request it was written on and shows on that pull request's diff
   only, never on another pull request's or the working-tree diff.
-- The review panel lists them under the pull request's number and title, after the working-tree
-  comments, ordered by pull request number.
+- The comments drawer lists them under the pull request's number and title, after the
+  working-tree comments, ordered by pull request number.
 - Comments are kept per pull request on your computer, survive a restart, and go away when the
   worktree is removed.
 - If a pull request leaves the list, its comments are kept and shown flagged "not in the list".
-- **Clear sent** and **Discard drafts** act only on the comments of what is shown: the pull
+- **Clear sent** and **Discard drafts…** act only on the comments of what is shown: the pull
   request, or the working tree.
 - Nothing is posted to GitHub. To have the agent act on a pull request's comments, see [Sending a
   pull request's comments](#sending-a-pull-requests-comments).
 
 ### Sending a review
 
-**Send review (n)** in the view's header sends the entry's draft comments — *n* of them — to the
-session working in that worktree (or in the project root, for the Default entry) as one message. It
-is unavailable while there are no drafts, and reads **Sending…** while a send of this entry is
-under way in any window. Only draft comments are sent: a comment that was already sent is not sent
-again, so a later send carries only the comments added since.
+A bar runs along the bottom of the Review tab, just above the window's status bar, whenever the
+Review tab is shown. On its left it counts the comments of what is shown (the working tree, or the
+pull request) in each status, leaving out a status with none: *3 drafts · 2 sent · 1 applied ·
+1 answered*, or "No review comments yet". On its right are **Comments** (which opens the [comments
+drawer](#the-comments-drawer)), **⋮** (the [overflow menu](#clearing-and-discarding)) and
+**Send review (n)**. In a narrow window the counts shorten to the drafts alone (*3 drafts*), then go;
+the three controls stay. They never move: opening the drawer, the number of drafts, **Sending…** or
+an error leave **Send review (n)** exactly where it is.
+
+**Send review (n)** sends the draft comments of what is shown — *n* of them — to the session
+working in that worktree (or in the project root, for the Default entry) as one message. It is
+filled while there are drafts to send; with none it reads **Send review (0)**, unfilled and
+unavailable. It reads **Sending…** and is unavailable while a send of this entry is under way in any
+window. Only draft comments are sent: a comment that was already sent is not sent again, so a later
+send carries only the comments added since.
 
 The message goes to the session running in the same entry; with several running there, to the one
 you used most recently (typed into, or whose activity last changed). It never goes to a session of
 another worktree. It is typed as one pasted submission, exactly as if you had pasted it and pressed
 Enter. What it contains is described under [The review message](#the-review-message).
 
-When it is delivered, a message reads "Sent a review of *n* comments to *session*", and the
-comments become **sent**: they stay on their lines, but can no longer be edited or deleted. When it
-is not delivered — for example the session's terminal cannot take a pasted text — an error reads
-"Couldn't send the review: *why*" and the comments stay drafts.
+When it is delivered, a message reads "Sent a review of *n* comments to *session*", the comments
+become **sent** (they stay on their lines, but can no longer be edited or deleted) and the bar's
+counts move them from draft to sent. When it is not delivered — for example the session's terminal
+cannot take a pasted text — an error reads "Couldn't send the review: *why*", the comments stay
+drafts, and the bar keeps showing the error after the counts until you dismiss it with its **×** or
+start the next send.
 
 #### When no session is running
 
@@ -597,47 +609,54 @@ in 4 lines has no **Show all**. A reply longer than 4,000 characters also offers
 card shows of its start. Press **Show all** to read the whole reply in a dialog, scrolling if it is
 long; **Close** (or Esc) returns to the diff. The dialog closes by itself when its comment is cleared or discarded.
 
-### The review panel
+### The comments drawer
 
-The panel on the right of the diff lists every comment of the entry, across all its files. It is
-closed when you open the review; the **Review (n)** button in the header, *n* being the number of
-comments, opens and closes it, and **Esc** closes it when no menu or dialog is open above it (a
-menu or dialog open above it closes first). Whether it is open, its tab and where it was scrolled
-are kept with the entry's Review tab, so they are as you left them when you come back to it.
+**Comments** on the bar opens the comments drawer: a panel over the right side of the diff, from
+under the view's header down to the bar, 360 pixels wide (at most half the diff's area in a narrow
+window). It covers the diff rather than squeezing it: the diff keeps its width and its lines do not
+move, and while the drawer is closed the diff takes the whole width beside the file list. The
+drawer is closed when you open the review. **Comments** again, the drawer's **×**, or **Esc** closes
+it; **Esc** closes a menu or dialog open above it first. Whether it is open, its tab and where each
+tab was scrolled are kept with the entry's Review tab, so they are as you left them when you come
+back to it.
 
-The panel opens by itself, on **Replies**, when the agent first reports on a review you sent from
+The drawer opens by itself, on **Replies**, when the agent first reports on a review you sent from
 this window: once per send, only while that entry's Review tab is shown, and not if you closed the
-panel since sending. A report on a review sent from another window does not open it.
+drawer since sending. An open drawer stays on its tab. A report on a review sent from another window
+does not open it.
 
 - **Tabs.** **Drafts** lists the comments not sent yet; **Replies** lists sent, applied and
-  answered comments. Each tab's label carries its count (*Drafts 3*, *Replies 4*); a tab with no
-  rows says "No drafts" or "No replies yet".
-- **What a row shows.** The file and the lines (*Lines 3–5*, or *Old lines 3–5* for the base
-  version), the start of the comment, its status (Draft, Sent, Applied or Answered) and, once the
-  agent has reported, its reply. Rows are ordered by file, then by line. A row whose file is no
-  longer among the changes is marked *Not in the current diff* and keeps its status.
-- **Counts.** Under the panel's title, how many comments are in each status.
-- **Jumping.** Press a row to select its file and scroll the diff to the comment's first line; the
-  comment's card is outlined. A jump can be refused: when the file is hidden because the
-  **Committed** or **Uncommitted** button is off, the panel says to turn it back on; when the file
-  is not among the changes at all, it says so. The diff stays where it was.
-- **Editing and deleting.** A draft row has **Edit** and **Delete**, the same as its card. Sent,
-  applied and answered rows have neither, and no row offers them while a send is under way.
-- **Buttons.** **Send review (n)**, **Clear sent** and **Discard drafts…** are in the panel's header
-  and are available under the same conditions as described here.
-- **No comments.** The panel says "No review comments yet" and how to start one.
+  answered comments. Each lists every comment of the entry, the working tree's first, then each pull
+  request's by number. Each tab's label carries its count (*Drafts 3*, *Replies 4*); a tab with no
+  rows says "No drafts" or "No replies yet", and with no comment at all, how to start one.
+- **What a row shows.** The file and the lines (*Line 3*, *Lines 3–5*, or *Old lines 3–5* for the
+  base version), its status and the start of the comment. Rows are ordered by file, then by line. A
+  row whose file is no longer among the changes is marked *Not in the current diff* and keeps its
+  status.
+- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** opens the comment's text in the row;
+  closing the drawer keeps what you wrote, and it is there again when you reopen it. No row offers
+  them while a send is under way.
+- **Replies.** A row shows the whole reply, wrapped; a reply longer than 4,000 characters shows its
+  start and **Show all**. A Sent row offers **Mark applied** and **Answer…**, as its card does
+  ([Marking a comment by hand](#marking-a-comment-by-hand)); **Answer…** opens the note in the row.
+- **Jumping.** Press a row to select its file and scroll the diff to the comment's first line, left
+  of the drawer; the comment's card is outlined. A jump can be refused: when the file is hidden
+  because the **Committed** or **Uncommitted** button is off, the drawer says to turn it back on;
+  when the file is not among the changes at all, it says so. The diff stays where it was.
 
 ### Clearing and discarding
 
-Two buttons in the review panel's header tidy the list once a round of feedback is done:
+The bar's **⋮** opens a menu that tidies the comments of what is shown (the working tree, or the
+shown pull request) once a round of feedback is done:
 
-- **Clear sent** removes every sent comment of the entry at once and keeps the drafts. It is
-  unavailable while the entry has no sent comments.
-- **Discard drafts…** asks "Discard *n* draft comments? This cannot be undone." **Discard**
-  removes every draft comment of the entry; **Cancel** keeps them. It is unavailable while the
-  entry has no draft comments, and while a send of the entry is under way.
+- **Clear sent** removes every sent, applied and answered comment of what is shown at once and
+  keeps the drafts. It is unavailable while there is none.
+- **Discard drafts…** asks "Discard *n* draft comments? This cannot be undone.", *n* counting the
+  drafts of what is shown. **Discard** removes them; **Cancel** keeps them. It is unavailable while
+  there are no drafts, and while a send of the entry is under way.
 
-Both change the entry's comments in every window open on the project.
+**Esc** or a click outside closes the menu without changing anything. Both actions change the
+comments in every window open on the project.
 
 ### When a worktree is removed
 
