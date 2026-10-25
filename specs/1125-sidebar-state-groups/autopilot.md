@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M5
-- **Next step**: implement M5 (T052–T058)
+- **Next step**: M5 verify (verify.md step 1: scoped gate + review A high)
 
 ## Pull requests
 
@@ -108,7 +108,11 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 
 ## Handover
 
-None.
+M5 implemented and committed (a1e6a42df), T052–T058 ticked; not yet gated or reviewed, not pushed.
+- Done: `TreeItem::key` + keyed layout via `cdk::Keyed::column` (tree_view.rs, tests `a_keyed_row_keeps_*`, red then green); sidebar keys every row (`RowKey`/`row_key` in ui/sidebar.rs, test `every_sidebar_row_has_a_distinct_key`); `worktree.hovered: Option<(String, usize)>`, `Hovered(String, usize)`, `sidebar::hover_holds` (tests `a_row_that_moves_group` in tests/sidebar_tree.rs, red by compile); `Hash` derived on `SessionLocation` and `RowRef`; user guide bullet "The keyboard follows the sidebar's order". T054 already done by 1126 (D22).
+- Passed locally: `cargo test -p micold-client --lib -- keyed tree_view transcript ui::sidebar`, `--test sidebar_tree --test sidebar_state --test features_worktree --test showcase_completeness`.
+- Next: verify.md from step 1 (scoped gate with review A `high`), review B, visual pass (quickstart §B6, §B7), `git fetch` + rebase if main moved, full gate `scripts/gate.sh`, then pr.md (push `--force-with-lease=claude/project-thread-22fhnj:`, title/body to scratchpad). Layout snapshot may need regenerating if row trees changed shape (Keyed is layout-transparent, so probably not).
+- No PR open; no open findings.
 
 ## Open escalation
 
