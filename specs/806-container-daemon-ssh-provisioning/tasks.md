@@ -6,6 +6,7 @@ description: "Tasks for container daemons provisioned over SSH from a basic imag
 # Tasks: Container daemons provisioned over SSH from a basic image
 
 **Bugfix**: 2026-10-23 — [BUG-1165](./bugs/BUG-1165.md) Updated from bugfix patch: T062 reopened, Phase 14 (T100–T106) added
+**Bugfix**: 2026-10-25 — [BUG-1434](./bugs/BUG-1434.md) Phase 15 (T107–T109) added
 
 **Input**: Design documents from `specs/806-container-daemon-ssh-provisioning/`
 
@@ -425,3 +426,9 @@ spec 491 FR-007, FR-008; spec 027 FR-023. Spec 489's rule for SSH daemons is unc
 - [X] T104 Retarget the banner's Restart service: `on_restart_service_requested` (`crates/micold-client/src/shell/service_control.rs:37`) dispatches on the active daemon's runtime: a container daemon → stop that container by its `ContainerSettings::container_name` through the configured runtime and start the daemon again through the existing `Started` path (the `sandbox_boot` path only when the active daemon is `app.sandbox_daemon()`); the host → the existing endpoint stop; SSH or Kubernetes → no stop, a notification pointing to the daemon's row. The banner's wording is unchanged. `cargo test -p micold-client --bin micold-ai-ide service_control`
 - [X] T105 Correct T062's gate: `stop_blocked` (`crates/micold-client/src/features/daemons.rs:658`) is false while the legacy container's link is `VersionMismatch` (its daemon cannot report sessions; the user may stop it, 489 FR-011), and unchanged for a daemon that can report. Add the case to the T058 tests in `features/daemons.rs`. `cargo test -p micold-client --lib features::daemons`
 - [X] T106 Docs: `docs/user-guide/sandboxed-daemon.md` (the version row of the table, line 56) and `docs/user-guide/settings.md` (Daemons section, line ~484) say what a version-mismatched container daemon's row shows, when Replace is offered, and that Stop then Start moves it to this app's version; `CHANGELOG.md` is release-please's, not edited. `scripts/tests/*.test.sh` docs checks pass
+
+## Phase 15: Bugfix (BUG-1434)
+
+- [X] T107 [US1] Regression test, red on `origin/main`: in `crates/micold-client/src/daemon.rs` the container target's env test asserts `HOME` is the container home (`ContainerReach.home`) and absent when none is known; `crates/micold-core/src/sandbox/mod.rs` test `present_under_names_the_shared_files_found_in_a_home_and_never_their_contents`. `cargo test -p micold-client --lib container_target`, `cargo test -p micold-core --lib present_under`
+- [X] T108 `container_env` forwards `HOME` = the host home under the container path mapping (`install_container_home`, called at startup beside `install_time_zone`), so the bridge, the daemon and every session run with `HOME=$MICOLD_HOME` on the already-published image
+- [X] T109 At container session start the daemon logs the effective `HOME` and which shared credential files (names only) exist under it (`log_container_home` in `crates/micold-daemon/src/state.rs`, `CredentialLayout::present_under`)

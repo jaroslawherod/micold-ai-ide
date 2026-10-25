@@ -103,6 +103,18 @@ pub fn install_time_zone(zone: Option<String>) {
     let _ = HOST_TIME_ZONE.set(zone);
 }
 
+/// The home a container's sessions run in, as the container names it: the host user's home under
+/// the container path mapping, which is what `MICOLD_HOME` is and where shared credentials are
+/// mounted (#1434).
+static CONTAINER_HOME: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+
+/// Install the host user's home (the shell reads it; this module reads no host files). The first
+/// call wins.
+pub fn install_container_home(host_home: Option<&Path>) {
+    let _ = CONTAINER_HOME
+        .set(host_home.map(|home| micold_core::sandbox::pathmap::map_for(home, cfg!(windows))));
+}
+
 /// The AI CLI packages a container daemon's provisioning installs, when a process replaced the
 /// pinned table: only the real-runtime end-to-end test does, with a stand-in package (#1281). The
 /// application installs none, so it installs [`AiCliTable::pinned`].
@@ -727,6 +739,7 @@ async fn connect_and_pump(
                 survive_logout: *survive_logout,
                 ai_clis,
                 time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
+                home: CONTAINER_HOME.get().and_then(|h| h.as_deref()),
             };
             match container_attempt(
                 SSH_HOST.get().map(|h| &**h),
@@ -1259,6 +1272,8 @@ struct ContainerReach<'a> {
     survive_logout: bool,
     ai_clis: &'a AiCliSelection,
     time_zone: Option<&'a str>,
+    /// The container's home (`MICOLD_HOME`), which the daemon and its sessions must run with.
+    home: Option<&'a Path>,
 }
 
 /// The environment of a daemon the bridge starts in a container. sshd builds a session's
@@ -1278,6 +1293,11 @@ fn container_env(reach: &ContainerReach<'_>) -> Vec<(String, String)> {
     }
     if let Some(zone) = reach.time_zone {
         env.push(("TZ".to_string(), zone.to_string()));
+    }
+    // sshd sets HOME from passwd (`/home/node` on the base image), not from the container's
+    // `MICOLD_HOME`, where the shared sign-in and git config are mounted (#1434).
+    if let Some(home) = reach.home {
+        env.push(("HOME".to_string(), home.display().to_string()));
     }
     if let Some(value) = micold_core::sandbox::argv::idle_stop_value(reach.survive_logout) {
         env.push((
@@ -2060,6 +2080,7 @@ mod tests {
             survive_logout: true,
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: Some("Europe/Berlin"),
+            home: Some(std::path::Path::new("/home/jaro")),
         };
         let target = container_target("node".into(), &reach, &keys);
         let Reach::Pinned(pinned) = &target.reach else {
@@ -2097,16 +2118,20 @@ mod tests {
         assert_eq!(get("MICOLD_IMAGE_REFERENCE"), Some("ghcr.io/o/img:1"));
         assert_eq!(get("MICOLD_IDLE_STOP"), Some("off"));
         assert_eq!(get("TZ"), Some("Europe/Berlin"));
+        // 1434: the shared credentials live under MICOLD_HOME, not the passwd home sshd would use.
+        assert_eq!(get("HOME"), Some("/home/jaro"));
         let quiet_reach = ContainerReach {
             survive_logout: false,
             image: "",
             time_zone: None,
+            home: None,
             ..reach
         };
         let plain = container_target("node".into(), &quiet_reach, &keys).env;
-        assert!(plain
-            .iter()
-            .all(|(n, _)| n != "MICOLD_IDLE_STOP" && n != "MICOLD_IMAGE_REFERENCE" && n != "TZ"));
+        assert!(plain.iter().all(|(n, _)| n != "MICOLD_IDLE_STOP"
+            && n != "MICOLD_IMAGE_REFERENCE"
+            && n != "TZ"
+            && n != "HOME"));
         let open = ContainerReach {
             network: micold_core::sandbox::NetworkPosture::Outbound,
             ..reach
@@ -2167,6 +2192,7 @@ mod tests {
             survive_logout: false,
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: None,
+            home: None,
         };
         // `NoSsh` never finds the container, so the attempt is still waiting when the timeout ends it.
         let waited = tokio::time::timeout(

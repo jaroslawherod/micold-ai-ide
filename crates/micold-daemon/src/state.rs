@@ -761,6 +761,25 @@ pub(crate) fn image_reference() -> String {
     std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default()
 }
 
+/// In a container, say which `HOME` a session starts with and which shared credential files are
+/// there (names only, never contents): sshd resets the environment, so a daemon started without
+/// the container's home looks in the image user's home and the CLI asks to sign in (#1434).
+fn log_container_home(id: SessionId, image: &str) {
+    if image.is_empty() {
+        return;
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let found = home
+        .as_deref()
+        .map(|h| micold_core::sandbox::CredentialLayout::present_under(h, |p| p.is_file()));
+    tracing::info!(
+        session = %id.0,
+        home = ?home,
+        credentials_found = ?found.unwrap_or_default(),
+        "container session home"
+    );
+}
+
 /// Where sessions run, as a sentence about a missing AI CLI names it (feature 037, contract W4):
 /// this computer when `image` is empty, otherwise that image. In a container, installing on this
 /// computer changes nothing, so the image is named instead, as the settings notices name it.
@@ -5884,6 +5903,7 @@ impl DaemonState {
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
+        log_container_home(id, &image_reference());
         // It started, so whatever was wrong before is no longer true, and the history it was
         // seeded with has been taken (R4).
         {
