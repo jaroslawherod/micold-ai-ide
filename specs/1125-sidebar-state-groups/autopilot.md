@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
 - **Phase**: milestone M4
-- **Next step**: M4 full gate, then push and PR files
+- **Next step**: orchestrator opens the M4 PR (title/body in the scratchpad), waits on CI and merges; then M5
 
 ## Pull requests
 
@@ -85,6 +85,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | M4 review B (conformance, sonnet) | 1 | 72dd2cce4cea0f68442ed9f47474aff93f0fab69:a229182db05824cbded5f710aeda58324dcf544b | CLEAN (2 MINOR: no `tdd/cycle-log.md`, as M1–M3; T045 Tab test stops at the first header, as T045's observable states for the chip bar's order — declined) |
 | M4 scoped gate | — | after rebase onto origin/main 5b5064bc | red twice, fixed: `layout_coverage_registry` ratchet needed `RevealingState` listed as empty (`EMPTY_KINDS`); `refresh_is_only_on_demand` allowlist re-pointed at `more_action_message` |
 | M4 visual pass | — | 3eedd2e8 | B1 chip-bar half, B5 (pointer and keyboard-opened ⋯ menu, Escape, attach chosen, type chip filters), B8 at 180 px PASS, light and dark: `visual-pass/m4-record.md` |
+| M4 full gate | — | e2cf702f | `scripts/gate.sh` green after rebasing onto origin/main 78c2fc22 |
 
 ## Declined review findings
 
