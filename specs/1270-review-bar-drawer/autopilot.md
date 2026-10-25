@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: orchestrator opens M3's PR (title/body in the session scratchpad `pr-title.md`, `pr-body.md`), waits on CI and merges; then M4
+- **Next step**: M4 built on `m4-1270` (worktree /home/user/micold-m4) from M3's head 0c4e2d2d while #1402 (M3) runs CI; the orchestrator rebases it onto main after #1402 merges, re-records the layout snapshot, gates, pushes and opens M4's PR; then the close unit
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1356 | design: spec, clarify, plan, tasks | merged (rebase) | f15ecc59696cceeef6c4fca16b1b7eb7d8776b45 |
 | #1369 | M1: core rules review::{bar,drawer}, reply::card_preview, anatomy tokens | merged (rebase) | dde943af17ba1dd8a8caadaa183357d47da43469 |
 | #1382 | M2: ReviewBar, SideSheet, LineClamped::when_cut, row reply mode; cards show 4 reply lines | merged (rebase) | 150de7f6724e9021da4913a8b5eb68e1adbafae3 |
+| #1402 | M3: reducer, shell and Esc wired to the per-entry review view | open, CI running | — |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | merged; full gate green at e0c0e828; reviews A, B clean |
 | M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | #1382 | merged; full gate green at 0b8e6365; reviews A, B clean; visual pass recorded |
-| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | — (pushed on `claude/project-thread-ttad83`; PR opened by the orchestrator) | full gate green at 5358a2b7; reviews A (r2), B clean; visual pass recorded (`visual-pass-m3.md`) |
-| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — | not started |
+| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | #1402 (open, CI running) | full gate green at 5358a2b7; reviews A (r2), B clean; visual pass recorded (`visual-pass-m3.md`) |
+| M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — (branch `m4-1270`, not pushed; PR title/body in the scratchpad `pr-title-m4.md`, `pr-body-m4.md`) | implemented; visual pass recorded (`visual-pass-m4.md`); reviews and gate below |
 
 ## Decisions
 
@@ -57,6 +58,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D21 | M3 | How does a composer get `ComposerPlace::Drawer`? | `Msg::DrawerEdit(id)` / `Msg::DrawerAnswer(id)` (same rules as `EditComment` / `AnswerComment`, which keep `Card`); not drawn in a row until M4 | agent-resolved | contracts D6, D7; T034 |
 | D22 | M3 | Is the overflow menu displaced by, or does it displace, other popovers? | Neither (`popover_displacement.rs` row `review_overflow: []`); `OverflowToggled`/`OverflowDismissed` are also pure state in `app::State::update`, so the registry's dismissals (outside click, scroll beneath, a dialog opening) reach it | agent-resolved | research R8; `app.rs` DiscardCancelled arm |
 | D23 | M3 | Esc order between the Overview and the drawer | Registry, Settings draft, expanded card, Overview, then the drawer (last, R8); a closed drawer leaves Esc unused (`None`) | agent-resolved | research R8; `app::on_escape` |
+| D25 | M4 | How does the Review tab bind `anatomy::comments_drawer::WIDTH` (D13), when `SideSheet` read it only through core's `drawer::width`? | `SideSheet::width(w)` (the width its call site wants, capped at half the area by core's new `drawer::capped`; `drawer::width` is `capped(WIDTH, area)`); the drawer layout passes `anatomy::comments_drawer::WIDTH`, so the figure reaches `ui/changes.rs` and the `NOT_BUILT` entry is gone | agent-resolved | `anatomy_call_sites.rs` `bindings` scans for the figure's name |
+| D26 | M4 | `VirtualRows` has one row height, but a Replies row draws the whole reply and a row can hold a composer | The drawer's rows are a plain `Scrollable` column reporting `DrawerScrolled` per tab; an entry's comments are few enough to build every row | agent-resolved | contract D7 (whole reply), D6 (composer in the row) |
+| D27 | M4 | Where does the overflow menu hang, with no press reporting the ⋮'s bounds? | From the ⋮'s top-right, computed from the window size: the bar's right edge is the window's and its bottom the status bar's top (FR-001), and the trailing group has fixed sizes (`review_bar::overflow_trigger_right`, unit-tested against the laid-out ⋮); the panel rises above the bar | agent-resolved | `overflow` covered state: panel 847–1087 × 616–728 over a bar at y 728 |
+| D28 | M4 | Diff and file list widths once the review column is gone (SC-004) | The list keeps its old share (2 of 2 + 3 + 2) and the diff area takes the rest (5 of 7), reaching the tab's right edge and the bar; the drawer is stacked over it, the stack kept while closed so the diff's widget state survives a toggle | agent-resolved | `review_bar_fixed` SC-004 case: area ≥ 5/7 of the old padded width |
 | D24 | M3 | A connection lost while a send is pending (review B M3 F2) | Left as today: the outcome is unknown (the generic "may or may not have taken effect" notice), so no bar error; the watch stays, and a report of that send still opens the drawer once, as it would had the send gone through | agent-resolved | `shell/daemon_sync.rs` disconnect path; FR-006 names a failed send only |
 
 ## Review rounds

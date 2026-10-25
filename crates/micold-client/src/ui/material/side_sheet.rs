@@ -1,8 +1,9 @@
 //! `SideSheet` — a panel stacked over the right of an area, covering it without moving it
 //! (feature 1270, contract D2, D3, research R5): the comments drawer over the diff.
 //!
-//! A title, a × that closes it and the content under them, `review::drawer::width(area)` wide —
-//! 360 px, never more than half the area. The sheet takes the whole area it is offered and lays its
+//! A title, a × that closes it and the content under them, the width its call site gives
+//! (`.width`, the comments drawer's `anatomy::comments_drawer::WIDTH`) but never more than half the
+//! area (`review::drawer::capped`). The sheet takes the whole area it is offered and lays its
 //! panel out at the area's right edge, so it is drawn with `stack![area, sheet]` and the area's own
 //! layout is computed as if the sheet were absent (FR-010: opening it does not change the diff's
 //! width or move its lines). A press on the panel stays there; left of it the area gets it.
@@ -10,7 +11,8 @@
 //! Unlike `NavigationDrawer`, which pushes its sibling and leaves a rail, this covers. It is not an
 //! overlay either: it is part of the view, under dialogs and menus.
 //!
-//! Builder form: `SideSheet::new(content, roles).title("Comments").on_close(Msg::Close).into()`.
+//! Builder form: `SideSheet::new(content, roles).width(anatomy::comments_drawer::WIDTH)
+//! .title("Comments").on_close(Msg::Close).into()`.
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{Operation, Tree};
@@ -29,6 +31,7 @@ pub struct SideSheet<'a, M> {
     roles: Roles,
     title: Option<String>,
     on_close: Option<M>,
+    width: f32,
 }
 
 impl<'a, M: Clone + 'a> SideSheet<'a, M> {
@@ -39,7 +42,15 @@ impl<'a, M: Clone + 'a> SideSheet<'a, M> {
             roles,
             title: None,
             on_close: None,
+            width: f32::INFINITY,
         }
+    }
+
+    /// The panel's width, which it keeps while that is at most half the area; without it the
+    /// panel is half the area.
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
     }
 
     /// The title in the sheet's head.
@@ -88,6 +99,7 @@ impl<'a, M: Clone + 'a> From<SideSheet<'a, M>> for Element<'a, M> {
         Element::new(Sheet {
             panel: panel.into(),
             roles: r,
+            width: sheet.width,
         })
     }
 }
@@ -96,6 +108,8 @@ impl<'a, M: Clone + 'a> From<SideSheet<'a, M>> for Element<'a, M> {
 struct Sheet<'a, M> {
     panel: Element<'a, M>,
     roles: Roles,
+    /// The width wanted, before the half-the-area cap.
+    width: f32,
 }
 
 impl<M> Sheet<'_, M> {
@@ -128,7 +142,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Sheet<'_, M> {
         limits: &layout::Limits,
     ) -> layout::Node {
         let area = limits.resolve(Length::Fill, Length::Fill, Size::ZERO);
-        let width = drawer::width(area.width);
+        let width = drawer::capped(self.width, area.width);
         let fixed = layout::Limits::new(Size::ZERO, Size::new(width, area.height));
         let panel = self
             .panel
@@ -274,6 +288,7 @@ mod tests {
 
     fn sheet() -> SideSheet<'static, String> {
         SideSheet::new(Text::new("Rows", TypeRole::Body, LIGHT), LIGHT)
+            .width(micold_core::tokens::anatomy::comments_drawer::WIDTH)
             .title("Comments")
             .on_close("close".to_owned())
     }

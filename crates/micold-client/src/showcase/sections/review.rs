@@ -656,6 +656,7 @@ pub fn side_sheet<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
         container(iced::widget::stack![
             area,
             SideSheet::new(rows, roles)
+                .width(micold_core::tokens::anatomy::comments_drawer::WIDTH)
                 .title("Comments")
                 .on_close(Message::NoOp),
         ])

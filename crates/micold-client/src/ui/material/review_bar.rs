@@ -106,6 +106,13 @@ impl<'a, M: Clone + 'a> ReviewBar<'a, M> {
     }
 }
 
+/// The x of the overflow trigger's (⋮) right edge in a bar whose right edge is at `right`. The
+/// trailing group is laid out from the bar's edge at fixed sizes (B3), so the menu the trigger opens
+/// hangs from it without a press having to report where it is (T022).
+pub fn overflow_trigger_right(right: f32) -> f32 {
+    right - spacing::MD - anatomy::review_bar::SEND_WIDTH - spacing::SM
+}
+
 /// The longest counts text that fits `room`, if any (research R3).
 fn fitting_counts(counts: &ScopeCounts, room: f32) -> Option<String> {
     [CountsForm::Full, CountsForm::DraftsOnly]
@@ -280,6 +287,18 @@ mod tests {
     fn taken(width: f32) -> f32 {
         let group = trailing(bar(mixed()), width);
         width - group[0].x + spacing::MD
+    }
+
+    /// T022: the overflow menu hangs from where the ⋮ really is.
+    #[test]
+    fn the_overflow_trigger_ends_where_the_menu_hangs_from() {
+        for width in [WIDE, 520.0] {
+            let menu = trailing(bar(mixed()), width)[1];
+            assert!(
+                (menu.x + menu.width - overflow_trigger_right(width)).abs() < 0.5,
+                "{menu:?} at {width}"
+            );
+        }
     }
 
     /// B2: at three widths the bar draws Full, then DraftsOnly, then nothing.

@@ -7,15 +7,15 @@
 use micold_core::review::comment::Scope;
 use std::collections::BTreeMap;
 
-use iced::widget::{column, container, row, text_editor, Row, Space};
-use iced::{Alignment, Element, Length};
+use iced::widget::{column, container, row, stack, text_editor, Row, Space};
+use iced::{Alignment, Element, Length, Padding};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
 use micold_core::review::comment::{ReviewComment, Status};
 use micold_core::review::Side;
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Rgb, Roles};
+use micold_core::tokens::{self, anatomy, spacing, Rgb, Roles};
 use micold_core::typeahead::{match_one, Query};
 
 use crate::app::{EditorAction, Message, State};
@@ -24,19 +24,20 @@ use crate::features::changes::{
     committed_available, composer_placed, diff_body, discard_prompt, drawer_counts, drawer_groups,
     drawer_rows, file_comments, file_diff_available, file_reviews, list_body, mark_control,
     pending_counts, picker_matches, pr_header, progress_label, review_bar, review_of,
-    reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody, ComposerTarget,
-    DiffBody, ListBody, Load, Msg, OpenView, PrSection, Source, Step, TreeKind, WholeFile,
-    DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT, WHOLE_FILE_UNAVAILABLE,
+    reviews_progress, section, selected_file, tree_rows, whole_file, BrowseBody, ComposerPlace,
+    ComposerTarget, DiffBody, DrawerRow, ListBody, Load, Msg, OpenView, PrSection, ReviewBarModel,
+    Source, Step, TreeKind, WholeFile, DEFAULT_ENTRY_NOTE, WHOLE_FILE_UNAVAILABLE,
 };
 use crate::icons::{icon_role, Icon, IconSurface};
+use crate::ui::cdk::overlay::Surface;
 use crate::ui::material::{
-    BrowseBar, Button, ButtonVariant, CardState, DiffView, Ellipsized, Glyph, IconButton,
-    ProgressBar, PullRequestIndicator, PullRequestRow, ReviewCommentCard, ReviewPanelRow,
-    StageProgress, Tag, Text, TextArea, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
-    Typeahead, TypeaheadRow, VirtualRows,
+    menu_panel_size, overflow_trigger_right, tab_content_colour, BrowseBar, Button, ButtonVariant,
+    CardState, DiffView, Ellipsized, Glyph, IconButton, MenuItem, MenuOverlay, ProgressBar,
+    PullRequestIndicator, PullRequestRow, ReviewBar, ReviewCommentCard, ReviewPanelRow, Scrollable,
+    SideSheet, StageProgress, Tab, TabStrip, Tag, Text, TextArea, ToggleChip, Tooltip, TreeItem,
+    TreeView, TypeRole, Typeahead, TypeaheadRow, VirtualRows, REVIEW_BAR_COMMENTS as COMMENTS,
 };
-use micold_core::review::bar::{counts_text, CountsForm};
-use micold_core::review::drawer::{DrawerEvent, DrawerTab};
+use micold_core::review::drawer::{DrawerEvent, DrawerTab, START_HINT};
 use micold_core::review::marks::{FileReview, ReviewState};
 use micold_core::review::RelPath;
 use micold_core::task_progress::Ratio;
@@ -67,9 +68,6 @@ pub const PROGRESS_SLOT_WIDTH: f32 = 260.0;
 /// The progress bar's width in that slot at its widest (research R9).
 pub const PROGRESS_BAR_WIDTH: f32 = 120.0;
 
-/// One review panel row's height.
-const PANEL_ROW_HEIGHT: f32 = crate::ui::material::PANEL_ROW_HEIGHT;
-
 /// The diff's scroll viewport, by name: a panel jump scrolls it (feature 946, FR-017). A
 /// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
 pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
@@ -78,6 +76,10 @@ pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
 /// The Changes view of `view`'s entry. `composer` is the review composer's editor, which only the
 /// binary holds; without it an open composer shows its text read-only. `connected`: the session
 /// service that keeps the marks is reachable (feature 1271, FR-013).
+///
+/// Top to bottom (feature 1270): the header, the file list beside the diff area — over whose right
+/// side the comments drawer is stacked while open — and the review bar, the tab's last row, at full
+/// width directly above the status bar (FR-001, FR-010).
 pub fn view<'a>(
     state: &'a State,
     view: &'a OpenView,
@@ -91,59 +93,63 @@ pub fn view<'a>(
         SessionLocation::Worktree(dir) => state.worktree_display_name(dir),
     };
 
-    // V2: the entry, the base (or why there is none), and the way out.
+    // V2: the entry and the base (or why there is none). FR-009: **Review (n)** and **Send
+    // review** moved to the bar; feature 1269 (FR-007, U13): the Review tab's × closes the review.
     let mut heading = column![Text::new(title, TypeRole::Title, r)].spacing(spacing::XS);
     if let Some(line) = base_line(view) {
         heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
     }
-    // Feature 1271: the rows' review states, judged once for the list and the header.
+    // Feature 1271: the rows' review states, judged once for the list and the header, whose
+    // *n of m reviewed* slot sits beside the heading (FR-008, FR-009).
     let reviews = file_reviews(&state.changes, view, connected);
-    // S1: Send review (n), "Sending…" while a send of this entry is open in any window.
-    let mut header = row![
-        container(heading).width(Length::FillPortion(2)),
-        progress_slot(reviews_progress(&reviews, connected), r),
-    ];
-    // FR-016: the toolbar toggle that closes and reopens the review panel, which draws the
-    // comments drawer's state until feature 1270's bar and drawer replace it (M4).
-    let bar = review_bar(&state.changes);
-    let open = view.drawer.state.open;
-    let total = bar
-        .as_ref()
-        .map_or(0, |b| b.counts.draft + b.counts.reported_or_sent());
-    header = header.push(
-        ToggleChip::new(
-            format!("Review ({total})"),
-            Message::Changes(Msg::Drawer(DrawerEvent::Toggle)),
-            r,
-        )
-        .active(open),
-    );
-    if !open {
-        header = header.push(review_buttons(state, r));
-    }
-    // Feature 1269 (FR-007, U13): no **Close** here; the Review tab's × closes the review.
-    let header = header.spacing(spacing::MD).align_y(Alignment::Center);
+    let header = container(
+        row![
+            container(heading).width(Length::FillPortion(2)),
+            progress_slot(reviews_progress(&reviews, connected), r),
+        ]
+        .spacing(spacing::MD)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding(spacing::LG);
 
-    let mut body = row![
-        container(list_pane(state, view, reviews, r)).width(Length::FillPortion(2)),
-        container(diff_pane(state, view, scheme, composer, connected))
-            .width(Length::FillPortion(3)),
+    // FR-010, SC-002: the drawer covers the diff area's right side without changing the diff's
+    // layout. Always a stack, open or closed, so the diff keeps its widget state across a toggle.
+    let mut diff_area = stack![
+        container(diff_pane(state, view, scheme, composer, connected)).padding(Padding {
+            right: spacing::LG,
+            bottom: spacing::LG,
+            ..Padding::ZERO
+        })
+    ]
+    .width(Length::FillPortion(5))
+    .height(Length::Fill);
+    if view.drawer.state.open {
+        diff_area = diff_area.push(comments_drawer(state, view, composer, r));
+    }
+    // SC-004: the file list keeps its share of the old three columns (2 of 2 + 3 + 2), and the
+    // diff area takes the rest — the old diff and review column together.
+    let body = row![
+        container(list_pane(state, view, reviews, r))
+            .width(Length::FillPortion(2))
+            .padding(Padding {
+                left: spacing::LG,
+                bottom: spacing::LG,
+                ..Padding::ZERO
+            }),
+        diff_area,
     ]
     .spacing(spacing::LG)
     .height(Length::Fill);
-    if open {
-        body = body.push(container(review_panel(state, view, r)).width(Length::FillPortion(2)));
-    }
 
-    container(
-        column![header, body]
-            .spacing(spacing::LG)
-            .height(Length::Fill),
-    )
-    .padding(spacing::LG)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    // No gap above the bar: the drawer runs down to it (D2).
+    let mut tab = column![header, body]
+        .width(Length::Fill)
+        .height(Length::Fill);
+    if let Some(bar) = review_bar(&state.changes) {
+        tab = tab.push(bar_of(bar, r));
+    }
+    tab.into()
 }
 
 /// *n of m reviewed* and its bar (feature 1271, FR-008), in a slot whose width follows the header's
@@ -179,134 +185,208 @@ fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
         .into()
 }
 
-/// **Clear sent**, **Discard drafts…** and **Send review (n)**, each with the availability 482
-/// gave it (FR-019). In the panel's header while it is open, in the view's header otherwise.
-fn review_buttons<'a>(state: &'a State, r: Roles) -> iced::widget::Row<'a, Message> {
-    let mut buttons = row![].spacing(spacing::SM).align_y(Alignment::Center);
-    if let Some(bar) = review_bar(&state.changes) {
-        buttons = buttons
-            .push(
-                Button::text("Clear sent", r).on_press_maybe(
-                    bar.overflow
-                        .clear_sent
-                        .then_some(Message::Changes(Msg::ClearSentPressed)),
-                ),
-            )
-            .push(
-                Button::text("Discard drafts…", r).on_press_maybe(
-                    bar.overflow
-                        .discard_drafts
-                        .then_some(Message::Changes(Msg::DiscardPendingPressed)),
-                ),
-            )
-            .push(
-                Button::filled(bar.send.label, r).on_press_maybe(
-                    bar.send
-                        .enabled
-                        .then_some(Message::Changes(Msg::SendPressed)),
-                ),
-            );
+/// The review bar (feature 1270, B1–B8): the shown diff's counts, the send error with its ×, and
+/// **Comments**, ⋮ and **Send review (n)** at the trailing edge.
+fn bar_of<'a>(bar: ReviewBarModel, r: Roles) -> Element<'a, Message> {
+    let mut element = ReviewBar::new(bar.counts, bar.send, r)
+        .drawer_open(bar.drawer_open)
+        .on_send(Message::Changes(Msg::SendPressed))
+        .on_overflow(Message::Changes(Msg::OverflowToggled))
+        .on_toggle_drawer(Message::Changes(Msg::Drawer(DrawerEvent::Toggle)))
+        .on_dismiss_error(Message::Changes(Msg::SendErrorDismissed));
+    if let Some(error) = bar.error {
+        element = element.error(error);
     }
-    buttons
+    element.into()
 }
 
-/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, the
-/// comments drawer's two tabs (feature 1270, until M4 draws the drawer itself) and a row per
-/// comment of the selected tab. `VirtualRows` has one row height, so the file path is in each
-/// row's label rather than in a group header.
-fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
-    let buttons = review_buttons(state, r);
-    // With no comment the empty text below says so; the counts line would say it twice.
-    let counts = review_bar(&state.changes)
-        .filter(|bar| !bar.counts.is_empty())
-        .and_then(|bar| counts_text(&bar.counts, CountsForm::Full))
-        .unwrap_or_default();
+/// The bar's overflow menu (feature 1270, T022, B7): **Clear sent** and **Discard drafts…**, each
+/// pressable only when `Overflow` allows it, hung from the ⋮ and rising above the bar. `None` while
+/// no Review tab is shown; closed (and fading out) while the menu is not open.
+pub fn overflow_menu<'a>(state: &'a State, r: Roles) -> Option<Surface<'a, Message>> {
+    let view = state.changes.tabs.shown_view()?;
+    let bar = review_bar(&state.changes)?;
+    let items = vec![
+        MenuItem::labeled(OVERFLOW_ITEMS[0], Message::Changes(Msg::ClearSentPressed)),
+        MenuItem::labeled(
+            OVERFLOW_ITEMS[1],
+            Message::Changes(Msg::DiscardPendingPressed),
+        ),
+    ];
+    let enabled = [bar.overflow.clear_sent, bar.overflow.discard_drafts];
+    let items: Vec<MenuItem<Message>> = items
+        .into_iter()
+        .zip(enabled)
+        .map(|(item, on)| MenuItem {
+            message: item.message.filter(|_| on),
+            ..item
+        })
+        .collect();
+    let panel = menu_panel_size(items.len());
+    let (width, height) = state.window.window_size;
+    // The bar's right edge is the window's and its bottom the status bar's top (FR-001), so the
+    // panel's bottom-right corner sits on the ⋮'s top-right without a press reporting it.
+    let hung = (width > 0 && height > 0).then(|| {
+        let right = overflow_trigger_right(f32::from(width));
+        let bar_top = f32::from(height) - anatomy::status_bar::HEIGHT - anatomy::review_bar::HEIGHT;
+        iced::Point::new(
+            (right - f32::from(panel.0)).max(0.0),
+            (bar_top - f32::from(panel.1)).max(0.0),
+        )
+    });
+    Some(
+        MenuOverlay::new(items, Message::Changes(Msg::OverflowDismissed), r)
+            .open(view.overflow_open)
+            .hung_from(hung)
+            .into(),
+    )
+}
+
+/// The overflow menu's items, in order (B7).
+pub const OVERFLOW_ITEMS: [&str; 2] = ["Clear sent", "Discard drafts\u{2026}"];
+
+/// The comments drawer (feature 1270, D2–D9, T042, T043): a `SideSheet` over the diff area's
+/// right, from under the header to the bar; its Drafts and Replies tabs with their counts, a
+/// refused jump's reason, and the selected tab's rows or its empty text.
+fn comments_drawer<'a>(
+    state: &'a State,
+    view: &'a OpenView,
+    composer: Option<&'a text_editor::Content>,
+    r: Roles,
+) -> Element<'a, Message> {
     let tab = view.drawer.state.tab;
     let (drafts, replies) = drawer_counts(&state.changes);
-    let tabs = row![
-        ToggleChip::new(
-            DrawerTab::Drafts.label(drafts),
-            Message::Changes(Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Drafts))),
+    let tab_of = |of: DrawerTab, n: usize| {
+        let active = of == tab;
+        Tab::new(
+            Text::new(of.label(n), TypeRole::Label, r).tint(tab_content_colour(active, r)),
             r,
         )
-        .active(tab == DrawerTab::Drafts),
-        ToggleChip::new(
-            DrawerTab::Replies.label(replies),
-            Message::Changes(Msg::Drawer(DrawerEvent::SelectTab(DrawerTab::Replies))),
-            r,
-        )
-        .active(tab == DrawerTab::Replies),
-    ]
-    .spacing(spacing::SM);
-    let mut pane = column![
-        Text::new("Review", TypeRole::Title, r),
-        buttons.wrap(),
-        Text::new(counts, TypeRole::Body, r).muted(),
-        tabs,
-    ]
-    .spacing(spacing::SM)
-    .height(Length::Fill);
+        .content_sized()
+        .active(active)
+        .on_press(Message::Changes(Msg::Drawer(DrawerEvent::SelectTab(of))))
+    };
+    let tabs = TabStrip::new(
+        vec![
+            tab_of(DrawerTab::Drafts, drafts),
+            tab_of(DrawerTab::Replies, replies),
+        ],
+        r,
+    );
+    let mut pane = column![tabs].spacing(spacing::SM).height(Length::Fill);
     if let Some(why) = view.drawer.hidden {
         pane = pane.push(Text::new(why.message(), TypeRole::Body, r));
     }
     let rows = drawer_rows(&state.changes, tab);
-    // `VirtualRows` has one row height, so a pull request's heading leads each of its rows.
-    let headings: BTreeMap<Scope, String> = drawer_groups(&state.changes)
-        .into_iter()
-        .filter_map(|group| Some((group.scope, group.heading()?)))
-        .collect();
     if rows.is_empty() {
-        let empty = if drafts + replies == 0 {
-            PANEL_EMPTY_TEXT
-        } else {
-            tab.empty_text()
-        };
-        return pane
-            .push(Text::new(empty, TypeRole::Body, r).muted())
-            .into();
+        // D9: a tab with no rows says so; with no comment at all, today's hint follows.
+        pane = pane.push(Text::new(tab.empty_text(), TypeRole::Body, r).muted());
+        if drafts + replies == 0 {
+            pane = pane.push(Text::new(START_HINT, TypeRole::Body, r).muted());
+        }
+    } else {
+        // A pull request's heading leads each of its rows' labels.
+        let headings: BTreeMap<Scope, String> = drawer_groups(&state.changes)
+            .into_iter()
+            .filter_map(|group| Some((group.scope, group.heading()?)))
+            .collect();
+        // Clear of the scrollbar, which is drawn over the content's right edge.
+        let mut list = column![].spacing(spacing::SM).padding(Padding {
+            right: spacing::MD,
+            ..Padding::ZERO
+        });
+        for item in rows {
+            let heading = headings.get(&item.scope).map(String::as_str);
+            list = list.push(drawer_row(view, item, heading, composer, r));
+        }
+        // Rows differ in height (a whole reply, a composer), so the list is a plain scrolling
+        // column rather than `VirtualRows`; it reports its offset per tab (FR-019).
+        pane = pane.push(
+            Scrollable::new(list, r)
+                .height(Length::Fill)
+                .on_scroll_metrics(move |offset, viewport, _| {
+                    Message::Changes(Msg::DrawerScrolled {
+                        tab,
+                        offset,
+                        viewport,
+                    })
+                }),
+        );
     }
-    let list = VirtualRows::new(
-        rows.len(),
-        PANEL_ROW_HEIGHT,
-        move |index| {
-            let Some(item) = rows.get(index) else {
-                return Space::new().into();
-            };
-            let place = format!("{} · {}", item.path.as_str(), item.lines);
-            let mut card = ReviewPanelRow::new(
-                match headings.get(&item.scope) {
-                    Some(heading) => format!("{heading} · {place}"),
-                    None => place,
-                },
-                item.text.clone(),
-                item.status,
-                r,
-            )
-            .selected(item.selected)
-            .not_in_diff(item.not_in_diff)
-            .on_press(Message::Changes(Msg::DrawerRowSelected(item.id)));
-            if let Some(reply) = &item.reply {
-                card = card.reply(reply.clone());
-            }
-            if item.editable {
-                card = card
-                    .on_edit(Message::Changes(Msg::EditComment(item.id)))
-                    .on_delete(Message::Changes(Msg::DeleteComment(item.id)));
-            }
-            card.into()
-        },
+    SideSheet::new(
+        container(pane).padding(Padding {
+            left: spacing::MD,
+            right: spacing::MD,
+            bottom: spacing::MD,
+            top: 0.0,
+        }),
         r,
     )
-    .offset(view.drawer.state.offset(tab))
-    .viewport(view.drawer.viewport)
-    .on_scroll(move |offset, viewport| {
-        Message::Changes(Msg::DrawerScrolled {
-            tab,
-            offset,
-            viewport,
-        })
-    });
-    pane.push(list).into()
+    .width(anatomy::comments_drawer::WIDTH)
+    .title(COMMENTS)
+    .on_close(Message::Changes(Msg::Drawer(DrawerEvent::Close)))
+    .into()
+}
+
+/// One row of the drawer (D6, D7): a Drafts row with **Edit** and **Delete** while no send holds
+/// it; a Replies row with its status, the whole reply (Show all past 4,000 characters) and, on a
+/// Sent row, **Mark applied** and **Answer…**. A composer the drawer opened (`ComposerPlace::Drawer`)
+/// is drawn under its row.
+fn drawer_row<'a>(
+    view: &'a OpenView,
+    item: DrawerRow,
+    heading: Option<&str>,
+    composer: Option<&'a text_editor::Content>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let place = format!("{} · {}", item.path.as_str(), item.lines);
+    let label = match heading {
+        Some(heading) => format!("{heading} · {place}"),
+        None => place,
+    };
+    let id = item.id;
+    let mut row_ = ReviewPanelRow::new(label, item.text, item.status, r)
+        .selected(item.selected)
+        .not_in_diff(item.not_in_diff)
+        .on_press(Message::Changes(Msg::DrawerRowSelected(id)));
+    if item.status == Status::Draft {
+        if let Some(reply) = item.reply {
+            row_ = row_.reply(reply);
+        }
+    } else {
+        row_ = row_.whole_reply(item.reply.unwrap_or_default(), item.has_full_reply);
+        if item.has_full_reply {
+            row_ = row_.on_show_reply(Message::Changes(Msg::ShowReply(id)));
+        }
+    }
+    if item.editable {
+        row_ = row_
+            .on_edit(Message::Changes(Msg::DrawerEdit(id)))
+            .on_delete(Message::Changes(Msg::DeleteComment(id)));
+    }
+    if item.markable {
+        row_ = row_
+            .on_mark_applied(Message::Changes(Msg::MarkApplied(id)))
+            .on_answer(Message::Changes(Msg::DrawerAnswer(id)));
+    }
+    let row_: Element<'a, Message> = row_.into();
+    let Some(open) = view
+        .composer
+        .as_ref()
+        .filter(|open| open.place == ComposerPlace::Drawer)
+    else {
+        return row_;
+    };
+    let placeholder = match open.target {
+        ComposerTarget::Edit(target) if target == id => "Comment",
+        ComposerTarget::Answer(target) if target == id => "Why not, or what you did",
+        _ => return row_,
+    };
+    column![
+        row_,
+        composer_box(&open.text, composer, true, placeholder, r)
+    ]
+    .into()
 }
 
 /// The left pane: the two toggles (L1) over the file list or its empty state (L2, L3).
@@ -987,7 +1067,12 @@ fn comment_or_editor<'a>(
     composer: Option<&'a text_editor::Content>,
     r: Roles,
 ) -> Element<'a, Message> {
-    if let Some(open) = view.composer.as_ref() {
+    // A composer the drawer opened is drawn in its row instead (feature 1270, D6).
+    let on_card = view
+        .composer
+        .as_ref()
+        .filter(|open| open.place == ComposerPlace::Card);
+    if let Some(open) = on_card {
         if open.target == ComposerTarget::Edit(comment.id) {
             return composer_box(&open.text, composer, true, "Comment", r);
         }
@@ -1020,7 +1105,7 @@ fn comment_or_editor<'a>(
             .on_answer(Message::Changes(Msg::AnswerComment(comment.id)));
     }
     let card: Element<'a, Message> = card.into();
-    match view.composer.as_ref() {
+    match on_card {
         Some(open) if open.target == ComposerTarget::Answer(comment.id) => column![
             card,
             composer_box(&open.text, composer, true, "Why not, or what you did", r)

@@ -301,6 +301,27 @@ fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
         && escape.edge == "bottom"
 }
 
+/// The **comments drawer's rows** taller than the drawer's list viewport (feature 1270, T053).
+///
+/// The seventh site of the same mechanism: `drawer-drafts` and `drawer-replies` hold more rows than
+/// the drawer's `Scrollable` shows at 1280×800 (the answered reply wraps over several lines), so
+/// the rest is reached by scrolling. Held only there and only past the viewport's **bottom** edge
+/// ([`DRAWER_ROWS_VIEWPORT`]): the sheet's panel → its column → the content → the drawer's padding →
+/// the tabs-and-rows column → the rows' `Scrollable`.
+const DRAWER_ROWS_CONTENT: &[&str] = &["0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0"];
+
+/// The drawer's rows `Scrollable`: the parent of [`DRAWER_ROWS_CONTENT`].
+const DRAWER_ROWS_VIEWPORT: &str = "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1";
+
+/// Whether `escape`, in the covered state `state`, is the drawer's rows outgrowing their viewport
+/// downwards, which is the only overhang [`DRAWER_ROWS_CONTENT`] allows.
+fn is_drawer_rows_scroll(state: &str, escape: &lay::Escape) -> bool {
+    matches!(state, "drawer-drafts" | "drawer-replies")
+        && DRAWER_ROWS_CONTENT.contains(&escape.child_path.as_str())
+        && escape.parent_path == DRAWER_ROWS_VIEWPORT
+        && escape.edge == "bottom"
+}
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
     let child_path = escape.child_path.as_str();
@@ -324,6 +345,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("TRANSCRIPT_CONTENT")
     } else if is_folded_body(state, escape) {
         Some("FOLDED_BODY_REVEAL")
+    } else if is_drawer_rows_scroll(state, escape) {
+        Some("DRAWER_ROWS_CONTENT")
     } else {
         None
     }
@@ -368,6 +391,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(PR_NUMBER_GUTTER)
         .chain(TRANSCRIPT_CONTENT)
         .chain(FOLDED_BODY_REVEAL)
+        .chain(DRAWER_ROWS_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(

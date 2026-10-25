@@ -648,6 +648,10 @@ pub fn view_with<'a>(
     }))
     .into();
 
+    // The Review tab's bar's overflow menu (feature 1270, T022), hung from its ⋮; pushed while a
+    // Review tab is shown, open or not, so it can fade out as the toolbar's menu does.
+    let review_overflow = changes::overflow_menu(state, roles);
+
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
     // render time (not when the menu opened) so a window resize while it is showing can never leave
@@ -907,6 +911,7 @@ pub fn view_with<'a>(
         .push(overflow_menu)
         .push(switcher)
         .push(more_menu)
+        .push_maybe(review_overflow)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
         .push_maybe(group_menu)
