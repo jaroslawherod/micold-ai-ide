@@ -155,3 +155,8 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
 - Follow-up (not done): #1271's `disk_mode`/`trusts_file_mode` could give untracked rows real
   modes (the declined A-r1 F6 part); symlinks still take `Stat` in `identify`, where #1271's
   `blob_ids` hashes their target as git stores it.
+- M3 red CI again on faedc2bb0 (2026-10-25): main moved to 35ac6de2d and dropped a toolbar child
+  (the 103-wide element at x237.9), so `changes-review-held` shifted. Rebased onto 35ac6de2d,
+  only `changes-review-held` failed in `layout_snapshot`; re-recorded (15+/20-, toolbar children
+  renumbered 3→2, 4→3, 5→4, search box now at x520.9). Ran `layout_snapshot`, `features_changes`,
+  `features_pr_changes` and `micold-core --lib review`: green. Pushed, then full `scripts/gate.sh`.
