@@ -142,3 +142,35 @@ fn a_line_with_no_end_is_cut_at_max_line_bytes() {
     assert_eq!(lines(buffer.finish()), ["x".repeat(10)]);
     assert_eq!(buffer.next_index(), 3);
 }
+
+#[test]
+fn the_buffer_is_bounded_even_for_binary_output() {
+    // Every kept line holds at most `MAX_LINE_BYTES` plus the three bytes a cut character may
+    // add, even when invalid bytes widen to U+FFFD, so 10,000 lines stay a few tens of MiB.
+    let worst = std::hint::black_box(KEEP_LINES) * (MAX_LINE_BYTES + 3);
+    assert!(
+        worst <= 48 << 20,
+        "the worst case kept is bounded: {worst} bytes"
+    );
+    let mut buffer = OutputBuffer::new();
+    let mut done = lines(buffer.push(Stream::Stdout, &vec![0xff; MAX_LINE_BYTES + 1]));
+    done.extend(lines(buffer.finish()));
+    assert!(!done.is_empty());
+    assert!(
+        done.iter().all(|line| line.len() <= MAX_LINE_BYTES + 3),
+        "{:?}",
+        done.iter().map(String::len).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_cut_line_does_not_split_a_character() {
+    let mut buffer = OutputBuffer::new();
+    let mut long = vec![b'x'; MAX_LINE_BYTES - 1];
+    long.extend_from_slice("é€y".as_bytes());
+    let done = lines(buffer.push(Stream::Stdout, &long));
+    let mut whole = "x".repeat(MAX_LINE_BYTES - 1);
+    whole.push('é');
+    assert_eq!(done, [whole], "the character at the cut stays whole");
+    assert_eq!(lines(buffer.finish()), ["€y"]);
+}
