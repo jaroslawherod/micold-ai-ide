@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1365, #1372, #1429, #1431, #1432
 
 **Input**: User description: "Issue #1128 — Layout: docs, layout snapshot and visual pass for the
 redesign. Blocked by: #1124, #1125, #1126, #1127. Update user guide pages (worktrees-and-sessions,

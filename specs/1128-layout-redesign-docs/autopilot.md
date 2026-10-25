@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M4 rebased onto main (#1431 merged as 653370c6) and pushed on claude/project-thread-bznqpy; reviews A and B clean; specs-only gate green; M4 PR not opened yet
-- **Next step**: orchestrator opens the M4 PR (title and body in the session scratchpad), records its number, waits on CI and merges; then the close unit (T035). Frames were drawn at ad1fc7b3; `git diff --stat origin/main -- crates` is empty after the rebase, so they stand.
+- **Phase**: close — tdd-verify PASS_WITH_GAPS (`tdd/verification.md`), T035 done (A4 green at 357d48d5, FR-020 holds over the feature), spec Status Closed; close diff committed and pushed, awaiting close review
+- **Next step**: orchestrator dispatches the close review (correctness of `tdd/verification.md`, truth of the T035 and Status lines; snapshot in *Review rounds*); then the close unit runs the specs-only gate (`scripts/check-criteria-observables.sh`), finishes the ledger (Phase done, Next step handoff) and the orchestrator opens the close PR `docs(1128): close the spec (#1128)`.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -22,7 +22,8 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | #1372 | M1 — status bar and session area in the user guide | merged (rebase) | 1c69ea8bb8e8b6b755b21c167d23307e43b6a46c |
 | #1429 | M2 — sidebar and title bar in the user guide | merged (rebase) | 58ef1146da2e1cd31d7def7217c08b7132538dd3 |
 | #1431 | M3 — whole-window covered states and gate W | merged (rebase) | 653370c6d7b6fe901a626985d52ebc02f08f261d |
-| (M4, not opened yet) | M4 — visual pass | pushed on claude/project-thread-bznqpy; PR opened by the orchestrator | — |
+| #1432 | M4 — visual pass | merged (rebase) | 357d48d5be4eedc191d9a5b91cc25f19270f23ef |
+| (close, not opened yet) | Close — tdd-verify, T035, spec Status | pushed on claude/project-thread-bznqpy; awaiting close review | — |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | merged (rebase) as 58ef1146 |
 | M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | #1431 | merged (rebase) as 653370c6 |
-| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | rebased onto main 653370c6 and pushed on claude/project-thread-bznqpy; reviews A and B clean; specs-only gate green; PR to open |
+| M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | #1432 | merged (rebase) as 357d48d5 |
 
 ## Decisions
 
@@ -105,13 +106,15 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-M4 PR unit: #1431 merged as 653370c6. `m4-1128` reset onto claude/project-thread-bznqpy and rebased onto origin/main: M3's two commits were skipped as already applied, 5 M4 commits are left, and `git diff --stat origin/main -- crates` is empty. Specs-only gate (`scripts/check-criteria-observables.sh`) exits 0. Pushed. The second worktree /home/user/wt-1128-m4 and `m4-1128` are removed. Next: the orchestrator opens the M4 PR (`gh` is not authenticated).
+None.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- Close unit: #1432 merged as 357d48d5; branch reset to origin/main (every unmerged subject was on main). `speckit-tdd-verify` is not a loadable skill here and there is no Agent tool, so its steps ran inline (smell pass not delegated): PASS_WITH_GAPS, 2 LOW findings, no remediation tasks (none worth acting on within FR-020); 2 deliberate mutants on the feature's test files, both caught. `speckit-converge` skipped: review B CLEAN for M1–M4. A4 ran as `scripts/gate.sh` (no `mise` on PATH). Follow-ups for the handoff, each its own issue: terminal.rs "Choose restart below" text; `site/capture/scenes/lib.sh` coordinates predate the 44 px title bar; light-theme chip contrast 4.40:1 from `style::chip`; Overview badge "1 need action" singular.
 
 - M4 defect (visual pass, D1, FR-016), region issue #1125: **Sidebar** — the worktree row's *no daemon* label chip reads 4.40:1 in light (`#625B71` `secondary` ink on its `#DAD3DC` tint), under 4.5:1; dark reads 6.25:1. The cause is shared: `micold_material::style::chip` draws every accent's tint at 20% alpha with the accent itself as ink, so the run-group *N runs* tags, the error-accent status chip and *N failed* tag (review A round 2 works these out at ~4.2:1 on the sidebar), primary and tertiary chips, and the chips outside the sidebar (`changes.rs` Binary / Not text, `review_comment.rs` Answered, `compare.rs`, `review_panel_row.rs`) are likely under 4.5:1 too. No composition-contrast test holds `style::chip`. Screenshots `specs/1128-layout-redesign-docs/visual-pass/session-view-light-1280.png`, `overview-light-1280.png`. Needs its own bug issue: fix the chip ink or tint for every accent, with a test in `composition_contrast.rs` over every accent and host fill.
 - M4 defect (visual pass, D1), region issue #1125: **Sidebar** — the Overview row's badge reads *1 need action* (and would read *1 need attention*): `features/overview.rs` `badge()` writes `"{n} need action"` with no singular. The wording comes from feature 813's contract (`specs/813-worktree-overview/contracts/ui.md`, *N need action* / *N need attention*), `docs/user-guide/overview.md` describes it, and tests pin it (`features/overview.rs` ~:795, `ui/overview.rs` ~:1924 asserts *1 need attention*). On all four frames (`specs/1128-layout-redesign-docs/visual-pass/*-1280.png`). Needs its own bug issue covering contract, guide, tests and code (singular *needs*).
