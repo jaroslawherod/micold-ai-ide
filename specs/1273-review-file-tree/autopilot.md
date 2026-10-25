@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
 - **Phase**: implement (M3)
-- **Next step**: M3 implemented (T019–T023 ticked), scoped gate green; review A, review B, full gate, then PR (title/body in the unit's scratchpad; the orchestrator opens it). Then M4 (T024–T030)
+- **Next step**: M3 reviewed (A, B), full gate, pushed; PR title/body in the unit's scratchpad for the orchestrator to open. Then M4 (T024–T030)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
-| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | implemented (T019–T023 ticked); reviews and gate next |
+| M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | — | reviewed; PR to open |
 | M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | — | after M3 |
 | M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | after M4 |
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance, sonnet) | 1 | bce2c567f7b1bed1d8b308b7a0b8a6704cea53c6:88f3f377cea4adfd8323022041b81e37fc170188 | CLEAN, cited (2 MINOR: cycle-log count fixed; test-first commits noted) |
 | Review A M2 (code-review high) | 1 | da02017a64ead8f45b762267d2848db413cea704:2bad8b6cb7f52c5bd212d0a49655fe71af1b88d3 (base 6d0475a5) | 10 MINOR (F2, F3, F4, F5, F6, F7, F8, F9 fixed; F1, F10 declined) |
 | Review B M2 (conformance, sonnet) | 1 | da02017a…:2bad8b6c (base 6d0475a5) | CLEAN, cited (tree.rs, tasks.md:70-91, cycle-log.md:15-19) |
+| Review A M3 (code-review high) | 1 | f22196b4e09cd9e1d7f351b7b611662b7d134cb0:0db79c00204b5edec9f374c8343473ee7fed851b (base bb931624) | 5 MINOR (F1 fixed in 7b228493: reference to an unchanged file tested; F2–F5 declined) |
+| Review B M3 (conformance, sonnet) | 1 | f22196b4…:0db79c00 | CLEAN, cited (changes.rs arms, tree_state / tree_source tests, tasks T019–T023); 2 MINOR (F2 cycle-log note fixed, prose only; F1 declined) |
 
 ## Declined review findings
 
@@ -75,19 +77,15 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 | M1 | A | F2 (`walk` clones and sorts a level's files) | `(&str, usize)` pairs, small; M2 replaces the ordering with Size / Unreviewed-first sorts, so the per-level sort is reworked there |
 | M2 | A | F1 (`reveal` while filtering clears `collapsed`, so clearing the filter does not restore a fold above the selected file) | follows data-model §2 and R2 as written ("removes every ancestor folder of `path` from both sets"); whether a select while filtering should keep the pre-filter fold is M3's reducer wiring (T020, scenario 3.4) — M3 to decide and, if needed, reveal only in the active set |
 | M2 | A | F10 (wall-clock thresholds; untested Unreviewed-first + filter + chain) | the timed test is SC-003's chosen measure (R9), slowest of runs, 5x headroom in debug; sort keys of a chained row are its outer node's, equal to the inner's by construction, and L11 covers sort + filter. Fixed the part that held: the Size step now times the full unfiltered list |
+| M3 | A | F2 (`FileSelected` reveal while filtering clears `collapsed`) | decision 8: a file selected by any route stays listed once the filter clears (scenario 3.4, edge case "Selection inside a collapsed folder") |
+| M3 | A | F3 (`refresh_change_rows` builds leaves and a digest on every non-scroll message) | decision 10 / R9: the digest is linear and skips the layout; a generation counter needs every `list`/`diff`/`tree` writer to bump it, the miss decision 10 avoids; SC-003 timing covers the large list |
+| M3 | A | F4 (non-shown views keep stale rows) | only the shown view is drawn or read by `tree_pane`; a tab switch is a message through `update`, which refreshes the newly shown view |
+| M3 | A | F5 (`tree_rows` and `change_leaves` map leaves separately; Files lays out per draw) | different count rules by design (Files has none); Files' per-draw layout predates M3, its cost unchanged |
+| M3 | B | F1 (T034/T036 edited in M3) | decision 6 records why; prose in tasks only |
 
 ## Handover
 
-M3 unit handed over at checkpoint (CONTEXT 159k > 150k). Done: T019–T023 implemented and ticked
-(commits d9a9889e red tests, 67a2a040 implementation, c8e2a566 fmt), branch not pushed;
-`features_changes` 173 passed, `features_pr_changes` 92 passed; scoped gate green at c8e2a566;
-review snapshot before fmt 0603f0fb…:67a2a040. Next: review A (code-review high, origin/main...HEAD)
-— run it in a fresh context, not in the unit; review B (conformance, sonnet) via
-`claude -p --agent autopilot-reviewer` with the diff inline; then, right before the full gate,
-`git fetch origin main && git rebase origin/main`, layout snapshot re-record check (M3 draws
-nothing new, so the fixture should not change), `scripts/gate.sh`, then PR title/body to the
-orchestrator's scratchpad (`#1273: Review UI: file tree, filter and sort — M3 tree state`, body
-ends `Refs #1273`). Open findings: none yet. Decisions 6–10 recorded above.
+None.
 
 ## Open escalation
 

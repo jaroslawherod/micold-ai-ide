@@ -5891,7 +5891,8 @@ mod tree_state {
         assert_eq!(diff_body(view_of(&state)), DiffBody::Diff(&text_diff()));
     }
 
-    /// `ready(NESTED)` with `src` collapsed and the repository's tree read with the same files.
+    /// `ready(NESTED)` with `src` collapsed and the repository's tree read with the same files
+    /// plus `src/other.rs`, which the change does not list.
     fn collapsed_with_tree() -> State {
         let mut state = ready(NESTED);
         toggle(&mut state, &["src"]);
@@ -5904,7 +5905,11 @@ mod tree_state {
             Msg::TreeRead {
                 seq,
                 result: Ok(micold_core::pull_request::TreeListing {
-                    paths: NESTED.iter().map(|p| path(p)).collect(),
+                    paths: NESTED
+                        .iter()
+                        .chain(&["src/other.rs"])
+                        .map(|p| path(p))
+                        .collect(),
                     truncated: false,
                 }),
             },
@@ -5934,6 +5939,16 @@ mod tree_state {
         let effect = changes::update(&mut state, Msg::ReferenceActivated(path("top.rs"), None));
         assert!(matches!(effect, Effect::ReadFile { .. }), "{effect:?}");
         assert_eq!(collapsed(&state), ["src"]);
+        let effect = changes::update(
+            &mut state,
+            Msg::ReferenceActivated(path("src/other.rs"), Some(1)),
+        );
+        assert!(matches!(effect, Effect::ReadFile { .. }), "{effect:?}");
+        assert_eq!(
+            collapsed(&state),
+            ["src"],
+            "an unchanged file opens no folder"
+        );
         let effect = changes::update(
             &mut state,
             Msg::ReferenceActivated(path("src/ui/b.rs"), Some(3)),
