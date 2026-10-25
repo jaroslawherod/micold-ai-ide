@@ -73,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 gate (`scripts/gate.sh`) | — | 397d8d8d2079be2bc90fffb62e28ee6201c3983d | pass (after the known `attention_error_notice` flake, rerun); on the way: overlay inventory and showcase pose `Anchor::Below` |
 | M3 review A (code-review, high) | 1 | d938ca8eba6bb93fc7d0d90e458febaf292ef7c0:ef9ff60cb174f1478f0e1ed3265c61bc18f4cb13 | CLEAN (1 MINOR, fixed: `FieldButton::fit_in` restated the fit choice `FirstThatFits` makes — removed) |
 | M3 scoped gate | — | — | red, fixed: `sibling_parity` learns the field's shape (`FIELD_HEIGHT` pill, leading-icon glyph); `anatomy_call_sites` drops the stale `FIELD_HEIGHT`/`FIELD_MAX_WIDTH` exemptions; `material_builder_api`: `FieldButton::width` became the free fn `field_button::width`; showcase poses `FieldFit`'s variants; contrast: the field's edges checked on the resting pill (pressed layer 2.98:1) |
+| M3 review B (conformance, sonnet) | 1 | 4782f85b | CHANGES: 1 BLOCKER (the Verify log was still queued behind the build lock when it read it — the run then finished green, `VERIFY_EXIT=0`); 1 MINOR (T044's conditional covered state: `title-bar-settings` already draws the field disabled, so no `title-bar-settings-field` was added — fixed, prose only, recorded here) |
+| M3 visual pass | — | 4782f85b | pass: field centred in the free space, press opens the switcher with its input focused, a second press closes it, disabled in Settings, tooltip, dark, 640 drops the words (specs/1127-title-bar-breadcrumb/visual-pass/m3/). Glyph-only and macOS hint not driven (test-covered) |
 
 ## Declined review findings
 
