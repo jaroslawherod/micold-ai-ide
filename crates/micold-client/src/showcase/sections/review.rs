@@ -36,8 +36,9 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    BrowseBar, CardState, DiffLayout, DiffView, InlineDiff, ReviewBar, ReviewCommentCard,
-    ReviewPanelRow, SideSheet, Tag, Text, TextArea, TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
+    BrowseBar, CardState, ChangeBar, DiffLayout, DiffView, InlineDiff, ReviewBar,
+    ReviewCommentCard, ReviewPanelRow, SideSheet, Tag, Text, TextArea, TypeRole, VirtualRows,
+    PANEL_ROW_HEIGHT,
 };
 use micold_core::review::bar::{error_text, send_button, ScopeCounts};
 
@@ -625,6 +626,40 @@ pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
             ),
         ],
         Layout::FullWidth,
+    )
+}
+
+/// `ChangeBar` — a file's added and removed lines (feature 1273, T026): 40 added to 10 removed
+/// (four to one), a large and a small change against the same scale, and a one-line change at the
+/// bar's minimum length. Check that green and red sit side by side, the large bar is the longer,
+/// and the one-line bar still shows.
+pub fn change_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::review::tree::bar;
+    const WIDTH: f32 = crate::ui::material::CHANGE_BAR_WIDTH;
+    let sample = |added: u32, removed: u32, scale: u64| -> Element<'a, Message> {
+        let counts = Text::new(
+            format!("+{added} \u{2212}{removed}"),
+            TypeRole::Caption,
+            roles,
+        )
+        .muted();
+        let mut line = row![].spacing(spacing::SM).align_y(Alignment::Center);
+        if let Some(parts) = bar(added, removed, scale, WIDTH) {
+            line = line.push(ChangeBar::new(parts, roles).max_width(WIDTH));
+        }
+        line.push(counts).into()
+    };
+    arrange(
+        vec![
+            posed("4:1", sample(40, 10, 50), roles),
+            posed(
+                "one large and one small",
+                column![sample(80, 20, 100), sample(6, 4, 100)].spacing(spacing::SM),
+                roles,
+            ),
+            posed("minimum one-line", sample(1, 0, 5_000), roles),
+        ],
+        Layout::Inline,
     )
 }
 

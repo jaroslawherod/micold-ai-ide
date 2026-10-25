@@ -74,17 +74,35 @@ from the app.
 
 ## What the list shows
 
-One row per changed file:
+The changed files are shown as a tree. Each folder that holds a changed file has a row of its own,
+with its files and sub-folders indented below it; at each level folders come before files, and both
+are in name order. A folder whose only content is one folder shares its row with it, so
+`crates/core/src/review` is one row rather than four. Every folder is open when the view opens.
+
+A folder row shows a chevron, the folder's name and, under it, `+a −r`: the lines added and removed
+in all the files below it, so a closed folder still says how much changed inside. Select a folder row
+to close it and hide everything below it; select it again to open it, with any sub-folder you closed
+still closed. The folders you close stay closed while the view is kept, even when the list is read
+again or you switch the source. Selecting a file in a closed folder some other way (from the diff's
+**Open diff**, or by following a reference) opens the folders above it.
+
+A file row starts with the file's own name, in bold; the folders above it say where it is. Under the
+name:
 
 - its review state: ○ not reviewed yet, ◉ not reviewed and with draft comments, ✓ reviewed (see
-  [Marking files reviewed](#marking-files-reviewed));
-- the file's path, relative to the worktree;
-- what happened to it: **Added**, **Modified**, **Deleted**, **Renamed from** `<old path>` or
-  **Mode** (only its permissions changed). A file git does not track yet counts as **Added**;
+  [Marking files reviewed](#marking-files-reviewed)), before the name;
+- what happened to it: **Added**, **Deleted**, **Renamed** or **Mode** (only its permissions
+  changed); a modified file has no tag. A file git does not track yet counts as **Added**;
 - **Binary** or **Not text** when the file's contents are not readable text;
-- `+a −r`: how many lines were added and removed;
+- a small bar and `+a −r`: the green part of the bar is the lines added and the red part the lines
+  removed, in proportion to each other, and the whole bar is longer the more lines the file changed
+  compared with the other files listed, so the large changes stand out. A binary or non-text file, a
+  **Mode** change and a rename with no edits have no bar and no counts;
 - how many comments you have written on the file and not sent yet (see
   [Commenting on lines](#commenting-on-lines)), when there are any.
+
+Hover a file row to see its full path, and for a rename the path it had before. A name too long for
+the list ends in `…`; deep folders stop indenting further before a file's name loses its room.
 
 A file changed both in a commit and again since is listed once, with the combined change. Long
 lists scroll smoothly: only the rows on screen are drawn.

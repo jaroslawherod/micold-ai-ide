@@ -29,6 +29,7 @@ mod anatomy_size;
 mod button_anatomy;
 mod card_grid;
 mod card_lift;
+mod change_bar;
 mod code_block;
 mod command_palette;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
@@ -122,6 +123,7 @@ mod typeahead;
 mod usage_indicator;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use card_grid::{CardGrid, Zoom};
+pub use change_bar::{ChangeBar, CHANGE_BAR_WIDTH};
 pub use code_block::CodeBlock;
 pub use command_palette::CommandPalette;
 pub use connection_banner::ConnectionBanner;

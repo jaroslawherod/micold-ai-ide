@@ -25,3 +25,12 @@ task pair it covers.
 | T019 | #1272's list pane: 260 px file column, row 36 px; no renames (ledger decision 7) | structural | — |
 | T020, T021 | reducer: tree default, `TreeFolderToggled`, reveal by `FileSelected` / `OpenFileDiff` / `ReferenceActivated`, folds kept by re-read, reading/failed, source switch, `tree_pane`, leaves' counts and bar scale | `cargo check -p micold-client --test features_changes --test features_pr_changes`: 15 errors, `no field change_rows / tree / change_scale on OpenView`, `no variant TreeFolderToggled`, `unresolved imports changes::tree_pane, changes::TreePane` | T022 |
 | T022, T023 | `OpenView.tree`, `change_rows`, `change_scale`, `refresh_change_rows` in `update`, reveal; Files `tree_rows` over `review::tree::layout` (client `Folder` walk deleted) | — (T022 turns T020/T021's red green; T023 is a behaviour-preserving refactor guarded by the unchanged Files tree tests) | `features_changes` 173 passed (Files tree tests unchanged), `features_pr_changes` 92 passed |
+
+## M4
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T024, T025 | `ChangeBar`: two adjacent segments at the `BarParts` lengths, never past `.max_width`, nothing for a zero part (pixel and geometry checks) | not observed separately: the geometry test and the component were written in one step | `cargo test -p micold-client --lib change_bar`: 3 passed |
+| T026 | `ChangeBar` in the showcase | `showcase_completeness` names a component with no entry until the entry exists (rule of the gate) | `showcase_completeness` 13 passed, `material_builder_api` 46 passed |
+| T027 | 24-character name keeps its room at every depth (SC-006); tree rows drawn | not observed separately (written with the row layout; ledger decision 11 records why the rows went to two lines) | `ui::changes::tests` 1 passed |
+| T028 | `changes-tree-collapsed` recorded; the changed list states re-recorded (`changes-review-marks*`, `review-source-open*`) | containment failed on a first 12-row state (the list's scroll content past its viewport); cut to 8 rows | `layout_snapshot` 140 passed |

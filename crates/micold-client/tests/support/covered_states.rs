@@ -2062,6 +2062,26 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1273: the changed files as a tree (T028, FR-001–FR-007) -------------------
+        //
+        // `feat-short`'s review listing five files in folders: the nested `crates/core/src/review`
+        // chained into one row, `tests` collapsed, a binary file in `assets`, a Mode change in
+        // `scripts`, `README.md` at the top level; `tree.rs` selected. Eight rows, so the list
+        // fits the 800 px window's column without scrolling.
+        CoveredState {
+            name: "changes-tree-collapsed",
+            build: review_tree_collapsed,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
         // --- Feature 1272: the review's source control (T024, FR-012) -------------------------
         //
         // `feat-short`'s review with the source control in its header and the file column at its
@@ -3596,6 +3616,62 @@ pub fn review_held() -> StateUnderTest {
             result: Ok(latest),
             whole: Err("kept".into()),
         },
+    );
+    under
+}
+
+/// [`review_shown`] with its list read as a tree (feature 1273, T028): a chain of nested folders,
+/// `tests` collapsed, a binary and a Mode row, and `tree.rs` selected.
+pub fn review_tree_collapsed() -> StateUnderTest {
+    use micold_client::features::changes::{self, Load, Msg};
+    use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile, Content, Origin};
+    use micold_core::review::marks::WholeChange;
+    use micold_core::review::RelPath;
+
+    let mut under = review_shown();
+    let path = |p: &str| RelPath::from_native(p).expect("a relative path");
+    let file = |p: &str, kind: ChangeKind, content: Content, added: u32, removed: u32| ChangedFile {
+        path: path(p),
+        kind,
+        content,
+        added,
+        removed,
+        large: false,
+        origin: Origin::Uncommitted,
+        identity: micold_core::review::changes::ChangeIdentity::Unknown,
+    };
+    let text = Content::Text;
+    let list = ChangeList {
+        files: vec![
+            file("README.md", ChangeKind::Modified, text, 3, 1),
+            file("assets/logo.png", ChangeKind::Added, Content::Binary, 0, 0),
+            file("crates/core/src/review/tree.rs", ChangeKind::Modified, text, 120, 30),
+            file("scripts/run.sh", ChangeKind::ModeOnly, text, 0, 0),
+            file("tests/tree.rs", ChangeKind::Modified, text, 14, 6),
+        ],
+        scope: micold_core::review::base::ReviewScope::Worktree {
+            base: micold_core::review::base::Base::MergeBase {
+                branch: "main".into(),
+                commit: "0123456789abcdef0123456789abcdef01234567".into(),
+            },
+        },
+    };
+    let changes = &mut under.state.changes;
+    let Some(Load::Loading { seq, .. }) = changes.tabs.shown_view().map(|v| v.list.clone()) else {
+        panic!("the shown review reads its list");
+    };
+    changes::update(
+        changes,
+        Msg::ListRead {
+            seq,
+            result: Ok(list),
+            whole: Ok(WholeChange::default()),
+        },
+    );
+    changes::update(changes, Msg::TreeFolderToggled(vec!["tests".into()]));
+    changes::update(
+        changes,
+        Msg::FileSelected(path("crates/core/src/review/tree.rs")),
     );
     under
 }
