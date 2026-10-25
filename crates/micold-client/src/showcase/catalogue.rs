@@ -893,6 +893,22 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::breadcrumb,
     },
     Entry {
+        module: "material/field_button.rs",
+        component: "FieldButton",
+        // `material::FieldFit`: each fit posed in the room it needs.
+        variants: &["Full", "GlyphAndHint", "Glyph"],
+        density: &[],
+        posed: &["full", "glyph and hint", "glyph", "disabled"],
+        live: &[
+            "press it",
+            "Tab to it and press Enter or Space",
+        ],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::surfaces::field_button,
+    },
+    Entry {
         module: "material/connection_banner.rs",
         component: "ConnectionBanner",
         // `Info`/`Error` are `style::NoticeLevel`, which the Material crate declares (feature 1262).

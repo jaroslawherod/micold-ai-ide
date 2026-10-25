@@ -31,7 +31,7 @@ status markers.
 | Delete | Delete a worktree | Sidebar worktree rows |
 | Filter | Toggle a tag-filter panel | Component showcase |
 | More (⋯) | Open the menu holding refresh, attach existing and run in parallel | Sidebar chip bar |
-| Search | Search a long list by typing | Branch search in the New worktree form |
+| Search | Search a long list by typing; on the title bar's jump-to field, open the quick switcher | Branch search in the New worktree form, the title bar's jump-to field |
 | Project root | The repository's own working directory | Sidebar **Default** entry |
 | Copy | Copy a worktree's name to the clipboard | Worktree right-click menu (**Copy name**) |
 | Raised hand | A session needs permission or an answer from you | **Needs permission** row in Settings and its notification |

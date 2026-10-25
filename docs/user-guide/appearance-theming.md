@@ -12,9 +12,12 @@ The window is organised as a Material Design layout:
 - A 44 px **title bar** across the top holds, from the left: the app mark (hover it for the
   application's name), a `project / place` **breadcrumb** — the open project (press it to switch
   projects) and, after a `/` in a quieter tone, the branch or view the main area shows — and the
-  **Overview** button; at the right, a **Settings** button (the gear) and the **overflow menu**
-  (three dots). It shows no title text. When the window is narrow, the place shortens with an
-  ellipsis first, then the project name, and every control stays in the bar.
+  **Overview** button; in the middle of the free space, the **Jump to location, session or
+  project** field with its shortcut (Ctrl+Shift+P, Cmd+Shift+P on macOS), which opens the quick
+  switcher; at the right, a **Settings** button (the gear) and the **overflow menu** (three dots).
+  It shows no title text. When the window narrows, the field gives way first — it narrows to fit
+  its words, then drops its words, then its shortcut, keeping a pressable search glyph — then the
+  place shortens with an ellipsis, then the project name, and every control stays in the bar.
 - The **main area** shows either the active project or, when nothing is open, a welcoming
   empty state inviting you to open a folder.
 - A thin **status bar** along the bottom edge says whether the window is connected and whether the

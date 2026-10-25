@@ -216,52 +216,52 @@ Test*.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T034 [P] [US2] Write failing unit tests in NEW `lib/field_button.rs`:
+- [x] T034 [P] [US2] Write failing unit tests in NEW `lib/field_button.rs`:
   `FieldButton::new(Icon::Search, label, roles).hint(text).max_width(w).on_press_maybe(m).id(id)` is
   a `FIELD_HEIGHT` pill; its three widths (`Full`: glyph, label, hint; `GlyphAndHint`; `Glyph`: an
   `ICON_TARGET` square) are reported; at `Full` it never grows past `max_width`; with `None` it draws
   content at the shared 38% disabled treatment and is no Tab stop; with a press, Enter and Space
   publish it (FR-008, FR-009, FR-013, data-model *Fit*)
-- [ ] T035 [P] [US2] Write failing unit tests in `lib/toolbar.rs` for `.centre(e)`: B3 the centre
+- [x] T035 [P] [US2] Write failing unit tests in `lib/toolbar.rs` for `.centre(e)`: B3 the centre
   child has equal free space either side between the leading and trailing groups (not the window's
   centre line, also with a long breadcrumb); B4 the five-step order of data-model *Give-way order* —
   field spare width, field label `Drop(0)`, field hint `Drop(1)`, place `Shorten(0)`, project
   `Shorten(1)` — each only as far as needed
-- [ ] T036 [P] [US2] Write failing render-free tests in `client/src/ui/toolbar.rs` for
+- [x] T036 [P] [US2] Write failing render-free tests in `client/src/ui/toolbar.rs` for
   `jump_press(state)`: Settings open → `None`; session view, Overview, full screen, no project →
   `Some(QuickSwitch(Toggled { terminal_had_focus: state.terminal_focused() }))` (FR-009, US2 s4, R6)
-- [ ] T037 [P] [US2] Write a failing test in `client/src/main_tests.rs` through `update`: the field's
+- [x] T037 [P] [US2] Write a failing test in `client/src/main_tests.rs` through `update`: the field's
   message opens the quick switcher and the returned task focuses `QUICK_SWITCHER_FIELD_ID`, the same
   as the chord's (FR-009, US2 s1)
-- [ ] T038 [P] [US2] Add a case to `client/tests/overlay_dismissal_rules.rs`: with the quick switcher
+- [x] T038 [P] [US2] Add a case to `client/tests/overlay_dismissal_rules.rs`: with the quick switcher
   open, a press at the field's bounds yields `QuickSwitch(Dismissed)` and opens no second switcher
   (US2 s3, contract P3)
-- [ ] T039 [P] [US2] Extend `client/tests/title_bar_keyboard.rs`: the field is a Tab stop between the
+- [x] T039 [P] [US2] Extend `client/tests/title_bar_keyboard.rs`: the field is a Tab stop between the
   Overview button and Settings and Enter on it publishes `jump_press`'s message; with Settings open
   it is skipped (FR-013, contract C5)
-- [ ] T040 [P] [US2] Add field pairs to `client/src/ui/material/composition_contrast.rs`: label and
+- [x] T040 [P] [US2] Add field pairs to `client/src/ui/material/composition_contrast.rs`: label and
   hint text in `on_surface_variant` ≥ 4.5:1 and the pill outline and key-cap outline in the outline
   role ≥ 3:1 on the field's and the bar's surface, light and dark (FR-017, contract T2)
 
 ### Implementation for User Story 2
 
-- [ ] T041 [US2] Implement `FieldButton` in `lib/field_button.rs` (`surface_container_highest` pill,
+- [x] T041 [US2] Implement `FieldButton` in `lib/field_button.rs` (`surface_container_highest` pill,
   `shape::FULL`, outline role per T2, outlined key-cap hint, `TakesTheKeyboard` when pressable,
   `Fit` decided at layout); `pub mod` / `pub use` in `lib/lib.rs` (R5)
-- [ ] T042 [US2] Implement `Toolbar::centre(e)` in `lib/toolbar.rs`: the centre child gets the free
+- [x] T042 [US2] Implement `Toolbar::centre(e)` in `lib/toolbar.rs`: the centre child gets the free
   space up to its maximum, centred in it, and yields through `give_way::plan` per T035 (R2, R3)
-- [ ] T043 [US2] Add `jump_press()` and `TitleBarModel::jump` in `client/src/ui/toolbar.rs`, and
+- [x] T043 [US2] Add `jump_press()` and `TitleBarModel::jump` in `client/src/ui/toolbar.rs`, and
   `.centre(FieldButton::new(Icon::Search, "Jump to location, session or project", r)
   .hint(keymap::switcher_chord_label()).max_width(app_bar::FIELD_MAX_WIDTH).on_press_maybe(model.jump))`
   in a `Tooltip` "Jump to location, session or project (<chord>)" in `view()` (FR-008, FR-009,
   contract C5)
-- [ ] T044 [US2] Extend `client/tests/gates/title_bar_fits.rs` (at 640 dp the field shows at least its
+- [x] T044 [US2] Extend `client/tests/gates/title_bar_fits.rs` (at 640 dp the field shows at least its
   glyph; at 1280 dp it is centred in the free space), add covered state `title-bar-settings-field`
   if `title-bar-settings` does not already show the disabled field, add a `FieldButton` showcase
   entry in `client/src/showcase/sections/surfaces.rs`, update the `app_bar.*` component paths in
   `client/tests/support/covered_states.rs` behind the new centre child, and regenerate
   `client/tests/fixtures/layout_snapshot.txt`
-- [ ] T045 [US2] Update the user guide: `docs/user-guide/worktrees-and-sessions.md` (the quick
+- [x] T045 [US2] Update the user guide: `docs/user-guide/worktrees-and-sessions.md` (the quick
   switcher opens from the title bar's field too), `docs/user-guide/appearance-theming.md` (the field
   and what gives way first in a narrow window), `docs/user-guide/icons.md` (Search on the field)
   (FR-018)

@@ -1,7 +1,8 @@
-//! The title bar's keyboard reach (feature 1127, FR-003, FR-013, contract C1, C4, C6, C7): its
-//! controls are Tab stops in bar order — the project switcher, the Overview button, Settings, the
-//! overflow trigger — Enter on Settings opens Settings, and the app mark is neither a Tab stop nor
-//! a control.
+//! The title bar's keyboard reach (feature 1127, FR-003, FR-013, contract C1, C4, C5, C6, C7): its
+//! controls are Tab stops in bar order — the project switcher, the Overview button, the jump-to
+//! field, Settings, the overflow trigger — Enter on the field publishes its press and Enter on
+//! Settings opens Settings, the field is skipped while Settings is open, and the app mark is neither
+//! a Tab stop nor a control.
 
 mod support;
 
@@ -134,7 +135,7 @@ fn view(state: &State) -> Element<'_, Message> {
     )
 }
 
-/// C2/C4/C6/C7: four Tab stops in the bar, left to right in traversal order, the first of them the
+/// C2/C4/C5/C6/C7: five Tab stops in the bar, left to right in traversal order, the first of them the
 /// first Tab stop of the window; none of them is the app mark's square.
 #[test]
 fn the_bar_controls_are_tab_stops_in_bar_order() {
@@ -143,8 +144,8 @@ fn the_bar_controls_are_tab_stops_in_bar_order() {
     let stops = m.bar_stops();
     assert_eq!(
         stops.len(),
-        4,
-        "the switcher, Overview, Settings and the overflow trigger: {stops:?}"
+        5,
+        "the switcher, Overview, the field, Settings and the overflow trigger: {stops:?}"
     );
     for pair in stops.windows(2) {
         assert!(
@@ -157,7 +158,7 @@ fn the_bar_controls_are_tab_stops_in_bar_order() {
         stops.iter().all(|b| b.x >= mark_end),
         "the app mark is a Tab stop: {stops:?}"
     );
-    let (settings, overflow) = (stops[2], stops[3]);
+    let (settings, overflow) = (stops[3], stops[4]);
     for icon_only in [settings, overflow] {
         assert_eq!(
             (icon_only.width, icon_only.height),
@@ -167,12 +168,12 @@ fn the_bar_controls_are_tab_stops_in_bar_order() {
     }
 }
 
-/// C6: Tab to Settings (the third stop) and press Enter: Settings opens.
+/// C6: Tab to Settings (the fourth stop) and press Enter: Settings opens.
 #[test]
 fn enter_on_settings_opens_settings() {
     let state = state();
     let mut m = Mounted::new(view(&state));
-    for _ in 0..3 {
+    for _ in 0..4 {
         m.tab();
     }
     let published = m.send(named_key(Named::Enter), mouse::Cursor::Unavailable);
@@ -180,7 +181,40 @@ fn enter_on_settings_opens_settings() {
         published
             .iter()
             .any(|msg| matches!(msg, Message::Settings(SettingsMsg::Opened))),
-        "Enter on the third Tab stop sent {published:?}"
+        "Enter on the fourth Tab stop sent {published:?}"
+    );
+}
+
+/// T039 (FR-013, C5): the field is the third stop, between the Overview button and Settings, and
+/// Enter on it publishes what `jump_press` says it sends.
+#[test]
+fn enter_on_the_jump_field_publishes_its_press() {
+    let state = state();
+    let mut m = Mounted::new(view(&state));
+    for _ in 0..3 {
+        m.tab();
+    }
+    let published = m.send(named_key(Named::Enter), mouse::Cursor::Unavailable);
+    let pressed = micold_client::ui::jump_press(&state).expect("pressable");
+    assert_eq!(published, vec![pressed], "Enter on the third Tab stop");
+}
+
+/// T039 (FR-009, C5): with Settings open the field is drawn disabled and Tab skips it.
+#[test]
+fn with_settings_open_tab_skips_the_jump_field() {
+    let mut state = state();
+    state.settings.settings_draft = Some(Default::default());
+    let mut m = Mounted::new(view(&state));
+    let field = lay::resolve(view(&state), &lay::renderer())
+        .into_iter()
+        .find(|r| r.layer == lay::Layer::Base && r.path == [0, 0, 0, 0, 0, 3])
+        .expect("the bar lays out its jump-to field");
+    let centre = Point::new(field.x + field.width / 2.0, field.y + field.height / 2.0);
+    let stops = m.bar_stops();
+    assert!(!stops.is_empty(), "the bar still has Tab stops");
+    assert!(
+        stops.iter().all(|b| !b.contains(centre)),
+        "the disabled field at {field:?} is a Tab stop: {stops:?}"
     );
 }
 

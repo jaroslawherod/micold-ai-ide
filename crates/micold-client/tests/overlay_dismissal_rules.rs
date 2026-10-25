@@ -7,6 +7,8 @@
 //! kind/trigger pair — so a local special case fails here rather than being discovered as a
 //! surface that closes when its neighbour does not.
 
+mod support;
+
 use micold_client::app::Message;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
@@ -117,5 +119,54 @@ fn a_surface_identity_is_its_own_name_and_nothing_else() {
         id,
         SurfaceId::new("add_worktree"),
         "identities must distinguish surfaces — the registry keys on them"
+    );
+}
+
+/// Feature 1127 (T038, US2 s3, contract P3): with the quick switcher open, a press where the title
+/// bar's jump-to field is lands on the switcher's scrim — it closes the switcher, the way a press
+/// anywhere outside it does, and opens no second one.
+#[test]
+fn a_press_on_the_jump_field_closes_an_open_quick_switcher() {
+    use micold_client::features::quick_switch::{Msg as QuickSwitchMsg, Open};
+    use support::layout::{self as lay, Gesture, StateUnderTest};
+
+    let mut workspace = support::workspace_with(vec![("/fixture/project", vec![])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = micold_client::app::State {
+        workspace,
+        ..micold_client::app::State::default()
+    };
+    state.window.window_size = (1280, 800);
+
+    // Where the field is: the bar's centre child (shell → column → bar → lane → child 3).
+    let closed = StateUnderTest::new(state.clone());
+    let field = lay::resolve(lay::view_of(&closed), &lay::renderer())
+        .into_iter()
+        .find(|r| r.layer == lay::Layer::Base && r.path == [0, 0, 0, 0, 0, 3])
+        .expect("the bar lays out its jump-to field");
+    let centre = iced::Point::new(field.x + field.width / 2.0, field.y + field.height / 2.0);
+
+    state.quick_switch.open = Some(Open {
+        query: String::new(),
+        highlighted: None,
+        terminal_had_focus: false,
+        keyboard_row_before: None,
+    });
+    let open = StateUnderTest::new(state);
+    let published = lay::runtime_messages(
+        || lay::view_of(&open),
+        iced::Size::new(1280.0, 800.0),
+        &[Gesture::Click(centre)],
+    )
+    .concat();
+    assert!(
+        published.contains(&Message::QuickSwitch(QuickSwitchMsg::Dismissed)),
+        "the press did not close the switcher: {published:?}"
+    );
+    assert!(
+        !published
+            .iter()
+            .any(|m| matches!(m, Message::QuickSwitch(QuickSwitchMsg::Toggled { .. }))),
+        "the press reached the field under the switcher: {published:?}"
     );
 }

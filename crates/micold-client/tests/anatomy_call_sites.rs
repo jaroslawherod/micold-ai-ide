@@ -164,18 +164,6 @@ const RECORDED: &[(&str, &str, &str)] = &[
         "1dp — no menu in the application groups its items, so none draws a divider",
     ),
     (
-        "anatomy::app_bar::FIELD_HEIGHT",
-        gap::NOT_BUILT,
-        "32dp — feature 1127's jump-to field, which its milestone M3 builds; M1 draws the bar \
-         without it",
-    ),
-    (
-        "anatomy::app_bar::FIELD_MAX_WIDTH",
-        gap::NOT_BUILT,
-        "360dp — the same jump-to field as `app_bar::FIELD_HEIGHT`, not built before feature \
-         1127's M3",
-    ),
-    (
         "anatomy::app_bar::LEADING_ICON_PADDING",
         gap::NOT_BUILT,
         "4dp — `Toolbar` has no leading-icon slot; its leading element is the app mark, which \

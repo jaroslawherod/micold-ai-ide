@@ -12,22 +12,19 @@
 //! an ellipsis first (`Shorten(0)`), then the project (`Shorten(1)`), each to a floor of one
 //! character and `…`; the separator, the glyph and the mark never shorten (FR-007, data-model
 //! *Give-way order*). A segment that is shortened shows its full text in its tooltip, which is
-//! decided where the shortening is: at layout, by [`Fit`].
+//! decided where the shortening is: at layout, by [`FirstThatFits`].
 //!
 //! Builder form (Principle VIII):
 //! `Breadcrumb::new(project, roles).tooltip(t).on_press(m).trailing_mark(n, t).place(p, full).open(b).into()`.
 
-use crate::give_way::{Floor, GiveWay, Lane, Slot};
+use crate::give_way::{FirstThatFits, Floor, GiveWay, Group, Lane, Need, Slot};
 use crate::icons::Icon;
 use crate::shaped_text::width_of;
 use crate::style::Host;
 use crate::text::{Text, TypeRole};
 use crate::{Button, ButtonVariant, Ellipsized, Tooltip};
-use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{tree, Operation, Tree};
-use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::container;
-use iced::{Element, Event, Length, Padding, Rectangle, Size, Vector};
+use iced::{Element, Padding};
 use micold_core::tokens::{anatomy, spacing, Roles};
 
 /// The role both segments and the separator are set at: the label role a button's text takes, so
@@ -116,7 +113,7 @@ fn floor_text(text: &str) -> String {
 fn shortens(rank: u8, text: &str) -> Slot {
     Slot {
         give_way: GiveWay::Shorten(rank),
-        trailing: false,
+        group: Group::Leading,
         floor: Floor::Saving(width_of(text, ROLE) - width_of(&floor_text(text), ROLE)),
     }
 }
@@ -150,7 +147,10 @@ impl<'a, M: Clone + 'a> From<Breadcrumb<M>> for Element<'a, M> {
             None => b.project.clone(),
         });
         let mut lane = Lane::hugging(spacing::XS).push(
-            Fit::new(project(b.tooltip.clone()), project(shortened_tooltip)).into(),
+            FirstThatFits::new()
+                .or(project(b.tooltip.clone()), Need::Natural)
+                .or(project(shortened_tooltip), Need::Natural)
+                .into(),
             shortens(1, &b.project),
         );
 
@@ -164,7 +164,7 @@ impl<'a, M: Clone + 'a> From<Breadcrumb<M>> for Element<'a, M> {
                 });
             let kept = Slot {
                 give_way: GiveWay::Keep,
-                trailing: false,
+                group: Group::Leading,
                 floor: Floor::Natural,
             };
             let label = |tooltip: Option<String>| -> Element<'a, M> {
@@ -177,176 +177,15 @@ impl<'a, M: Clone + 'a> From<Breadcrumb<M>> for Element<'a, M> {
             let slot = shortens(0, &text);
             let whole = label(full.clone());
             let cut = label(Some(full.unwrap_or_else(|| text.clone())));
-            lane = lane
-                .push(separator.into(), kept)
-                .push(Fit::new(whole, cut).into(), slot);
+            lane = lane.push(separator.into(), kept).push(
+                FirstThatFits::new()
+                    .or(whole, Need::Natural)
+                    .or(cut, Need::Natural)
+                    .into(),
+                slot,
+            );
         }
         lane.into()
-    }
-}
-
-/// One of two renderings of a segment: `whole` while it is laid out at its natural width, `cut`
-/// once its room is narrower than that — the same segment with the full text in its tooltip.
-///
-/// The choice is made at layout because that is the first moment anything knows whether the text
-/// was shortened; the view that built the bar does not know the window's width. Only the chosen
-/// child is drawn, updated, traversed and floated, so the segment is one Tab stop and one tooltip.
-/// It adds no layout node of its own.
-///
-/// The two renderings keep separate trees, so a resize that crosses the threshold drops the
-/// segment's hover, press and keyboard focus and restarts its tooltip's wait. A resize is not
-/// something a person does while pressing or tabbing, so the bar accepts that.
-struct Fit<'a, M> {
-    whole: Element<'a, M>,
-    cut: Element<'a, M>,
-}
-
-/// Whether the last layout chose [`Fit::cut`].
-#[derive(Default)]
-struct Shortened(bool);
-
-impl<'a, M> Fit<'a, M> {
-    fn new(whole: Element<'a, M>, cut: Element<'a, M>) -> Self {
-        Self { whole, cut }
-    }
-
-    /// The child the last layout chose, and its tree.
-    fn chosen<'b>(&'b self, tree: &'b Tree) -> (&'b Element<'a, M>, &'b Tree) {
-        if tree.state.downcast_ref::<Shortened>().0 {
-            (&self.cut, &tree.children[1])
-        } else {
-            (&self.whole, &tree.children[0])
-        }
-    }
-
-    fn chosen_mut<'b>(&'b mut self, tree: &'b mut Tree) -> (&'b mut Element<'a, M>, &'b mut Tree) {
-        if tree.state.downcast_ref::<Shortened>().0 {
-            (&mut self.cut, &mut tree.children[1])
-        } else {
-            (&mut self.whole, &mut tree.children[0])
-        }
-    }
-}
-
-impl<M> Widget<M, iced::Theme, iced::Renderer> for Fit<'_, M> {
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<Shortened>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(Shortened::default())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.whole), Tree::new(&self.cut)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.whole, &self.cut]);
-    }
-
-    fn size(&self) -> Size<Length> {
-        self.whole.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &iced::Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        let unbounded =
-            layout::Limits::new(Size::ZERO, Size::new(f32::INFINITY, limits.max().height));
-        let natural =
-            self.whole
-                .as_widget_mut()
-                .layout(&mut tree.children[0], renderer, &unbounded);
-        // Half a pixel, as every geometry rule beside this one: a width given back to it rounded is
-        // not a shortening.
-        let shortened = natural.size().width > limits.max().width + 0.5;
-        tree.state.downcast_mut::<Shortened>().0 = shortened;
-        let (child, state) = self.chosen_mut(tree);
-        child.as_widget_mut().layout(state, renderer, limits)
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        let (child, state) = self.chosen_mut(tree);
-        child
-            .as_widget_mut()
-            .operate(state, layout, renderer, operation);
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &iced::Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, M>,
-        viewport: &Rectangle,
-    ) {
-        let (child, state) = self.chosen_mut(tree);
-        child.as_widget_mut().update(
-            state, event, layout, cursor, renderer, clipboard, shell, viewport,
-        );
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &iced::Renderer,
-    ) -> mouse::Interaction {
-        let (child, state) = self.chosen(tree);
-        child
-            .as_widget()
-            .mouse_interaction(state, layout, cursor, viewport, renderer)
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut iced::Renderer,
-        theme: &iced::Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        let (child, state) = self.chosen(tree);
-        child
-            .as_widget()
-            .draw(state, renderer, theme, style, layout, cursor, viewport);
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let (child, state) = self.chosen_mut(tree);
-        child
-            .as_widget_mut()
-            .overlay(state, layout, renderer, viewport, translation)
-    }
-}
-
-impl<'a, M: 'a> From<Fit<'a, M>> for Element<'a, M> {
-    fn from(fit: Fit<'a, M>) -> Self {
-        Element::new(fit)
     }
 }
 
@@ -354,7 +193,8 @@ impl<'a, M: 'a> From<Fit<'a, M>> for Element<'a, M> {
 mod tests {
     use super::super::test_support::{dark_roles, leaves, roles, Mounted};
     use super::*;
-    use iced::{Point, Size};
+    use iced::advanced::mouse;
+    use iced::{Event, Point, Rectangle, Size};
 
     const ROOM: Size = Size::new(800.0, 100.0);
     const PROJECT: &str = "micold-ai-ide";

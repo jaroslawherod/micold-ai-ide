@@ -16249,3 +16249,67 @@ mod jira_filter_shell {
         ));
     }
 }
+
+/// Whether the work an update returned moves the keyboard to `id`: each widget operation it
+/// carries is run over one focusable named `id`, as the runtime runs it over the view.
+fn focuses(work: Task<Message>, id: &iced::widget::Id) -> bool {
+    use iced::advanced::widget::operation::Focusable;
+    use iced::futures::StreamExt;
+    struct Field(bool);
+    impl Focusable for Field {
+        fn is_focused(&self) -> bool {
+            self.0
+        }
+        fn focus(&mut self) {
+            self.0 = true;
+        }
+        fn unfocus(&mut self) {
+            self.0 = false;
+        }
+    }
+    let Some(stream) = iced_runtime::task::into_stream(work) else {
+        return false;
+    };
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let actions = runtime.block_on(async {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            stream.collect::<Vec<_>>(),
+        )
+        .await
+        .expect("the work an update returned has to finish")
+    });
+    actions.into_iter().any(|action| match action {
+        iced_runtime::Action::Widget(mut operation) => {
+            let mut field = Field(false);
+            operation.focusable(Some(id), iced::Rectangle::default(), &mut field);
+            field.is_focused()
+        }
+        _ => false,
+    })
+}
+
+/// Feature 1127 (T037, FR-009, US2 s1): the jump-to field's message, through `update`, opens the
+/// quick switcher and returns the work that focuses its input — the same as the chord's message,
+/// which is the same message.
+#[test]
+fn the_jump_field_opens_the_quick_switcher_with_its_input_focused() {
+    use micold_client::features::quick_switch::Msg as QuickSwitchMsg;
+    use micold_client::ui::quick_switcher::QUICK_SWITCHER_FIELD_ID;
+    let project = PathBuf::from("/repo/micold-ai-ide");
+    let mut app = app_on_project(&project);
+    let pressed = micold_client::ui::jump_press(&app.core).expect("the field is pressable");
+    assert_eq!(
+        pressed,
+        Message::QuickSwitch(QuickSwitchMsg::Toggled {
+            terminal_had_focus: false
+        }),
+        "the chord's message with no terminal holding the keyboard"
+    );
+    let work = update(&mut app, pressed);
+    assert!(app.core.quick_switch.open.is_some(), "the switcher opens");
+    assert!(
+        focuses(work, &QUICK_SWITCHER_FIELD_ID),
+        "the switcher's input takes the keyboard"
+    );
+}
