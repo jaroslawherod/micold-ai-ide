@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1271
 - **Worktree branch**: claude/project-thread-umhor9
 - **Started**: 2026-10-24
-- **Phase**: M5 implemented (branch 1271-m5, stacked on M4's PR #1417); reviews due on snapshot a4e09516:58f399d8c
-- **Next step**: orchestrator runs review A (high), B (conformance) and the visual pass (quickstart Part B step 7) on the M5 snapshot; after #1417 merges, rebase 1271-m5 onto main, run the full gate and open the M5 PR
+- **Phase**: M5 round 1 fixes applied and rebased on origin/main a3948a180 (M4 merged); awaiting round 2 on the fix diff
+- **Next step**: orchestrator runs round 2 (scoped, sonnet) on the fix diff; then the full gate, push 1271-m5 and open the M5 PR
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1360 | design (spec, plan, tasks) | merged | e683d5db1514b59179c91d03dc1b85ed4fc1a049 |
 | #1374 | M1 micold-core marks | merged (after it, the orchestrator pushed two CI fixes: cf4073cf `as_chunks` for clippy 1.99; 59ff54bf quoted-path test `#[cfg(unix)]`, Windows refuses `"` in file names) | 96b90dd65dc6cd9920f111dba94c460b2a414c26 |
 | #1390 | M2 marks on the wire and in the service | merged (after the M2 PR was prepared, the orchestrator rebased onto main, which carried #1269's kept Review tabs, and added `marks: Vec::new()` to three #1269 test messages, commit 9047a4f0) | dc03f7528be1f656964c04ac87a5b21499f5f6ac |
+| #1417 | M4 changed-since dot, other windows' marks | merged (rebase merge) | a3948a180 |
 | #1411 | M3 row states, mark control, progress | merged (after the M3 PR text was prepared, the orchestrator rebased twice more, resolved a `use` conflict in review/marks.rs, added #1275's `identity` field to the marks covered state, and re-recorded the layout snapshot) | 81b3eb543292e6df8dca698ad249498549417349 |
 
 ## Milestones
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | micold-core: change ids, whole-change read, EntryMarks, states, progress, review file v4 | #1374 | merged |
 | M2 | T018–T024 | full | wire SetReviewed + ReviewChanged.marks, service keeps/pushes/removes marks, client holds them; no view change (docs-not-needed) | #1390 | merged |
 | M3 | T025–T034 | full | MVP: row states, Mark reviewed control, n of m reviewed + bar, user guide | #1411 | merged |
-| M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | — | implementing |
-| M5 | T040–T044 | full | pull request marks and progress, guide text | — | implemented, reviews due |
+| M4 | T035–T039 | light | changed-since dot, other windows' marks in the view, guide text | #1417 | merged (rebase merge a3948a180) |
+| M5 | T040–T044 | full | pull request marks and progress, guide text | — | round 1 fixed, round 2 due |
 
 ## Decisions
 
@@ -74,6 +75,7 @@ B1 runs (`MUT1271=<name>`, `cargo test -p micold-client --test features_changes 
 | M4 round 3 | 3 | 922adf0475245b280975b60e13a63a287039c800:4e706b27ad22b43859cef339b985234f343f22eb | Code re-review CLEAN (1 MINOR: `Tag::one_line` doc says it affects only the natural-width label, taken). Visual FAIL at 900 only: once the path shrinks to 0 the tags and counts are wider than the row and paint into the trailing padding, under the dot. Round 2's gate missed it: it read layout nodes (which overflow whatever clips them) at widths where the path still had room. Fixed: the row's content is `container(line).width(Fill).clip(true)` inside the button, so overflow is cut at the content edge. Gate renamed `a_changed_rows_text_is_clipped_clear_of_the_dot`: reads each painted text's clip (`painted_text_settled_at`) at 640, 700, 800, 900, 1100 wide, drawer closed and open, and asserts it ends inside the content box; fails without the clip ("… is clipped at 434.8, past the content box's 422.8"), passes with it. Layout snapshot re-recorded: only the two review-marks states move (the row's content one level deeper). Round 4 visual due |
 
 | M5 implement | — | a4e0951682550439dbe12d0a7af965fb391a76eb:58f399d8ce532e8ae814e8d1d4f5d9111d409c57 | Snapshot of the M5 diff (`git diff 759656532 58f399d8c`); reviews A, B and the visual pass due (no Agent tool in the unit). TDD (Principle I): T040's three `review::pr_diff` tests failed against an empty `pr_change_ids` stub ("a.rs's diff changed", left None right None), then passed with T041; T042's five `features_pr_changes` `reviewed_marks` tests: four failed before T043 (rows `[]` for #12, progress `None`, control `None`), the fifth (`nothing_is_judged_while_the_pull_requests_diff_is_read`) passed before and after as a guard (D9 (1)). Verify: `cargo test -p micold-core review::pr_diff` 3 passed; `cargo test -p micold-client --test features_pr_changes` 86 passed; all of `cargo test -p micold-client` green, layout snapshot unchanged (136); `review::` core 325 passed; fmt clean; `cargo +1.99.0 clippy --workspace --all-targets -D warnings` clean. Quickstart Part B step 7 not run (no display in the unit): the visual pass's |
+| M5 round 1 | 1 | a4e0951682550439dbe12d0a7af965fb391a76eb:58f399d8ce532e8ae814e8d1d4f5d9111d409c57 | A CLEAN, 3 MINOR; B CLEAN, 1 MINOR; visual PASS (run by the orchestrator). A-F1 fixed: `pr_change_ids` digests a section with hunks without its `index` line (`shown_part`), so a base merge below the hunks or a longer abbreviation keeps the id; a section without hunks (binary, mode only) keeps it. Tests: `pr_change_ids_ignores_the_index_line_of_a_section_with_hunks` failed first (two ids), passes now; `…keeps_the_index_line_of_a_section_without_hunks` passed before and after (guard). A-F2 fixed: the ids are worked out once in `pr_diff_ready` (first read and head refresh) and kept in `PrDiffLoad::Ready.ids`; `current_ids` clones them, as the working tree keeps its ids in `WholeChange`. Test `the_ready_diff_keeps_its_files_ids` (red: no such field). A-F3 pinned, not fixed: `a_type_change_lists_two_rows_and_counts_one` (follow-up below). Test gap closed: `two_pull_requests_keep_separate_marks_on_the_same_path` (#12 and #8, same diff). B-F1 fixed: the guide says the file "drops back to ○ or ◉ with a dot at the end of its row", as in *Marking files reviewed*. Visual note recorded as a follow-up. Rebased onto origin/main a3948a180 (M4's commit dropped as already applied, no conflicts). After the rebase: `cargo test --workspace --no-run` builds; `review::pr_diff` 5, `features_pr_changes` 89, `features_changes` 162, `layout_snapshot` 136 (unchanged) passed; fmt clean; `cargo +1.99.0 clippy --workspace --all-targets -D warnings` clean |
 
 ## Declined review findings
 
@@ -90,6 +92,9 @@ None.
 None. (Clarify Q1 answered by the user on 2026-10-25: option A, see D4.)
 
 ## Follow-ups not done
+
+- For the close unit (M5 review A-F3): a type change (file to symlink or back) prints two `diff --git` sections for one path. `pr_diff_ready` keys the patches by path and keeps the last, so the list shows two rows but *n of m* counts one, and both rows share the second section's id and mark. Pinned by `features_pr_changes` `a_type_change_lists_two_rows_and_counts_one`; not redesigned here.
+- For the close unit (M5 visual note): with the Comments panel (#1270's SideSheet) open, it covers the diff header's **Mark reviewed** chip.
 
 - 640×480 with the sidebar open (M3 visual round 2, V3), pre-existing on origin/main by code: (a) the list pane is ~70 px, narrower than the single-word **Committed**/**Uncommitted** chips, so their labels spill (main laid them in a non-wrapping row, which spilled the same; this branch only made the row wrap); (b) with the panel closed the header's Shrink toggle and review buttons take the whole ~280 px, leaving the heading 0 px, so the title and the base line wrap word by word into a tall column that pushes the body into the status bar — main's `container(heading).width(Fill)` got 0 px the same way. (c) M3 visual round 3: at 640×480 the review pane overflows onto the status bar and nothing scrolls (same on round 2 and on main). Worth an issue: the Changes view has no layout below ~900 px session width.
 - On a daemon reconnect the client drops the open review and returns to the project page (seen in the M3 visual pass). Predates this branch: its diff touches no reconnect, tab or navigation code (`on_connected`, `ReviewTabs` and the catalog reconcile are main's); only the view's `connected` input and the `ReviewMark` op are new. Not fixed here; worth its own issue.
