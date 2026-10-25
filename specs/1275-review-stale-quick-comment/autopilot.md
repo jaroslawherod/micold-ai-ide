@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M4
-- **Next step**: M4 (T026–T034) implement, gate, push; reviews by the orchestrator.
+- **Next step**: orchestrator: reviews A (high) and B for M4 on snapshot c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7, then open the M4 PR (body: scratchpad pr-body-1275-m4.md).
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
-| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | in progress |
+| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | pushed 3dc34ba63, gate green; reviews pending |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | gated: #1271 merged |
 
@@ -63,6 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) | 1 | 3ca84763c (WIP) | CHANGES (run by the orchestrator): 4 MAJOR, 2 MINOR, all verified. F1 open file dropping out of a background read switched to NO_LONGER_CHANGED on its own → `OpenView.chose_gone` (set only when the user selects the file, or the read their selection started finds it gone; `stale::note_selection`), test `the_open_file_leaving_a_background_read_keeps_its_diff_until_selected` (red seen). F2 re-selecting the open dotted file did nothing → `FileSelected` re-reads it keeping the old diff, test `selecting_the_open_dotted_file_reads_its_latest_diff` (red seen). F3 ReadDiff job read the row after the diff → row read first (no seam for a test: off-thread closure over real git). F4 adopted PR file recorded the old head → `PullRequestView.adopted` + `stale::head_of` for the anchor's `head_commit` and the head-version read, test `a_comment_on_an_adopted_file_records_the_head_it_was_read_at` (red seen). F5 watch read ahead of a queued user read was applied → `OpenView.apply_queued`, test `a_watch_read_ahead_of_the_users_queued_read_is_not_shown` (red seen). F6 clones: fixed in part (see Declined). |
 | M3 visual pass (T025) | 1 | M3 tree, debug build | PASS (unit, cloud Xvfb, 1280x800, light and dark): §A step 2 held state, re-selecting the open dotted file (A F2), notice applied. Observations: base line ellipsised while the notice shows; #1271's dot close to the `−2` count. Evidence `visual-pass/` and /mnt/project-files/issue-1275/. |
 | M3 A (code-review high) | 2 | db7d27eba4cb67716924927acc1878a3d8749dfc:04e4a0496d37e182a3281b8e4dcf04ea932c504b | pending (orchestrator). Fix diff: `git diff b65c8c8ea..04e4a0496` (b65c8c8ea is 3ca84763c reworded, same tree). Full gate (`scripts/gate.sh`) green on 04e4a0496's code. |
+| M4 A (code-review high) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | pending (orchestrator) |
+| M4 B (conformance) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | pending (orchestrator) |
+| M4 visual pass (T034) | 1 | M4 tree, debug build | PASS (unit, cloud Xvfb, 1280x800, light and dark, XTest drag): pick follows the pointer, box opens focused under the released line, second drag with the box open, Esc restores. Found and fixed: slots followed the pick mid-drag and moved rows under the pointer → `slot_pick`. Touchpad and release-outside-window not runnable under Xvfb. Evidence `visual-pass/m4-b-*` and /mnt/project-files/issue-1275/. |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
@@ -166,3 +169,4 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
   `hold`; #1273's two `Msg::DiffRead` initialisers gained `row: DiffRow::NotRead`). Layout fixture
   unchanged by that move. Client lib + the three test targets + core `review` green.
 - Full `scripts/gate.sh` on pushed 2f0606e03 (main d84e94860): exit 0.
+- M4 (unit, 2026-10-25): T026–T034 done on b582c2563. Deviations: press stays `.on_gutter`, over is `.on_gutter_over` + `.dragging`; Q5 focus as `Effect::FocusComposer`; slots stay under the pre-press pick while dragging (`slot_pick`, visual-pass finding); a click retargets a new box on release (C4); `AddComment` and `close_new` end a drag. Carried MINORs: `Drag::span` clamps 0 (core d9), `chose_gone` reset with the hold (`forget_hold`, apply, `SourceChosen`), Decisions row 1 *By* fixed. Layout snapshot unchanged (passes). Full `scripts/gate.sh` exit 0 on 3dc34ba63 (main b582c2563, unmoved); pushed. TDD log `tdd/cycle-log.md`.
