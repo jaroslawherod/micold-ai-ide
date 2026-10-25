@@ -1,4 +1,5 @@
 //! Feature 1289, contract C4 (A7): the `create_worktree` result says whether setup started.
+// unix-only: the setup command `true` is a POSIX shell builtin; on Windows setup runs in PowerShell
 #![cfg(unix)]
 
 #[path = "support/mcp.rs"]

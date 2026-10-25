@@ -3,6 +3,7 @@
 //! (contracts C1–C2; tests A6, A8, A9, A10).
 //!
 //! Every test drives the real wire messages over a connection, as a window sends them.
+// unix-only: the setup commands are POSIX shell lines (`touch`, `sleep`, `>&2`, `exit 3`) run by bash/sh; on Windows setup runs in PowerShell
 #![cfg(unix)]
 
 use std::path::{Path, PathBuf};
