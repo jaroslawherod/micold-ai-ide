@@ -21,8 +21,7 @@ tab) and #1271 (reviewed marks) are both merged** (research R11): #1269 reshapes
 Changes/Review view they change. **M6 must not start until #1271 is merged.** A unit that picks up a
 gated milestone first checks both issues' PRs are `MERGED` and otherwise escalates.
 
-**FR-014** is planned as the whole-view hold (provisional A, ledger *Open escalation*). If the user
-picks B or C, only M3's tasks change (plan *Delivery order*); M1's `changed_since` serves all three.
+**FR-014** is the whole-view hold (A, decided by the user 2026-10-25).
 
 ## Format: `[ID] [P?] [Story] Description`
 

@@ -48,7 +48,7 @@ view wait until #1269 (which reshapes that view) and #1271 are merged.
 - Q: While changes are held, is the whole view (file list, counts, every file) frozen, or only the
   open file's diff? → A: Whole-view hold (FR-014): the list, its counts and every file stay one
   snapshot until the notice is pressed; changed files carry a dot and count in *n*; selecting a
-  dotted file shows its latest diff. _(A (recommended; provisional, awaiting user):
+  dotted file shows its latest diff. _(A, decided by user 2026-10-25:
   `docs/development/review-redesign.md` item 8 counts 3 files with row dots while one diff is open)_
 
 ## User Scenarios & Testing *(mandatory)*
