@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M2
-- **Next step**: M2 implemented (T008–T017 ticked); review A and review B round 1, then full gate and PR
+- **Next step**: M2 review A (high) and review B round 1 on snapshot 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d (dispatched by the orchestrator); then fixes, full gate, PR
 
 ## Pull requests
 
@@ -62,6 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 2 (sonnet, scoped) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, no findings |
 | M1 B | 2 (sonnet) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, 1 MINOR — fixed, prose only (guide paragraph re-wrapped to ~100 columns). Verify: toolchain_path 16/16, daemon `offered` 9/9 |
 | M1 A | 3 (sonnet, scoped, red-CI fix c9320751) | 896f820bf2e94b14db372bee07de2cf983fe110b:c9320751 | CLEAN, 1 MINOR — logged as a follow-up, not fixed (offered.json with `clis: []` ambiguous across daemons) |
+| M2 A | 1 (high) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | pending |
+| M2 B | 1 (sonnet) | 9d700a4cfc7e4e26deb5f78cbfbc8e4d190d44be:d5272e0d0a2cbf564ed5fa3810cbef45e2680a90 | pending |
 
 ## Declined review findings
 
