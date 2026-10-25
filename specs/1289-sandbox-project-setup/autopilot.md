@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M4
-- **Next step**: M4 review A round 2 (scoped, sonnet) on the fix snapshot; then rebase, PR
+- **Next step**: M4 rebase onto main, full gate, push, open the M4 PR
 
 ## Pull requests
 
@@ -81,7 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A | 2 (scoped, sonnet) | 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 | CLEAN, no findings — lock order setup→inner everywhere, no I/O under either mutex, chunking keeps watcher `next` consistent, 1 MiB bound holds |
 | M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `interrupt_all` sets `stopping`/`stop_requested`, `spawned` ends a shell of an ended run, `start` refuses while stopping; F2 `Persist::seq` + `SetupStore::in_order` drop stale writes (interrupt rewrites the log whole); F3 record and log written independently; F4 `DeleteHold` refuses starts during a delete, `forget` ends a live tree; cycle log M4 cycle 3 |
 | M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | CLEAN (Verify all pass); MINORs: B-F1 fixed with A-F2; B-F2 compaction red logged (cycle log M4 cycle 3) |
-| M4 A | 2 (sonnet, scoped) | 72c712a70e67a2419c9c2df0782306822ca21f05:c311173c2197557a5791e3e920f1b279c7268633 | pending (orchestrator dispatches) |
+| M4 A | 2 (sonnet, scoped) | 72c712a70e67a2419c9c2df0782306822ca21f05:c311173c2197557a5791e3e920f1b279c7268633 | CLEAN, no findings |
 
 ## Declined review findings
 
