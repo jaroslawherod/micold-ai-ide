@@ -2,6 +2,7 @@
 //! diff for the whole request; the Changes view lists its files and parses a file's `patch` with
 //! [`super::diff::parse_unified`] when the user selects it. Pure: nothing here reads a file.
 
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
@@ -132,9 +133,34 @@ pub fn pr_change_ids(
         .iter()
         .filter_map(|file| {
             let patch = patches.get(&file.path)?;
-            Some((file.path.clone(), ChangeId::of_patch(file, patch)))
+            Some((
+                file.path.clone(),
+                ChangeId::of_patch(file, &shown_part(patch)),
+            ))
         })
         .collect()
+}
+
+/// What of `section` the diff shows: a section with hunks without its `index` line, whose blob
+/// ids move with a base merge below the hunks or a longer abbreviation while the hunks stay the
+/// same (review A M5 F1). A section without hunks (binary, mode only) keeps it: there it is the
+/// only identity of the content.
+fn shown_part(section: &[u8]) -> Cow<'_, [u8]> {
+    let has_hunks = section
+        .split(|&b| b == b'\n')
+        .any(|line| line.starts_with(b"@@"));
+    if !has_hunks {
+        return Cow::Borrowed(section);
+    }
+    let mut shown = Vec::with_capacity(section.len());
+    let mut in_header = true;
+    for line in section.split_inclusive(|&b| b == b'\n') {
+        in_header &= !line.starts_with(b"@@");
+        if !(in_header && line.starts_with(b"index ")) {
+            shown.extend_from_slice(line);
+        }
+    }
+    Cow::Owned(shown)
 }
 
 /// A file's identity in a pull request (FR-001a): a hash of its section. Never stored, so it
@@ -261,12 +287,7 @@ mod tests {
             ids.keys().map(RelPath::as_str).collect::<Vec<_>>(),
             ["a.rs", "b.rs"]
         );
-        let a = &diff.files[0];
-        assert_eq!(
-            ids.get(&path("a.rs")),
-            Some(&ChangeId::of_patch(&a.file, &a.patch)),
-            "the id is the file's own section's"
-        );
+        assert_eq!(diff.files.len(), 2);
         assert_ne!(ids.get(&path("a.rs")), ids.get(&path("b.rs")));
     }
 
@@ -310,5 +331,31 @@ mod tests {
         let ids = pr_change_ids(&files, &patches);
         assert!(ids.contains_key(&path("a.rs")));
         assert_eq!(ids.get(&path("b.rs")), None, "b.rs has no patch");
+    }
+
+    /// A section of `path` with `index` as its index line and `body` after it.
+    fn indexed(path: &str, index: &str, body: &str) -> String {
+        format!("diff --git a/{path} b/{path}\nindex {index}\n{body}")
+    }
+
+    /// Review A M5 F1: GitHub's `index` line moves with a base merge below the hunks or a longer
+    /// abbreviation; the diff on screen does not, so neither does the id.
+    #[test]
+    fn pr_change_ids_ignores_the_index_line_of_a_section_with_hunks() {
+        let hunks = "--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n";
+        let short = ids_of(&indexed("a.rs", "1234567..89abcde 100644", hunks));
+        let long = ids_of(&indexed("a.rs", "123456789..fedcba987 100644", hunks));
+        assert_eq!(short.get(&path("a.rs")), long.get(&path("a.rs")));
+        assert!(short.contains_key(&path("a.rs")));
+    }
+
+    /// Review A M5 F1: a binary section has no hunks; its `index` line is its content's identity.
+    #[test]
+    fn pr_change_ids_keeps_the_index_line_of_a_section_without_hunks() {
+        let binary = "Binary files a/i.png and b/i.png differ\n";
+        let before = ids_of(&indexed("i.png", "1234567..89abcde 100644", binary));
+        let after = ids_of(&indexed("i.png", "1234567..0000fff 100644", binary));
+        assert!(before.contains_key(&path("i.png")));
+        assert_ne!(before.get(&path("i.png")), after.get(&path("i.png")));
     }
 }

@@ -140,9 +140,9 @@ another reason says so in the pane, with no notice; click the row again to retry
 A pull request's files have their own marks and their own *n of m reviewed* (see [Marking files
 reviewed](#marking-files-reviewed)), apart from the working tree's: marking `src/a.rs` in a pull
 request leaves the working tree's `src/a.rs` as it was, and the other way round. A mark is made on
-the file's diff in that pull request. A new head commit that changes a file's diff drops the
-file's mark, with the dot at the end of its row, as an edit does in the working tree; a new head
-commit that leaves the file's diff the same keeps it reviewed. The marks stay when the pull request
+the file's diff in that pull request. When a new head commit changes a file's diff, the file is no
+longer reviewed: it drops back to ○ or ◉ with a dot at the end of its row, as after an edit in the
+working tree. A new head commit that leaves the file's diff the same keeps it reviewed. The marks stay when the pull request
 is merged, closed or no longer listed, and show again whenever its diff is shown; they go when you
 unmark them or the worktree is removed.
 

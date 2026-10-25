@@ -2490,7 +2490,10 @@ diff --git a/b.rs b/b.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b
                 }),
             },
         );
-        listed(&mut state, vec![pr(PR, BranchPrState::Open)]);
+        listed(
+            &mut state,
+            vec![pr(PR, BranchPrState::Open), pr(8, BranchPrState::Open)],
+        );
         chosen(&mut state, PR);
         state
     }
@@ -2714,6 +2717,84 @@ diff --git a/b.rs b/b.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b
             "a.rs changed since reviewed; b.rs's diff is the same"
         );
         assert_eq!(progress(&state), ratio(1, 2));
+    }
+
+    /// FR-006: two pull requests keep separate marks on the same path, even where their diffs of
+    /// it are the same.
+    #[test]
+    fn two_pull_requests_keep_separate_marks_on_the_same_path() {
+        use ReviewState::{Reviewed, Unseen};
+        let mut state = showing_twelve();
+        let (a, b) = (pr_id(DIFF, "a.rs"), pr_id(DIFF, "b.rs"));
+        pushed(&mut state, &[(Scope::PullRequest(PR), "a.rs", a)]);
+        chosen(&mut state, 8);
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Unseen), row("b.rs", Unseen)],
+            "#12's mark is not #8's, on the same diff"
+        );
+        pushed(
+            &mut state,
+            &[
+                (Scope::PullRequest(PR), "a.rs", a),
+                (Scope::PullRequest(8), "b.rs", b),
+            ],
+        );
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Unseen), row("b.rs", Reviewed)]
+        );
+        chosen(&mut state, PR);
+        assert_eq!(
+            states(&state),
+            vec![row("a.rs", Reviewed), row("b.rs", Unseen)]
+        );
+    }
+
+    /// Review A M5 F2: the ids are computed once, when the diff is read, and kept with it.
+    #[test]
+    fn the_ready_diff_keeps_its_files_ids() {
+        let state = showing_twelve();
+        let PrDiffLoad::Ready {
+            files,
+            patches,
+            ids,
+        } = &shown_pr(&state).diff
+        else {
+            panic!("#12's diff is ready");
+        };
+        assert_eq!(ids, &pr_change_ids(files, patches));
+        assert_eq!(ids.len(), 2);
+    }
+
+    /// Review A M5 F3, pinned as it is (a follow-up): a type change (file to symlink) prints two
+    /// sections for one path; the patches, keyed by path, keep the last, so two rows count as one
+    /// in *n of m*.
+    #[test]
+    fn a_type_change_lists_two_rows_and_counts_one() {
+        const TYPE_CHANGE: &str = "diff --git a/l b/l\ndeleted file mode 100644\nindex 1..0\n--- a/l\n+++ /dev/null\n@@ -1 +0,0 @@\n-text\n\
+diff --git a/l b/l\nnew file mode 120000\nindex 0..2\n--- /dev/null\n+++ b/l\n@@ -0,0 +1 @@\n+target\n";
+        let mut state = showing_twelve();
+        changes::update(&mut state, Msg::SourceChosen(None));
+        let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(PR))), PR);
+        changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: PR,
+                result: Ok(split_pr_diff(TYPE_CHANGE)),
+            },
+        );
+        let view = state.tabs.shown_view().expect("open");
+        assert!(matches!(list_body(view), ListBody::Files(files) if files.len() == 2));
+        assert_eq!(progress(&state), ratio(0, 1));
+    }
+
+    fn shown_pr(state: &State) -> &micold_client::features::changes::PullRequestView {
+        match source(state) {
+            Source::PullRequest(pr) => pr,
+            Source::Changes => panic!("a pull request is shown"),
+        }
     }
 
     /// Nothing is judged while #12's diff is read: no rows, no *n of m*, no control.
