@@ -4,7 +4,7 @@
 
 **Input**: Feature specification from `specs/1275-review-stale-quick-comment/spec.md` (issue #1275,
 slice R6 of `docs/development/review-redesign.md`). FR-014 is planned as the whole-view hold, as the
-spec records it: provisional, awaiting the user (ledger *Open escalation*).
+spec records it (decided by the user, 2026-10-25).
 
 ## Summary
 

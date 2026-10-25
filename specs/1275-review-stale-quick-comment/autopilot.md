@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M2
-- **Next step**: reviews A (high) and B (conformance) on M2 at snapshot e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05, then open the M2 PR from the prepared body (title `feat(1275): add core drag pick, suggestion chips and their setting (#1275)`). M2 = T009–T014, commit 00fb5329 on main be3819ab, pushed; full `scripts/gate.sh` exit 0 at 00fb5329. Flakes outside the diff, each passed alone: client `card_grid::a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (3/3), daemon `mcp_default_prompt::github_issues_off_looks_nothing_up` (commit-signing server 503 in its git fixture; 2/2). Gate also required `suggestion_chips` in `DEFERRED` of `crates/micold-client/tests/settings_sections.rs` (T014 note added; T038 deletes it). FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: M1 (#1380) and M2 (#1413) merged (M2 at 05575435). Wait for #1271 to close (#1269 closed 2026-10-25), then M3 (rebase, re-record layout_snapshot.txt right before the gate).
 
 ## Pull requests
 
@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| 1 | clarify | FR-014: hold the whole view or only the open diff? | A, whole-view hold (provisional, awaiting user) | orchestrator (recommended; user not yet answered) | docs/development/review-redesign.md item 8 |
+| 1 | clarify | FR-014: hold the whole view or only the open diff? | A, whole-view hold (decided by user 2026-10-25, decision card) | orchestrator (recommended; user not yet answered) | docs/development/review-redesign.md item 8 |
 
 ## Review rounds
 
@@ -102,28 +102,7 @@ None.
 
 ## Open escalation
 
-**Pending user confirmation**: applied provisionally as A (whole-view hold) on the orchestrator's
-word; spec.md records it as provisional. Clarify round 1, Q1 (category 1, product decision the repo does not settle): **FR-014 — while
-changes are held, is the whole view frozen, or only the open file's diff?**
-
-- **A. Whole-view hold (Recommended)**: the file list, its +/- counts and every file stay one
-  snapshot until the notice is pressed; changed files get a dot and count in *n*; selecting a dotted
-  file shows its latest diff (US1 AS9–11). Nothing on screen moves. Evidence:
-  `docs/development/review-redesign.md` item 8 shows *3 files changed since you looked* with dots on
-  the file rows while one diff is open, so *n* must count files other than the open one; a live list
-  would insert, drop and re-sort rows (a tree after #1273) under the reader, the same movement the
-  item exists to stop; the spec as reviewed (2 rounds) is written for it.
-- **B. Live list, held open diff with dots**: list rows and counts update live as today; files that
-  changed since the user last saw them get a dot and count in *n*; only the open diff is held until
-  the notice (or reselecting) is pressed. Literal minimum of item 8 ("the open diff does not
-  reflow"); simpler (no held list, no AS9–11), but rows still move.
-- **C. Open diff only, no dots on other files**: the spec's current second answer; *n* is at most 1.
-  Contradicts item 8's example of 3 files.
-
-What the repo says: item 8 and the issue only require that the open diff not reflow, and that rows
-carry a dot and the header a count of several files; neither says whether the list itself is held.
-`docs/user-guide/reviewing-changes.md` *Keeping up with changes*: today the list and diff re-read
-together within ~2 s.
+None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as applied).
 
 ## Follow-ups not done
 
