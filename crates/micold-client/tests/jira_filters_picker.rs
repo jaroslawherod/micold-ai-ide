@@ -1525,3 +1525,29 @@ fn clearing_the_typed_text_forgets_the_search() {
         ["Any reporter", "You (Jane Doe)"]
     );
 }
+
+#[test]
+fn no_search_runs_before_the_own_user_loads_and_no_match_without_you_says_only_that() {
+    let mut state = loaded();
+    filter(&mut state, FilterMsg::Focused(REPORTER));
+    filter(&mut state, FilterMsg::QueryChanged(REPORTER, "sam".into()));
+    assert_eq!(
+        state.worktree_form.pending_people_search(),
+        None,
+        "the list shows the own user's load, not people"
+    );
+    let seq = me_seq(&state);
+    filter(
+        &mut state,
+        FilterMsg::MeLoaded {
+            seq,
+            result: Ok(None),
+        },
+    );
+    search_people(&mut state, "zz", Ok(Vec::new()));
+    assert_eq!(
+        labels_of(&state, REPORTER),
+        ["Any reporter", "No reporter matches"],
+        "nobody is offered, so the row does not say you are"
+    );
+}

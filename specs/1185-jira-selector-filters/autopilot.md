@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | d6f29faa90cf9a1c34034faa4a8d785dce237360:e4de8a606ecec897976a5ce1e3a911a9181d5735 | CLEAN (2 MINOR: cramped main row — kept as follow-up, D13; compile red "by construction" in cycle-log — noted) |
 | Visual pass M2 | 1 | e4de8a60 (CPU rasteriser renders of 8 states) | B3 PASS; FAIL: "This project has no versions" cut to "This project ha…" in the list — fixed (wrapped reason under a "No versions" line, gate `an_empty_choice_list_shows_its_whole_reason`); CONCERN: main row cramped (D13) |
 | Review rebase M2 (sonnet) | 1 | 8a4b7ddeee15324fd610b34c498807a1d6734ac6:ea88436025f3b37a41cad12c65aff40c2c5ceffa | CLEAN (main's D12 layout kept; Fix version field, PICKER_MAIN, awaited_choices newest-request fix intact; fixture touches only jira states) |
+| Review A M3 | 1 | ed9a28d90d0ee5dec30eb9ee8b3c3156605622d0:256ce33fcd941af92f010f33f298650ed80d8d46 | CLEAN (2 MINOR fixed: no-match row said "you are still offered" with no own user — now "No reporter matches"; a people search ran while `/myself` failed and its people were never shown — no search until the own user loads) |
 
 ## Declined review findings
 
