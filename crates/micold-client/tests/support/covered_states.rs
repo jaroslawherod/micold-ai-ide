@@ -1935,10 +1935,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
-                },
-                Anchor {
                     name: "session.header",
                     path: SESSION_HEADER,
                 },
@@ -1977,10 +1973,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "shell.root",
                     path: &[],
-                },
-                Anchor {
-                    name: "toolbar.title",
-                    path: TOOLBAR_TITLE,
                 },
                 Anchor {
                     name: "session.header",
@@ -2897,7 +2889,7 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "title-bar-changes",
             build: || {
-                let mut state = changes_open_under_header();
+                let mut state = review_shown().state;
                 with_unread_elsewhere(&mut state);
                 StateUnderTest::new(state)
             },
