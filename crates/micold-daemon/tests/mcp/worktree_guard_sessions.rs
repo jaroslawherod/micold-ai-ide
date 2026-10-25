@@ -363,12 +363,15 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
 #[tokio::test]
 async fn failing_open_is_logged_with_its_reason_and_never_the_payload() {
     let buffer = LogBuffer::default();
-    let _guard = tracing::subscriber::set_default(
+    // Global, not thread-local: the guard runs on a `spawn_blocking` thread. This is the only test
+    // in the binary that logs.
+    tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
             .with_writer(buffer.clone())
             .with_ansi(false)
             .finish(),
-    );
+    )
+    .expect("no other test installs a subscriber");
     let f = fixture().await;
     let unreadable = json!({
         "hook_event_name": "PreToolUse",
