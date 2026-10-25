@@ -262,7 +262,7 @@ impl<'a, M: Clone + 'a> From<FieldButton<M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{named_key, roles, Focusables, Mounted};
+    use super::super::test_support::{named_key, renderer, roles, Focusables, Mounted};
     use super::*;
     use iced::keyboard::key::Named;
     use iced::{Point, Size};
@@ -272,6 +272,8 @@ mod tests {
     const HEIGHT: f32 = 100.0;
 
     fn field() -> FieldButton<String> {
+        // The bundled fonts first: the field measures its words as it is built.
+        let _ = renderer();
         FieldButton::new(Icon::Search, LABEL, roles())
             .hint(HINT)
             .on_press_maybe(Some("jump".to_string()))
@@ -375,6 +377,7 @@ mod tests {
     /// Tab stop, and a click publishes nothing.
     #[test]
     fn without_a_press_it_is_disabled_and_no_tab_stop() {
+        let _ = renderer();
         let f = FieldButton::<String>::new(Icon::Search, LABEL, roles()).hint(HINT);
         let mut m = mounted(f, 1000.0);
         assert_eq!(m.drive(Focusables(0)), Some(0));
