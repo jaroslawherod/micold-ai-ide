@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-25 — shipped in PRs #1355 (design), #1368 (M1), #1383 (M2 + M3), #1418 (M4) and the close PR; TDD verification and test-strength fixes in [tdd/verification.md](tdd/verification.md) and T028–T033.
 
 **Input**: User description: "Review UI: source dropdown and two-column layout (issue #1272). Blocked by: #1270, #1150 (merged). One **Working tree / Pull requests / Files** control in the review header; the PR section and Committed/Uncommitted toggles leave the left column. Keep Whole file, Files, Back and Open diff from #1150. Part of the review UI redesign: `docs/development/review-redesign.md`. Mockup: https://claude.ai/artifact/MviqD4uqBNaZtsCKH7yuTu (Review tab redesign). Acceptance also: pure logic in micold-core with unit tests; docs, layout snapshot and visual pass (1280x800, both themes) updated."
 
@@ -201,7 +201,8 @@ the diff column against the window and check the file column has the fixed width
   source while the window is open, as today. A pull request list refreshed by another window's read
   updates this window's list without closing it while it is open.
 - **Narrow window (900 px)**: the header keeps the source control and **Close** visible. The
-  subtitle truncates before the control does.
+  subtitle truncates before the control does. (As shipped, Close is the Review tab's ×, outside
+  the header, which #1269 introduced: ledger decision 6.)
 - **Keyboard**: the control opens with Enter or Space when focused. Arrow keys move through the
   options and Enter picks one. `Esc` closes it.
 - **Cross-platform (Principle VI)**: the control, its list and its tooltip behave the same on
