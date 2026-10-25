@@ -176,7 +176,7 @@ Each decision: what was chosen, why, what was rejected. Paths are relative to th
 
 - **Decision**: a `ShortcutSheet` surface on the overlay registry's Dialog layer, like
   `QuickSwitcherDialog` (#968), listing `REVIEW_KEYS` with the platform's labels, built from shared
-  `ui/material` parts. Escape and a click outside are the registry's dismissal; `?` closes it
+  `ui/material` parts. Escape and a click outside are the registry's dismissal; `?` closes it (while the single keys are on, FR-022)
   through `resolve` (`Holder::Sheet`). The review bar's overflow menu (#1270) gets a **Keyboard
   shortcuts** item sending the same open message (US5 s4).
 - **Rejected**: a tooltip-like popover (no focus, no Escape route); a section in Settings (not

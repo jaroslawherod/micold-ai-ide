@@ -32,7 +32,7 @@ rows only. `REVIEW_KEYS` itself never changes.
 | Holder | Press | Result |
 |---|---|---|
 | `Other` | anything | none (FR-002) |
-| `Sheet` | text `?`, unmodified, not repeat | `ToggleSheet` (closes) |
+| `Sheet` | text `?`, unmodified, not repeat, `single_keys` on | `ToggleSheet` (closes) |
 | `Sheet` | anything else | none (FR-012) |
 | `Composer` | the `Send` entry's press, not repeat | `Send` |
 | `Composer` | anything else | none (the text area keeps it) |
