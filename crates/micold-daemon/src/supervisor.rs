@@ -927,12 +927,25 @@ mod container_git_tests {
 
     #[test]
     fn env_hygiene_wires_the_container_git_env_into_every_spawn() {
-        let edits = env_hygiene_with(&std::process::Command::new("true"), Some(DATA), Some(Path::new(EXE)), true);
+        let edits = env_hygiene_with(
+            &std::process::Command::new("true"),
+            Some(DATA),
+            Some(Path::new(EXE)),
+            true,
+        );
         let env = set(&edits);
         assert_eq!(env["GIT_CONFIG_COUNT"], "5");
-        assert!(env["GIT_CONFIG_VALUE_1"].starts_with("!/"), "absolute helper");
+        assert!(
+            env["GIT_CONFIG_VALUE_1"].starts_with("!/"),
+            "absolute helper"
+        );
         assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
-        let outside = env_hygiene_with(&std::process::Command::new("true"), None, Some(Path::new(EXE)), true);
+        let outside = env_hygiene_with(
+            &std::process::Command::new("true"),
+            None,
+            Some(Path::new(EXE)),
+            true,
+        );
         assert!(!set(&outside).contains_key("GIT_CONFIG_COUNT"));
     }
 
