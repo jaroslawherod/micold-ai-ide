@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: implement M2
-- **Next step**: M2 (T009–T014) implemented TDD on main 8c071118; full `scripts/gate.sh`, push, then reviews A/B on M2 (the unit had no Agent tool) and open the M2 PR from the prepared body. FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
+- **Next step**: reviews A (high) and B (conformance) on M2 at snapshot e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05, then open the M2 PR from the prepared body (title `feat(1275): add core drag pick, suggestion chips and their setting (#1275)`). M2 = T009–T014, commit 00fb5329 on main be3819ab, pushed; full `scripts/gate.sh` exit 0 at 00fb5329. Flakes outside the diff, each passed alone: client `card_grid::a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (3/3), daemon `mcp_default_prompt::github_issues_off_looks_nothing_up` (commit-signing server 503 in its git fixture; 2/2). Gate also required `suggestion_chips` in `DEFERRED` of `crates/micold-client/tests/settings_sections.rs` (T014 note added; T038 deletes it). FR-014 is provisional A; if the user picks B or C, reopen clarify (FR-005/FR-008/FR-009/FR-014, US1 AS1, 5, 9–11) and revise plan M3 only (research R2–R4, contracts/changes-view-hold.md)
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
-| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | implemented T009–T014; reviews A/B pending |
+| M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | | pushed 00fb5329, gate green; reviews A/B pending, PR not opened |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | gated: #1269 and #1271 merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | gated: #1269 and #1271 merged |
@@ -55,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks | 2 | 64b03cb3ab2547b2dce5040cd993877738b24612:b9a769ba4a2504e5d0c0b8d4bd71e19d73202d82 | CHANGES (sonnet): round-1 fixes F2–F4 confirmed; 1 MAJOR: `persist.rs:1171` test literal is exhaustive, not `..`. Fixed by the orchestrator in T014 (add `suggestion_chips: false`); a factual task-list correction the compiler would also catch, verified against the code, no round 3. |
 | M1 A (code-review high) | 1 | 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc | CHANGES (run by the orchestrator): 3 MAJOR, 3 MINOR, all verified and fixed, red test first. F1 (MAJOR, held: `ChangeList::put` never touched a rename's `from`, so `x` stayed shown beside `y`): `Held::adopt` also puts a fresh rename's `from` into shown and latest; test s11. F2 (MAJOR, held: adopting an undotted path the fresh read no longer lists left set ≠ difference): `adopt` recomputes `changed = changed_between(shown, latest)`; test s12 with an invariant check. F3 (MAJOR, held: one failing path made every row `Stat`): on a failed batch `identify` hashes each path alone (not after a timeout), so only that row falls back; test with a required clean filter that fails. F4 (MINOR, held: `hash-object --stdin-paths` C-unquotes a leading `"` and drops a trailing CR): such paths take `Stat` (`carried_verbatim`); test with `"q"` beside `q` and `cr\r`. F5 (MINOR, held: `--raw` gives a gitlink's worktree side as zeros, the dir's stat never moves): a directory with its own `.git` takes `git rev-parse HEAD` as `Object`; submodule test. F6 (MINOR, held): `NameStatus.mode_changed: bool` became `modes: [u32; 2]` (+ `mode_changed()`), `ChangeIdentity::Sides` gained `modes` (serde default); chmod test. |
 | M1 B (conformance) | 1 | 4a00118fcb2ed7417b603fca94e6e7a6b6a4c739:19a082ccf3ed3810272518621f9be51459286dbc | CLEAN (sonnet, run by the orchestrator). Verify: lib 1578 passed incl. 10 `review::stale`; `review_git` and `pr_diff_split` passed; `settings_refuses_save_over_failed_read` failed only because the reviewer ran as root (`scripts/gate.sh` runs it unprivileged). |
+| M2 A (code-review high) | 1 | e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05 | pending (unit had no Agent tool; orchestrator runs it) |
+| M2 B (conformance) | 1 | e12a747f740c0ac99c3bd5caf92c4a4a84d04d4a:00fb53299583fcd03c4a0bc131e18d39d1ef0f05 | pending |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
