@@ -6834,6 +6834,45 @@ mod drag {
         assert_eq!(composer(&state), before);
     }
 
+    // Review A M4 F3: leaving the tab mid-drag cancels the drag as Esc does, so coming back finds
+    // no drag that a later release anywhere would end as a range.
+    #[test]
+    fn leaving_the_tab_mid_drag_cancels_it() {
+        let mut state = writing();
+        let (before_pick, before_composer) = (pick(&state), composer(&state));
+        press(&mut state, 3);
+        over(&mut state, None, Some(4));
+        changes::update(&mut state, Msg::SessionSelected);
+        changes::update(
+            &mut state,
+            Msg::Opened {
+                project: project(),
+                entry: worktree(),
+            },
+        );
+        assert!(view(&state).drag.is_none());
+        assert_eq!(pick(&state), before_pick);
+        assert_eq!(composer(&state), before_composer);
+    }
+
+    // Review A M4 F3: the window losing focus mid-drag cancels the drag as Esc does.
+    #[test]
+    fn the_window_losing_focus_mid_drag_cancels_it() {
+        let mut state = writing();
+        let (before_pick, before_composer) = (pick(&state), composer(&state));
+        press(&mut state, 3);
+        over(&mut state, None, Some(4));
+        changes::cancel_drag(&mut state);
+        assert!(view(&state).drag.is_none());
+        assert_eq!(pick(&state), before_pick);
+        assert_eq!(composer(&state), before_composer);
+        assert_eq!(
+            release(&mut state),
+            Effect::None,
+            "a later release does nothing"
+        );
+    }
+
     // Q8, FR-020, US2 AS6: Esc mid-drag puts back the pick and the box from before the press.
     #[test]
     fn esc_restores_the_pick_and_box_from_before_the_press() {

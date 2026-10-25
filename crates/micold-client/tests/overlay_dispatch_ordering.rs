@@ -319,6 +319,27 @@ fn escape_closes_what_is_above_the_drawer_then_the_drawer() {
     );
 }
 
+/// Feature 1275 (review A M4 F2): Esc during a drag over the line numbers cancels the drag only;
+/// the comments drawer stays open for the next Esc.
+#[test]
+fn escape_during_a_drag_cancels_it_before_closing_the_drawer() {
+    use micold_client::features::changes::{DragState, Msg as ChangesMsg};
+    use micold_core::review::drag::Drag;
+    use micold_core::review::Side;
+    let state = drawer_open(|view| {
+        view.drag = Some(DragState {
+            drag: Drag::press(Side::New, 1),
+            before_pick: None,
+            before_composer: None,
+        });
+    });
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Changes(ChangesMsg::GutterDragCancelled)),
+        "the drag first, the drawer stays open"
+    );
+}
+
 /// [`drawer_open`] with a reported comment's whole reply open in its Show all dialog.
 fn with_reply_open() -> State {
     use micold_client::features::changes::{self, Msg};

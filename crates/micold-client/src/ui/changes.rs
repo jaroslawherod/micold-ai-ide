@@ -946,6 +946,7 @@ fn diff_pane_body<'a>(
                         Message::Changes(Msg::GutterPressed { old, new, extend })
                     })
                     .on_gutter_over(|old, new| Message::Changes(Msg::GutterDragOver { old, new }))
+                    .on_gutter_release(|| Message::Changes(Msg::GutterDragReleased))
                     .dragging(view.drag.is_some());
             }
             if let Some(pick) = view.pick {

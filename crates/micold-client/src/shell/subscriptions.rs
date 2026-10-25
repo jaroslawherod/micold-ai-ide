@@ -160,8 +160,10 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subs.extend(crate::shell::changes_watch::watch(app, entry));
     }
     // Feature 1275 (US2, R7): a drag over the diff's line numbers ends with the button's release
-    // anywhere in the window, or **Esc**; listened to only while a drag is under way. It maps no
-    // pointer move, so FR-010's "no mouse-move messages" holds.
+    // anywhere in the window; listened to only while a drag is under way. The pressed number cell
+    // publishes the release too, for one that comes in the press's batch (review A M4 F1); **Esc**
+    // goes through `on_escape` (F2). It maps no pointer move, so FR-010's "no mouse-move messages"
+    // holds.
     if app
         .core
         .changes
@@ -218,7 +220,8 @@ fn window_focus_message(
 }
 
 /// The `listen_with` callback that ends a Review tab drag (feature 1275, contracts/quick-comment.md
-/// Q8, Q9): the left button's release, captured or not, releases it; **Esc** cancels it.
+/// Q9): the left button's release, captured or not, releases it. **Esc** is `on_escape`'s, which
+/// cancels the drag before anything else Esc closes (review A M4 F2).
 fn changes_drag_message(
     event: iced::Event,
     _status: iced::event::Status,
@@ -229,10 +232,6 @@ fn changes_drag_message(
         iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
             Some(Message::Changes(ChangesMsg::GutterDragReleased))
         }
-        iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-            key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-            ..
-        }) => Some(Message::Changes(ChangesMsg::GutterDragCancelled)),
         _ => None,
     }
 }
@@ -411,10 +410,10 @@ mod tests {
         );
     }
 
-    /// Feature 1275 (Q8, Q9): a drag ends on the left button's release and is cancelled by Esc;
-    /// nothing else, not a press nor another button, maps to a message.
+    /// Feature 1275 (Q9): a drag ends on the left button's release; nothing else, not a press,
+    /// another button nor Esc (which is `on_escape`'s, review A M4 F2), maps to a message.
     #[test]
-    fn changes_drag_message_ends_on_release_and_cancels_on_esc() {
+    fn changes_drag_message_ends_on_release_only() {
         use micold_client::features::changes::Msg as ChangesMsg;
         let map = |event| changes_drag_message(event, dummy_status(), iced::window::Id::unique());
         assert_eq!(
@@ -436,7 +435,7 @@ mod tests {
                 text: None,
                 repeat: false,
             })),
-            Some(Message::Changes(ChangesMsg::GutterDragCancelled))
+            None
         );
         assert_eq!(
             map(iced::Event::Mouse(iced::mouse::Event::ButtonPressed(

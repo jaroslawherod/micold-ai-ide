@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: implement M4
-- **Next step**: orchestrator: reviews A (high) and B for M4 on snapshot c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7, then open the M4 PR (body: scratchpad pr-body-1275-m4.md).
+- **Phase**: review M4
+- **Next step**: orchestrator: Review A round 2 (sonnet) on the fix diff `review-snapshot.sh diff c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7`; then open the M4 PR (body: scratchpad pr-body-1275-m4.md).
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -63,9 +63,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) | 1 | 3ca84763c (WIP) | CHANGES (run by the orchestrator): 4 MAJOR, 2 MINOR, all verified. F1 open file dropping out of a background read switched to NO_LONGER_CHANGED on its own → `OpenView.chose_gone` (set only when the user selects the file, or the read their selection started finds it gone; `stale::note_selection`), test `the_open_file_leaving_a_background_read_keeps_its_diff_until_selected` (red seen). F2 re-selecting the open dotted file did nothing → `FileSelected` re-reads it keeping the old diff, test `selecting_the_open_dotted_file_reads_its_latest_diff` (red seen). F3 ReadDiff job read the row after the diff → row read first (no seam for a test: off-thread closure over real git). F4 adopted PR file recorded the old head → `PullRequestView.adopted` + `stale::head_of` for the anchor's `head_commit` and the head-version read, test `a_comment_on_an_adopted_file_records_the_head_it_was_read_at` (red seen). F5 watch read ahead of a queued user read was applied → `OpenView.apply_queued`, test `a_watch_read_ahead_of_the_users_queued_read_is_not_shown` (red seen). F6 clones: fixed in part (see Declined). |
 | M3 visual pass (T025) | 1 | M3 tree, debug build | PASS (unit, cloud Xvfb, 1280x800, light and dark): §A step 2 held state, re-selecting the open dotted file (A F2), notice applied. Observations: base line ellipsised while the notice shows; #1271's dot close to the `−2` count. Evidence `visual-pass/` and /mnt/project-files/issue-1275/. |
 | M3 A (code-review high) | 2 | db7d27eba4cb67716924927acc1878a3d8749dfc:04e4a0496d37e182a3281b8e4dcf04ea932c504b | pending (orchestrator). Fix diff: `git diff b65c8c8ea..04e4a0496` (b65c8c8ea is 3ca84763c reworded, same tree). Full gate (`scripts/gate.sh`) green on 04e4a0496's code. |
-| M4 A (code-review high) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | pending (orchestrator) |
-| M4 B (conformance) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | pending (orchestrator) |
+| M4 A (code-review high) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | CHANGES: F1 MAJOR (press+release in one winit batch never seen by the drag subscription made on the press's message → stale drag) fixed: the pressed number cell publishes `GutterDragReleased` on its own release (`GutterState.pressed`, `.on_gutter_release`), red test first; F2 MINOR (Esc cancelled drag and closed the drawer) fixed: `on_escape` arm before the drawer, Esc arm dropped from `changes_drag_message`; F3 MINOR (focus loss / tab switch left the drag) fixed: `changes::cancel_drag` on `WindowFocusChanged(false)` and in `hide_shown` (tab close: see Declined). Round 2 pending (sonnet, fix diff). |
+| M4 B (conformance) | 1 | c9b47c92757ce55f58408ae50544ecf22bfd88d8:3dc34ba6364dc7dc82e729029426bb9577ddd6d7 | CLEAN, 3 MINOR: B1 red runs logged for the two tests (mutation runs, `tdd/cycle-log.md`); B2 carried M3/M2 fixes named in the PR body; B3 "the diff does not scroll while you drag" dropped from the user guide (fixed, prose only). No new round (only MINORs). |
 | M4 visual pass (T034) | 1 | M4 tree, debug build | PASS (unit, cloud Xvfb, 1280x800, light and dark, XTest drag): pick follows the pointer, box opens focused under the released line, second drag with the box open, Esc restores. Found and fixed: slots followed the pick mid-drag and moved rows under the pointer → `slot_pick`. Touchpad and release-outside-window not runnable under Xvfb. Evidence `visual-pass/m4-b-*` and /mnt/project-files/issue-1275/. |
+| M4 visual pass (review A F1 fix) | 2 | M4 tree + round 1 fixes, debug build | PASS (unit, cloud Xvfb, light and dark): XTest press+release back to back on a number picks the line, no drag left (moving over numbers and a plain click change nothing, pixel-identical), a full drag still opens the box. Evidence `visual-pass/m4-c-*`. |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
 changes-view-hold.md, quick-comment.md, quickstart.md). Milestones proposed: M1 core stale tracking
@@ -103,6 +104,8 @@ items unconditional). Round 2 scan: no critical ambiguities left; clarify CLEAN.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M4 | A r1 | F3 (MINOR), tab close part | Closing a Review tab drops its `OpenView` with its `drag`, so no stale drag survives a close; only showing another tab or a session (`hide_shown`) needed the cancel. |
+| M4 | B r1 | B3 (MINOR) | Not verified on screen (the fixture's diff fits the viewport); the clause was dropped from the user guide instead (fixed, prose only). |
 | M3 | A r1 | F6 (MINOR), clones | Partly: `applied` no longer clones the shown PR diff, `list_read` takes the list instead of cloning it, `adopt_pr_selection` checks the set before building anything. Kept: the latest PR diff is still cloned on adoption (`Listing::put` places a file new to the shown diff by its neighbours in the latest one, so the whole latest diff is the `fresh` argument) and `hold_pr_refresh` builds the shown `PrDiff` to compare (the view stores files and patches apart). |
 | M1 | A r1 | F6, untracked rows | Partly: an untracked row's modes stay `[0, 0]` (`--raw` does not list it); a chmod on an untracked file is not flagged. Its diff shows the mode only in the `new file mode` header; left for a follow-up if wanted. |
 

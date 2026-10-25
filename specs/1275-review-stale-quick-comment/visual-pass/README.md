@@ -43,3 +43,16 @@ under the pick from before the press until the release (`changes::slot_pick`, te
 Not run in the container: a touchpad press-and-drag (no touchpad device under Xvfb; it reaches iced
 as the same mouse button and motion events) and a release outside the window (XTest cannot move the
 pointer past the 1280x800 screen; the release is caught window-wide by the same listener, Q9 test).
+
+### M4 review round 1 — a fast click (review A F1)
+
+Same setup, M4 tree with the round 1 fixes. XTest sent the button's press and release back to
+back with no wait, so they reach the window in one batch of events, before the press's message is
+handled.
+
+| File | Shows | Verdict |
+|---|---|---|
+| `m4-c-1-fast-click-{light,dark}-1280.png` | the fast click on new line 2: line 2 picked, **Add comment** under it, no box | PASS |
+| `m4-c-3-moved-and-clicked-{light,dark}-1280.png` | then the pointer moved with no button over the numbers of lines 3–8 and a plain click on the diff text: the screen is pixel-identical to the one above (pick still line 2, no box opened, nothing focused) — before the fix the drag stayed on, the pick followed the pointer and the next release opened a box | PASS |
+
+A full drag afterwards (2 → 5) still opens the box under the released line, as in §B.
