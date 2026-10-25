@@ -384,9 +384,10 @@ pub fn reconcile_catalog(
             // T067a-6: committing the outgoing row is an outcome now, so it has to be applied —
             // a dropped `Vec<Outcome>` here is the row snapping shut, which is the thing FR-001c
             // is about.
-            // Feature 1269 (U8): with its location's kept review shown when it was the last there.
-            let outcomes =
-                crate::features::session::current_session_gone(core.set_current_session(None));
+            // Feature 1269 (U8): with its location's kept review shown when it was the last there
+            // (its record is gone, so the root takes the location the header followed).
+            let mut outcomes = core.set_current_session(None);
+            outcomes.push(crate::features::Outcome::CurrentSessionGone(None));
             crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
         }
     }

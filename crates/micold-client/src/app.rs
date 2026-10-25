@@ -1386,16 +1386,23 @@ impl State {
 
     /// The current session went and was the last live one of its location (feature 1269, U8,
     /// R8): that location's Review tab, if it has one, is shown, so the location stays shown under
-    /// its own header. The location is the one the header followed: while a session is current
-    /// the shown location is that session's (a shown review is always the current session's
-    /// location, or a sessionless one's). Not while Compare holds the main area, which it took
-    /// from the review; under the Overview or Settings it is shown unread, and read once uncovered.
-    fn show_review_of_emptied_location(&mut self) {
+    /// its own header. `left` is the gone session's location, read while its record was there;
+    /// a session already gone from the catalog has none, and then the location the header
+    /// followed stands for it. Not while Compare holds the main area, which it took from the
+    /// review; under the Overview or Settings it is shown unread, and read once uncovered.
+    fn show_review_of_emptied_location(
+        &mut self,
+        left: Option<micold_core::session::SessionLocation>,
+    ) {
         if self.session.active.is_some() || self.runs.compare.is_some() {
             return;
         }
-        let Some(key) = self.changes.header.entry.clone() else {
-            return;
+        let key = match (left, self.workspace.active.clone()) {
+            (Some(entry), Some(project)) => (project, entry),
+            _ => match self.changes.header.entry.clone() {
+                Some(key) => key,
+                None => return,
+            },
         };
         let live_left = self
             .active_sessions()
@@ -1717,7 +1724,7 @@ pub fn interpret(
             );
         }
         // Feature 1269 (U8): the current session went; its emptied location's review is shown.
-        Outcome::CurrentSessionGone => state.show_review_of_emptied_location(),
+        Outcome::CurrentSessionGone(left) => state.show_review_of_emptied_location(left),
         // Feature 1269 (U9): the forgotten project's Review tabs go with it, under either spelling
         // of its path.
         Outcome::ProjectForgotten(path) => {

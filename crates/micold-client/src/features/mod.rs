@@ -80,10 +80,10 @@ pub enum Outcome {
     /// `changes`'s; `project` owns the catalog.
     ProjectForgotten(std::path::PathBuf),
     /// The current session went (closed, removed, ended, or gone from the catalog), its records
-    /// already updated (feature 1269, U8, R8): when it was its location's last live session, the
-    /// root shows that location's Review tab, if it has one. `session` owns the sessions,
-    /// `changes` the tabs.
-    CurrentSessionGone,
+    /// already updated (feature 1269, U8, R8): when it was the last live session of its location
+    /// (named when its record was still there), the root shows that location's Review tab, if it
+    /// has one. `session` owns the sessions, `changes` the tabs.
+    CurrentSessionGone(Option<micold_core::session::SessionLocation>),
     /// **Run in parallel** was chosen (feature 483): the root opens the dialog.
     RunInParallelRequested,
     /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).
