@@ -1111,6 +1111,8 @@ fn a_focus_while_another_filters_choices_are_out_awaits_its_own() {
     );
     assert_eq!(labels_of(&state, FIX_VERSION).len(), 3);
     assert_eq!(labels_of(&state, COMPONENT).len(), 4);
+}
+
 // ---- Feature 1186 FR-002, FR-003: advanced mode hides the filters; Basic restores them ----
 
 #[test]
