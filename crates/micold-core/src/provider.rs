@@ -572,7 +572,7 @@ pub fn pathext() -> Vec<String> {
 
 /// The file `command` resolves to on `path` (same rules as [`resolves_on_path`]), so a spawn can
 /// use it directly: `Command::new` would not find a Windows `.cmd` shim by its bare name.
-fn resolve_on_path(command: &str, path: &OsStr) -> Option<PathBuf> {
+pub(crate) fn resolve_on_path(command: &str, path: &OsStr) -> Option<PathBuf> {
     let is_file = |candidate: &PathBuf| {
         std::fs::metadata(candidate)
             .map(|meta| meta.is_file())

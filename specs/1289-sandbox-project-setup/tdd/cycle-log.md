@@ -91,3 +91,60 @@ output is copied from the session's logs.
   `right: "<host-bin>:/usr/bin:/bin"` (1 failed)
 - green: `offered_clis` returns `None` for an offer naming a `bin` outside its `ai-clis` dir; 10/10
   `offered` tests pass, `scripts/gate.sh` exit 0
+
+## M2 cycle 1: A4 model — command, run record, transitions, labels, reason lines (T008 → T009)
+
+- tests: `crates/micold-core/tests/setup_model.rs` (13): blank → `None`, trimmed with inner
+  newlines; every Running → ended row succeeds, Running → Running and every finish from an ended
+  state refused (record unchanged); `ended_at` is `Some` exactly when not running (also refused on
+  deserialize); U2 tag texts; SC-004 reason lines; C2 JSON shape; postcard round trip; plain-string
+  command, blank one refused
+- red: `scripts/build-lock.sh cargo test -p micold-core --test setup_model` ->
+  `error[E0432]: unresolved import micold_core::setup` (no module)
+- green: `core/src/setup/mod.rs` -> `test result: ok. 13 passed; 0 failed`
+
+## M2 cycle 2: A4 output — lines, `\r`, ANSI, lossy UTF-8, 10,000-line cap (T010 → T011)
+
+- tests: `crates/micold-core/tests/setup_output.rs` (8)
+- red: `cargo test -p micold-core --test setup_output` -> `error[E0433]: cannot find setup in micold_core`
+- green: `core/src/setup/output.rs` (no ANSI helper existed: `grep -rn '\x1b\['` found only the
+  paste markers) -> `test result: ok. 8 passed; 0 failed`
+
+## M2 cycle 3: A4 shell — `shell_line` rows and `bash_on_path` (T012 → T013)
+
+- tests: `crates/micold-core/tests/setup_shell.rs` (4)
+- red: `cargo test -p micold-core --test setup_shell` -> `error[E0432]: unresolved import micold_core::setup`
+- green: `core/src/setup/shell.rs`, `provider::resolve_on_path` made `pub(crate)` ->
+  `test result: ok. 4 passed; 0 failed`
+
+## M2 cycle 4: A5 `StreamingChild` — per-stream order, stdin EOF, tree terminate, exit kinds (T014 → T015)
+
+- tests: `crates/micold-core/tests/streaming_child.rs` (7 on Unix; a `#[cfg(windows)]` module covers
+  order, stdin EOF and terminate through `powershell.exe -Command`, run by CI's Windows job)
+- red: `cargo test -p micold-core --test streaming_child` -> `error[E0432]: unresolved imports
+  micold_core::process::ExitKind, micold_core::process::Stream, micold_core::process::StreamingChild`
+- green: `StreamingChild`, `Terminator`, `ExitKind` in `process.rs`; the group kill / job kill is
+  `TreeKill`, shared with `run_bounded` -> `test result: ok. 7 passed; 0 failed`; `run_bounded`'s
+  consumers green: `--test env_include_resolve` 13/13, `--test env_include` 6/6, `--lib process` ok
+- mutant red (group kill → leader only: `libc::kill(-(pid…))` → `libc::kill(pid…)`):
+  `unix::terminate_ends_the_command_and_every_process_it_started ... FAILED` — `the grandchild 8630
+  outlived the terminate` (6 passed; 1 failed). Restored from a copy
+- mutant red (stdin `Stdio::null()` → `Stdio::piped()`): `cargo test --test streaming_child -- stdin`
+  hung until `timeout 90` killed it (exit 143). Restored from a copy
+
+## M2 cycle 5: A14 `setup_commands` in `settings.json`, kept by the daemon's write (T016 → T017)
+
+- tests: `settings.rs` `setup_commands_tests` (5: round trip with the C3 shape, empty map writes no
+  key, a file without the key loads empty and keeps `settings_version` 4, a blank entry is dropped
+  and the rest kept, `SetupCommandChange` sets/removes one project); `catalog.rs`
+  `the_service_write_keeps_a_setup_command`
+- red: before T017 neither compiles (`Settings` has no `setup_commands`, no `SetupCommandChange`).
+  Mutant (on-disk mirror `setup_commands: settings.setup_commands.clone()` → `BTreeMap::new()`):
+  `cargo test -p micold-core --lib -- settings` -> `a_setup_command_round_trips_through_the_file ...
+  FAILED` (43 passed; 1 failed); `cargo test -p micold-daemon --lib -- catalog` ->
+  `the_service_write_keeps_a_setup_command ... FAILED`, `left: None, right: Some(SetupCommand("mise
+  trust && mise install"))`. Restored from a copy
+- green: field on `Settings` and `StoredSettings` (`known_values`, skip when empty),
+  `SetupCommandChange` -> `--lib -- settings` 44/44, daemon `--lib -- catalog` 13/13. The client's
+  `ValidSettings::into_settings` and `set_changed` name the field (a save never writes it), and
+  `saving_a_theme_keeps_every_other_setting` now holds a setup command

@@ -449,6 +449,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         // Written by its own per-project change, never by a save of the form (features 533, 1122).
         jira_connections: _,
         jira_base_urls: _,
+        // Written by its own per-project change, never by a save of the form (feature 1289).
+        setup_commands: _,
         desktop_notifications: _,
         notification_kinds: _,
         long_task_threshold_secs: _,
@@ -1172,6 +1174,11 @@ mod tests {
             jira_enabled: false,
             jira_connections: Default::default(),
             jira_base_urls: Default::default(),
+            setup_commands: [(
+                "/home/me/src/app".to_string(),
+                micold_core::setup::SetupCommand::parse("mise install").unwrap(),
+            )]
+            .into(),
             github_issues_enabled: true,
             plan_usage_enabled: false,
             plan_usage_warn_percent: 65,

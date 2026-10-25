@@ -2441,6 +2441,33 @@ mod notify_tests {
         catalog.set_desktop_notifications(false).unwrap();
         assert_eq!(stored(&dir).long_task_threshold_secs, 300);
     }
+
+    /// Feature 1289, A14 (contract C3): a service-settings write keeps a project's setup command
+    /// already in `settings.json`, which the client wrote and this daemon never copies.
+    #[test]
+    fn the_service_write_keeps_a_setup_command() {
+        let command =
+            micold_core::setup::SetupCommand::parse("mise trust && mise install").unwrap();
+        let (dir, mut catalog) = catalog_with(Settings::default());
+        let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+        store
+            .update(&mut |on_disk| {
+                on_disk
+                    .setup_commands
+                    .insert("/home/me/src/app".to_owned(), command.clone());
+            })
+            .unwrap();
+
+        catalog.set_desktop_notifications(false).unwrap();
+
+        let on_disk = stored(&dir);
+        assert!(!on_disk.desktop_notifications, "the service write happened");
+        assert_eq!(
+            on_disk.setup_commands.get("/home/me/src/app"),
+            Some(&command),
+            "the client's setup command survives the daemon's write"
+        );
+    }
 }
 
 #[cfg(test)]

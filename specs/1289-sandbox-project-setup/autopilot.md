@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M1
-- **Next step**: M1 PR #1353: red CI (`sandbox_real_history`) fixed; M1 review A scoped round on the fix, then CI and merge, then M2
+- **Phase**: M2
+- **Next step**: M2 implemented (T008–T017 ticked); review A and review B round 1, then full gate and PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1347 | design (spec, plan, tasks) | merged | 86fcb6b28cfe72ea680999550251409cbfa0921f |
-| #1353 | M1 sandbox PATH | open | — |
+| #1353 | M1 sandbox PATH | merged (rebase) | 31a863fd3191b73aaea8000c244864413a5a1ad2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | PR open |
-| M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | — | pending |
+| M1 | T001–T007 | full | sandbox home's ~/.local/bin and mise shims on PATH | #1353 | merged |
+| M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | — | in progress |
 | M3 | T018–T030 | full | protocol 69; daemon runs setup on create, streams output, MCP field, run/stop | — | pending |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | — | pending |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | — | pending |
@@ -61,6 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 1 (sonnet) | bfedc8feff31a942849a46161efd9046cd8ac84b:65b4a48c150e71ebb1754ffda28df43e74b95f10 | CHANGES: 1 MAJOR, 1 MINOR — fixed (F1 `tdd/cycle-log.md` added, red/green per behaviour; F2 guide says "container or Kubernetes daemon", prose only). Verify: toolchain_path 14/14, daemon `offered` 8/8 |
 | M1 A | 2 (sonnet, scoped) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, no findings |
 | M1 B | 2 (sonnet) | da8d7b2975423f682e8ed7b67404de7fa34812af:079a1970a4f38c03df7d287289a5d26dac1513f5 | CLEAN, 1 MINOR — fixed, prose only (guide paragraph re-wrapped to ~100 columns). Verify: toolchain_path 16/16, daemon `offered` 9/9 |
+| M1 A | 3 (sonnet, scoped, red-CI fix c9320751) | 896f820bf2e94b14db372bee07de2cf983fe110b:c9320751 | CLEAN, 1 MINOR — logged as a follow-up, not fixed (offered.json with `clis: []` ambiguous across daemons) |
 
 ## Declined review findings
 
@@ -78,3 +79,4 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 ## Follow-ups not done
 
 - Per-project sandbox image (spec Story 4, deferred by clarify Q2): needs its own issue.
+- M1 review A round 3 MINOR: an `offered.json` with `clis: []` cannot be told apart from the daemon's own, so a host daemon sharing the state dir would prepend home folders to its PATH. Fix: an ownership marker (`#[serde(default)] state: Option<PathBuf>` in `Offered`, filled by the writer; `offered_clis` returns None when Some and differs from `dir`).

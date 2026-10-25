@@ -85,3 +85,9 @@ impl Drop for JobHandle {
         }
     }
 }
+
+// SAFETY: a job handle is a kernel handle, usable from any thread; `terminate` and `Drop` are the
+// only calls made through it, and the handle is closed exactly once, in `Drop`.
+unsafe impl Send for JobHandle {}
+// SAFETY: as above; `TerminateJobObject` may be called on the same handle from several threads.
+unsafe impl Sync for JobHandle {}

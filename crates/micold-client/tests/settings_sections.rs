@@ -53,6 +53,8 @@ use std::path::{Path, PathBuf};
 /// switch itself is rendered by Settings → Jira.
 const DEFERRED: &[(&str, &str)] = &[
     ("jira_connections", "M2 (T022) connect form"),
+    // Feature 1289: stored from M2; Settings › Project's setup command field lands with M5.
+    ("setup_commands", "1289 M5 (T046) Settings › Project"),
     // Read-repair state (`#[serde(skip)]`): shown through `ContainerSettings.migration`'s notice.
     (
         "daemon.sandbox.moved_off_released",
