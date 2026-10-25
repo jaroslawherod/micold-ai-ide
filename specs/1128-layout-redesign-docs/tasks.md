@@ -264,8 +264,11 @@ its reason (SC-006).
 
 Changes no code; left to the close unit's PR (milestones rule 4).
 
-- [ ] T035 Quickstart A4 (`mise run gate`) and the FR-020 check over the whole feature's diff;
-  tick the tasks the milestones completed
+- [X] T035 Quickstart A4 (`mise run gate`) and the FR-020 check over the whole feature's diff;
+  tick the tasks the milestones completed — A4: `scripts/gate.sh` (what `mise run gate` runs; no
+  `mise` in the cloud container) green at `357d48d5b`, 11263 tests passed, 0 failed, and
+  `scripts/tests/*.test.sh` green; FR-020: the feature's commits (`git log --grep='(1128)'`) change
+  no file under `crates/*/src`; T001–T034 were ticked by their milestones
 
 ---
 
