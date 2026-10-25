@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1128
 - **Worktree branch**: claude/project-thread-bznqpy
 - **Started**: 2026-10-24
-- **Phase**: M3 implemented on local branch `m3-1128` (worktree /home/user/wt-1128-m3, from the M2 head 3fa50c20); scoped gate and review A next
-- **Next step**: M3 unit: scoped gate + review A (code-review, high), commit, review snapshot, return for review B (no Agent tool). M2 PR #1429 open, in CI; M3 rebases onto main after it merges and re-records the fixture before the full gate.
+- **Phase**: M3 implemented on local branch `m3-1128` (worktree /home/user/wt-1128-m3, from the M2 head 3fa50c20); review A clean (2 rounds), scoped gate green at fda91d72; review B pending
+- **Next step**: orchestrator dispatches M3 review B (conformance, sonnet) on snapshot `55012b98799571e4ba1c20e7eecb3c04647547bf:fda91d7211b016e78b22856c5c05d8bf9c98b8f3` (diff `3fa50c20...m3-1128`; the unit has no Agent tool). Then, after #1429 merges: rebase `m3-1128` onto main, re-record the fixture (`UPDATE_LAYOUT_SNAPSHOT=1`, additions only), full gate, push, PR `feat(1128): cover the whole redesigned window in the layout snapshot (#1128)` with label `docs-not-needed`.
 
 Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–M5 todo); #1127 open, no spec. Spec stages the work: stage 1 (status bar, session area) now; stage 2 (sidebar, title bar, whole-window states, fixture, visual pass) after #1125 and #1127 merge.
 
@@ -28,7 +28,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 |---|---|---|---|---|---|
 | M1 | T001–T011 | full | Status bar and session-area mentions corrected and linked; no bar under the terminal, no unnamed "bar" | #1372 | merged (rebase) as 1c69ea8b |
 | M2 | T012–T020 | full | Sidebar and title bar in the user guide; FR-009 opening section; media alt text | #1429 | open, in CI (branch claude/project-thread-bznqpy); reviews A and B clean; full gate green at fa639e9b |
-| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | implemented on local `m3-1128`; reviews pending; not pushed (waits on #1429) |
+| M3 | T021–T029 | full | `window-session-view`, `window-overview`, gate W, regenerated fixture, `layout-snapshot.md` passage | — | on local `m3-1128` at fda91d72; review A clean; scoped gate green; review B pending; not pushed (waits on #1429) |
 | M4 | T030–T034 | full | Visual pass: 4 frames, 20 verdicts, contrast | — | blocked: after M3 |
 
 ## Decisions
@@ -67,6 +67,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 | M3 review A (code-review, high) | 0 | — (`origin/main...101e5a00`) | Ran on the whole branch by mistake: its 9 findings are all M2's diff (#1429), none in M3's files; re-run on `3fa50c20...101e5a00`. Not a counted round. |
 | M3 review A (code-review, high) | 1 | — (`3fa50c20...101e5a00`) | 10 findings: fixed — W5's `row_selected` loop was vacuous (short-circuits on `overview_open`) and copied the private `row_selection`: dropped, W5 asserts the fields that are the selection (D6); W4 checked heights only: now tops, sidebar left, session area right edge too, W1/W2 left and width; new describe test read the fixture file and raced a regeneration: uses `emit_fixture`; `Window::region` copied the `at()` lookup of three strip gates: extracted `support::layout::anchored`, all four use it; contract W1 said HEIGHT 44: corrected to 43 + DIVIDER (prose). Declined — see below. Round 2 on the fix diff. |
 | M3 review A (code-review, high) | 2 | — (fix diff `101e5a00..381f54c8`) | Fixes hold. 7 MINORs: fixed — declined rows moved into the Declined table; data-model.md and research R6 still read HEIGHT 44 (prose); W3 now holds the body's left edge and width; `region` panic names the declared path again; contract W2/W3 rows list the width checks, line re-wrapped. Declined — see below. Clean. |
+| M3 review B (conformance) | 1 | `55012b98799571e4ba1c20e7eecb3c04647547bf:fda91d7211b016e78b22856c5c05d8bf9c98b8f3` | pending — to be dispatched by the orchestrator (no Agent tool in the unit) |
 | M2 review B (conformance) | 1 | `86ed9f3eebb0fd4ed330dee693d4cddfa1392404:02f788dccc6541db122fee7aa38c8f9b2ce52d3a` | CLEAN, 2 MINORs: F1 icons.md Filter row named the removed tag-filter panel — fixed, prose only (glyph shown only in the component showcase); F2 icons.md "adding an icon" steps re-pathed beyond FR-011 — paths correct, recorded as an extra in *Follow-ups not done*. |
 
 ## Declined review findings
@@ -98,7 +99,7 @@ Blockers at spec time: #1124 and #1126 merged; #1125 open (M1, M2 on main; M3–
 
 ## Handover
 
-M2 unit 2: recorded review B (CLEAN, 2 MINORs; F1 fixed prose only), rebased onto origin/main 35ac6de2, full gate (`scripts/gate.sh`) red once: main's `settings_sections::nothing_points_at_the_removed_session_service_section` lists every page allowed to name "Session service diagnostics", and M2's appearance-theming, help-about and icons pages name it (lines broken mid-phrase). Fixed in fa639e9b (three ALLOWED entries, phrase kept on one line); gate green at fa639e9b. Pushed. Next: open the M2 PR. No open findings.
+None.
 
 ## Open escalation
 
