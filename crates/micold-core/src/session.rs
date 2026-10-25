@@ -407,7 +407,7 @@ pub struct ShellInstance {
 /// (Constitution Principle V) so a session can never be ambiguously "maybe a worktree, maybe
 /// not" — every session maps to exactly one of these two sanctioned locations (constitution
 /// v1.3.0, Principle III).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SessionLocation {
     /// Hosted by a worktree, identified by its `dir_name` (identity, unchanged from before
     /// feature 010).

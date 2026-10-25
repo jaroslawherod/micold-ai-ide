@@ -192,16 +192,16 @@ accordion are gone (FR-014–FR-016).
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T052 [P] [US5] In `crates/micold-client/src/ui/material/tree_view.rs` `mod tests`, add failing tests: a `TreeView` whose items all carry `.key(u64)` keeps a focused row's keyboard focus (and its ripple and hover state) on that row when a rebuild moves it to another position, with the list's length unchanged (R13, FR-017)
-- [ ] T053 [P] [US5] In `crates/micold-client/tests/sidebar_tree.rs`, add failing tests for `sidebar::hover_holds(state, dir, index)`: true while the row's current index in `sidebar_list()` equals the recorded one, false once a state change moves it (R14)
+- [x] T052 [P] [US5] In `crates/micold-client/src/ui/material/tree_view.rs` `mod tests`, add failing tests: a `TreeView` whose items all carry `.key(u64)` keeps a focused row's keyboard focus (and its ripple and hover state) on that row when a rebuild moves it to another position, with the list's length unchanged (R13, FR-017)
+- [x] T053 [P] [US5] In `crates/micold-client/tests/sidebar_tree.rs`, add failing tests for `sidebar::hover_holds(state, dir, index)`: true while the row's current index in `sidebar_list()` equals the recorded one, false once a state change moves it (R14)
 
 ### Implementation for User Story 5
 
-- [ ] T054 [US5] Move `crates/micold-client/src/ui/transcript/keyed.rs` to `crates/micold-client/src/ui/cdk/keyed_column.rs` with its tests, API unchanged (`ui/cdk/mod.rs` exports it, `ui/transcript/mod.rs` imports it); list `KeyedColumn` under cdk in `crates/micold-client/src/showcase/catalogue.rs`; `--test showcase_completeness` passes
-- [ ] T055 [US5] Add `TreeItem::key(u64)` in `crates/micold-client/src/ui/material/tree_view.rs`; `TreeView` lays its rows out in `cdk::KeyedColumn` when every item has a key; T052 passes
-- [ ] T056 [US5] In `crates/micold-client/src/ui/sidebar.rs`, key a location row by a hash of its `RowRef`, a session row by its `SessionId`, a header by its `StateGroup`, a run group by its `GroupId` (R13)
-- [ ] T057 [US5] `worktree.hovered: Option<(String, usize)>` and `WorktreeMsg::Hovered(String, usize)` in `crates/micold-client/src/features/worktree.rs`; `sidebar::hover_holds` in `crates/micold-client/src/features/sidebar.rs`; `crates/micold-client/src/ui/sidebar.rs` sends the drawn index and shows hover actions only while `hover_holds`; the other `Hovered` sites (`crates/micold-client/src/main.rs`, tests) pass the index; an open row context menu keeps its anchor and location; T053 passes
-- [ ] T058 [US5] In `docs/user-guide/worktrees-and-sessions.md` *Browsing worktrees*: the keyboard stays on a row that moves to another group; Tab visits the Overview row, the chip bar, each header and each row in display order (FR-022)
+- [x] T054 [US5] Move `crates/micold-client/src/ui/transcript/keyed.rs` to `crates/micold-client/src/ui/cdk/keyed_column.rs` with its tests, API unchanged (`ui/cdk/mod.rs` exports it, `ui/transcript/mod.rs` imports it); list `KeyedColumn` under cdk in `crates/micold-client/src/showcase/catalogue.rs`; `--test showcase_completeness` passes
+- [x] T055 [US5] Add `TreeItem::key(u64)` in `crates/micold-client/src/ui/material/tree_view.rs`; `TreeView` lays its rows out in `cdk::KeyedColumn` when every item has a key; T052 passes
+- [x] T056 [US5] In `crates/micold-client/src/ui/sidebar.rs`, key a location row by a hash of its `RowRef`, a session row by its `SessionId`, a header by its `StateGroup`, a run group by its `GroupId` (R13)
+- [x] T057 [US5] `worktree.hovered: Option<(String, usize)>` and `WorktreeMsg::Hovered(String, usize)` in `crates/micold-client/src/features/worktree.rs`; `sidebar::hover_holds` in `crates/micold-client/src/features/sidebar.rs`; `crates/micold-client/src/ui/sidebar.rs` sends the drawn index and shows hover actions only while `hover_holds`; the other `Hovered` sites (`crates/micold-client/src/main.rs`, tests) pass the index; an open row context menu keeps its anchor and location; T053 passes
+- [x] T058 [US5] In `docs/user-guide/worktrees-and-sessions.md` *Browsing worktrees*: the keyboard stays on a row that moves to another group; Tab visits the Overview row, the chip bar, each header and each row in display order (FR-022)
 
 **Checkpoint**: the whole feature is on `main`.
 

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1125
 - **Worktree branch**: claude/project-thread-22fhnj
 - **Started**: 2026-10-24
-- **Phase**: milestone M4
-- **Next step**: orchestrator opens the M4 PR (title/body in the scratchpad), waits on CI and merges; then M5
+- **Phase**: milestone M5
+- **Next step**: implement M5 (T052–T058)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1325 | M1: sidebar grouped by state | merged (rebase) | 0e5a1e9bb48c633b80eca5a20ce7c9ba3d807316 |
 | #1345 | M2: two-line rows, primary selection | merged (rebase) | b54fa75959d6535260875f8859776e458e3851aa |
 | #1359 | M3: Overview row, top-bar badge | merged (rebase) | 9c2e5b7b70c182522eeb41eeaac4df0aea9e26bb |
+| #1378 | M4: chip bar and ⋯ menu | merged (rebase) | 219cbd4590b8fcaaf660f77acc30bc7b6ebef049 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T019 | full | Sidebar grouped by state (headers with counts, Done collapsed, toggles, reveals/chords open a closed group) | #1325 | done |
 | M2 | T020–T031 | full | Two-line rows, no type/issue chips, primary-container selection | #1345 | done |
 | M3 | T032–T041 | full | Overview as the sidebar's first row, top bar's badge and tooltip | #1359 | done |
-| M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | — | in progress |
-| M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | todo |
+| M4 | T042–T051 | full | Chip bar (All, tag chips, add, hide, ⋯ menu) replaces the filter panel | #1378 | done |
+| M5 | T052–T058 | full | Keyboard and hover stay on a row that moves group; KeyedColumn in cdk | — | in progress |
 
 Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (grouping, collapse and reveal-into-collapsed only work together; tasks.md M1 *Size*). M2 kept whole at 12 (two lines and dropped chips are one row change). US3 before US2 (both P1): US2's selected look uses US3's `Selection::Primary`.
 
@@ -58,6 +59,7 @@ Polish T059–T060 changes no code: close unit. M1 kept whole at 19 tasks (group
 | D19 | M4 | Where do T042's tests that need a `State` live, and how does a chosen more-menu item both close the menu and do the header button's job? | Render-free tests (chips, item order, rules, tooltips) in `tests/features_sidebar.rs` (it builds no `State`); toggle, anchor, choose-closes, today's messages and `can_refresh_worktrees` agreement in `tests/sidebar_state.rs`. Items send `SidebarMsg::MoreMenuChosen(MoreAction)`: the reducer closes the menu, and the shell (`main.rs`) then sends `ui::sidebar::more_action_message(action)`, today's message, so refresh keeps its shell request path | agent-resolved | features_sidebar.rs module doc (isolation); `RefreshRequested` is answered in `main.rs` before the core reducer; `MenuOverlay` does not close itself on a choice |
 | D20 | M4 | Anchor field name, trigger size, keyboard anchor, refresh's busy text | `sidebar.more_anchor` (a `_menu` name trips `overlay_registration`'s popover-shaped scan), pinned in `root_state_is_shared` COMPONENT_LOCAL like `project.switcher_anchor`; the ⋯ trigger is a compact `IconButton` (MenuTrigger's 48dp target made the first line 48dp and pushed the context-menu gate's last row below the fold); a keyboard open (no press point) hangs the menu from the sidebar's trailing edge at the chip bar (`more_menu_fallback_anchor`); the refresh item's label is its tooltip ("Refreshing worktrees…" while running), since a menu item's tooltip is drawn only over a trailing icon | agent-resolved | `tests/overlay_registration.rs::popover_shaped`; `gates/context_menu_anchor.rs` WORKTREE_COUNT doc; `micold-material/src/menu.rs` `trailing_tooltip` doc |
 | D21 | M4 | Layout paths after the accordion left and the more menu joined the overlay | Sidebar body `…/3` → `…/2` (SCROLL_CONTENT, SIDEBAR_SESSION_ROW, row anchors, `sidebar_row`); the always-present more menu surface moves the dialog layer from `0/6` to `0/8` (covered-state presses/anchors, ISSUE_DETAILS_*, `layout_snapshot.rs` actions); `CLIP_REVEALED` and `revealing_states()` are empty; snapshot regenerated | agent-resolved | layout_snapshot "no node at … re-point" failures; probe regeneration |
+| D22 | M5 | T054 asks to move `ui/transcript/keyed.rs` to cdk, but feature 1126 (R10) already promoted it | T054 is satisfied by `micold-material/src/cdk/keyed.rs` (`cdk::Keyed`, row and column; the transcript and the session strip import it; showcase `Exemption` for `cdk/keyed.rs`): `TreeView` uses `cdk::Keyed::column`, nothing is moved | agent-resolved | `git log -- crates/micold-material/src/cdk/keyed.rs`; `ui/transcript/mod.rs:36`; `showcase/catalogue.rs` exemption |
 
 
 ## Review rounds

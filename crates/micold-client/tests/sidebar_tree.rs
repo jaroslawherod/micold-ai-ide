@@ -10,6 +10,8 @@ use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
+mod support;
+
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
         dir_name: dir.to_string(),
@@ -1098,4 +1100,64 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
         .collect();
     assert_eq!(after, before, "nothing is hidden because of an agent run");
     assert_eq!(state.workspace.sessions[&PathBuf::from("/repo")].len(), 1);
+}
+
+// --- Feature 1125 T053 (R14, Edge Cases): hover and the row menu on a row that moves group -----
+
+mod a_row_that_moves_group {
+    use super::support::sidebar_fixture::{five_states, session_in, worktree};
+    use super::WorktreeMsg;
+    use micold_client::app::{Message, State};
+    use micold_client::features::sidebar::{hover_holds, location_row};
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::session::SessionLifecycle;
+
+    fn idle_row(state: &State) -> Option<usize> {
+        location_row(&state.sidebar_list(), &worktree("idle"))
+    }
+
+    /// `idle` starts working: its row leaves Idle for Working.
+    fn start_working(state: &mut State) {
+        session_in(
+            state,
+            worktree("idle"),
+            SessionLifecycle::Running,
+            ActivitySignal::Working,
+            false,
+        );
+    }
+
+    /// R14: the hover holds while the row is where it was hovered, and not once it has moved.
+    #[test]
+    fn hover_holds_only_while_the_row_is_where_it_was_hovered() {
+        let mut state = five_states();
+        let at = idle_row(&state).expect("idle is drawn");
+        state.update(Message::Worktree(WorktreeMsg::Hovered("idle".into(), at)));
+        assert_eq!(state.worktree.hovered, Some(("idle".to_string(), at)));
+        assert!(hover_holds(&state, "idle", at));
+        assert!(!hover_holds(&state, "idle", at + 1), "another index");
+        assert!(!hover_holds(&state, "work", at), "another row");
+
+        start_working(&mut state);
+        assert_ne!(idle_row(&state), Some(at), "precondition: the row moved");
+        assert!(
+            !hover_holds(&state, "idle", at),
+            "a row moved out from under the pointer loses its hover"
+        );
+    }
+
+    /// Edge Cases: an open row context menu keeps its anchor and its location when the row moves.
+    #[test]
+    fn an_open_row_menu_stays_on_its_location_when_the_row_moves() {
+        let mut state = five_states();
+        state.update(Message::Worktree(WorktreeMsg::MenuToggled(
+            "idle".into(),
+            (40, 120),
+        )));
+        let open = state.worktree.menu_open.clone();
+        assert!(open.is_some(), "precondition: the menu is open");
+        start_working(&mut state);
+        assert_ne!(idle_row(&state), idle_row(&five_states()), "the row moved");
+        assert_eq!(state.worktree.menu_open, open);
+    }
 }

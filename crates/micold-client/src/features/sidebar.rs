@@ -155,7 +155,7 @@ pub struct State {
 
 /// A sidebar row named by what it shows, not by its position, so it survives the list arriving
 /// late (feature 803, data-model.md).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RowRef {
     /// A location's own row (Default or a worktree).
     Location(SessionLocation),
@@ -1029,6 +1029,17 @@ pub fn row_index(rows: &[ListRow], target: &RowRef) -> Option<usize> {
         }
     }
     None
+}
+
+/// Whether the pointer that entered `dir`'s row at `index` is still over it (feature 1125, R14):
+/// the row is still drawn at `index` in [`crate::app::State::sidebar_list`]. iced sends no exit when
+/// content moves under a still pointer, so a row a state change moved out from under it loses its
+/// hover.
+pub fn hover_holds(state: &crate::app::State, dir: &str, index: usize) -> bool {
+    location_row(
+        &state.sidebar_list(),
+        &SessionLocation::Worktree(dir.to_string()),
+    ) == Some(index)
 }
 
 /// Which rendered row is `target`'s own location row, if the list draws it (feature 813, R12).

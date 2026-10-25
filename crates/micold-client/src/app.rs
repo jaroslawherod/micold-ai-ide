@@ -1517,8 +1517,8 @@ impl State {
         if self
             .worktree
             .hovered
-            .as_deref()
-            .is_some_and(|d| !names.contains(d))
+            .as_ref()
+            .is_some_and(|(d, _)| !names.contains(d.as_str()))
         {
             self.worktree.hovered = None;
         }
