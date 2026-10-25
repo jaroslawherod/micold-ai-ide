@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1259
 - **Worktree branch**: claude/project-thread-wxdcto
 - **Started**: 2026-10-24
-- **Phase**: close unit — T023–T024 done; checks pending
-- **Next step**: orchestrator dispatches speckit-tdd-verify and speckit-converge (M2 review B has no CLEAN round) and the close-diff review; a close unit then acts on them, sets spec **Status** Closed, finishes the ledger and opens the close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1343 | design (spec, plan, tasks) | merged | 56515707ebd3c2d9e078e059a5e791e16982a6c3 |
 | #1377 | M1 | merged | dbe13ae2425575a7b112d3c9eceaffb6ceb58f27 |
 | #1389 | M2 | merged | e0536872b0c734f02206e8111b78d3196e956b31 |
+| #CLOSE | close (T023–T024, spec closed) | open | — |
 
 ## Milestones
 
@@ -59,10 +60,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A | 2 | 9596267dc307630eff98da28bee82557759a16d3:468b460804a33c78d42ce9d7f39bb150035773de | CLEAN (scoped re-review of A and B, sonnet): all round-1 findings fixed; D10 and D11 confirmed against cosmic-text 0.15.0 source. 2 MINOR declined (see below); no code change, so no new gate. Full gate (scripts/gate.sh) green at 468b4608; layout snapshot unchanged |
 | Review A M2 | 1 | 9edcbec0b4cb30468e08cba30782b1764f2a0625:2983ec92f3edaae8514bd95d544336d1b38eb71a | CLEAN; F1 MINOR fixed (`remove_host_faces` shared with `pin_monospace`), F2 MINOR declined |
 | Review B M2 | 1 | same | CHANGES: F1 MAJOR fixed (M2 cycle-log with red by mutation), F2 MINOR fixed (Verify names micold-material); visual pass B5 PASS |
-| Close review + tdd-verify + converge | 1 | e96467d88139e39bb3c3aff606c1cde655db8412:a6ba671167b82cb6ccd85c5248a05aba198da3d0 | pending (dispatched by orchestrator); close diff = quickstart Results, tasks T023–T024 ticks, ledger |
+| Review A+B M2 | 2 | 2983ec92..25cebc05 (scoped, run by orchestrator) | CLEAN: all round-1 findings fixed |
+| Close review + tdd-verify + converge | 1 | e96467d88139e39bb3c3aff606c1cde655db8412:a6ba671167b82cb6ccd85c5248a05aba198da3d0 | close-diff review CLEAN; tdd-verify PASS with gaps (test-after, mutation-checked; `cargo test -p micold-material --lib -- roboto link_text` 17 passed); converge not needed (M2 round 2 CLEAN). MINORs: F2 cycle-log count (6 → 5, no other test matches the filter) → fixed, prose only; F4 quickstart roboto_font.rs wording → fixed, prose only; F1, F3, F5 see *Declined review findings* |
 
 ## Declined review findings
 
+- Close tdd-verify F1 (test-first unproven): accepted as disclosed; cycle-log says red was not recorded and shows it by mutation.
+- Close tdd-verify F3 (optional extra mutant): declined; the recorded mutants already fail the pin and italic tests, and it adds no behaviour.
+- Close tdd-verify F5 (renderer test skips on hosts with Roboto): accepted as disclosed in quickstart §C; neither CI runner image has a host Roboto, and the pin test covers that host case.
 - M2 A-F2 (rename `pin_roboto_italics`): declined; the name is the contract C-2 / plan name and the doc comment states the off-weight upright removal.
 
 | Milestone | Review | Finding | Why declined |
