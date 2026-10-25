@@ -250,6 +250,9 @@ pub struct PullRequestView {
     /// A head refresh that differs from the diff on screen, held until the notice is pressed
     /// (feature 1275, research R6).
     pub held: Option<HeldPr>,
+    /// Files the user opened while a newer head was held, with the head their shown patch was
+    /// read at: what a comment on one records and its head version is read at (feature 1275).
+    pub adopted: BTreeMap<RelPath, String>,
 }
 
 /// The selected pull request file's version at the pull request's head (feature 1150, FR-005).
@@ -404,6 +407,12 @@ pub struct OpenView {
     /// The list read under way or queued was caused by the user (toggles, a source change): it
     /// is shown, never held (feature 1275, research R3).
     pub apply_next: bool,
+    /// A user's read is queued behind the read under way: the queued read is shown, the one
+    /// under way is not (feature 1275, research R3).
+    pub apply_queued: bool,
+    /// The user selected the selected file while it was changed since they looked and the
+    /// latest read no longer listed it: only then does the diff area say so (US1 AS11, H1).
+    pub chose_gone: bool,
     /// The entry's whole working-tree change, whatever the toggles show, read with the list and
     /// kept while a re-read runs: the current ids the marks are judged on (feature 1271, FR-005).
     pub whole: Load<WholeChange>,
@@ -2031,6 +2040,8 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         list: Load::Idle,
         held: None,
         apply_next: false,
+        apply_queued: false,
+        chose_gone: false,
         whole: Load::Idle,
         selected: None,
         list_offset: 0,
@@ -2452,13 +2463,21 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
                 pr.file = pr_file_diff(pr);
                 pr.head_text = HeadText::NotRead;
                 reset_diff_pane(view);
+                stale::note_selection(view);
                 return request_head(view, &mut state.next_seq, false);
             }
             // The file already shown keeps its diff and scroll; only a failed read is retried.
+            // One changed since the user looked shows its latest diff (feature 1275, FR-009),
+            // the old one kept until it arrives.
             if view.selected.as_ref() == Some(&path) && !matches!(view.diff, Load::Failed(_)) {
-                return Effect::None;
+                if !changed_since_you_looked(view, &path) {
+                    return Effect::None;
+                }
+                stale::note_selection(view);
+                return request_diff(state, true);
             }
             view.selected = Some(path);
+            stale::note_selection(view);
             // Picked lines and a new comment on them belong to the file they were picked in.
             close_new(view);
             view.diff = Load::Idle;
@@ -3272,7 +3291,7 @@ fn composer_saved(state: &mut State) -> Effect {
                     let anchor = PrAnchor {
                         number: shown.number,
                         head_branch: listed.head_branch.clone(),
-                        head_commit: shown.head.clone(),
+                        head_commit: stale::head_of(shown, path).to_owned(),
                     };
                     (path.clone(), quote, Some(anchor))
                 }
@@ -3906,7 +3925,7 @@ fn request_head(view: &mut OpenView, next_seq: &mut u64, force_large: bool) -> E
         return Effect::None;
     }
     let number = pr.number;
-    let commit = pr.head.clone();
+    let commit = stale::head_of(pr, &path).to_owned();
     let address = listed_pull_request(view, number).map(|listed| listed.url.clone());
     let (project, entry) = (view.project.clone(), view.entry.clone());
     let Source::PullRequest(pr) = &mut view.source else {
@@ -4021,6 +4040,7 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
         shown_large: BTreeSet::new(),
         head_text: HeadText::NotRead,
         held: None,
+        adopted: BTreeMap::new(),
     }));
     reset_diff_pane(view);
     state.next_seq += 1;
@@ -4145,7 +4165,12 @@ fn request_read(state: &mut State) -> Effect {
 /// what was held goes, since it was read under what the user just changed.
 fn request_user_read(state: &mut State) -> Effect {
     if let Some(view) = state.tabs.shown_view_mut() {
-        view.apply_next = true;
+        // Queued behind a read under way, the user's wish belongs to the queued read.
+        if matches!(view.list, Load::Loading { .. }) {
+            view.apply_queued = true;
+        } else {
+            view.apply_next = true;
+        }
         view.held = None;
     }
     request_read(state)
@@ -4180,12 +4205,11 @@ fn list_read(
         ) => Load::Ready(last),
         (Err(message), _) => Load::Failed(message),
     };
-    // A queued read was asked for after this one: the user's wish carries over to it.
+    // A queued read was asked for after this one: the user's wish for it carries over.
     let apply = view.apply_next;
-    if !again {
-        view.apply_next = false;
-    }
-    if let Some(shown) = stale::list_on_screen(view).filter(|_| !apply).cloned() {
+    view.apply_next = again && view.apply_queued;
+    view.apply_queued = false;
+    if let Some(shown) = stale::take_list_on_screen(view, apply) {
         stale::hold_read(view, shown, result);
         if again {
             return request_read(state);

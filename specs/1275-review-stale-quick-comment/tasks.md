@@ -231,7 +231,7 @@ you looked* and a dot per changed row, and applies on a press. **Independent tes
   `crates/micold-client/tests/layout_snapshot.rs` and regenerate
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1`; the
   fixture diff shows only those additions.
-- [ ] T025 [US1] Visual pass at 1280×800 in light and dark (`visual-pass` skill through an
+- [x] T025 [US1] Visual pass at 1280×800 in light and dark (`visual-pass` skill through an
   `autopilot-worker`) of quickstart §A step 2's state (header notice, row dots, unchanged diff);
   evidence in `specs/1275-review-stale-quick-comment/visual-pass/`.
 

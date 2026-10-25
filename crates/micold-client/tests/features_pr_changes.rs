@@ -1834,6 +1834,38 @@ mod review_comments {
         assert_eq!(pr.map(|p| p.head_commit), Some(HEAD.to_string()));
     }
 
+    // Review A F4: a file opened under the hold records the head its patch was read at, while
+    // another file stays held at the old head.
+    #[test]
+    fn a_comment_on_an_adopted_file_records_the_head_it_was_read_at() {
+        let mut state = showing_seven();
+        let effect = head_moves(&mut state);
+        answer_unapplied(&mut state, effect, &patch_a(1, "newer"));
+        changes::update(
+            &mut state,
+            Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
+        );
+        assert!(shown(&state).held.is_some(), "b.rs is still held");
+        assert_eq!(shown(&state).head, HEAD);
+        changes::update(
+            &mut state,
+            Msg::GutterPressed {
+                old: None,
+                new: Some(2),
+                extend: false,
+            },
+        );
+        changes::update(&mut state, Msg::AddComment);
+        changes::update(&mut state, Msg::ComposerEdited("on the newer line".into()));
+        let ReviewEditOp::Add { quote, pr, .. } =
+            add_of(changes::update(&mut state, Msg::ComposerSaved))
+        else {
+            panic!("an add");
+        };
+        assert_eq!(quote, vec!["newer".to_string()], "the adopted patch's line");
+        assert_eq!(pr.map(|p| p.head_commit), Some(NEWER.to_string()));
+    }
+
     #[test]
     fn a_comment_on_a_file_the_pull_request_dropped_is_outdated() {
         let mut state = showing_seven();
