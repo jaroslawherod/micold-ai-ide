@@ -154,14 +154,16 @@ and `Settings::default()`; `crates/micold-core/tests/settings_issue_mapping.rs` 
 `review/keys.rs`: `resolve(press, holder, single_keys)` refuses every `primary: false` row when
 false; `ReviewKey::is_single`, `sheet_rows(single_keys)`, `key_hint(action, single_keys)`,
 `SINGLE_KEYS_OFF_NOTE` (contract K2, K4a). The client compiles unchanged in behaviour: the
-`set_changed` destructure in `shell/persist.rs` names the field as not yet saved (M3 saves it), and
-`Settings` struct literals in client tests gain it.
+`set_changed` destructure in `shell/persist.rs` names the field as not yet saved (M3 saves it),
+`ValidSettings::into_settings` in `features/settings.rs` (an exhaustive literal) gets a placeholder
+`true` that `set_changed` never copies, and `Settings` struct literals in client tests gain it.
 
 Client (M3), following `reduce_motion` end to end: `features/settings.rs` (`AppearanceDraft`
-field, `Msg::ReviewSingleKeysToggled`, draft ↔ settings), `ui/settings/appearance.rs` (`Checkbox`
-**Single-key shortcuts in the Review tab** with `field_note` "j, k, n, p, ], [, v, g, c and ? in the
-Review tab; Ctrl+Shift+Enter keeps sending", its `SETTINGS` entry, a `FieldId`), `shell/persist.rs`
-(`persist_settings`, `set!`, the saving window's copy), `shell/startup.rs` (load), the window copy
+field, `Msg::ReviewSingleKeysToggled`, the window copy on `State` beside `reduce_motion`,
+`ValidSettings` field replacing the placeholder), `ui/settings/appearance.rs` (`Checkbox`
+**Single-key shortcuts in the Review tab** with `field_note` "The Review tab's one-key shortcuts;
+shortcuts with Ctrl or Cmd are not affected", its `SETTINGS` entry, a `FieldId`), `shell/persist.rs`
+(`persist_settings`, `set!`, `window_settings`, the saving window's apply step), `shell/startup.rs` (load), the window copy
 read by the listener and the composer for `resolve` and by the tooltips via `key_hint`;
 `docs/user-guide/settings.md#appearance` gains *Single-key shortcuts in the Review tab*. M4's sheet
 renders `sheet_rows` and, when off, `SINGLE_KEYS_OFF_NOTE`.
