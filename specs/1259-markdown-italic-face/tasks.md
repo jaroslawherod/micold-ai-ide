@@ -167,7 +167,7 @@ exception).
 - [x] T021 [US3] User guide: `docs/user-guide/appearance-theming.md` *The typeface*: a Roboto
   installed on the computer does not replace the bundled faces for emphasis or bold, so the
   interface looks the same with or without it
-- [ ] T022 [US3] Visual pass, quickstart §B B5 (host Roboto Italic in `~/.local/share/fonts`,
+- [x] T022 [US3] Visual pass, quickstart §B B5 (host Roboto Italic in `~/.local/share/fonts`,
   remove it after), through the `visual-pass` skill; evidence in
   `specs/1259-markdown-italic-face/visual-pass/`
 
@@ -235,7 +235,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   as on one without
 - **Satisfies**: US3 acceptance scenario 2; FR-006; FR-003 and FR-004's exception on every host;
   SC-002, SC-003
-- **Verify**: `cargo test -p micold-client --lib -- roboto`; quickstart §B B5; merge check:
+- **Verify**: `cargo test -p micold-material --lib -- roboto`; quickstart §B B5; merge check:
   `mise run gate` (`scripts/gate.sh` in a cloud session)
 - **Depends on**: M1
 - **Tier**: light (one function and its tests in `roboto.rs`, the pattern of `pin_monospace` and its

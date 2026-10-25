@@ -23,3 +23,12 @@ that is so, the row says so, and red was shown afterwards by mutation in the sec
 | characters Roboto's italic lacks leave emphasis upright, per grapheme, keeping the link (`emphasis_the_italic_lacks_draws_upright`) | stub returning the spans: `... FAILED` (left `[("漢字 and 🙂", true)]`, right `[("漢字", false), (" and ", true), ("🙂", false)]`) | after `upright_where_italic_lacks`: ok |
 | the three italics cover the same characters; `italic_has_glyph` answers `a`, `é` yes and `漢`, `🙂` no | stub returning `true`: `... FAILED` (`!italic_has_glyph('漢') && ...`) | ok |
 | `ui::ROBOTO_FACES` is the six shipped files, one per weight and style, in `ROBOTO_FAMILY` (review A F2) | written after the code it guards (characterization) | `cargo test -p micold-client --test roboto_font` ok |
+
+## M2 (T019-T020)
+
+Red was not recorded first: T019's test and T020's function were written together and the test
+passed on its first run (review B F1). Red is shown afterwards by mutation. Nothing is back-filled.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T019, T020 | `pin_roboto_italics` removes a host Roboto Italic and a host Roboto Bold (700), keeps a host Regular (400), the bundled faces and other families, resolves italic 400/500/600/700 and upright 700 to the bundled faces, and is idempotent (`pin_drops_host_italics_and_off_weight_faces_only`) | mutation: the removal loop replaced by `0` → `... FAILED` ("host italic and host bold", left 0, right 2) | restored: `cargo test -p micold-material --lib -- roboto` 6 passed |
