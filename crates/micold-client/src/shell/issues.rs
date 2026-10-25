@@ -46,6 +46,7 @@ use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::{
     BranchSource, DescriptionRequest, DetailsRequest, JiraAvailability, Msg as FormMsg,
 };
+use micold_client::features::Outcome;
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
@@ -113,6 +114,23 @@ fn remembered_query(app: &App) -> Option<RememberedQuery> {
     let project = app.core.workspace.active.as_deref()?;
     let dir = app.caps.jira_token_dir()?;
     Some(crate::shell::jira::read_query(dir, project))
+}
+
+/// Write what the add-worktree form asked its project to remember (feature 1186, FR-013), each
+/// change a read-modify-write of one field. A failure is a notification naming the OS error, never
+/// the query (FR-016). Without a data directory there is nowhere to keep it, and nothing to say.
+pub(crate) fn remember_jira_query(app: &mut App, outcomes: Vec<Outcome>) {
+    let Some(dir) = app.caps.jira_token_dir().map(std::path::Path::to_path_buf) else {
+        return;
+    };
+    for outcome in outcomes {
+        if let Outcome::JiraQueryRemembered { project, change } = outcome {
+            if let Err(error) = crate::shell::jira::remember_query(&dir, &project, &change) {
+                app.core
+                    .notify_error(crate::shell::jira::remember_failed(&error));
+            }
+        }
+    }
 }
 
 /// The branch source changed. Choosing the issue source starts a load when the reducer accepted

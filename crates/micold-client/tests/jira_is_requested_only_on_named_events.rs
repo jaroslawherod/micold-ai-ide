@@ -195,6 +195,8 @@ fn the_advanced_query_is_never_logged_or_notified() {
             "ScopedQuery",
         ),
         ("crates/micold-client/src/ui/jira_query.rs", "query.draft"),
+        // The remembered file's module: its error text is the caller's to raise.
+        ("crates/micold-client/src/shell/jira.rs", "RememberChange"),
     ] {
         let lines = code_lines(&root.join(file));
         assert!(
