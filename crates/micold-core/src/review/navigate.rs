@@ -318,7 +318,7 @@ pub fn comment_target(composer_open: bool, picked: bool, current: Option<&Hunk>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::review::changes::{ChangeKind, Origin};
+    use crate::review::changes::{ChangeIdentity, ChangeKind, Origin};
     use std::time::{Duration, Instant};
     use uuid::Uuid;
 
@@ -348,6 +348,7 @@ mod tests {
             removed,
             large,
             origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
         }
     }
 
