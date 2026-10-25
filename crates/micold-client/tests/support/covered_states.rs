@@ -3630,22 +3630,29 @@ pub fn review_tree_collapsed() -> StateUnderTest {
 
     let mut under = review_shown();
     let path = |p: &str| RelPath::from_native(p).expect("a relative path");
-    let file = |p: &str, kind: ChangeKind, content: Content, added: u32, removed: u32| ChangedFile {
-        path: path(p),
-        kind,
-        content,
-        added,
-        removed,
-        large: false,
-        origin: Origin::Uncommitted,
-        identity: micold_core::review::changes::ChangeIdentity::Unknown,
-    };
+    let file =
+        |p: &str, kind: ChangeKind, content: Content, added: u32, removed: u32| ChangedFile {
+            path: path(p),
+            kind,
+            content,
+            added,
+            removed,
+            large: false,
+            origin: Origin::Uncommitted,
+            identity: micold_core::review::changes::ChangeIdentity::Unknown,
+        };
     let text = Content::Text;
     let list = ChangeList {
         files: vec![
             file("README.md", ChangeKind::Modified, text, 3, 1),
             file("assets/logo.png", ChangeKind::Added, Content::Binary, 0, 0),
-            file("crates/core/src/review/tree.rs", ChangeKind::Modified, text, 120, 30),
+            file(
+                "crates/core/src/review/tree.rs",
+                ChangeKind::Modified,
+                text,
+                120,
+                30,
+            ),
             file("scripts/run.sh", ChangeKind::ModeOnly, text, 0, 0),
             file("tests/tree.rs", ChangeKind::Modified, text, 14, 6),
         ],
