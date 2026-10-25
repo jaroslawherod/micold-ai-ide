@@ -76,7 +76,9 @@ use std::path::{Path, PathBuf};
 /// not a write and not a violation of FR-020 — FR-003a permits reads outright — but it is the
 /// coupling SC-002 is about: it is how "adding a feature" starts to mean "and edit that one too".
 ///
-/// Every entry today is a read of a pure type. The sidebar renders a worktree's tags, and what a
+/// Nearly every entry is a read of a pure type; the exceptions publish another feature's message
+/// rather than write its state (the strip's Review tab sends sidebar's `Msg::ReviewChangesRequested`
+/// and changes' `Msg::TabClosed`). The sidebar renders a worktree's tags, and what a
 /// worktree's tags *are* is the worktree feature's to say; settings names the field a rejected save
 /// is about, and which fields can hold the keyboard is the window's; settings also names what the
 /// service answered about AI CLIs, and AI CLIs are what sessions run. In each case the alternative

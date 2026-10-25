@@ -19,7 +19,8 @@ use crate::ui::transcript::{BlockRenderers, RenderCtx};
 // paths through this module stay, for the tab menu in `ui/mod.rs` and the integration tests.
 pub(crate) use crate::features::session_strip::{attached_process_restartable, session_title};
 pub use crate::features::session_strip::{
-    marked_tab, marked_tab_index, process_stopped, scroll_into_view, StripModel, StripTab,
+    marked_tab, marked_tab_index, process_stopped, scroll_into_view, tab_reveal_target, StripModel,
+    StripTab,
 };
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::TermMode;

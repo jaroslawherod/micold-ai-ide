@@ -64,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code review high, opus) | 1 | 6c2ba5a024822d9093f1defb76baed57e761b6a6:d96e1cd8cd915c336a85710e7e5710c18a85e271 | CHANGES: F1 BLOCKER a session/shell/"+" press with the review shown left it shown (fixed: those three handlers lead with `Outcome::ReviewHidden`; test added), F2 MINOR no-project Review tab (fixed: `unwrap_or_default`) |
 | Review A M4 | 2 | 0d413f1eb3734c94a2a821b230a9af57614c8b0b:ce1824d5b6ba7a0abbee39001253c20de53f34b1 | CLEAN (sonnet, fix diff) |
 | Review B M4 (conformance, sonnet) | 1 | 3774ec77d04bfe2614c9cad100c5e61a00b26e7a:eb23f5694258e542bdc7ee9e5a5da44d0427f3c3 | CLEAN: 2 MINOR — F1 no mutation red for the A-F1 test (left; cycle log says so), F2 A-F1 fix not named under an M4 task (fixed, prose only: *As built (M4)*) |
+| Review M4 visual-pass fixes (sonnet) | 1 | 6df14dbe:4f2a601e | CHANGES: MAJOR drain target (`from_start` vs offset) untested in the binary — fixed: pure `session_strip::tab_reveal_target` + unit test, and a test that a review open moving `header.entry` (no session select) arms the reveal from the start (red with the arm removed); MINOR mid-tab hand-scroll and exact-width boundary assertions (fixed); MINOR `feature_registration_cost` doc now names published messages (fixed, prose only); MINOR resetting `tab_strip_viewport_width` on a location change (declined, below) |
 
 ## Declined review findings
 
@@ -79,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A2 | F3 the emptied location's review is not shown while Compare is open | Compare took the main area from the review (`ChangesClosedForCompare` hides it) and the view draws a shown review over Compare |
 | M3 | A2 | F5 `here` in `ChangesRequested` repeats `current_session_location` | that one filters unlisted worktrees; a session at a run's (or the shell fixture's) unlisted worktree must count as already there |
 | M3 | A2 | F8 derive U8 in the follow step instead of at each clear site | the follow step cannot tell a session that went from a review Compare hid, so it would re-show it over Compare |
+| M4 | visual-pass re-review | MINOR reset `tab_strip_viewport_width` on a location change | the strip keeps its place in the layout across locations, so the width held stays right; zeroing it would hold the reveal until the next resize report, which may never come when the width is unchanged |
 
 ## Handover
 
@@ -91,7 +93,7 @@ None.
 ## Follow-ups not done
 
 - M4: at 640×480 with the sidebar open the strip's viewport (~150 px) is narrower than one tab (feature 1126's layout); tabs scroll and are whole with the sidebar collapsed.
-- M4: the visual-pass reveal fixes (`tab_reveal_from_start`, oversized member revealed at its leading edge) and the `feature_registration_cost` allowlist entries landed after reviews A/B and were not re-reviewed; tests and gate green.
+- M4: possible follow-up — the strip publishing sidebar's `Msg::ReviewChangesRequested` (an allowlisted cross-feature name) could move to a shared outcome or the changes feature; left as is in this PR.
 - M4: quickstart B12 (chords) and B11's twelve tabs were not run by hand; their tests cover them. B9's Settings half not run by hand.
 - M4: the gate ran in chunks (disk too small for every test binary at once); six root-only permission tests skipped (container runs as root).
 - M2: quickstart B0 (M2 subset: B1 without the strip, B2–B4, B9) was not run by hand in this container (no display, disk at its limit); the M4 visual pass covers B1–B4 and B9.

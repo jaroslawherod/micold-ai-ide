@@ -516,6 +516,27 @@ pub fn scroll_into_view(
     ((target - offset).abs() > EDGE_TOLERANCE).then_some(target)
 }
 
+/// Where the drained tab reveal scrolls the strip, or `None` to leave it (feature 026 FR-002d,
+/// feature 1269 visual pass).
+///
+/// `from_start` is set after a location change: the offset held is then the left strip's, so the
+/// reveal measures from `0` instead and always scrolls — to the start when the marked tab fits
+/// there, else to where [`scroll_into_view`] puts it. Otherwise it measures from `offset`, and a
+/// tab already in view is left alone, so a strip the user scrolled by hand stays put.
+pub fn tab_reveal_target(
+    from_start: bool,
+    offset: f32,
+    viewport: f32,
+    index: usize,
+    members: &[Member],
+) -> Option<f32> {
+    if from_start {
+        Some(scroll_into_view(index, 0.0, viewport, members).unwrap_or(0.0))
+    } else {
+        scroll_into_view(index, offset, viewport, members)
+    }
+}
+
 /// A session's tab (S1, R8): `<command> · <session name>`, its role and status on hover.
 fn session_member(
     state: &State,
@@ -1177,6 +1198,49 @@ pub(crate) mod tests {
         assert_eq!(scroll_into_view(11, 0.0, narrow, &members), Some(leading));
         assert_eq!(scroll_into_view(11, leading, narrow, &members), None);
         assert_eq!(scroll_into_view(0, 0.0, narrow, &members), None);
+        // Deliberate: a hand-scrolled offset in the middle of an oversized marked tab snaps back to
+        // its leading edge, where the mark is, rather than being left mid-tab.
+        assert_eq!(
+            scroll_into_view(11, leading + narrow / 2.0, narrow, &members),
+            Some(leading)
+        );
+        // Boundary: a member exactly the viewport's width fits — scrolled to, it is left alone.
+        let exact = trailing - leading;
+        assert_eq!(scroll_into_view(11, leading, exact, &members), None);
+        assert_eq!(
+            scroll_into_view(11, 0.0, exact, &members),
+            Some(trailing - exact),
+            "it fits, so the trailing-edge rule applies, which is its leading edge"
+        );
+    }
+
+    /// The drained reveal's target (feature 1269, visual pass): after a location change it
+    /// measures from the start and always scrolls; otherwise a tab in view is left alone.
+    #[test]
+    fn the_tab_reveal_target_measures_from_the_start_after_a_location_change() {
+        let members = twelve();
+        let offsets = member_offsets(&members);
+        assert_eq!(
+            tab_reveal_target(true, 500.0, 340.0, 0, &members),
+            Some(0.0),
+            "from the start, a tab that fits there scrolls to the start"
+        );
+        let (leading, trailing) = offsets[11];
+        assert_eq!(
+            tab_reveal_target(true, leading, 340.0, 11, &members),
+            Some(trailing - 340.0),
+            "from the start, an overflowing tab scrolls to its position, whatever the offset held"
+        );
+        let (leading, _) = offsets[2];
+        assert_eq!(
+            tab_reveal_target(false, leading, 340.0, 2, &members),
+            None,
+            "not from the start, a visible tab is left alone"
+        );
+        assert_eq!(
+            tab_reveal_target(false, 0.0, 340.0, 11, &members),
+            Some(trailing - 340.0)
+        );
     }
 
     /// FR-005: exactly one tab is marked, for **every** combination of mode and active instance.

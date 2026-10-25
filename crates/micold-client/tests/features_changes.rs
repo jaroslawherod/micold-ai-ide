@@ -4203,6 +4203,32 @@ fn review_changes_on_another_location_shows_it_with_its_last_shown_else_main_ses
     assert_eq!(app.changes.header.entry, Some((project(), feat_z)));
 }
 
+/// Feature 1269 (visual pass): a review opened on another location moves the header there without
+/// any session selection (feat-z has no session), and that alone arms the strip's reveal from the
+/// strip's start — the offset held is the left strip's.
+#[test]
+fn a_review_open_that_moves_the_header_reveals_the_strip_from_its_start() {
+    let feat_z = SessionLocation::Worktree("feat-z".into());
+    let (mut app, _) = with_sessionless_worktree();
+    app.session.pending_tab_reveal = false;
+    app.session.tab_reveal_from_start = false;
+    let before = app.changes.header.entry.clone();
+
+    review_again(&mut app, feat_z.clone());
+
+    assert_eq!(app.session.active, None, "no session was selected");
+    assert_ne!(app.changes.header.entry, before);
+    assert_eq!(app.changes.header.entry, Some((project(), feat_z)));
+    assert!(
+        app.session.pending_tab_reveal,
+        "the new strip's marked tab is revealed"
+    );
+    assert!(
+        app.session.tab_reveal_from_start,
+        "measured from the strip's start, not the left strip's offset"
+    );
+}
+
 /// Feature 1269 T026 (U7, R4): every way a session of a location is selected — the sidebar's row
 /// and the session tab (`SessionMsg::Selected`), a chord and the quick switcher (a navigation
 /// step) — makes it the session that location shows next.
