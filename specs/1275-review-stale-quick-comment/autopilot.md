@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1370 | design (spec, plan, tasks) | merged | c4ca075476319aaa90f54c1438fa910aada87585 |
-| #1380 | M1 | open, rebased onto main 8f38e9ca (#1271 M1 conflicts resolved) | |
+| #1380 | M1 | open, rebased onto main 8eceb3ad (#1271 M1 conflicts resolved); gate green, pushed | |
 
 ## Milestones
 
@@ -155,7 +155,7 @@ together within ~2 s.
   CR or a newline is now hashed (C-quoted) to its `Object` id instead of `Stat`; F4's test became
   `a_path_git_would_unquote_or_trim_gets_its_own_id` (adds a newline path). #1271's test fixture
   `marks::tests::pr_file` gained `identity: ChangeIdentity::Unknown` (new field only).
-- Rebased again onto 8f38e9ca (main moved twice; clean): #1274's `navigate::tests::changed` fixture
+- Rebased again onto 8f38e9ca, then 8eceb3ad (main moved three times; clean; final `scripts/gate.sh` exit 0): #1274's `navigate::tests::changed` fixture
   gained `identity: ChangeIdentity::Unknown` (commit "give #1274's navigate test row…"). CI on the
   first push (d62d3a31) failed `card_grid::tests::a_link_scrolled_out_of_the_body_is_not_under_the_pointer`
   (overview cards, not in our diff); it passed in all three local gates here, so not ours. A gate
