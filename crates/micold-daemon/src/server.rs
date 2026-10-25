@@ -2972,7 +2972,6 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
     }
 }
 
-/// Reply to a correlated RPC with a bare success (`OperationOk { Ack }`).
 /// A refused setup request's answer (contract C1).
 fn send_setup_error(
     state: &Arc<DaemonState>,
@@ -2991,6 +2990,7 @@ fn send_setup_error(
     );
 }
 
+/// Reply to a correlated RPC with a bare success (`OperationOk { Ack }`).
 fn send_ack(state: &Arc<DaemonState>, id: crate::state::ClientId, req: u64) {
     state.send(
         id,

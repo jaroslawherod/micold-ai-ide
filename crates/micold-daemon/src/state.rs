@@ -104,6 +104,10 @@ pub struct DaemonState {
     /// A mutex rather than the two atomics the retired `Lifecycle` used, because the count and its
     /// armed deadline have to move together — see [`Presence`].
     presence: Mutex<Presence>,
+    /// Setup commands and runs (feature 1289, data-model §Daemon), through [`DaemonState::setup`].
+    /// Its own mutex, so a run's every output chunk and flush tick never takes `inner` (review
+    /// A-F2). Lock order: `setup`, then `inner`; never take `setup` while holding `inner`.
+    setup: Mutex<crate::setup::SetupRuns>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -341,8 +345,6 @@ struct Inner {
     reviews: crate::review::Reviews,
     /// Run groups per project (feature 483), read on first use.
     runs: crate::runs::Runs,
-    /// Setup commands and runs (feature 1289, data-model §Daemon), through [`DaemonState::setup`].
-    setup: crate::setup::SetupRuns,
     /// A test's override of the long-task threshold (feature 613, C2), set by
     /// [`DaemonState::set_long_task_threshold`]; `None` outside tests, where the stored setting
     /// decides ([`Inner::effective_long_task_threshold`]).
@@ -1058,7 +1060,6 @@ impl DaemonState {
                 turn_clock_ahead: std::time::Duration::ZERO,
                 reviews: crate::review::Reviews::default(),
                 runs: crate::runs::Runs::default(),
-                setup: crate::setup::SetupRuns::default(),
                 attention_retry: AttentionRetry::default(),
                 plan_usage: None,
                 plan_usage_reported: HashMap::new(),
@@ -1067,6 +1068,7 @@ impl DaemonState {
             // Armed from construction: a daemon spawned by a client that dies before handshaking
             // must not outlive the machine (G1).
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
+            setup: Mutex::new(crate::setup::SetupRuns::default()),
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
@@ -2300,8 +2302,9 @@ impl DaemonState {
             inner.clients.remove(&id);
             inner.attachments.retain(|_, att| att.client != id);
             inner.views.remove(id);
-            inner.setup.unwatch_all(id);
         }
+        // After `inner` is released: the lock order is `setup`, then `inner`.
+        self.setup(|runs, _| runs.unwatch_all(id));
         self.presence
             .lock()
             .expect("presence mutex poisoned")
@@ -3457,15 +3460,20 @@ impl DaemonState {
         }
     }
 
-    /// Run `f` on the setup runs under the state lock, then send what it queued, still under the
-    /// lock, so pushes leave in the order the changes were made (feature 1289). `f` does no I/O.
+    /// Run `f` on the setup runs under their lock, then send what it queued, still under it, so
+    /// pushes leave in the order the changes were made (feature 1289). `f` does no I/O. The state
+    /// lock is taken only when there is something to send.
     pub(crate) fn setup<R>(
         &self,
         f: impl FnOnce(&mut crate::setup::SetupRuns, &mut crate::setup::Outgoing) -> R,
     ) -> R {
-        let mut inner = self.lock();
+        let mut runs = self.setup.lock().expect("setup mutex poisoned");
         let mut out = Vec::new();
-        let result = f(&mut inner.setup, &mut out);
+        let result = f(&mut runs, &mut out);
+        if out.is_empty() {
+            return result;
+        }
+        let inner = self.lock();
         for (to, msg) in out {
             match to {
                 crate::setup::To::All => Self::broadcast_locked(&inner, vec![msg]),
@@ -8760,5 +8768,45 @@ mod prompt_lookup_bound_tests {
             state.prompt_lookup_bound(),
             std::time::Duration::from_secs(5)
         );
+    }
+}
+
+#[cfg(test)]
+mod setup_lock_tests {
+    use super::*;
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::JsonFileStore;
+
+    /// Review A-F2: a setup run's output is kept without the daemon-wide lock, so a noisy install
+    /// never waits on (or holds up) the sessions' state.
+    #[test]
+    fn keeping_setup_output_does_not_wait_on_the_state_lock() {
+        let store = tempfile::tempdir().unwrap();
+        let state = DaemonState::new(Catalog::load(
+            Box::new(JsonFileStore::at(store.path().join("p.json"))),
+            Box::new(JsonFileSettingsStore::at(store.path().join("s.json"))),
+        ));
+        let key = (
+            PathBuf::from("/p"),
+            micold_core::session::SessionLocation::Default,
+        );
+        let held = state.lock();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                state.setup(|runs, _| {
+                    runs.push(
+                        &key,
+                        micold_core::setup::RunId(1),
+                        micold_core::process::Stream::Stdout,
+                        b"x\n",
+                    );
+                });
+                tx.send(()).unwrap();
+            });
+            let pushed = rx.recv_timeout(std::time::Duration::from_secs(2));
+            drop(held);
+            assert!(pushed.is_ok(), "the push waited on the state lock");
+        });
     }
 }
