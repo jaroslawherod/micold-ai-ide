@@ -14,7 +14,7 @@ criteria_total: 4 # the criteria a test can hold: FR-012, FR-013, SC-004, SC-005
 criteria_covered: 4
 mutation_score: null # no mutation tool (tdd-profile `mutation: null`); 7 deliberate mutants, all caught
 mutants_survived: 0
-suite: 11263 passed, 0 failed, 18 ignored (scripts/gate.sh, 583 test binaries and doc-test runs) + scripts/tests/*.test.sh green
+suite: 11263 passed, 0 failed, 18 ignored (scripts/gate.sh, 583 test binaries and doc-test runs) + scripts/tests/*.test.sh green # counts from the close unit's gate run on 357d48d5; log not committed
 ---
 
 # TDD Verification: layout redesign docs, layout snapshot and visual pass
@@ -90,7 +90,7 @@ re-run green (146 passed).
 | Criterion | Tests | End to end |
 | --------- | ----- | ---------- |
 | FR-012 | `the_layout_matches_the_committed_fixture` (both window states in `tests/fixtures/layout_snapshot.txt`) | Yes: `ui::view` laid out by the real renderer |
-| FR-013 | `the_layout_matches_the_committed_fixture` | Yes |
+| FR-013 | `the_layout_matches_the_committed_fixture`; text overflow: `no_text_is_drawn_wider_than_its_clip` (`tests/layout_text_overflow.rs`); containment: `no_layout_node_escapes_its_parent` (`tests/gates/containment.rs`) — both over every covered state in the light scheme, with dark held to the same geometry by `the_other_scheme_lays_out_identically` (`tests/layout_snapshot.rs`) | Yes |
 | SC-004 | `w1_…`, `w2_…`, `w3_…`, `w4_…` (both schemes) | Yes |
 | SC-005 | `the_layout_matches_the_committed_fixture`, `a_difference_past_the_detailed_ones_still_names_its_state`, gate W | Yes |
 
