@@ -78,6 +78,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A | 1 (high) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CHANGES: 1 MAJOR, 3 MINOR — F1 fixed (`SetupOutput` batches ≤ 1 MiB of line bytes); F2 fixed (`SetupRuns` own mutex, state lock only to send); F3 deferred to M4 T038 (delete stops and forgets the run); F4 fixed (`start_in` the created worktree's path); cycle log M3 cycle 3 |
 | M3 B | 1 (sonnet) | 76878fd79e7b3cda96fef785c06dae1e781bb505:92410eac003e260ba2f0996c20787408eced4676 | CLEAN — Verify re-run green (setup_run 7/7, mcp_create_worktree_setup 2/2, mcp_create_worktree 43/43, core protocol 32/32); 2 MINOR fixed (B-F1 `send_ack` doc back on it, prose only; B-F2 = A-F4) |
 | M3 A | 2 (scoped, sonnet) | 8dfc0a347798adf3e04dbda979314c7259e06dbe:9ae68f109d053306af8e9b8bb09a3b26ce94a192 | CLEAN, no findings — lock order setup→inner everywhere, no I/O under either mutex, chunking keeps watcher `next` consistent, 1 MiB bound holds |
+| M4 A | 1 (high) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | pending (orchestrator dispatches) |
+| M4 B | 1 (sonnet) | 5975a20d48e06cf1dc06dcf4da85b30dad314aaa:facc3d6c9ba9376e22630842374cee23c6221052 | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
@@ -86,7 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 implemented (2026-10-25) on 9177522b: T031–T039 ticked, `setup_run` 12/12, daemon `-- setup` 10/10, core `setup_store` 5/5, clippy core+daemon clean. Next: reviews A and B round 1, then the full gate (`scripts/gate.sh`), rebase, PR.
+M4 implemented (2026-10-25) on 9177522b: T031–T039 ticked, `setup_run` 12/12, daemon `-- setup` 10/10, core `setup_store` 5/5, clippy core+daemon clean. Snapshot 5975a20d:facc3d6c. Unit context over 150k at this point: a fresh unit continues. Next: reviews A and B round 1, fix findings, then the full gate (`scripts/gate.sh`), rebase, PR.
 
 Earlier: M3 rebase 1 (2026-10-25): onto af0d60077; `SessionLocation` derive conflict in session.rs (main `Hash`, M3 `Serialize, Deserialize`) — kept both.
 M3 rebase 2 (2026-10-25): onto 36459b958 (38 commits), then f92be5b68 (3 test/spec commits of 1116). Main's feature 1271 took protocol 69, so 1289 renumbered to 69 → 70: `PROTOCOL_VERSION`, `FEATURE_026_PROTOCOL_VERSION` (schema_hash.rs), `the_protocol_version_is_70` (protocol_roundtrip.rs), `the_setup_messages_bump_the_protocol_to_70` (messages.rs; the first gate run caught it), version.rs/schema_hash.rs history comments keep 1271's line and add 1289's; tasks.md, plan.md, research.md, contracts/wire-and-settings.md say 70. Conflicts only in those history comments; no shared logic. `cargo test -p micold-daemon -p micold-core -p micold-client --no-run` clean; full gate (scripts/gate.sh) green at ef699805f and force-pushed. Main then gained 6 commits (1270 M3, #1288 sandbox basic image): they touch none of M3's files, make no protocol bump, and `git merge-tree` merges them clean, so the PR is behind but not in conflict.
