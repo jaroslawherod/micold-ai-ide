@@ -1,8 +1,8 @@
 //! Feature 491 (FR-001, FR-015): the rules a daemon registry enforces on every change.
 
 use micold_core::daemons::{
-    os_free_loopback_port, pick_free_port, ContainerSettings, DaemonId, DaemonRegistry,
-    DaemonRuntime, PortPickError, RegistryError,
+    container_name_long_enough, os_free_loopback_port, pick_free_port, ContainerSettings,
+    DaemonEntry, DaemonId, DaemonRegistry, DaemonRuntime, PortPickError, RegistryError,
 };
 use micold_core::sandbox::SandboxProfile;
 
@@ -244,4 +244,37 @@ mod default_container_name {
             assert_eq!(of(&name).unwrap(), "a".repeat(62), "separator {sep:?}");
         }
     }
+}
+
+#[test]
+fn a_container_name_needs_at_least_two_characters() {
+    assert!(!container_name_long_enough(""));
+    assert!(!container_name_long_enough("a"));
+    assert!(container_name_long_enough("ab"));
+    assert!(container_name_long_enough(&"x".repeat(63)));
+}
+
+#[test]
+fn the_container_name_length_counts_characters_not_bytes() {
+    assert!(!container_name_long_enough("é"), "one character, two bytes");
+    assert!(container_name_long_enough("éé"));
+}
+
+#[test]
+fn the_container_name_length_ignores_surrounding_whitespace() {
+    assert!(!container_name_long_enough(" x "));
+    assert!(container_name_long_enough(" xy "));
+}
+
+/// FR-006: a one-character name stored before the rule round-trips unchanged.
+#[test]
+fn a_stored_one_character_container_name_round_trips_unchanged() {
+    let mut r = registry();
+    r.add("legacy", container("a", 7728), false).unwrap();
+    let json = serde_json::to_string(r.entries()).unwrap();
+    let loaded: Vec<DaemonEntry> = serde_json::from_str(&json).unwrap();
+    let reloaded = DaemonRegistry::new(loaded, r.next_id());
+    assert_eq!(reloaded, r);
+    assert_eq!(reloaded.entries()[0].container_name(), Some("a"));
+    assert_eq!(serde_json::to_string(reloaded.entries()).unwrap(), json);
 }
