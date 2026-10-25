@@ -14,6 +14,22 @@ Regenerate the fixture only once the strip is done (M4), after rebasing on `orig
 `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`; only the
 session-area states may change.
 
+### Part A results (T042, close unit, 2026-10-25)
+
+Run at the M4 tip `41105c69` (PR #1394, not yet merged when this ran; M1–M3 on `main`) with
+`scripts/gate.sh`, which ran every row above: fmt, clippy (core, workspace, `-D warnings`),
+`cargo test --workspace` and `scripts/tests/*.test.sh`. **Green**: 10809 passed, 0 failed,
+18 ignored over 656 test binaries; the six root-only permission tests ran as a normal user and
+passed; every shell test passed.
+
+| Row | Result |
+|---|---|
+| core T1–T8 | `micold-core` lib 1663 passed (`review_tabs` 28 of them) |
+| client lib U5, U6, U11–U15 | `micold-client` lib 945 passed, binary unit tests (`main_tests`, `app_chord_tests`) 710 passed |
+| client integration U1–U4, U7–U10 | `features_changes` 129, `terminal_focus` 36, `attention_view_report` 8, `keyboard` 3, `navigation` 19, `idle_subscriptions` 10, `session_area_stability` 16, `tab_reveal` 2 — all passed |
+| layout | `layout_snapshot` 114 (with `session_area_fits`, fixture matched), `layout_text_overflow` 3 — passed |
+| `micold-material` (`CountBadge`, `tab::REVIEW_WIDTH`) | lib 370 passed |
+
 ## Part B0: M2 and M3 checks (no covered state changes before M4)
 
 M2 and M3 add no widget and change no geometry the layout snapshot records (the Changes button keeps

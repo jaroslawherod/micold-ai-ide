@@ -9,24 +9,28 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: milestone M4
-- **Next step**: orchestrator opens the M4 PR (branch `1269-m4`, stacked on `1269-m3`; PR files `pr-title-m4.md`/`pr-body-m4.md` in the scratchpad); then the close unit (T042–T043)
+- **Phase**: close
+- **Next step**: close unit: fresh review of the close diff, full gate, then the orchestrator opens the close PR (branch `1269-close`, stacked on M4 #1394; PR files `pr-title-close.md`/`pr-body-close.md` in the scratchpad)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1361 | design | merged | 75292027eb695dbe44b01869f8f56c47046429b8 |
-| #1371 | M1 | in CI | — |
+| #1371 | M1 | merged | c475a975e3ef0377cb93b768084b0fa8dea9e642 |
+| #1384 | M2 | merged | 7844dde4e772ac4670ffa2f14dd3ee804e1128c6 |
+| #1387 | M3 | merged | f827c8222e3395b2347c6158a1dc1356e74e379d |
+| #1394 | M4 | open, in CI | — |
+| (close PR, opened by orchestrator) | close | branch `1269-close` | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | in CI |
-| M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | (M2 PR, opened by orchestrator) | review-ready |
-| M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | (M3 PR, opened by orchestrator) | review-ready |
-| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | (M4 PR, opened by orchestrator) | review-ready |
+| M1 | T001–T009 | full | `micold_core::review_tabs` rules T1–T8 proven by core unit tests (FR-016) | #1371 | merged |
+| M2 | T010–T025 | full | switching away keeps the review; **Changes** brings it back as left, re-read if changed; only **Close**/removal drops it | #1384 | merged |
+| M3 | T026–T031 | full | **Review changes** on another/sessionless location shows it under its own header; last session closed shows its review | #1387 | merged |
+| M4 | T032–T041 | full | the strip's Review tab with draft badge, changed mark and × (replaces **Close**); gates, snapshot, docs, visual pass | #1394 | open, in CI |
 
 ## Decisions
 
@@ -82,6 +86,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A2 | F5 `here` in `ChangesRequested` repeats `current_session_location` | that one filters unlisted worktrees; a session at a run's (or the shell fixture's) unlisted worktree must count as already there |
 | M3 | A2 | F8 derive U8 in the follow step instead of at each clear site | the follow step cannot tell a session that went from a review Compare hid, so it would re-show it over Compare |
 | M4 | visual-pass re-review | MINOR reset `tab_strip_viewport_width` on a location change | the strip keeps its place in the layout across locations, so the width held stays right; zeroing it would hold the reveal until the next resize report, which may never come when the width is unchanged |
+| close | TDD smell pass | MED re-implemented expectation in `the_review_member_has_one_width_and_the_offsets_and_reveal_count_it` | fixed widths plus an SM gap is the specified rule (S6, R10), stated from constants, not computed through `member_offsets` |
+| close | TDD smell pass | MED `the_badge_is_the_section_lists_chip_around_a_number` holds by construction | the equality is R11 (the badge is the section list's chip); it fails if `CountBadge` draws its own pill |
+| close | TDD smell pass | LOW badge cap pinned at three places | two implementations (core `badge_text`, material `count_badge::text`); recorded as a follow-up, not a test fix |
 
 ## Handover
 
@@ -100,3 +107,6 @@ None.
 - M2: quickstart B0 (M2 subset: B1 without the strip, B2–B4, B9) was not run by hand in this container (no display, disk at its limit); the M4 visual pass covers B1–B4 and B9.
 - M2: T020's failed re-read on show keeps the tab, toggles and comments and shows the error as today; as today, a failed list read also drops the selection and the pick (`list_read` → `close_new`), so "picks kept" holds only for a re-read that succeeds.
 - M2: the root-level stray file `/reviewB-m2-r1.out` (an empty-variable redirect while launching review B) could not be removed by the unit; delete it by hand.
+- close: `ReviewTabFace::badge_text` (core) duplicates material's `count_badge::text` and is used only by its own tests; drop it or have material call it (verification.md finding 4).
+- close: move `Msg::ReviewChangesRequested` (sidebar's, published by the strip) into the changes feature or a shared outcome (same as the M4 note above).
+- close: #1125 (sidebar) and #1127 (title bar) are unmerged blockers in other threads; nothing in this feature builds on them.

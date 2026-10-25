@@ -464,7 +464,9 @@ fn the_review_tab_holds_its_label_badge_mark_and_close_whole() {
                 ];
                 if marked {
                     let mark = children_of(&records, &slots[0].path);
-                    let mark = mark.first().map_or(rect(slots[0]), |m| rect(m));
+                    let mark = rect(mark.first().unwrap_or_else(|| {
+                        panic!("{what}: the changed mark is drawn in the mark slot")
+                    }));
                     parts.push(("changed mark", mark));
                 }
                 for (part, r) in &parts {
