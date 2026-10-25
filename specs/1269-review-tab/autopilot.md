@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1269
 - **Worktree branch**: claude/project-thread-6rh2yo
 - **Started**: 2026-10-24
-- **Phase**: close
-- **Next step**: close unit: fresh review of the close diff, full gate, then the orchestrator opens the close PR (branch `1269-close`, stacked on M4 #1394; PR files `pr-title-close.md`/`pr-body-close.md` in the scratchpad)
+- **Phase**: done
+- **Next step**: handoff (the run ends when the close PR merges, after M4 #1394; branch `1269-close`, PR files `pr-title-close.md`/`pr-body-close.md` in the scratchpad)
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1384 | M2 | merged | 7844dde4e772ac4670ffa2f14dd3ee804e1128c6 |
 | #1387 | M3 | merged | f827c8222e3395b2347c6158a1dc1356e74e379d |
 | #1394 | M4 | open, in CI | — |
-| (close PR, opened by orchestrator) | close | branch `1269-close` | — |
+| (close PR, opened by orchestrator) | close | branch `1269-close`; full gate green at 8f110fa5 | — |
 
 ## Milestones
 
@@ -70,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 (conformance, sonnet) | 1 | 3774ec77d04bfe2614c9cad100c5e61a00b26e7a:eb23f5694258e542bdc7ee9e5a5da44d0427f3c3 | CLEAN: 2 MINOR — F1 no mutation red for the A-F1 test (left; cycle log says so), F2 A-F1 fix not named under an M4 task (fixed, prose only: *As built (M4)*) |
 | Review M4 visual-pass fixes (sonnet) | 1 | 6df14dbe:4f2a601e | CHANGES: MAJOR drain target (`from_start` vs offset) untested in the binary — fixed: pure `session_strip::tab_reveal_target` + unit test, and a test that a review open moving `header.entry` (no session select) arms the reveal from the start (red with the arm removed); MINOR mid-tab hand-scroll and exact-width boundary assertions (fixed); MINOR `feature_registration_cost` doc now names published messages (fixed, prose only); MINOR resetting `tab_strip_viewport_width` on a location change (declined, below) |
 | Review M4 visual-pass fixes | 2 | 4f2a601e:abb47375 | CLEAN (sonnet, fix diff; decline stands) |
+| Review close (diff, opus) | 1 | 181f53ad894841832b730b34ed388fb574247af7:8f110fa5c88fe194fd91dd0f7adc1f0550df601f | CLEAN: 1 MINOR (verification.md row-count note contradicted its counts), fixed, prose only |
+| TDD smell pass (sonnet) | 1 | —:41105c69 | CLEAN: 3 MED, 2 LOW — unlabelled core asserts (fixed T044), mark fallback (fixed T045); offsets formula, badge = chip by construction, cap pinned thrice (declined below) |
 
 ## Declined review findings
 

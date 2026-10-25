@@ -63,7 +63,7 @@ tests and source together, so order rests on the cycle log's reds.
 | M4 gate: `feature_registration_cost` allowlist | NOT_APPLICABLE | an existing guard caught it; allowlist entries with reasons |
 | M4 gate: material boundary, builder API, captions | NOT_APPLICABLE | existing guards caught them |
 
-(The two gate rows count as one in `not_applicable`; 26 rows in all.)
+26 rows: 12 PROVEN, 8 LIKELY, 6 NOT_APPLICABLE (both gate rows counted).
 
 **Existing tests.** The removed assertions across the feature's commits (`git show -U0` over every
 `(1269)` commit) are the `state.open` → `state.tabs` migration (same predicate on the new API), fmt
