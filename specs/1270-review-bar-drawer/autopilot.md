@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ttad83
 - **Started**: 2026-10-24
 - **Phase**: implement
-- **Next step**: M3 (implement → verify → PR); #1269 closed (last PR #1398), blocker cleared
+- **Next step**: orchestrator opens M3's PR (title/body in the session scratchpad `pr-title.md`, `pr-body.md`), waits on CI and merges; then M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007, T017–T018, T023–T026, T044–T045 | full | core rules review::{bar,drawer}, reply::card_preview, anatomy tokens, unit-tested (Layer A) | #1369 | merged; full gate green at e0c0e828; reviews A, B clean |
 | M2 | T008–T010, T027–T031, T046–T052 | full | ReviewBar, SideSheet, LineClamped::when_cut, ReviewPanelRow reply mode; cards show 4 reply lines (Layer A) | #1382 | merged; full gate green at 0b8e6365; reviews A, B clean; visual pass recorded |
-| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | — | implementing |
+| M3 | T011–T014, T019–T021, T032–T040 | full | reducer, shell, Esc wired to per-entry view; old panel still drawn (Layer B; #1269 closed, blocker cleared) | — (pushed on `claude/project-thread-ttad83`; PR opened by the orchestrator) | full gate green at 5358a2b7; reviews A (r2), B clean; visual pass recorded (`visual-pass-m3.md`) |
 | M4 | T015–T016, T022, T041–T043, T053–T057 | full | Review tab bar + drawer layout, geometry gate, snapshot, guide, visual pass (Layer B; #1269 closed, blocker cleared) | — | not started |
 
 ## Decisions
@@ -57,6 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D21 | M3 | How does a composer get `ComposerPlace::Drawer`? | `Msg::DrawerEdit(id)` / `Msg::DrawerAnswer(id)` (same rules as `EditComment` / `AnswerComment`, which keep `Card`); not drawn in a row until M4 | agent-resolved | contracts D6, D7; T034 |
 | D22 | M3 | Is the overflow menu displaced by, or does it displace, other popovers? | Neither (`popover_displacement.rs` row `review_overflow: []`); `OverflowToggled`/`OverflowDismissed` are also pure state in `app::State::update`, so the registry's dismissals (outside click, scroll beneath, a dialog opening) reach it | agent-resolved | research R8; `app.rs` DiscardCancelled arm |
 | D23 | M3 | Esc order between the Overview and the drawer | Registry, Settings draft, expanded card, Overview, then the drawer (last, R8); a closed drawer leaves Esc unused (`None`) | agent-resolved | research R8; `app::on_escape` |
+| D24 | M3 | A connection lost while a send is pending (review B M3 F2) | Left as today: the outcome is unknown (the generic "may or may not have taken effect" notice), so no bar error; the watch stays, and a report of that send still opens the drawer once, as it would had the send gone through | agent-resolved | `shell/daemon_sync.rs` disconnect path; FR-006 names a failed send only |
 
 ## Review rounds
 
@@ -71,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, headless reviewer) | 1 | 8c92d360526b5d06c0d85ae3cfa2941ce96b91ea:68c5b3fe6ec8cee326941591b531e4f411b34580 | CLEAN |
 | Visual pass M2 (in-process tiny-skia, 1280 wide, both schemes) | 1 | — | 1 real finding fixed: Answer… overflowed a 340 px whole-reply row; Mark applied / Answer… moved to their own line. Record: `visual-pass-m2.md` |
 | Review A M3 (code review high, headless reviewer) | 1 | 28fbd07040ff3c5c74adc97695d603af7a90c0e3:75b576df73af295f0de414be1c74aa9a1c5dd45c | CHANGES: F1 MAJOR fixed (a send that never left — no daemon, route down — now also fails in the bar and drops the watch: `shell/changes.rs` uses `send_op_bound_req`; test `a_send_with_no_daemon_fails_in_the_bar_and_drops_the_watch`); F2 MINOR fixed (the error clears only when a send starts); F3 MINOR fixed (the overflow menu closes when the tab hides and when a send starts) |
+| Review A M3 (scoped, sonnet, headless) | 2 | 9505ca1c084428ed4c4d85434218a2d50d5f49a1:5358a2b738b38a662427bc2c18fe3fb4cc6b93d9 | CLEAN (fix diff of r1; re-run with JSON output: 4 turns) |
+| Review B M3 (conformance, sonnet, headless) | 1 | 9505ca1c084428ed4c4d85434218a2d50d5f49a1:5358a2b738b38a662427bc2c18fe3fb4cc6b93d9 | CLEAN: 2 MINOR — F1 fixed, prose only (cycle-log names the third `review_send` test, not run red); F2 recorded as D24 |
 | Visual pass M3 (in-process tiny-skia, 1280×800, both schemes) | 1 | — | 1 finding fixed: "No review comments yet" said twice in an empty panel. Record: `visual-pass-m3.md` |
 
 ## Declined review findings
