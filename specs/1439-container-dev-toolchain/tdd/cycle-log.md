@@ -35,3 +35,29 @@ and their test evidence is in the ledger's *M1 notes* and *M2 notes*. Commands r
 - green: `DaemonState::set_in_sandbox` (server: data dir = `STATE_CONTAINER_DIR`) gates
   `setup_turn`; `run_shell` drops the turn when the stop sender is gone; runs join the queue in
   `spawn_run_with`, synchronously (A-F3). Same command -> `test result: ok. 9 passed; 0 failed`
+
+## M4 cycle 1: T028 → T029 (`mise.toml` declares the gate's and the LSP's Rust components)
+
+- test: `scripts/tests/mise-toolchain.test.sh` (A3): `[tools]` rust has `rustfmt`, `clippy`,
+  `rust-analyzer`; `uv` declared; a copy without `rust-analyzer` refused.
+- red: on `66e3e18f6` (`rust = "stable"`) -> `FAIL  mise.toml: [tools] rust does not install the
+  component rustfmt` (and clippy, rust-analyzer), exit 1.
+- green: `rust = { version = "stable", components = "rustfmt,clippy,rust-analyzer" }` -> 2 ok, exit 0.
+
+## M4 cycle 2: T026/T027 (`sandbox_real_mise_setup`, A7)
+
+- test: `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` on the fixture
+  `tests/fixtures/mise-c-crate` (behind `sandbox-real-runtime`, needs network and a runtime).
+- red/green: not runnable in this cloud container (no container daemon; the basic image's build is
+  refused by the egress proxy). Compiles clean under `cargo clippy -p micold-daemon --features
+  sandbox-real-runtime --tests -D warnings`; the fixture crate itself builds, tests and runs here
+  (`cargo test` -> `1 passed`, `answer 42`). Its first real run is CI's `sandbox-runtime` job on
+  the M4 PR (`--test 'sandbox_real_*' sandbox_real_`).
+
+## M4 cycle 3: T030 (own-image example)
+
+- test: `scripts/tests/guide-own-image.test.sh`: the example's `FROM` is `BASIC_IMAGE` without its
+  digest; it installs `libpq-dev`; a page without it is refused. Red before T030: the section did
+  not exist (`check-guide-own-image: no dockerfile block`). Green after.
+- B3's build: `scripts/check-guide-own-image.sh <runtime> micold-basic:dev`, a new step of CI's
+  `container-daemon` job (docker and rootless podman).

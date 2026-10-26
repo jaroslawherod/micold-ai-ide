@@ -50,6 +50,56 @@ A daemon that used to run the released daemon image moves to the basic image on 
 row says so until it has started. A container still running the released image keeps running, and
 its row says so too: restart it with no sessions running to move it to the basic image.
 
+### Building projects in the basic image
+
+The basic image carries what a project's build needs underneath its own toolchain, and nothing
+project-specific:
+
+- `mise`, at a version the image pins, in `/usr/local/bin/mise`;
+- a C and C++ compiler (`cc`, `gcc`, `c++`, `g++`), `make`, `ar` and the C library headers, so a
+  Rust build script or a native npm or Python package compiles its C code;
+- `pkg-config`, which finds the libraries the image (or an image built `FROM` it) installs;
+- `python3`, `git`, `gh`, `curl`, `wget`, `jq` and `rg` (ripgrep);
+- the X11/Wayland development libraries this repository's own tests link (`libx11-dev`,
+  `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`, `libxkbcommon-dev`, `libwayland-dev`).
+
+A project that declares its toolchain in a `mise.toml` gets it by setting the project's **Setup
+command** ([Settings › Project](settings.md#project)) to
+
+```sh
+mise trust && mise install
+```
+
+Each new worktree on the daemon then runs it before you build (see
+[Setup in a new worktree](worktrees-and-sessions.md#setup-in-a-new-worktree)). Everything it
+installs — Rust with its components, Node, uv, Go and the rest — lands in the sandbox's home, not in
+the image, and needs no root. It stays there when the container restarts, and every worktree on that
+daemon shares it: a second worktree of the same project finds the toolchain already installed and
+sets up in seconds. A project with no `mise.toml` can keep the same command; it installs nothing and
+succeeds. On a container or Kubernetes daemon one setup runs at a time, so two new worktrees never
+install into the home at once; the later one waits for the earlier
+([Running setup again, and stopping it](worktrees-and-sessions.md#running-setup-again-and-stopping-it)).
+
+The basic image does not carry any project's language toolchain (that is what `mise install` is
+for), nor system libraries beyond the ones above: a crate that links PostgreSQL's `libpq`, OpenSSL
+or SQLite through `pkg-config`, for example, does not build on it as it is. A session cannot install
+those itself either, because it does not run as root. For such a project, build an image of your
+own `FROM` the basic image with the packages it needs, and give it to a second container daemon as
+**My own image**. This one adds `libpq`'s development files:
+
+```dockerfile
+FROM ghcr.io/jaroslawherod/micold-basic:113535f6f5551276
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+Save it as `Containerfile` in an empty folder, and build it there with `docker build -t
+my-project-image -f Containerfile .` or `podman build -t my-project-image -f Containerfile .`. Give
+`my-project-image` as the daemon's image. In a session there, `pkg-config --libs libpq` prints
+`-lpq`, and the setup command above works as on the basic image. Keep the `FROM` line on the tag
+this page names when you update the application, so your image has what the application expects.
+
 ## Running a host daemon and container daemons together
 
 You can have several session services at once: at most one on this computer (the host daemon) and

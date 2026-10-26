@@ -1,0 +1,4 @@
+# The fixture project of #1439's `sandbox_real_mise_setup` (quickstart A7): a pinned Rust toolchain,
+# minimal profile, so the setup command `mise trust && mise install` downloads as little as it can.
+[tools]
+rust = { version = "1.90.0", profile = "minimal" }
