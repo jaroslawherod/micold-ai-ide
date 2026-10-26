@@ -2,7 +2,7 @@
 
 Extends feature 806's basic-image contract
 (`specs/806-container-daemon-ssh-provisioning/contracts/basic-image.md`) and assumes #1435's
-`curl`, `gh` and `jq`. Requirements: FR-001 to FR-007, FR-011.
+`curl`, `gh` and `jq`. Requirements: FR-001 to FR-007, FR-011, FR-017.
 
 ## B1. Commands on the default `PATH` of every session, before any setup
 
@@ -13,6 +13,8 @@ Extends feature 806's basic-image contract
 | `make` | `make` | FR-003 |
 | `pkg-config` | `pkgconf` | FR-003 |
 | `python3` | `python3` | FR-004 |
+| `curl`, `git`, `tar`, `gzip` | #1435's list, Debian's essential set | FR-017 |
+| `xz`, `unzip` | `xz-utils`, `unzip` | FR-017 |
 
 `mise --version` prints the version named in `mise.sha256` (its first field after `mise-v`).
 Headers: `libc6-dev`. Every row works as uid 1000, as an arbitrary host uid, and as uid 10001 with a
