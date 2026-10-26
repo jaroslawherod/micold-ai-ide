@@ -180,7 +180,8 @@ fn the_first_row_counts_the_lines_not_kept_and_an_empty_view_says_no_output_yet(
     find(&painted(&state), "No output yet.");
 }
 
-/// U3: **Setup output** sits directly above Delete while a record exists, and not before.
+/// U3: **Setup output** sits above Delete while a record exists, and not before (M7 puts **Stop
+/// setup** between them while the run runs).
 #[test]
 fn the_menu_offers_setup_output_above_delete_while_a_record_exists() {
     let (mut state, host) = fixture();
@@ -194,7 +195,8 @@ fn the_menu_offers_setup_output_above_delete_while_a_record_exists() {
     report(&mut state, host, None);
     let items = labels(&state, &worktree());
     let at = items.iter().position(|l| l == "Setup output").unwrap();
-    assert_eq!(items[at + 1], "Delete", "{items:?}");
+    assert_eq!(items[at + 1], "Stop setup", "{items:?}");
+    assert_eq!(items[at + 2], "Delete", "{items:?}");
 
     // On the Default row it is appended.
     assert!(!labels(&state, &SessionLocation::Default).contains(&"Setup output".to_owned()));
@@ -215,7 +217,8 @@ fn the_menu_offers_setup_output_above_delete_while_a_record_exists() {
         },
     );
     let items = labels(&state, &SessionLocation::Default);
-    assert_eq!(items.last().map(String::as_str), Some("Setup output"));
+    let at = items.iter().position(|l| l == "Setup output").unwrap();
+    assert_eq!(&items[at..], ["Setup output", "Stop setup"], "{items:?}");
 }
 
 /// U6: the delete confirmation says setup is stopped first exactly while it runs.
@@ -279,5 +282,119 @@ fn a_long_line_is_clipped_clear_of_the_scrollbar() {
     assert!(
         line_right <= body_right - 6.0 + 0.01,
         "the line is clipped at {line_right}, the list ends at {body_right}"
+    );
+}
+
+/// The project `/repo` has `command` set, as Settings › Project stores it.
+fn set_command(state: &mut State, command: &str) {
+    state.settings.setup_commands.insert(
+        micold_core::jira::connection_key(std::path::Path::new("/repo")),
+        SetupCommand::parse(command).unwrap(),
+    );
+}
+
+fn menu_labels(state: &State, location: &SessionLocation) -> Vec<String> {
+    micold_client::ui::location_menu_items(state, location)
+        .into_iter()
+        .map(|item| item.label)
+        .collect()
+}
+
+/// M7, U3: **Run setup** follows **Setup output** above Delete when the project has a command and
+/// nothing runs; **Stop setup** takes its place while the run runs; neither without a command.
+#[test]
+fn the_menu_offers_run_or_stop_setup_after_setup_output_above_delete() {
+    let (mut state, host) = fixture();
+    let before = menu_labels(&state, &worktree());
+    assert!(!before.contains(&"Run setup".to_owned()), "no command");
+
+    set_command(&mut state, "mise install");
+    let items = menu_labels(&state, &worktree());
+    let at = items.iter().position(|l| l == "Run setup").unwrap();
+    assert_eq!(items[at + 1], "Delete", "{items:?}");
+    assert!(!items.contains(&"Stop setup".to_owned()));
+
+    report(&mut state, host, None);
+    let items = menu_labels(&state, &worktree());
+    assert!(!items.contains(&"Run setup".to_owned()), "while running");
+    let output = items.iter().position(|l| l == "Setup output").unwrap();
+    assert_eq!(items[output + 1], "Stop setup", "{items:?}");
+    assert_eq!(items[output + 2], "Delete", "{items:?}");
+
+    report(&mut state, host, Some(SetupState::Failed(Failure::Exit(2))));
+    let items = menu_labels(&state, &worktree());
+    let output = items.iter().position(|l| l == "Setup output").unwrap();
+    assert_eq!(items[output + 1], "Run setup", "{items:?}");
+    assert!(!items.contains(&"Stop setup".to_owned()));
+
+    // Without a command a failed run cannot be re-run, but its output can still be read.
+    state.settings.setup_commands.clear();
+    let items = menu_labels(&state, &worktree());
+    assert!(items.contains(&"Setup output".to_owned()));
+    assert!(!items.contains(&"Run setup".to_owned()));
+}
+
+/// M7, US3 scenario 5: the Default row is offered **Run setup**, appended last.
+#[test]
+fn the_default_row_is_offered_run_setup_last() {
+    let (mut state, _host) = fixture();
+    assert!(!menu_labels(&state, &SessionLocation::Default).contains(&"Run setup".to_owned()));
+    set_command(&mut state, "mise install");
+    let items = menu_labels(&state, &SessionLocation::Default);
+    assert_eq!(
+        items.last().map(String::as_str),
+        Some("Run setup"),
+        "{items:?}"
+    );
+}
+
+/// M7, U3: choosing either entry closes the row menu, as Setup output and Delete do.
+#[test]
+fn choosing_run_or_stop_setup_closes_the_row_menu() {
+    use micold_client::app::Message;
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    let (mut state, host) = fixture();
+    let key = (host, PathBuf::from("/repo"), worktree());
+    for msg in [Msg::RunRequested(key.clone()), Msg::StopRequested(key)] {
+        state.update(Message::Worktree(WorktreeMsg::MenuToggled(
+            DIR.to_owned(),
+            (120, 300),
+        )));
+        assert!(state.worktree.menu_open.is_some());
+        state.update(Message::Setup(msg));
+        assert!(state.worktree.menu_open.is_none());
+    }
+}
+
+/// M7, U4: **Stop setup** sits before **Close** in the output view while the run runs, and is
+/// absent once it ends; the action row stays inside the smallest window.
+#[test]
+fn the_output_view_offers_stop_setup_before_close_while_running() {
+    let (mut state, host) = fixture();
+    report(&mut state, host, None);
+    open_with(&mut state, host, 0, numbered(3));
+    let shown = painted(&state);
+    let window = MIN_WINDOW_SIZE;
+    let (copy, stop, close) = (
+        find(&shown, "Copy output"),
+        find(&shown, "Stop setup"),
+        find(&shown, "Close"),
+    );
+    assert!(copy.on_screen.x < stop.on_screen.x && stop.on_screen.x < close.on_screen.x);
+    for at in [copy, stop, close] {
+        assert!(
+            at.on_screen.y >= 0.0 && at.on_screen.y + at.natural_height <= window.height,
+            "{} outside the {}dp window",
+            at.content,
+            window.height
+        );
+    }
+
+    report(&mut state, host, Some(SetupState::Stopped));
+    let shown = painted(&state);
+    assert!(
+        !shown.iter().any(|p| p.content == "Stop setup"),
+        "{:?}",
+        contents(&shown)
     );
 }
