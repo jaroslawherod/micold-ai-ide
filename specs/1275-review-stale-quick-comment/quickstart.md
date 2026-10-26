@@ -55,7 +55,9 @@ micold-client --test layout_snapshot` records the notice, dot and chips; the dif
 6. (M6, FR-013) Mark `a.txt` and `b.txt` reviewed (header *2 of m reviewed*), then append a line to
    `a.txt` from a terminal: `a.txt`'s row shows ○ with the dot (tooltip *Changed since you looked,
    and since you marked it reviewed*), `b.txt` keeps ✓, the header reads *1 of m reviewed* beside
-   *1 file changed since you looked*.
+   *1 file changed since you looked*. Select `a.txt`, append another line: **Mark reviewed** is
+   unavailable (tooltip *This file changed since you looked: select it again to see its latest
+   change*); select `a.txt` again and it is available.
 
 Screenshots of steps 1, 2, 5 and 6 in both themes go in `visual-pass/`.
 

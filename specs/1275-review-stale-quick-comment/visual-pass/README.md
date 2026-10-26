@@ -84,6 +84,16 @@ Real client (debug build of the M6 tree, client and daemon pair) on a cloud Xvfb
 | `m6-b6-2-held-reviewed-{light,dark}-1280.png` | a line appended to `a.txt` from a shell: *1 file changed since you looked*, `a.txt`'s row back to ○ with the dot, `b.txt` still ✓, *1 of 5 reviewed*; the open `b.txt` diff unchanged | PASS |
 | `m6-b6-3-dot-tooltip-{light,dark}-1280.png` | hovering `a.txt`'s dot: *Changed since you looked, and since you marked it reviewed* | PASS |
 
-Observation, not a failure: the tree stays in the order it had (Path sort). Under **Unreviewed
-first** the order follows #1271's judgement on the live whole-change ids, not the hold, so it can
-move while changes are held (unchanged by M6).
+Observation, not a failure: the tree stays in the order it had (Path sort). (Review A F2 since
+made **Unreviewed first** judge the hold too, so its order agrees with the glyphs.)
+
+### M6 review A fixes (F1: the mark control while the open file is held)
+
+Same setup, debug build with the round 1 fixes. In light `a.txt` is marked on an older change; in
+dark it was marked on its current change just before the append (so its row carries only the
+*changed since you looked* dot).
+
+| File | Shows | Verdict |
+|---|---|---|
+| `m6-c-1-held-blocked-{light,dark}-1280.png` | `a.txt` open, a line appended from a shell: *1 file changed since you looked*, **Mark reviewed** shown unavailable, hovering it: *This file changed since you looked: select it again to see its latest change*; clicking it changed nothing (frame identical, the row stays ○) | PASS |
+| `m6-c-2-reselected-{light,dark}-1280.png` | `a.txt` selected again: the notice is gone, the row's counts and diff are the latest, **Mark reviewed** available again | PASS |

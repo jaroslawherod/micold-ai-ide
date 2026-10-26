@@ -30,8 +30,8 @@ use micold_core::review::drag::{gutter_line, Drag, Release};
 use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::marks::{
-    file_review, held_file_review, mark_block, progress, ChangeId, EntryMarks, FileReview,
-    MarkBlock, ReviewMark, ReviewState, WholeChange,
+    held_file_review, mark_block, progress, ChangeId, EntryMarks, FileReview, MarkBlock,
+    ReviewMark, ReviewState, WholeChange,
 };
 use micold_core::review::pr_diff::{pr_change_ids, PrDiff};
 use micold_core::review::reference::{self, Reference};
@@ -728,7 +728,8 @@ pub fn sort_offers(state: &State, view: &OpenView, connected: bool) -> [(TreeSor
 }
 
 /// The listed files with a reviewed mark on their current change, as [`file_reviews`] judges them
-/// from the entry's last push; read only while the tree is sorted **Unreviewed first**.
+/// from the entry's last push, a held change included (feature 1275, FR-013, FR-014), so the
+/// order agrees with the glyphs; read only while the tree is sorted **Unreviewed first**.
 fn reviewed_paths(state: &State, view: &OpenView) -> BTreeSet<String> {
     let (TreeSort::UnreviewedFirst, Some(review), ListBody::Files(files)) =
         (view.tree.sort, review_of(state, view), list_body(view))
@@ -741,7 +742,8 @@ fn reviewed_paths(state: &State, view: &OpenView) -> BTreeSet<String> {
         .iter()
         .filter(|file| {
             let mark = review.marks.get(scope, &file.path);
-            file_review(mark, ids.get(&file.path), 0).state == ReviewState::Reviewed
+            let held = changed_since_you_looked(view, &file.path);
+            held_file_review(mark, ids.get(&file.path), 0, held).state == ReviewState::Reviewed
         })
         .map(|file| file.path.as_str().to_owned())
         .collect()
@@ -4858,6 +4860,10 @@ pub fn mark_control(state: &State, view: &OpenView, connected: bool) -> Option<M
     }
     let block = if !connected {
         Some(MarkBlock::Disconnected)
+    } else if changed_since_you_looked(view, path) {
+        // Feature 1275, FR-013: the diff on screen is older than the change a mark would be kept
+        // on; selecting the file again reads its latest diff and ends this.
+        Some(MarkBlock::Held)
     } else if view.source != Source::Changes {
         // A pull request's file is its patch, whole whatever the toggles show (US4).
         (!ids.contains_key(path)).then_some(MarkBlock::NotRead)
