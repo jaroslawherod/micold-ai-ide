@@ -410,3 +410,8 @@ output is copied from the session's logs.
 ## M7 cycle 2: review round 1 fixes (V-F1, A-F2, A-F3)
 
 - red/green: V-F1 `settings::setup_commands_tests::clearing_the_last_setup_command_removes_it_from_the_file` (save with a command, clear, save: key must be gone) written together with the fix, not run red first; `merged_with_existing` now drops the old `setup_commands` key when the new document lacks it. A-F2 `shell::setup::tests::a_stop_refused_as_not_found_is_silent` with a `SetupStop`/`NotFound` arm in `daemon_sync`. A-F3 the 640x480 action-row test also bounds x + width. All pass; clippy and fmt clean.
+
+## Close note (2026-10-26)
+
+- Protocol: M3 cycle 1 above says 69; M3's rebase 2 renumbered it to 70 (main's feature 1271 took
+  69). The test is now `the_setup_messages_bump_the_protocol_to_70`. Entries above are kept as written.

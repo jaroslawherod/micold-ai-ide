@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: close
-- **Next step**: close — speckit-tdd-verify and the close diff review (orchestrator), then the docs gate and the close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -104,7 +104,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 B | 1 (sonnet) | same | CLEAN; features_setup 33, setup_output_geometry 11. MINORs accepted: B-F1 Stop uses `Icon::Close` (no stop glyph); B-F2 red not run separately (compile-failure red, disclosed); B-F3 Run uses `StateRunning`, which U3 allows |
 | M7 visual pass | 1 (U3, U4) | same | PASS light and dark, 1600x1000 and 640x480 (Busy not reachable from the UI). V-F1 MAJOR: clearing a project's setup command was not persisted (`merged_with_existing` kept the old `setup_commands` key as the field is skipped when empty) — fixed: a known key omitted when empty is removed from the merged document; test `clearing_the_last_setup_command_removes_it_from_the_file` (written with the fix; not run red first). Evidence `visual-pass/m7-*`, notes `m7-u3-u4-notes.md` |
 | M7 A | 2 (scoped, sonnet) | 4c71363eab4b6c45191816dad727c7bb67fc22c0:fd1498aea05aa60c764deea5d1fab1417046efc3 | CLEAN, no findings. Confirmed: V-F1 removes only `setup_commands` and keeps every other key (unknown ones too); concurrent windows safe through update_reporting; A-F2 NotFound only when no run exists for the key; A-F3 bound correct |
-| Close tdd-verify + diff review | 1 | ddacea4f81559a866f5c3ce913a332374624f65e:b9d3e16b4020b97d4cce27e38e8ea30444ee645b | pending (orchestrator dispatches) |
+| Close tdd-verify | 1 (sonnet) | ddacea4f81559a866f5c3ce913a332374624f65e:b9d3e16b4020b97d4cce27e38e8ea30444ee645b | PASS: 61/61 tasks ticked, every named test exists and passes. MINORs: T-F1 = R-F1 fixed; T-F2 A6–A13 paths now `tests/mcp/…` (`--test mcp`), fixed; T-F3 cycle log protocol 69 → dated note appended, fixed; T-F4 red-before-green gaps already disclosed, accepted |
+| Close review (docs truth) | 1 | same | CHANGES, 1 MAJOR — fixed, prose only (counts corrected to the CI log): R-F1 macOS `streaming_child` 9, `toolchain_path` 16; R-F2 SC-003 named on U2, SC-005 line added (A6); R-F3 B5 `ps` only for row and card stops, visual-pass sizes per milestone; R-F4 follow-up M6 B-F3 added, list blank line removed |
 
 ## Declined review findings
 
@@ -114,6 +115,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+Close PR (2026-10-26): tdd-verify PASS, close review R-F1–R-F4 and T-F1–T-F3 fixed (prose only); specs gate green (check-criteria-observables, all scripts/tests/*.test.sh); close PR opened. The run ends when it merges.
 Close (2026-10-26) on main 308ab390a (#1476 merged by rebase): T060–T061 done docs-only — quickstart §Results (Part B per step with its evidence: B3–B5 from the M5–M7 visual passes on a host daemon, B1 from CI's sandbox job, B2/B6/B7 not run by hand with the reason; U1–U6 table citing `visual-pass/m5-*`, `m6-*`, `m7-*`; T061 macOS/Windows table from CI runs 40305573743 and 40314588666), A15 says version 70, spec **Status** Closed. Converge skipped: every milestone has a CLEAN review B. Next: speckit-tdd-verify and the close diff review (orchestrator), fix findings; docs gate; close PR.
 M7 PR (2026-10-26): review A round 2 CLEAN; rebased onto main 1669ef5df (no conflicts, protocol stays 70, no new ProjectAdd site); `cargo test -p micold-client --no-run` and full gate (scripts/gate.sh) green; pushed; PR #1476 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; close unit (T060–T061).
 M7 round 1 fixed (2026-10-26): V-F1, A-F2, A-F3 (cycle log M7 cycle 2); A-F1 left as follow-up. micold-core setup_commands 6, client setup tests green, clippy and fmt clean. Next: review A round 2 (scoped, sonnet); then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
@@ -145,7 +147,7 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 - M7 A-F1: Run setup's availability reads `state.settings.setup_commands`, refreshed from the store only when Settings reads `in_force`; a command saved in another window shows after the next refresh. Refresh when a row menu opens.
 - Another feature's, not changed here: `jira_base_urls` has the same shape as V-F1 (`skip_serializing_if` empty + `merged_with_existing` keeps the old key), so clearing the last one may not persist.
 - M7 observation: SIGKILL of the daemon orphans a running setup's child process (the daemon cannot end the tree if it is itself killed). There is no stop glyph in the icon set.
-
+- M6 review B-F3: `confirm_delete::modal` takes 8 arguments; group them in a struct (optional).
 - ~~M3 review A-F3~~: done in M4 T038 (`stop_and_wait` before git, `forget` after); test `deleting_a_worktree_stops_its_setup_first_and_forgets_it` recreates the same `dir_name` and runs setup again.
 - M6 visual pass round 2 observation: with ~700 output lines at 640×480 the Setup output scrollbar thumb shrinks to 2–3 px; a minimum thumb length would help (not a finding).
 - Per-project sandbox image (spec Story 4, deferred by clarify Q2): needs its own issue.
