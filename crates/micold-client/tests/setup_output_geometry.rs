@@ -79,6 +79,7 @@ fn open_with(state: &mut State, daemon: DaemonId, first_line: u64, lines: Vec<St
             run: RunId(1),
             first_line,
             lines,
+            dropped: first_line,
         },
     );
 }
@@ -237,4 +238,46 @@ fn the_delete_confirmation_says_setup_is_stopped_first_while_it_runs() {
     assert!(delete_paints_line(&state), "running");
     report(&mut state, host, Some(SetupState::Succeeded));
     assert!(!delete_paints_line(&state), "ended");
+}
+
+/// M6 review V-F2: choosing **Setup output** in a row's menu closes the menu, as Delete does.
+#[test]
+fn choosing_setup_output_closes_the_row_menu() {
+    use micold_client::app::Message;
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    let (mut state, host) = fixture();
+    report(&mut state, host, None);
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
+        DIR.to_owned(),
+        (120, 300),
+    )));
+    assert!(state.worktree.menu_open.is_some());
+    state.update(Message::Setup(Msg::ViewOpened((
+        host,
+        PathBuf::from("/repo"),
+        worktree(),
+    ))));
+    assert!(state.setup.view.is_some());
+    assert_eq!(state.worktree.menu_open, None);
+}
+
+/// M6 review V-F3: an output line too long for the list stops short of the list's scrollbar.
+#[test]
+fn a_long_line_is_clipped_clear_of_the_scrollbar() {
+    let (mut state, host) = fixture();
+    report(&mut state, host, None);
+    let long = "x".repeat(400);
+    let mut lines = vec![long.clone()];
+    lines.extend(numbered(60));
+    open_with(&mut state, host, 0, lines);
+    let shown = painted(&state);
+    let line = find(&shown, &long);
+    // The command's box spans the dialog body, as the list's does.
+    let body = find(&shown, "mise trust && mise install");
+    let body_right = body.clip.x + body.clip.width;
+    let line_right = line.clip.x + line.clip.width;
+    assert!(
+        line_right <= body_right - 6.0 + 0.01,
+        "the line is clipped at {line_right}, the list ends at {body_right}"
+    );
 }

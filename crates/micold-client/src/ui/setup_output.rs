@@ -8,6 +8,7 @@
 
 use crate::app::{Message, State};
 use crate::features::setup::{self, Msg, OutputView, ROW_HEIGHT};
+use crate::ui::material::scrollable::BAR_FOOTPRINT;
 use crate::ui::material::{dialog, Button, ScrollingDialog, Text, Tooltip, TypeRole, VirtualRows};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
@@ -115,10 +116,12 @@ fn lines(view: &OutputView, r: Roles) -> Element<'_, Message> {
                     None => Space::new().into(),
                 },
             };
-            container(content)
+            // Clipped clear of the scrollbar, so a long line does not run under it (M6 review
+            // V-F3).
+            container(container(content).width(Length::Fill).clip(true))
                 .width(Length::Fill)
                 .height(Length::Fixed(ROW_HEIGHT))
-                .clip(true)
+                .padding(iced::Padding::ZERO.right(BAR_FOOTPRINT))
                 .into()
         },
         r,
@@ -126,6 +129,12 @@ fn lines(view: &OutputView, r: Roles) -> Element<'_, Message> {
     .offset(view.offset)
     .viewport(view.viewport)
     .id(SETUP_OUTPUT_SCROLL_ID.clone())
-    .on_scroll(|offset, viewport| Message::Setup(Msg::Scrolled { offset, viewport }))
+    .on_scroll_metrics(|offset, viewport, content| {
+        Message::Setup(Msg::Scrolled {
+            offset,
+            viewport,
+            content,
+        })
+    })
     .into()
 }

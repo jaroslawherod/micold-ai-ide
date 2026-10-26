@@ -110,6 +110,9 @@ pub fn spacers_with(
 /// Builds one row by its index.
 type BuildRow<'a, M> = Box<dyn Fn(usize) -> Element<'a, M> + 'a>;
 
+/// Builds the scroll report from the offset, the viewport height and the content height.
+type OnScroll<'a, M> = Box<dyn Fn(u32, u32, u32) -> M + 'a>;
+
 /// A virtualised list of fixed-height rows.
 pub struct VirtualRows<'a, M> {
     len: usize,
@@ -118,7 +121,7 @@ pub struct VirtualRows<'a, M> {
     roles: Roles,
     offset: u32,
     viewport: u32,
-    on_scroll: Option<Box<dyn Fn(u32, u32) -> M + 'a>>,
+    on_scroll: Option<OnScroll<'a, M>>,
     extras: Vec<(usize, f32)>,
     id: Option<iced::advanced::widget::Id>,
 }
@@ -171,7 +174,14 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
     }
 
     /// Report the offset and the viewport height as the list scrolls.
-    pub fn on_scroll(mut self, f: impl Fn(u32, u32) -> M + 'a) -> Self {
+    pub fn on_scroll(self, f: impl Fn(u32, u32) -> M + 'a) -> Self {
+        self.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport))
+    }
+
+    /// Report the offset, the viewport height and the content height the list measured as it
+    /// scrolls: a caller that judges "at the end" from it is not misled by a report laid out
+    /// before its rows changed.
+    pub fn on_scroll_metrics(mut self, f: impl Fn(u32, u32, u32) -> M + 'a) -> Self {
         self.on_scroll = Some(Box::new(f));
         self
     }
@@ -210,8 +220,7 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
             scroll = scroll.id(id);
         }
         if let Some(f) = list.on_scroll {
-            scroll =
-                scroll.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport));
+            scroll = scroll.on_scroll_metrics(f);
         }
         scroll.into()
     }

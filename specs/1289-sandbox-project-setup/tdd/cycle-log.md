@@ -363,3 +363,29 @@ output is copied from the session's logs.
   dropped row, *No output yet.*, the menu entry above Delete / last on Default, and the U6 line
   exactly while running. overlay_registry 26 and popover_displacement 4 passed with the new
   `setup_output` surface counted (29 dialogs; 25 in the registry list).
+
+## M6 cycle 2: review round 1 fixes (A-F1–A-F4, V-F1–V-F3)
+
+- red: `features_setup.rs` gains five tests — a watch resumed into a newer run asks again from the
+  first kept line (A-F1, both with nothing and with 20 lines dropped), a live batch before a reopened
+  view's backlog is ignored (A-F2), reopening the shown location keeps the view, a report at the
+  end of the content it measured keeps following (A-F3), a resize while following keeps the follow
+  and snaps to the end while one detached stays detached (V-F1); `setup_output_geometry.rs` gains
+  two — choosing **Setup output** closes the row menu (V-F2), a long line is clipped clear of the
+  scrollbar (V-F3). At 07a50ad79 they failed to compile: `Msg::Output` has no field `dropped`,
+  `Msg::Scrolled` has no field `content`, `Effect` has no variant `Watch`. After the wire fields
+  were added the V-F3 test failed for the real reason: *the line is clipped at 536, the list ends
+  at 536* (padding alone left the clip on the padded box).
+- green: `Msg::Output` carries the wire's `dropped`; `OutputView::pending` holds the first line of
+  the watch sent last (open: 0, `rewatch`: the next line) and batches past `max(from, dropped)` are
+  not taken until its backlog arrives (A-F2); a batch of another run starting past `dropped` makes
+  `update` return `Effect::Watch` from `dropped` (A-F1), which `shell/setup.rs` sends; a same-run
+  batch is appended only when it starts inside the held lines, else it replaces them. `ViewOpened`
+  of the location shown is a no-op. `Msg::Scrolled` carries the measured content
+  (`VirtualRows::on_scroll_metrics`, `on_scroll` now wraps it) and `Follow::scrolled` judges by it
+  (A-F3); a report with a new viewport height while following returns `ScrollToEnd` and keeps the
+  follow (V-F1). `sync_watch` compares keys by reference (A-F4). `State::update_setup` closes the
+  worktree menu on `ViewOpened` (V-F2). Rows pad `BAR_FOOTPRINT` on the right with the clip on an
+  inner container (V-F3). Two existing tests sent backlogs past line 0 with `dropped: 0`, which no
+  daemon sends (`send_from` reports `first_index` as `dropped`); they now pass the daemon's
+  `dropped` -> features_setup 29, setup_output_geometry 7 passed.

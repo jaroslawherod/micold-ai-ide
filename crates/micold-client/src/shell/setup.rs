@@ -104,8 +104,9 @@ pub fn on_saved(app: &mut App, change: &SetupCommandChange) {
 /// Apply `msg` to the setup state, and perform what it asks for: the notification (FR-017), the
 /// output view's scroll to its end, or its copy (contract U4).
 pub fn update(app: &mut App, msg: micold_client::features::setup::Msg) -> Task<Message> {
-    match setup::update(&mut app.core.setup, msg) {
+    match app.core.update_setup(msg) {
         Effect::NotifyError(text) => app.core.notify_error(text),
+        Effect::Watch(request) => send_watch(app, request),
         Effect::ScrollToEnd => {
             return iced::widget::operation::snap_to_end(SETUP_OUTPUT_SCROLL_ID.clone());
         }
@@ -131,7 +132,7 @@ pub fn sync_watch(app: &mut App) {
 /// `daemon` connected: the open view of one of its locations is watched again from the line after
 /// the last one held (FR-018).
 pub fn rewatch(app: &mut App, daemon: DaemonId) {
-    if let Some(request) = setup::rewatch(&app.core.setup, daemon) {
+    if let Some(request) = setup::rewatch(&mut app.core.setup, daemon) {
         send_watch(app, request);
     }
 }
