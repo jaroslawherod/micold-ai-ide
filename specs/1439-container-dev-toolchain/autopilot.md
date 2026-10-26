@@ -135,7 +135,7 @@ Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7
 
 ## Handover
 
-None.
+M4 unit hit the 150k context cap after the full gate. Done: T026–T030 (commit e26591dbd), D12 curl retries + hash, D13, full gate exit 0 at e26591dbd, branch pushed (no PR yet). Next: reviews A (code-review high on origin/main...HEAD) and B (conformance, sonnet) on snapshot 422e54ca1ec4059a2b0215f6501ae301833a0c0d:e26591dbd43db7c88ca4349c27cc65825fb1dfdb (rows in *Review rounds*); act on findings (scoped gate, then full gate if code changes); fill REVIEW_A / REVIEW_B / GATE_LINE in the scratchpad `pr-body.md` (title in `pr-title.txt`); orchestrator opens the PR. Open: T031 partly (B3 via CI step; "daemon on it starts sessions" not covered), T032 (B1) and T033 (B2, B6) need a container runtime — no CI job runs them; orchestrator/user decides whether they block the M4 PR. No visual change, so no visual pass.
 
 ## Open escalation
 
