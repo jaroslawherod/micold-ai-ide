@@ -202,7 +202,8 @@ show, that All clears the filters, and that the add and hide actions work.
 
 1. **Given** worktrees with tags, **When** the sidebar is shown, **Then** the chip bar shows an
    **All** chip followed by one chip per tag filter on offer today (each type present, *issue*,
-   *untyped*, in today's order), without opening any panel.
+   *untyped*, in today's order) when 3 or fewer are on offer; with more, scenario 7 applies
+   (BUG-1470).
 2. **Given** no filter is active, **When** the chip bar is shown, **Then** **All** looks selected;
    **When** the user presses a type chip, **Then** only that type's rows show, **All** no longer
    looks selected, and pressing more chips combines them with OR, as today (feature 008).
@@ -218,8 +219,16 @@ show, that All clears the filters, and that the add and hide actions work.
    from the sidebar: a more (⋯) action at the chip bar's end, beside add and hide, opens a menu
    holding refresh, attach existing and run in parallel, each with today's enabled rule and
    tooltip; choosing an item does what today's header button does and closes the menu.
-7. **Given** more chips than fit one line, **When** the chip bar is shown, **Then** the chips wrap
-   onto further lines and the actions stay on the first line; no chip is cut off or hidden.
+7. **Given** more filters on offer than fit one line next to **All** (more than 3, BUG-1470),
+   **When** the chip bar is shown, **Then** it is exactly one chip line tall: **All**, a **Filter**
+   toggle (⏷ closed, ⏶ open, with the count of active filters when any), then the actions at the
+   line's end; no chip or action is cut off. **When** the user presses the toggle, **Then** an
+   accordion under the line holds every filter chip, wrapped onto further lines, and the toggle
+   flips; pressing it again closes the accordion. **When** filters are active and the accordion is
+   closed, **Then** each active filter shows on the line as a selected chip with a ✕ that clears
+   just that filter, and those that do not fit end in a `+N` chip that opens the accordion.
+   **When** 3 or fewer filters are on offer, **Then** there is no toggle and the chips show inline
+   as in scenario 1.
 8. **Given** the worktree holding the current session is excluded by a filter, **When** the sidebar
    is shown, **Then** it stays listed in its state's group with its *current session* chip (feature
    024 FR-012a), unchanged.
@@ -342,17 +351,25 @@ chords to reach a location in a collapsed group.
   *outside this app*, *can be removed*, missing/invalid status) it shows today; the type tag and
   the issue tag MUST NOT be drawn as chips on the row.
 - **FR-014**: Under the Overview row the chip bar MUST show an **All** chip and one chip per tag
-  filter on offer (feature 008), always visible; **All** MUST look selected when no filter is active
+  filter on offer (feature 008), always visible when 3 or fewer are on offer, else behind the
+  **Filter** toggle of FR-016 (BUG-1470); **All** MUST look selected when no filter is active
   and MUST clear every filter when pressed; the filters' meaning (OR across chips, the
-  current-session exception, the no-match message) MUST be unchanged. The filter button and its
-  accordion are removed.
+  current-session exception, the no-match message) MUST be unchanged. The header's filter button is removed.
 - **FR-015**: The chip bar MUST end with the add-worktree, hide-sidebar and more (⋯) actions; add and
   hide do what the header's buttons do today; more MUST open a menu holding the refresh,
   attach-existing and run-in-parallel actions, each with today's enabled rule and tooltip, doing
   what today's header button does and closing the menu when chosen. The menu MUST be the shared
   `Menu` primitive, so its placing and dismissal follow feature 017.
-- **FR-016**: Chips that do not fit one line MUST wrap to further lines; no chip or action may be cut
-  off or overlap another.
+- **FR-016** (BUG-1470): The chip bar MUST be one chip line tall (`anatomy::chip::HEIGHT`) whatever
+  the number of filters. With more than 3 filters on offer it MUST show **All**, a **Filter** toggle
+  (⏷/⏶, with the active count), the active filters as selected `ToggleChip`s each with a ✕ clearing
+  just that filter, and a `+N` chip opening the accordion for those that do not fit; the toggle and
+  `+N` open and close the existing `Accordion` under the line, which holds every filter chip
+  wrapped (same `ToggleChip`, OR semantics, colours). Whether it is open MUST live in sidebar state
+  and persist across restarts (a new `Settings` field: filter and panel state were session-only
+  before; the issue asks for it, as `folded_origins` already persists). The toggle MUST be a Tab stop answering Enter and Space
+  with the focus ring; the accordion's chips MUST be Tab stops only while it is open. No chip or
+  action may be cut off or overlap another. The no-match message (008 FR-027) is unchanged.
 - **FR-017**: The Overview row, every chip, every group header and every row MUST be reachable by
   keyboard in display order with a visible focus ring; Enter or Space on a collapsible header MUST
   toggle it; the keyboard MUST stay on a row that moves to another group.

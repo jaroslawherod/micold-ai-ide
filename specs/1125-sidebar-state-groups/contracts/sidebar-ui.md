@@ -10,7 +10,7 @@ pixel tests in `ui/material/*`, the layout snapshot and quickstart §B.
 With a project open: the Overview row; the chip bar; the start-up offer banner when shown (feature
 582); the scrolling list of group headers and rows; the no-worktrees / no-match hint. With no project
 open: no Overview row, chip bar, header or row (Edge Cases). The "Worktrees" title, the filter
-button and the filter accordion are gone (FR-014, spec Assumptions).
+button is gone (FR-014, spec Assumptions); the filter accordion returns under the chip bar for more than 3 filters on offer (BUG-1470, FR-016).
 
 ## S2. Overview row
 
@@ -30,8 +30,7 @@ button and the filter accordion are gone (FR-014, spec Assumptions).
 - **All** active iff `filters.is_empty()`; pressing it clears every filter (US4.2, US4.3).
 - Type chips toggle as today (OR, current-session exception, no-match message unchanged; US4.2,
   US4.4, US4.8).
-- Add, hide and more on the first line, right-aligned; chips wrap onto further lines left of them;
-  no chip or action is cut off or overlaps at 180, 300 and 600 px sidebar width (US4.7, FR-016).
+- The bar is one chip line (BUG-1470, US4.7, FR-016). With 3 or fewer filters on offer: **All** and the filter chips inline. With more: **All**, a **Filter** toggle (⏷ closed, ⏶ open, active count) sending `SidebarMsg::FilterOpenToggled`, the active filters as selected chips each with a ✕ sending `FilterToggled`, and a `+N` chip sending `FilterOpenToggled`; the `Accordion` under the line (while `filter_open`) holds every filter chip, wrapped. Add, hide and more stay at the line's end; nothing is cut off or overlaps at 180, 300 and 600 px. The toggle is a Tab stop; accordion chips are Tab stops only while open.
 - Add sends `FormMsg::Opened`; hide sends `SidebarMsg::Toggled` (US4.5).
 - More toggles `SidebarMoreMenu`: a `MenuOverlay` hung from the trigger's corner, items in order
   *Refresh the worktree list*, *Attach existing…*, *Run in parallel…*, each disabled exactly when

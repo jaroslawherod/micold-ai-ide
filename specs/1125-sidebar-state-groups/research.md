@@ -131,7 +131,7 @@ the type and issue tags those chips sat beside; dropping those two frees the spa
 **Alternatives rejected**:
 - A third line for chips: three lines on every worktree row (the daemon chip is always there).
 - Move the label chips into the tooltip: FR-013 says they stay on the row.
-- Wrap chips onto further lines when they do not fit: row height would depend on text width, which
+- (superseded, BUG-1470) Wrap chips onto further lines when they do not fit: row height would depend on text width, which
   the render-free scroll metrics (`row_heights`) cannot know (feature 024 R6).
 
 ## R7. The selected look
@@ -215,6 +215,8 @@ onto one.
 
 ## R11. The chip bar and the more menu
 
+> **BUG-1470**: the accordion and the wrapping `Row` described below are superseded: the accordion is not gone for good. With more than 3 filters on offer the chip bar is one line (All, a Filter toggle, active chips, `+N`) and the existing `Accordion` holds the full set; see spec FR-016.
+
 **Decision**: The chip bar is a `row![chips, actions]` under the Overview row. `chips` is a
 wrapping `Row` (`Row::wrap()`) of `ToggleChip`s: **All** (active when no filter is) then today's
 `filter_chip`s in `available_tag_filters()` order; **All** sends `SidebarMsg::FiltersCleared`.
@@ -229,7 +231,7 @@ surface `SidebarMoreMenu` (Popover layer, cancelled by `SidebarMsg::MoreMenuTogg
 017's dismissal (Escape, click outside, displacement) applies. Choosing an item sends the old
 header button's message and closes the menu.
 
-The filter accordion, its `FilterTrigger`, `sidebar.filter_open`, `SidebarMsg::FilterMenuToggled`
+(Superseded, BUG-1470.) The filter accordion, its `FilterTrigger`, `sidebar.filter_open`, `SidebarMsg::FilterMenuToggled`
 and the `SidebarFilterPanel` surface are removed (FR-014). Tests that used the filter panel as their
 sample popover (`tests/overlay_registry.rs`, `tests/overlay_dispatch_ordering.rs`,
 `tests/navigation.rs`) move to `SidebarMoreMenu`, which takes its place in the registry's
@@ -294,7 +296,7 @@ the sidebar change shape (Overview row, chip bar, headers, two-line rows); the f
 (`tests/fixtures/layout_snapshot.txt`) is regenerated once the sidebar is done. A new covered state
 `main-shell-sidebar-grouped` holds one location per state, a collapsed Done and the Overview open,
 so headers, the selected Overview row and a collapsed group are all recorded. The
-`CLIP_REVEALED` exemptions for the sidebar's filter accordion and the `revealing_states()` exception
+(Superseded by BUG-1470, T066.) `CLIP_REVEALED` exemptions for the sidebar's filter accordion and the `revealing_states()` exception
 in `docs/development/layout-snapshot.md` go with the accordion. The showcase
 (`showcase/sections/atoms.rs`, TreeView entry) gains the Overview row with and without a badge, a
 group header open and closed, and a two-line row unselected and selected (`Selection::Primary`); the

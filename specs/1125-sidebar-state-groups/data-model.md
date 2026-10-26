@@ -70,7 +70,7 @@ one row of one-line height; every location row is two-line; session rows are one
 |---|---|---|
 | `group_choices: BTreeMap<PathBuf, BTreeMap<StateGroup, bool>>` | new | per project, per group: the user's last open (`true`) or closed (`false`) choice; absent = never chosen. Not pruned, not persisted (R4) |
 | `more_menu_open: bool`, `more_menu_anchor: Option<(u16, u16)>` | new | the chip bar's more menu (R11) |
-| `filter_open` | removed | the filter accordion is gone (FR-014) |
+| `filter_open` | re-added (BUG-1470) | the accordion returns for more than 3 filters; also a new `Settings` field (FR-016, T063) |
 
 ## worktree::State (changed, client)
 

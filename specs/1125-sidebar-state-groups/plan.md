@@ -21,7 +21,7 @@ drawn `sidebar_list()` (headers and rows), remembers per-project group choices f
 re-counts the scroll metrics with headers; navigation steps in grouped order and reveals open a
 closed group. The view extends shared components (`TreeItem` supporting line, heading, key;
 `TreeView` selection; `KeyedColumn` promoted to `cdk`) and reuses `MenuOverlay`, `ToggleChip`, `Tag`.
-The filter accordion and its popover go. Design decisions: [research.md](research.md).
+The filter accordion and its popover go. Design decisions: [research.md](research.md). (the accordion returns for more than 3 filters, BUG-1470)
 
 ## Technical Context
 
@@ -109,7 +109,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 
 - **`sidebar.rs`**: the Overview row (R9), the chip bar (R11), the list from `sidebar_list()` with
   heading rows and two-line rows (R6, R8), `Selection::Primary`, row keys (R13); the header row,
-  `filter_bar` and the accordion removed.
+  the header filter button removed; the accordion returns for more than 3 filters (BUG-1470).
 - **`mod.rs`**: the more menu's `MenuOverlay` surface beside the switcher's.
 - **`overview.rs`**: `card` calls `features::overview::location_card_state`.
 - **`toolbar.rs`**: calls the moved `overview_tooltip`; nothing else changes.
@@ -125,7 +125,7 @@ Post-design re-check: unchanged, all PASS. No Complexity Tracking entries.
 ### Tests and fixtures
 
 `tests/support/covered_states.rs` (`main-shell-sidebar-grouped`, and the sidebar states' new shape),
-`tests/fixtures/layout_snapshot.txt` regenerated; the filter-accordion exemptions removed from the
+`tests/fixtures/layout_snapshot.txt` regenerated; the filter-accordion exemptions removed from the (superseded by BUG-1470: T066 re-covers the accordion states)
 layout gates.
 
 ### Docs
@@ -153,9 +153,9 @@ states, exemptions), `docs/user-guide/icons.md` (the Overview row, hide and ⋯ 
 | FR-011 two lines | `sidebar_second_line`, `TreeItem::supporting_text` (R6) | core unit (T1); `tree_view.rs` geometry (second line under the label) |
 | FR-012 ellipsis, tooltip with full title and branch | `Ellipsized` second line; `worktree_tooltip` | `tree_view.rs` geometry; client render-free tooltip test; `layout_text_overflow` |
 | FR-013 chips kept, type/issue tags not drawn | `ui/sidebar.rs` chip list; `leading_chip` | client render-free test of the row's chip labels (no type/issue); layout snapshot |
-| FR-014 chip bar, All, filters unchanged, accordion removed | `ui/sidebar.rs` chip bar; `FiltersCleared`; removals (R11) | client render-free (All active iff no filter, clears all; existing filter tests kept); overlay tests migrated |
+| FR-014 chip bar, All, filters unchanged (accordion returns for many filters, BUG-1470) | `ui/sidebar.rs` chip bar; `FiltersCleared`; header filter button removed (R11) | client render-free (All active iff no filter, clears all; existing filter tests kept) |
 | FR-015 add, hide, more menu (shared `Menu`) | `SidebarMoreMenu`, `MenuOverlay` (R11) | `overlay_registry`, `overlay_dispatch_ordering` (open, Escape, outside, displacement); render-free item list with enabled rules |
-| FR-016 chips wrap, nothing cut off | `row().wrap()` left of the actions | layout snapshot + containment gate at 180/300/600 px |
+| FR-016 (BUG-1470) one-line chip bar, **Filter** toggle, inline active chips with ✕ and `+N`, `Accordion` under the line, open state persisted, Tab stops only while open | `chip_bar_chips` gains the collapsed layout (pure helper); `ui/sidebar.rs` `chip_bar` + `Accordion`; `filter_open` in `sidebar::State` and, new, a `Settings` field (`micold-core/src/settings.rs`); `takes_the_keyboard` | render-free helper tests; Tab-order test open vs closed; layout snapshot + containment gate at 180/300/600 px with 9 filters |
 | FR-017 keyboard order, Enter/Space toggles, focus stays on moved row | keyed rows (R13), `TakesTheKeyboard` on every control | `keyed_column.rs` (focus follows key); `tree_view.rs` heading toggles on Enter/Space; quickstart B6–B7 |
 | FR-018 ripple and context menu unchanged | rows keep `on_right_press`, `Ripple` over the whole row | existing sidebar menu tests kept; `tree_view.rs` ripple bounds cover both lines |
 | FR-019 4.5:1 | R12 pairs | `composition_contrast.rs` |
@@ -171,7 +171,7 @@ states, exemptions), `docs/user-guide/icons.md` (the Overview row, hide and ⋯ 
    choices, metrics over `ListRow`, reveal and navigation, `Opened`, tooltip lines, hover index.
 3. **Shared components**: `KeyedColumn` to `cdk`, `TreeItem`/`TreeView` builders, type role, icon,
    contrast pairs, showcase.
-4. **Sidebar view**: Overview row, chip bar and more menu (with the filter accordion's removal and
+4. **Sidebar view**: Overview row, chip bar and more menu (the filter button's removal; BUG-1470 brings the accordion back for many filters, and
    the overlay tests' migration), grouped list.
 5. **Snapshot and docs**: covered state, regenerated fixture, user guide, layout-snapshot doc,
    visual pass.
