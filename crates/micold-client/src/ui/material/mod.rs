@@ -146,7 +146,9 @@ pub use pull_request_row::PullRequestRow;
 pub use queue_row::QueueRow;
 pub use review_bar::{overflow_trigger_right, ReviewBar, COMMENTS as REVIEW_BAR_COMMENTS};
 pub use review_comment::{CardState, ReviewCommentCard};
-pub use review_panel_row::{ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT};
+pub use review_panel_row::{
+    status_label as comment_status_label, ReviewPanelRow, HEIGHT as PANEL_ROW_HEIGHT,
+};
 pub use select::Select;
 pub use side_sheet::SideSheet;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};

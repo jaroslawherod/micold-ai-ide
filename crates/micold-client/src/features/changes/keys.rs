@@ -4,16 +4,19 @@
 //! (`micold_core::review::{keys, navigate}`); this module only feeds them the view's state.
 
 use micold_core::navigation::Dir;
+use micold_core::quick_switch::Candidate;
+use micold_core::review::comment::{CommentId, ReviewComment};
 use micold_core::review::diff::header_rows;
 use micold_core::review::drawer::{DrawerEvent, DrawerTab};
+use micold_core::review::jump::{review_candidates, ReviewEntry};
 use micold_core::review::keys::{
     key_hint, resolve, sheet_rows, Holder, Press, ReviewAction, ReviewKey, SINGLE_KEYS_OFF_NOTE,
 };
 use micold_core::review::marks::ReviewState;
 use micold_core::review::navigate::{
-    comment_order, comment_target, has_hunks, next_unreviewed, resolve_edge, step_comment,
-    step_file, step_hunk, CommentFact, CommentOpen, HunkMove, NavFile, SelectedDiff, Show,
-    Unreviewed, ALL_FILES_REVIEWED, PICK_OR_HUNK,
+    comment_move, comment_order, comment_target, has_hunks, next_unreviewed, resolve_edge,
+    step_comment, step_file, step_hunk, CommentFact, CommentMove, CommentOpen, HunkMove, NavFile,
+    SelectedDiff, Show, Unreviewed, ALL_FILES_REVIEWED, PICK_OR_HUNK,
 };
 use micold_core::review::tree;
 use micold_core::review::RelPath;
@@ -289,18 +292,28 @@ fn comment_facts(state: &State, view: &OpenView) -> Vec<CommentFact> {
 /// it is another; a card in the diff is reached by the drawer row's jump, any other comment by the
 /// drawer opened on it.
 fn step_comments(state: &mut State, dir: Dir) -> Effect {
+    reach_comment(state, |ordered, order, selected, last| {
+        step_comment(ordered, order, selected, last, dir)
+    })
+}
+
+/// Reach the comment `pick` chooses from the shown scope's comments in comment order, the shown
+/// files' order, the selected file and the last comment reached, as `]` does (FR-006).
+fn reach_comment(
+    state: &mut State,
+    pick: impl FnOnce(
+        &[CommentFact],
+        &[NavFile],
+        Option<&RelPath>,
+        Option<CommentId>,
+    ) -> Option<CommentMove>,
+) -> Effect {
     let Some(view) = state.tabs.shown_view() else {
         return Effect::None;
     };
     let order = nav_order(state, view);
     let ordered = comment_order(&comment_facts(state, view), &order);
-    let Some(step) = step_comment(
-        &ordered,
-        &order,
-        selected_file(view),
-        view.last_comment,
-        dir,
-    ) else {
+    let Some(step) = pick(&ordered, &order, selected_file(view), view.last_comment) else {
         return Effect::None;
     };
     let tab = review_of(state, view)
@@ -335,6 +348,67 @@ fn step_comments(state: &mut State, dir: Dir) -> Effect {
             selected
         }
     }
+}
+
+/// A review entry of the jump-to field (#1274 contract J5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReviewJump {
+    /// Select this file, as `j` reaching it does.
+    File(RelPath),
+    /// Reach this comment, as `]` reaching it does.
+    Comment(CommentId),
+}
+
+/// What a chosen review entry does to the shown view (contract J5): nothing for a file or comment
+/// the view no longer lists.
+pub(super) fn jumped(state: &mut State, jump: ReviewJump) -> Effect {
+    match jump {
+        ReviewJump::File(path) => {
+            let Some(view) = state.tabs.shown_view() else {
+                return Effect::None;
+            };
+            if nav_order(state, view).iter().any(|file| file.path == path) {
+                select(state, path)
+            } else {
+                Effect::None
+            }
+        }
+        ReviewJump::Comment(id) => reach_comment(state, |ordered, order, selected, _| {
+            comment_move(ordered, order, selected, id)
+        }),
+    }
+}
+
+/// The jump-to field's review entries for `app`'s current entry (#1274 FR-016, contract J1, J4):
+/// the files of its Review tab, shown or hidden, in the order `j` steps through them, then the
+/// comments of its shown scope; nothing when the current entry has no Review tab (FR-019).
+pub fn jump_entries(app: &crate::app::State) -> Vec<(Candidate, ReviewEntry)> {
+    let Some(entry) = app.shown_location() else {
+        return Vec::new();
+    };
+    // No active project reads as the empty path, as `review_shown` does.
+    let project = app.workspace.active.clone().unwrap_or_default();
+    let Some(tab) = app.changes.tabs.get(&(project, entry)) else {
+        return Vec::new();
+    };
+    let (state, view) = (&app.changes, &tab.view);
+    let files: Vec<RelPath> = nav_order(state, view)
+        .into_iter()
+        .map(|file| file.path)
+        .collect();
+    let reviews = file_reviews(state, view, true);
+    let comments: Vec<ReviewComment> = review_of(state, view)
+        .map(|review| in_scope(review, view_scope(view)).cloned().collect())
+        .unwrap_or_default();
+    review_candidates(
+        &files,
+        |path| {
+            reviews
+                .get(path)
+                .is_some_and(|review| review.state == ReviewState::Reviewed)
+        },
+        &comments,
+    )
 }
 
 /// `c` (FR-009): focus the open composer, else open **Add comment**'s on the picked lines, else

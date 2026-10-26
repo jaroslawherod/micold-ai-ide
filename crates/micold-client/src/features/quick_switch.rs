@@ -4,9 +4,11 @@
 
 use micold_core::navigation::Dir;
 use micold_core::quick_switch::{self, Candidate, EntryKey, Ranked};
+use micold_core::review::jump::ReviewEntry;
 use micold_core::typeahead::Query;
 
 use crate::app::{Message, State as Root};
+use crate::features::changes::ReviewJump;
 use crate::features::navigation::{self, Step};
 use crate::features::sidebar::RowRef;
 use crate::floating_surface;
@@ -19,6 +21,10 @@ pub enum Kind {
     Location,
     Session,
     Project,
+    /// A file of the current entry's review (#1274 FR-016).
+    ReviewFile,
+    /// A comment of the current entry's review (#1274 FR-016).
+    ReviewComment,
 }
 
 /// One row of the palette: the rule-facing candidate plus what the view shows.
@@ -26,7 +32,11 @@ pub enum Kind {
 pub struct Entry {
     pub candidate: Candidate,
     pub kind: Kind,
-    /// The dimmed second line: a session's location, a project's path.
+    /// The row's first line: the candidate's name, or a comment's first line of text (#1274
+    /// FR-016), the name's prefix.
+    pub label: String,
+    /// The dimmed second line: a session's location, a project's path; a review file's path and
+    /// reviewed state, a comment's `path:line` and status (#1274 FR-016).
     pub context: String,
     /// Whether this is the current location, session or project.
     pub current: bool,
@@ -165,8 +175,8 @@ fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
         // A click on the session's sub-row: `Selected` opens its location's row and reveals it.
         EntryKey::Session(id) => Some(Step::Session(*id)),
         EntryKey::Project(path) => Some(Step::Project(path.clone())),
-        // Review entries are not listed yet (#1274 M4), so the `listed` check above refuses them.
-        EntryKey::ReviewFile(_) | EntryKey::ReviewComment(_) => None,
+        EntryKey::ReviewFile(path) => Some(Step::Review(ReviewJump::File(path.clone()))),
+        EntryKey::ReviewComment(id) => Some(Step::Review(ReviewJump::Comment(*id))),
     }
 }
 
@@ -273,6 +283,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
                 selectable: true,
             },
             kind: Kind::Location,
+            label: name.clone(),
             context,
             current: current.as_ref() == Some(&location),
         });
@@ -285,10 +296,13 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
                 selectable: true,
             },
             kind: Kind::Session,
+            label: session.label.display().to_owned(),
             context: name.clone(),
             current: state.session.active == Some(session.id),
         }));
     }
+    // #1274 J4: the current entry's review, after the active project's locations and sessions.
+    entries.extend(review_entries(state));
     entries.extend(
         state
             .switcher_entries()
@@ -303,6 +317,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
                     context.push_str(" · unavailable");
                 }
                 Entry {
+                    label: project.label.clone(),
                     candidate: Candidate {
                         key: EntryKey::Project(project.path),
                         name: project.label,
@@ -317,4 +332,48 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
             }),
     );
     entries
+}
+
+/// The current entry's review files and comments as entries (#1274 FR-016, contracts J1 and J4):
+/// a file under its name, with its path and reviewed state; a comment under its first line, with
+/// its `path:line` and status. The path leads the context, where a path match is emphasised.
+fn review_entries(state: &Root) -> Vec<Entry> {
+    crate::features::changes::jump_entries(state)
+        .into_iter()
+        .map(|(candidate, entry)| {
+            let (kind, label, context) = match entry {
+                ReviewEntry::File { path, reviewed } => (
+                    Kind::ReviewFile,
+                    candidate.name.clone(),
+                    format!(
+                        "{} \u{b7} {}",
+                        path.as_str(),
+                        if reviewed { "reviewed" } else { "not reviewed" }
+                    ),
+                ),
+                ReviewEntry::Comment {
+                    state: comment,
+                    path,
+                    line,
+                    first_line,
+                    ..
+                } => (
+                    Kind::ReviewComment,
+                    first_line,
+                    format!(
+                        "{}:{line} \u{b7} {}",
+                        path.as_str(),
+                        crate::ui::material::comment_status_label(comment.status())
+                    ),
+                ),
+            };
+            Entry {
+                candidate,
+                kind,
+                label,
+                context,
+                current: false,
+            }
+        })
+        .collect()
 }

@@ -151,10 +151,20 @@ shortcuts** sends the same open message. Showcase `sections/review.rs` gains the
 
 ### D8 — Jump-to entries (client, M5) — R6
 
-`crates/micold-client/src/features/quick_switch.rs`: `candidates` inserts `review_candidates` for
-the current entry's Review tab after the active project's locations and sessions; the U3 choice
-resolution gains the two keys, returning a Review-tab step (show tab, `select_file` or the comment
-effect). The row view shows the reviewed state, or status and `path:line`.
+Re-read against the merged #1127 (T052): its title bar field (`ui/toolbar.rs::jump_press`) sends
+the chord's `QuickSwitch(Msg::Toggled)` and draws no list of its own, so the one place to add
+entries is still `crates/micold-client/src/features/quick_switch.rs`. `candidates` inserts
+`review::jump::review_candidates` for the Review tab of the shown location (`shown_location`, in
+the active project), shown or hidden, after the active project's locations and sessions, as
+`Kind::ReviewFile` / `Kind::ReviewComment`; the files are the tab's `j`/`k` order (its tree's sort
+and filter), the comments those of its shown scope. `resolve` maps the two keys to a new
+`navigation::Step::Review(ReviewJump)`; `State::apply_navigation` turns it into the Changes
+button's `ReviewChangesRequested` for that location (shows the tab, changes no location or session)
+followed by `changes::Msg::Jumped(ReviewJump)`, which selects a file through the tree-click path
+(`keys::select`) or applies `]`'s effect for one comment (core `navigate::comment_move`, the part of
+`step_comment` after the step). The row view is `crates/micold-client/src/ui/quick_switcher.rs`
+(`view_of`): the second line reads `File · <path> · reviewed|not reviewed` or
+`Comment · <path>:<line> · <status>`, and a `Via::Detail` match emphasises the path there.
 
 ### D10 — Single-key switch (core M2, client M3; sheet M4) — R4
 

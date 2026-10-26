@@ -13,6 +13,8 @@ pub mod jira_picker;
 pub mod layout;
 /// The modal table the overlay tests share (issue #700).
 pub mod modals;
+/// A Review tab's first read and its review (#1274).
+pub mod review_fixture;
 /// The sidebar's project at `/repo` (features 029, 803).
 pub mod sidebar_fixture;
 pub mod spawn_tree;

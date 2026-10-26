@@ -191,11 +191,11 @@ The setting and the `single_keys` filters serve US1–US5 and FR-022; no story l
 
 ### Client (M5 — needs #1127 and M4 merged)
 
-- [ ] T052 [US6] Re-read the merged #1127 (title bar jump-to field) and update T053–T057's paths and message names in `specs/1274-review-keyboard-map/tasks.md` and D8 in `plan.md`; record what changed in the ledger
-- [ ] T053 [US6] Write failing tests in `crates/micold-client/tests/quick_switch.rs` for contract J4–J5: review entries listed only when the current entry has a Review tab (shown or hidden), after the active project's locations and sessions and before other projects (US6 s1, s5); choosing `ReviewFile` shows the Review tab and selects through `select_file` (s3); choosing `ReviewComment` applies `step_comment`'s effect for that id (s4); neither changes the location, session or project; a key no longer listed does nothing (FR-018)
-- [ ] T054 [US6] Insert `review_candidates` for the current entry's Review tab in `crates/micold-client/src/features/quick_switch.rs::candidates` and resolve the two keys in the choice to a Review-tab step, so T053 passes
-- [ ] T055 [US6] Show the reviewed state on file rows and status, `path:line` and first text line on comment rows in the quick-switcher's row view (`crates/micold-client/src/ui/quick_switch.rs` or #1127's), with `Via` spans emphasising the matched text (FR-016)
-- [ ] T056 [US6] Add the jump-to entries to *Reviewing from the keyboard* in `docs/user-guide/reviewing-changes.md` (FR-020)
+- [x] T052 [US6] Re-read the merged #1127 (title bar jump-to field) and update T053–T057's paths and message names in `specs/1274-review-keyboard-map/tasks.md` and D8 in `plan.md`; record what changed in the ledger
+- [x] T053 [US6] Write failing tests in `crates/micold-client/tests/quick_switch.rs` for contract J4–J5: review entries listed only when the current entry has a Review tab (shown or hidden), after the active project's locations and sessions and before other projects (US6 s1, s5); choosing `ReviewFile` resolves to `Step::Review` and, applied, shows the Review tab with the file selected through the tree-click path (s3); choosing `ReviewComment` applies `]`'s effect for that id (`comment_move`) (s4); neither changes the location, session or project; a key no longer listed does nothing (FR-018)
+- [x] T054 [US6] Insert `review_candidates` for the current entry's Review tab in `crates/micold-client/src/features/quick_switch.rs::candidates` and resolve the two keys to `navigation::Step::Review(ReviewJump)`, applied by `State::apply_navigation` as `ReviewChangesRequested` then `changes::Msg::Jumped`; add core `navigate::comment_move` (shared with `step_comment`), so T053 passes
+- [x] T055 [US6] Show the reviewed state on file rows and status, `path:line` and first text line on comment rows in the quick-switcher's row view (`crates/micold-client/src/ui/quick_switcher.rs::view_of`), with `Via` spans emphasising the matched text (FR-016)
+- [x] T056 [US6] Add the jump-to entries to *Reviewing from the keyboard* in `docs/user-guide/reviewing-changes.md` (FR-020)
 - [ ] T057 [US6] Run the `visual-pass` skill (through an `autopilot-worker`) for quickstart §B B14 at 1280×800, light and dark; save the evidence under `specs/1274-review-keyboard-map/visual-pass/`
 
 ---

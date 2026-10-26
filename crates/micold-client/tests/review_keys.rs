@@ -15,38 +15,31 @@ use micold_client::features::changes::{
 };
 use micold_client::features::window::FieldId;
 use micold_core::protocol::messages::ReviewEditOp;
-use micold_core::review::base::{Base, ReviewScope};
-use micold_core::review::changes::{
-    ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
-};
-use micold_core::review::comment::{CommentId, CommentState, ReviewComment, Scope};
+use micold_core::review::changes::{ChangedFile, Content};
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
 use micold_core::review::diff::{parse_unified, LoadedDiff, SideLines};
 use micold_core::review::drawer::DrawerTab;
 use micold_core::review::keys::{
     sheet_rows, Holder, Press, PressKey, ReviewAction, SINGLE_KEYS_OFF_NOTE,
 };
-use micold_core::review::marks::{ChangeId, ReviewMark, ReviewState, WholeChange, WholeFile};
+use micold_core::review::marks::ReviewState;
 use micold_core::review::navigate::{Edge, ALL_FILES_REVIEWED, PICK_OR_HUNK};
-use micold_core::review::{LineRange, RelPath, Side};
+use micold_core::review::{LineRange, Side};
 use micold_core::session::SessionLocation;
 
 // --- fixtures -------------------------------------------------------------------------------------
 
-fn path(p: &str) -> RelPath {
-    RelPath::from_native(p).expect("relative path")
+mod support;
+use support::review_fixture::{draft, file, id, path};
+
+/// Open `entry`'s Review tab in `state` and answer its first read with `files`.
+fn open_into(state: &mut State, entry: SessionLocation, files: &[ChangedFile]) {
+    support::review_fixture::open_into(state, project(), entry, files);
 }
 
-fn file(p: &str) -> ChangedFile {
-    ChangedFile {
-        path: path(p),
-        kind: ChangeKind::Modified,
-        content: Content::Text,
-        added: 2,
-        removed: 2,
-        large: false,
-        origin: Origin::Uncommitted,
-        identity: ChangeIdentity::Unknown,
-    }
+/// The service pushes `feat-a`'s reviewed marks: each path on its current id.
+fn marked(state: &mut State, files: &[&str], all: &[&str], comments: Vec<ReviewComment>) {
+    support::review_fixture::marked(state, project(), "feat-a", files, all, comments);
 }
 
 /// The empty project: the one the root shows with no active project.
@@ -56,60 +49,6 @@ fn project() -> PathBuf {
 
 fn worktree() -> SessionLocation {
     SessionLocation::Worktree("feat-a".into())
-}
-
-/// A change id from one byte.
-fn id(n: usize) -> ChangeId {
-    ChangeId::parse(&format!("{:02x}", n % 256).repeat(20)).expect("an id")
-}
-
-fn whole(files: &[ChangedFile]) -> WholeChange {
-    WholeChange {
-        files: files
-            .iter()
-            .enumerate()
-            .map(|(i, f)| {
-                let entry = WholeFile {
-                    path: f.path.clone(),
-                    kind: f.kind.clone(),
-                    origin: f.origin,
-                    id: Some(id(i + 1)),
-                };
-                (f.path.clone(), entry)
-            })
-            .collect(),
-    }
-}
-
-/// Open `entry`'s Review tab in `state` and answer its first read with `files`.
-fn open_into(state: &mut State, entry: SessionLocation, files: &[ChangedFile]) {
-    let seq = match changes::update(
-        state,
-        Msg::Opened {
-            project: project(),
-            entry,
-        },
-    ) {
-        Effect::ReadList { seq, .. } => seq,
-        other => panic!("opening reads the list, got {other:?}"),
-    };
-    let scope = ReviewScope::Worktree {
-        base: Base::MergeBase {
-            branch: "main".into(),
-            commit: "0123456789abcdef0123456789abcdef01234567".into(),
-        },
-    };
-    changes::update(
-        state,
-        Msg::ListRead {
-            seq,
-            whole: Ok(whole(files)),
-            result: Ok(ChangeList {
-                files: files.to_vec(),
-                scope,
-            }),
-        },
-    );
 }
 
 fn ready(paths: &[&str]) -> State {
@@ -182,31 +121,6 @@ fn shown_with(state: &mut State, p: &str, diff: LoadedDiff) {
     let effect = effects(changes::update(state, Msg::FileSelected(path(p))));
     let seq = diff_read(&effect).expect("a diff read");
     answer(state, seq, diff);
-}
-
-/// The service pushes `feat-a`'s reviewed marks: each path on its current id.
-fn marked(state: &mut State, files: &[&str], all: &[&str], comments: Vec<ReviewComment>) {
-    let marks = files
-        .iter()
-        .map(|p| {
-            let at = all.iter().position(|q| q == p).expect("listed");
-            ReviewMark {
-                scope: Scope::WorkingTree,
-                path: path(p),
-                change: id(at + 1),
-            }
-        })
-        .collect();
-    changes::update(
-        state,
-        Msg::ReviewChanged {
-            project: project(),
-            worktree_dir: "feat-a".into(),
-            comments,
-            sending: false,
-            marks,
-        },
-    );
 }
 
 fn press(c: char) -> Press {
@@ -706,21 +620,6 @@ fn with_the_switch_off_the_single_keys_do_nothing_and_tooltips_name_none() {
 }
 
 // --- T033: ] [ c ------------------------------------------------------------------------------------
-
-/// A draft on `line` of `p`, made at `created`.
-fn draft(p: &str, line: u32, created: u64) -> ReviewComment {
-    ReviewComment {
-        id: CommentId::new(),
-        path: path(p),
-        side: Side::New,
-        range: LineRange::new(line, line).expect("a range"),
-        quote: vec![format!("l{line}")],
-        text: format!("on {p}:{line}"),
-        state: CommentState::Draft,
-        created,
-        pr: None,
-    }
-}
 
 /// US3 s1–s2, FR-006: `]` shows each comment's card in comment order, selecting `c.rs` for the
 /// third and wrapping; `[` steps back. The card is reached through the drawer row's pending jump.
