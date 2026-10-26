@@ -376,6 +376,11 @@ every spawn gets these defaults:
 A value your environment already sets wins: one from the environment-include script or the
 daemon's own environment is kept as it is (for npm, a lower-case `npm_config_prefix` counts too).
 
+mise checks the GitHub attestation of the Python builds it downloads, and builds older than mid-2025
+(Python 3.12.8, for example) have none, so `mise use -g python@<old version>` fails with "No GitHub
+artifact attestations found". Pick a newer patch release, or set
+`MISE_PYTHON_GITHUB_ATTESTATIONS=false` if you need that exact version.
+
 What a session installs stays for the life of the daemon: the home is the daemon's own folder on
 the host (a container daemon) or on its volume (a Kubernetes daemon), so it survives a restart, a
 container replaced for an image update or a changed setting, and a recreated pod. Removing the
