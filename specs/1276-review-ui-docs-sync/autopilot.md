@@ -79,7 +79,15 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-None.
+M2 stop (a) done at 0af2331d (pushed; review snapshot
+`0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880`): T014–T018 and
+T022–T024 ticked; scoped gate green except `the_layout_matches_the_committed_fixture` (fixture not
+re-recorded yet, by design). Next, after reviews: act on findings; rebase onto origin/main; T019
+`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`; T020 explain the
+diff by group into the PR body (expected: `@` anchor lines on the slice states, four new state
+blocks; anything else needs a reason, FR-005); T021 +1 px on `review_bar.rs`'s strip padding
+(`.padding([0.0, spacing::MD])`) fails naming `path …, inside review.bar`, revert; T025
+`scripts/gate.sh` detached; draft PR. No PR open yet. #1474 filed (smallest-window squeeze).
 
 ## Open escalation
 
