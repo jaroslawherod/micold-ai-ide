@@ -88,7 +88,7 @@ covered by a client unit test.
 
 ### H9. Structure
 
-`column![ row![ title, changes_button ], chips ]`, padding `spacing::LG` horizontally, the title
+*Amended by feature 1463 (H9/H10 below, marked 1463):* `row![ title, chips, changes_button ]` on one line, padding `spacing::XS` vertically, the title taking the remaining width; the original two-row structure follows. Originally: `column![ row![ title, changes_button ], chips ]`, padding `spacing::LG` horizontally, the title
 `Length::Fill`. The child lists of the column and the rows never vary; the chips row holds the state
 chip always, then the branch chip and pull request chip when present. Title is `Ellipsized` at
 `TypeRole::Title`; each chip is a `Tag` with `.max_width(CHIP_MAX_WIDTH)` (`CHIP_MAX_WIDTH` a new const in `ui/session_area.rs`) in a `Tooltip` with its
@@ -96,6 +96,8 @@ full text. The Changes button's label is one `Ellipsized` line, its tooltip the 
 *Close the Changes view*) then the label. The Changes button sits on the title line, so the chips keep the header's whole width at
 the smallest window (M3: beside both lines it left the chips no room at 640×480). It is never
 narrower than it asks (gate, H10).
+
+**1463:** the button is compact (`density::DENSE`, 28 dp, no taller than the title line) and the header is at most 40 px. At the smallest window the title shortens first; only when the title is at its minimum is the Changes label cut with an ellipsis (tooltip whole), the chips keeping their capped width. The three-digit guarantee below holds where the line has room.
 
 ### H10. Fit (FR-013, SC-004)
 

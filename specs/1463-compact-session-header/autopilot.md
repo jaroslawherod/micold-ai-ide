@@ -27,6 +27,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- M1 Q1 (user): at the smallest window, after the title the Changes label is cut with an ellipsis; chips keep capped width. FR-002, US1 scenario 3 and H10 amended.
+- M1 Q2 (user): `Button::density(DENSE)` for Changes (button 28 dp, no taller than the title line, header at most 40 px); R2, FR-003, T003, T005 amended.
+
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -50,7 +53,7 @@ None.
 
 ## Open escalation
 
-M1 (category 6, plan false). At the smallest window (640 wide, sidebar 300, so the area is 334 px, 302 inside the header padding) the one-line header cannot hold what FR-002 and US1 scenario 3 promise: `Changes · 12 files · +345 −67` asks 251.5 px, one chip is about 113 px, MD spacing 12 each, so even with the title at 0 the line overflows by about 90 px (more with branch and PR chips). Measured on the work tree: with the Changes button laid out first (outer `row![lead, changes]`, `lead = row![title Fill, chips]`) the title goes to 0 and the chips go to 0 wide. Also research R2 is false: `material::Button::padding` cannot shrink the button, its height is `Fixed(density::BUTTON_BASE)` 40 dp; I added `Button::density(step)` (default `STANDARD`) and use `DENSE` (28 dp) for Changes. Chips are 15.6 px tall, so "Changes no taller than the chips" (T003) is unreachable; gate asserts it is no taller than the title line (28 dp) and the header at most 40 px. Question for the user: what gives way at the smallest window after the title? Option A (Recommended): the Changes label, cut with an ellipsis (tooltip whole), after the title; chips keep their capped width; amends FR-002, scenario 3 and H10 so the three-digit width guarantee holds only where the line has room. Option B: the chips collapse (state chip invisible) so the button keeps its width. Option C: below a width the header wraps to two rows (varies the child list; breaks FR-001, FR-011). WIP uncommitted work is in the tree.
+None.
 
 ## Follow-ups not done
 
