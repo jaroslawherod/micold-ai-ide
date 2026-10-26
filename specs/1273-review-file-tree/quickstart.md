@@ -46,4 +46,23 @@ Run with the `visual-pass` skill against the client, or the showcase for step 2'
 
 ## Part B results
 
-Recorded at close (M5).
+Recorded at close, 2026-10-26.
+
+**Part A.** `review_tree` 42 passed and the `micold-core` lib 1763 passed (SC-001 to SC-004, the
+SC-003 timing test included); the client's tree, marks and source-menu tests 38 + 29 passed; the
+full gate (`fmt`, clippy, the workspace suite, `layout_snapshot`, `showcase_completeness`,
+`scripts/tests`) passed for the close PR (see the ledger). Ten deliberate mutants of the layout and
+the reducer each failed a test (`tdd/verification.md`).
+
+**Part B**, at 1280×800 in light and dark, release build, a fixture worktree of 28 changed files in
+nested folders ([visual-pass/m4.md](visual-pass/m4.md), [visual-pass/m5.md](visual-pass/m5.md)):
+
+| Step | Result |
+|---|---|
+| 1 Tree, chains, names first, hover path | pass (M4) |
+| 2 Bars in proportion; none for binary and Mode | pass (M4) |
+| 3 Filter, highlights, no-match line, `Esc` | pass after a fix (M5): highlights moved to the tertiary role |
+| 4 Collapse; the selected file's diff stays | pass (M4: collapse and the diff); filter-then-clear restoring the fold is `clearing_the_filter_restores_the_folds_before_it`, not checked by eye |
+| 5 Size and Unreviewed first | pass (M5); the 5,000-file timing is the core test SC-003, not judged by eye |
+| 6 24-character name at depth; ellipsis past it | pass after a fix (M4): indent cap sized to the row's real width |
+| 7 Re-read while filtered, sorted and folded keeps all three | pass (M5) |

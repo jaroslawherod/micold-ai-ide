@@ -501,34 +501,29 @@ fn spans_are_rebased_to_each_rows_label() {
 /// A folder row's spans are the union of its listed files' spans inside its label.
 #[test]
 fn a_folder_rows_spans_are_the_union_of_its_files_spans() {
-    use micold_core::typeahead::match_one;
-    // `abcde.rs` matches in its own name, `q.rs` within one edit of the folder's name.
-    let paths = ["abcdx/abcde.rs", "abcdx/q.rs", "other.rs"];
-    let text = "abcde";
-    let query = Query::new(text);
-    let rows = filtered(&paths, text);
-    let label = "abcdx";
-    let mut expected: Vec<usize> = Vec::new();
-    let mut per_file: Vec<Vec<std::ops::Range<usize>>> = Vec::new();
-    for path in paths.iter().filter(|p| p.starts_with("abcdx/")) {
-        if let Some(found) = match_one(path, &query) {
-            let inside: Vec<_> = found
-                .spans
-                .iter()
-                .map(|s| s.start.min(label.len())..s.end.min(label.len()))
-                .filter(|s| !s.is_empty())
-                .collect();
-            expected.extend(inside.iter().flat_map(Clone::clone));
-            per_file.push(inside);
-        }
-    }
-    expected.sort_unstable();
-    expected.dedup();
-    let got: Vec<usize> = spans_of(&rows, label).into_iter().flatten().collect();
-    assert_eq!(got, expected);
+    // `abcde.rs` matches literally at path bytes 6..11, past the folder label `abcdx/` (0..6), so
+    // it adds nothing to the folder; `q.rs` matches by one edit at path bytes 0..5 (`abcdx`
+    // against `abcde`), which is exactly the folder's name.
+    let rows = filtered(&["abcdx/abcde.rs", "abcdx/q.rs", "other.rs"], "abcde");
+    assert_eq!(
+        shape(&rows),
+        ["0abcdx/", "1abcde.rs", "1q.rs"],
+        "both files under the folder are listed; `other.rs` does not match"
+    );
+    assert_eq!(
+        spans_of(&rows, "abcde.rs"),
+        vec![0..5],
+        "a file row marks the literal match in its own name, relative to its label"
+    );
     assert!(
-        per_file.windows(2).any(|w| w[0] != w[1]),
-        "the fixture should give files different spans inside the folder: {per_file:?}"
+        spans_of(&rows, "q.rs").is_empty(),
+        "a file whose match lies in its folder's name marks nothing in its own label"
+    );
+    assert_eq!(
+        spans_of(&rows, "abcdx"),
+        vec![0..5],
+        "the folder row marks its files' ranges inside its label: 0..5 from q.rs, none from \
+         abcde.rs"
     );
 }
 

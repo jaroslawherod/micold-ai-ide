@@ -45,3 +45,9 @@ task pair it covers.
 | T037 | `changes-tree-filter` (`tree`, Size), `changes-tree-no-match` recorded; the listed Changes states re-recorded for the filter box and chips | containment failed on `changes-tree-collapsed` (8 rows past the column under the new filter box by 67.6 px); the fixture's binary and Mode files moved to the top level, 6 rows | `layout_snapshot` 142 passed |
 | T038 | guide: filter box and sort chips in *What the list shows* | docs only | `mise run test-scripts` in the gate |
 | T039 | visual pass, Part B steps 3, 5, 7 | step 3 failed: a file name's highlight in the primary role, which the name already uses, showed only as weight | highlight in the tertiary role; `visual-pass/m5.md` all pass |
+
+## Close (T040)
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| verification F1 | folder spans in `a_folder_rows_spans_are_the_union_of_its_files_spans` pinned as literals (no `match_one` in the test) | mutant M10, folder spans never pushed: that test and `spans_are_rebased_to_each_rows_label` FAILED | `review_tree` 42 passed |

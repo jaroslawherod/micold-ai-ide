@@ -154,7 +154,7 @@ snapshot and showcase completeness tests.
 
 ## Phase 7: Polish
 
-- [ ] T040 Record quickstart Part A and Part B results under *Part B results* in `specs/1273-review-file-tree/quickstart.md` (close unit)
+- [x] T040 Record quickstart Part A and Part B results under *Part B results* in `specs/1273-review-file-tree/quickstart.md` (close unit)
 
 ---
 

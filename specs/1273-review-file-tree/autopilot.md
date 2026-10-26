@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: implement (M5)
-- **Next step**: orchestrator: force-push, CI on #1430 (M4+M5, rebased onto main acefceb57 without conflicts, gate green at 3b25e6338), then merge; then the close unit (T040)
+- **Phase**: close
+- **Next step**: close unit: tdd-verify, T040 quickstart results, spec Status, review, gate, close PR
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1367 | M1 core tree layout | merged (rebase) | 78c2fc228b7d3e1c88160385cea8ef5a6d402bd4 |
 | #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
 | #1426 | M3 tree state in the Changes reducer; Files on core | merged (rebase) | d84e94860 |
-| #1430 | M4+M5: tree rows, ChangeBar, filter box, sort chips (rebased onto main after conflicts) | open | — |
+| #1430 | M4+M5: tree rows, ChangeBar, filter box, sort chips (rebased onto main after conflicts) | merged (rebase) | c9a21a6a |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T006 | full | core `review::tree::layout` (grouping, chaining, both openness modes, Path order) + `TreeChoices` toggle/reveal; Files parity in core tests | #1367 | merged |
 | M2 | T007–T018 | full | core totals, bar maths, indent cap, hover text, filter + spans, Size / Unreviewed-first sorts, sort offer, SC-003 timing | #1375 | merged |
 | M3 | T019–T023 | full | Changes reducer keeps folds per view; reveal on select; Files `tree_rows` on core | #1426 | merged |
-| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | #1430 | open |
-| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | — | T031–T039 done; rides #1430 with M4 |
+| M4 | T024–T030 | full | tree rows + `ChangeBar` drawn; user guide; snapshot; visual pass | #1430 | merged |
+| M5 | T031–T039 | full | filter box (Esc, clear, no-match) + sort chips; user guide; snapshot states; visual pass | #1430 | merged |
 
 ## Decisions
 
@@ -72,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high) | 1 | pre-rebase ffe41054 (M5 diff ec96c2769..HEAD) | CLEAN, cited (text_field.rs, features/changes.rs, ui/changes.rs, features_changes.rs, tree.rs:375-460); 1 MINOR declined |
 | Conflict review M4+M5 rebase (sonnet) | 1 | range-diff d84e94860..pre-rebase-m5 vs b582c2563..6926b547 | CLEAN, cited (ui/changes.rs list pane, change_tree, FileFacts, file_row, RowDot; covered_states; fixture states); 1 MINOR (counted() mirrors change_leaves; noted, kept) |
 | Review B M5 (conformance, sonnet) | 1 | 6926b547 (M5 diff e6bce9876..HEAD) | CLEAN, cited; F1 MINOR fixed (mutation red for T033–T035 in cycle-log M5); F2 MINOR none needed (decision 13) |
+| TDD verify smell pass (close, sonnet) | 1 | c9a21a6a (feature tests) | 1 HIGH (F1 re-implemented folder-span expectation: fixed, literal spans, mutant M10 caught); 4 MED, 2 LOW accepted (see Declined); verdict FAIL in `tdd/verification.md` (5 TEST_AFTER rows, history cannot be redone) |
+| Close review (diff, session model) | 1 | 3e671f415a3e8cfb4d1a62a25e55fb072a75043e:c9a21a6a1acccd2b583cd4931dba12c20d5dd31b | CLEAN, cited (review_tree.rs:503-527 literals derived against typeahead.rs:255-266; every mutant line and SHA in verification.md); 2 MINOR fixed, prose only (quickstart step 4 evidence, verdict note) |
 
 ## Declined review findings
 
@@ -95,10 +97,16 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 | M3 | B | F1 (T034/T036 edited in M3) | decision 6 records why; prose in tasks only |
 | M4 | A | F2 (the SC-006 test restates the cap formula) | the depth-0 assertion fails when the column cannot hold a 24-character name at all, and `cap >= 2` fails when the tree could not indent; the drawn row is the visual pass's check (T030, Part B step 6) |
 | M5 | A | F1 (Escape captured on an empty filter box) | `on_escape` wraps the field in `EscapeWhileFocused`; toggling it with the filter's text would change the field's widget tree while typing and drop its focus. An empty-box Escape sends `TreeFilterCleared`, a no-op (T033) |
+| close | TDD smell | F2 (SC-003 timing on the real clock, 5× debug allowance) | the budget is the criterion itself (research R9); debug allowance documented in the test |
+| close | TDD smell | F3 (generated Size fixture asserts in a loop) | guarded by `runs > 3`; the literal-shape test beside it pins the rule, this one the property over 60 files |
+| close | TDD smell | F4 (SC-006 room uses the renderer's `name_room`) | same as M4 A F2: the subject is the cap; a cap of 0 is caught; the drawn row is the visual pass's check |
+| close | TDD smell | F5, F6, F7 (assert messages, `MIN_BAR` pin, copied `rows()` helper) | style, MED/LOW; no behaviour |
 
 ## Handover
 
-None.
+Close unit over the context cap. Done: #1430 merge recorded; tdd-verify run inline (`tdd/verification.md`, FAIL for TEST_AFTER history, accepted; HIGH smell F1 fixed in `review_tree.rs`, mutant M10 caught; 10 deliberate mutants all caught); T040 quickstart results, spec Status, cycle-log close row; close review CLEAN (2 MINOR fixed, prose only). Not converge: review B CLEAN for every milestone.
+
+Next: the full gate (`/mnt/project-files/scripts/split-gate.sh`) is running detached on this committed tree, log `/tmp/claude-0/-home-user-micold-ai-ide/3e0b603d-be90-55f9-b18f-51657d9a856c/scratchpad/gate-1792973201.log`; hold on it with `scripts/autopilot/hold.sh <log> 'GATE_EXIT='`. Green: set **Phase** `done`, **Next step** `handoff`, add the close PR row to *Pull requests*, set this section to `None.`, commit (`docs(1273): close the spec`), push with `git push --force-with-lease=claude/project-thread-p2tb7i: -u origin claude/project-thread-p2tb7i`, and write the PR title/body to the orchestrator's scratchpad files (title `#1273: Review UI: file tree, filter and sort — close`, body ends `Refs #1273`). Red: fix (known flake: micold-daemon attention_error_notice) and re-run. Open findings: none. PR: none yet.
 
 ## Open escalation
 
