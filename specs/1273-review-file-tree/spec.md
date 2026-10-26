@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-26 — shipped in PRs #1354, #1367, #1375, #1426, #1430 and the close PR
 
 **Input**: User description: "Review UI: file tree, filter and sort (issue #1273). Blocked by: #1272, #1150 (merged). Collapsible directories, name-first rows, +/- bar, filter box, sort by path / size / unreviewed first; reuse `tree_rows`. Part of the review UI redesign: `docs/development/review-redesign.md`. Mockup: Review tab redesign. Acceptance also: pure logic in micold-core with unit tests; docs, layout snapshot and visual pass (1280x800, both themes) updated."
 
