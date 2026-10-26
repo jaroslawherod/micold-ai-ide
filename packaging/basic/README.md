@@ -9,8 +9,21 @@ published image serves every client, released or not.
 ## What it carries, and what it must not
 
 Carries: `sshd` (config `/etc/micold/sshd_config`, port 2222, key auth only, run as the container's
-uid), Node 24 and `npm` (the AI CLIs are npm packages), `git`, `openssh-client`, `flock`, `bash`,
-`procps`, `less`, `tzdata`, glibc 2.41 (trixie), and `MICOLD_DATA_DIR=/var/lib/micold-ai-ide` for the daemon's state.
+uid), Node 24 and `npm` (the AI CLIs are npm packages), `git`, `git-lfs`, `gh`, `curl`, `wget`,
+`jq`, `ripgrep`, `openssh-client`, `flock`, `bash`, `procps`, `less`, `tzdata`, glibc 2.41
+(trixie), and `MICOLD_DATA_DIR=/var/lib/micold-ai-ide` for the daemon's state.
+
+For building (#1439), before any setup has run:
+
+- `mise` 2026.10.19 at `/usr/local/bin/mise`, the release binary checked at build time against
+  `mise.sha256` (two lines, `linux-x64` and `linux-arm64`, from the release's signed
+  `SHASUMS256.txt`); a mismatch or a failed download fails the build. See "Update mise" below;
+- a C/C++ toolchain (`gcc`, `g++`, `cc`, `c++`, `ld`, the C library headers), `make` and
+  `pkg-config` (`pkgconf`), so a Rust toolchain installed by mise links crates with C code;
+- `python3`, and `xz` and `unzip` for what installers download.
+
+The entrypoint also creates `~/.local/bin` and mise's shims folder in the home before sshd starts,
+the two folders every session's `PATH` holds (#1289), leaving anything already in them alone.
 
 Must not carry: `micold-daemon`, any AI CLI, or any key, token or credential. The SSH host key and
 authorized key are mounted read-only at `/run/micold/ssh` at run time, and AI CLI sign-ins reach the
@@ -43,6 +56,38 @@ MICOLD_BASIC_IMAGE_TAG=micold-basic:dev \
 ```
 
 `podman build` works the same.
+
+## Update mise
+
+The pin is taken by hand, on a machine that reaches `github.com`, from a release's signed checksums,
+never from the build that checks them:
+
+1. **Download** the release's checksums into an empty folder:
+   `gh release download v<ver> -R jdx/mise -p SHASUMS256.txt -p SHASUMS256.asc -p SHASUMS256.txt.minisig`
+   (or `curl -fLO https://github.com/jdx/mise/releases/download/v<ver>/<file>` for each).
+2. **Verify both signatures** with the keys mise's own documentation names (`docs/installing-mise.md`
+   and `SECURITY.md`, "Release gpg key", in jdx/mise), never keys from the release itself; re-read
+   them each time and stop if they changed:
+   - GPG: import the release key `24853EC9F655CE80B48E6C3A8B81C9D17413A06D` (from
+     `keys.openpgp.org`, or the block in `SECURITY.md`), check `gpg --fingerprint` shows exactly
+     that, then `gpg --output signed.txt --decrypt SHASUMS256.asc` (the file is clearsigned) must
+     report a good signature by that fingerprint;
+   - minisign: `minisign -Vm SHASUMS256.txt -P RWTC3g8W3z4RZK3V3qv7fa1QY4JEWyBtqIHW+85QlJpZc5yG+uNYNBSZ`
+     (`minisign.pub` in jdx/mise);
+   - `cmp signed.txt SHASUMS256.txt` finds no difference.
+3. **Keep two lines**: `grep -E '  (\./)?mise-v<ver>-linux-(x64|arm64)$' signed.txt`, with the `./`
+   dropped, so each reads `<64 lowercase hex>  mise-v<ver>-linux-<arch>`. Archives, `-musl`
+   builds and other platforms stay out.
+4. **Cross-check** each hash against a second origin: `npm pack @jdxcode/mise-linux-x64@<ver>` and
+   `@jdxcode/mise-linux-arm64@<ver>`, unpack each into an empty folder and `sha256sum` the `mise`
+   binary inside. Both must equal step 3's lines.
+5. **Record** the version, both hashes, the GPG fingerprint and minisign key used, the npm result,
+   and who ran it where, in the PR.
+
+Then write the two lines to `mise.sha256`, put the version in this README, and follow "Hash,
+publish, pin" below. `scripts/tests/basic-image-hash.test.sh` fails while `mise.sha256` is not two
+such lines of one version, while this README does not name that version, or while the
+`Containerfile` downloads mise without checking it against `mise.sha256`.
 
 ## Hash, publish, pin
 

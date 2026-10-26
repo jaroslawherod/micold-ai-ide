@@ -3,9 +3,11 @@
 #
 # 1. The container runs as the host uid, which has no passwd entry; sshd refuses a user it cannot
 #    resolve. Add one, home `$MICOLD_HOME` (the container home the client passes), when absent.
-# 2. When provisioning has started a daemon build here before, start it again in the background,
+# 2. Create the home's `~/.local/bin` and mise's shims folder, which #1289 puts on every session's
+#    `PATH`, so a session that lists them sees what exists (#1439, FR-011).
+# 3. When provisioning has started a daemon build here before, start it again in the background,
 #    so a restart-policy restart runs the daemon unattended (feature 027's survive-logout).
-# 3. Run sshd as this container's main process and, when the runtime stops the container, stop every
+# 4. Run sshd as this container's main process and, when the runtime stops the container, stop every
 #    daemon first: the daemon is not sshd's child (the client starts it over SSH), so the runtime's
 #    SIGTERM, which reaches only this process, would end it unsaved when the container goes. The
 #    daemon's orderly stop saves terminal history (feature 041, FR-002).
@@ -41,6 +43,22 @@ if ! grep -q "^[^:]*:[^:]*:${gid}:" "$group_file" && [ -w "$group_file" ]; then
 fi
 
 export HOME="$home"
+
+# The shims folder by #1289's rule (contract toolchain-path P2): `$MISE_DATA_DIR/shims`, else
+# `$XDG_DATA_HOME/mise/shims`, else `~/.local/share/mise/shims`; an empty value counts as unset.
+# `mkdir -p` leaves existing folders and their files alone. A home it cannot write costs one line on
+# stderr, not the container (#1439, FR-011).
+if [ -n "${MISE_DATA_DIR:-}" ]; then
+  shims="$MISE_DATA_DIR/shims"
+elif [ -n "${XDG_DATA_HOME:-}" ]; then
+  shims="$XDG_DATA_HOME/mise/shims"
+else
+  shims="$HOME/.local/share/mise/shims"
+fi
+if ! mkdir -p "$HOME/.local/bin" "$shims" 2>/dev/null; then
+  echo "micold-entrypoint: cannot create $HOME/.local/bin and $shims; sessions start without them" >&2
+fi
+
 last="$HOME/.micold/remote/last"
 if [ -f "$last" ]; then
   daemon="$HOME/.micold/remote/$(cat "$last")/micold-daemon"
