@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M4 implementing
-- **Next step**: M4 tasks T026–T033, then gate and reviews
-- **Gate**: M3 full gate (`scripts/gate.sh`, unmodified, CI's order, root-only tests as a normal user, nothing skipped) exit 0 at f5ff218e6 (code tree of 1071fc852; only specs changed after); the nine `setup_turn` tests pass in it. Earlier runs: see Follow-ups (card_grid flake under an earlier `--skip`; root-only `mutation_semantics` test now run unprivileged by the gate).
+- **Phase**: M4 implemented (T026–T030; T031 via CI; T032–T033 open, need a runtime); full gate green at e26591dbd; reviews A and B due (dispatched by the orchestrator)
+- **Next step**: orchestrator runs review A (code-review high, origin/main...HEAD) and review B (conformance, sonnet) on snapshot 422e54ca1ec4059a2b0215f6501ae301833a0c0d:e26591dbd43db7c88ca4349c27cc65825fb1dfdb; then this unit acts on findings and opens the PR from the scratchpad `pr-title.txt`/`pr-body.md`
+- **Gate**: M4 full gate (`scripts/gate.sh`, unmodified, CI's order, nothing skipped) exit 0 at e26591dbd. M3: exit 0 at f5ff218e6.
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; T015 B5 measured value open (T042) |
 | M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
 | M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | #1494 | merged |
-| M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | waits for M1, M2, M3 |
+| M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | T026–T030 done, gate green at e26591dbd; reviews due |
 | M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | waits for M1, M4 |
 
 T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
@@ -74,6 +74,8 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | Review B M1 (conformance, sonnet) | 1 | 1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58 | CHANGES; 1 MAJOR. F1: Verify `mise run image && mise run test-sandbox` not observed on a built image (no apt egress here). Satisfied by CI (**green**: PR #1484 merged at 5820c4018; the "sandbox against a real runtime (linux)" job passed on head 53fb85196, `sandbox_real_basic_image_*` and `sandbox_real_toolchain_path_*` passed; the orchestrator's extra M1 fix 53fb85196 mounts the uid-10001 tmpfs in sandbox_real_basic_image.rs with `exec`, as Docker tmpfs defaults to noexec and the compiled test binary got Permission denied): `.gitattributes:185` marks `packaging/basic/**` `micold-daemon-runtime`, so ci.yml's `sandbox-runtime` job ("sandbox against a real runtime (linux)") runs on the PR; it `docker build`s `micold-basic:dev` from the tree (ci.yml:617) and runs `cargo test -p micold-core --features sandbox-real-runtime sandbox_real_` (`sandbox_real_basic_image_*`) and `cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_` (`sandbox_real_toolchain_path_*`). Record the job's result here when it is green |
 | Review A M2 (code-review high) | 1 | 4fa19a85a | CLEAN; 3 MINOR, all fixed. F1 T019 ticked with B5 open: split into T019b (open, with T042). F2 README bullet ends `;`. F3 Containerfile comment names the ci.yml step, not line numbers; basic-image-hash.test.sh gains a case that ci.yml's X11/Wayland list equals the Containerfile layer. Hash → `5d9ed63715e43146` |
 | Review B M2 (conformance, sonnet) | 1 | 4fa19a85a | CLEAN, no findings. Real-runtime Verify via CI job |
+| Review A M4 (code-review high) | 1 | 422e54ca1ec4059a2b0215f6501ae301833a0c0d:e26591dbd43db7c88ca4349c27cc65825fb1dfdb | due (orchestrator dispatches) |
+| Review B M4 (conformance) | 1 | 422e54ca1ec4059a2b0215f6501ae301833a0c0d:e26591dbd43db7c88ca4349c27cc65825fb1dfdb | due (orchestrator dispatches) |
 
 speckit-analyze (run inline on spec/plan/tasks before tasks review round 2; the skill is not invocable through the Skill tool in this cloud session; no analyze hooks in `.specify/extensions.yml`): 0 CRITICAL; 1 HIGH — C1 coverage: FR-009, SC-001, SC-002 and US2 AS1–AS4 mapped only to Phase 9 tasks outside any milestone (same as review F1) — fixed by moving T032–T033 into M4. MEDIUM: C2 three edge cases with no test/quickstart row (= F4, fixed); I1 checklist item unticked though no markers remain (= F3, fixed). LOW: none acted on. Coverage after fixes: FR-001–FR-013 and SC-001–SC-005 each have ≥1 task in a milestone (SC-004 via T015/T019); every task maps to a story or requirement; constitution I (tests first in each milestone), VI (two arches, daemon code on three CI platforms) and VII (user guide in M1 T009/T014, M2 T018, M3 T025, M4 T030) hold.
 
