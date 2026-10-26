@@ -79,3 +79,43 @@ and their test evidence is in the ledger's *M1 notes* and *M2 notes*. Commands r
   Compiles clean under clippy `--features sandbox-real-runtime -D warnings`. **Pending CI**: its
   first real run is the PR's "sandbox against a real runtime (linux)" job (review B-F2); the
   orchestrator records that run in the ledger.
+
+## M5 cycle 1: T034 + T038 (core install defaults, contract I2)
+
+- test: five `install_env_*` tests in `crates/micold-core/tests/toolchain_path.rs` (the integration
+  tests of `toolchain_path.rs`, where 1289's A1 lives): the three defaults under `HOME`; a set
+  variable left out, the others kept; an empty value is unset; lower-case `npm_config_prefix`
+  counts for `NPM_CONFIG_PREFIX`; no or empty `HOME` gives none.
+- red: `unresolved import micold_core::sandbox::toolchain_path::install_env_defaults`.
+- green: pure `install_env_defaults(home: Option<&Path>, current: impl Fn(&str) -> Option<OsString>)`
+  → `Vec<(&'static str, PathBuf)>`. The predicate takes the variable's value rather than a bool
+  (plan D8's `is_set`), so "empty counts as unset" is decided and tested in core. 21 passed.
+
+## M5 cycle 2: T035 + T039 (daemon wiring, contract I1, I2, I4)
+
+- test: four `install_env_*` tests in `state.rs`'s `offered_tests`: defaults reach a sandbox spawn
+  under the resolved `HOME` and the `PATH` is the one 1289 orders; an environment-include value is
+  kept; the daemon's own environment (incl. `npm_config_prefix`, and its `HOME` as fallback) is
+  not overridden; no `offered.json` → none. The daemon's own environment is injected through
+  `with_sandbox_env(resolved, own)` (what `with_sandbox_path` calls with `std::env::var_os`), so no
+  test sets a process variable.
+- red: `no method named with_sandbox_env` (compile). Behaviour red, checked by mutation: with the
+  `extend` of the defaults disabled, 3 of the 4 fail (the no-offer one passes, as it should).
+- green: `with_sandbox_env` computes the defaults with the existing `var` closure and appends them
+  after ordering `PATH`. 7 passed (the four new + 1289's three PATH tests).
+
+## M5 cycle 3: T036, T037, T040
+
+- T036: `recreate_deletes_the_drifted_pod_and_creates_a_new_one_keeping_the_volume`
+  (`kube/start_tests.rs:388`) still asserts `deletes == [delete Pod …]` and
+  `created.len() == 1` ("the volume was adopted"); no change.
+- T037: `crates/micold-daemon/tests/sandbox_real_self_install.rs`, one test
+  `sandbox_real_self_install_a_session_installs_its_tools_and_they_stay`. Support: `git`, `repo`,
+  `copy_tree` moved from `sandbox_real_mise_setup.rs` into `sandbox_real_support`, plus
+  `seed_sessions` (several sessions, `seed_projects` delegates) and `written_outside` (the FR-010
+  `find`, now shared with the M4 test). Rust's minimal profile is written into the global mise
+  config (`mise use` has no profile flag), then `mise install rust`; uv/go/python via `mise use -g`.
+  Compiles clean under `cargo clippy -p micold-daemon --features sandbox-real-runtime --tests -D
+  warnings`; not runnable here (no container runtime). First run: the PR's "sandbox against a real
+  runtime (linux)" job.
+- T040: guide paragraph + defaults table under "Tools installed in the sandbox's home".

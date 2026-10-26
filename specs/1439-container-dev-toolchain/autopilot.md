@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M4 reviews A and B round 1 acted on (A: 3 MINOR fixed; B: F1 waived D14, F2 pending CI, F3 note D15); T032–T033 open (D14); PR body ready
-- **Next step**: orchestrator opens the M4 PR from the scratchpad `pr-title.txt`/`pr-body.md`, waits on CI, and records the "sandbox against a real runtime (linux)" run of `sandbox_real_mise_setup` here when green (review B-F2)
-- **Gate**: M4 review fixes: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11513 tests passed, 0 failed, all scripts/tests cases ok. Before: M4 full gate (`scripts/gate.sh`, unmodified, CI's order, nothing skipped) exit 0 at e26591dbd. M3: exit 0 at f5ff218e6.
+- **Phase**: M5 implemented (T034–T040; T041 open: needs a cluster and macOS/Windows hosts), full gate run, committed on `1439-m5` (stacked on M4 head ae341690d, M4 = PR #1497); reviews due (orchestrator)
+- **Next step**: orchestrator dispatches M5 reviews A and B on the snapshot in *Review rounds*; after M4 (#1497) merges, rebase `1439-m5` and open the M5 PR from the scratchpad `pr-title-m5.txt`/`pr-body-m5.md`; record the real-runtime CI run of `sandbox_real_self_install` (first run)
+- **Gate**: M5: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11522 tests passed, 0 failed, all scripts/tests cases ok; `cargo clippy -p micold-daemon --features sandbox-real-runtime --tests -D warnings` clean. M4 review fixes: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11513 tests passed, 0 failed, all scripts/tests cases ok. Before: M4 full gate (`scripts/gate.sh`, unmodified, CI's order, nothing skipped) exit 0 at e26591dbd. M3: exit 0 at f5ff218e6.
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
 | M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | #1494 | merged |
 | M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | T026–T030 done; reviews round 1 acted on, full gate exit 0 after the fixes; T032–T033 open (D14); PR due (orchestrator) |
-| M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | waits for M1, M4 |
+| M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | T034–T040 done on `1439-m5` (stacked on M4 #1497); T041 open; reviews due |
 
 T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 
@@ -135,6 +135,17 @@ Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7
 - T032 (B1: this repo's `mise run gate` inside a container session on `:dev`, five tools, LSP hover, wall times) and T033 (B2 concurrent setups, B6 Kubernetes pod): **open**, not runnable here (no container daemon; the basic image build is refused by the proxy) and no CI job runs them.
 - D12 curl retries (see Decisions).
 - Review fixes (round 1): A-F1/F2/F3 fixed (see *Review rounds*, cycle log M4 cycle 4); B-F1 waived (D14: T032/T033 stay open until after T042); B-F2 `sandbox_real_mise_setup` Verify pending CI; B-F3 note (D15).
+
+## M5 notes
+
+- Base: stacked on M4's head ae341690d (PR #1497, CI running, not merged); no branch-start (orchestrator override).
+- T034/T038: `install_env_defaults(home, current)` in `sandbox/toolchain_path.rs`; tests in `crates/micold-core/tests/toolchain_path.rs` (where 1289's A1 lives). `current` returns the value, not a bool, so "empty = unset" is core's.
+- T035/T039: `with_sandbox_path` → `with_sandbox_env(resolved, own)` (own = `std::env::var_os`), defaults appended after `PATH`; tests in `state.rs` `offered_tests` inject the daemon's own environment, none sets a process variable.
+- T036 (A9, FR-016 Kubernetes evidence): `recreate_deletes_the_drifted_pod_and_creates_a_new_one_keeping_the_volume` (`crates/micold-core/src/kube/start_tests.rs:388`) still asserts only the pod is deleted and one object (the pod) is created; unchanged.
+- T037 (A10): `sandbox_real_self_install.rs` (port 17792). Pins: rust 1.90.0 minimal (written into `~/.config/mise/config.toml`, since `mise use` has no profile flag), uv 0.8.0, go 1.24.0, python 3.12.8, `pycodestyle==2.12.1` (uv tool), `pyflakes==3.2.0` (pip --user). Second worktree session seeded with `seed_sessions`; replacements: restart, `localhost/micold-self-install-probe:second` tag, `start_no_outbound_sandbox`. Clippy-clean with `sandbox-real-runtime`; **not run** here (no runtime): first run is CI's real-runtime job on the M5 PR.
+- mise sets `GOBIN` to its Go's own `bin` only when `GOBIN` is unset (mise settings `go.set_gobin`), so the daemon's default wins and `go install` lands in `~/.local/bin`.
+- T040: guide paragraph and defaults table in "Tools installed in the sandbox's home".
+- T041 (B6 second half, B7): **open**, needs a Kubernetes cluster and macOS/Windows hosts (owner, like T032/T033).
 
 ## Handover
 

@@ -1,11 +1,14 @@
 //! Feature 1289, test A1: the `PATH` a sandboxed spawn gets (contract toolchain-path P2, P3;
 //! FR-001 to FR-004). Pure: nothing here touches the filesystem, and no folder named exists.
+//! Also #1439 A8, core half: the install defaults of contract sandbox-install-env I2 (FR-015).
 #![cfg(unix)]
 
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use micold_core::sandbox::toolchain_path::{toolchain_path, ToolchainPathInput};
+use micold_core::sandbox::toolchain_path::{
+    install_env_defaults, toolchain_path, ToolchainPathInput,
+};
 
 const CLAUDE_BIN: &str = "/s/ai-clis/claude/bin";
 const REST: &str = "/usr/local/bin:/usr/bin:/bin";
@@ -182,4 +185,85 @@ fn an_xdg_data_home_holding_the_separator_leaves_out_only_the_shims_folder() {
         path(input),
         "/s/ai-clis/claude/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin"
     );
+}
+
+/// `install_env_defaults` for `home`, with `set` as the variables the environment already has.
+fn install_env(home: Option<&str>, set: &[(&str, &str)]) -> Vec<(String, String)> {
+    let set: Vec<(String, OsString)> = set
+        .iter()
+        .map(|(k, v)| (k.to_string(), OsString::from(v)))
+        .collect();
+    let home = home.map(PathBuf::from);
+    install_env_defaults(home.as_deref(), |name| {
+        set.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone())
+    })
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.into_os_string().into_string().unwrap()))
+    .collect()
+}
+
+fn pairs(want: &[(&str, &str)]) -> Vec<(String, String)> {
+    want.iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+#[test]
+fn install_env_defaults_put_npm_cargo_and_go_installs_under_the_home() {
+    assert_eq!(
+        install_env(Some("/home/u"), &[]),
+        pairs(&[
+            ("NPM_CONFIG_PREFIX", "/home/u/.local"),
+            ("CARGO_INSTALL_ROOT", "/home/u/.local"),
+            ("GOBIN", "/home/u/.local/bin"),
+        ])
+    );
+}
+
+#[test]
+fn install_env_leaves_out_a_variable_already_set_and_keeps_the_others() {
+    assert_eq!(
+        install_env(Some("/home/u"), &[("CARGO_INSTALL_ROOT", "/opt/cargo")]),
+        pairs(&[
+            ("NPM_CONFIG_PREFIX", "/home/u/.local"),
+            ("GOBIN", "/home/u/.local/bin"),
+        ])
+    );
+    assert_eq!(
+        install_env(
+            Some("/home/u"),
+            &[("GOBIN", "/g"), ("NPM_CONFIG_PREFIX", "/n")]
+        ),
+        pairs(&[("CARGO_INSTALL_ROOT", "/home/u/.local")])
+    );
+}
+
+#[test]
+fn install_env_counts_an_empty_value_as_unset() {
+    assert_eq!(
+        install_env(Some("/home/u"), &[("GOBIN", "")]),
+        install_env(Some("/home/u"), &[])
+    );
+}
+
+#[test]
+fn install_env_counts_a_lower_case_npm_config_prefix_as_set() {
+    assert_eq!(
+        install_env(Some("/home/u"), &[("npm_config_prefix", "/n")]),
+        pairs(&[
+            ("CARGO_INSTALL_ROOT", "/home/u/.local"),
+            ("GOBIN", "/home/u/.local/bin"),
+        ])
+    );
+    assert_eq!(
+        install_env(Some("/home/u"), &[("npm_config_prefix", "")]).len(),
+        3,
+        "an empty lower-case prefix is unset too"
+    );
+}
+
+#[test]
+fn install_env_without_a_home_sets_nothing() {
+    assert_eq!(install_env(None, &[]), pairs(&[]));
+    assert_eq!(install_env(Some(""), &[]), pairs(&[]));
 }

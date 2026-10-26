@@ -26,7 +26,6 @@
 mod sandbox_real_support;
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
@@ -36,8 +35,8 @@ use micold_core::session::{SessionLocation, TerminalMode};
 use micold_core::setup::{RunId, SetupCommand, SetupState};
 use micold_core::worktree::CreateMode;
 use sandbox_real_support::{
-    cli, input_serial, open_session, seed_projects, start_sandbox, wait_for_accept, SandboxSpec,
-    Terminal,
+    cli, input_serial, open_session, repo, seed_projects, start_sandbox, wait_for_accept,
+    tagged_lines, written_outside, SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-mise-setup-probe";
@@ -61,54 +60,6 @@ const ANSWER: Duration = Duration::from_secs(30);
 /// How long the first setup may take to show its toolchain install under way (mise resolving the
 /// version, then rustup starting); generous for a slow runner, it only stops a hang.
 const INSTALL_STARTS: Duration = Duration::from_secs(5 * 60);
-
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
-        .current_dir(dir)
-        .args([
-            "-c",
-            "user.name=probe",
-            "-c",
-            "user.email=probe@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git runs");
-    assert!(
-        out.status.success(),
-        "git {args:?} in {}: {}",
-        dir.display(),
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-/// A git repository at `dir` holding the files of `from` (none when `None`) in one commit.
-fn repo(dir: &Path, from: Option<&Path>) {
-    std::fs::create_dir_all(dir).unwrap();
-    if let Some(from) = from {
-        copy_tree(from, dir);
-    } else {
-        std::fs::write(dir.join("README"), "a project with no mise.toml\n").unwrap();
-    }
-    git(dir, &["init", "-q", "-b", "main"]);
-    git(dir, &["add", "-A"]);
-    git(dir, &["commit", "-qm", "fixture"]);
-}
-
-fn copy_tree(from: &Path, to: &Path) {
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            std::fs::create_dir_all(&target).unwrap();
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), &target).unwrap();
-        }
-    }
-}
 
 fn worktree(project: &Path, dir: &str) -> PathBuf {
     project.join(".claude/worktrees").join(dir)
@@ -501,10 +452,7 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
             .await;
         // The command wraps on the terminal, so its echo can leak into the output: count only the
         // lines `-printf` wrote, whose tag is typed split so the echo never carries it whole.
-        let fetched: Vec<&str> = fetched
-            .lines()
-            .filter(|l| l.contains("NEWERFILE "))
-            .collect();
+        let fetched = tagged_lines(&fetched, "NEWERFILE");
         assert!(
             fetched.is_empty(),
             "the second worktree's setup installed or downloaded:\n{fetched:#?}\noutput: {lines:#?}"
@@ -526,24 +474,13 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
         // 5. FR-010: no file outside the home, the projects and the daemon's state is newer than
         // the marker. `-xdev` keeps it on the container's own file system; the temp folders are
         // left out (FR-014 excepts temp files, and /tmp need not be a tmpfs).
-        let outside = term
-            .run_within(
-                &format!(
-                    "find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run \
-                     -o -path /tmp -o -path /var/tmp \
-                     -o -path '{sandbox_home}' -o -path '{}' -o -path '{}' \\) -prune \
-                     -o -type f -newer \"$HOME/.mise-setup-probe-marker\" \
-                     -printf 'NEWER''FILE %p\\n' 2>/dev/null",
-                    projects.display(),
-                    sandbox_real_support::CONTAINER_STATE
-                ),
-                Duration::from_secs(120),
-            )
-            .await;
-        let outside: Vec<&str> = outside
-            .lines()
-            .filter(|l| l.contains("NEWERFILE "))
-            .collect();
+        let outside = written_outside(
+            &mut term,
+            &sandbox_home,
+            &projects,
+            "$HOME/.mise-setup-probe-marker",
+        )
+        .await;
         assert!(
             outside.is_empty(),
             "setup wrote outside the sandbox home and the projects:\n{outside:#?}"

@@ -360,8 +360,34 @@ A folder already on the image's `PATH` appears once, in the position above. A pr
 entry such as `uvx <server>` therefore finds `uv` in `~/.local/bin`. Folders an environment-include
 script puts on `PATH` keep their order after these.
 
-The host daemon and daemons on remote machines over SSH keep the `PATH` they had: none of this
-applies to them.
+A session needs no setup command to get the tools a project builds with: it can install
+user-level tools itself, as the session user, without root. mise (`mise use -g go@1.24`),
+`npm install -g`, `cargo install`, `uv tool install`, `go install`, and `pip install --user`
+under a Python that mise or uv installed all write into the sandbox's home. For the three that
+would otherwise put their binaries off the `PATH` or in a folder the session user cannot write,
+every spawn gets these defaults:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `NPM_CONFIG_PREFIX` | `~/.local` | `npm install -g` links into `~/.local/bin` instead of the image's `/usr/local` |
+| `CARGO_INSTALL_ROOT` | `~/.local` | `cargo install` puts binaries in `~/.local/bin` instead of `~/.cargo/bin` |
+| `GOBIN` | `~/.local/bin` | `go install` puts binaries in `~/.local/bin` instead of `~/go/bin` |
+
+A value your environment already sets wins: one from the environment-include script or the
+daemon's own environment is kept as it is (for npm, a lower-case `npm_config_prefix` counts too).
+
+What a session installs stays for the life of the daemon: the home is the daemon's own folder on
+the host (a container daemon) or on its volume (a Kubernetes daemon), so it survives a restart, a
+container replaced for an image update or a changed setting, and a recreated pod. Removing the
+daemon removes it. A tool built against a library of the image, such as a `cargo install` that
+links OpenSSL or an npm package with a native module, may need reinstalling after an image update
+changes that library. Installs that sessions start are not serialised with each other or with a
+setup command; when two collide and one fails, run it again. System packages (`apt-get install`)
+stay out of reach: they come from the image, or from
+[an image of your own](#building-projects-in-the-basic-image).
+
+The host daemon and daemons on remote machines over SSH keep the `PATH` and the environment they
+had: none of this applies to them.
 
 ## Credentials
 
