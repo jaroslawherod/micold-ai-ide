@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M6
-- **Next step**: M6 review A round 2 (scoped, sonnet) and visual-pass re-check (V-F1–V-F3) on snapshot 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1 (diff from 7a8321df:3e4881d6); then rebase, PR
+- **Next step**: orchestrator waits on CI for PR #1472 (M6), merges; then M7
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1393 | M3 daemon runs setup (protocol 70) | merged (rebase) | 9177522b8a536a94336a72df7469658756093a44 |
 | #1407 | M4 setup persistence and delete | merged (rebase) | 8a49a7780b9b3021fe4a41b6a56be18a067a8b0a |
 | #1414 | M5 setup settings and state | merged (rebase) | 15d62e891bb1292c94c58b585a0a975869c291dd |
+| #1472 | M6 setup output dialog | open | — |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | merged |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | merged |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | #1414 | merged |
-| M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | in progress |
+| M6 | T050–T055 | full | Setup output dialog, delete confirmation line | #1472 | PR open |
 | M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
 
 ## Decisions
@@ -107,6 +108,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M6 PR (2026-10-26): review A round 2 CLEAN (1 MINOR declined), visual re-check V-F1–V-F3 PASS (evidence `visual-pass/m6-r2-*` committed); rebased onto main 02421815f (7 docs/test commits, no conflicts, protocol stays 70, no new ProjectAdd site); `cargo test -p micold-client --no-run` clean; full gate (scripts/gate.sh) green at 9c330e1c9; pushed; PR #1472 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M7.
 M6 review round 1 fixed (2026-10-26) at a6b1f4d97: A-F1–A-F4, V-F1–V-F3 (cycle log M6 cycle 2; features_setup 29, setup_output_geometry 7); B MINORs recorded; visual-pass evidence committed; full gate (scripts/gate.sh) green and pushed. Snapshot 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1. Next: review A round 2 (scoped, sonnet) and visual-pass re-check of V-F1–V-F3; then rebase onto main, PR.
 M6 implemented (2026-10-26) on 15d62e891 (#1414 merged by rebase): T050–T055 ticked; features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4 passed (cycle log § M6 cycle 1); clippy client clean; full client suite green after two guard updates (feature_registration_cost: `setup`→`structured_transcript::Follow` allowed with reason; root vocabulary 29 with `Setup`). Pushed 3e4881d6f; snapshot 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926. Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings; then full gate (`scripts/gate.sh`), rebase, PR.
 M5 rebase 2 (2026-10-26, user asked to resolve #1414's conflicts): rebased onto main 26ac5a75e (211+ commits). Conflicts: (1) `daemon_sync.rs` — main's bug 1423 split `register_projects` into `register_bound_projects` and added `register_project_for` (a create registers its project on the target daemon first); resolved by keeping main's split and routing `register_bound_projects`' loop through `shell::setup::add_project`, so bug 1423's ProjectAdd also carries the stored setup command (logic both sides touched: scoped review advised). No other new ProjectAdd send site on main. (2) `docs/user-guide/settings.md` — kept main's title/status-bar links with "seven sections". Protocol stays 70 (main has no bump past 1289's 70). `cargo test --no-run` (client, core, daemon, material) clean with no compile fixes; layout_snapshot 150/150 unchanged; full gate (scripts/gate.sh) green at 4727fd047; force-pushed. Main since gained 5 docs-only 1439 commits, merge-tree clean. Next: scoped review of the daemon_sync resolution, CI, merge; M6.
