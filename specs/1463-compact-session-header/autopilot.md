@@ -44,6 +44,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- Review A F1 (chips row can starve the Changes button with three long chips at 640 px): declined for this milestone. Option A (user) puts the chips before the label's cut; a priority layout needs a give-way widget the client cannot use (Lane is crate-private to micold-material). The sidebar's Review changes reaches the same action. Recorded as a follow-up.
+- Review A F2/F3 (gates weakened for a zero-width title and a cut button): these are the amended H10' the user chose.
+- Review A F4 (28 dp button): user accepted Q2. Button rustdoc now says the 40 dp is the default.
+- Review A F7 (density range): `density` takes the scale's steps; callers pass the named constants.
+- Review A F8 (spec weakened): the amendment is the user's answer to Q1.
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
@@ -56,6 +62,9 @@ None.
 None.
 
 ## Follow-ups not done
+
+- With three long chips at the smallest window the Changes button can get no room (flat row, chips before button). A priority layout would fix it.
+- `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` failed in the scoped gate (cap 0); unrelated to the header, check on main.
 
 None yet. Pre-existing failure on main: ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth.
 
