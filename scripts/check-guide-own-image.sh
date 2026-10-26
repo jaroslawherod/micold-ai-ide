@@ -52,7 +52,8 @@ fi
 
 tag="micold-guide-own-image:check"
 (cd "$dir" && "$runtime" build -t "$tag" -f Containerfile .)
-libs="$("$runtime" run --rm --entrypoint pkg-config "$tag" --libs libpq)"
+# pkgconf ends its output with a space: compare the flags, not the raw text.
+libs="$("$runtime" run --rm --entrypoint pkg-config "$tag" --libs libpq | awk '{$1 = $1; print}')"
 "$runtime" rmi "$tag" >/dev/null 2>&1 || true
 if [ "$libs" != "-lpq" ]; then
   echo "check-guide-own-image: pkg-config --libs libpq printed '$libs', not -lpq" >&2
