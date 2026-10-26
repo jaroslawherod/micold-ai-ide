@@ -59,7 +59,7 @@ None.
 
 ## Open escalation
 
-None.
+blocked by work outside my flow (category 5). M1 is done and reviewed (A and B addressed, partial visual pass) but `mise run gate` is red on `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` ("the tree indents at the default width: cap 0"), and the push hook refuses code no green gate saw. It fails identically on `origin/main` source (session_area.rs and button.rs checked out from origin/main 308ab390a, same result), so it is not this diff; it measures text width, likely this machine's fonts. Everything else in the gate (fmt, clippy, all other tests) passed in the earlier runs. Question: how to push? Option A (Recommended): run the full gate where the test passes (CI or a machine with fonts), or let the orchestrator push the branch (6 commits, rebased on 308ab390a) and let CI decide. Option B: a separate fix of that test on main first. Nothing is pushed; no PR yet. PR body notes to write: review A and B findings in Declined section, Q1/Q2 amendments.
 
 ## Follow-ups not done
 
