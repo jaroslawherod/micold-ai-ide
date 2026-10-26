@@ -64,7 +64,7 @@ const INSTALLS: &[(&str, &str)] = &[
     ),
     ("uv through mise", "mise use -g uv@0.8.0"),
     ("go through mise", "mise use -g go@1.24.0"),
-    ("python through mise", "mise use -g python@3.12.8"),
+    ("python through mise", "mise use -g python@3.12.12"),
     (
         "npm install -g",
         "cd npm-probe && npm pack --silent && npm install -g ./self-install-probe-1.0.0.tgz",
@@ -139,7 +139,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         command: "python",
         run: "python --version",
-        prints: "Python 3.12.8",
+        prints: "Python 3.12.12",
         local_bin: false,
     },
 ];
