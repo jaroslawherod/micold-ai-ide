@@ -76,6 +76,21 @@ RUN set -eu; \
     install -m 0755 "$file" /usr/local/bin/mise; \
     rm -f "$file" /tmp/mise.sha256
 
+# The X11/Wayland development libraries this repository's own gate links (#1439, FR-007), the set
+# `.github/workflows/ci.yml:270-272` installs for the Linux test job, so the default image builds and
+# tests this repository. Its own layer, apart from the toolchain above, so dropping or changing it
+# (the owner's FR-007 decision) touches nothing else. Anything else a project links comes from an
+# own image built `FROM` this one (FR-012).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libxkbcommon-dev \
+      libwayland-dev \
+      libx11-dev \
+      libxcursor-dev \
+      libxrandr-dev \
+      libxi-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 # The daemon's state directory, bind-mounted from the host at run time (feature 027, FR-011), and
 # found through `MICOLD_DATA_DIR`. Not `XDG_DATA_HOME`: every process in the container inherits that,
 # and `/var/lib` is not writable by the session user, so XDG-aware tools such as mise fail (1286).

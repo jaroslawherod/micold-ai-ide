@@ -21,6 +21,11 @@ For building (#1439), before any setup has run:
 - a C/C++ toolchain (`gcc`, `g++`, `cc`, `c++`, `ld`, the C library headers), `make` and
   `pkg-config` (`pkgconf`), so a Rust toolchain installed by mise links crates with C code;
 - `python3`, and `xz` and `unzip` for what installers download.
+- the X11/Wayland development libraries this repository's tests link (`libxkbcommon-dev`,
+  `libwayland-dev`, `libx11-dev`, `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`, FR-007), in a layer
+  of their own after the mise step, so `pkg-config` finds them and the default image builds and tests
+  this repository. Any other system library a project needs comes from an own image built `FROM` this
+  one.
 
 The entrypoint also creates `~/.local/bin` and mise's shims folder in the home before sshd starts,
 the two folders every session's `PATH` holds (#1289), leaving anything already in them alone. It

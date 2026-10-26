@@ -25,7 +25,7 @@ server. The application connects to it with its own keys, copies its own service
 daemon always has the version of the application you run, and installs the AI CLIs you offer.
 Besides the session tools, the basic image carries what a project needs to build before anything
 is installed: `mise` at a pinned version, a C/C++ compiler with `make` and `pkg-config`, and
-`python3`.
+`python3`. It also carries the X11/Wayland development libraries this repository's tests link.
 
 To use your own image, choose **My own image** and give a reference (or an image archive path). Your
 image must:
