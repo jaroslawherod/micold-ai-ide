@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | implemented (T001–T012), in review; T013 needs the full gate |
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | T001–T012 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); in review. T013 open: lychee and mdbook missing here, CI's docs checks run them |
 | M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
