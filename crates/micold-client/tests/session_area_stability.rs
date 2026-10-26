@@ -202,11 +202,7 @@ fn no_child_is_pushed_under_an_if_on_session_shape() {
 #[test]
 fn the_pane_area_draws_no_bar_under_the_terminal() {
     let src = source("ui/terminal.rs");
-    let pane = body_from(
-        &src,
-        "pub fn pane<'a>(",
-        &["GridSizeReporter", "terminal_switch_strip("],
-    );
+    let pane = body_from(&src, "pub fn pane<'a>(", &["GridSizeReporter", "let body"]);
     for bar_part in [
         "row![",
         "Row::",
