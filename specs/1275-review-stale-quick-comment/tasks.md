@@ -350,7 +350,7 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
 
 ## Phase 10: Polish (close unit, no code)
 
-- [ ] T047 Run quickstart §A in full and §C on macOS and Windows (or record what stood in for them)
+- [x] T047 Run quickstart §A in full and §C on macOS and Windows (or record what stood in for them)
   in `specs/1275-review-stale-quick-comment/quickstart.md`'s results; tick checklists.
 
 ---

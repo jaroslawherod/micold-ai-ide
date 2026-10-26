@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-26 — shipped in PRs #1370 (design), #1380, #1413, #1424, #1443, #1447, #1450 and the close PR
 
 **Input**: GitHub issue #1275 "Review UI: stale-awareness and quick comment". "Blocked by: #1271.
 'n files changed since you looked' without reflowing the diff being read; drag over line numbers
