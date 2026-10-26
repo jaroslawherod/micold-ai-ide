@@ -62,7 +62,7 @@ None.
 
 ## Open escalation
 
-None.
+M2 is gated (full gate green) and committed locally, 5 commits ahead of origin/main. `git push --force-with-lease -u origin HEAD` was rejected (stale info: the remote branch of the same name has commits not in the local ref) and a retry with `git fetch` + force-with-lease was denied by the permission classifier. Needs the user to push (or approve the force-with-lease), then `gh pr create --base main --title "feat(1463): switch control in the tab strip (#1463)" --body-file <scratchpad>/pr-body.md` (body ends `Refs #1463`).
 
 ## Follow-ups not done
 
