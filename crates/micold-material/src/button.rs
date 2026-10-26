@@ -428,7 +428,10 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             .height(Length::Fill)
             .align_y(Alignment::Center);
         let mut widget = button(content)
-            .height(Length::Fixed(density::height(density::BUTTON_BASE, b.density)))
+            .height(Length::Fixed(density::height(
+                density::BUTTON_BASE,
+                b.density,
+            )))
             .style(style_fn);
         // §7.3's horizontal padding, from the variant table. Vertical padding is zero because the
         // height above is what makes the button 40dp — padding on this axis would add to a figure

@@ -262,7 +262,9 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
             parts.extend(strip);
             for (what, part) in &parts {
                 assert!(
-                    (part.width > 0.0 || what == "title") && inside(part, &area) && inside(part, &screen),
+                    (part.width > 0.0 || what == "title")
+                        && inside(part, &area)
+                        && inside(part, &screen),
                     "{name} {theme:?} {window:?}: the {what} {part:?} lies inside the session \
                      area {area:?} and the window"
                 );
