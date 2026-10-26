@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1422_container-name-enforce-a-minimum-length-docker
 - **Started**: 2026-10-25
 - **Phase**: milestone
-- **Next step**: M1 PR CI and merge (gate re-run after rebase, then push)
+- **Next step**: M1 PR #1489 CI and merge
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1433 | design | merged | 48cda33fe6d376055f88aa7ad672842fa3aa8c6a |
+| #1489 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Container names under 2 characters refused at Save; placeholder hidden; legacy loads | | in review |
+| M1 | T001–T009 | full | Container names under 2 characters refused at Save; placeholder hidden; legacy loads | #1489 | PR open |
 
 ## Decisions
 
