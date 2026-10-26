@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M6
-- **Next step**: M6 implement T050–T055 (tdd), then reviews A/B round 1 and visual pass
+- **Next step**: M6 reviews A/B round 1 and visual pass on snapshot 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926; then full gate, rebase, PR
 
 ## Pull requests
 
@@ -101,7 +101,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 implemented (2026-10-26) on 15d62e891 (#1414 merged by rebase): T050–T055 ticked; features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4 passed (cycle log § M6 cycle 1); clippy client clean; full client suite green after two guard updates (feature_registration_cost: `setup`→`structured_transcript::Follow` allowed with reason; root vocabulary 29 with `Setup`). Next: push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
+M6 implemented (2026-10-26) on 15d62e891 (#1414 merged by rebase): T050–T055 ticked; features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4 passed (cycle log § M6 cycle 1); clippy client clean; full client suite green after two guard updates (feature_registration_cost: `setup`→`structured_transcript::Follow` allowed with reason; root vocabulary 29 with `Setup`). Pushed 3e4881d6f; snapshot 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926. Next: reviews A and B round 1 and the visual pass (orchestrator dispatches), fix findings; then full gate (`scripts/gate.sh`), rebase, PR.
 M5 rebase 2 (2026-10-26, user asked to resolve #1414's conflicts): rebased onto main 26ac5a75e (211+ commits). Conflicts: (1) `daemon_sync.rs` — main's bug 1423 split `register_projects` into `register_bound_projects` and added `register_project_for` (a create registers its project on the target daemon first); resolved by keeping main's split and routing `register_bound_projects`' loop through `shell::setup::add_project`, so bug 1423's ProjectAdd also carries the stored setup command (logic both sides touched: scoped review advised). No other new ProjectAdd send site on main. (2) `docs/user-guide/settings.md` — kept main's title/status-bar links with "seven sections". Protocol stays 70 (main has no bump past 1289's 70). `cargo test --no-run` (client, core, daemon, material) clean with no compile fixes; layout_snapshot 150/150 unchanged; full gate (scripts/gate.sh) green at 4727fd047; force-pushed. Main since gained 5 docs-only 1439 commits, merge-tree clean. Next: scoped review of the daemon_sync resolution, CI, merge; M6.
 M5 PR (2026-10-25): review A round 2 CLEAN; rebased onto main 81b3eb543 (11 commits, no conflicts, protocol stays 70, layout snapshot passes unchanged, no SettingsDraft fixes needed); full gate (scripts/gate.sh) green at a03ae147f; pushed; PR #1414 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M6.
 M5 review round 1 fixed (2026-10-25): A-F1–A-F5, B-F1, V-F2 (cycle log M5 cycle 3); V-F1 kept as the existing pattern; full gate (scripts/gate.sh) green. Next: review A round 2 (scoped, sonnet) on the new snapshot; then rebase onto main, PR.
