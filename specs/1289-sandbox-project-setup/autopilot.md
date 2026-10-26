@@ -104,6 +104,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 B | 1 (sonnet) | same | CLEAN; features_setup 33, setup_output_geometry 11. MINORs accepted: B-F1 Stop uses `Icon::Close` (no stop glyph); B-F2 red not run separately (compile-failure red, disclosed); B-F3 Run uses `StateRunning`, which U3 allows |
 | M7 visual pass | 1 (U3, U4) | same | PASS light and dark, 1600x1000 and 640x480 (Busy not reachable from the UI). V-F1 MAJOR: clearing a project's setup command was not persisted (`merged_with_existing` kept the old `setup_commands` key as the field is skipped when empty) — fixed: a known key omitted when empty is removed from the merged document; test `clearing_the_last_setup_command_removes_it_from_the_file` (written with the fix; not run red first). Evidence `visual-pass/m7-*`, notes `m7-u3-u4-notes.md` |
 | M7 A | 2 (scoped, sonnet) | 4c71363eab4b6c45191816dad727c7bb67fc22c0:fd1498aea05aa60c764deea5d1fab1417046efc3 | CLEAN, no findings. Confirmed: V-F1 removes only `setup_commands` and keeps every other key (unknown ones too); concurrent windows safe through update_reporting; A-F2 NotFound only when no run exists for the key; A-F3 bound correct |
+| Close tdd-verify + diff review | 1 | ddacea4f81559a866f5c3ce913a332374624f65e:b9d3e16b4020b97d4cce27e38e8ea30444ee645b | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
