@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Started**: 2026-10-25
 - **Phase**: M1 PR (reviews done, fixes applied, pushed; PR opened by the orchestrator)
 - **Next step**: orchestrator opens the M1 PR from the scratchpad's `pr-title.txt` / `pr-body.md`, waits on CI (the `sandbox-runtime` job closes review B F1), merges; then the M2 unit
-- **Gate**: full `scripts/gate.sh` (mise not installed here) exit 0 at 395662059 (first run: one flaky client UI test `card_grid::a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and in the rerun); real-runtime clippy (`--features sandbox-real-runtime --tests`) clean
+- **Gate**: full gate (split-gate.sh: fmt, clippy core + workspace, all tests per package, the unprivileged tests, scripts/tests) exit 0 on the tree of b474da07b; split-gate.sh's unprivileged list named old targets (`mutation_semantics`, `settings_service_write_refuses_failed_read`), now modules of `sessions` and `settings` — those two ran from the scratchpad's gate-tail.sh
 
 ## Pull requests
 
