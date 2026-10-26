@@ -183,15 +183,15 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
 
 ### Implementation for US2
 
-- [ ] T019 [US2] Re-record the fixture once:
+- [x] T019 [US2] Re-record the fixture once:
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`, updating
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` (FR-005); then `layout_snapshot` and
   `layout_text_overflow` pass without the variable, and `layout_snapshot.rs`'s
   coverage-narrowing test (that file's own T016, not this list's) passes.
-- [ ] T020 [US2] Write the fixture diff's explanation, line group by line group (review-tab states;
+- [x] T020 [US2] Write the fixture diff's explanation, line group by line group (review-tab states;
   any other group, e.g. #1128 Overview drift, with its reason), into the M2 PR body draft in the
   scratchpad (FR-005, US2 sc.1).
-- [ ] T021 [US2] Prove the gate is live: +1 px on the review bar's padding in the review bar's style
+- [x] T021 [US2] Prove the gate is live: +1 px on the review bar's padding in the review bar's style
   (the file R1 merged) fails `layout_snapshot` naming `review.bar`; revert; record the output line in
   the PR body draft (US2 Independent Test).
 - [x] T022 [US2] Time each new covered state warm as `docs/development/layout-snapshot.md` § *Adding a

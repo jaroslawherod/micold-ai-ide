@@ -1939,6 +1939,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "session.strip.split",
                     path: SESSION_STRIP_SPLIT,
                 },
+                // The first state the review bar's padding moves (feature 1276, US2): anchored so
+                // that a change to it fails naming `review.bar`, not the shell.
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
             ],
         },
         CoveredState {

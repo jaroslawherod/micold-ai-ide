@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | merged; T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
-| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | T014–T018, T022–T024 done; T019–T021 (re-record, diff explanation, +1 px proof) and T025 wait for stop (b). Smallest-window squeeze found by the new gate filed as #1474 and declared in `SMALLEST_WINDOW` |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | T014–T024 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; T025 full gate next. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
@@ -57,6 +57,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | 6 | M2 implement | `review_tab_fits` finds the review tab squeezed at 640×480 (progress slot, sort chips, diff header, narrow drawer): fix here? | No: spec § Out of Scope (no review layout change); filed #1474, declared per node in `SMALLEST_WINDOW`, each required to keep firing; three scrolled-viewport overhangs declared beside them | agent | review_tab_fits run log; spec Out of Scope |
 | 7 | M2 implement | T016 redefine `session-area-changes-open`? | Already done by #1269 as `session-area-review-shown`; the contract's anchors are on it; no change | agent | covered_states.rs (1269 block) |
 | 8 | M2 implement | US2 "+1 px fails naming `review.bar`": the padding moves the bar's children, not the bar | `describe_difference` names an unanchored node by its path and the deepest anchor holding it (`path …, inside review.bar`) | agent | layout_snapshot.rs describe_difference |
+| 9 | M2 stop (b) | T021's +1 px on the review bar's padding moves `session-area-review-shown` first, which anchored only `shell.root` there, so the report said `inside shell.root` | Anchor `review.bar` on `session-area-review-shown` too (one `@` line in the fixture); the report then names `path 0/0/0/1/1/2/2/0/1/0, inside review.bar` | agent | plus-1 run output; tasks T021 |
 
 ## Review rounds
 
