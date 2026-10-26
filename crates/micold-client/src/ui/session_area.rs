@@ -168,6 +168,7 @@ pub fn changes_button<'a>(
     Tooltip::new(
         material::Button::with_content(text, material::ButtonVariant::Outlined, r)
             .leading(Icon::Git)
+            .density(micold_core::tokens::density::DENSE)
             .selected(button.selected)
             .on_press(press),
         tooltip,
@@ -176,8 +177,9 @@ pub fn changes_button<'a>(
     .into()
 }
 
-/// The context header (H9): the title line with the Changes button at its right, then the chips
-/// row; child lists that never vary.
+/// The context header (H9, amended by feature 1463): one line, the title taking the remaining
+/// width, then the chips row, then the Changes button, which is laid out first so it is never
+/// squeezed; child lists that never vary.
 fn header<'a>(
     state: &State,
     location: &SessionLocation,
@@ -204,23 +206,26 @@ fn header<'a>(
         }
         chips.push(neutral_chip(chip, Some(indicator.into()), r));
     }
-    // Shrink beside the Fill title: laid out at the width it asks for (H10). On the title line, so
-    // the chips keep the header's whole width at the smallest window.
+    // The Changes button is laid out first, at the width it asks for (H10), because the Fill
+    // block beside it is laid out with what remains; inside that block the chips take theirs and
+    // the Fill title the rest, so the title is what gives way first (FR-002).
     let changes = changes_button(state, location, text.changes, r);
+    let lead = row![
+        container(title).width(Length::Fill),
+        row(chips).spacing(spacing::SM).align_y(Alignment::Center)
+    ]
+    .spacing(spacing::MD)
+    .align_y(Alignment::Center)
+    .width(Length::Fill);
     container(
-        column![
-            row![container(title).width(Length::Fill), changes]
-                .spacing(spacing::MD)
-                .align_y(Alignment::Center),
-            row(chips).spacing(spacing::SM).align_y(Alignment::Center)
-        ]
-        .spacing(spacing::XS)
-        .width(Length::Fill),
+        row![lead, changes]
+            .spacing(spacing::MD)
+            .align_y(Alignment::Center),
     )
     .width(Length::Fill)
     .padding(Padding {
-        top: spacing::SM,
-        bottom: spacing::SM,
+        top: spacing::XS,
+        bottom: spacing::XS,
         left: spacing::LG,
         right: spacing::LG,
     })
