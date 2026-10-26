@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M2 implemented (T016–T019); scoped gate and reviews A/B due
-- **Next step**: reviews A (code-review medium-or-flow level) and B (conformance) on `origin/main...HEAD` dispatched by the orchestrator; then open the M2 PR
-- **Gate**: M2 scoped gate green (basic-image-hash.test.sh 31 cases, basic-entrypoint.test.sh, cargo fmt --check, micold-core basic_image tests, clippy -D warnings with sandbox-real-runtime; packaging/tests/docs only, per gate.md); M1: full gate (split-gate.sh: fmt, clippy core + workspace, all tests per package, the unprivileged tests, scripts/tests) exit 0 on the tree of b474da07b; split-gate.sh's unprivileged list named old targets (`mutation_semantics`, `settings_service_write_refuses_failed_read`), now modules of `sessions` and `settings` — those two ran from the scratchpad's gate-tail.sh
+- **Phase**: M3 implemented (T020–T025); full gate green; reviews A/B due
+- **Next step**: orchestrator dispatches review A (code-review high, origin/main...HEAD) and B (conformance, sonnet) on snapshot `a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07`; no visual pass (nothing visible changes); then the M3 PR (title/body in the session scratchpad `pr-title.txt`, `pr-body.md`)
+- **Gate**: M3 full gate (`scripts/gate.sh`, CI's order) exit 0 on the tree of snapshot a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07, with `--skip a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (micold-client card_grid; failed twice under the full parallel run, passes alone; client code M3 does not touch — see Follow-ups). Red check: with `setup_turn()` forced to `None`, the six turn tests fail (host-overlap test passes either way).
 
 ## Pull requests
 
@@ -20,14 +20,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1444 | design (spec, plan, tasks) | merged (rebase) | e3c651071 (last commit of the rebase on main) |
 | #1461 | design amendment D8 | merged (rebase) | 3a0c42592 |
 | #1484 | M1 | merged (rebase) | 5820c4018 |
+| #1485 | M2 | merged (rebase); CI's real-runtime sandbox job passed on head e426fe7e4 (M2 Verify) | e3575514b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | — | implemented (T001–T014); T015 B5 measured value open; reviews due |
-| M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | — | implemented (T016–T019), reviews due; FR-007 still provisional A |
-| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | — | waits for #1289 |
+| M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; T015 B5 measured value open (T042) |
+| M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
+| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | — | implemented; gate green; reviews due |
 | M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | waits for M1, M2, M3 |
 | M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | waits for M1, M4 |
 
@@ -53,6 +54,7 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M3 A (code-review high) + B (conformance) | 1 | a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07 | due (orchestrator dispatches) |
 | Review spec | 1 | 88a57bc11916cbc5c1b545009cfdd9cb331ed559:acefceb57addd2b636a783099b5c1664b60c8efe | CHANGES: 1 MAJOR (F1 pkg-config fixture untestable), 2 MINOR — all fixed |
 | Review spec | 2 | 0dd79911c49382f93e7e6c046c4ab2dda6be0d1a:6da15512d5f7e13d3544e0ea3cc3c60143156e3a | CLEAN; 1 MINOR for the plan: AS4 (spec.md:67) names no library the image provides — plan picks a fixture library (one the image installs, or a test-built .pc file) |
 | Review plan | 1 | af5ff41a6aea3437938c9f5176c59cdfd38c8f28:fc2ae166b80b5b08990a56af109bf79b1406f498 | CHANGES: 1 MAJOR (F1 no step obtains/verifies mise checksums; README update step unspecific), 2 MINOR (F2 SC-001/002/005 rows; F3 hung holder blocks setups) — all fixed: plan D1a (signed SHASUMS256, two lines, npm cross-check, provenance in ledger), M1 row, D6 README steps, D7, R1; requirement-map rows SC-001/002/005 + B3 reads the section; setup-turn S2/S3 + D6 sentence + A4 case |
@@ -105,13 +107,19 @@ Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7
 - T019 (B5 split to T019b, open until T042): `BASIC_IMAGE_CONTENT_HASH` → `5d9ed63715e43146` (was `695339aa04f97c3e`; `dc80481f77d8a7c9` before review fixes); `BASIC_IMAGE` left on the published pin. B5 re-measure: **open**, needs the image basic-image.yml publishes on merge (this container cannot build it: egress proxy refuses deb.debian.org); the README size is written with the pin PR (T042).
 - Real-runtime verification (`mise run image && mise run test-sandbox`) not possible here; comes from the PR's CI job "sandbox against a real runtime (linux)" (`.gitattributes:185` triggers it for `packaging/basic/**`).
 
+## M3 notes
+
+- T020/T023: `DaemonState::setup_turn()` (`Arc<tokio::sync::Mutex<()>>`, `Some` only when `offered_clis()` is); test `offered_tests::only_a_daemon_with_an_offer_of_its_own_has_a_setup_turn` (also: another daemon's offer gives none).
+- T024: `Entry.stop` (`watch::Sender<bool>`, signalled by `SetupRuns::stop`, so `stop_and_wait`/`forget_project` too, and `interrupt_all`; dropped by `forget`); `SetupRuns::waiting` (push + flush, no I/O); `spawn_run` → `spawn_run_with(…, shell)` → `take_turn` (try_lock_owned; else waiting line, then `select!` lock_owned vs stop) → `run_shell`; the guard drops after the end is written. No await between the waiting line and the queue entry, so the line marks the order.
+- Deviation: `spawn_run_with` takes the blocking part as a closure so the panicking-run case of T022 is testable; `spawn_run` passes `run_blocking`.
+- T021/T022 tests in `setup.rs` `mod tests` (`Turns` harness, real shells, `cfg(unix)`; setup turns apply only to Linux sandboxes).
+- T025: user guide, "Running setup again, and stopping it" (a short paragraph, not one sentence: also says host/remote daemons run side by side).
+
 ## Handover
 
-M1 T001–T014 done; reviews A and B recorded and fixed (Review rounds); committed and pushed.
-T015 open only for B5's measured size (see M1 notes); B4 recorded.
-
-- **Next**: orchestrator opens the PR (title/body: `/tmp/claude-0/-home-user-micold-ai-ide/1cae4e28-bf2c-59fc-853a-e0ae2ff28e49/scratchpad/pr-title.txt`, `pr-body.md`; title changed to the milestone form `feat(1439): … (#1439)` per tasks/pr.md), records the PR number here, waits on CI. The `sandbox-runtime` job's result closes review B F1: write it into that Review rounds row. Then merge; then M2.
-- **Open findings**: review B F1 pending on CI (above). No others.
+M3 T020–T025 done, full gate green, committed and pushed (no PR yet). Context over the cap after the gate.
+- **Next**: reviews A and B on the snapshot in *Review rounds* (orchestrator); then act on findings per review-rounds.md, scoped gate, open the M3 PR (title/body: session scratchpad `pr-title.txt`, `pr-body.md`; fill the review lines and the gate sha).
+- **Open findings**: none yet.
 
 ## Open escalation
 
@@ -119,5 +127,7 @@ None. FR-007 is on the user's decision card (coordinator); applied provisionally
 If the user picks B or C, the coordinator dispatches a revision.
 
 ## Follow-ups not done
+
+- `micold-client` `ui::material::card_grid::tests::a_link_scrolled_out_of_the_body_is_not_under_the_pointer` fails under the full `cargo test --workspace` load in this container (`left: ["body true true", "rest 0"]`), passes alone: timing-dependent; not this flow's code.
 
 - `gh` GraphQL is blocked in the cloud container, so `scripts/autopilot/issue.sh` could not set labels; in-progress and flow:feature were set through the GitHub MCP.
