@@ -7,7 +7,7 @@ Paths: `C` = `crates/micold-client`. Gates: `C/tests/gates/session_area_fits.rs`
 
 ## Phase 1: Setup
 
-- [ ] T001 Read the current gates and note the helpers to extend (`header_parts`, `strip_parts`, `assert_button_unsqueezed`, `builders()`) in `C/tests/gates/session_area_fits.rs` and `C/tests/session_area_stability.rs`; no edit.
+- [x] T001 Read the current gates and note the helpers to extend (`header_parts`, `strip_parts`, `assert_button_unsqueezed`, `builders()`) in `C/tests/gates/session_area_fits.rs` and `C/tests/session_area_stability.rs`; no edit.
 
 ## Phase 2: Foundational
 
@@ -17,12 +17,12 @@ Paths: `C` = `crates/micold-client`. Gates: `C/tests/gates/session_area_fits.rs`
 
 **Independent test**: `session_area_fits` header gates (in the `layout_snapshot` target) at 640x480+300 sidebar and 1280x800, light and dark.
 
-- [ ] T003 [US1] Write failing gate in `C/tests/gates/session_area_fits.rs`: header children are title, chips, Changes on one line in that order (FR-001); header height at most about 40 px and Changes no taller than chips (FR-003, SC-003).
-- [ ] T004 [US1] Write failing gate in `C/tests/gates/session_area_fits.rs`: at 640x480 the title shortens first, chips stay at `CHIP_MAX_WIDTH`, Changes keeps its width for `Changes · 12 files · +345 −67` and four-digit lines cut with ellipsis after title minimum; at 1280x800 five-digit files and six-digit lines whole (FR-002, H10'). The cut itself already exists in `changes_button`.
-- [ ] T005 [US1] Compact padding for `changes_button` via `material::Button::padding(..)` in `C/src/ui/session_area.rs` (R2, FR-003).
-- [ ] T006 [US1] Rebuild `header()` as `row![container(title).width(Fill), chips_row, changes]`, spacing `MD`, `align_y(Center)`, vertical padding `XS`, child list never varying, in `C/src/ui/session_area.rs` (FR-001, FR-002).
-- [ ] T007 [US1] Re-record layout fixtures for the new header after T003-T006 are green: `C/tests/layout_snapshot.rs` and its fixtures (FR-010).
-- [ ] T008 [US1] Update header description in `docs/user-guide/terminal-panes.md` and note H9/H10 amendment in `specs/1126-session-context-header/contracts/context-header.md` (FR-010).
+- [x] T003 [US1] Write failing gate in `C/tests/gates/session_area_fits.rs`: header children are title, chips, Changes on one line in that order (FR-001); header height at most about 40 px and Changes no taller than the title line, header at most 40 px (FR-003, SC-003).
+- [x] T004 [US1] Write failing gate in `C/tests/gates/session_area_fits.rs`: at 640x480 the title shortens first, chips stay at `CHIP_MAX_WIDTH`, Changes keeps its width for `Changes · 12 files · +345 −67` and four-digit lines cut with ellipsis after title minimum; at 1280x800 five-digit files and six-digit lines whole (FR-002, H10'). The cut itself already exists in `changes_button`.
+- [x] T005 [US1] Compact `changes_button` via new `material::Button::density(DENSE)` in `C/src/ui/session_area.rs` (R2, FR-003).
+- [x] T006 [US1] Rebuild `header()` as `row![container(title).width(Fill), chips_row, changes]`, spacing `MD`, `align_y(Center)`, vertical padding `XS`, child list never varying, in `C/src/ui/session_area.rs` (FR-001, FR-002).
+- [x] T007 [US1] Re-record layout fixtures for the new header after T003-T006 are green: `C/tests/layout_snapshot.rs` and its fixtures (FR-010).
+- [x] T008 [US1] Update header description in `docs/user-guide/terminal-panes.md` and note H9/H10 amendment in `specs/1126-session-context-header/contracts/context-header.md` (FR-010).
 
 **Checkpoint**: header is one line on main.
 

@@ -6,7 +6,7 @@
 - **Rejected**: a new child of the strip row between cluster and add control (restart would no longer be last of the cluster); a header-row placement (issue asks for the strip); putting it into `StripModel` (view-only derivation from `State` suffices, no data added).
 
 ## R2. Compact Changes button
-- **Decision**: `material::Button::padding(..)` (exists) with smaller padding, used only by `changes_button`.
+- **Decision** (amended in M1): `material::Button::padding` cannot shrink a button, whose height is fixed at 40 dp; a new `Button::density(step)` (default standard) lets `changes_button` use `density::DENSE` (28 dp).
 - **Why**: Principle VIII, one button, no fork.
 - **Rejected**: a bespoke container-styled button (fork); shrinking the font (changes look).
 

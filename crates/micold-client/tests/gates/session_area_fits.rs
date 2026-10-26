@@ -102,14 +102,14 @@ fn at<'r>(records: &'r [LayoutRecord], path: &[usize]) -> Option<&'r LayoutRecor
 }
 
 /// The header's Changes button: the header line's third child (H9, feature 1463).
-const CHANGES_BUTTON: &[usize] = &[0, 0, 1];
+const CHANGES_BUTTON: &[usize] = &[0, 0, 2];
 
 /// The header's title and chips in `records`: the title, each chip of the chips row, then the
 /// Changes button.
 fn header_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let header = [SESSION_AREA, &[0]].concat();
-    let title = [header.as_slice(), &[0, 0, 0]].concat();
-    let chips = [header.as_slice(), &[0, 0, 1]].concat();
+    let title = [header.as_slice(), &[0, 0]].concat();
+    let chips = [header.as_slice(), &[0, 1]].concat();
     let button = [SESSION_AREA, CHANGES_BUTTON].concat();
     let mut parts = vec![
         (
@@ -205,16 +205,31 @@ fn changes_button_request(state: &State) -> f32 {
         .width
 }
 
-/// H10: the Changes button is laid out at the width it asks for, never squeezed by the title.
+/// The title is at its minimum below this width: little more than its ellipsis (FR-002).
+const TITLE_MINIMUM: f32 = 40.0;
+
+/// H10' (feature 1463): the Changes button is laid out at the width it asks for while the title
+/// has any room; once the title is gone the label is cut with an ellipsis and the button is no
+/// wider than it asks for.
 fn assert_button_unsqueezed(what: &str, records: &[LayoutRecord], state: &State) {
     let button = [SESSION_AREA, CHANGES_BUTTON].concat();
     let laid = at(records, &button).expect("the header draws its Changes button");
     let wanted = changes_button_request(state);
-    assert!(
-        (laid.width - wanted).abs() <= TOLERANCE,
-        "{what}: the Changes button is laid out {} wide, it asks for {wanted} (H10)",
-        laid.width
-    );
+    let title = header_line(records)[0];
+    if title.width >= TITLE_MINIMUM {
+        assert!(
+            (laid.width - wanted).abs() <= TOLERANCE,
+            "{what}: the Changes button is laid out {} wide, it asks for {wanted} while the title \
+             still has room (H10')",
+            laid.width
+        );
+    } else {
+        assert!(
+            laid.width > 0.0 && laid.width <= wanted + TOLERANCE,
+            "{what}: the cut Changes button is {} wide, it asks for {wanted} (H10')",
+            laid.width
+        );
+    }
 }
 
 fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
@@ -267,7 +282,7 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
 /// The header's line: its title, chips row and Changes button, in that order (FR-001, H9).
 fn header_line(records: &[LayoutRecord]) -> [Rectangle; 3] {
     let header = [SESSION_AREA, &[0]].concat();
-    [vec![0, 0, 0], vec![0, 0, 1], vec![0, 1]].map(|tail| {
+    [vec![0, 0], vec![0, 1], vec![0, 2]].map(|tail| {
         let path = [header.as_slice(), tail.as_slice()].concat();
         rect(at(records, &path).expect("the header line has three children"))
     })
@@ -335,10 +350,7 @@ fn the_title_shortens_before_the_chips_and_the_button() {
             under.state.changes.header.load = micold_client::features::changes::Load::Ready(counts);
             let state = under.state.clone();
             let records = records_of(under, window);
-            // The widest counts are whole only at the layout window (spec edge case).
-            if window == WINDOW || counts == A_BRANCHS_COUNTS {
-                assert_button_unsqueezed(&format!("{counts:?} {window:?}"), &records, &state);
-            }
+            assert_button_unsqueezed(&format!("{counts:?} {window:?}"), &records, &state);
             header_line(&records)
         };
         let [wide_title, wide_chips, _] = measure(WINDOW);
@@ -350,7 +362,7 @@ fn the_title_shortens_before_the_chips_and_the_button() {
         // The chips give way only once the title has nothing more to give.
         assert!(
             chips.width <= wide_chips.width + TOLERANCE
-                && (chips.width >= wide_chips.width - TOLERANCE || title.width < 40.0),
+                && (chips.width >= wide_chips.width - TOLERANCE || title.width < TITLE_MINIMUM),
             "{counts:?}: the chips {chips:?} shortened (was {wide_chips:?}) while the title \
              {title:?} still had room (FR-002)"
         );

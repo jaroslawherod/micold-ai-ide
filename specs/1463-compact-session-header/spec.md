@@ -36,7 +36,7 @@ A user opens a worktree. The title, the chips and the Changes button sit on a si
 
 1. **Given** a worktree with a state, a branch and a pull request, **When** the header is shown, **Then** the title, then the chips, then the Changes button appear on one line, in that order.
 2. **Given** the Changes button with "no changes", **When** the header is shown, **Then** the button is no taller than the chips and does not set the line height.
-3. **Given** a window too narrow for everything, **When** the header is laid out, **Then** the title is shortened with an ellipsis first; the chips keep their capped width and the Changes button keeps its requested width for counts up to three digits (`Changes · 12 files · +345 −67`).
+3. **Given** a window too narrow for everything, **When** the header is laid out, **Then** the title is shortened with an ellipsis first; the chips keep their capped width; the Changes label is cut with an ellipsis only when the title is at its minimum (amended: the label keeps its requested width only where the line has room).
 
 ---
 
@@ -89,8 +89,8 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 ### Functional Requirements
 
 - **FR-001**: The header MUST show the title, the chips and the Changes button on one line, in that order, with the title taking the remaining width.
-- **FR-002**: When width is short, the title MUST shorten before the chips or the Changes button lose any width; the chips stay capped at their maximum width.
-- **FR-003**: The Changes button MUST keep its look and glyph but be compact, so it does not set the header line height; the header line MUST be no taller than the chips plus the header's reduced vertical padding (the whole header about 40 px or less at default scale).
+- **FR-002**: When width is short, the title MUST shorten before the chips or the Changes button lose any width; the chips stay capped at their maximum width. At the smallest window (640 px, sidebar 300 px) the line cannot hold the chips and a three-digit Changes label: once the title is at its minimum the Changes label is cut with an ellipsis (tooltip whole). The full width of the label is guaranteed only where the line has room.
+- **FR-003**: The Changes button MUST keep its look and glyph but be compact, so it does not set the header line height; the button MUST be no taller than the title line and the whole header about 40 px or less at default scale.
 - **FR-004**: In a single pane, the switch control and held-queue caption MUST appear in the strip after the status words and before restart; no separate switch row MAY be shown.
 - **FR-005**: Restart MUST remain the last control of the strip's cluster.
 - **FR-006**: The switch control and caption MUST be hidden while the Review tab is shown.
