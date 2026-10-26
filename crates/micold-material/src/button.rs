@@ -97,6 +97,7 @@ pub struct Button<'a, M> {
     padding: Option<Padding>,
     width: Option<Length>,
     shape: Option<f32>,
+    density: i8,
     leading: Option<(Icon, Option<Rgb>)>,
     trailing: Option<Icon>,
     trailing_mark: Option<(usize, String)>,
@@ -144,6 +145,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             selected: false,
             width: None,
             shape: None,
+            density: micold_core::tokens::density::STANDARD,
             host: None,
             id: None,
         }
@@ -182,6 +184,14 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
     /// goes away with the last caller.
     pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
         self.padding = Some(padding.into());
+        self
+    }
+
+    /// Lay the button out at a step of the density scale (`density::DENSE` for a compact one); the
+    /// default is `density::STANDARD`, the 40dp of §7.3. The label and glyph keep their size and
+    /// look; only the height changes.
+    pub fn density(mut self, step: i8) -> Self {
+        self.density = step;
         self
     }
 
@@ -418,7 +428,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             .height(Length::Fill)
             .align_y(Alignment::Center);
         let mut widget = button(content)
-            .height(Length::Fixed(density::BUTTON_BASE))
+            .height(Length::Fixed(density::height(density::BUTTON_BASE, b.density)))
             .style(style_fn);
         // §7.3's horizontal padding, from the variant table. Vertical padding is zero because the
         // height above is what makes the button 40dp — padding on this axis would add to a figure

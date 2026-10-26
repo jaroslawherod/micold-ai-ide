@@ -101,15 +101,15 @@ fn at<'r>(records: &'r [LayoutRecord], path: &[usize]) -> Option<&'r LayoutRecor
     records.iter().find(|r| r.path == path)
 }
 
-/// The header's Changes button: the title line's second child (H9).
-const CHANGES_BUTTON: &[usize] = &[0, 0, 0, 1];
+/// The header's Changes button: the header line's third child (H9, feature 1463).
+const CHANGES_BUTTON: &[usize] = &[0, 0, 1];
 
-/// The header's title and chips in `records`: the title line, each chip of the chips row, then
-/// the Changes button.
+/// The header's title and chips in `records`: the title, each chip of the chips row, then the
+/// Changes button.
 fn header_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let header = [SESSION_AREA, &[0]].concat();
     let title = [header.as_slice(), &[0, 0, 0]].concat();
-    let chips = [header.as_slice(), &[0, 1]].concat();
+    let chips = [header.as_slice(), &[0, 0, 1]].concat();
     let button = [SESSION_AREA, CHANGES_BUTTON].concat();
     let mut parts = vec![
         (
@@ -247,7 +247,7 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
             parts.extend(strip);
             for (what, part) in &parts {
                 assert!(
-                    part.width > 0.0 && inside(part, &area) && inside(part, &screen),
+                    (part.width > 0.0 || what == "title") && inside(part, &area) && inside(part, &screen),
                     "{name} {theme:?} {window:?}: the {what} {part:?} lies inside the session \
                      area {area:?} and the window"
                 );
@@ -261,6 +261,103 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
                 }
             }
         }
+    }
+}
+
+/// The header's line: its title, chips row and Changes button, in that order (FR-001, H9).
+fn header_line(records: &[LayoutRecord]) -> [Rectangle; 3] {
+    let header = [SESSION_AREA, &[0]].concat();
+    [vec![0, 0, 0], vec![0, 0, 1], vec![0, 1]].map(|tail| {
+        let path = [header.as_slice(), tail.as_slice()].concat();
+        rect(at(records, &path).expect("the header line has three children"))
+    })
+}
+
+/// FR-001, FR-003, SC-003: title, chips and Changes sit on one line in that order; the header is
+/// about one line tall and the Changes button is no taller than the chips.
+#[test]
+fn the_header_is_one_line_with_a_compact_changes_button() {
+    for name in SESSION_STATES {
+        let covered = covered_states()
+            .iter()
+            .find(|s| s.name == *name)
+            .unwrap_or_else(|| panic!("the covered state {name} exists"));
+        for window in [MIN_WINDOW_SIZE, WINDOW] {
+            let mut under = (covered.build)();
+            under.state.sidebar.width = SIDEBAR;
+            let records = records_of(under, window);
+            let [title, chips, changes] = header_line(&records);
+            let what = format!("{name} {window:?}");
+            assert!(
+                title.x + title.width <= chips.x + TOLERANCE
+                    && chips.x + chips.width <= changes.x + TOLERANCE,
+                "{what}: title {title:?}, chips {chips:?}, Changes {changes:?} are not left to right"
+            );
+            for part in [&title, &chips, &changes] {
+                assert!(
+                    part.y < title.y + title.height && part.y + part.height > title.y,
+                    "{what}: {part:?} is not on the title's line {title:?}"
+                );
+            }
+            let header = rect(at(&records, &[SESSION_AREA, &[0]].concat()).expect("the header"));
+            assert!(
+                header.height <= 40.0 + TOLERANCE,
+                "{what}: the header is {} tall, about one line is 40 (SC-003)",
+                header.height
+            );
+            assert!(
+                changes.height <= title.height + TOLERANCE,
+                "{what}: the Changes button {changes:?} is taller than the title line {title:?}, so \
+                 it sets the header's height (FR-003)"
+            );
+        }
+    }
+}
+
+/// FR-002, H10': at the smallest window the title shortens first, then the chips; the Changes
+/// button keeps its requested width.
+#[test]
+fn the_title_shortens_before_the_chips_and_the_button() {
+    let covered = covered_states()
+        .iter()
+        .find(|s| s.name == "session-area-one-tab")
+        .expect("the covered state exists");
+    for counts in [A_BRANCHS_COUNTS, THE_WIDEST_COUNTS] {
+        let measure = |window: Size| {
+            let mut under = (covered.build)();
+            under.state.sidebar.width = SIDEBAR;
+            let location = under
+                .state
+                .current_session_location()
+                .expect("a session is shown");
+            let project = under.state.workspace.active.clone().unwrap();
+            under.state.changes.header.entry = Some((project, location));
+            under.state.changes.header.load = micold_client::features::changes::Load::Ready(counts);
+            let state = under.state.clone();
+            let records = records_of(under, window);
+            // The widest counts are whole only at the layout window (spec edge case).
+            if window == WINDOW || counts == A_BRANCHS_COUNTS {
+                assert_button_unsqueezed(&format!("{counts:?} {window:?}"), &records, &state);
+            }
+            header_line(&records)
+        };
+        let [wide_title, wide_chips, _] = measure(WINDOW);
+        let [title, chips, changes] = measure(MIN_WINDOW_SIZE);
+        assert!(
+            title.width < wide_title.width,
+            "{counts:?}: the title {title:?} gives way at the smallest window (was {wide_title:?})"
+        );
+        // The chips give way only once the title has nothing more to give.
+        assert!(
+            chips.width <= wide_chips.width + TOLERANCE
+                && (chips.width >= wide_chips.width - TOLERANCE || title.width < 40.0),
+            "{counts:?}: the chips {chips:?} shortened (was {wide_chips:?}) while the title \
+             {title:?} still had room (FR-002)"
+        );
+        assert!(
+            changes.x + changes.width <= MIN_WINDOW_SIZE.width,
+            "{counts:?}: the Changes button {changes:?} lies inside the window"
+        );
     }
 }
 
@@ -384,7 +481,7 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                 parts.extend(strip.into_iter().filter(|(_, r)| r.width > 0.0));
                 for (part, r) in &parts {
                     assert!(
-                        r.width > 0.0 && inside(r, &area),
+                        (r.width > 0.0 || part == "title") && inside(r, &area),
                         "{what}: the {part} {r:?} lies inside the session area {area:?}"
                     );
                 }
@@ -730,7 +827,7 @@ fn the_widest_counts_fit_at_the_layout_window() {
         let parts = header_parts(&records);
         for (part, r) in &parts {
             assert!(
-                r.width > 0.0 && inside(r, &area),
+                (r.width > 0.0 || part == "title") && inside(r, &area),
                 "{what}: the {part} {r:?} lies inside the session area {area:?}"
             );
         }

@@ -500,7 +500,7 @@ mod press_in_flight {
             .layout(&mut tree, &renderer, &limits);
         let row = [
             &super::support::covered_states::SESSION_HEADER_CHANGES[..5],
-            &[0, 1],
+            &[0, 0, 1],
         ]
         .concat();
         lay::walk(Layout::new(&node), lay::Layer::Base)
