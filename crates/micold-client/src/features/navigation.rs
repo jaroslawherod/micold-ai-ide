@@ -30,6 +30,8 @@ pub enum Step {
     Stop(SessionLocation),
     /// Switch to this project, as the project switcher does.
     Project(PathBuf),
+    /// Show the current entry's Review tab and reach this file or comment in it (#1274 J5).
+    Review(crate::features::changes::ReviewJump),
 }
 
 /// The active project's locations in the order the sidebar draws them (contracts/ui.md U2):

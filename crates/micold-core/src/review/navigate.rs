@@ -251,6 +251,17 @@ pub fn step_comment(
 ) -> Option<CommentMove> {
     let ids: Vec<CommentId> = ordered.iter().map(|f| f.id).collect();
     let id = navigation::step(&ids, last.as_ref(), dir)?;
+    comment_move(ordered, order, selected, id)
+}
+
+/// What reaching comment `id` of `ordered` does, as `]` reaching it does (FR-006); the jump-to
+/// field's choice of a comment (#1274 FR-018, contract J5). `None` when `id` is not in `ordered`.
+pub fn comment_move(
+    ordered: &[CommentFact],
+    order: &[NavFile],
+    selected: Option<&RelPath>,
+    id: CommentId,
+) -> Option<CommentMove> {
     let fact = ordered.iter().find(|f| f.id == id)?;
     let listed = order.iter().any(|f| f.path == fact.path);
     let select = (listed && selected != Some(&fact.path)).then(|| fact.path.clone());
@@ -816,6 +827,32 @@ mod tests {
             }),
             "a comment of an unlisted file has no file to select: the drawer"
         );
+    }
+
+    /// #1274 FR-018 (contract J5): choosing a comment in the jump-to field does what reaching it
+    /// with `]` does: its file selected first when it is another listed one, its card or the
+    /// drawer; a comment no longer present gives nothing.
+    #[test]
+    fn a_chosen_comment_moves_as_bracket_reaching_it_does() {
+        let (order, comments) = (abc(), three_comments());
+        let a = path("a.rs");
+        for (last, reached) in [(Some(id(2)), id(3)), (None, id(1)), (Some(id(1)), id(2))] {
+            assert_eq!(
+                comment_move(&comments, &order, Some(&a), reached),
+                step_comment(&comments, &order, Some(&a), last, Dir::Next),
+                "the same move as `]` reaching {reached:?}"
+            );
+        }
+        let outdated = comment_order(&[fact(4, "b.rs", 4, 1, false)], &order);
+        assert_eq!(
+            comment_move(&outdated, &order, Some(&a), id(4)),
+            Some(CommentMove {
+                id: id(4),
+                select: Some(path("b.rs")),
+                show: Show::Drawer
+            })
+        );
+        assert_eq!(comment_move(&comments, &order, Some(&a), id(99)), None);
     }
 
     #[test]

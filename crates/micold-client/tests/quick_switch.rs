@@ -1379,3 +1379,290 @@ fn applying_a_project_choice_activates_it_and_keeps_every_session_running() {
         "the previous project keeps its session running"
     );
 }
+
+// ---- review entries (#1274 M5: T053, T055) ----
+
+use micold_client::features::changes::{self as review, ReviewJump};
+use micold_core::review::comment::ReviewComment;
+use micold_core::review::keys::ReviewAction;
+use support::review_fixture::{draft, file, marked, open_into, path};
+
+const REVIEWED: [&str; 3] = ["a/tests.rs", "b.md", "c.rs"];
+
+/// `/repo` active with `feat-a`'s session current and its Review tab shown, listing [`REVIEWED`]
+/// (`b.md` marked reviewed) with a draft on `c.rs:3` and one on `b.md:5`; three other projects.
+fn reviewing() -> (State, SessionId, [ReviewComment; 2]) {
+    let mut state = with_projects();
+    let a = session_at(&mut state, worktree("feat-a"));
+    state.session.active = Some(a);
+    let files: Vec<_> = REVIEWED.iter().map(|p| file(p)).collect();
+    open_into(
+        &mut state.changes,
+        "/repo".into(),
+        worktree("feat-a"),
+        &files,
+    );
+    let (on_c, on_b) = (draft("c.rs", 3, 1), draft("b.md", 5, 2));
+    marked(
+        &mut state.changes,
+        "/repo".into(),
+        "feat-a",
+        &["b.md"],
+        &REVIEWED,
+        vec![on_c.clone(), on_b.clone()],
+    );
+    assert!(state.review_shown().is_some(), "precondition: shown");
+    (state, a, [on_b, on_c])
+}
+
+fn review_keys_of(entries: &[Entry]) -> Vec<EntryKey> {
+    entries
+        .iter()
+        .filter(|e| matches!(e.kind, Kind::ReviewFile | Kind::ReviewComment))
+        .map(|e| e.candidate.key.clone())
+        .collect()
+}
+
+/// Apply `step` as the binary does: the root's follow-ups, a Review-tab message through the
+/// review's own reducer (the shell's `changes::update`, effects aside).
+fn press_review(state: &mut State, step: Step, terminal_had_focus: bool) {
+    for message in state.apply_navigation(step.clone(), terminal_had_focus) {
+        match message {
+            Message::Changes(msg) => {
+                review::update(&mut state.changes, msg);
+            }
+            other => state.update(other),
+        }
+    }
+    state.finish_navigation(&step, terminal_had_focus);
+}
+
+fn shown_view(state: &State) -> &review::OpenView {
+    state
+        .changes
+        .tabs
+        .shown_view()
+        .expect("the review is shown")
+}
+
+/// US6 s1, J4: the review's files in file order, then its comments in comment order, after the
+/// active project's locations and sessions and before the other projects; a hidden tab lists them
+/// too.
+#[test]
+fn review_entries_follow_the_projects_locations_and_sessions_before_other_projects() {
+    let (mut state, _, [on_b, on_c]) = reviewing();
+    let entries = candidates(&state);
+    let expected = vec![
+        EntryKey::ReviewFile(path("a/tests.rs")),
+        EntryKey::ReviewFile(path("b.md")),
+        EntryKey::ReviewFile(path("c.rs")),
+        EntryKey::ReviewComment(on_b.id),
+        EntryKey::ReviewComment(on_c.id),
+    ];
+    assert_eq!(review_keys_of(&entries), expected);
+    let kinds: Vec<Kind> = entries.iter().map(|e| e.kind).collect();
+    let first_review = kinds.iter().position(|k| *k == Kind::ReviewFile).unwrap();
+    assert!(
+        kinds[..first_review]
+            .iter()
+            .all(|k| matches!(k, Kind::Location | Kind::Session)),
+        "only the active project's locations and sessions come before: {kinds:?}"
+    );
+    assert!(
+        kinds[first_review + expected.len()..]
+            .iter()
+            .all(|k| *k == Kind::Project),
+        "the other projects come after: {kinds:?}"
+    );
+    assert!(entries[first_review..first_review + expected.len()]
+        .iter()
+        .all(|e| e.candidate.selectable && e.candidate.parent.is_none() && !e.current));
+
+    review::update(&mut state.changes, review::Msg::SessionSelected);
+    assert!(state.review_shown().is_none(), "the tab is hidden");
+    assert_eq!(
+        review_keys_of(&candidates(&state)),
+        expected,
+        "US6 s1: shown or not"
+    );
+}
+
+/// US6 s5, FR-019: with no Review tab for the current entry, no review entry and every other
+/// entry as before.
+#[test]
+fn without_a_review_tab_for_the_current_entry_nothing_of_it_is_listed() {
+    let (mut state, _, _) = reviewing();
+    let others: Vec<_> = candidates(&state)
+        .into_iter()
+        .filter(|e| !matches!(e.kind, Kind::ReviewFile | Kind::ReviewComment))
+        .collect();
+    let b = session_at(&mut state, worktree("fix-b"));
+    state.session.active = Some(b);
+    review::update(&mut state.changes, review::Msg::SessionSelected);
+    let entries = candidates(&state);
+    assert_eq!(review_keys_of(&entries), Vec::<EntryKey>::new());
+
+    let mut fresh = with_projects();
+    let a = session_at(&mut fresh, worktree("feat-a"));
+    fresh.session.active = Some(a);
+    assert_eq!(review_keys_of(&candidates(&fresh)), Vec::<EntryKey>::new());
+    let shape = |e: &Entry| (e.kind, e.candidate.name.clone(), e.context.clone());
+    let unchanged: Vec<_> = others.iter().map(shape).collect();
+    let now: Vec<_> = candidates(&fresh).iter().map(shape).collect();
+    assert_eq!(now, unchanged, "FR-019: the other entries are unchanged");
+}
+
+/// US6 s2: a query finds the file by its name.
+#[test]
+fn a_query_finds_a_review_file_by_name() {
+    let (mut state, _, _) = reviewing();
+    open(&mut state);
+    update(&mut state, Msg::QueryChanged("tests".into()));
+    assert_eq!(
+        highlighted(&state),
+        Some(EntryKey::ReviewFile(path("a/tests.rs")))
+    );
+}
+
+/// US6 s3, J5: choosing a file shows the hidden Review tab with that file selected; the location,
+/// session and project stay, and no session starts or stops.
+#[test]
+fn choosing_a_review_file_shows_the_tab_with_it_selected() {
+    let (mut state, a, _) = reviewing();
+    review::update(&mut state.changes, review::Msg::SessionSelected);
+    let (before, stop) = (session_count(&state), state.sidebar.nav_stop.clone());
+    open(&mut state);
+    let choice = update(&mut state, Msg::Chosen(EntryKey::ReviewFile(path("c.rs"))));
+    assert_eq!(
+        choice,
+        Some(Choice {
+            step: Step::Review(ReviewJump::File(path("c.rs"))),
+            terminal_had_focus: true,
+            close_overview_first: false,
+        })
+    );
+    let choice = choice.unwrap();
+    press_review(&mut state, choice.step, choice.terminal_had_focus);
+    assert!(state.quick_switch.open.is_none());
+    assert_eq!(
+        state.review_shown().map(|(_, entry)| entry.clone()),
+        Some(worktree("feat-a")),
+        "the Review tab is shown"
+    );
+    assert_eq!(
+        shown_view(&state).selected.as_ref().map(|p| p.as_str()),
+        Some("c.rs")
+    );
+    assert_eq!(state.session.active, Some(a), "FR-018: the session stays");
+    assert_eq!(state.sidebar.nav_stop, stop, "and the location");
+    assert_eq!(
+        state.workspace.active,
+        Some("/repo".into()),
+        "and the project"
+    );
+    assert_eq!(session_count(&state), before, "no session starts or stops");
+}
+
+/// US6 s4, J5: choosing a comment does what `]` reaching it does.
+#[test]
+fn choosing_a_review_comment_does_what_bracket_reaching_it_does() {
+    let (mut state, a, [on_b, _]) = reviewing();
+    let mut by_key = state.clone();
+    review::update(
+        &mut by_key.changes,
+        review::Msg::ReviewKey(ReviewAction::NextComment),
+    );
+    assert_eq!(
+        by_key.changes.tabs.shown_view().unwrap().last_comment,
+        Some(on_b.id),
+        "precondition: `]` reaches the comment on b.md first"
+    );
+    open(&mut state);
+    let choice =
+        update(&mut state, Msg::Chosen(EntryKey::ReviewComment(on_b.id))).expect("resolves");
+    assert_eq!(choice.step, Step::Review(ReviewJump::Comment(on_b.id)));
+    press_review(&mut state, choice.step, choice.terminal_had_focus);
+    // Showing the tab through the root takes a read sequence number first: only the seq differs.
+    let without_seq = |state: &State| {
+        let mut view = shown_view(state).clone();
+        assert!(
+            matches!(view.diff, review::Load::Loading { .. }),
+            "b.md's diff is read"
+        );
+        view.diff = review::Load::Idle;
+        view
+    };
+    assert_eq!(
+        without_seq(&state),
+        without_seq(&by_key),
+        "the same view as after `]`"
+    );
+    assert_eq!(shown_view(&state).drawer.focus, Some(on_b.id));
+    assert_eq!(state.session.active, Some(a));
+}
+
+/// FR-018 (968 U3): a review key no longer listed does nothing and keeps the switcher open.
+#[test]
+fn a_review_key_no_longer_listed_does_nothing() {
+    let (mut state, _, [on_b, _]) = reviewing();
+    open(&mut state);
+    for key in [
+        EntryKey::ReviewFile(path("gone.rs")),
+        EntryKey::ReviewComment(micold_core::review::comment::CommentId::new()),
+    ] {
+        assert!(update(&mut state, Msg::Chosen(key)).is_none());
+        assert!(state.quick_switch.open.is_some(), "stays open");
+    }
+    let b = session_at(&mut state, worktree("fix-b"));
+    state.session.active = Some(b);
+    review::update(&mut state.changes, review::Msg::SessionSelected);
+    for key in [
+        EntryKey::ReviewFile(path("b.md")),
+        EntryKey::ReviewComment(on_b.id),
+    ] {
+        assert!(
+            update(&mut state, Msg::Chosen(key)).is_none(),
+            "another entry's review is not listed"
+        );
+    }
+}
+
+/// FR-016, J3: a file row shows its path and reviewed state, a comment row its status and
+/// `path:line`; a match on the path alone emphasises it on the second line.
+#[test]
+fn review_rows_show_the_reviewed_state_status_and_line() {
+    use micold_client::ui::quick_switcher::view_of;
+    let (mut state, _, [on_b, _]) = reviewing();
+    open(&mut state);
+    update(&mut state, Msg::QueryChanged("b.md".into()));
+    let view = view_of(&state);
+    let row = |key: &EntryKey| {
+        let at = view.keys.iter().position(|k| k == key).expect("listed");
+        &view.rows[at]
+    };
+    let file_row = row(&EntryKey::ReviewFile(path("b.md")));
+    assert_eq!(file_row.label, "b.md");
+    assert_eq!(
+        file_row.details.as_ref().map(|(text, _)| text.as_str()),
+        Some("File \u{b7} b.md \u{b7} reviewed")
+    );
+    let comment_row = row(&EntryKey::ReviewComment(on_b.id));
+    assert_eq!(comment_row.label, "on b.md:5", "its first line");
+    assert_eq!(
+        comment_row.details.as_ref().map(|(text, _)| text.as_str()),
+        Some("Comment \u{b7} b.md:5 \u{b7} Draft")
+    );
+
+    update(&mut state, Msg::QueryChanged("a/t".into()));
+    let view = view_of(&state);
+    let at = view
+        .keys
+        .iter()
+        .position(|k| *k == EntryKey::ReviewFile(path("a/tests.rs")))
+        .expect("listed by its path");
+    let (text, spans) = view.rows[at].details.clone().expect("a second line");
+    assert_eq!(text, "File \u{b7} a/tests.rs \u{b7} not reviewed");
+    assert!(view.rows[at].spans.is_empty(), "the name did not match");
+    let matched: String = spans.iter().map(|s| &text[s.clone()]).collect();
+    assert_eq!(matched, "a/t", "the path's matched text is emphasised");
+}

@@ -2,19 +2,20 @@
 //! list. Glue only — every decision (what is listed, in what order, what is highlighted, why the
 //! list is empty) comes from [`quick_switch::list`]; this module lays it out.
 
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use iced::widget::column;
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::navigation::Dir;
-use micold_core::quick_switch::EntryKey;
+use micold_core::quick_switch::{EntryKey, Via};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, Roles};
 use micold_core::typeahead::Direction;
 
 use crate::app::{Message, State};
-use crate::features::quick_switch::{self, Empty, Kind, Msg};
+use crate::features::quick_switch::{self, Empty, Entry, Kind, Msg};
 use crate::ui::material::{self, SurfaceKind, TypeaheadRow};
 
 /// The search field's widget id: the keyboard goes here when the switcher opens (research R8).
@@ -43,6 +44,8 @@ fn kind_label(kind: Kind) -> &'static str {
         Kind::Location => "Location",
         Kind::Session => "Session",
         Kind::Project => "Project",
+        Kind::ReviewFile => "File",
+        Kind::ReviewComment => "Comment",
     }
 }
 
@@ -55,6 +58,34 @@ pub fn context_line(kind: Kind, context: &str) -> String {
     }
 }
 
+/// `spans` of the name kept within its first `len` bytes, the row's label (#1274: a comment's
+/// first line is the prefix of its name).
+fn clipped(spans: &[Range<usize>], len: usize) -> Vec<Range<usize>> {
+    spans
+        .iter()
+        .filter(|span| span.start < len)
+        .map(|span| span.start..span.end.min(len))
+        .collect()
+}
+
+/// `spans` of the entry's detail moved onto the second line `details`, which ends with the context
+/// the detail leads (#1274 contract J3); none when the context does not start with it.
+fn detail_spans(entry: &Entry, details: &str, spans: &[Range<usize>]) -> Vec<Range<usize>> {
+    let leads = entry
+        .candidate
+        .detail
+        .as_deref()
+        .is_some_and(|detail| entry.context.starts_with(detail));
+    if !leads {
+        return Vec::new();
+    }
+    let at = details.len() - entry.context.len();
+    spans
+        .iter()
+        .map(|span| span.start + at..span.end + at)
+        .collect()
+}
+
 /// The dialog's data for the open switcher (empty when closed).
 pub fn view_of(state: &State) -> View<'_> {
     let list = quick_switch::list(state);
@@ -63,9 +94,14 @@ pub fn view_of(state: &State) -> View<'_> {
     let mut current = None;
     for (at, ranked) in list.ranked.iter().enumerate() {
         let entry = &list.entries[ranked.index];
-        let row = TypeaheadRow::new(entry.candidate.name.clone(), ranked.spans.clone())
+        let details = context_line(entry.kind, &entry.context);
+        let (label_spans, detail_spans) = match ranked.via {
+            Via::Name => (clipped(&ranked.spans, entry.label.len()), Vec::new()),
+            Via::Detail => (Vec::new(), detail_spans(entry, &details, &ranked.spans)),
+        };
+        let row = TypeaheadRow::new(entry.label.clone(), label_spans)
             .single_line()
-            .details(context_line(entry.kind, &entry.context), Vec::new());
+            .details(details, detail_spans);
         rows.push(if entry.candidate.selectable {
             row
         } else {

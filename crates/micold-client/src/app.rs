@@ -2011,6 +2011,15 @@ impl State {
             Step::Project(path) => vec![Message::Project(crate::features::project::Msg::Reopened(
                 path,
             ))],
+            // #1274 J5: the Changes button's message shows the tab of the shown location, which
+            // changes no location or session; the jump then acts on the shown view.
+            Step::Review(jump) => match self.shown_location() {
+                Some(entry) => vec![
+                    Message::Sidebar(crate::features::sidebar::Msg::ReviewChangesRequested(entry)),
+                    Message::Changes(crate::features::changes::Msg::Jumped(jump)),
+                ],
+                None => Vec::new(),
+            },
             Step::None => Vec::new(),
         }
     }
@@ -2046,7 +2055,7 @@ impl State {
                     .map(crate::features::sidebar::RowRef::Session);
             }
             // A refused switch (the project turned unavailable) left everything where it was.
-            Step::Project(_) | Step::None | Step::Stop(_) => {}
+            Step::Project(_) | Step::None | Step::Stop(_) | Step::Review(_) => {}
         }
     }
 }

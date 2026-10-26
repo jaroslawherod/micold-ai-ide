@@ -64,3 +64,21 @@ the reducer arms, `composer_press`, `shortcut_sheet` and the holder's `Sheet` st
 Refactor: `platform_label` shared by the tooltips and the sheet; `sheet_model` shared by the dialog
 and the showcase. A fixture fix: US3 s1's line 20 became line 5, since the 12-line fixture made a
 line-20 quote outdated (a drawer jump, the next test's case).
+
+### M5 — jump to review files and comments (T052–T056)
+
+Red: `cargo test -p micold-core --lib review::navigate` with `comment_move` stubbed to `None`, and
+`cargo test -p micold-client --test quick_switch --test review_keys --no-fail-fast` with the API in
+place (`Step::Review`, `ReviewJump`, `Msg::Jumped`, `Kind::Review*`) but `candidates` not yet
+inserting the review entries and `view_of` not yet moving detail spans.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T054 (core) | `comment_move` = `]` reaching one id (select, card / drawer), `None` for an id not listed; `step_comment` delegates to it | `a_chosen_comment_moves_as_bracket_reaching_it_does` FAILED (`20 passed; 5 failed` — the stub broke `step_comment` too) | in the gate |
+| T053 → T054 | J4 position (after locations and sessions, before projects; hidden tab too), query by name, choosing a file (tab shown, file selected, session / location / project / session count unchanged), choosing a comment = `]`'s view | `quick_switch`: 5 FAILED (`51 passed; 5 failed`), e.g. `review_entries_follow_the_projects_locations_and_sessions_before_other_projects` | `56 passed; 0 failed`; `review_keys` `29 passed` |
+| T053 | FR-019 no tab → no entries, others unchanged; a key no longer listed does nothing | a guard: passed on the red run (nothing listed yet); fails if review entries leak to another entry | — |
+| T055 | file row `File · <path> · reviewed|not reviewed`, comment row first line + `Comment · <path>:<line> · <status>`, a path-only match emphasised on the second line | `review_rows_show_the_reviewed_state_status_and_line` FAILED | green; a first green run found `reviewed_paths` empty unless sorted Unreviewed first — switched to `file_reviews` (as `g`) |
+
+Refactor: `step_comments` and the comment jump share `reach_comment`; the Review tab fixtures
+(`path`, `file`, `id`, `whole`, `open_into`, `marked`, `draft`) moved to
+`tests/support/review_fixture.rs`, used by `review_keys` and `quick_switch`.

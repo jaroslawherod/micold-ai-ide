@@ -53,8 +53,9 @@ mod keys;
 mod stale;
 
 pub use keys::{
-    composer_press, current_header_row, hunk_controls, key_pressed, review_holder, sheet_model,
-    shortcut_sheet, with_key_hint, SheetModel, NEXT_HUNK, PREVIOUS_HUNK, SEND_TOOLTIP,
+    composer_press, current_header_row, hunk_controls, jump_entries, key_pressed, review_holder,
+    sheet_model, shortcut_sheet, with_key_hint, ReviewJump, SheetModel, NEXT_HUNK, PREVIOUS_HUNK,
+    SEND_TOOLTIP,
 };
 use micold_core::review::keys::{Press, ReviewAction};
 use micold_core::review::navigate::Edge;
@@ -1844,6 +1845,8 @@ pub enum Msg {
     KeyPressed(Press),
     /// A review key's action, decided by [`key_pressed`] (#1274 contract K7).
     ReviewKey(ReviewAction),
+    /// A review entry chosen in the jump-to field (#1274 contract J5), once its tab is shown.
+    Jumped(ReviewJump),
 }
 
 /// What the shell must do.
@@ -3004,6 +3007,7 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::MarkToggled => mark_toggled(state),
         Msg::KeyPressed(_) => Effect::None,
         Msg::ReviewKey(action) => keys::review_key(state, action),
+        Msg::Jumped(jump) => keys::jumped(state, jump),
         Msg::WorktreesListed { project, names } => {
             state.tabs.drop_gone_worktrees(&project, &names);
             // Feature 1126: the header's worktree gone, it follows nothing until the root's follow
