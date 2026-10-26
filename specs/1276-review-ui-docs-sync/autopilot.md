@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
 - **Phase**: M1 reviews
-- **Next step**: orchestrator re-runs review B (round 2) on the fix diff; then full gate and the M1 PR
+- **Next step**: full gate, then the draft M1 PR
 
 ## Pull requests
 
@@ -65,7 +65,8 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | Plan | 3 | b071908fcf6dd7d0c516e4321efa5f0e7d2ee778:c8b7b7954d99ef1165f82f84f9e53ed1e8e5354a | CLEAN, 1 MINOR (sonnet): parallel-runs.md:84,91,92, docs/README.md:45, layout-snapshot.md:105 also say "Changes view" — fixed, prose only: added to outline § Inbound links and plan §3 as reworded to the Review tab |
 | Tasks | 1 | 2172de0899146cb46d218285f19e84958b64c45d:07827f22ca321e5ed423241daeacccd0ba41a4e7 | CLEAN, 3 MINOR (session model, run by orchestrator; speckit-analyze could not run, reviewer checked cross-artifact consistency in its place); all fixed: F1 checklist items 16–17 ticked, notes say clarify answered all three; F2 M1/M2 size kept, decisions 4–5; F3 T005 names the `#[path]` include of marked_table.rs, M1 Verify adds `review_sheet_doc` |
 | M1 A (correctness) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CLEAN, 3 MINOR (high, session model, run by orchestrator); all fixed: F1 `key_cell` builds from `ReviewKey::labels()`, the hand-rolled `chord` removed; F2 § Clearing and discarding says the ⋮ menu also holds **Keyboard shortcuts** → #the-shortcut-sheet (prose only); F3 the row-count assert moved before the zip loop |
-| M1 B (conformance) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CHANGES, 1 MAJOR 2 MINOR (sonnet, run by orchestrator); Verify: cargo tests pass, documentation-set.test.sh pass, links.sh exit 2 (no lychee). All fixed: F1 red-before-green recorded in `tdd/cycle-log.md` (tests run against origin/main's guide in a scratch worktree: 3 failed, then green on the branch); F2 T013 ticked, lychee/mdBook left to CI; F3 parallel-runs.md edited lines rewrapped to 100 columns. Re-review of B due (own MAJOR) |
+| M1 B (conformance) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CHANGES, 1 MAJOR 2 MINOR (sonnet, run by orchestrator); Verify: cargo tests pass, documentation-set.test.sh pass, links.sh exit 2 (no lychee). All fixed: F1 red-before-green recorded in `tdd/cycle-log.md` (tests run against origin/main's guide in a scratch worktree: 3 failed, then green on the branch); F2 T013 ticked, lychee/mdBook left to CI; F3 parallel-runs.md edited lines rewrapped to 100 columns. Re-reviewed in round 2 |
+| M1 B (conformance) | 2 | 55c8a7de13a6327a4e09ea4d89482e75712c28f1:9938200b23e98e38be8e66626ade678b854710e5 | CLEAN, 1 MINOR (sonnet, run by orchestrator); Verify: 3+3+2 tests pass, documentation-set.test.sh pass. F1 cycle-log.md last line ended mid-sentence — fixed, prose only ("loop.") |
 
 ## Declined review findings
 

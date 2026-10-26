@@ -27,4 +27,4 @@ failed before the implementation.
 - refactor: `terminal_only_doc.rs` moved onto `marked_table.rs`; it passes both against
   `origin/main`'s guide in the scratch worktree (2 passed) and on the branch (2 passed), so the
   refactor kept its behaviour. Review A F1: `key_cell` now builds from `ReviewKey::labels()` (the
-  text the `?` sheet renders) instead of re-deriving the key; F3: row count asserted before the zip
+  text the `?` sheet renders) instead of re-deriving the key; F3: row count asserted before the zip loop.
