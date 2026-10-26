@@ -513,10 +513,10 @@ only those two chords and says *Single-key shortcuts are off (Settings → Appea
 The title bar's [jump-to field](appearance-theming.md#title-bar) (or **Ctrl+Shift+P**,
 **Cmd+Shift+P** on macOS) also lists the review of the location you are on, whenever it has a
 Review tab, shown or not: after that project's locations and sessions and before the other projects
-come its files, in the order `j` visits them, then its comments, in the order `]` visits them. A
-file's row shows its name, with its path and *reviewed* or *not reviewed* below; a comment's row
-shows its first line, with its `file:line` and status (*Draft*, *Sent*, *Applied* or *Answered*)
-below.
+come its files, in the order `j` visits them (the tree's filter and sort apply), then its comments,
+in the order `]` visits them. A file's row shows its name, with its path and *reviewed* or *not
+reviewed* below; a comment's row shows its first line, with its `file:line` and status (*Draft*,
+*Sent*, *Applied* or *Answered*) below.
 
 Typing matches a file by its name first and then by its path, and a comment by its text and then by
 its file's path; the matched letters are emphasised. Choosing a file shows the Review tab with that
