@@ -32,6 +32,7 @@ iced_renderer = { workspace = true, optional = true }
 iced_tiny_skia = { workspace = true, optional = true }
 
 [dev-dependencies]
+iced_runtime = { workspace = true }
 tempfile = { workspace = true }
 iced_renderer = { workspace = true }
 iced_tiny_skia = { workspace = true }

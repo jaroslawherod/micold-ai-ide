@@ -307,10 +307,16 @@ where
         // because a frame tick is not the field's business and this must not depend on what the
         // field does with it.
         let target = if self.open { 1.0 } else { 0.0 };
-        tree.state
-            .downcast_mut::<Visibility>()
-            .progress
-            .on_frame(event, target, self.exit, shell);
+        let progress = &mut tree.state.downcast_mut::<Visibility>().progress;
+        let floated = progress.value() > HIDDEN;
+        progress.on_frame(event, target, self.exit, shell);
+        // The floated list comes or goes with this frame, after the runtime laid out the floated
+        // layers for it. That layout is what the frame's `draw` uses, so without a fresh one the
+        // list is drawn against a layout made without it, or another layer against the list's,
+        // and a scrollable in it panics (#1453).
+        if !self.in_flow && floated != (progress.value() > HIDDEN) {
+            shell.invalidate_layout();
+        }
 
         // Reaching the field is a press on it, not a focus event: the rendering stack's text input
         // keeps focus to itself and publishes nothing when it gains it, so a press inside the
@@ -1239,6 +1245,58 @@ mod tests {
                 messages.iter().all(|m| !m.ends_with("opened")),
                 "{modifiers:?}+{key:?} opened Reporter: {messages:?}"
             );
+        }
+    }
+
+    /// A list that starts to show while another floating layer is up is laid out before it is
+    /// drawn (#1453). The runtime keeps the floated layers' layout from `update` for the `draw`
+    /// after it; a list that came into being during that `update` (its first frame of fading in)
+    /// was drawn against a layout made without it, and its scrollable found no child and panicked.
+    #[test]
+    fn a_list_that_starts_showing_beside_another_layer_is_laid_out_before_it_is_drawn() {
+        use iced::widget::{container, scrollable, text};
+        use iced_runtime::user_interface::{Cache, UserInterface};
+        use std::time::{Duration, Instant};
+
+        // The opening list first, so the layers group hands it the other layer's layout.
+        let view = |opening: bool| -> Element<'static, String> {
+            let source = Picker::new(
+                input("Source"),
+                container(scrollable(column![text("Working tree")])),
+                opening,
+                4.0,
+            );
+            let other = Picker::new(input("Other"), text("rows"), true, 4.0);
+            column![source, other].into()
+        };
+
+        let mut renderer = renderer();
+        let mut cache = Cache::default();
+        let start = Instant::now();
+        for frame in 0..30u64 {
+            let mut ui = UserInterface::build(
+                view(frame >= 2),
+                WINDOW,
+                std::mem::take(&mut cache),
+                &mut renderer,
+            );
+            let tick = Event::Window(iced::window::Event::RedrawRequested(
+                start + Duration::from_millis(16 * frame),
+            ));
+            let _ = ui.update(
+                &[tick],
+                mouse::Cursor::Unavailable,
+                &mut renderer,
+                &mut clipboard::Null,
+                &mut Vec::new(),
+            );
+            ui.draw(
+                &mut renderer,
+                &iced::Theme::Light,
+                &renderer::Style::default(),
+                mouse::Cursor::Unavailable,
+            );
+            cache = ui.into_cache();
         }
     }
 }
