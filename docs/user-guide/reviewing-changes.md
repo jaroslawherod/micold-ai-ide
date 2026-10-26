@@ -645,6 +645,8 @@ shown pull request) once a round of feedback is done:
 **Esc** or a click outside closes the menu without changing anything. Both actions change the
 comments in every window open on the project.
 
+The menu also holds **Keyboard shortcuts**, which opens [the shortcut sheet](#the-shortcut-sheet).
+
 ### Sending a pull request's comments
 
 While a pull request's diff is shown, **Send review (n)** sends that pull request's draft comments
