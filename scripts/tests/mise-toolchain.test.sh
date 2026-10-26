@@ -18,26 +18,25 @@ pass() { printf 'ok    %s\n' "$1"; }
 # Prints one line per problem with the `[tools]` table of the mise.toml given; nothing when it
 # declares rust with the three components, and uv.
 problems() {
-  python3 -I - "$1" <<'PY'
-import sys, tomllib
-
-with open(sys.argv[1], "rb") as f:
-    tools = tomllib.load(f).get("tools", {})
-
-rust = tools.get("rust")
-if rust is None:
-    print("[tools] declares no rust")
-else:
-    comps = rust.get("components", "") if isinstance(rust, dict) else ""
-    if isinstance(comps, list):
-        comps = ",".join(comps)
-    have = {c.strip() for c in comps.split(",") if c.strip()}
-    for want in ("rustfmt", "clippy", "rust-analyzer"):
-        if want not in have:
-            print(f"[tools] rust does not install the component {want}")
-if "uv" not in tools:
-    print("[tools] declares no uv")
-PY
+  # The `[tools]` table's lines, up to the next table header (no TOML parser: the gate runs on hosts
+  # whose python3 predates tomllib).
+  local tools rust comps want
+  tools="$(awk '/^\[/ { in_tools = ($0 == "[tools]"); next } in_tools' "$1")"
+  rust="$(printf '%s\n' "$tools" | grep -E '^[[:space:]]*rust[[:space:]]*=' || true)"
+  if [ -z "$rust" ]; then
+    echo "[tools] declares no rust"
+  else
+    comps="$(printf '%s\n' "$rust" | sed -n 's/.*components[[:space:]]*=[[:space:]]*\(.*\)/\1/p' | tr -d '"[]}' | tr ',' ' ')"
+    for want in rustfmt clippy rust-analyzer; do
+      case " $comps " in
+        *" $want "*) ;;
+        *) echo "[tools] rust does not install the component $want" ;;
+      esac
+    done
+  fi
+  if ! printf '%s\n' "$tools" | grep -qE '^[[:space:]]*uv[[:space:]]*='; then
+    echo "[tools] declares no uv"
+  fi
 }
 
 out="$(problems mise.toml)"

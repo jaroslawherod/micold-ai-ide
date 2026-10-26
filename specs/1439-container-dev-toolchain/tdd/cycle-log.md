@@ -61,3 +61,21 @@ and their test evidence is in the ledger's *M1 notes* and *M2 notes*. Commands r
   not exist (`check-guide-own-image: no dockerfile block`). Green after.
 - B3's build: `scripts/check-guide-own-image.sh <runtime> micold-basic:dev`, a new step of CI's
   `container-daemon` job (docker and rootless podman).
+
+## M4 cycle 4: review A fixes (A-F1, A-F2, A-F3)
+
+- A-F3 (`check-guide-own-image.sh`: a `#` comment inside the example ended extraction): new case in
+  `scripts/tests/guide-own-image.test.sh` inserts a Dockerfile comment at the top of the example.
+  Red: `FAIL  a comment inside the example ends it before its FROM line`. Fix: the in-block rules
+  run before the heading rule. Green: all four cases `ok`. The base swap now replaces only the first
+  `FROM` with portable awk (also when it is line 1; GNU sed's `0,/re/` is not on macOS).
+- A-F1 (`mise-toolchain.test.sh` needed python3 ≥ 3.11 for `tomllib`): the `[tools]` table is read
+  with awk/grep/sed. Both cases `ok`; a copy without `uv` prints `[tools] declares no uv`.
+- A-F2 (`sandbox_real_mise_setup.rs` stopped after a fixed 3 s): it now waits (up to 5 min) for a
+  watched setup line showing the install under way (`rust@`, `rustup` or `download`), failing if the
+  run ended first, then sends `SetupStop` and asserts `Stopped`. The second worktree's "downloads
+  nothing" is read from the home (no file under a `toolchains`/`installs`/`downloads` folder newer
+  than a marker), not from output wording; the FR-010 `find` also prunes `/tmp` and `/var/tmp`.
+  Compiles clean under clippy `--features sandbox-real-runtime -D warnings`. **Pending CI**: its
+  first real run is the PR's "sandbox against a real runtime (linux)" job (review B-F2); the
+  orchestrator records that run in the ledger.

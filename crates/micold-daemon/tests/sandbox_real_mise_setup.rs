@@ -58,6 +58,10 @@ const SECOND_SETUP: Duration = Duration::from_secs(60);
 
 const ANSWER: Duration = Duration::from_secs(30);
 
+/// How long the first setup may take to show its toolchain install under way (mise resolving the
+/// version, then rustup starting); generous for a slow runner, it only stops a hang.
+const INSTALL_STARTS: Duration = Duration::from_secs(5 * 60);
+
 fn git(dir: &Path, args: &[&str]) {
     let out = Command::new("git")
         .current_dir(dir)
@@ -246,13 +250,60 @@ impl Pending {
         .await
     }
 
-    /// How run `id` at `location` ended, and its whole output (the reason line last).
+    /// Run `id`'s watched output at `location` until a line satisfies `pred`, all of it so far.
+    /// Fails when the run ends first, so a caller knows the run is still going.
+    async fn output_until(
+        &mut self,
+        term: &mut Terminal<'_>,
+        location: &SessionLocation,
+        id: RunId,
+        within: Duration,
+        what: &str,
+        pred: impl Fn(&str) -> bool,
+    ) -> Vec<String> {
+        let deadline = Instant::now() + within;
+        let mut lines: Vec<String> = Vec::new();
+        while !lines.iter().any(|l| pred(l)) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let next = self
+                .take(term, remaining, what, |m| {
+                    match m {
+                        DaemonMsg::SetupOutput {
+                            location: l,
+                            run,
+                            first_line,
+                            lines,
+                            ..
+                        } if l == location && *run == id => Ok(Some((*first_line, lines.clone()))),
+                        DaemonMsg::SetupChanged {
+                            location: l,
+                            run: Some(s),
+                            ..
+                        } if l == location && s.run.id() == id && s.run.state().is_ended() => {
+                            Err(s.run.state().clone())
+                        }
+                        _ => Ok(None),
+                    }
+                    .transpose()
+                })
+                .await;
+            match next {
+                Ok((first, batch)) => append(&mut lines, first, batch),
+                Err(state) => panic!("run {id:?} ended as {state:?} before {what}: {lines:#?}"),
+            }
+        }
+        lines
+    }
+
+    /// How run `id` at `location` ended, and its whole output (the reason line last), after the
+    /// `lines` of it already taken.
     async fn ended(
         &mut self,
         term: &mut Terminal<'_>,
         location: &SessionLocation,
         id: RunId,
         within: Duration,
+        mut lines: Vec<String>,
     ) -> (SetupState, Vec<String>) {
         let what = format!("the end of setup run {id:?} in {location:?}");
         let state = self
@@ -268,7 +319,6 @@ impl Pending {
             })
             .await;
         let reason = state.reason_line().expect("an ended run has a reason line");
-        let mut lines: Vec<String> = Vec::new();
         while lines.last() != Some(&reason) {
             let (first, batch) = self
                 .take(
@@ -287,12 +337,17 @@ impl Pending {
                     },
                 )
                 .await;
-            // A batch may repeat lines already held (the backlog of a watch); keep each index once.
-            let skip = (lines.len() as u64).saturating_sub(first) as usize;
-            lines.extend(batch.into_iter().skip(skip));
+            append(&mut lines, first, batch);
         }
         (state, lines)
     }
+}
+
+/// Appends a watched output batch whose first line has index `first`. A batch may repeat lines
+/// already held (the backlog of a watch); each index is kept once.
+fn append(lines: &mut Vec<String>, first: u64, batch: Vec<String>) {
+    let skip = (lines.len() as u64).saturating_sub(first) as usize;
+    lines.extend(batch.into_iter().skip(skip));
 }
 
 #[tokio::test]
@@ -354,15 +409,28 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
         let first = wt("first");
         pending.create(&mut term, 3, &crate_project, "first").await;
         let id = pending.started(&mut term, &first).await;
-        // mise resolves the version, then rustup downloads; three seconds in it is mid-install.
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        // Stop once mise or rustup reports the install under way (a `rust@` progress line or a
+        // rustup one); `output_until` fails if the run ended before that.
+        let begun = pending
+            .output_until(
+                &mut term,
+                &first,
+                id,
+                INSTALL_STARTS,
+                "a line showing the toolchain install under way",
+                |l| {
+                    let l = l.to_lowercase();
+                    l.contains("rust@") || l.contains("rustup") || l.contains("download")
+                },
+            )
+            .await;
         let stop = ClientMsg::SetupStop {
             req: 4,
             project: crate_project.clone(),
             location: first.clone(),
         };
         pending.ack(&mut term, stop, 4).await;
-        let (state, lines) = pending.ended(&mut term, &first, id, ANSWER).await;
+        let (state, lines) = pending.ended(&mut term, &first, id, ANSWER, begun).await;
         assert_eq!(state, SetupState::Stopped, "the first run: {lines:#?}");
 
         let again = ClientMsg::SetupRun {
@@ -372,7 +440,9 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
         };
         pending.ack(&mut term, again, 5).await;
         let id = pending.started(&mut term, &first).await;
-        let (state, lines) = pending.ended(&mut term, &first, id, INSTALL_BOUND).await;
+        let (state, lines) = pending
+            .ended(&mut term, &first, id, INSTALL_BOUND, Vec::new())
+            .await;
         assert_eq!(
             state,
             SetupState::Succeeded,
@@ -400,12 +470,17 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
             "`command -v cargo` is not under the sandbox home {sandbox_home}: {cargo}"
         );
 
-        // 3. A second worktree reuses the toolchain: no download, under a minute.
+        // 3. A second worktree reuses the toolchain: no download, under a minute. "No download" is
+        // read from the home, not the output's wording: no file in a toolchain, install or
+        // download folder (rustup's, mise's) is newer than a marker made just before.
+        term.run("touch \"$HOME/.mise-setup-second-marker\"").await;
         let second = wt("second");
         let began = Instant::now();
         pending.create(&mut term, 6, &crate_project, "second").await;
         let id = pending.started(&mut term, &second).await;
-        let (state, lines) = pending.ended(&mut term, &second, id, SECOND_SETUP).await;
+        let (state, lines) = pending
+            .ended(&mut term, &second, id, SECOND_SETUP, Vec::new())
+            .await;
         let took = began.elapsed();
         assert_eq!(
             state,
@@ -416,16 +491,26 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
             took < SECOND_SETUP,
             "the second worktree's setup took {took:?}"
         );
+        let fetched = term
+            .run_within(
+                "find \"$HOME\" -type f -newer \"$HOME/.mise-setup-second-marker\" \\( \
+                 -path '*/toolchains/*' -o -path '*/installs/*' -o -path '*/downloads/*' \\) \
+                 -print 2>/dev/null",
+                Duration::from_secs(60),
+            )
+            .await;
         assert!(
-            !lines.iter().any(|l| l.to_lowercase().contains("download")),
-            "the second worktree's setup downloaded: {lines:#?}"
+            fetched.trim().is_empty(),
+            "the second worktree's setup installed or downloaded:\n{fetched}\noutput: {lines:#?}"
         );
 
         // 4. A project with no mise.toml.
         let bare = wt("bare");
         pending.create(&mut term, 7, &empty_project, "bare").await;
         let id = pending.started(&mut term, &bare).await;
-        let (state, lines) = pending.ended(&mut term, &bare, id, ANSWER).await;
+        let (state, lines) = pending
+            .ended(&mut term, &bare, id, ANSWER, Vec::new())
+            .await;
         assert_eq!(
             state,
             SetupState::Succeeded,
@@ -433,11 +518,13 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
         );
 
         // 5. FR-010: no file outside the home, the projects and the daemon's state is newer than
-        // the marker. `-xdev` keeps it on the container's own file system.
+        // the marker. `-xdev` keeps it on the container's own file system; the temp folders are
+        // left out (FR-014 excepts temp files, and /tmp need not be a tmpfs).
         let outside = term
             .run_within(
                 &format!(
                     "find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run \
+                     -o -path /tmp -o -path /var/tmp \
                      -o -path '{sandbox_home}' -o -path '{}' -o -path '{}' \\) -prune \
                      -o -type f -newer \"$HOME/.mise-setup-probe-marker\" -print 2>/dev/null",
                     projects.display(),
