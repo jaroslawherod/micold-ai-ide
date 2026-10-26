@@ -327,6 +327,12 @@ pub enum Message {
     /// the shell (`shell::runs::run_pending`).
     Runs(crate::features::runs::Msg),
 
+    // ---- Feature 1289: setup runs ----
+    /// The setup output view's messages (contract U4); see [`crate::features::setup::Msg`]. What
+    /// they ask of the shell (a scroll, a copy, a watch) is `shell/setup.rs`'s; here the state
+    /// changes and the requests are dropped, as the transcript's scroll is.
+    Setup(crate::features::setup::Msg),
+
     /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
     ///
     /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
@@ -1263,6 +1269,9 @@ impl State {
             Message::Runs(msg) => {
                 let outcomes = crate::features::runs::routed(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::Setup(msg) => {
+                let _ = crate::features::setup::update(&mut self.setup, msg);
             }
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);

@@ -513,6 +513,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // Feature 034 (FR-014): a dismissed agent prompt is declined; the dismissal reaches the core by
     // several routes (Escape, the scrim, another dialog opening), so the answer is sent from here.
     shell::daemon_sync::send_agent_confirm_declines(app);
+    // Feature 1289 (U4): the open setup output view is watched, and a closed one unwatched, by
+    // whichever route it opened or closed.
+    shell::setup::sync_watch(app);
 
     // Feature 024: an armed reveal scrolls its row into view once there *is* a row to scroll to.
     //
@@ -1211,6 +1214,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::runs::run_pending(app)
         }
         Message::Runs(msg) => shell::runs::update(app, msg),
+        Message::Setup(msg) => shell::setup::update(app, msg),
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)
         }

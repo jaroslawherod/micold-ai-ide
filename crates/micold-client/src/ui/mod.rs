@@ -13,7 +13,7 @@ pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_bypass;
 pub mod confirm_daemon_removal;
-pub(crate) mod confirm_delete;
+pub mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
@@ -83,6 +83,7 @@ pub use settings::container_fields::{
 };
 pub mod session_area;
 pub(crate) mod settings_view;
+pub mod setup_output;
 mod shell;
 pub(crate) mod shortcut_sheet;
 pub mod sidebar;
@@ -944,6 +945,8 @@ pub fn location_menu_items(
         let mut items = vec![review_changes_item(location.clone())];
         items.extend(additional_session_item(state, location));
         items.extend(single_session_items(state, location));
+        // Feature 1289 (U3): appended on the Default row.
+        items.extend(setup_output_item(state, location));
         return items;
     };
     let included = state
@@ -996,7 +999,27 @@ pub fn location_menu_items(
             ),
         );
     }
+    // Feature 1289 (U3): directly above Delete.
+    if let Some(item) = setup_output_item(state, location) {
+        items.insert(items.len() - 1, item);
+    }
     items
+}
+
+/// **Setup output** for `location` (feature 1289, contract U3), while it has a setup run record.
+fn setup_output_item(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Option<material::MenuItem<Message>> {
+    use crate::features::setup;
+    let key = setup::key_of(state, location)?;
+    setup::output_offered(state.setup.summary(key.0, &key.1, &key.2)).then(|| {
+        material::MenuItem::new(
+            Icon::RegularTerminal,
+            "Setup output",
+            Message::Setup(setup::Msg::ViewOpened(key)),
+        )
+    })
 }
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added

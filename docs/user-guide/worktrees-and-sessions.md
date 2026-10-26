@@ -523,6 +523,29 @@ notification for that run, such as *Setup failed in app / Login page: Exited wit
 naming the project and the worktree. A run that was stopped or interrupted posts none, and the same
 run never notifies twice, even after a reconnect.
 
+#### Reading the setup output
+
+Right-click a worktree whose row shows a setup tag, or the **Default** entry, and choose **Setup
+output** (the entry appears once setup has run there). A dialog titled *Setup — <worktree>* opens
+with the command at the top (cut to three lines; hover it for the whole command), the state in
+words, and everything the command printed on standard output and standard error, in the order it
+printed it, in a monospace list:
+
+- **While it runs**, new lines appear as they are printed, at most a quarter of a second apart.
+- **Follow**: the list stays at the bottom as lines arrive. Scroll up to read earlier lines and the
+  list stays where you put it; scroll back to the bottom and it follows again.
+- **The last 10,000 lines** are kept. When a run printed more, the first row says how many earlier
+  lines were not kept, for example *1520 earlier lines not kept*. Until the command prints
+  anything, the list reads *No output yet.*
+- **A failed run ends with the reason**, for example *Exited with status 2.*, as its last line.
+- **Copy output** copies the kept lines, one per line, to the system clipboard. **Close** (or
+  Escape) closes the dialog.
+
+Setup belongs to the daemon, not to the app: it keeps running when the app disconnects or quits.
+If the connection drops while the dialog is open, the dialog picks up where it left off when the
+app reconnects, and a run that ended in the meantime shows its last lines and its reason. The
+output stays readable after the run ends, until the worktree is deleted or setup runs again.
+
 ## Creating a worktree
 
 Click **add** on the sidebar's chip bar to open the New worktree form. At the top, three chips choose
@@ -1122,6 +1145,11 @@ Right-click a worktree in the sidebar to open its context menu:
   that worktree first, then removes the directory, sessions, and (unless unchecked) the branch —
   this cannot be undone. Cancelling removes nothing, including any change you made to the
   checkbox. (A worktree that is already missing/invalid can still be cleaned up this way.)
+  While the worktree's [setup](#setup-in-a-new-worktree) is still running, the dialog adds
+  *Setup is running here. It will be stopped first.*: confirming stops setup, then deletes.
+- **Setup output** — only once [setup](#setup-in-a-new-worktree) has run in the worktree, directly
+  above **Delete**; the **Default** entry offers it last. Opens the
+  [setup output](#reading-the-setup-output).
 - **Start another session...** — only on a worktree that already has a session (the **Default**
   entry offers it too). A confirmation names the worktree and its existing session. Confirming
   starts a **helper** session beside it, selected and shown; the existing session stays the main

@@ -5,7 +5,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use micold_client::features::setup::{self, Effect, Msg, Names};
+use micold_client::features::setup::{self, Effect, Msg, Request};
+use micold_client::ui::setup_output::SETUP_OUTPUT_SCROLL_ID;
 use micold_core::daemons::{Binding, DaemonId};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::session::SessionLocation;
@@ -100,13 +101,63 @@ pub fn on_saved(app: &mut App, change: &SetupCommandChange) {
     }
 }
 
-/// Apply `msg` to the setup state, and post the notification it asks for (FR-017).
+/// Apply `msg` to the setup state, and perform what it asks for: the notification (FR-017), the
+/// output view's scroll to its end, or its copy (contract U4).
 pub fn update(app: &mut App, msg: micold_client::features::setup::Msg) -> Task<Message> {
     match setup::update(&mut app.core.setup, msg) {
         Effect::NotifyError(text) => app.core.notify_error(text),
+        Effect::ScrollToEnd => {
+            return iced::widget::operation::snap_to_end(SETUP_OUTPUT_SCROLL_ID.clone());
+        }
+        Effect::Copy(text) => {
+            return crate::shell::clipboard::interpret(
+                micold_client::features::Outcome::ClipboardWrite(text),
+            );
+        }
         Effect::None => {}
     }
     Task::none()
+}
+
+/// Send what the open output view needs (contract C1, U4): a watch for the location it shows, an
+/// unwatch for one it no longer shows. After every message, so every route that closes the view
+/// stops the watch.
+pub fn sync_watch(app: &mut App) {
+    for request in setup::sync_watch(&mut app.core.setup) {
+        send_watch(app, request);
+    }
+}
+
+/// `daemon` connected: the open view of one of its locations is watched again from the line after
+/// the last one held (FR-018).
+pub fn rewatch(app: &mut App, daemon: DaemonId) {
+    if let Some(request) = setup::rewatch(&app.core.setup, daemon) {
+        send_watch(app, request);
+    }
+}
+
+/// Send `request` to its daemon, when connected; a daemon away gets the watch on reconnect.
+fn send_watch(app: &mut App, request: Request) {
+    let (key, msg) = match request {
+        Request::Watch { key, from_line } => {
+            let (_, project, location) = key.clone();
+            (
+                key,
+                ClientMsg::SetupOutputWatch {
+                    project,
+                    location,
+                    from_line,
+                },
+            )
+        }
+        Request::Unwatch { key } => {
+            let (_, project, location) = key.clone();
+            (key, ClientMsg::SetupOutputUnwatch { project, location })
+        }
+    };
+    if let Some(outbox) = app.outbox_for(key.0) {
+        outbox.send(msg);
+    }
 }
 
 /// A `SetupChanged` from `daemon` (contract C2), as the reducer's message: the summary, with the
@@ -119,37 +170,10 @@ pub fn changed(
     run: Option<SetupRunSummary>,
 ) -> Msg {
     Msg::Changed {
-        names: names(app, &project, &location),
+        names: setup::names(&app.core, &project, &location),
         daemon,
         project,
         location,
         run,
-    }
-}
-
-/// What a notification calls `project` and `location`: the names the sidebar shows.
-fn names(app: &App, project: &std::path::Path, location: &SessionLocation) -> Names {
-    let workspace = &app.core.workspace;
-    let project_name = workspace
-        .projects
-        .iter()
-        .find(|p| p.path == project)
-        .map(|p| p.display_name.clone())
-        .unwrap_or_else(|| {
-            project
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| project.display().to_string())
-        });
-    let location = match location {
-        SessionLocation::Default => "Default".to_owned(),
-        SessionLocation::Worktree(dir) if workspace.active.as_deref() == Some(project) => {
-            app.core.worktree_display_name(dir)
-        }
-        SessionLocation::Worktree(dir) => micold_core::naming::display_name(dir),
-    };
-    Names {
-        project: project_name,
-        location,
     }
 }

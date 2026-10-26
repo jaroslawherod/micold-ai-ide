@@ -1236,16 +1236,8 @@ fn setup_chip(
     location: &SessionLocation,
     r: Roles,
 ) -> Option<Element<'static, Message>> {
-    use crate::features::setup::{row_tag, Tone};
-    let project = state.workspace.active.as_deref()?;
-    let key = match location {
-        SessionLocation::Worktree(dir) => dir.as_str(),
-        SessionLocation::Default => "",
-    };
-    let micold_core::daemons::Binding::Bound(daemon) = state.daemon_binding(key) else {
-        return None;
-    };
-    let summary = state.setup.summary(daemon, project, location)?;
+    use crate::features::setup::{row_tag, summary_of, Tone};
+    let summary = summary_of(state, location)?;
     let tag = row_tag(summary, |secs| {
         micold_core::local_time::UtcOffset::local_at(i64::try_from(secs).unwrap_or(i64::MAX))
     });

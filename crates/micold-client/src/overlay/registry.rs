@@ -355,6 +355,8 @@ register! {
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
     },
+    // The setup output view (feature 1289, contract U4).
+    crate::features::setup::SetupOutputDialog => crate::ui::setup_output::dialog,
     crate::features::worktree::ConfirmWorktreeDeleteDialog => crate::ui::confirm_delete::dialog,
     // The project row menu and nothing else: the two context menus replace each other, and a panel
     // popover open elsewhere in the window is unaffected by a right-click in the sidebar.

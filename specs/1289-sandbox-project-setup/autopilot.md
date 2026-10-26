@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M5
-- **Next step**: orchestrator waits on CI for #1414 and merges; then M6 (T050–T055)
+- **Phase**: M6
+- **Next step**: M6 implement T050–T055 (tdd), then reviews A/B round 1 and visual pass
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1385 | M2 setup core | merged (rebase) | 47997d190a6ee8533f9bf0c71d34185fc66276b2 |
 | #1393 | M3 daemon runs setup (protocol 70) | merged (rebase) | 9177522b8a536a94336a72df7469658756093a44 |
 | #1407 | M4 setup persistence and delete | merged (rebase) | 8a49a7780b9b3021fe4a41b6a56be18a067a8b0a |
-| #1414 | M5 setup settings and state | open | — |
+| #1414 | M5 setup settings and state | merged (rebase) | 15d62e891bb1292c94c58b585a0a975869c291dd |
 
 ## Milestones
 
@@ -31,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T008–T017 | full | core setup model, output buffer, shell, StreamingChild, settings field | #1385 | merged |
 | M3 | T018–T030 | full | protocol 70; daemon runs setup on create, streams output, MCP field, run/stop | #1393 | merged |
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | merged |
-| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | #1414 | PR open |
-| M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | pending |
+| M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | #1414 | merged |
+| M6 | T050–T055 | full | Setup output dialog, delete confirmation line | — | in progress |
 | M7 | T056–T059 | light | Run setup / Stop setup menu entries | — | pending |
 
 ## Decisions
@@ -92,6 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 B | 1 (sonnet) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | CLEAN; Verify green (features_setup 9, features_settings 155, setup_tag_geometry 3, layout_snapshot 127, feature_write_isolation 8, feature_registration_cost 7); B-F1 fixed, prose only ("seven sections") |
 | M5 visual pass | 1 (U1, U2) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | PASS; V-F1 left: the tag's tooltip shows with the row's, as the leading status chip's does (`status_chip.rs:96` inside a `row_tooltip` row), the existing pattern; V-F2 fixed (placeholder *e.g. mise trust && mise install*); evidence in `visual-pass/` |
 | M5 A | 2 (scoped, sonnet) | 1107e0107dc91a44d1323966ca70bcde87d9de44:7f5b8a36eaf2e15a4cb3532d59d873e553b54b08 | CLEAN; no findings |
+| M5 rebase-2 daemon_sync resolution | scoped (sonnet) | — | CLEAN — every production ProjectAdd goes through `add_project`, bug 1423 ordering kept, setup command sent once per project on connect |
 
 ## Declined review findings
 
@@ -100,6 +101,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M6 implemented (2026-10-26) on 15d62e891 (#1414 merged by rebase): T050–T055 ticked; features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4 passed (cycle log § M6 cycle 1); clippy client clean; full client suite green after two guard updates (feature_registration_cost: `setup`→`structured_transcript::Follow` allowed with reason; root vocabulary 29 with `Setup`). Next: push, review snapshot, return for reviews A and B round 1 and the visual pass; then full gate (`scripts/gate.sh`), rebase, PR.
 M5 rebase 2 (2026-10-26, user asked to resolve #1414's conflicts): rebased onto main 26ac5a75e (211+ commits). Conflicts: (1) `daemon_sync.rs` — main's bug 1423 split `register_projects` into `register_bound_projects` and added `register_project_for` (a create registers its project on the target daemon first); resolved by keeping main's split and routing `register_bound_projects`' loop through `shell::setup::add_project`, so bug 1423's ProjectAdd also carries the stored setup command (logic both sides touched: scoped review advised). No other new ProjectAdd send site on main. (2) `docs/user-guide/settings.md` — kept main's title/status-bar links with "seven sections". Protocol stays 70 (main has no bump past 1289's 70). `cargo test --no-run` (client, core, daemon, material) clean with no compile fixes; layout_snapshot 150/150 unchanged; full gate (scripts/gate.sh) green at 4727fd047; force-pushed. Main since gained 5 docs-only 1439 commits, merge-tree clean. Next: scoped review of the daemon_sync resolution, CI, merge; M6.
 M5 PR (2026-10-25): review A round 2 CLEAN; rebased onto main 81b3eb543 (11 commits, no conflicts, protocol stays 70, layout snapshot passes unchanged, no SettingsDraft fixes needed); full gate (scripts/gate.sh) green at a03ae147f; pushed; PR #1414 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M6.
 M5 review round 1 fixed (2026-10-25): A-F1–A-F5, B-F1, V-F2 (cycle log M5 cycle 3); V-F1 kept as the existing pattern; full gate (scripts/gate.sh) green. Next: review A round 2 (scoped, sonnet) on the new snapshot; then rebase onto main, PR.
