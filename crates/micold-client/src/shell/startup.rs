@@ -209,6 +209,7 @@ fn restore_from_disk(
 /// Feature 551, FR-017: the sidebar starts with the folds the settings recorded.
 fn restore_folds(core: &mut State, settings: &Settings) {
     core.sidebar.folded = settings.folded_origins.clone();
+    core.sidebar.filter_open = settings.filter_open;
 }
 
 fn boot() -> (App, Task<Message>) {
@@ -781,6 +782,20 @@ mod tests {
         restore_folds(&mut core, &settings);
 
         assert_eq!(core.sidebar.folded, [folded].into());
+    }
+
+    /// BUG-1470, FR-016: the filter accordion opens at launch as it was left.
+    #[test]
+    fn an_open_filter_accordion_stays_open_at_launch() {
+        let mut core = State::default();
+        restore_folds(&mut core, &Settings::default());
+        assert!(!core.sidebar.filter_open);
+        let settings = Settings {
+            filter_open: true,
+            ..Settings::default()
+        };
+        restore_folds(&mut core, &settings);
+        assert!(core.sidebar.filter_open);
     }
 
     /// The window has a narrowest supported size, and it is the one the documentation names.

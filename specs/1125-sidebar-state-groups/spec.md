@@ -221,7 +221,7 @@ show, that All clears the filters, and that the add and hide actions work.
    tooltip; choosing an item does what today's header button does and closes the menu.
 7. **Given** more filters on offer than fit one line next to **All** (more than 3, BUG-1470),
    **When** the chip bar is shown, **Then** it is exactly one chip line tall: **All**, a **Filter**
-   toggle (⏷ closed, ⏶ open, with the count of active filters when any), then the actions at the
+   toggle (▾ closed, ▴ open, with the count of active filters when any), then the actions at the
    line's end; no chip or action is cut off. **When** the user presses the toggle, **Then** an
    accordion under the line holds every filter chip, wrapped onto further lines, and the toggle
    flips; pressing it again closes the accordion. **When** filters are active and the accordion is
@@ -362,7 +362,7 @@ chords to reach a location in a collapsed group.
   `Menu` primitive, so its placing and dismissal follow feature 017.
 - **FR-016** (BUG-1470): The chip bar MUST be one chip line tall (`anatomy::chip::HEIGHT`) whatever
   the number of filters. With more than 3 filters on offer it MUST show **All**, a **Filter** toggle
-  (⏷/⏶, with the active count), the active filters as selected `ToggleChip`s each with a ✕ clearing
+  (▾/▴, with the active count), the active filters as selected `ToggleChip`s each with a ✕ clearing
   just that filter, and a `+N` chip opening the accordion for those that do not fit; the toggle and
   `+N` open and close the existing `Accordion` under the line, which holds every filter chip
   wrapped (same `ToggleChip`, OR semantics, colours). Whether it is open MUST live in sidebar state

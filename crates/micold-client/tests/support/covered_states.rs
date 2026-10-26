@@ -529,23 +529,35 @@ fn with_project() -> State {
     state
 }
 
-/// The project with worktrees offering six tag filters — four types, *issue* and *untyped* — at
-/// sidebar `width` (feature 1125, T050).
-fn with_six_filters(width: u16) -> State {
+/// The project with worktrees offering nine tag filters — seven types, *issue* and *untyped* — at
+/// sidebar `width`, two of them active when `active`, the filter accordion open when `open`
+/// (BUG-1470, T066): more than fit one line, so the bar collapses to its one line.
+pub fn with_nine_filters(width: u16, active: bool, open: bool) -> State {
+    use micold_client::features::sidebar::{Msg, TagFilter};
+    use micold_core::naming::ConventionalType::{Feat, Fix};
     let mut state = with_project();
     state.sidebar.width = width;
     state.worktree.worktrees = vec![
         worktree("feat-42_login", "feat/42_login"),
         worktree("fix-1117_ci-red", "fix/1117_ci-red"),
         worktree("docs-guide", "docs/guide"),
-        worktree("chore-deps", "chore/deps"),
+        worktree("refactor-core", "refactor/core"),
+        worktree("build-deps", "build/deps"),
+        worktree("ci-cache", "ci/cache"),
+        worktree("perf-scan", "perf/scan"),
         worktree("scratch", "scratch"),
     ];
     assert_eq!(
         state.available_tag_filters().len(),
-        6,
-        "the chip bar must have six filter chips on offer"
+        9,
+        "the chip bar must have nine filter chips on offer"
     );
+    if active {
+        for f in [TagFilter::Type(Feat), TagFilter::Type(Fix)] {
+            state.update(micold_client::app::Message::Sidebar(Msg::FilterToggled(f)));
+        }
+    }
+    state.sidebar.filter_open = open;
     state
 }
 
@@ -910,12 +922,32 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[],
             }],
         },
-        // Feature 1125 (T050, US4.7, FR-016): the chip bar with six filter chips on offer (four
-        // types, *issue*, *untyped*) at the narrowest, default and widest sidebar: at 180px they
-        // wrap onto further lines left of add, hide and more.
+        // BUG-1470 (T066, US4.7, FR-016): the chip bar with nine filter chips on offer is one line:
+        // collapsed with two filters active, and with the accordion open, at the narrowest,
+        // default and widest sidebar.
         CoveredState {
             name: "main-shell-sidebar-chip-bar-narrowest",
-            build: || StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_MIN_WIDTH)),
+            build: || {
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_MIN_WIDTH,
+                    true,
+                    false,
+                ))
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-narrowest-open",
+            build: || {
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_MIN_WIDTH,
+                    true,
+                    true,
+                ))
+            },
             anchors: &[Anchor {
                 name: "shell.root",
                 path: &[],
@@ -924,7 +956,25 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "main-shell-sidebar-chip-bar-default",
             build: || {
-                StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_DEFAULT_WIDTH))
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_DEFAULT_WIDTH,
+                    true,
+                    false,
+                ))
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-default-open",
+            build: || {
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_DEFAULT_WIDTH,
+                    true,
+                    true,
+                ))
             },
             anchors: &[Anchor {
                 name: "shell.root",
@@ -933,7 +983,27 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         CoveredState {
             name: "main-shell-sidebar-chip-bar-widest",
-            build: || StateUnderTest::new(with_six_filters(micold_client::app::SIDEBAR_MAX_WIDTH)),
+            build: || {
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_MAX_WIDTH,
+                    true,
+                    false,
+                ))
+            },
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "main-shell-sidebar-chip-bar-widest-open",
+            build: || {
+                StateUnderTest::new(with_nine_filters(
+                    micold_client::app::SIDEBAR_MAX_WIDTH,
+                    true,
+                    true,
+                ))
+            },
             anchors: &[Anchor {
                 name: "shell.root",
                 path: &[],

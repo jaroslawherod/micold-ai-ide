@@ -73,8 +73,8 @@ comparison against a file.
 wrong: a widget may lay the child out at full size and clip it when drawing, and the layout tree
 looks identical either way. Whether the overhang reaches the screen is decided in `draw`, which this
 check does not read. So it catches an escape from a parent that does *not* clip, and is blind to the
-distinction otherwise — which is why `CLIP_REVEALED` exists and why it does not expire (empty since
-feature 1125 removed the one clip-revealing wrapper a covered state held at rest).
+distinction otherwise — which is why `CLIP_REVEALED` exists and why it does not expire (empty from
+feature 1125 until BUG-1470 brought the filter accordion back).
 
 That limit was found the hard way. The check was built against BUG-001, on the belief that
 `Expand`'s oversized child *was* the defect. It was not: `Expand::layout` is unchanged by the fix,
@@ -305,11 +305,12 @@ exist to prevent. Note what that does and does not mean: a firing exemption prov
 still there, not that it is still a defect. The first one below stayed green straight through the
 fix for the bug it was written against.
 
-- **`CLIP_REVEALED` — empty.** It held the sidebar's collapsed filter accordion (`material::Expand`
-  reports a shrunken height to its parent while its child keeps full height, then reveals it by
-  clipping). Feature 1125 replaced the accordion with the always-visible chip bar, so the list is
-  empty; a new entry is either a new clip-revealing wrapper, named with its reason and an
-  attribution test that drives it open, or a real escape.
+- **`CLIP_REVEALED` — one entry.** The sidebar's collapsed filter accordion under the chip bar's
+  line (`material::Expand` reports a shrunken height to its parent while its child keeps full
+  height, then reveals it by clipping). Feature 1125 had emptied the list; BUG-1470 put the
+  accordion back behind the **Filter** toggle (FR-016). `the_recorded_escapes_are_the_accordion_reveal`
+  drives it open and shows the node come clean. A new entry is either a new clip-revealing wrapper,
+  named with its reason and an attribution test that drives it open, or a real escape.
 - **`SCROLL_CONTENT` — one entry, one list.** The sidebar's scroll content in
   `main-shell-sidebar-scrolled-to-top`, 686.8px taller than the viewport showing it. A `Scrollable`
   overhangs because its content does not fit and the user moves it; that is what scrolling *is*.

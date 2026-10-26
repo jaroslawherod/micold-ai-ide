@@ -2134,7 +2134,8 @@ fn with_no_session_viewed_the_row_the_overview_revealed_is_selected() {
 mod chip_bar {
     use super::*;
     use micold_client::features::sidebar::{
-        chip_bar_chips, more_menu_items, ChipBarChip, MoreAction, MoreMenuItem, MORE_MENU,
+        chip_bar_chips, collapsed_bar, more_menu_items, ChipBarChip, MoreAction, MoreMenuItem,
+        MORE_MENU,
     };
 
     fn on_offer() -> Vec<TagFilter> {
@@ -2257,5 +2258,46 @@ mod chip_bar {
         assert_eq!(enabled(true, false), [true, true, true]);
         assert_eq!(enabled(true, true), [false, true, true]);
         assert_eq!(enabled(false, false), [false, false, false]);
+    }
+
+    /// Nine filters on offer: more than fit one line (BUG-1470, US4.7).
+    fn nine() -> Vec<TagFilter> {
+        use ConventionalType::*;
+        [Feat, Fix, Docs, Refactor, Build, Ci, Perf]
+            .into_iter()
+            .map(TagFilter::Type)
+            .chain([TagFilter::HasIssue, TagFilter::Untyped])
+            .collect()
+    }
+
+    #[test]
+    fn three_or_fewer_filters_have_no_collapsed_bar_and_stay_inline() {
+        assert_eq!(collapsed_bar(&on_offer()[..3], &BTreeSet::new(), 2), None);
+        assert_eq!(collapsed_bar(&[], &BTreeSet::new(), 2), None);
+        assert!(collapsed_bar(&on_offer(), &BTreeSet::new(), 2).is_some());
+    }
+
+    #[test]
+    fn the_collapsed_bar_is_all_the_toggle_and_nothing_else_while_no_filter_is_active() {
+        let bar = collapsed_bar(&nine(), &BTreeSet::new(), 2).expect("9 > 3");
+        assert!(bar.all_active, "All looks selected with no filter");
+        assert_eq!(bar.active_count, 0);
+        assert!(bar.shown.is_empty() && bar.overflow == 0);
+    }
+
+    #[test]
+    fn active_filters_show_on_the_line_and_the_rest_end_in_a_plus_n() {
+        let all = nine();
+        let bar = collapsed_bar(&all, &filters([all[4], all[1], all[7]]), 2).expect("9 > 3");
+        assert!(!bar.all_active);
+        assert_eq!(bar.active_count, 3, "the toggle's count");
+        assert_eq!(
+            bar.shown,
+            [all[1], all[4]],
+            "on-offer order, as many as fit"
+        );
+        assert_eq!(bar.overflow, 1, "+1");
+        let fits = collapsed_bar(&all, &filters([all[4]]), 2).expect("9 > 3");
+        assert_eq!((fits.shown, fits.overflow), (vec![all[4]], 0));
     }
 }

@@ -1161,3 +1161,34 @@ mod a_row_that_moves_group {
         assert_eq!(state.worktree.menu_open, open);
     }
 }
+
+#[test]
+fn the_filter_accordion_flips_with_its_toggle() {
+    // BUG-1470, FR-016: closed to begin with; `FilterOpenToggled` flips it and nothing else.
+    let mut state = filtered_state();
+    assert!(!state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
+    state.update(Message::Sidebar(SidebarMsg::FilterOpenToggled));
+    assert!(state.sidebar.filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterOpenToggled));
+    assert!(!state.sidebar.filter_open);
+    assert_eq!(state.sidebar.filters.len(), 1, "the filters are untouched");
+}
+
+#[test]
+fn pressing_an_active_chip_clears_just_that_filter() {
+    // BUG-1470: the ✕ on an active chip sends `FilterToggled` of that filter.
+    let mut state = filtered_state();
+    for f in [TagFilter::Untyped, TagFilter::Type(ConventionalType::Fix)] {
+        state.update(Message::Sidebar(SidebarMsg::FilterToggled(f)));
+    }
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
+    assert_eq!(
+        state.sidebar.filters.iter().copied().collect::<Vec<_>>(),
+        [TagFilter::Type(ConventionalType::Fix)]
+    );
+}
