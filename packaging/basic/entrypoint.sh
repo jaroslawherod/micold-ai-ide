@@ -47,7 +47,9 @@ export HOME="$home"
 # The shims folder by #1289's rule (contract toolchain-path P2): `$MISE_DATA_DIR/shims`, else
 # `$XDG_DATA_HOME/mise/shims`, else `~/.local/share/mise/shims`; an empty value counts as unset.
 # `mkdir -p` leaves existing folders and their files alone. A home it cannot write costs one line on
-# stderr, not the container (#1439, FR-011).
+# stderr, not the container (#1439, FR-011). The folder is picked from the container's environment:
+# when a project's environment-include sets MISE_DATA_DIR or XDG_DATA_HOME, the session PATH names
+# that folder instead, which this does not create (it is on PATH all the same; mise creates it).
 if [ -n "${MISE_DATA_DIR:-}" ]; then
   shims="$MISE_DATA_DIR/shims"
 elif [ -n "${XDG_DATA_HOME:-}" ]; then
