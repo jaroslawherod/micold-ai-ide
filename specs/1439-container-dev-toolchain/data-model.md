@@ -31,6 +31,9 @@ No new persisted app state, no settings field, no protocol message. Three things
 
 - **Where**: `DaemonState` in `crates/micold-daemon/src/state.rs`, one per daemon process.
 - **Shape**: `Arc<tokio::sync::Mutex<()>>`; held by at most one setup run (contract S2).
+- **Gate**: `in_sandbox` (`AtomicBool`), set at startup when the daemon's data directory is the
+  container's state directory; the turn exists only when it is set and `offered_clis()` is `Some`
+  (contract S1).
 - **Per-run additions** in `setup.rs`'s `Entry`: a way to wake a waiting run when **Stop setup**,
   a delete or a daemon stop ends it (a `watch`/`Notify` the stop path signals), so S3's "at once"
   holds. `SetupState` is unchanged: waiting is `Running`.
