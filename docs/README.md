@@ -42,9 +42,9 @@ follows describes the version you are reading it from (constitution, Principle V
 - [Running a prompt in parallel](user-guide/parallel-runs.md) — the **Run in parallel** button: one
   prompt, 2 to 8 runs each with its own AI CLI, worktree and branch, and the run group in the
   sidebar.
-- [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Changes view: opening it
-  from a worktree or the Default entry, the changed-file list, the base line, and the
-  Committed/Uncommitted toggles.
+- [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Review tab: opening and
+  keeping it, the source control and pull requests, the file tree and reviewed marks, comments,
+  sending a review, the comments drawer and the review keys.
 - [Tools for the AI in your sessions](user-guide/agent-tools.md) — what an assistant can do through
   the app's tool server, and which AI CLIs report their sub-agent runs (Claude Code does; Copilot,
   Pi, Codex and OpenCode have no known signal, and `claude --bg` is not covered).

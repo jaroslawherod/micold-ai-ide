@@ -261,8 +261,8 @@ A merged or closed pull request, and one with no checks, shows the state alone. 
 status has its own shape, so none depends on colour. The indicator keeps its size however wide the
 sidebar is.
 
-The same switch also lists every pull request of a worktree's branch in the source control of its
-[Changes view](reviewing-changes.md#pull-requests).
+The same switch also lists every pull request of a worktree's branch in the **Pull requests** entry
+of its [Review tab's source control](reviewing-changes.md#pull-requests).
 
 #### When the status is read
 
@@ -1155,9 +1155,10 @@ Right-click a worktree in the sidebar to open its context menu:
   starts a **helper** session beside it, selected and shown; the existing session stays the main
   one. Cancelling changes nothing. The confirmation still starts the session if another window or
   an agent added one while it was open.
-- **Review changes** — opens the Changes view: every file the worktree changed against its base
-  branch, committed and uncommitted. The **Default** entry offers this item too. See
-  [Reviewing a worktree's changes](reviewing-changes.md).
+- **Review changes** — opens the worktree's **Review** tab, or shows it when it is already open:
+  every file the worktree changed against its base branch, committed and uncommitted. The
+  **Changes** button at the end of the header above the terminal does the same. The **Default**
+  entry offers this item too. See [Reviewing a worktree's changes](reviewing-changes.md).
 
 ## Starting, switching, and closing sessions
 
@@ -1354,7 +1355,7 @@ the background service keeps the events it reports. It is Claude Code only.
   (**No change**) and when the last line gains or loses its line ending (**No newline at end**).
   While the input is still arriving, or when it is not of the shape the tool expects, the card shows
   the raw input as before; a failed call still shows its diff. Tool results stay plain text.
-- **Large blocks wait for you.** A code block or a diff over the size the **Changes** view shows
+- **Large blocks wait for you.** A code block or a diff over the size the **Review** tab shows
   without asking says how large it is, and draws its lines only once you press **Show in full**.
 - **Which links open.** An `http`, `https` or `mailto` link opens in your system's browser or mail
   app when you press it, or Tab to it and press Enter. Any other address (a relative path, a

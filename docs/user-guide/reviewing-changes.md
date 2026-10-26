@@ -1,25 +1,26 @@
 # Reviewing a worktree's changes
 
-The **Changes view** lists every file a worktree has changed, so you can see what a session did
-before you merge it or tell the session what to change next.
+A worktree's **Review** tab lists every file the worktree has changed, so you can see what a session
+did before you merge it or tell the session what to change next. It sits in the tab strip above the
+terminal, beside the worktree's sessions; each worktree, and the project root, has at most one.
 
-## Opening the Changes view
+## Opening a review
 
 While a session is shown, the header above the terminal ends with a **Changes** button for the
-worktree (or the project root) the session runs in. Press it to open the Changes view of that
-location. Its label counts the changes the way the view's list does, with both **Committed** and
-**Uncommitted** on:
+worktree (or the project root) the session runs in. Press it to open that location's **Review** tab,
+or to show it when it is already open. Its label counts the changes the way the tab's list does,
+with both **Committed** and **Uncommitted** on:
 
 - **Changes · 3 files · +42 −7**: three changed files, 42 lines added and 7 removed;
 - **Changes · no changes**: nothing to review;
 - **Changes** alone: the counts are being read, or cannot be read here (for example, the session
-  service runs on another computer). The button still opens the view.
+  service runs on another computer). The button still opens the tab.
 
 The counts follow your edits: when files change on disk, they are read again, and while that read
 runs the button shows **Changes** alone rather than an old figure.
 
-You can also right-click a worktree in the sidebar and choose **Review changes**. The **Default**
-entry (the project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
+You can also right-click a worktree in the sidebar and choose **Review changes**: it opens or
+shows that worktree's Review tab as **Changes** does. The **Default** entry (the project root, see [Worktrees & Sessions](worktrees-and-sessions.md#the-default-entry-sessions-without-a-worktree))
 has a right-click menu too, with **Review changes** as its one item.
 
 **Review changes** on a worktree other than the one shown switches to that worktree: the session
@@ -28,26 +29,14 @@ under that worktree's own header. On a worktree with no session, its review is s
 header, with no session current.
 
 The review opens as a **Review** tab in the location's tab strip, after its session and shell
-tabs and just before **New session**, and is the shown tab, underlined. The view takes the place
-of the terminal, with the header and the strip still above it and the **Changes** button drawn
-selected while it is shown (hover it: *The review is shown*). Its own header names the entry. A
+tabs and just before **New session**, and is the shown tab, underlined. Its content fills the area
+under the strip where the shown session's panes are drawn, with the header and the strip still above
+it and the **Changes** button drawn selected while it is shown (hover it: *The review is shown*). The tab's own header names the entry. A
 review is always shown under its own worktree's header and strip, never another's. A worktree with
 no session shows a strip of the **Review** tab alone beside **New session**. While the Review tab
 is shown, the status words and the split buttons keep their place in the strip, greyed out: they
 act on the terminal, which is not shown. When you close the last session of a worktree whose review
 you kept, its review is shown in the session's place.
-
-The view's header names the entry over its base line, and beside them holds the **source
-control**: a button that reads what the view shows, **Working tree** when it opens. Press it (or
-focus it and press `Enter` or `Space`) to open its list: **Working tree**, with its **Committed**
-and **Uncommitted** chips (see [Committed and uncommitted](#committed-and-uncommitted)), then the
-worktree's [pull requests](#pull-requests), then **Files** (see
-[Browsing the repository](#browsing-the-repository)). What is shown now is marked as chosen. Pick an
-option to show it; the list closes. The arrow keys move through the options and chips, `Enter` picks,
-and `Esc`, `Tab` or a click outside the list closes it without changing anything. Hover the control
-to read its whole label and the base line. Below the header, the file list (or the Files tree) has
-a fixed-width column to itself, and the diff takes the rest of the width: a wider window widens
-only the diff. In a narrow window the control keeps its width: the entry's column narrows and its base line ends in `…`.
 
 The Review tab carries two marks:
 
@@ -56,6 +45,8 @@ The Review tab carries two marks:
 - a **dot** while the tab is not shown and the worktree's files have changed since you last looked
   at the review. Hover the tab to read both: *Review · 2 drafts / Changed since you looked*.
   Showing the tab reads the changes again and the dot goes.
+
+## Keeping and closing the Review tab
 
 The review is kept while you work elsewhere. Selecting a session (in the sidebar, with a session
 chord or the quick switcher), switching to another worktree or project, or opening the Overview or
@@ -66,69 +57,53 @@ you left them. Each location keeps its own review. Press the **Review** tab, **C
 **Review changes** to show it again exactly as left; while it is shown, pressing **Changes** or
 the tab changes nothing.
 
-Only the Review tab's **×** drops the review (it takes the place of the view's former **Close**
-button), returning to the session shown before it; the next open starts afresh, with your
-comments and the chosen pull request still there. The review is also dropped
+Only the Review tab's **×** drops the review, returning to the session shown before it; the next
+open starts afresh, with your comments and the chosen pull request still there. The review is also dropped
 when its worktree is removed (for example, deleted from another window) or its project is removed
 from the app.
 
-## What the list shows
+### When a worktree is removed
 
-The changed files are shown as a tree. Each folder that holds a changed file has a row of its own,
-with its files and sub-folders indented below it; at each level folders come before files, and both
-are in name order. A folder whose only content is one folder shares its row with it, so
-`crates/core/src/review` is one row rather than four. Every folder is open when the view opens.
+Removing a worktree removes its comments with it: deleting it from the sidebar closes its Review
+tab and deletes its comments, and a worktree removed outside the app (for example with
+`git worktree remove`) loses its comments the next time the project's worktree list is refreshed.
+Its comments do not reappear in any other entry. Removing the project from the app deletes the
+comments of all its entries.
 
-A folder row shows a chevron, the folder's name and, under it, `+a −r`: the lines added and removed
-in all the files below it, so a closed folder still says how much changed inside. Select a folder row
-to close it and hide everything below it; select it again to open it, with any sub-folder you closed
-still closed. The folders you close stay closed while the view is kept, even when the list is read
-again or you switch the source. Selecting a file in a closed folder some other way (from the diff's
-**Open diff**, or by following a reference) opens the folders above it.
+## Choosing what to review
 
-A file row starts with its review state (○ not reviewed yet, ◉ not reviewed and with draft
-comments, ✓ reviewed; see [Marking files reviewed](#marking-files-reviewed)) and the file's own name,
-in bold; the folders above it say where it is. Under the name:
+The Review tab's header names the entry over its base line, and beside them holds the **source
+control**: a button that reads what the tab shows, **Working tree** when it opens. Press it (or
+focus it and press `Enter` or `Space`) to open its list: **Working tree**, with its **Committed**
+and **Uncommitted** chips (see [Committed and uncommitted](#committed-and-uncommitted)), then the
+worktree's [pull requests](#pull-requests), then **Files** (see
+[Browsing the repository](#browsing-the-repository)). What is shown now is marked as chosen. Pick an
+option to show it; the list closes. The arrow keys move through the options and chips, `Enter` picks,
+and `Esc`, `Tab` or a click outside the list closes it without changing anything. Hover the control
+to read its whole label and the base line. Below the header, the file list (or the Files tree) has
+a fixed-width column to itself, and the diff takes the rest of the width: a wider window widens
+only the diff. In a narrow window the control keeps its width: the entry's column narrows and its base line ends in `…`.
 
-- what happened to it: **Added**, **Deleted**, **Renamed** or **Mode** (only its permissions
-  changed); a modified file has no tag. A file git does not track yet counts as **Added**;
-- **Binary** or **Not text** when the file's contents are not readable text;
-- a small bar and `+a −r`: the green part of the bar is the lines added and the red part the lines
-  removed, in proportion to each other, and the whole bar is longer the more lines the file changed
-  compared with the other files listed, so the large changes stand out. A binary or non-text file, a
-  **Mode** change and a rename with no edits have no bar and no counts;
-- how many comments you have written on the file and not sent yet (see
-  [Commenting on lines](#commenting-on-lines)), when there are any.
+Whatever you choose, the diff of the selected file is beside the tree: **Whole file** shows all its
+lines (see [Showing the whole file](#showing-the-whole-file)), and in **Files**, **Back** returns to
+what you were reading and **Open diff** switches from a browsed file to its diff. When a pull
+request's diff cannot be read, the diff area says *The pull request's diff could not be read; select
+it again to retry*: pick it again in the source control to read it again (see [Reading a pull
+request's diff](#reading-a-pull-requests-diff)).
 
-Hover a file row to see its full path, and for a rename the path it had before. A name too long for
-the list ends in `…`; deep folders stop indenting further before a file's name loses its room.
+### Committed and uncommitted
 
-Above the tree, the **Filter files…** box narrows the list: type part of a path and only the files
-whose path matches stay listed, inside the folders that hold them, with the matched characters
-highlighted. It matches as **Open file by path** does (see
-[Browsing the repository](#browsing-the-repository)), so `tests.r` finds `daemon/tests.rs`. While the
-box holds text every folder holding a match is shown open; empty it — press `Esc` in the box, or its
-**×** — and the tree comes back with the folders you had closed still closed. When nothing matches,
-the list says **No changed file matches the filter** with a **Clear filter** button; the diff keeps
-showing the file you had open, and that file is selected again once the filter is cleared.
+Two chips inside the source control's **Working tree** option choose what is listed, and both are
+on when the Review tab opens:
 
-Under the filter box, the sort chips order each level of the tree; folders always stay before files
-and the tree is never flattened:
+- **Committed** — the commits on the worktree's branch since the base;
+- **Uncommitted** — what is in the worktree's files but not committed yet, including files git
+  does not track.
 
-- **Path** (the default): by name.
-- **Size**: the largest change (lines added plus removed) first; a folder counts the files below it.
-- **Unreviewed first**: files you have not marked reviewed first, and folders holding any such file
-  before folders holding none. It is offered once the files' reviewed marks are known (see
-  [Marking files reviewed](#marking-files-reviewed)).
-
-The filter text and the chosen sort stay as they are while the view is kept, when the list is read
-again and when you switch the source. Each window keeps its own.
-
-A file changed both in a commit and again since is listed once, with the combined change. Long
-lists scroll smoothly: only the rows on screen are drawn.
-
-While the list is read, the view says **Reading changes…**. With nothing to list it says why:
-**No changes against** `<branch>`, **No uncommitted changes**, or that both kinds are hidden.
+Turn one off to see only the other kind of change: the list stays open, so you can turn the other
+back on, and the closed control reads **Working tree · uncommitted** (or **· committed**, or **·
+nothing shown** with both off). Pressing a chip while a pull request is shown returns to the working
+tree with the new kinds. They reset each time the Review tab opens.
 
 ## Pull requests
 
@@ -189,7 +164,8 @@ pull request is no longer listed after a refresh, the view returns to the workin
 
 GitHub will not diff a pull request above 300 files or 20 000 changed lines. The pane then says
 the pull request is too large to show here and offers **Open on GitHub**. A read that fails for
-another reason says so in the pane, with no notice; pick it again to retry.
+another reason says *The pull request's diff could not be read; select it again to retry* in the
+pane, with no notice; pick it again to retry.
 
 A pull request's files have their own marks and their own *n of m reviewed* (see [Marking files
 reviewed](#marking-files-reviewed)), apart from the working tree's: marking `src/a.rs` in a pull
@@ -199,6 +175,112 @@ longer reviewed: it drops back to ○ or ◉ with a dot at the end of its row, a
 working tree. A new head commit that leaves the file's diff the same keeps it reviewed. The marks
 stay when the pull request is merged, closed or no longer listed, and show again whenever its diff
 is shown; they go when you unmark them or the worktree is removed.
+
+## The file tree
+
+The changed files are shown as a tree. Each folder that holds a changed file has a row of its own,
+with its files and sub-folders indented below it; at each level folders come before files, and both
+are in name order. A folder whose only content is one folder shares its row with it, so
+`crates/core/src/review` is one row rather than four. Every folder is open when the Review tab opens.
+
+A folder row shows a chevron, the folder's name and, under it, `+a −r`: the lines added and removed
+in all the files below it, so a closed folder still says how much changed inside. Select a folder row
+to close it and hide everything below it; select it again to open it, with any sub-folder you closed
+still closed. The folders you close stay closed while the view is kept, even when the list is read
+again or you switch the source. Selecting a file in a closed folder some other way (from the diff's
+**Open diff**, or by following a reference) opens the folders above it.
+
+A file row starts with its review state (○ not reviewed yet, ◉ not reviewed and with draft
+comments, ✓ reviewed; see [Marking files reviewed](#marking-files-reviewed)) and the file's own name,
+in bold; the folders above it say where it is. Under the name:
+
+- what happened to it: **Added**, **Deleted**, **Renamed** or **Mode** (only its permissions
+  changed); a modified file has no tag. A file git does not track yet counts as **Added**;
+- **Binary** or **Not text** when the file's contents are not readable text;
+- a small bar and `+a −r`: the green part of the bar is the lines added and the red part the lines
+  removed, in proportion to each other, and the whole bar is longer the more lines the file changed
+  compared with the other files listed, so the large changes stand out. A binary or non-text file, a
+  **Mode** change and a rename with no edits have no bar and no counts;
+- how many comments you have written on the file and not sent yet (see
+  [Commenting on lines](#commenting-on-lines)), when there are any.
+
+Hover a file row to see its full path, and for a rename the path it had before. A name too long for
+the list ends in `…`; deep folders stop indenting further before a file's name loses its room.
+
+Above the tree, the **Filter files…** box narrows the list: type part of a path and only the files
+whose path matches stay listed, inside the folders that hold them, with the matched characters
+highlighted. It matches as **Open file by path** does (see
+[Browsing the repository](#browsing-the-repository)), so `tests.r` finds `daemon/tests.rs`. While the
+box holds text every folder holding a match is shown open; empty it — press `Esc` in the box, or its
+**×** — and the tree comes back with the folders you had closed still closed. When nothing matches,
+the list says **No changed file matches the filter** with a **Clear filter** button; the diff keeps
+showing the file you had open, and that file is selected again once the filter is cleared.
+
+Under the filter box, the sort chips order each level of the tree; folders always stay before files
+and the tree is never flattened:
+
+- **Path** (the default): by name.
+- **Size**: the largest change (lines added plus removed) first; a folder counts the files below it.
+- **Unreviewed first**: files you have not marked reviewed first, and folders holding any such file
+  before folders holding none. It is offered once the files' reviewed marks are known (see
+  [Marking files reviewed](#marking-files-reviewed)).
+
+The filter text and the chosen sort stay as they are while the view is kept, when the list is read
+again and when you switch the source. Each window keeps its own.
+
+A file changed both in a commit and again since is listed once, with the combined change. Long
+lists scroll smoothly: only the rows on screen are drawn.
+
+While the list is read, the view says **Reading changes…**. With nothing to list it says why:
+**No changes against** `<branch>`, **No uncommitted changes**, or that both kinds are hidden.
+
+## Marking files reviewed
+
+Once you have read a file's diff, press **Mark reviewed** in the diff header, beside **Whole
+file**. The file's row turns to ✓ and the control reads **Reviewed**, shown pressed; press it
+again to take the mark back. A file with draft comments shows ◉ until you mark it; marking it keeps
+its drafts and their count on the row.
+
+A mark is made on the file's change as it is now. When the file's change differs from the marked one
+(an edit, a new commit that alters it), it is no longer reviewed: it drops back to ○ or ◉, with a
+dot at the end of its row (tooltip: "Changed since you marked it reviewed"), and no longer counts in
+*n*. Mark it again to review the new change. If you have not marked it again, undo the change, so
+the file's change is the one you marked, and the mark comes back without pressing anything. Other
+files changing, or new files appearing, leave a mark alone. Committing or staging a file unaltered
+keeps it reviewed in an entry that has a base (see [The base line](#the-base-line)); in an entry
+without one only uncommitted changes are listed, so a committed file leaves the list. A renamed file
+starts unreviewed: its change is the one under its new name.
+
+While changes are held (see [Changed since you looked](#changed-since-you-looked)), a reviewed file
+that changed since you looked is not reviewed either: its row drops back to ○ or ◉ with the dot
+(tooltip: "Changed since you looked, and since you marked it reviewed", or "Changed since you
+looked" when another window has already marked its new change), it does not count in *n*, and
+**Unreviewed first** sorts it with the unreviewed files. While the open file is one of them,
+**Mark reviewed** is unavailable (tooltip: "This file changed since you looked: select it again to
+see its latest change"), since the diff on screen is not the change a mark would be kept on.
+Holding changes writes nothing to the session service, so other windows keep the mark. Select the
+file or press the notice to see its latest change: a mark on that change shows the file reviewed
+again, and a mark on an older one leaves it to be marked again, as above.
+
+The Review tab's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
+the list shows, so it follows the **Committed** and **Uncommitted** chips, and *n* how many of
+them are reviewed. With no files listed, or while marks are unavailable, the header shows neither,
+and nothing else in it moves.
+
+A mark covers the file's whole change, committed and uncommitted together, whatever the chips
+show. **Mark reviewed** is unavailable, with a tooltip saying why, when:
+
+- **Committed** or **Uncommitted** is off and the file has changes of the hidden kind: turn both
+  on to see its whole change first. **Reviewed** stays pressable, so you can always take a mark
+  back;
+- the file's change has not been read yet, or could not be read (it can be marked once a later
+  read succeeds);
+- the session service is not connected. Rows then show ○ and ◉ only and the header shows no
+  progress; comments keep working.
+
+Marks are kept by the session service, beside the entry's comments: every window on the project
+shows the same marks, and they are still there after a restart. They are removed with the
+worktree.
 
 ## Reading a diff
 
@@ -227,7 +309,7 @@ Two chips above the diff choose its layout:
   lines than the other, the shorter side is left blank.
 
 Both layouts show the same changed lines. The choice is kept: the next file you select opens in the
-same layout, and so does the Changes view after you restart the app. Every open window follows
+same layout, and so does the Review tab after you restart the app. Every open window follows
 the latest choice.
 
 ### Syntax colouring
@@ -334,7 +416,7 @@ a path you type still opens. Choosing another pull request, or the working tree,
 were browsing again at that version, says so if it does not exist there, and forgets where **Back**
 led.
 
-### Keeping up with changes
+## Changed since you looked
 
 The view keeps watching the entry while it is shown. When a file in the entry is created, edited,
 deleted or renamed, or a change is staged or committed — by you in a terminal or editor, or by
@@ -344,7 +426,7 @@ do not trigger a read, and the Default entry does not react to changes inside it
 
 What you are reading does not move while the agent works. Once the list has files, a read that
 finds something new is held: the file list, its counts and the diff on screen stay exactly as they
-were, scroll position included. Instead the view's header says **3 files changed since you looked**
+were, scroll position included. Instead the Review tab's header says **3 files changed since you looked**
 (**1 file changed since you looked** for one), and the row of each of those files carries a dot
 at its end (tooltip: "Changed since you looked"; the same dot a reviewed file gets when it changes,
 see *Marking files reviewed*).
@@ -371,7 +453,7 @@ GitHub, the last list stays on screen with no error, and once it is older than t
 captioned **Possibly stale** until a refresh succeeds.
 
 A pull request opened from a new branch of the worktree appears at the next refresh, without
-reopening the view. The pull request you are reading stays shown and keeps its place in the list
+reopening the Review tab. The pull request you are reading stays shown and keeps its place in the list
 while the list changes; its header follows its state and checks. It is replaced by the working
 tree only when it leaves the list.
 
@@ -384,146 +466,6 @@ its files may have changed meanwhile (they changed while its location was shown,
 not shown, or the Overview or Settings covered it). That read is held like any other: you come
 back to the list and diff you left, with **n files changed since you looked** in the header when
 something changed meanwhile.
-
-## Marking files reviewed
-
-Once you have read a file's diff, press **Mark reviewed** in the diff header, beside **Whole
-file**. The file's row turns to ✓ and the control reads **Reviewed**, shown pressed; press it
-again to take the mark back. A file with draft comments shows ◉ until you mark it; marking it keeps
-its drafts and their count on the row.
-
-A mark is made on the file's change as it is now. When the file's change differs from the marked one
-(an edit, a new commit that alters it), it is no longer reviewed: it drops back to ○ or ◉, with a
-dot at the end of its row (tooltip: "Changed since you marked it reviewed"), and no longer counts in
-*n*. Mark it again to review the new change. If you have not marked it again, undo the change, so
-the file's change is the one you marked, and the mark comes back without pressing anything. Other
-files changing, or new files appearing, leave a mark alone. Committing or staging a file unaltered
-keeps it reviewed in an entry that has a base (see [The base line](#the-base-line)); in an entry
-without one only uncommitted changes are listed, so a committed file leaves the list. A renamed file
-starts unreviewed: its change is the one under its new name.
-
-While changes are held (see [Keeping up with changes](#keeping-up-with-changes)), a reviewed file
-that changed since you looked is not reviewed either: its row drops back to ○ or ◉ with the dot
-(tooltip: "Changed since you looked, and since you marked it reviewed", or "Changed since you
-looked" when another window has already marked its new change), it does not count in *n*, and
-**Unreviewed first** sorts it with the unreviewed files. While the open file is one of them,
-**Mark reviewed** is unavailable (tooltip: "This file changed since you looked: select it again to
-see its latest change"), since the diff on screen is not the change a mark would be kept on.
-Holding changes writes nothing to the session service, so other windows keep the mark. Select the
-file or press the notice to see its latest change: a mark on that change shows the file reviewed
-again, and a mark on an older one leaves it to be marked again, as above.
-
-The view's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
-the list shows, so it follows the **Committed** and **Uncommitted** chips, and *n* how many of
-them are reviewed. With no files listed, or while marks are unavailable, the header shows neither,
-and nothing else in it moves.
-
-A mark covers the file's whole change, committed and uncommitted together, whatever the chips
-show. **Mark reviewed** is unavailable, with a tooltip saying why, when:
-
-- **Committed** or **Uncommitted** is off and the file has changes of the hidden kind: turn both
-  on to see its whole change first. **Reviewed** stays pressable, so you can always take a mark
-  back;
-- the file's change has not been read yet, or could not be read (it can be marked once a later
-  read succeeds);
-- the session service is not connected. Rows then show ○ and ◉ only and the header shows no
-  progress; comments keep working.
-
-Marks are kept by the session service, beside the entry's comments: every window on the project
-shows the same marks, and they are still there after a restart. They are removed with the
-worktree.
-
-## Reviewing from the keyboard
-
-While the Review tab is shown and no text field, dialog or terminal has the keyboard, single keys
-move through the review, mark it and comment on it, and one chord sends it. Press `?` for the same
-list in the app:
-
-| Key (Linux / Windows) | Key (macOS) | What it does |
-|---|---|---|
-| `j` | `j` | Next file |
-| `k` | `k` | Previous file |
-| `n` | `n` | Next change |
-| `p` | `p` | Previous change |
-| `]` | `]` | Next comment |
-| `[` | `[` | Previous comment |
-| `v` | `v` | Mark file reviewed / not reviewed |
-| `g` | `g` | Next file not reviewed |
-| `c` | `c` | Comment on the picked lines or the current change |
-| `?` | `?` | Show or hide these shortcuts |
-| `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` | Send review |
-| `Ctrl+Enter` | `Cmd+Enter` | Save comment (in the comment box) |
-
-`j` and `k` follow the files in the order the tree lists them, with its filter and sort: a filtered
-tree visits only the files it shows. A file inside a collapsed folder is visited too, and its folder
-opens. The selected file's diff is shown from the top and its row is scrolled into view. Both wrap
-at the ends of the list; with no file selected, `j` selects the first and `k` the last.
-
-`n` and `p` step through the selected file's changes (hunks) and scroll the diff so the change's
-header is at the top. The current change's header is drawn in the accent colour. Past the last
-change of a file, `n` goes on to the first change of the next file that has changes; before the
-first, `p` goes to the last change of the previous one. Files without changes to step through
-(binary, renamed only, mode only, or a large file whose diff is not shown) are passed over, and both
-wrap at the ends of the list. Selecting another file, however you select it, clears the current
-change. Moving never changes picked lines, a comment you are writing, **Whole file**, or
-**Unified** / **Side by side**. The arrows in the diff header, beside **Mark reviewed**, do what `p`
-and `n` do.
-
-`]` and `[` step through the comments of what the diff shows — drafts and sent ones alike — in
-file order (the tree's), then by line, wrapping at both ends. Each press selects the comment's file
-when it is another one and scrolls its card into view, highlighted, as a press on its row in the
-[comments drawer](#the-comments-drawer) does. A comment that is not in the diff (outdated, or its
-file is not listed) opens the drawer on it instead.
-
-`c` opens the comment box with the keyboard in it: on the picked lines, as **Add comment** does;
-with no lines picked, on the current change's changed lines (the new version's, or the base
-version's for a change that only removes lines); with neither it opens nothing and says *Pick lines
-or move to a hunk (n) to comment*. A comment box already open keeps its text and gets the keyboard
-back.
-
-`v` does exactly what **Mark reviewed** does (see [Marking files reviewed](#marking-files-reviewed)),
-for the selected file only. `g` selects the first file after the selected one, wrapping, that is not
-marked reviewed — a mark made in another window counts. With every file reviewed it leaves the
-selection where it is and says *All files reviewed*.
-
-**Ctrl+Shift+Enter** (**Cmd+Shift+Enter** on macOS) sends the review exactly as **Send review (n)**
-does, and does nothing while that button is unavailable (no drafts, or a send under way in any
-window). It also works while you are typing in the comment box: only the saved drafts are sent, and
-the box stays open with its text and the keyboard. **Ctrl+Enter** (**Cmd+Enter**) in the box saves
-the comment; with Shift held too it sends instead, so it never saves. The tooltip of **Send review
-(n)** names the chord.
-
-### The shortcut sheet
-
-`?`, or **Keyboard shortcuts** in the review bar's ⋮ menu, opens the shortcut sheet over the Review
-tab: every key above with what it does, in your platform's form. While it is open no other review key
-acts; Escape, `?` or a click outside closes it and gives the keyboard back to the Review tab.
-
-The single keys act only while the review has the keyboard: typed into the tree's filter, a comment
-box or any other field, a letter is just text; with Ctrl, Cmd or Alt held, or while an input method
-is composing, nothing happens. Holding `j`, `k`, `n`, `p`, `]` or `[` steps once per key repeat;
-`v`, `g`, `c` and `?` act once per press. The tooltips of the arrows and of **Mark reviewed** name
-their key. To turn the single keys off, see [Settings → Single-key shortcuts in the Review
-tab](settings.md#single-key-shortcuts-in-the-review-tab): with them off, `?` does nothing, the send
-chord and the comment box's save chord keep working, and the sheet — opened from the ⋮ menu — lists
-only those two chords and says *Single-key shortcuts are off (Settings → Appearance)*.
-
-### Jumping to a file or comment by name
-
-The title bar's [jump-to field](appearance-theming.md#title-bar) (or **Ctrl+Shift+P**,
-**Cmd+Shift+P** on macOS) also lists the review of the location you are on, whenever it has a
-Review tab, shown or not: after that project's locations and sessions and before the other projects
-come its files, in the order `j` visits them (the tree's filter and sort apply), then its comments,
-in the order `]` visits them. A file's row shows its name, with its path and *reviewed* or *not
-reviewed* below; a comment's row shows its first line, with its `file:line` and status (*Draft*,
-*Sent*, *Applied* or *Answered*) below.
-
-Typing matches a file by its name first and then by its path, and a comment by its text and then by
-its file's path; the matched letters are emphasised. Choosing a file shows the Review tab with that
-file selected and its row in view, as `j` reaching it does. Choosing a comment does what `]`
-reaching it does: its card is scrolled into view, or the comments drawer opens on it. Neither
-changes the location, session or project you are on. A location without a Review tab adds nothing
-to the list.
 
 ## Commenting on lines
 
@@ -639,7 +581,7 @@ non-text and too-large files take no comments, as before.
 - Nothing is posted to GitHub. To have the agent act on a pull request's comments, see [Sending a
   pull request's comments](#sending-a-pull-requests-comments).
 
-### Sending a review
+## Sending a review
 
 A bar runs along the bottom of the Review tab, just above the window's status bar, whenever the
 Review tab is shown. On its left it counts the comments of what is shown (the working tree, or the
@@ -669,7 +611,7 @@ cannot take a pasted text — an error reads "Couldn't send the review: *why*", 
 drafts, and the bar keeps showing the error after the counts until you dismiss it with its **×** or
 start the next send.
 
-#### When no session is running
+### When no session is running
 
 If no session is running in the entry, Send review starts one there with the project's default AI
 CLI (Settings), waits until it is ready for input, and types the message as its first input. A
@@ -683,11 +625,25 @@ runs, its process fails to start, or it is not ready for input within a minute �
 that was started but not ready in time stays in the sidebar; you can use it, or close it, and send
 again.
 
-#### Sending from two windows
+### Sending from two windows
 
 While a send of an entry is under way, Send review reads **Sending…** and is unavailable for that
 entry in every window, including while a new session is starting for it. Each comment is delivered
 once: a second send started meanwhile is refused, and the comments of the first are not sent twice.
+
+### Clearing and discarding
+
+The bar's **⋮** opens a menu that tidies the comments of what is shown (the working tree, or the
+shown pull request) once a round of feedback is done:
+
+- **Clear sent** removes every sent, applied and answered comment of what is shown at once and
+  keeps the drafts. It is unavailable while there is none.
+- **Discard drafts…** asks "Discard *n* draft comments? This cannot be undone.", *n* counting the
+  drafts of what is shown. **Discard** removes them; **Cancel** keeps them. It is unavailable while
+  there are no drafts, and while a send of the entry is under way.
+
+**Esc** or a click outside closes the menu without changing anything. Both actions change the
+comments in every window open on the project.
 
 ### Sending a pull request's comments
 
@@ -718,7 +674,7 @@ comments were written against is not in the worktree, one says so.
 A pull request's branch can gain commits (the agent's push, a colleague's) or be force-pushed while
 your comments are drafts. When the pull request list refreshes and shows a new head for the
 pull request you are looking at, its diff is read again. When it differs from the diff on screen it
-is held, as for the working tree (see *Keeping up with changes*): the header says how many files
+is held, as for the working tree (see [Changed since you looked](#changed-since-you-looked)): the header says how many files
 changed since you looked and their rows carry a dot. Selecting a dotted file shows its latest patch;
 pressing the notice shows the new diff, and the file you had selected stays selected. Comments you
 write before that record the commit of the diff on screen.
@@ -839,7 +795,7 @@ in 4 lines has no **Show all**. A reply longer than 4,000 characters also offers
 card shows of its start. Press **Show all** to read the whole reply in a dialog, scrolling if it is
 long; **Close** (or Esc) returns to the diff. The dialog closes by itself when its comment is cleared or discarded.
 
-### The comments drawer
+## The comments drawer
 
 **Comments** on the bar opens the comments drawer: a panel over the right side of the diff, from
 under the view's header down to the bar, 360 pixels wide (at most half the diff's area in a narrow
@@ -873,30 +829,126 @@ does not open it.
   ([Marking a comment by hand](#marking-a-comment-by-hand)); **Answer…** also jumps to the comment and opens the note in the row.
 - **Jumping.** Press a row to select its file and scroll the diff to the comment's first line, left
   of the drawer; the comment's card is outlined. A jump can be refused: when the file is hidden
-  because the **Committed** or **Uncommitted** button is off, the drawer says to turn it back on;
+  because the source control's **Committed** or **Uncommitted** chip is off, the drawer says to turn
+  it back on;
   when the file is not among the changes at all, it says so. The diff stays where it was.
 
-### Clearing and discarding
+## Reviewing from the keyboard
 
-The bar's **⋮** opens a menu that tidies the comments of what is shown (the working tree, or the
-shown pull request) once a round of feedback is done:
+While the Review tab is shown and no text field, dialog or terminal has the keyboard, single keys
+move through the review, mark it and comment on it, and one chord sends it. Press `?` for the same
+list in the app:
 
-- **Clear sent** removes every sent, applied and answered comment of what is shown at once and
-  keeps the drafts. It is unavailable while there is none.
-- **Discard drafts…** asks "Discard *n* draft comments? This cannot be undone.", *n* counting the
-  drafts of what is shown. **Discard** removes them; **Cancel** keeps them. It is unavailable while
-  there are no drafts, and while a send of the entry is under way.
+<!-- review-shortcuts:start -->
+| Key | Does |
+|---|---|
+| `j` | Next file |
+| `k` | Previous file |
+| `n` | Next change |
+| `p` | Previous change |
+| `]` | Next comment |
+| `[` | Previous comment |
+| `v` | Mark file reviewed / not reviewed |
+| `g` | Next file not reviewed |
+| `c` | Comment on the picked lines or the current change |
+| `?` | Show or hide these shortcuts |
+| `Ctrl+Shift+Enter` (`Cmd+Shift+Enter` on macOS) | Send review |
+| `Ctrl+Enter` (`Cmd+Enter` on macOS) | Save comment |
+<!-- review-shortcuts:end -->
 
-**Esc** or a click outside closes the menu without changing anything. Both actions change the
-comments in every window open on the project.
+The single keys are the same on every platform; the two chords use `Ctrl` on Linux and Windows and
+`Cmd` on macOS. **Save comment** acts in the comment box only.
 
-### When a worktree is removed
+`j` and `k` follow the files in the order the tree lists them, with its filter and sort: a filtered
+tree visits only the files it shows. A file inside a collapsed folder is visited too, and its folder
+opens. The selected file's diff is shown from the top and its row is scrolled into view. Both wrap
+at the ends of the list; with no file selected, `j` selects the first and `k` the last.
 
-Removing a worktree removes its comments with it: deleting it from the sidebar closes its Changes
-view and deletes its comments, and a worktree removed outside the app (for example with
-`git worktree remove`) loses its comments the next time the project's worktree list is refreshed.
-Its comments do not reappear in any other entry. Removing the project from the app deletes the
-comments of all its entries.
+`n` and `p` step through the selected file's changes (hunks) and scroll the diff so the change's
+header is at the top. The current change's header is drawn in the accent colour. Past the last
+change of a file, `n` goes on to the first change of the next file that has changes; before the
+first, `p` goes to the last change of the previous one. Files without changes to step through
+(binary, renamed only, mode only, or a large file whose diff is not shown) are passed over, and both
+wrap at the ends of the list. Selecting another file, however you select it, clears the current
+change. Moving never changes picked lines, a comment you are writing, **Whole file**, or
+**Unified** / **Side by side**. The arrows in the diff header, beside **Mark reviewed**, do what `p`
+and `n` do.
+
+`]` and `[` step through the comments of what the diff shows — drafts and sent ones alike — in
+file order (the tree's), then by line, wrapping at both ends. Each press selects the comment's file
+when it is another one and scrolls its card into view, highlighted, as a press on its row in the
+[comments drawer](#the-comments-drawer) does. A comment that is not in the diff (outdated, or its
+file is not listed) opens the drawer on it instead.
+
+`c` opens the comment box with the keyboard in it: on the picked lines, as **Add comment** does;
+with no lines picked, on the current change's changed lines (the new version's, or the base
+version's for a change that only removes lines); with neither it opens nothing and says *Pick lines
+or move to a hunk (n) to comment*. A comment box already open keeps its text and gets the keyboard
+back.
+
+`v` does exactly what **Mark reviewed** does (see [Marking files reviewed](#marking-files-reviewed)),
+for the selected file only. `g` selects the first file after the selected one, wrapping, that is not
+marked reviewed — a mark made in another window counts. With every file reviewed it leaves the
+selection where it is and says *All files reviewed*.
+
+**Ctrl+Shift+Enter** (**Cmd+Shift+Enter** on macOS) sends the review exactly as **Send review (n)**
+does, and does nothing while that button is unavailable (no drafts, or a send under way in any
+window). It also works while you are typing in the comment box: only the saved drafts are sent, and
+the box stays open with its text and the keyboard. **Ctrl+Enter** (**Cmd+Enter**) in the box saves
+the comment; with Shift held too it sends instead, so it never saves. The tooltip of **Send review
+(n)** names the chord.
+
+### The shortcut sheet
+
+`?`, or **Keyboard shortcuts** in the review bar's ⋮ menu, opens the shortcut sheet over the Review
+tab: every key above with what it does, in your platform's form. While it is open no other review key
+acts; Escape, `?` or a click outside closes it and gives the keyboard back to the Review tab.
+
+The single keys act only while the review has the keyboard: typed into the tree's filter, a comment
+box or any other field, a letter is just text; with Ctrl, Cmd or Alt held, or while an input method
+is composing, nothing happens. Holding `j`, `k`, `n`, `p`, `]` or `[` steps once per key repeat;
+`v`, `g`, `c` and `?` act once per press. The tooltips of the arrows and of **Mark reviewed** name
+their key. To turn the single keys off, see [Settings → Single-key shortcuts in the Review
+tab](settings.md#single-key-shortcuts-in-the-review-tab): with them off, `?` does nothing, the send
+chord and the comment box's save chord keep working, and the sheet — opened from the ⋮ menu — lists
+only those two chords and says *Single-key shortcuts are off (Settings → Appearance)*.
+
+### Jumping to a file or comment by name
+
+The title bar's [jump-to field](appearance-theming.md#title-bar) (or **Ctrl+Shift+P**,
+**Cmd+Shift+P** on macOS) also lists the review of the location you are on, whenever it has a
+Review tab, shown or not: after that project's locations and sessions and before the other projects
+come its files, in the order `j` visits them (the tree's filter and sort apply), then its comments,
+in the order `]` visits them. A file's row shows its name, with its path and *reviewed* or *not
+reviewed* below; a comment's row shows its first line, with its `file:line` and status (*Draft*,
+*Sent*, *Applied* or *Answered*) below.
+
+Typing matches a file by its name first and then by its path, and a comment by its text and then by
+its file's path; the matched letters are emphasised. Choosing a file shows the Review tab with that
+file selected and its row in view, as `j` reaching it does. Choosing a comment does what `]`
+reaching it does: its card is scrolled into view, or the comments drawer opens on it. Neither
+changes the location, session or project you are on. A location without a Review tab adds nothing
+to the list.
+
+## Two worktrees, two windows
+
+Each worktree, and the project root, has its own Review tab, and each keeps its own state: the
+source you chose, the selected file, both scroll positions, revealed lines, picked lines, the
+comment you are writing and the comments drawer. Showing another worktree shows that worktree's
+Review tab as you left it, and never carries this one's selection, comments or marks over to it
+(see [Keeping and closing the Review tab](#keeping-and-closing-the-review-tab)).
+
+Several windows can be open on one project. What you are looking at stays in its window: each
+window keeps its own selection, scroll positions, filter and sort. What the session service keeps
+is shared: every window on a worktree shows the same reviewed marks (see [Marking files
+reviewed](#marking-files-reviewed)) and the same comments, drafts included, with their statuses and
+replies, and the Review tab's badge counts the same drafts in each. A change made in one window shows
+in the others as it is made.
+
+That holds while a review is sent, too. While one window sends a worktree's review, **Send review
+(n)** reads **Sending…** and is unavailable in every window on that worktree, **Discard drafts…** is
+unavailable in each, and once the review is delivered its comments are sent in all of them; each
+comment is delivered once (see [Sending from two windows](#sending-from-two-windows)).
 
 ## The base line
 
@@ -909,20 +961,6 @@ When there is no such point, the line says why instead, and only uncommitted cha
 
 - no default branch was found (no `origin/HEAD`, `main` or `master`);
 - the worktree's branch has no history in common with the default branch.
-
-## Committed and uncommitted
-
-Two chips inside the source control's **Working tree** option choose what is listed, and both are
-on when the view opens:
-
-- **Committed** — the commits on the worktree's branch since the base;
-- **Uncommitted** — what is in the worktree's files but not committed yet, including files git
-  does not track.
-
-Turn one off to see only the other kind of change: the list stays open, so you can turn the other
-back on, and the closed control reads **Working tree · uncommitted** (or **· committed**, or **·
-nothing shown** with both off). Pressing a chip while a pull request is shown returns to the working
-tree with the new kinds. They reset each time the view opens.
 
 ## The Default entry
 

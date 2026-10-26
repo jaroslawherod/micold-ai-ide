@@ -2,6 +2,14 @@
 
 Checked by `crates/micold-core/tests/review_keys_doc.rs`.
 
+## The table it is checked against (T002)
+
+`micold_core::review::keys::REVIEW_KEYS` (`crates/micold-core/src/review/keys.rs`, #1274): 12
+`ReviewKey` rows in the `?` sheet's order, each with `key: KeyName` (`Char(c)` or `Enter`),
+`mods: KeyMods { primary, shift }` (`primary` is Cmd on macOS, Ctrl elsewhere), `action`,
+`repeats` and `sheet: &'static str`, the sheet's text. The table is not thinner: the core test
+compares both cells and no client test is needed (T005).
+
 ## In the guide
 
 `docs/user-guide/reviewing-changes.md`, under the keyboard heading:

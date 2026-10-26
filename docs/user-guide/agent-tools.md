@@ -308,7 +308,7 @@ refused it.
 
 ## Reporting on review comments
 
-When you send a review from the Changes view
+When you send a review from the Review tab
 ([Sending a review](reviewing-changes.md#sending-a-review)), each comment in the message carries a
 reference such as `C-1a2b3c4d`. The session answers a comment with `report_review_comment`:
 
