@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M5 PR open (CI, merge); then the close unit (T058, quickstart §C).
+- **Next step**: M5 PR #1460 open (CI, merge); then the close unit (T058, quickstart §C).
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1415 | M2 single-key switch core (+ D4 design amendment) | merged | 83f693ff7c3b14e115a2ae17dc67fa5085546242 |
 | #1451 | M3 move and mark (j k n p v g, Settings switch) | merged | 6cbd52f0ed4581036bec4dd0f6527022dcd4a046 |
 | #1458 | M4 comments, send chord, shortcut sheet | merged | cc2e4548a0f9b835009b6e250e39416ba2222b8c |
+| #1460 | M5 jump to review files and comments | open | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | #1415 | merged |
 | M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs (blockers merged) | #1451 | merged |
 | M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | #1458 | merged |
-| M5 | T052–T057 | full | jump-to review entries — #1127 merged, after M4 | (this PR) | PR open |
+| M5 | T052–T057 | full | jump-to review entries — #1127 merged, after M4 | #1460 | PR open |
 
 ## Decisions
 
