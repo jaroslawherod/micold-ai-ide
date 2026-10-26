@@ -651,6 +651,37 @@ pub(crate) fn switch_button<'a>(
     )
 }
 
+/// As [`switch_button`], its label cut with an ellipsis (the full label on hover) when the strip is
+/// too narrow for it (feature 1463 FR-012).
+pub(crate) fn switch_button_shrinking<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    let entry = crate::features::session::switch_entries(state, id)
+        .into_iter()
+        .next()?;
+    let tint = crate::ui::material::ButtonVariant::Outlined.content(r, None);
+    let label = crate::ui::material::Ellipsized::<Message>::at_role_spaced(
+        entry.label.clone(),
+        TypeRole::Action,
+        tint,
+    )
+    .shrink();
+    let button = crate::ui::material::Button::with_content(
+        label,
+        crate::ui::material::ButtonVariant::Outlined,
+        r,
+    )
+    .on_press(Message::Composer(
+        crate::features::composer::Msg::SwitchRequested {
+            session: id,
+            to: entry.to,
+        },
+    ));
+    Some(crate::ui::material::Tooltip::new(button, entry.label, r).into())
+}
+
 /// The primary terminal of `id` while the single pane shows its AI tab (#943).
 fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
     state
@@ -834,6 +865,62 @@ mod tests {
     //! tab's variant rule (feature 012 BUG-001). Bin unit tests — run with
     //! `cargo test --features gui`. See contracts/terminal-render-input.md.
     use super::*;
+
+    /// A shown Claude Code session of `kind` in its AI tab, from a project at `/repo`.
+    fn shown_session(kind: micold_core::session::SessionKind) -> State {
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, Session};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path.clone());
+        let session = Session::start_new_of_kind(SessionLocation::Default, AiCli::ClaudeCode, kind);
+        state.session.active = Some(session.id);
+        state.workspace.sessions.insert(path, vec![session]);
+        state
+    }
+
+    /// Feature 1463 FR-004, FR-006, T009: the strip carries a switch only for a Claude terminal
+    /// session's AI tab in a single pane with the Review tab not shown.
+    #[test]
+    fn the_strip_offers_the_switch_only_for_a_single_pane_claude_terminal_session() {
+        use micold_core::session::SessionKind;
+        let terminal = shown_session(SessionKind::Terminal);
+        let id = terminal.session.active.expect("a shown session");
+        let offer =
+            strip_switch_offer(&terminal, false, false).expect("a Claude terminal offers it");
+        assert_eq!(offer.session, id);
+        assert_eq!(offer.caption, None, "nothing waits");
+        assert!(
+            strip_switch_offer(&terminal, true, false).is_none(),
+            "tiled panes keep their own row (FR-007)"
+        );
+        assert!(
+            strip_switch_offer(&terminal, false, true).is_none(),
+            "hidden while the Review tab is shown (FR-006)"
+        );
+        let structured = shown_session(SessionKind::Structured);
+        assert!(
+            strip_switch_offer(&structured, false, false).is_none(),
+            "a transcript has its switch in its own header"
+        );
+        let mut regular = shown_session(SessionKind::Terminal);
+        for session in regular.workspace.sessions.values_mut().flatten() {
+            session.mode = TerminalMode::Regular;
+        }
+        assert!(
+            strip_switch_offer(&regular, false, false).is_none(),
+            "only the AI tab is offered the switch"
+        );
+        let none = State::default();
+        assert!(
+            strip_switch_offer(&none, false, false).is_none(),
+            "no session, no offer"
+        );
+    }
     use crate::features::session_strip::tests::{failed, state_showing, state_with_instances};
     use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Rgb as AnsiRgb};
     use micold_core::session::{SessionLifecycle, SessionLocation, ShellLifecycle};

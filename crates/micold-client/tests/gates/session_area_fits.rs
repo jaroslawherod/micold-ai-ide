@@ -148,12 +148,16 @@ fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
 /// (S7). The members inside the region scroll, so they are not parts that must fit the window.
 fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let row = [SESSION_AREA, &[1, 0]].concat();
-    const NAMES: [&str; 4] = ["tab region", "status", "New session", "split buttons"];
-    records
-        .iter()
-        .filter(|r| r.path.len() == row.len() + 1 && r.path.starts_with(&row))
-        .map(|r| (format!("strip {}", NAMES[r.path[row.len()]]), rect(r)))
-        .collect()
+    let controls = [row.as_slice(), &[1]].concat();
+    let mut parts: Vec<(String, Rectangle)> = Vec::new();
+    let named = |path: Vec<usize>, name: &str| {
+        at(records, &path).map(|r| (format!("strip {name}"), rect(r)))
+    };
+    parts.extend(named([row.as_slice(), &[0]].concat(), "tab region"));
+    parts.extend(named([controls.as_slice(), &[0]].concat(), "status"));
+    parts.extend(named([controls.as_slice(), &[1]].concat(), "New session"));
+    parts.extend(named([controls.as_slice(), &[2]].concat(), "split buttons"));
+    parts
 }
 
 /// A1, A2: the session area holds the header, the strip and the pane area, in that order, each
@@ -262,7 +266,7 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
             parts.extend(strip);
             for (what, part) in &parts {
                 assert!(
-                    (part.width > 0.0 || what == "title")
+                    (part.width > 0.0 || what == "title" || what == "strip tab region")
                         && inside(part, &area)
                         && inside(part, &screen),
                     "{name} {theme:?} {window:?}: the {what} {part:?} lies inside the session \
@@ -1202,7 +1206,7 @@ const TWO_ROWS_MAX: f32 = 100.0;
 const HEADER_MAX: f32 = 40.0;
 
 /// The strip's status cluster: its words, switch slot and, while the process is stopped, restart.
-const CLUSTER: &[usize] = &[1, 0, 1];
+const CLUSTER: &[usize] = &[1, 0, 1, 0];
 
 fn cluster_children(records: &[LayoutRecord]) -> Vec<Rectangle> {
     let path = [SESSION_AREA, CLUSTER].concat();
@@ -1370,4 +1374,90 @@ fn the_filled_strip_and_the_header_fit_at_the_smallest_window() {
     assert_fits_under("claude terminal, queue held", || {
         StateUnderTest::new(claude_terminal(true, 3))
     });
+}
+
+/// FR-006, FR-008, FR-005: with the Review tab shown the switch slot is empty and restart keeps
+/// its distance from the strip's right end, as it has with the Review tab hidden and the switch in
+/// place.
+#[test]
+fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
+    use micold_client::features::changes::{self, Msg};
+    let shown = || {
+        crate::support::covered_states::with_review_of(
+            claude_terminal(true, 3),
+            SessionLocation::Worktree("feat-short".to_string()),
+        )
+    };
+    let hidden = || {
+        let mut state = shown();
+        changes::update(&mut state.changes, Msg::SessionSelected);
+        state
+    };
+    for window in [MIN_WINDOW_SIZE, WINDOW] {
+        let mut from_right = Vec::new();
+        for (what, state) in [("shown", shown()), ("hidden", hidden())] {
+            let records = records_for(state, ThemePreference::Light, window);
+            let cluster = cluster_children(&records);
+            assert_eq!(
+                cluster.len(),
+                3,
+                "{what} {window:?}: words, slot, restart: {cluster:?}"
+            );
+            assert_eq!(
+                cluster[1].width > 0.0,
+                what == "hidden",
+                "{what} {window:?}: the switch slot is empty exactly while the Review is shown \
+                 (FR-006): {:?}",
+                cluster[1]
+            );
+            let controls = at(&records, &[SESSION_AREA, &[1, 0, 1]].concat()).expect("controls");
+            let restart = cluster[2];
+            from_right.push((controls.x + controls.width) - (restart.x + restart.width));
+        }
+        assert!(
+            (from_right[0] - from_right[1]).abs() <= TOLERANCE,
+            "{window:?}: restart sits {} from the controls' end with the Review shown, {} with it \
+             closed (FR-008)",
+            from_right[0],
+            from_right[1]
+        );
+    }
+}
+
+/// FR-007, SC-004: a tiled pane keeps its own switch row, directly under its pane header, its size
+/// and its offset from the pane area's origin the same whatever the strip does.
+#[test]
+fn a_tiled_pane_still_has_its_switch_row() {
+    use micold_core::pane_layout::{Axis, PaneLayout};
+    let mut state = claude_terminal(true, 2);
+    state.settings.theme_pref = ThemePreference::Light;
+    state.sidebar.width = SIDEBAR;
+    let mut layout = PaneLayout::single();
+    let first = layout.focused();
+    layout
+        .split(first, Axis::Vertical, (1000.0, 600.0), (80.0, 160.0), None)
+        .expect("a 1000 px pane splits in two");
+    let records = records_of(StateUnderTest::new(state).panes(layout), WINDOW);
+    let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+    let panes = rect(at(&records, &[SESSION_AREA, &[2]].concat()).expect("pane area"));
+    assert!(
+        panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
+        "two rows above the tiles (FR-009)"
+    );
+    // Each tile is a column of pane header, switch row and terminal: find the tiles' switch rows
+    // by their height, the only fixed-height row between the header and the body.
+    let tiles: Vec<&LayoutRecord> = records
+        .iter()
+        .filter(|r| {
+            r.path.starts_with(SESSION_AREA)
+                && r.path.len() > SESSION_AREA.len() + 1
+                && r.path[SESSION_AREA.len()] == 2
+                && (r.height - 36.0).abs() < 12.0
+                && r.width > 100.0
+        })
+        .collect();
+    assert!(
+        !tiles.is_empty(),
+        "no tiled pane draws a switch row: the tiled path was lost (FR-007)"
+    );
 }

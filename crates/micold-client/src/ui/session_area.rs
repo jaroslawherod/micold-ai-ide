@@ -303,7 +303,15 @@ pub(crate) fn strip<'a>(
         None => container(Space::new()).into(),
     };
     let switch = switch_slot(state, area, model, r);
-    let strip = row![tabs, status_cluster(model, switch, r), new_session, splits]
+    // The controls after the tabs give way by rank when the strip is too narrow (feature 1463
+    // FR-012): the cluster's caption, then the switch button's label, then the status words, while
+    // New session and the split buttons stay whole. A plain `row!` would squeeze the controls it
+    // lays out last instead.
+    let controls = material::GiveWayRow::new(spacing::SM)
+        .shorten(0, status_cluster(model, switch, r))
+        .keep(new_session)
+        .keep(splits);
+    let strip = row![tabs, controls]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
     material::Surface::new(strip, SurfaceKind::Toolbar, r)
@@ -326,7 +334,7 @@ fn switch_slot<'a>(
     let several = area.is_some_and(|a| a.layout.len() > 1);
     let slot =
         terminal::strip_switch_offer(state, several, model.review_shown()).and_then(|offer| {
-            let button = terminal::switch_button(state, offer.session, r)?;
+            let button = terminal::switch_button_shrinking(state, offer.session, r)?;
             let caption = offer.caption.map(|line| {
                 Tooltip::new(
                     container(
@@ -343,13 +351,11 @@ fn switch_slot<'a>(
                 )
                 .position(TooltipPosition::Bottom)
             });
-            Some(
-                row![]
-                    .push(caption)
-                    .push(button)
-                    .spacing(spacing::SM)
-                    .align_y(Alignment::Center),
-            )
+            let mut slot = material::GiveWayRow::new(spacing::SM);
+            if let Some(caption) = caption {
+                slot = slot.shorten(0, caption);
+            }
+            Some(slot.shorten(1, button))
         });
     match slot {
         Some(slot) => slot.into(),
@@ -382,11 +388,12 @@ fn status_cluster<'a>(
         r,
     )
     .position(TooltipPosition::Bottom);
-    let mut cluster = row![words, switch]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
+    // Rank 0 gives way first: the switch slot (its caption, then its button's label), then the words.
+    let mut cluster = material::GiveWayRow::new(spacing::SM)
+        .shorten(1, words)
+        .shorten(0, switch);
     if let Some(restart) = model.restart.clone() {
-        cluster = cluster.push(
+        cluster = cluster.keep(
             material::Button::with_content(
                 Text::new("restart", TypeRole::Label, r).muted(),
                 material::ButtonVariant::Text,

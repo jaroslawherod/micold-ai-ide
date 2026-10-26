@@ -116,6 +116,14 @@ fn builders() -> Vec<(&'static str, String)> {
             ),
         ),
         (
+            "session_area::switch_slot",
+            body_from(
+                &area,
+                "fn switch_slot<'a>(",
+                &["strip_switch_offer(", "container(Space"],
+            ),
+        ),
+        (
             "session_area::member",
             body_from(&area, "fn member<'a>(", &["Member::Plus", "Member::Shell"]),
         ),
@@ -197,12 +205,18 @@ fn no_child_is_pushed_under_an_if_on_session_shape() {
 /// back *inside* `terminal::pane` (the pane area fills the session area either way), so the pane's
 /// builder is held to drawing no bar: no row of controls, no toolbar surface, no split buttons, and
 /// its last act is to wrap the body it built, not to stack anything under it. (`column!` and
-/// `container(` themselves stay allowed: the pane stacks the switch strip and a refusal *above* the
-/// body and centres the empty state.)
+/// `container(` themselves stay allowed: the pane stacks a refusal *above* the body and centres the
+/// empty state.)
 #[test]
 fn the_pane_area_draws_no_bar_under_the_terminal() {
     let src = source("ui/terminal.rs");
-    let pane = body_from(&src, "pub fn pane<'a>(", &["GridSizeReporter", "let body"]);
+    let pane = body_from(&src, "pub fn pane<'a>(", &["GridSizeReporter"]);
+    // Feature 1463 FR-004: a single pane's switch control and caption sit in the strip, so the
+    // pane builds no switch row of its own (a tiled pane's is built by `panes::view`).
+    assert!(
+        !pane.contains("terminal_switch_strip(") && !pane.contains("switch_button("),
+        "`terminal::pane` builds a switch row again: the control belongs to the strip (FR-004)"
+    );
     for bar_part in [
         "row![",
         "Row::",
@@ -773,8 +787,9 @@ mod rendered_presses {
             .expect("the shown session")
             .1
             .mark_shell_exited(shell);
-        // The status cluster is the strip row's second child, the restart control its last.
-        let path = [SESSION_STRIP_ROW, &[1, 1]].concat();
+        // The status cluster is the first child of the strip's controls group (the strip row's
+        // second child); its words, switch slot and restart control are its three children.
+        let path = [SESSION_STRIP_ROW, &[1, 0, 2]].concat();
         let pressed: Vec<Message> = click(under, &path)
             .into_iter()
             .filter(|m| {

@@ -96,10 +96,10 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 - **FR-006**: The switch control and caption MUST be hidden while the Review tab is shown.
 - **FR-007**: In tiled panes, each pane MUST keep its own switch row unchanged.
 - **FR-008**: No strip control moves or is missed between session states (idle, running, stopped, held queue, Review shown) beyond the switch control's own space; a press lands on its first try.
-- **FR-009**: A Claude terminal session in a single pane MUST need two rows above the terminal (about 90 px instead of about 190 px); any other session two rows instead of three.
+- **FR-009**: A Claude terminal session in a single pane MUST need two rows above the terminal (about 100 px instead of about 190 px); any other session two rows instead of three.
 - **FR-010**: The layout snapshots, the header layout contract (H9) of spec 1126 and the user-guide header description MUST describe the new layout.
 - **FR-011**: The session tab width (`tab::SESSION_WIDTH`) MUST stay as it is; reconsidering it is deferred (see Clarifications).
-- **FR-012**: In a narrow strip the held-queue caption MUST be cut with an ellipsis (full text in a tooltip) before the switch control, restart or any fixed control is clipped; session tabs scroll as in 1126.
+- **FR-012**: In a narrow strip the held-queue caption MUST be cut with an ellipsis (full text in a tooltip) first, then the switch control's label (full text in a tooltip), before restart, New session or the split buttons are clipped; the tab region may shrink to nothing; session tabs scroll as in 1126.
 
 ### Key Entities
 
@@ -109,7 +109,7 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 
 ### Measurable Outcomes
 
-- **SC-001**: A Claude terminal session in a single pane shows 2 rows above the terminal, about 90 px, down from 4 rows and about 190 px.
+- **SC-001**: A Claude terminal session in a single pane shows 2 rows above the terminal, about 100 px, down from 4 rows and about 190 px.
 - **SC-002**: Every other session shows 2 rows, down from 3.
 - **SC-003**: At 640x480 with the sidebar at 300 px and at 1280x800, light and dark, no header or strip element overlaps another or leaves the session area, checked by the visual pass.
 - **SC-004**: Tiled panes render identically to before (each pane's row size and position relative to the pane-area origin unchanged; absolute fixtures move with the shorter header and are re-recorded).

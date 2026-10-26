@@ -1602,7 +1602,7 @@ have no such entry.
   in, or the sign-in expired) shows its error in the transcript and a card offering **Open in
   terminal** with `/login`, which switches the same way.
 - **Open in structured view.** A Claude Code terminal session, whether it started as one or was
-  switched, has **Open in structured view** above its terminal and in its menu. The terminal's
+  switched, has **Open in structured view** in the tab strip above its terminal and in its menu. The terminal's
   Claude Code process ends and the session starts again as a structured session, resuming the same
   conversation.
 - **Work in progress is asked about.** Switching while a turn is running, a permission request

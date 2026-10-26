@@ -11,7 +11,7 @@ Paths: `C` = `crates/micold-client`. Gates: `C/tests/gates/session_area_fits.rs`
 
 ## Phase 2: Foundational
 
-- [ ] T002 Make `terminal::active_primary` `pub(crate)` in `C/src/ui/terminal.rs` (needed by the strip slot in US2; no behaviour change).
+- [x] T002 Make `terminal::active_primary` `pub(crate)` in `C/src/ui/terminal.rs` (needed by the strip slot in US2; no behaviour change).
 
 ## Phase 3: User Story 1 - Header on one line (P1) 🎯 MVP
 
@@ -30,21 +30,21 @@ Paths: `C` = `crates/micold-client`. Gates: `C/tests/gates/session_area_fits.rs`
 
 **Independent test**: Claude terminal single pane shows 2 rows above the terminal; switch slot before restart.
 
-- [ ] T009 [US2] Write failing unit test for the shared eligibility helper in `C/src/ui/terminal.rs` (primary terminal AI tab, terminal kind, entry exists, not transcript, single pane, Review not shown) (FR-004, FR-006).
-- [ ] T010 [US2] Write failing gates in `C/tests/gates/session_area_fits.rs`: strip order tabs, status words, switch slot, restart last (FR-004, FR-005); caption cut with ellipsis before switch/restart clipped at 640x480 with longest `held_queue_line` caption (FR-012, SC-006); rows above pane area is 2 for every session and pane top offset about 90 px, including the outlined switch button height (FR-009, SC-001, SC-002); name session kinds (Claude terminal, plain terminal, non-terminal) and a stopped/restarting case (switch button enabled rules as before); add a Review-shown-then-closed case asserting restart keeps its x offset from the right edge (FR-008). Numeric bounds at scale 1.0: header at most 40 px, two rows at most 90 px; if the outlined switch button breaks 90 px, give it smaller padding in T013.
-- [ ] T011 [US2] Write test that a tiled pane still builds its switch row and its row size/position relative to the pane-area origin equal pre-change values, in `C/tests/gates/session_area_fits.rs` (FR-007, SC-004).
-- [ ] T012 [US2] Add the shared eligibility helper in `C/src/ui/terminal.rs`, used by both the tiled row and the strip (D2).
-- [ ] T013 [US2] Change `status_cluster` to `status_cluster(state, model, switch: Option<SwitchSlot>, r)`, add `switch_slot(state, area, model, r)`: always one child, empty `container(Space)` or `row![caption (Ellipsized, max_width cap, tooltip), switch_button]`; update `strip()` in `C/src/ui/session_area.rs` (FR-004, FR-005, FR-008, R5, R6).
-- [ ] T014 [US2] Stop stacking `terminal_switch_strip` above the body for a single pane in `terminal::pane` in `C/src/ui/terminal.rs`; tiled call in `C/src/ui/panes.rs` unchanged (FR-007, R4).
-- [ ] T015 [US2] Update `C/tests/session_area_stability.rs`: new `"fn status_cluster<'a>("` marker, edit `the_pane_area_draws_no_bar_under_the_terminal` (drop `terminal_switch_strip(` end marker, assert single-pane `pane` no longer calls it, fix doc comment); child list stable across idle, running, stopped, held queue, Review shown, and a press lands first try (FR-008, SC-005).
-- [ ] T016 [US2] Re-record tiled and single-pane layout fixtures in `C/tests/layout_snapshot.rs` (FR-010).
-- [ ] T017 [US2] Update the strip section of `docs/user-guide/terminal-panes.md` and S7'/rows note in `specs/1126-session-context-header/contracts/context-header.md` (FR-010).
+- [x] T009 [US2] Write failing unit test for the shared eligibility helper in `C/src/ui/terminal.rs` (primary terminal AI tab, terminal kind, entry exists, not transcript, single pane, Review not shown) (FR-004, FR-006).
+- [x] T010 [US2] Write failing gates in `C/tests/gates/session_area_fits.rs`: strip order tabs, status words, switch slot, restart last (FR-004, FR-005); caption cut with ellipsis before switch/restart clipped at 640x480 with longest `held_queue_line` caption (FR-012, SC-006); rows above pane area is 2 for every session and pane top offset about 90 px, including the outlined switch button height (FR-009, SC-001, SC-002); name session kinds (Claude terminal, plain terminal, non-terminal) and a stopped/restarting case (switch button enabled rules as before); add a Review-shown-then-closed case asserting restart keeps its x offset from the right edge (FR-008). Numeric bounds at scale 1.0: header at most 40 px, two rows at most 90 px; if the outlined switch button breaks 90 px, give it smaller padding in T013.
+- [x] T011 [US2] Write test that a tiled pane still builds its switch row and its row size/position relative to the pane-area origin equal pre-change values, in `C/tests/gates/session_area_fits.rs` (FR-007, SC-004).
+- [x] T012 [US2] Add the shared eligibility helper in `C/src/ui/terminal.rs`, used by both the tiled row and the strip (D2).
+- [x] T013 [US2] Change `status_cluster` to `status_cluster(state, model, switch: Option<SwitchSlot>, r)`, add `switch_slot(state, area, model, r)`: always one child, empty `container(Space)` or `row![caption (Ellipsized, max_width cap, tooltip), switch_button]`; update `strip()` in `C/src/ui/session_area.rs` (FR-004, FR-005, FR-008, R5, R6).
+- [x] T014 [US2] Stop stacking `terminal_switch_strip` above the body for a single pane in `terminal::pane` in `C/src/ui/terminal.rs`; tiled call in `C/src/ui/panes.rs` unchanged (FR-007, R4).
+- [x] T015 [US2] Update `C/tests/session_area_stability.rs`: new `"fn status_cluster<'a>("` marker, edit `the_pane_area_draws_no_bar_under_the_terminal` (drop `terminal_switch_strip(` end marker, assert single-pane `pane` no longer calls it, fix doc comment); child list stable across idle, running, stopped, held queue, Review shown, and a press lands first try (FR-008, SC-005).
+- [x] T016 [US2] Re-record tiled and single-pane layout fixtures in `C/tests/layout_snapshot.rs` (FR-010).
+- [x] T017 [US2] Update the strip section of `docs/user-guide/terminal-panes.md` and S7'/rows note in `specs/1126-session-context-header/contracts/context-header.md` (FR-010).
 
 ## Phase 5: User Story 3 - Steady tabs and controls (P2)
 
 **Independent test**: existing stability and fit gates pass at the smallest window.
 
-- [ ] T018 [US3] Add the 640x480+300 sidebar no-overlap/inside check for header plus strip with switch slot filled, light and dark, in `C/tests/gates/session_area_fits.rs` (US3 scenario 2); confirm `C/src/ui/tab.rs` untouched (FR-011).
+- [x] T018 [US3] Add the 640x480+300 sidebar no-overlap/inside check for header plus strip with switch slot filled, light and dark, in `C/tests/gates/session_area_fits.rs` (US3 scenario 2); confirm `C/src/ui/tab.rs` untouched (FR-011).
 
 ## Phase 6: Polish
 
