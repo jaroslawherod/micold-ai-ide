@@ -4,13 +4,13 @@
 //! showcase poses it with [`sheet`].
 
 use iced::widget::{column, container, row, Column};
-use iced::{Alignment, Background, Element, Length};
+use iced::{Alignment, Element, Length};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, shape, spacing, Roles};
+use micold_core::tokens::{self, spacing, Roles};
 
 use crate::app::{Message, State};
 use crate::features::changes::{shortcut_sheet, Msg, SheetModel};
-use crate::ui::material::{dialog, style, Button, Surface, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{dialog, Button, Keycap, Surface, SurfaceKind, Text, TypeRole};
 
 /// The sheet's title, as the overflow menu's item names it (US5 s4).
 pub const TITLE: &str = "Keyboard shortcuts";
@@ -36,7 +36,7 @@ pub fn dialog<'a>(
 pub fn sheet<'a, M: Clone + 'a>(model: SheetModel, close: M, r: Roles) -> Element<'a, M> {
     let rows = model.rows.into_iter().map(|(key, text)| {
         row![
-            container(keycap(key, r)).width(Length::Fixed(KEY_WIDTH)),
+            container(Keycap::new(key, r)).width(Length::Fixed(KEY_WIDTH)),
             Text::new(text, TypeRole::Body, r),
         ]
         .spacing(spacing::MD)
@@ -53,17 +53,5 @@ pub fn sheet<'a, M: Clone + 'a>(model: SheetModel, close: M, r: Roles) -> Elemen
     let actions = dialog::actions(row![Button::text("Close", r).on_press(close)]);
     Surface::new(dialog::body(fields, actions), SurfaceKind::Dialog, r)
         .width(Length::Fixed(520.0))
-        .into()
-}
-
-/// A key's label on a keycap: the label role on the highest container fill.
-fn keycap<'a, M: 'a>(label: String, r: Roles) -> Element<'a, M> {
-    container(Text::new(label, TypeRole::Label, r))
-        .padding([spacing::XS / 2.0, spacing::SM])
-        .style(move |_| container::Style {
-            background: Some(Background::Color(style::color(r.surface_container_highest))),
-            border: iced::border::rounded(shape::EXTRA_SMALL),
-            ..container::Style::default()
-        })
         .into()
 }

@@ -45,6 +45,7 @@ pub mod icon_button;
 pub mod icon_label;
 pub mod key_value_list;
 pub mod keyboard_focus;
+pub mod keycap;
 /// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
 /// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
 pub mod labelled_toggle;
@@ -131,6 +132,7 @@ pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
 pub use key_value_list::KeyValueList;
+pub use keycap::Keycap;
 pub use labelled_toggle::LabelledToggle;
 pub use link_text::LinkText;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
