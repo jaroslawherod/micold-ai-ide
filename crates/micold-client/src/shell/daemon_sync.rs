@@ -238,6 +238,12 @@ pub enum PendingOp {
     /// A `ProjectSetupSet` (feature 1289, contract C3): the daemon answers `OperationOk`; this
     /// exists so a refusal reaches the user.
     ProjectSetupSet,
+    /// A `SetupRun` (feature 1289, FR-022): the daemon answers `OperationOk`, and the run's
+    /// progress arrives as `SetupChanged`; this exists so a refusal (`Busy`, no command) reaches
+    /// the user.
+    SetupRun,
+    /// A `SetupStop` (feature 1289, FR-023), as [`PendingOp::SetupRun`].
+    SetupStop,
     /// A `ProjectActivate` (002 BUG-003): a known project reopened, recorded as last active.
     ProjectActivate,
     ProjectRemove,
@@ -338,6 +344,8 @@ impl PendingOp {
             PendingOp::WorktreeRefresh => "refresh the worktree list".into(),
             PendingOp::ProjectAdd => "add the project".into(),
             PendingOp::ProjectSetupSet => "hand the project's setup command to its daemon".into(),
+            PendingOp::SetupRun => "run setup".into(),
+            PendingOp::SetupStop => "stop setup".into(),
             PendingOp::ProjectActivate => "record the active project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),

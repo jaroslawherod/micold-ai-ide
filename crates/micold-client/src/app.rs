@@ -948,13 +948,17 @@ impl State {
     }
 
     /// Apply a setup output view message (feature 1289, contract U4) and hand back what it asks
-    /// the shell to do. **Setup output** is chosen from a row's menu, which choosing it closes, as
-    /// choosing Delete does (M6 review V-F2).
+    /// the shell to do. **Setup output**, **Run setup** and **Stop setup** are chosen from a row's menu, which
+    /// choosing one closes, as choosing Delete does (M6 review V-F2).
     pub fn update_setup(
         &mut self,
         msg: crate::features::setup::Msg,
     ) -> crate::features::setup::Effect {
-        if matches!(msg, crate::features::setup::Msg::ViewOpened(_)) {
+        use crate::features::setup::Msg;
+        if matches!(
+            msg,
+            Msg::ViewOpened(_) | Msg::RunRequested(_) | Msg::StopRequested(_)
+        ) {
             crate::features::worktree::close_menu(self);
         }
         crate::features::setup::update(&mut self.setup, msg)

@@ -946,7 +946,7 @@ pub fn location_menu_items(
         items.extend(additional_session_item(state, location));
         items.extend(single_session_items(state, location));
         // Feature 1289 (U3): appended on the Default row.
-        items.extend(setup_output_item(state, location));
+        items.extend(setup_items(state, location));
         return items;
     };
     let included = state
@@ -1000,8 +1000,40 @@ pub fn location_menu_items(
         );
     }
     // Feature 1289 (U3): directly above Delete.
-    if let Some(item) = setup_output_item(state, location) {
+    for item in setup_items(state, location) {
         items.insert(items.len() - 1, item);
+    }
+    items
+}
+
+/// The setup entries of `location`'s menu, in order (feature 1289, contract U3): **Setup output**
+/// while a run record exists, then **Stop setup** while it runs or **Run setup** when the project
+/// has a command and none runs.
+fn setup_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    use crate::features::setup;
+    let mut items: Vec<_> = setup_output_item(state, location).into_iter().collect();
+    let Some(key) = setup::key_of(state, location) else {
+        return items;
+    };
+    let summary = state.setup.summary(key.0, &key.1, &key.2);
+    if setup::stop_offered(summary) {
+        items.push(material::MenuItem::new(
+            Icon::Close,
+            "Stop setup",
+            Message::Setup(setup::Msg::StopRequested(key)),
+        ));
+    } else if setup::run_offered(
+        setup::command_for(&state.settings.setup_commands, &key.1).is_some(),
+        summary,
+    ) {
+        items.push(material::MenuItem::new(
+            Icon::StateRunning,
+            "Run setup",
+            Message::Setup(setup::Msg::RunRequested(key)),
+        ));
     }
     items
 }

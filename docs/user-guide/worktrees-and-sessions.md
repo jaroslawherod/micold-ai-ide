@@ -538,13 +538,27 @@ printed it, in a monospace list:
   lines were not kept, for example *1520 earlier lines not kept*. Until the command prints
   anything, the list reads *No output yet.*
 - **A failed run ends with the reason**, for example *Exited with status 2.*, as its last line.
-- **Copy output** copies the kept lines, one per line, to the system clipboard. **Close** (or
-  Escape) closes the dialog.
+- **Copy output** copies the kept lines, one per line, to the system clipboard. **Stop setup**
+  (only while the run runs) ends it, as below. **Close** (or Escape) closes the dialog.
 
 Setup belongs to the daemon, not to the app: it keeps running when the app disconnects or quits.
 If the connection drops while the dialog is open, the dialog picks up where it left off when the
 app reconnects, and a run that ended in the meantime shows its last lines and its reason. The
 output stays readable after the run ends, until the worktree is deleted or setup runs again.
+
+#### Running setup again, and stopping it
+
+When setup failed (the network dropped during an install, say), or you changed the project's
+toolchain, run it again from the menu: right-click the worktree, or the **Default** entry, and
+choose **Run setup**. That is two actions. The project's *current* setup command runs there as it
+does in a new worktree, the row's tag shows *Setting up…* and the new run's output replaces the
+previous run's. The entry is offered only while the project has a setup command and no setup is
+running for that worktree; if another window started a run a moment before, the app says *Setup is
+already running in* the worktree and starts nothing.
+
+When setup hangs or takes too long, choose **Stop setup** (in the same menu while it runs, or in
+the setup output dialog). The command and every process it started are ended, and the row shows
+*Setup stopped*, not *Setup failed* and not *Set up*.
 
 ## Creating a worktree
 
@@ -1150,6 +1164,10 @@ Right-click a worktree in the sidebar to open its context menu:
 - **Setup output** — only once [setup](#setup-in-a-new-worktree) has run in the worktree, directly
   above **Delete**; the **Default** entry offers it last. Opens the
   [setup output](#reading-the-setup-output).
+- **Run setup** / **Stop setup** — after **Setup output**, directly above **Delete** (the
+  **Default** entry offers them last). **Run setup** appears when the project has a setup command
+  and none is running for the worktree; **Stop setup** appears while one runs. See
+  [running setup again](#running-setup-again-and-stopping-it).
 - **Start another session...** — only on a worktree that already has a session (the **Default**
   entry offers it too). A confirmation names the worktree and its existing session. Confirming
   starts a **helper** session beside it, selected and shown; the existing session stays the main

@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use micold_client::features::setup::{
-    on_change, on_connect, row_tag, update, Effect, Msg, Names, State, Tone,
+    on_change, on_connect, row_tag, run_offered, stop_offered, update, Effect, Msg, Names, State,
+    Tone,
 };
 use micold_core::daemons::DaemonId;
 use micold_core::local_time::UtcOffset;
@@ -715,4 +716,71 @@ fn a_resize_while_following_keeps_the_follow_and_snaps_to_the_end() {
         Effect::None
     );
     assert!(matches!(follow(&state), Follow::Detached { .. }));
+}
+
+/// M7, US3 scenarios 1, 3, 4: **Run setup** is offered with a command and no running run, whatever
+/// the last run came to; not without a command, not while one runs.
+#[test]
+fn run_setup_is_offered_with_a_command_and_no_running_run() {
+    let none = None;
+    let ended_runs = [
+        ended(1, SetupState::Succeeded),
+        ended(1, failed(2)),
+        ended(1, SetupState::Stopped),
+        ended(1, SetupState::Interrupted),
+    ];
+    assert!(run_offered(true, none), "a command, no run yet");
+    for summary in &ended_runs {
+        assert!(run_offered(true, Some(summary)), "{summary:?}");
+        assert!(
+            !run_offered(false, Some(summary)),
+            "no command: {summary:?}"
+        );
+    }
+    assert!(!run_offered(false, none), "no command, no run");
+    assert!(!run_offered(true, Some(&running(1))), "while it runs");
+    assert!(!run_offered(false, Some(&running(1))));
+}
+
+/// M7, US3 scenario 2: **Stop setup** is offered exactly while the run is running.
+#[test]
+fn stop_setup_is_offered_exactly_while_the_run_runs() {
+    assert!(stop_offered(Some(&running(1))));
+    assert!(!stop_offered(None));
+    for to in [
+        SetupState::Succeeded,
+        failed(1),
+        SetupState::Stopped,
+        SetupState::Interrupted,
+    ] {
+        assert!(!stop_offered(Some(&ended(1, to.clone()))), "{to:?}");
+    }
+}
+
+/// M7, US3 scenario 5: the Default row decides the same way (the predicates take no location).
+#[test]
+fn the_default_row_is_offered_run_and_stop_by_the_same_rules() {
+    let mut state = State::default();
+    let project = PathBuf::from("/src/app");
+    let default = SessionLocation::Default;
+    assert!(run_offered(true, state.summary(HOST, &project, &default)));
+    update(&mut state, changed(default.clone(), Some(running(1))));
+    let summary = state.summary(HOST, &project, &default);
+    assert!(!run_offered(true, summary));
+    assert!(stop_offered(summary));
+}
+
+/// M7: choosing the entries asks the shell to send `SetupRun` / `SetupStop` for that location.
+#[test]
+fn run_and_stop_requests_ask_the_shell_to_send_for_the_location() {
+    let mut state = State::default();
+    let key = (HOST, PathBuf::from("/src/app"), wt("feat-a"));
+    assert_eq!(
+        update(&mut state, Msg::RunRequested(key.clone())),
+        Effect::Run(key.clone())
+    );
+    assert_eq!(
+        update(&mut state, Msg::StopRequested(key.clone())),
+        Effect::Stop(key)
+    );
 }

@@ -389,3 +389,20 @@ output is copied from the session's logs.
   inner container (V-F3). Two existing tests sent backlogs past line 0 with `dropped: 0`, which no
   daemon sends (`send_from` reports `first_index` as `dropped`); they now pass the daemon's
   `dropped` -> features_setup 29, setup_output_geometry 7 passed.
+
+## M7 cycle 1: Run setup / Stop setup (T056–T059)
+
+- red: tests written before the code, in `features_setup.rs` (`run_offered`, `stop_offered`, the
+  Default row, `RunRequested`/`StopRequested` -> `Effect::Run`/`Effect::Stop`),
+  `setup_output_geometry.rs` (menu order above Delete, Default row last, menu closes, **Stop setup**
+  before **Close** inside 640×480 and gone once the run ends) and `shell/setup.rs` (`SetupRun`/
+  `SetupStop` sent; a `Busy` answer notifies with the daemon's text). They referenced items that did
+  not exist yet (compile failure was the red); not run separately before the code.
+- green: `features/setup.rs` gains the two predicates, two `Msg`s and two `Effect`s;
+  `PendingOp::SetupRun`/`SetupStop` (describe -> "run setup"/"stop setup", so the default
+  `OperationError` arm says `Couldn't run setup: <daemon text>`); `shell/setup.rs` sends them;
+  `ui/mod.rs` `setup_items` (Setup output, then Stop setup or Run setup; icons `Close` for stop, `StateRunning`
+  (play_arrow) for run — no new icon); `State::update_setup` closes the row menu for both;
+  `setup_output.rs` adds the outlined **Stop setup** before **Close** while running. The M6 menu test
+  now expects **Stop setup** between Setup output and Delete while running. `cargo test -p
+  micold-client` all green, clippy `-D warnings` clean, fmt clean.

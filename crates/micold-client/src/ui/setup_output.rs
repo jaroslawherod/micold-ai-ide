@@ -73,10 +73,19 @@ pub fn dialog<'a>(
     ]
     .spacing(spacing::SM);
 
-    let actions = dialog::actions(row![
-        Button::outlined("Copy output", r).on_press(Message::Setup(Msg::CopyRequested)),
-        Button::filled("Close", r).on_press(Message::Setup(Msg::ViewClosed)),
-    ]);
+    // Stop setup (U4) sits before Close while the run runs.
+    let stop = setup::stop_offered(Some(summary)).then(|| {
+        Button::outlined("Stop setup", r)
+            .on_press(Message::Setup(Msg::StopRequested(view.key.clone())))
+    });
+    let mut buttons =
+        row![Button::outlined("Copy output", r).on_press(Message::Setup(Msg::CopyRequested))];
+    if let Some(stop) = stop {
+        buttons = buttons.push(stop);
+    }
+    let actions = dialog::actions(
+        buttons.push(Button::filled("Close", r).on_press(Message::Setup(Msg::ViewClosed))),
+    );
     let title = format!("Setup \u{2014} {}", names.location);
     Some(
         ScrollingDialog::new(title, body, actions, r)
