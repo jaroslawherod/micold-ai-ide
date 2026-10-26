@@ -350,20 +350,19 @@ fn filter_chip(
         TagFilter::Untyped => material::chip_neutral_accent(r),
     };
     let label = filter_label(filter);
-    let label = if clearable {
-        format!("{label} \u{2715}")
-    } else {
-        label
-    };
-    ToggleChip::new(
+    let chip = ToggleChip::new(
         label,
         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
         r,
     )
     .active(active)
     .accent(fill, on)
-    .one_line()
-    .into()
+    .one_line();
+    if clearable {
+        chip.trailing_icon(Icon::Close).into()
+    } else {
+        chip.into()
+    }
 }
 
 /// How many active chips the collapsed line has room for at `width` (BUG-1470): what is left once
@@ -422,14 +421,14 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
         Some(bar) => {
             let mut line = vec![all(bar.all_active)];
             // Glyph only at the narrowest widths: the word does not fit beside All and the actions.
-            let glyph = if open { "\u{25b4}" } else { "\u{25be}" };
             let label = if state.sidebar_width_px() < 250 {
-                glyph.to_string()
+                ""
             } else {
-                format!("Filter {glyph}")
+                "Filter"
             };
             line.push(takes_the_keyboard(
                 ToggleChip::new(label, toggle.clone(), r)
+                    .trailing_icon(Icon::SelectChevron)
                     .active(open)
                     .count(bar.active_count)
                     .one_line(),

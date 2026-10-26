@@ -8,12 +8,14 @@
 //! Exposed as a chainable builder terminating in `.into()` (Principle VIII builder-API rule).
 
 use super::keyboard_focus::{Indicator, TakesTheKeyboard};
+use crate::glyph::icon_colored;
+use crate::icons::Icon;
 use crate::style;
 use crate::{Ellipsized, Text, TypeRole};
 use iced::keyboard::key::Named;
 use iced::widget::button;
 use iced::{Background, Border, Color, Element};
-use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
+use micold_core::tokens::{anatomy, shape, spacing, state, Rgb, Roles};
 
 /// The text a chip renders, given its label and the quantity it stands in front of (feature 029,
 /// FR-025/FR-025a).
@@ -47,6 +49,7 @@ pub struct ToggleChip<M> {
     disabled: bool,
     one_line: bool,
     keyboard: bool,
+    trailing: Option<Icon>,
 }
 
 impl<M> ToggleChip<M> {
@@ -63,6 +66,7 @@ impl<M> ToggleChip<M> {
             disabled: false,
             one_line: false,
             keyboard: false,
+            trailing: None,
         }
     }
 
@@ -110,6 +114,14 @@ impl<M> ToggleChip<M> {
     /// the keyboard order they have.
     pub fn takes_the_keyboard(mut self) -> Self {
         self.keyboard = true;
+        self
+    }
+
+    /// An icon after the label (BUG-1470: the filter chip's disclosure chevron and the active
+    /// chip's clear mark), drawn in the icon font in the label's colour. An empty label leaves the
+    /// icon alone, and a count then stands before it without the `·`.
+    pub fn trailing_icon(mut self, icon: Icon) -> Self {
+        self.trailing = Some(icon);
         self
     }
 
@@ -164,7 +176,13 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         //
         // `Tag` keeps `sidebar_tag`: the contract's own row for the worktree tag says `label_small`
         // *in the sidebar*, and those sit inside 36dp dense rows where 32dp chips would not fit.
-        let label = chip_label(&chip.label, chip.count);
+        let trailing = chip.trailing;
+        let label = if chip.label.is_empty() && chip.count > 0 {
+            chip.count.to_string()
+        } else {
+            chip_label(&chip.label, chip.count)
+        };
+        let label_empty = label.is_empty();
         let content: Element<'a, M> = if chip.one_line {
             // The same line box, centred the same way, but cut rather than wrapped.
             iced::widget::container(
@@ -190,6 +208,21 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                 .height(iced::Length::Fill)
                 .align_y(iced::alignment::Vertical::Center)
                 .into()
+        };
+        let content: Element<'a, M> = match trailing {
+            Some(icon) => {
+                let icon = icon_colored(icon, TypeRole::Action.size(), style::color(ripple_tint));
+                let parts = if label_empty {
+                    iced::widget::row![icon]
+                } else {
+                    iced::widget::row![content, icon]
+                };
+                iced::widget::container(parts.spacing(spacing::XS).align_y(iced::Alignment::Center))
+                    .height(iced::Length::Fill)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .into()
+            }
+            None => content,
         };
         let chip_button = button(content)
             // §7.6: a chip is 32dp tall with 12dp of horizontal padding. There is no vertical padding

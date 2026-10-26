@@ -345,11 +345,11 @@ the application cannot then tell that the branch holds nothing newer.
 
 The tag filters are the chips on the sidebar's **chip bar**, under the **Overview** row, shown at
 all times, and one line tall. **All** comes first and looks selected while no filter is on. With
-three or fewer tags in use their chips sit on that line. With more, a **Filter** toggle (▾ closed,
-▴ open, with the number of active filters) follows **All**: it opens a panel under the line holding
+three or fewer tags in use their chips sit on that line. With more, a **Filter** toggle (a chevron, the chip filled while the panel
+is open, with the number of active filters) follows **All**: it opens a panel under the line holding
 every chip, wrapped. While it is closed, each active filter stays on the line as a selected chip
 with a ✕ that clears just that filter, and a `+N` chip (only beside at least one shown chip) stands for those that do not fit and opens the
-panel. In a narrow sidebar the toggle is just ▾ or ▴. The panel stays open or closed as you left it, across restarts. The **add**, **hide** and
+panel. In a narrow sidebar the toggle is just the chevron. The panel stays open or closed as you left it, across restarts. The **add**, **hide** and
 **more** (⋯) actions end the line:
 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
