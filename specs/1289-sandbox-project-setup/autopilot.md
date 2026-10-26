@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1414 | M5 setup settings and state | merged (rebase) | 15d62e891bb1292c94c58b585a0a975869c291dd |
 | #1472 | M6 setup output dialog | merged (rebase) | 419198cb9ec060aa7576ad523479a62ae8e9873a |
 | #1476 | M7 run and stop setup | merged (rebase) | 308ab390a1d0c1f6212f7eebb0e9f82977227bb3 |
+| #1483 | close (T060–T061) | open | — |
 
 ## Milestones
 
@@ -115,7 +116,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close PR (2026-10-26): tdd-verify PASS, close review R-F1–R-F4 and T-F1–T-F3 fixed (prose only); specs gate green (check-criteria-observables, all scripts/tests/*.test.sh); close PR opened. The run ends when it merges.
+Close PR (2026-10-26): tdd-verify PASS, close review R-F1–R-F4 and T-F1–T-F3 fixed (prose only); specs gate green (check-criteria-observables, all scripts/tests/*.test.sh); close PR #1483 opened, assigned jaroslawherod. The run ends when it merges.
 Close (2026-10-26) on main 308ab390a (#1476 merged by rebase): T060–T061 done docs-only — quickstart §Results (Part B per step with its evidence: B3–B5 from the M5–M7 visual passes on a host daemon, B1 from CI's sandbox job, B2/B6/B7 not run by hand with the reason; U1–U6 table citing `visual-pass/m5-*`, `m6-*`, `m7-*`; T061 macOS/Windows table from CI runs 40305573743 and 40314588666), A15 says version 70, spec **Status** Closed. Converge skipped: every milestone has a CLEAN review B. Next: speckit-tdd-verify and the close diff review (orchestrator), fix findings; docs gate; close PR.
 M7 PR (2026-10-26): review A round 2 CLEAN; rebased onto main 1669ef5df (no conflicts, protocol stays 70, no new ProjectAdd site); `cargo test -p micold-client --no-run` and full gate (scripts/gate.sh) green; pushed; PR #1476 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; close unit (T060–T061).
 M7 round 1 fixed (2026-10-26): V-F1, A-F2, A-F3 (cycle log M7 cycle 2); A-F1 left as follow-up. micold-core setup_commands 6, client setup tests green, clippy and fmt clean. Next: review A round 2 (scoped, sonnet); then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
