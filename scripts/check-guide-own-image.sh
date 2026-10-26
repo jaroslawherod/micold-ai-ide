@@ -16,14 +16,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUIDE="${MICOLD_GUIDE:-$ROOT/docs/user-guide/sandboxed-daemon.md}"
 
-# The first ```dockerfile block after the section's heading, up to the next heading.
+# The first ```dockerfile block after the section's heading, up to the next heading. Inside the
+# block a `#` line is a Dockerfile comment, not a heading.
 example() {
   awk '
     /^### Building projects in the basic image$/ { in_section = 1; next }
+    in_block && /^```$/ { exit }
+    in_block { print; next }
     in_section && /^#+ / { exit }
     in_section && /^```dockerfile$/ { in_block = 1; next }
-    in_block && /^```$/ { exit }
-    in_block { print }
   ' "$GUIDE"
 }
 
@@ -43,7 +44,8 @@ base="${2:-}"
 dir="$(mktemp -d)"
 trap 'rm -rf "$dir"' EXIT
 if [ -n "$base" ]; then
-  printf '%s\n' "$text" | sed "1,/^FROM /s#^FROM .*#FROM $base#" >"$dir/Containerfile"
+  # Only the first FROM, also when it is the first line (portable; GNU sed's `0,/re/` is not).
+  printf '%s\n' "$text" | awk -v base="$base" '!done && /^FROM / { print "FROM " base; done = 1; next } { print }' >"$dir/Containerfile"
 else
   printf '%s\n' "$text" >"$dir/Containerfile"
 fi

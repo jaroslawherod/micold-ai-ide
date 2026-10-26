@@ -35,4 +35,13 @@ else
   pass "a page without the example is refused"
 fi
 
+# A Dockerfile comment inside the example is part of it, not the section's next heading.
+awk '{ print } /^```dockerfile$/ && !done { print "# a comment inside the example"; done = 1 }' \
+  docs/user-guide/sandboxed-daemon.md >"$tmp/commented.md"
+if MICOLD_GUIDE="$tmp/commented.md" scripts/check-guide-own-image.sh --print 2>/dev/null | grep -q '^FROM '; then
+  pass "a comment inside the example does not end it"
+else
+  fail "a comment inside the example ends it before its FROM line"
+fi
+
 [ "$failures" -eq 0 ]

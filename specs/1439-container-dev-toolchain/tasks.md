@@ -146,6 +146,8 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 - [ ] T032 Quickstart B1 on `micold-basic:dev` (or the pinned image after D7's pin PR): setup ends **Set up**, `command -v cargo rust-analyzer uv python3 gh` prints five paths, `mise run gate` exits 0, the `LSP` tool answers a `hover`; record wall times. A tool the gate needs that is missing goes into `mise.toml` (user-space) or escalates (system tool outside FR-003/FR-007), plan D5.
 - [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, `cargo build` in both sessions at once succeeds (edge case "Several sessions on one daemon"), Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
+
+_T032 and T033 are carried past the M4 PR (ledger D14): they run after T042 publishes and pins the image, by the owner locally (B6 on his cluster), and stay open until then._
 ---
 
 ## Phase 10: User Story 5 — an AI session installs the build tools it needs itself, and they stay (Priority: P1; amendment 2026-10-26)
