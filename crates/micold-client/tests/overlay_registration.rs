@@ -146,6 +146,12 @@ const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] = &[
     }),
 ];
 
+/// Popover-*shaped* fields that open nothing floating: the sidebar's filter accordion sits inline
+/// under the chip bar (BUG-1470), so it has no overlay to register.
+/// `an_inline_flag_registers_no_overlay` holds this list to that.
+const INLINE_FLAGS: &[(&str, fn(&mut State))] =
+    &[("sidebar.filter_open", |s| s.sidebar.filter_open = true)];
+
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
 ///
 /// Feature 028 moves a feature's fields behind a struct of its own, so the scan follows them: a
@@ -212,6 +218,7 @@ fn the_list_of_popovers_matches_the_ones_that_exist() {
         .iter()
         .chain(DIALOG_FLAGS.iter())
         .map(|(f, ..)| f.to_string())
+        .chain(INLINE_FLAGS.iter().map(|(f, _)| f.to_string()))
         .collect();
 
     let unlisted: Vec<_> = declared.difference(&listed).collect();
@@ -374,4 +381,14 @@ fn the_overview_card_menu_registers_as_a_context_menu_cancelled_by_its_dismissal
             OverviewMsg::CardMenuDismissed
         ))
     );
+}
+
+#[test]
+fn an_inline_flag_registers_no_overlay() {
+    for (field, open) in INLINE_FLAGS {
+        assert!(
+            registry::topmost(&opened(*open)).is_none(),
+            "`{field}` opens an overlay: list it in POPOVERS or DIALOG_FLAGS"
+        );
+    }
 }
