@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1422_container-name-enforce-a-minimum-length-docker
 - **Started**: 2026-10-25
 - **Phase**: milestone
-- **Next step**: M1 PR CI and merge
+- **Next step**: M1 PR CI and merge (gate re-run after rebase, then push)
 
 ## Pull requests
 
@@ -28,6 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | milestone M1 gate | `a_24_character_name_keeps_its_room_at_every_depth` fails on plain origin/main here: run the gate elsewhere or fix the test? | Fix the test first (merged as PR #1482, #1462); rebased onto origin/main | decided by user | gate red on unmodified origin/main |
 
 ## Review rounds
 
@@ -52,7 +53,7 @@ None.
 
 ## Open escalation
 
-M1 is implemented, reviewed (A and B clean) and rebased on origin/main 3a0c42592, but `mise run gate` is red here and the gate hook blocks the push. `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` fails identically on plain origin/main in this environment ("depth 0: 198 px of room for a 201.59996 px name"; text-width measurement, file untouched by this feature). Main's CI is green, so it looks like this machine's fonts. Needs a decision: run the gate elsewhere, or get the test made environment-independent. Local branch has 3 unpushed commits, no PR.
+None.
 
 ## Follow-ups not done
 
