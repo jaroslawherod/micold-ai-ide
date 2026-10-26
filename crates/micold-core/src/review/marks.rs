@@ -388,6 +388,25 @@ pub fn file_review(
     }
 }
 
+/// [`file_review`] for a file whose change may be `held` (feature 1275, FR-013, research R10): a
+/// marked file with a held change is not Reviewed, and is changed since its mark, whichever id the
+/// mark is on, since the change on screen is not the one the hold has seen.
+pub fn held_file_review(
+    mark: Option<&ChangeId>,
+    current: Option<&ChangeId>,
+    drafts: usize,
+    held: bool,
+) -> FileReview {
+    if held && mark.is_some() {
+        FileReview {
+            state: file_review(None, None, drafts).state,
+            changed_since: true,
+        }
+    } else {
+        file_review(mark, current, drafts)
+    }
+}
+
 /// *n of m* (FR-008, FR-009): `done` the Reviewed files, `total` all of `files`; `None` for none.
 pub fn progress(files: impl IntoIterator<Item = FileReview>) -> Option<Ratio> {
     let (done, total) = files.into_iter().fold((0u32, 0u32), |(done, total), file| {
@@ -929,6 +948,31 @@ mod tests {
                 file_review(mark, current, drafts),
                 expected,
                 "mark {mark:?}, current {current:?}, {drafts} drafts"
+            );
+        }
+    }
+
+    // Feature 1275 FR-013, research R10: a held change makes a marked file unseen, changed since
+    // its mark, whatever id the mark is on; an unmarked or unheld file is judged as above.
+    #[test]
+    fn a_held_change_to_a_marked_file_is_not_reviewed() {
+        use ReviewState::{HasDrafts, Reviewed, Unseen};
+        let (m, c) = (id(1), id(2));
+        let rows = [
+            (Some(&m), Some(&m), 0, true, review(Unseen, true)),
+            (Some(&m), Some(&m), 2, true, review(HasDrafts, true)),
+            (Some(&m), Some(&c), 0, true, review(Unseen, true)),
+            (Some(&m), None, 0, true, review(Unseen, true)),
+            (None, Some(&c), 0, true, review(Unseen, false)),
+            (None, Some(&c), 1, true, review(HasDrafts, false)),
+            (Some(&m), Some(&m), 0, false, review(Reviewed, false)),
+            (Some(&m), Some(&c), 1, false, review(HasDrafts, true)),
+        ];
+        for (mark, current, drafts, held, expected) in rows {
+            assert_eq!(
+                held_file_review(mark, current, drafts, held),
+                expected,
+                "mark {mark:?}, current {current:?}, {drafts} drafts, held {held}"
             );
         }
     }

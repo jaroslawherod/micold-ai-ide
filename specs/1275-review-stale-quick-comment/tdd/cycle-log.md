@@ -50,3 +50,10 @@ One line per behaviour: the test, how red was seen, what made it green.
 | Q12 the setting in force follows each message | `chips::q12_the_setting_in_force_follows_each_message` | same compile error | `SuggestionChipsInForce` arm |
 | H14 chip while held; Save quotes the lines shown | `hold::while_held_a_chip_fills_the_box_and_save_quotes_the_lines_shown` | same compile error | no hold check in `chip_pressed` |
 | Chips row + switch in the layout snapshot (T042) | `layout_snapshot` new state `changes-review-held-chips` | fixture mismatch until re-recorded (new state; the switch's row in `settings-view-rail-collapsed`, `status-bar-settings`, `title-bar-settings`) | `UPDATE_LAYOUT_SNAPSHOT=1` (560 lines added after the rebase onto main, none removed) |
+
+## M6 — reviewed files while held (T044–T046)
+
+| Behaviour | Test | Red seen | Green by |
+|---|---|---|---|
+| H16, FR-013: a held reviewed file is ○/◉ with the dot, *n of m* counts `reviewed ∖ changed`, even with the mark on the latest id; the hold and applying write nothing; applied, the mark is judged as #1271 does (T044) | `reviewed_marks::a_reviewed_file_changed_while_held_is_unseen_with_the_dot` | assertion features_changes.rs:5923 "held: unseen, with the dot": `left: (Reviewed, false) right: (Unseen, true)` | `judged` passes `changed_since_you_looked` to core `held_file_review` (T045) |
+| core: a held change makes a marked file unreviewed and changed since its mark; unmarked or unheld as `file_review` | micold-core `review::marks::tests::a_held_change_to_a_marked_file_is_not_reviewed` | first a compile error (no `held_file_review`, test written before it, not run); shown by mutation (`if false && held …`): `left: Reviewed, false right: Unseen, true` | `marks::held_file_review` |
