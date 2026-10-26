@@ -30,6 +30,18 @@ const OPEN_BUDGET: Duration = Duration::from_secs(1);
 const DELTA_BUDGET: Duration = Duration::from_millis(100);
 const WINDOW: Size = Size::new(1280.0, 800.0);
 
+/// Held by each budget for its whole run. The harness runs a binary's tests in parallel, and a budget
+/// measured beside another one's work measures the contention: on an idle machine the parallel run
+/// failed the delta budget four times in six, the serial one never (#1453).
+static ONE_BUDGET_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The lock above; a budget that failed still lets the next one run.
+fn alone() -> std::sync::MutexGuard<'static, ()> {
+    ONE_BUDGET_AT_A_TIME
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// The recordings a history repeats, and the renderers it is drawn with.
 #[derive(Clone, Copy)]
 struct Kind {
@@ -170,6 +182,7 @@ fn opened(kind: Kind) -> Opened {
 }
 
 fn opens_within_a_second(kind: Kind) {
+    let _alone = alone();
     let opened = opened(kind);
     assert!(
         opened.state.transcript(opened.session).unwrap().held() == MAX_EVENTS,
@@ -185,6 +198,7 @@ fn opens_within_a_second(kind: Kind) {
 /// A reply streamed in on top of a full history, one event at a time, as the wire delivers it live:
 /// `turn`'s recording, its ids its own.
 fn each_delta_within_100_ms(kind: Kind, turn: &str) {
+    let _alone = alone();
     let Opened {
         kind,
         session,
