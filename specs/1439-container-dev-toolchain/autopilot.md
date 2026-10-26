@@ -95,6 +95,8 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
   `113535f6f5551276@sha256:61d27fed…` (pin is T042). Note `kube::settings::pod_image` uses the
   content-hash tag, so Kubernetes defaults reach the new tag once basic-image.yml publishes it.
 
+Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7 files): Review A (code-review, flow level) and Review B (conformance: T016–T019, FR-003/FR-007, US1 AS4; Verify unobservable here, CI job stands in). Rows to be added by the orchestrator.
+
 ## M2 notes
 
 - T016: `DEV_PKG_CONFIG` + `sandbox_real_basic_image_pkg_config_finds_the_gate_libraries` (root, and uid 10001 `--read-only`; `-lX11`). T017: own `RUN apt-get install` layer after the mise step. T018: README bullet + user-guide sentence. `scripts/tests/basic-image-hash.test.sh` package guard gains the six packages.
