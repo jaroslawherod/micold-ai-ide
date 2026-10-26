@@ -6,39 +6,13 @@
 //! [`CHECKED_AGAINST`]. A command added to or dropped from the list, a reason reworded, or the
 //! version moved without the guide following fails here.
 
+mod support;
+
 use micold_core::structured::commands::{CHECKED_AGAINST, TERMINAL_ONLY};
+use support::marked_table::{marked_section, rows};
 
-const START: &str = "<!-- terminal-only-commands:start -->";
-const END: &str = "<!-- terminal-only-commands:end -->";
-
-/// The guide's text between the markers.
-fn marked_section() -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/user-guide/worktrees-and-sessions.md");
-    let text = std::fs::read_to_string(&path).expect("the user guide page reads");
-    let start = text
-        .find(START)
-        .unwrap_or_else(|| panic!("the guide has `{START}`"));
-    let end = text[start..]
-        .find(END)
-        .unwrap_or_else(|| panic!("the guide has `{END}` after `{START}`"));
-    text[start + START.len()..start + end].to_string()
-}
-
-/// The table's body rows as `(command cell, why cell)`, header and rule left out.
-fn rows(section: &str) -> Vec<(String, String)> {
-    section
-        .lines()
-        .map(str::trim)
-        .filter(|l| l.starts_with('|'))
-        .skip(2)
-        .map(|l| {
-            let cells: Vec<&str> = l.trim_matches('|').split('|').map(str::trim).collect();
-            assert_eq!(cells.len(), 2, "two cells: {l}");
-            (cells[0].to_string(), cells[1].to_string())
-        })
-        .collect()
-}
+const PAGE: &str = "docs/user-guide/worktrees-and-sessions.md";
+const MARKER: &str = "terminal-only-commands";
 
 /// The command cell the guide writes for `name` and its `aliases`.
 fn command_cell(name: &str, aliases: &[&str]) -> String {
@@ -52,7 +26,7 @@ fn command_cell(name: &str, aliases: &[&str]) -> String {
 
 #[test]
 fn the_guides_table_is_the_terminal_only_list_with_its_reasons() {
-    let found = rows(&marked_section());
+    let found = rows(&marked_section(PAGE, MARKER));
     let expected: Vec<(String, String)> = TERMINAL_ONLY
         .iter()
         .map(|t| (command_cell(t.name, t.aliases), t.why.to_string()))
@@ -64,7 +38,9 @@ fn the_guides_table_is_the_terminal_only_list_with_its_reasons() {
 fn the_guide_names_the_version_the_list_was_checked_against() {
     let line = format!("Checked against Claude Code {CHECKED_AGAINST}.");
     assert!(
-        marked_section().lines().any(|l| l.trim() == line),
+        marked_section(PAGE, MARKER)
+            .lines()
+            .any(|l| l.trim() == line),
         "the guide says `{line}` between the markers"
     );
 }

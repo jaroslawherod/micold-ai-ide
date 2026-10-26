@@ -37,12 +37,12 @@ the guide's key cells name the macOS form of every primary-modifier chord, check
 
 **Purpose**: start from the merged build.
 
-- [ ] T001 Rebase on `origin/main` (`scripts/autopilot/branch-start.sh`) and confirm the milestone's
+- [x] T001 Rebase on `origin/main` (`scripts/autopilot/branch-start.sh`) and confirm the milestone's
   blockers are all `MERGED` on GitHub; record each blocker's merge PR in the ledger
   (`specs/1276-review-ui-docs-sync/autopilot.md`, input to T033). Re-run
   `grep -rn "Changes view" docs/` and keep the hit list in the scratchpad for T011–T013 (line numbers
   in [contracts/guide-outline.md](contracts/guide-outline.md) § *Inbound links* are pre-rebase).
-- [ ] T002 Locate the review key table #1274 merged in `micold-core` (`workspaceSymbol` for
+- [x] T002 Locate the review key table #1274 merged in `micold-core` (`workspaceSymbol` for
   `REVIEW_KEYS`, then `grep -rn` for the key `Ctrl+Shift+Enter` / `'?'` under `crates/micold-core/src`)
   and note in [contracts/guide-shortcut-table.md](contracts/guide-shortcut-table.md) its real path and
   fields (key, modifier set or primary flag, sheet text). If #1274 merged no `micold-core` table the
@@ -55,7 +55,7 @@ the guide's key cells name the macOS form of every primary-modifier chord, check
 
 **Purpose**: share the marker-table helpers before a second test uses them (plan §1, research R3).
 
-- [ ] T003 Move `marked_section` and `rows` from `crates/micold-core/tests/terminal_only_doc.rs`
+- [x] T003 Move `marked_section` and `rows` from `crates/micold-core/tests/terminal_only_doc.rs`
   into `crates/micold-core/tests/support/marked_table.rs`, generalised to take the page path and the
   marker name (`terminal-only`, `review-shortcuts`), declared in `crates/micold-core/tests/support/mod.rs`;
   `terminal_only_doc.rs` calls them. Moved, not copied (`mise run duplication`). Refactor under green:
@@ -76,14 +76,14 @@ passes and fails on a changed `Does` cell; the §A2 grep returns nothing from th
 
 ### Tests for US1 (write first)
 
-- [ ] T004 [US1] Write `crates/micold-core/tests/review_keys_doc.rs` with
+- [x] T004 [US1] Write `crates/micold-core/tests/review_keys_doc.rs` with
   `the_markers_are_there`, `the_guides_table_is_the_review_key_table` and
   `each_primary_chord_names_its_macos_form`, per [contracts/guide-shortcut-table.md](contracts/guide-shortcut-table.md):
   rows rendered from the T002 table in its order, key cell modifiers ordered `Ctrl+Alt+Shift+<key>`,
   ``(`Cmd+…` on macOS)`` suffix exactly on primary-modifier chords, `Does` = sheet text verbatim;
   failure messages list both row sets / name the missing marker. Uses T003's helpers. Run it: it
   fails on `the_markers_are_there` (no `review-shortcuts` markers in the page yet).
-- [ ] T005 [US1] Only if T002 found the table *thinner* (contract § *If the table is thinner*): with no
+- [x] T005 [US1] *Not needed: `REVIEW_KEYS` carries `sheet` text and `KeyMods::primary`, so `review_keys_doc` compares both cells.* Only if T002 found the table *thinner* (contract § *If the table is thinner*): with no
   sheet text, narrow T004's row comparison to the `Key` cells and write
   `crates/micold-client/tests/review_sheet_doc.rs` comparing each `Does` cell with the `?` sheet's text
   for that key, with the same marker helpers (shared, not copied: the client test includes the core
@@ -91,14 +91,14 @@ passes and fails on a changed `Does` cell; the §A2 grep returns nothing from th
   integration test cannot `use` another crate's `tests/` module); with no primary flag, derive the
   suffix from the modifier set as the contract says. Seen failing before T007. Otherwise mark it
   "not needed" with the reason.
-- [ ] T006 [US1] Add the commented `/docs/user-guide/reviewing-changes.md -micold-docs` block of the
+- [x] T006 [US1] Add the commented `/docs/user-guide/reviewing-changes.md -micold-docs` block of the
   contract § *Attribute* to `.gitattributes` after `docs/**`, in the form of the
   `worktrees-and-sessions.md` entry; `cargo test -p micold-core --test documentation_is_not_read` and
   `scripts/tests/documentation-set.test.sh` pass.
 
 ### Implementation for US1
 
-- [ ] T007 [US1] Restructure `docs/user-guide/reviewing-changes.md` to the headings of
+- [x] T007 [US1] Restructure `docs/user-guide/reviewing-changes.md` to the headings of
   [contracts/guide-outline.md](contracts/guide-outline.md), each control a heading (SC-005), starting
   from the slices' own edits: *Opening a review*, *Keeping and closing the Review tab*, *Choosing what
   to review*, *The file tree*, *Marking files reviewed*, *Commenting on lines* (drag-to-comment,
@@ -109,22 +109,22 @@ passes and fails on a changed `Does` cell; the §A2 grep returns nothing from th
   review message*, *Statuses and replies*, *The base line*, *The Default entry*. State the
   PR-diff-cannot-be-read error and every `Ctrl`/`Cmd` difference (FR-001). Use the merged slices'
   wording of each control.
-- [ ] T008 [US1] In the same page, rewrite *Pull requests* (heading and `#pull-requests` kept) for the
+- [x] T008 [US1] In the same page, rewrite *Pull requests* (heading and `#pull-requests` kept) for the
   source control's **Pull requests** entry per the outline, fold *The review panel* and *Committed and
   uncommitted* into their new sections, and remove every statement on the outline's *Must not say*
   list, including the *Changes view* hits at the page's top and its old line 132 (FR-002).
-- [ ] T009 [P] [US1] `docs/user-guide/terminal-panes.md` tab strip section: the **Review** tab as a
+- [x] T009 [P] [US1] `docs/user-guide/terminal-panes.md` tab strip section: the **Review** tab as a
   strip member with its badge and *changed since you looked* mark; pane chords and focus while it is
   shown, as R0 built them (FR-003).
-- [ ] T010 [P] [US1] `docs/user-guide/worktrees-and-sessions.md`: row menu **Review changes** opens or
+- [x] T010 [P] [US1] `docs/user-guide/worktrees-and-sessions.md`: row menu **Review changes** opens or
   focuses the Review tab (old line ~978); the header **Changes** button; the sidebar's *Review · n
   drafts* line if the build shows it; the `#pull-requests` link text at old line ~240 reworded to the
   source control's **Pull requests** entry (FR-003, FR-014).
-- [ ] T011 [P] [US1] `docs/user-guide/settings.md` (old lines 653, 659, 660) and
+- [x] T011 [P] [US1] `docs/user-guide/settings.md` (old lines 653, 659, 660) and
   `docs/user-guide/agent-tools.md` (old lines 299, 300, 311): reword each *Changes view* mention to the
   Review tab / source control as the outline's § *Inbound links* lists; re-point `#sending-a-review`
   and `#statuses-and-replies` if T007 moved them (FR-014).
-- [ ] T012 [P] [US1] `docs/user-guide/parallel-runs.md` (old lines 84, 91, 92) and `docs/README.md`
+- [x] T012 [P] [US1] `docs/user-guide/parallel-runs.md` (old lines 84, 91, 92) and `docs/README.md`
   (old line 45): reword *Changes view* to the Review tab per the outline's § *Inbound links*.
 - [ ] T013 [US1] Check US1: quickstart §A2 grep over the five pages returns nothing, and
   `grep -rn "Changes view" docs/` returns only `docs/development/layout-snapshot.md` (T024) and

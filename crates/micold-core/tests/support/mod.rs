@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 
+pub mod marked_table;
 mod session_fixtures;
 #[allow(unused_imports)]
 pub use session_fixtures::*;

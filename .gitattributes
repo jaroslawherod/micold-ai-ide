@@ -124,6 +124,11 @@ specs/**      micold-docs
 # that catches it. Must stay after `docs/**`, which sets the attribute.
 /docs/user-guide/worktrees-and-sessions.md -micold-docs
 
+# Read by a test, so a test input rather than documentation: this page's review shortcut table
+# must equal the review key table, which `crates/micold-core/tests/review_keys_doc.rs` checks
+# (feature 1276, FR-004). Must stay after `docs/**`, which sets the attribute.
+/docs/user-guide/reviewing-changes.md -micold-docs
+
 # The download-page trust notice, appended to a release's body before it is published (feature
 # 028, SC-001). It is prose about the download, read only by the `publish` job at release time --
 # nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`

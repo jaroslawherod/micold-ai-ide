@@ -9,24 +9,40 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: design PR
-- **Next step**: orchestrator waits on design PR CI and merges; then M1 (blocked on #1269–#1275)
+- **Phase**: M1 reviews
+- **Next step**: orchestrator runs M1 reviews A and B (+ visual pass if wanted); then full gate and the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1358 | design (spec, plan, tasks) | open (draft) | — |
+| #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | blocked: #1269–#1275 |
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | implemented (T001–T012), in review; T013 needs the full gate |
 | M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
+
+## Blockers merged (T001, input to T033)
+
+All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from each feature's ledger:
+
+| Issue | Feature | PRs |
+|---|---|---|
+| #1269 | review tab | #1361, #1371, #1384, #1387, #1394 |
+| #1270 | review bar and drawer | #1356, #1369, #1382, #1402 |
+| #1271 | reviewed marks | #1360, #1374, #1390, #1417, #1419, #1411 |
+| #1272 | source dropdown | #1355, #1368, #1383, #1418 |
+| #1273 | file tree | #1354, #1367, #1375, #1426, #1430 |
+| #1274 | keyboard map | #1366, #1404, #1415, #1451, #1458, #1460, #1468 |
+| #1275 | stale and quick comment | #1370, #1380, #1413, #1424, #1443, #1447, #1450 |
+| #1128 | (M2 only) | #1365, #1372, #1429, #1431, #1432 |
+| #1260 | bundled monospace font | #1316, #1323, #1329, #1332 |
 
 ## Decisions
 
