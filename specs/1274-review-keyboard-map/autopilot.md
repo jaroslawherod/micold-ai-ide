@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M3 in progress (blockers #1269/#1270/#1271/#1273/#1127 merged on main 63cf1dc4). First M3 unit handed over at its context cap after T012 exploration: continue from *Handover*.
+- **Next step**: M3 implemented (T012–T026, T063–T065); reviews, visual pass (T027), full gate and PR next.
 
 ## Pull requests
 
@@ -72,18 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-First M3 unit (2026-10-26) stopped at its 150k context cap (its system prompt alone ~135k) before writing code. Branch `claude/project-thread-m7gq7k` = origin/main 63cf1dc4 + this ledger commit; nothing pushed, no PR. `branch-start.sh 1415` printed `PREVIOUS-PR-OPEN: #1415 is UNKNOWN` (gh unauthenticated); M2 merge SHA 83f693ff confirmed an ancestor of HEAD, so skip branch-start. **Next step: T012 (write the findings below into tasks.md/plan.md), then T013 onward.** Findings from reading the merged code (T012), all in `crates/micold-client/src/features/changes.rs` unless noted — no #1269 module split, the Review tab state is still this file:
-
-- Tabs: `State.tabs: ReviewTabs<OpenView>`; `state.tabs.shown_view()/shown_view_mut()`; app-level "Review tab is on screen" = `app::State::review_shown()` (app.rs:1444) and `ui/mod.rs:449`.
-- Selection: `Msg::FileSelected(RelPath)` (arm ~l.2601) is already the one select path: it calls `view.tree.reveal(path)` (expands collapsed folders, core `TreeChoices::reveal`), sets `diff_offset = 0`, handles `Source::PullRequest` (`pr.selected`). Read the selection with `selected_file(view)` (l.4939), never `view.selected` (PR source). Add `current_hunk`/`pending_edge` to `OpenView` (l.396) and clear them in that arm.
-- **File order for j/k/n/p/g (divergence from plan):** #1273 lays the tree out in `refresh_change_rows` (l.771) via `micold_core::review::tree::layout(&change_leaves(files), &view.tree.options(&query, &is_reviewed))`; `view.change_rows: Vec<Row>` holds only the *visible* rows (collapsed folders hide files; sort Path/Size/UnreviewedFirst; filter). FR-003 wants collapsed files still visited (then revealed), so the nav order must be a layout with the same sort + filter but **no folds**: add a core fn in `review/tree.rs` (e.g. `file_order(leaves, choices, query, reviewed) -> Vec<usize>` = leaf indices of `layout` with `Openness::DefaultOpen{collapsed:&empty}`), unit-test it there, and build `NavFile`s from `shown_files(view)` (l.857) with `navigate::has_hunks(file, view.shown_large.contains(path))`. `reviewed_paths()` (l.732) returns marks only under UnreviewedFirst; for `g` use `review.marks.get(view_scope(view), path)` + `file_review(..).state == ReviewState::Reviewed` as it does.
-- Bring row into view: no list scroll effect exists. Tree is `VirtualRows` (crates/micold-material/src/virtual_rows.rs, has `.id()`), rows `ui/changes.rs::ROW_HEIGHT = 48.0`, state `view.list_offset/list_viewport`. Add `LIST_SCROLL_ID` beside `DIFF_SCROLL_ID` (ui/changes.rs ~l.91, re-exported ui/mod.rs:94), `Effect::ScrollList{offset}`, its `scroll_to` in `shell/changes.rs` (~l.199 like ScrollDiff); compute from the row index in `view.change_rows` *after* `update()` re-ran `refresh_change_rows` (call `update(state, Msg::FileSelected(..))` recursively, as `DrawerRowSelected` does).
-- Hunk scroll: `jump_offset` (l.1293) is comment-specific (drawer.focus); reuse its arithmetic (`row × material::DIFF_ROW_HEIGHT + slot_heights above`) with `review::diff::header_rows`; the pending mechanism is `view.drawer.to_show` + the `Msg::DiffRead` arm (l.2841) — add the `pending_edge` resolve there (only when the read path matches). Hunks: `shown_hunks(view)` = `view.shaped.hunks`; `Effect::ScrollDiff{offset}`.
-- `v`: `Msg::MarkToggled` → `mark_toggled` (l.4903) is #1271's **Mark reviewed** path (uses `mark_control`, `review_edit(SetReviewed)`); reuse it as is.
-- Note for `g` AllReviewed: `view.notice: Option<&'static str>` (cleared by `update` on every non-scroll message, so set it after `apply`) — the existing one-line notice.
-- Holder (T016): put `review_holder(&app::State) -> Holder` beside these; inputs: `review_shown()`, `window.focused_field`, `overlay::registry::topmost(state)` (quick switcher is registered there), `settings.settings_draft.is_some()`, `overview.open`, `runs.compare.is_some()`, `terminal_focused()`. The review composer's focus is **not** tracked today: add `FieldId::ReviewComposer` (features/window.rs l.~289) and `.track_focus(FieldId::ReviewComposer, ..)` (ui/focus.rs `TrackFocus for TextArea`) on the composer `TextArea` in `ui/changes.rs::composer_box` (~l.1406); treat it as `Composer` only while `view.composer.is_some()` (a closed composer never reports its blur). Tree filter = `FieldId::ReviewTreeFilter` → `Other`.
-- Listener (T019): `ui/mod.rs::subscription` (l.1422) — add a named-fn `review_key_listener` (TypeId rule, see `app_chord_listener` l.1504); `crate::ui::composer::key_input(&key,&physical_key,modifiers,text)` builds `KeyInput`; `keymap.rs` has `Mods`/`KeyInput` (l.15/75) for K5.
-- Settings switch: follow `reduce_motion` in features/settings.rs (placeholder `review_single_keys: true` l.838), shell/persist.rs (`review_single_keys: _` l.464; tests l.1225, l.1583), shell/startup.rs, ui/settings/appearance.rs, tests/settings_sections.rs l.59 `DEFERRED` entry, tests/support/covered_states.rs.
+None.
 
 ## Open escalation
 
@@ -91,6 +80,8 @@ None.
 
 ## Follow-ups not done
 
+- T012 (M3, 2026-10-26): merged code re-read. Changes recorded in plan D5 and tasks T016/T018/T020/T025: the Review tab state stayed in `features/changes.rs` (no #1269 module); select path `Msg::FileSelected`; **Mark reviewed** = `Msg::MarkToggled`; nav order = new core `review::tree::file_order` (layout without folds; `change_rows` holds only visible rows); new `Effect::ScrollList` + `LIST_SCROLL_ID`; new `FieldId::ReviewComposer` (composer focus was not tracked). The key press is resolved in `app::State::update_changes` (holder + switch at the press), not in the listener.
+- M3: the switch's startup load (`shell/startup.rs`, one line) has no unit test — no startup harness exists; covered by quickstart B16 in the visual pass.
 - M2 rebase (2026-10-25): PR #1415 conflicted with main (no CI ran). Rebased onto origin/main 35ac6de2d; only conflict `crates/micold-client/tests/settings_sections.rs` `DEFERRED`: kept main's `suggestion_chips` (#1275 M5) and this branch's `review_single_keys` (1274 M3) entries, both sides' rows intact. settings.rs, persist.rs, core settings.rs, settings_issue_mapping.rs auto-merged.
 
 - M2: container disk (~29 GB free) ran out twice in the full gate; target-shared wiped and the gate run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`, `STRIP=symbols`. `gh` unauthenticated: branch-start.sh run without the PR argument after confirming M1's merge SHA is on origin/main; PR via GitHub MCP.

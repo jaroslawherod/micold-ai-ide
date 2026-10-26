@@ -640,3 +640,38 @@ fn function_key(n: u8, _mods: Mods) -> Option<String> {
     };
     Some(s.to_string())
 }
+
+/// Whether the platform's primary modifier is held: Cmd (`logo`) on macOS, Ctrl elsewhere
+/// (#1274 contract K5).
+pub fn primary_held(mods: Mods) -> bool {
+    if cfg!(target_os = "macos") {
+        mods.logo
+    } else {
+        mods.ctrl
+    }
+}
+
+/// The review key map's view of a press (#1274 contract K5): the one character the press produced,
+/// the Enter key, or `Other` (a dead key, an input method composing, a control character); and
+/// every modifier as held. Nothing is matched here: `micold_core::review::keys::resolve` decides.
+pub fn review_press(input: &KeyInput, repeat: bool) -> micold_core::review::keys::Press {
+    use micold_core::review::keys::{Press, PressKey};
+    let key = if input.key == Key::Named(NamedKey::Enter) {
+        PressKey::Enter
+    } else {
+        let mut chars = input.text.as_deref().unwrap_or("").chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) if !c.is_control() => PressKey::Char(c),
+            _ => PressKey::Other,
+        }
+    };
+    Press {
+        key,
+        primary: primary_held(input.mods),
+        ctrl: input.mods.ctrl,
+        alt: input.mods.alt,
+        logo: input.mods.logo,
+        shift: input.mods.shift,
+        repeat,
+    }
+}

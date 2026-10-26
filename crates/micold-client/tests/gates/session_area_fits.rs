@@ -418,7 +418,12 @@ const DIFF_PANE: &[usize] = &[2, 1, 1, 0];
 #[test]
 fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
     let mut placed = Vec::new();
-    for name in ["changes-review-marks", "changes-review-marks-unavailable"] {
+    for name in [
+        "changes-review-marks",
+        "changes-review-marks-unavailable",
+        // Feature 1274: with the hunk controls beside the chips.
+        "review-current-hunk",
+    ] {
         let covered = covered_states()
             .iter()
             .find(|s| s.name == name)

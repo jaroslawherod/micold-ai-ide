@@ -314,6 +314,7 @@ pub struct DiffView<'a, M> {
     on_gap: Option<OnGap<'a, M>>,
     find: Option<Find<'a>>,
     on_reference: Option<OnReference<'a, M>>,
+    current_row: Option<usize>,
 }
 
 /// What a press on a hidden-lines row sends: the run's key.
@@ -340,7 +341,15 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
             on_gap: None,
             find: None,
             on_reference: None,
+            current_row: None,
         }
+    }
+
+    /// Mark the hunk header at row `row` (of the layout in force) as the current hunk, with an
+    /// accent from the theme's roles (#1274 FR-005).
+    pub fn current_row(mut self, row: Option<usize>) -> Self {
+        self.current_row = row;
+        self
     }
 
     /// Which parts of a line's text name a file: `f` gives their byte ranges. They are underlined
@@ -763,19 +772,25 @@ fn gap_row<'a, M: Clone + 'a>(
 }
 
 /// A hunk's header row: `@@ -a,b +c,d @@ section`, muted, on the container tone.
-fn header_row<'a, M: 'a>(hunk: &'a Hunk, r: Roles) -> Element<'a, M> {
+fn header_row<'a, M: 'a>(hunk: &'a Hunk, current: bool, r: Roles) -> Element<'a, M> {
     let mut header = hunk.header();
     if !hunk.section.is_empty() {
         header.push(' ');
         header.push_str(&hunk.section);
     }
-    container(code(header, r.on_surface_variant))
+    // #1274 FR-005: the current hunk's header in the primary container's roles, in both themes.
+    let (ink, fill) = if current {
+        (r.on_primary_container, r.primary_container)
+    } else {
+        (r.on_surface_variant, r.surface_container)
+    };
+    container(code(header, ink))
         .padding([0.0, spacing::SM])
         .height(Length::Fixed(ROW_HEIGHT))
         .width(Length::Fill)
         .align_y(Alignment::Center)
         .clip(true)
-        .style(move |_| background(r.surface_container))
+        .style(move |_| background(fill))
         .into()
 }
 
@@ -1021,6 +1036,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
         let spans = view.spans;
         let shown = body(view.diff, view.shaped, view.layout);
         let on_gap = view.on_gap;
+        let current = view.current_row;
         let anchors: Vec<Anchor> = view.slots.keys().copied().collect();
         let hung = slot_rows(&shown, &anchors);
         let extras = slot_extras(&hung, &view.slot_heights);
@@ -1053,7 +1069,9 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 rows.len(),
                 Box::new(move |index| {
                     let row = match rows.row(index) {
-                        Some(UnifiedRow::Header(hunk)) => header_row(hunk, r),
+                        Some(UnifiedRow::Header(hunk)) => {
+                            header_row(hunk, current == Some(index), r)
+                        }
                         Some(UnifiedRow::Line(line)) => line_row(line, Some(spans), r, &gutters),
                         Some(UnifiedRow::Gap { gap, open }) => {
                             gap_row(gap, open, r, on_gap.as_ref())
@@ -1067,7 +1085,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 rows.len(),
                 Box::new(move |index| {
                     let row = match rows.row(index) {
-                        Some(SideRow::Header(hunk)) => header_row(hunk, r),
+                        Some(SideRow::Header(hunk)) => header_row(hunk, current == Some(index), r),
                         Some(SideRow::Pair { left, right }) => {
                             side_row(left, right, spans, r, &gutters)
                         }

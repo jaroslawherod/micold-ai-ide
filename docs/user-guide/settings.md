@@ -68,6 +68,15 @@ Pressing one puts its text in the box (see [Reviewing changes → Writing a
 comment](reviewing-changes.md#writing-a-comment)). A box already open shows or hides the chips as
 soon as you save; **Cancel** discards the change.
 
+### Single-key shortcuts in the Review tab
+
+On by default. Turn it off and press **Save**, and the Review tab's one-key shortcuts — `j` `k` `n`
+`p` `v` `g` (see [Reviewing changes → Reviewing from the
+keyboard](reviewing-changes.md#reviewing-from-the-keyboard)) — do nothing: the letter goes wherever
+it would go without them, and the tooltips stop naming them. Shortcuts with Ctrl or Cmd keep
+working. It applies in the window you save from as soon as you press **Save**, and in every window
+opened later; **Cancel** discards the change.
+
 ## Terminal
 
 **Scrollback lines** controls how many lines of earlier output each session's terminal keeps for

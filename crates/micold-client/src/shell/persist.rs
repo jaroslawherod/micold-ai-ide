@@ -334,6 +334,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         theme: app.core.settings.theme_pref,
         reduce_motion: app.core.settings.reduce_motion,
         suggestion_chips: app.core.settings.suggestion_chips,
+        review_single_keys: app.core.settings.review_single_keys,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
@@ -411,6 +412,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         theme: _,
         reduce_motion: _,
         suggestion_chips: _,
+        review_single_keys: _,
         scrollback_lines: _,
         env_include_enabled: _,
         env_include_script_path: _,
@@ -459,9 +461,6 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         diff_layout: _,
         // Written by its own toggle in the sidebar, never by a save of the form (feature 551).
         folded_origins: _,
-        // Not in the form yet: the Settings → Appearance row that saves it comes with the review
-        // keys (feature 1274, T064). Until then a save leaves the stored value as it is.
-        review_single_keys: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
         daemons: _,
         next_daemon_id: _,
@@ -481,6 +480,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(theme);
     set!(reduce_motion);
     set!(suggestion_chips);
+    set!(review_single_keys);
     set!(scrollback_lines);
     set!(env_include_enabled);
     set!(env_include_script_path);
@@ -709,6 +709,8 @@ pub(crate) fn save_and_prepare_check(
     app.core.settings.reduce_motion = window.reduce_motion;
     // #1275 (FR-026): boxes opened after the save follow the switch.
     crate::shell::changes::suggestion_chips_in_force(&mut app.core, window.suggestion_chips);
+    // #1274 (FR-022): the saving window's review keys follow the switch at once.
+    app.core.settings.review_single_keys = window.review_single_keys;
     app.scrollback_lines = window.scrollback_lines;
     app.env_include_enabled = window.env_include_enabled;
     app.env_include_script_path = window.env_include_script_path;
@@ -1575,8 +1577,34 @@ mod catalog_recovery_tests {
         );
     }
 
-    /// Feature 1274 (T060): the form does not carry the single-key switch yet, so a save whose
-    /// settings hold `into_settings`' placeholder `true` keeps a stored `false`.
+    /// Feature 1274 (T063, FR-022): a form save that turns the single-key switch off writes it and
+    /// keeps every other stored setting.
+    #[test]
+    fn saving_the_single_key_switch_keeps_every_other_setting() {
+        let stored = Settings {
+            theme: micold_core::theme::ThemePreference::Light,
+            scrollback_lines: 12_345,
+            suggestion_chips: true,
+            ..Settings::default()
+        };
+        let mut target = stored.clone();
+        let saved = Settings {
+            review_single_keys: false,
+            ..Settings::default()
+        };
+        set_changed(&mut target, &saved, Some(&Settings::default()));
+        assert!(!target.review_single_keys, "the choice is written");
+        assert_eq!(
+            Settings {
+                review_single_keys: true,
+                ..target
+            },
+            stored,
+            "every field but `review_single_keys` came back unchanged"
+        );
+    }
+
+    /// Feature 1274 (T060): a save that did not touch the single-key switch keeps a stored off.
     #[test]
     fn a_form_save_keeps_a_stored_single_key_switch_off() {
         let mut target = Settings {
@@ -1588,7 +1616,7 @@ mod catalog_recovery_tests {
             theme: micold_core::theme::ThemePreference::Light,
             ..Settings::default()
         };
-        assert!(saved.review_single_keys, "the form's placeholder is on");
+        assert!(saved.review_single_keys, "the form left it on");
         set_changed(&mut target, &saved, Some(&baseline));
         assert!(!target.review_single_keys, "the stored off is kept");
         assert_eq!(target.theme, micold_core::theme::ThemePreference::Light);

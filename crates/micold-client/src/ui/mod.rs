@@ -91,8 +91,8 @@ pub mod status_bar;
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
 pub use changes::{
-    COMPOSER_ID, DIFF_SCROLL_ID, DRAWER_SCROLL_ID, FILE_COLUMN_WIDTH, PROGRESS_BAR_WIDTH,
-    SOURCE_CONTROL_WIDTH,
+    COMPOSER_ID, DIFF_SCROLL_ID, DRAWER_SCROLL_ID, FILE_COLUMN_WIDTH, LIST_SCROLL_ID,
+    PROGRESS_BAR_WIDTH, SOURCE_CONTROL_WIDTH,
 };
 pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component
@@ -1438,6 +1438,14 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     if state.settings.settings_draft.is_none() {
         subs.push(app_chord_listener());
     }
+    // #1274 (contract K6): the review keys, heard only while the review (or its shortcut sheet)
+    // has the keyboard; a focused field captures its presses before they get here.
+    if matches!(
+        crate::features::changes::review_holder(state),
+        micold_core::review::keys::Holder::Review | micold_core::review::keys::Holder::Sheet
+    ) {
+        subs.push(review_key_listener());
+    }
     // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
     // Feature 972 (FR-010): with a card menu open the same keys drive the menu instead.
     if state.overview.open {
@@ -1448,6 +1456,33 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         });
     }
     Subscription::batch(subs)
+}
+
+/// Key presses, heard while the review has the keyboard (#1274, contract K6).
+fn review_key_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(review_key)
+}
+
+/// A press as the review key map reads it (contract K5), for the root to decide against who has
+/// the keyboard and the single-key switch (`features::changes::key_pressed`). A named function for
+/// the same `TypeId` reason as [`escape_message`].
+fn review_key(event: iced::keyboard::Event) -> Option<Message> {
+    let iced::keyboard::Event::KeyPressed {
+        key,
+        physical_key,
+        modifiers,
+        text,
+        repeat,
+        ..
+    } = event
+    else {
+        return None;
+    };
+    let input = crate::ui::composer::key_input(&key, &physical_key, modifiers, text.as_deref())?;
+    let press = crate::keymap::review_press(&input, repeat);
+    Some(Message::Changes(crate::features::changes::Msg::KeyPressed(
+        press,
+    )))
 }
 
 /// Arrow keys, heard while the Overview is open and the terminal is not focused.

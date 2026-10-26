@@ -33,6 +33,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("theme", "ThemeChanged"),
     ("reduce_motion", "ReduceMotionToggled"),
     ("suggestion_chips", "SuggestionChipsToggled"),
+    ("review_single_keys", "ReviewSingleKeysToggled"),
 ];
 
 /// The theme options, in the order the picker lists them.
@@ -82,10 +83,29 @@ pub fn view<'a>(
         roles,
     );
 
+    // #1274 (FR-022): on by default; the saving window's review keys follow it on Save.
+    let review_single_keys = Checkbox::new(
+        "Single-key shortcuts in the Review tab",
+        draft.appearance.review_single_keys,
+        roles,
+    )
+    .track_focus(FieldId::SettingsReviewSingleKeys, focused)
+    .on_toggle(|on| Message::Settings(SettingsMsg::ReviewSingleKeysToggled(on)));
+    let review_single_keys = field_note(
+        review_single_keys,
+        Some("The Review tab's one-key shortcuts; shortcuts with Ctrl or Cmd are not affected"),
+        roles,
+    );
+
     page(
         "Appearance",
         "How the application looks.",
-        vec![theme.into(), reduce_motion, suggestion_chips],
+        vec![
+            theme.into(),
+            reduce_motion,
+            suggestion_chips,
+            review_single_keys,
+        ],
         roles,
     )
 }

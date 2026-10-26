@@ -120,6 +120,9 @@ view with the session service not connected: the progress slot is laid out empty
 width and **Mark reviewed** is unavailable. `gates/session_area_fits.rs` holds the view header's
 progress slot and the diff header's chips inside their rows, none overlapping another, in both
 states at both windows and themes.
+Feature 1274's `review-current-hunk` is `changes-review-marks` after `n`: the selected file's hunk
+header drawn in the primary container's roles as the current hunk, and the diff header's previous /
+next hunk controls (tooltips *Previous change (p)* / *Next change (n)*) beside **Reviewed**.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session

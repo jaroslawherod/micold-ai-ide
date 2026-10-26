@@ -497,9 +497,57 @@ impl TreeChoices {
     }
 }
 
+/// The changed files in the order the tree lists them under `choices` — sort and filter — with
+/// every folder open, as indices into `leaves` (#1274 FR-003): the order `j`/`k`/`n`/`p`/`g` walk,
+/// which visits a file in a collapsed folder too (the select then reveals it).
+pub fn file_order(
+    leaves: &[Leaf],
+    choices: &TreeChoices,
+    query: &Query,
+    reviewed: &dyn Fn(&str) -> bool,
+) -> Vec<usize> {
+    let none = BTreeSet::new();
+    let options = LayoutOptions {
+        openness: Openness::DefaultOpen { collapsed: &none },
+        ..choices.options(query, reviewed)
+    };
+    layout(leaves, &options)
+        .into_iter()
+        .filter_map(|row| match row.kind {
+            RowKind::File { leaf } => Some(leaf),
+            RowKind::Folder(_) => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1274 FR-003, US1 s5: the walk order is the tree's, folds ignored, filter and sort kept.
+    #[test]
+    fn file_order_ignores_folds_and_keeps_the_filter_and_sort() {
+        let leaves = [
+            leaf("z.rs", 1, 0),
+            leaf("src/ui/b.rs", 50, 0),
+            leaf("src/a.rs", 2, 0),
+        ];
+        let none = |_: &str| false;
+        let mut choices = TreeChoices::default();
+        choices.collapsed.insert("src/ui".to_owned());
+        choices.collapsed.insert("src".to_owned());
+        let all = Query::new("");
+        // Folders first at each level, by path: src/ui/b.rs, src/a.rs, z.rs.
+        assert_eq!(file_order(&leaves, &choices, &all, &none), vec![1, 2, 0]);
+        choices.set_filter("b.rs");
+        let query = Query::new(&choices.filter);
+        assert_eq!(file_order(&leaves, &choices, &query, &none), vec![1]);
+        choices.clear_filter();
+        let flat = [leaf("x.rs", 1, 0), leaf("y.rs", 50, 0)];
+        assert_eq!(file_order(&flat, &choices, &all, &none), vec![0, 1]);
+        choices.set_sort(TreeSort::Size, &sort_options(false));
+        assert_eq!(file_order(&flat, &choices, &all, &none), vec![1, 0]);
+    }
 
     fn leaf(path: &str, added: u32, removed: u32) -> Leaf<'_> {
         Leaf {

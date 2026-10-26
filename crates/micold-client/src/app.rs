@@ -994,7 +994,17 @@ impl State {
         &mut self,
         msg: crate::features::changes::Msg,
     ) -> crate::features::changes::Effect {
-        crate::features::changes::update(&mut self.changes, msg)
+        use crate::features::changes::{key_pressed, update, Effect, Msg};
+        // #1274 K6: a review key press is decided here, where who has the keyboard and the
+        // window's single-key switch are known; one that does nothing never reaches the view.
+        let msg = match msg {
+            Msg::KeyPressed(press) => match key_pressed(self, &press) {
+                Some(msg) => msg,
+                None => return Effect::None,
+            },
+            msg => msg,
+        };
+        update(&mut self.changes, msg)
     }
 
     /// Take one `StructuredEvents` message for `session` (feature 938 wire.md): its events reach
