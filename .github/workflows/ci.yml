@@ -714,6 +714,10 @@ jobs:
           fi
       - name: Build the :dev basic image
         run: '"$MICOLD_TEST_RUNTIME" build -f packaging/basic/Containerfile -t micold-basic:dev packaging/basic'
+      # #1439 quickstart B3: the sandbox page's own-image example builds as written on this
+      # runtime, `FROM` the image just built, and `pkg-config --libs libpq` prints `-lpq` in it.
+      - name: Build the user guide's own-image example
+        run: scripts/check-guide-own-image.sh "$MICOLD_TEST_RUNTIME" micold-basic:dev
       # The build the provisioning copies into the container; the test finds it beside its own
       # `deps/` directory.
       - name: Build the daemon

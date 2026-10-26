@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M3 reviews done; full gate green at f5ff218e6; pushed; M3 PR due (orchestrator opens it)
-- **Next step**: orchestrator opens the M3 PR from the session scratchpad `pr-title.txt`, `pr-body.md`, waits on CI and merges; then M4
+- **Phase**: M4 implementing
+- **Next step**: M4 tasks T026–T033, then gate and reviews
 - **Gate**: M3 full gate (`scripts/gate.sh`, unmodified, CI's order, root-only tests as a normal user, nothing skipped) exit 0 at f5ff218e6 (code tree of 1071fc852; only specs changed after); the nine `setup_turn` tests pass in it. Earlier runs: see Follow-ups (card_grid flake under an earlier `--skip`; root-only `mutation_semantics` test now run unprivileged by the gate).
 
 ## Pull requests
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1461 | design amendment D8 | merged (rebase) | 3a0c42592 |
 | #1484 | M1 | merged (rebase) | 5820c4018 |
 | #1485 | M2 | merged (rebase); CI's real-runtime sandbox job passed on head e426fe7e4 (M2 Verify) | e3575514b |
+| #1494 | M3 | merged (rebase). First CI run failed only in "container daemon end to end (docker, linux)": the basic-image build's `curl` of the mise release got HTTP 504 from github.com; one re-run of the failed job passed (fix: D12, M4) | 66e3e18f6 |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; T015 B5 measured value open (T042) |
 | M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
-| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | — | reviews clean (round 2); gate green at f5ff218e6; pushed, PR due |
+| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | #1494 | merged |
 | M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | waits for M1, M2, M3 |
 | M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | waits for M1, M4 |
 
@@ -49,6 +50,8 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | D9 | M1 | T002: the mise pin (plan D1a) | mise **2026.10.19** (newest on 2026-10-26; npm `latest` and the release tag agree). `mise-v2026.10.19-linux-x64` `3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d`; `mise-v2026.10.19-linux-arm64` `4a4ca53b28e5433c527f4f73fac1f98f992a17cf32ca136a58e2e375f790f627`. Ran by the M1 unit (Claude, cloud container, 2026-10-26): github.com release downloads were reachable through the proxy after all (R1 said not), so step 1 used `curl -fsSLO` of the three files. Step 2 re-read at jdx/mise@be5929f3 (`docs/installing-mise.md:113-118,506-520`, `SECURITY.md:142-`, `minisign.pub`): values unchanged. GPG: key imported from SECURITY.md's "Release gpg key" block (keys.openpgp.org unreachable: no dirmngr), `gpg --fingerprint` = `24853EC9F655CE80B48E6C3A8B81C9D17413A06D`; `gpg --decrypt SHASUMS256.asc` → `GOODSIG 8B81C9D17413A06D mise releases <release@mise.jdx.dev>`, `VALIDSIG 24853EC9…A06D 2026-10-24`. minisign: no `minisign` binary (apt blocked), verified with a 20-line Python Ed25519 verifier (cryptography 50.0.1: prehashed `ED` BLAKE2b-512 signature + trusted-comment global signature) against key `RWTC3g8W3z4RZK3V3qv7fa1QY4JEWyBtqIHW+85QlJpZc5yG+uNYNBSZ` (key id 64113EDF160FDEC2 = minisign.pub's): OK; a tampered copy fails with InvalidSignature. `cmp signed.txt SHASUMS256.txt`: identical. Lines taken from `signed.txt`; they read `<hash>  ./mise-v…`, normalised to `<hash>  mise-v…` per plan D1a step 3 / data model. npm cross-check: `npm pack @jdxcode/mise-linux-{x64,arm64}@2026.10.19` binaries hash equal to both lines; the GitHub release binaries too | agent-resolved | scratchpad `mise-pin/` (SHASUMS256.*, signed.txt, gpg status) |
 | D10 | M1 | T001: blockers on main | #1435 merged (`d6e500087`, pin `2aa1471dd`): `gh curl wget jq ripgrep make python3` in the Containerfile's apt list. #1289 merged (last PR #1483, main at `b2d857121`): `crates/micold-daemon/src/setup.rs`, `crates/micold-core/src/sandbox/toolchain_path.rs` present. Branch reset to origin/main `b2d857121` (`branch-start.sh` without the PR arg: `gh pr view` is GraphQL, blocked; #1461 merged as `3a0c42592` per orchestrator) | agent-resolved | git log origin/main |
 | D11 | M1 | T011: the existing passwd cases used `MICOLD_HOME=/home/jaro` | Moved to a temp `…/jaro` home: the entrypoint now `mkdir -p`s in the home, and as root (this container, any root CI) the fixed path created `/home/jaro/.local/…` on the test host. Assertions unchanged apart from the path | agent-resolved | first run created /home/jaro (removed) |
+| D12 | M4 | CI on #1494: the basic image's mise download got HTTP 504 from github.com once | In scope for M4 (orchestrator): the Containerfile's download is `curl --retry 5 --retry-all-errors --retry-delay 2 -fsSLo …`. The checksum guard (`basic-image-hash.test.sh` A1) does not match the curl flags; only its "check before the download" case located the line by `/curl -fsSLo/`, now `/curl .*-fsSLo/`. `BASIC_IMAGE_CONTENT_HASH` → `97e0b963519fe8d8` (was `5d9ed63715e43146`); `BASIC_IMAGE` left on the published pin | orchestrator | ci.yml container-daemon job log of #1494's first run |
+| D13 | M4 | Does `mise trust && mise install` in a worktree under `.claude/worktrees/` trip over the main checkout's (untrusted) `mise.toml`? | No, in a real git worktree: probed with mise 2026.10.19 (pinned binary, sha256 = D9's): `mise trust` in the worktree trusts only its file (`--show`: parent untrusted, worktree trusted) and `mise ls`/`mise install` read the worktree's config without a trust error. In a plain nested folder (not a git worktree) the same layout fails with `Config files in …/mise.toml are not trusted`, so the A7 fixture keeps its projects in a folder with no `mise.toml`. `mise install` could not finish here (mise-versions.jdx.dev and api.github.com refused by the proxy) | agent-resolved | scratchpad `mt/` probe |
 
 ## Review rounds
 
@@ -117,6 +120,16 @@ Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7
 - T021/T022 tests in `setup.rs` `mod tests` (`Turns` harness, real shells, `cfg(unix)`; setup turns apply only to Linux sandboxes).
 - T025: user guide, "Running setup again, and stopping it" (a short paragraph, not one sentence: also says host/remote daemons run side by side).
 - Round-1 fixes: `set_in_sandbox` (state.rs, set in server.rs), `join_turn`/`Queued`/`TurnLock` and the forgotten-run arm in `run_shell` (setup.rs). Red check: with the `in_sandbox` gate and the release arm disabled, the two affected tests fail (`tdd/cycle-log.md` M3 cycle 2).
+
+## M4 notes
+
+- T026: fixture `crates/micold-daemon/tests/fixtures/mise-c-crate/` (rust 1.90.0 minimal; `build.rs` runs `cc -c` and `ar crs`, links `libhello.a`; own `[workspace]` so the repo's workspace ignores it). Builds/tests/runs on this host.
+- T027: `sandbox_real_mise_setup.rs`, one test in user order: stop mid-download then rerun succeeds; `cargo build/test/run` in the worktree as non-root; `command -v cargo` under the sandbox home; second worktree Succeeded < 60 s with no line containing "download"; empty project (no `mise.toml` anywhere above it) Succeeded; FR-010 `find / -xdev … -newer marker` outside home/projects/state is empty; after `restart` `cargo --version` = 1.90.0. Support: `seed_projects` (several projects, git flag), `seed_with_mode` now calls it. Not runnable here; first run is CI `sandbox-runtime` on the PR.
+- T028/T029: `scripts/tests/mise-toolchain.test.sh`; `mise.toml` rust components; CONTRIBUTING "Set up" gives the container setup command and links the guide section. CI does not use mise, so CI downloads no rust-analyzer.
+- T030: guide section "Building projects in the basic image" (under "Which image it runs on"). The example is `FROM ghcr.io/jaroslawherod/micold-basic:113535f6f5551276` (the pinned tag); `scripts/tests/guide-own-image.test.sh` fails when it differs from `BASIC_IMAGE`'s tag, so T042's pin PR must move it.
+- T031 (B3): covered in CI by the new `container-daemon` step `scripts/check-guide-own-image.sh <runtime> micold-basic:dev` (docker + rootless podman: builds the example with its FROM swapped to `:dev`, `pkg-config --libs libpq` = `-lpq`). Not covered: "a daemon on it starts sessions". **Open** (needs a runtime).
+- T032 (B1: this repo's `mise run gate` inside a container session on `:dev`, five tools, LSP hover, wall times) and T033 (B2 concurrent setups, B6 Kubernetes pod): **open**, not runnable here (no container daemon; the basic image build is refused by the proxy) and no CI job runs them.
+- D12 curl retries (see Decisions).
 
 ## Handover
 

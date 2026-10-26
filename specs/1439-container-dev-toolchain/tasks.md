@@ -119,8 +119,8 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 **Goal**: setup `mise trust && mise install` installs a fixture project's Rust toolchain into the sandbox home; its C build script compiles; restart and a second worktree reuse it (AS1.2, AS1.3, AS1.5, FR-005, SC-003).
 
-- [ ] T026 [P] [US1] Create the fixture `crates/micold-daemon/tests/fixtures/mise-c-crate/` (`mise.toml` pinning rust with the minimal profile, `Cargo.toml` with no crates.io dependency, `build.rs` that runs `cc` on `hello.c` and links it, `src/main.rs` and one test calling the C function).
-- [ ] T027 [US1] Create `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support`) per quickstart A7: setup succeeds as the non-root session user, writing nothing outside the sandbox home and the worktree (FR-010); `cargo build` and `cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; still found after a container restart; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` runs the same setup command to success (edge case "Empty project"); a setup stopped with **Stop setup** while the toolchain downloads leaves a home in which the next setup run of the same worktree succeeds (edge case "Network failure during setup": the failure report itself is #1289's, this proves a partial install does not break the rerun). Green after T005–T013 (needs the published or `:dev` image).
+- [x] T026 [P] [US1] Create the fixture `crates/micold-daemon/tests/fixtures/mise-c-crate/` (`mise.toml` pinning rust with the minimal profile, `Cargo.toml` with no crates.io dependency, `build.rs` that runs `cc` on `hello.c` and links it, `src/main.rs` and one test calling the C function).
+- [x] T027 [US1] Create `crates/micold-daemon/tests/sandbox_real_mise_setup.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support`) per quickstart A7: setup succeeds as the non-root session user, writing nothing outside the sandbox home and the worktree (FR-010); `cargo build` and `cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; still found after a container restart; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` runs the same setup command to success (edge case "Empty project"); a setup stopped with **Stop setup** while the toolchain downloads leaves a home in which the next setup run of the same worktree succeeds (edge case "Network failure during setup": the failure report itself is #1289's, this proves a partial install does not break the rerun). Green after T005–T013 (needs the published or `:dev` image).
 
 ---
 
@@ -128,14 +128,14 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 **Goal**: `mise install` alone provides every tool the gate and the instructions need; the setup command is documented; `mise run gate` exits 0 in a container (FR-008, FR-009, FR-010, SC-001, SC-002).
 
-- [ ] T028 [P] [US2] Test first: create `scripts/tests/mise-toolchain.test.sh` (quickstart A3): `mise.toml`'s `[tools]` declares `rust` with components `rustfmt`, `clippy`, `rust-analyzer`, and `uv`; a temp copy without `rust-analyzer` fails.
-- [ ] T029 [US2] `mise.toml`: `rust = { version = "stable", components = "rustfmt,clippy,rust-analyzer" }` (research R8); `uv`, `node`, `ffmpeg` unchanged. `CONTRIBUTING.md` "Set up": the container daemon setup command `mise trust && mise install`, the same one the sandbox page recommends (plan D5).
+- [x] T028 [P] [US2] Test first: create `scripts/tests/mise-toolchain.test.sh` (quickstart A3): `mise.toml`'s `[tools]` declares `rust` with components `rustfmt`, `clippy`, `rust-analyzer`, and `uv`; a temp copy without `rust-analyzer` fails.
+- [x] T029 [US2] `mise.toml`: `rust = { version = "stable", components = "rustfmt,clippy,rust-analyzer" }` (research R8); `uv`, `node`, `ffmpeg` unchanged. `CONTRIBUTING.md` "Set up": the container daemon setup command `mise trust && mise install`, the same one the sandbox page recommends (plan D5).
 
 ---
 
 ## Phase 8: User Story 4 — the user guide says what the basic image can build (Priority: P2)
 
-- [ ] T030 [US4] `docs/user-guide/sandboxed-daemon.md`: a "Building projects in the basic image" section under "Which image it runs on" (plan D6): what the image carries (contract B1, B2), the setup command `mise trust && mise install` for a mise project, installs land in the sandbox home and persist and are shared by the daemon's worktrees, one setup at a time per sandbox daemon, what it does not carry (a project's toolchain, other system libraries), and a complete own-image `Containerfile` `FROM` the basic image that adds `libpq-dev`.
+- [x] T030 [US4] `docs/user-guide/sandboxed-daemon.md`: a "Building projects in the basic image" section under "Which image it runs on" (plan D6): what the image carries (contract B1, B2), the setup command `mise trust && mise install` for a mise project, installs land in the sandbox home and persist and are shared by the daemon's worktrees, one setup at a time per sandbox daemon, what it does not carry (a project's toolchain, other system libraries), and a complete own-image `Containerfile` `FROM` the basic image that adds `libpq-dev`.
 - [ ] T031 [US4] Run quickstart B3: build T030's example with `docker build` and `podman build` exactly as written; a daemon on it starts sessions and `pkg-config --libs libpq` prints `-lpq`. Record in the ledger.
 
 ---

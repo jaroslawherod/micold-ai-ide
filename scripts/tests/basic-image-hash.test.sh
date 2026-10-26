@@ -280,7 +280,7 @@ mise_refuses "a checksum check excused by '|| true'" "$bad"
 
 bad="$(copy_basic)"
 # The checksum line moved before the download: the check runs on a file not yet there.
-awk '/sha256sum[[:space:]]*-c/ { next } /curl -fsSLo/ { print "    sha256sum -c --ignore-missing /tmp/mise.sha256; \\" } { print }' \
+awk '/sha256sum[[:space:]]*-c/ { next } /curl .*-fsSLo/ { print "    sha256sum -c --ignore-missing /tmp/mise.sha256; \\" } { print }' \
   "$bad/Containerfile" >"$bad/c" && mv "$bad/c" "$bad/Containerfile"
 mise_refuses "a checksum check before the download" "$bad"
 

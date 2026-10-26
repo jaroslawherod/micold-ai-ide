@@ -742,8 +742,20 @@ pub fn seed_with_mode(
     label: &str,
     mode: TerminalMode,
 ) -> SessionId {
+    seed_projects(data_home, &[(project, false)], label, mode)
+}
+
+/// [`seed_with_mode`] for several projects, each with whether it is a git repository (one that is
+/// can have worktrees); the session is in the first.
+pub fn seed_projects(
+    data_home: &Path,
+    projects: &[(&Path, bool)],
+    label: &str,
+    mode: TerminalMode,
+) -> SessionId {
     let state = data_home.join("micold-ai-ide");
     std::fs::create_dir_all(&state).expect("state dir");
+    let project = projects.first().expect("at least one project").0;
 
     let id = SessionId::new();
     let mut by_project = BTreeMap::new();
@@ -760,11 +772,10 @@ pub fn seed_with_mode(
         )],
     );
     let workspace = Workspace {
-        projects: vec![Project::new(
-            project.to_path_buf(),
-            false,
-            Availability::Available,
-        )],
+        projects: projects
+            .iter()
+            .map(|(path, git)| Project::new(path.to_path_buf(), *git, Availability::Available))
+            .collect(),
         active: Some(project.to_path_buf()),
         sessions: by_project,
         worktree_names: BTreeMap::new(),

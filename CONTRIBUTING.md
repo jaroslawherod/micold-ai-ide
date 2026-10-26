@@ -14,6 +14,17 @@ mise run gate       # CI's merge gate locally — run before pushing
 `mise tasks` lists every task. Linux needs the usual GUI dev libraries (X11/Wayland/xkbcommon);
 see [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the package list.
 
+In a container daemon on the default (basic) image, set this repository's setup command to
+
+```sh
+mise trust && mise install
+```
+
+the same command the [sandbox page](docs/user-guide/sandboxed-daemon.md#building-projects-in-the-basic-image)
+recommends for any mise project. It installs the Rust toolchain with `rustfmt`, `clippy` and
+`rust-analyzer`, `uv`, `node` and `ffmpeg` into the sandbox home, without root; the image already
+carries the C toolchain, `python3`, `gh` and the GUI dev libraries, so `mise run gate` runs there.
+
 ## Pull requests
 
 - Open an issue first for anything larger than a small fix, so the direction is agreed.
