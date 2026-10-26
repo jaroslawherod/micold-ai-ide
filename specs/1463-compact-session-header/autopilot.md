@@ -63,6 +63,8 @@ None.
 
 ## Follow-ups not done
 
+- M1 visual pass was partial (dark only, 1600x1200 and 640x480 at the default sidebar; Xvfb/xdotool missing). Light scheme, 1280x800 and long-chip states unchecked; the label is cut at 640x480 as the user's Q1 answer allows. Screenshots in `visual-pass/`.
+
 - With three long chips at the smallest window the Changes button can get no room (flat row, chips before button). A priority layout would fix it.
 - `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` failed in the scoped gate (cap 0); unrelated to the header, check on main.
 
