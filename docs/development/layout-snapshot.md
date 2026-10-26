@@ -134,7 +134,8 @@ Feature 1276 holds the finished review tab: every review state of its contract
 (`specs/1276-review-ui-docs-sync/contracts/review-states.md`) is a covered state, a slice's own name
 standing, each anchored on what it introduces. `session-area-review-shown` stands for the contract's
 `session-area-changes-open` (`session.header`, `session.header.changes`, `session.strip`,
-`session.strip.tabs.review`); `review-tab-beside-sessions` is it with three drafts, the shown tab's
+`session.strip.tabs.review`, and `review.bar`, so that a change to the bar's padding fails naming
+the bar in the first state it moves); `review-tab-beside-sessions` is it with three drafts, the shown tab's
 badge *Review · 3* anchored as `review.tab.badge`; `session-area-review-hidden` adds the hidden tab's
 `review.tab.badge` and its changed mark, `review.tab.changed`. `review-bar` anchors the bar's ⋮ as
 `review.bar.overflow` and the status bar under it as `status_bar`; `drawer-drafts` and
