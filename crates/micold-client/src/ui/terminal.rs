@@ -533,16 +533,9 @@ pub fn pane<'a>(
         None => body,
     };
 
-    // #943: above a Claude terminal session's own terminal, the held-queue line and **Open in
-    // structured view**; an empty element otherwise, so the terminal keeps its place in the tree.
-    // Outside the size reporter, so the terminal is sized to the room left under it. A transcript
-    // has its switch in its own header.
-    let body: Element<'a, Message> = if several.is_some() || shows_transcript(state, active) {
-        body
-    } else {
-        let shown = active_primary(state, active);
-        column![terminal_switch_strip(state, shown, r), body].into()
-    };
+    // Feature 1463 FR-004: a single pane's held-queue caption and **Open in structured view** sit in
+    // the tab strip above (`session_area::strip`), not in a row of their own over the terminal. A
+    // tiled pane keeps its own row (`panes::view`); a transcript has its switch in its own header.
 
     // A refusal with a single pane (closing the last one) has no pane area to sit in: say it above
     // the terminal, as the multi-pane view does.
@@ -670,35 +663,73 @@ fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
         })
 }
 
-/// Above a Claude terminal session's terminal (#943 US4 scenario 4, US5 scenario 3): how many
-/// queued messages wait for the structured view, and **Open in structured view**. Anything else
-/// gets an empty element, so the terminal under it keeps its place in the widget tree.
+/// What a Claude terminal session offers beside its terminal (#943 US4 scenario 4, US5 scenario 3):
+/// **Open in structured view** and, when messages wait for the structured view, a caption saying
+/// how many.
+pub(crate) struct SwitchOffer {
+    /// The session the button switches.
+    pub session: SessionId,
+    /// How many queued messages wait, when any do.
+    pub caption: Option<String>,
+}
+
+/// The offer for `terminal`: only a Claude terminal session's primary terminal has one (the
+/// eligibility the tiled row and the strip share, feature 1463 D2).
+pub(crate) fn switch_offer_of(state: &State, terminal: Option<TerminalRef>) -> Option<SwitchOffer> {
+    let t = terminal
+        .filter(|t| t.process == micold_core::protocol::messages::SessionProcess::Primary)
+        .filter(|t| {
+            session_kind(state, t.session) == micold_core::session::SessionKind::Terminal
+        })?;
+    crate::features::session::switch_entries(state, t.session)
+        .first()
+        .map(|_| SwitchOffer {
+            session: t.session,
+            caption: state.held_queue_line(t.session),
+        })
+}
+
+/// The offer the tab strip carries for the shown session (feature 1463 FR-004, FR-006): a single
+/// pane showing a Claude terminal session's AI tab, not a transcript, and not while the Review tab
+/// is shown. Tiled panes keep their own row.
+pub(crate) fn strip_switch_offer(
+    state: &State,
+    several: bool,
+    review_shown: bool,
+) -> Option<SwitchOffer> {
+    let active = state.session.active?;
+    if several || review_shown || shows_transcript(state, active) {
+        return None;
+    }
+    switch_offer_of(state, active_primary(state, active))
+}
+
+/// Above a tiled pane's terminal (#943 US4 scenario 4, US5 scenario 3): how many queued messages
+/// wait for the structured view, and **Open in structured view**. Anything else gets an empty
+/// element, so the terminal under it keeps its place in the widget tree.
 pub(crate) fn terminal_switch_strip<'a>(
     state: &'a State,
     terminal: Option<TerminalRef>,
     r: tokens::Roles,
 ) -> Element<'a, Message> {
-    let strip = terminal
-        .filter(|t| t.process == micold_core::protocol::messages::SessionProcess::Primary)
-        .filter(|t| session_kind(state, t.session) == micold_core::session::SessionKind::Terminal)
-        .and_then(|t| {
-            let button = switch_button(state, t.session, r)?;
-            let held = state
-                .held_queue_line(t.session)
-                .map(|line| Text::new(line, TypeRole::Caption, r).muted());
-            Some(
-                container(
-                    row![]
-                        .push(held)
-                        .push(Space::new().width(Length::Fill))
-                        .push(button)
-                        .spacing(spacing::SM)
-                        .align_y(Alignment::Center),
-                )
-                .width(Length::Fill)
-                .padding([spacing::XS, spacing::SM]),
+    let strip = switch_offer_of(state, terminal).and_then(|offer| {
+        let button = switch_button(state, offer.session, r)?;
+        let held = offer
+            .caption
+            .map(|line| Text::new(line, TypeRole::Caption, r).muted());
+        Some(
+            container(
+                row![]
+                    .push(held)
+                    .push(Space::new().width(Length::Fill))
+                    .push(button)
+                    .spacing(spacing::SM)
+                    .align_y(Alignment::Center),
             )
-        });
+            .width(Length::Fill)
+            .padding([spacing::XS, spacing::SM]),
+        )
+    });
     // An empty container rather than a bare `Space`: a void child is dropped from the tree, which
     // would move the terminal under it (see `right_aligned_tabs`).
     match strip {
