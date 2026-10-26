@@ -96,7 +96,7 @@ const ROWS_LOST_TO_THE_GUTTER: u16 = 1;
 
 /// The session area's header, strip and pane area heights in `state` at the layout window,
 /// measured as `composer_fits` measures its header, and the height of the terminal body the pane
-/// area holds beside its own control row.
+/// area holds (a single pane has no control row of its own since feature 1463).
 fn session_area_heights(state: &State) -> [f32; 4] {
     let renderer = lay::renderer();
     let mut element = view(state);
@@ -106,7 +106,7 @@ fn session_area_heights(state: &State) -> [f32; 4] {
         .as_widget_mut()
         .layout(&mut tree, &renderer, &limits);
     let records = lay::walk(layout::Layout::new(&node), lay::Layer::Base);
-    [&[0][..], &[1], &[2], &[2, 0, 1]].map(|child| {
+    [&[0][..], &[1], &[2], &[2, 0]].map(|child| {
         let path = [SESSION_AREA, child].concat();
         records
             .iter()
