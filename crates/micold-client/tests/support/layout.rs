@@ -188,6 +188,19 @@ pub fn renderer() -> iced::Renderer {
         micold_client::ui::install_roboto(&mut fonts);
         fonts.load_font(Cow::Borrowed(REFERENCE_ICON_FONT_BYTES));
         micold_client::ui::install_monospace(&mut fonts);
+        // Then drop every host face: a character the shipped faces lack (the `→` of a note) would
+        // otherwise shape with whatever fallback the machine offers, and its width differ per host.
+        // Left to no fallback, it shapes the same everywhere.
+        use iced::advanced::graphics::text::cosmic_text::fontdb::Source;
+        let db = fonts.raw().db_mut();
+        let host: Vec<_> = db
+            .faces()
+            .filter(|face| !matches!(face.source, Source::Binary(_)))
+            .map(|face| face.id)
+            .collect();
+        for id in host {
+            db.remove_face(id);
+        }
     });
 
     block_on(<iced::Renderer as Headless>::new(
