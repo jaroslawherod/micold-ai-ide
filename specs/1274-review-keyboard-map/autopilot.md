@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1451 | M3 move and mark (j k n p v g, Settings switch) | merged | 6cbd52f0ed4581036bec4dd0f6527022dcd4a046 |
 | #1458 | M4 comments, send chord, shortcut sheet | merged | cc2e4548a0f9b835009b6e250e39416ba2222b8c |
 | #1460 | M5 jump to review files and comments | merged | a42fe315f1762bdd3842900a37e5c04cd0219a96 |
+| #1468 | close (TDD verification, quickstart §C, T066–T067) | open | — |
 
 ## Milestones
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Closed 2026-10-26 — shipped in PRs #1366, #1404, #1415, #1451, #1458, #1460 and the close PR
+**Status**: Closed 2026-10-26 — shipped in PRs #1366, #1404, #1415, #1451, #1458, #1460, #1468
 
 **Input**: User description: "Issue #1274: Review UI: keyboard map for reviewing. Blocked by: #1273,
 #1271, #1127. j/k file, n/p hunk, ]/[ comment, v reviewed, g next unreviewed, c comment,
