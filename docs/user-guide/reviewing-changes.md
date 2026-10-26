@@ -402,6 +402,14 @@ keeps it reviewed in an entry that has a base (see [The base line](#the-base-lin
 without one only uncommitted changes are listed, so a committed file leaves the list. A renamed file
 starts unreviewed: its change is the one under its new name.
 
+While changes are held (see [Keeping up with changes](#keeping-up-with-changes)), a reviewed file
+that changed since you looked is not reviewed either: its row drops back to ○ or ◉ with the dot
+(tooltip: "Changed since you looked, and since you marked it reviewed") and it does not count in
+*n*, even when another window has already marked its new change. Holding changes writes nothing to
+the session service, so other windows keep the mark. Select the file or press the notice to see
+its latest change: a mark on that change shows the file reviewed again, and a mark on an older one
+leaves it to be marked again, as above.
+
 The view's header reads *n of m reviewed* with a bar filled to match: *m* is the number of files
 the list shows, so it follows the **Committed** and **Uncommitted** chips, and *n* how many of
 them are reviewed. With no files listed, or while marks are unavailable, the header shows neither,

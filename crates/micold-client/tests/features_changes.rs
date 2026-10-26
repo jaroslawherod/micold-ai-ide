@@ -5880,6 +5880,77 @@ mod reviewed_marks {
         assert_eq!(progress_of(&state, true), ratio(2, 3));
         assert_eq!(states(&state, false)[0].1, Unseen, "disconnected: no marks");
     }
+
+    /// Feature 1275 H16, FR-013, research R10. A reviewed file whose change is held shows unseen
+    /// with the dot and *n of m reviewed* counts it as not reviewed, even with its mark on the
+    /// latest change (marked in another window); the hold writes nothing to the service, and
+    /// showing what is held judges the mark as #1271 does.
+    #[test]
+    fn a_reviewed_file_changed_while_held_is_unseen_with_the_dot() {
+        use micold_client::features::changes::changed_since_you_looked;
+        use ReviewState::{HasDrafts, Reviewed, Unseen};
+        let mut state = opened(THREE);
+        pushed(
+            &mut state,
+            &["c.rs"],
+            &[("a.rs", 1), ("b.rs", 2), ("c.rs", 3)],
+        );
+        assert_eq!(progress_of(&state, true), ratio(3, 3));
+
+        // a.rs and c.rs change on disk; the read differs from the list on screen and is held.
+        let latest: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 7),
+            ("b.rs", Origin::Uncommitted, 2),
+            ("c.rs", Origin::Uncommitted, 8),
+        ];
+        let mut rows = listed(latest);
+        rows.files[0].added = 5;
+        rows.files[2].added = 6;
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::Changed) else {
+            panic!("a change on disk rereads the list");
+        };
+        let effect = answer(&mut state, seq, Ok(rows), Ok(whole(latest)));
+        assert!(
+            !matches!(effect, Effect::ReviewEdit { .. } | Effect::Batch(_)),
+            "the hold writes nothing to the service: {effect:?}"
+        );
+        assert!(changed_since_you_looked(view(&state), &path("a.rs")));
+        assert!(!changed_since_you_looked(view(&state), &path("b.rs")));
+
+        // Another window shows the change and marks a.rs and c.rs on it.
+        pushed(
+            &mut state,
+            &["c.rs"],
+            &[("a.rs", 7), ("b.rs", 2), ("c.rs", 8)],
+        );
+        let reviews = file_reviews(&state, view(&state), true);
+        let of = |p: &str| {
+            let review = reviews[&path(p)];
+            (review.state, review.changed_since)
+        };
+        assert_eq!(of("a.rs"), (Unseen, true), "held: unseen, with the dot");
+        assert_eq!(of("c.rs"), (HasDrafts, true), "held with a draft: ●");
+        assert_eq!(of("b.rs"), (Reviewed, false), "not held: still reviewed");
+        assert_eq!(progress_of(&state, true), ratio(1, 3), "reviewed ∖ changed");
+        assert_eq!(
+            states(&state, false),
+            vec![
+                ("a.rs".to_string(), Unseen),
+                ("b.rs".to_string(), Unseen),
+                ("c.rs".to_string(), HasDrafts),
+            ],
+            "disconnected: no marks, held or not"
+        );
+
+        // Showing what is held: the marks are on the shown change, so they are Reviewed again.
+        let applied = changes::update(&mut state, Msg::StaleApplied);
+        assert!(
+            !matches!(applied, Effect::ReviewEdit { .. }),
+            "applying writes nothing: {applied:?}"
+        );
+        assert!(!changed_since_you_looked(view(&state), &path("a.rs")));
+        assert_eq!(progress_of(&state, true), ratio(3, 3));
+    }
 }
 
 // ---- Feature 1273, M3 (T020): the changed-file tree's state in the reducer ----

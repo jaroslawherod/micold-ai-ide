@@ -30,8 +30,8 @@ use micold_core::review::drag::{gutter_line, Drag, Release};
 use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
 use micold_core::review::marks::{
-    file_review, mark_block, progress, ChangeId, EntryMarks, FileReview, MarkBlock, ReviewMark,
-    ReviewState, WholeChange,
+    file_review, held_file_review, mark_block, progress, ChangeId, EntryMarks, FileReview,
+    MarkBlock, ReviewMark, ReviewState, WholeChange,
 };
 use micold_core::review::pr_diff::{pr_change_ids, PrDiff};
 use micold_core::review::reference::{self, Reference};
@@ -4784,7 +4784,8 @@ pub fn file_reviews(
 }
 
 /// `path`'s review state from its mark in the shown source (known only while `connected`), its
-/// current id and its draft count.
+/// current id and its draft count; a marked file whose change is held is not Reviewed (feature
+/// 1275, FR-013). Nothing is written to the service for it (research R10).
 fn judged(
     state: &State,
     view: &OpenView,
@@ -4797,7 +4798,8 @@ fn judged(
         .filter(|_| connected)
         .and_then(|r| r.marks.get(view_scope(view), path));
     let drafts = drafts.get(path).copied().unwrap_or(0);
-    file_review(mark, ids.get(path), drafts)
+    let held = changed_since_you_looked(view, path);
+    held_file_review(mark, ids.get(path), drafts, held)
 }
 
 /// **Mark reviewed** / **Reviewed** in the diff header (FR-002).

@@ -333,10 +333,10 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
 
 ## Phase 9: Reviewed files while held (FR-013) ⛔ after #1271
 
-- [ ] T044 [P] [US1] Write failing test H16 in `crates/micold-client/tests/features_changes.rs`: a
+- [x] T044 [P] [US1] Write failing test H16 in `crates/micold-client/tests/features_changes.rs`: a
   held file #1271 marks reviewed is shown unseen with the dot, *n of m reviewed* counts
   `reviewed ∖ changed`, and the hold writes nothing to the service.
-- [ ] T045 [US1] Implement it in `crates/micold-client/src/features/changes.rs` (the reviewed count)
+- [x] T045 [US1] Implement it in `crates/micold-client/src/features/changes.rs` (the reviewed count)
   and in the row glue of `crates/micold-client/src/ui/changes.rs` (no reviewed mark on a dotted row)
   (research R10).
 - [ ] T046 [US1] Update `docs/user-guide/reviewing-changes.md` (reviewed marks and held changes),
