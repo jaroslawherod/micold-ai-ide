@@ -2308,7 +2308,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             run,
             first_line,
             lines,
-            dropped: _,
+            dropped,
         } => {
             let msg = micold_client::features::setup::Msg::Output {
                 daemon,
@@ -2317,6 +2317,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 run,
                 first_line,
                 lines,
+                dropped,
             };
             follow_up = Task::batch([follow_up, crate::shell::setup::update(app, msg)]);
         }

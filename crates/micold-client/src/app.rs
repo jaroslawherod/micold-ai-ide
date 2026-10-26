@@ -947,6 +947,19 @@ impl State {
         crate::features::daemons::views(&self.daemon_list, &model)
     }
 
+    /// Apply a setup output view message (feature 1289, contract U4) and hand back what it asks
+    /// the shell to do. **Setup output** is chosen from a row's menu, which choosing it closes, as
+    /// choosing Delete does (M6 review V-F2).
+    pub fn update_setup(
+        &mut self,
+        msg: crate::features::setup::Msg,
+    ) -> crate::features::setup::Effect {
+        if matches!(msg, crate::features::setup::Msg::ViewOpened(_)) {
+            crate::features::worktree::close_menu(self);
+        }
+        crate::features::setup::update(&mut self.setup, msg)
+    }
+
     /// Apply a Daemons message and hand back what it asks the shell to persist or stop (feature
     /// 491, M3). The model is built from the registry, the links and the bindings the window holds.
     ///
@@ -1271,7 +1284,7 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Setup(msg) => {
-                let _ = crate::features::setup::update(&mut self.setup, msg);
+                let _ = self.update_setup(msg);
             }
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);

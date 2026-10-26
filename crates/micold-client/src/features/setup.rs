@@ -22,7 +22,7 @@ use micold_core::setup::{RunId, SetupCommand, SetupRunSummary, SetupState};
 use crate::features::structured_transcript::Follow;
 
 /// The height of one line of the output view, in dp: the list is virtual, so every row is this
-/// tall, and the follow arithmetic measures the content by it.
+/// tall.
 pub const ROW_HEIGHT: f32 = 20.0;
 
 /// Which location's run a summary is: the daemon that runs it, the project path in that daemon's
@@ -60,6 +60,9 @@ pub struct OutputView {
     pub offset: u32,
     /// The list's viewport height, as last reported; 0 before the first report.
     pub viewport: u32,
+    /// The first line of the watch sent last, until its backlog arrives: batches sent before the
+    /// daemon took that watch are in the backlog, and are not taken (M6 review A-F2).
+    pub pending: Option<u64>,
 }
 
 impl OutputView {
@@ -72,6 +75,7 @@ impl OutputView {
             follow: Follow::Following,
             offset: 0,
             viewport: 0,
+            pending: Some(0),
         }
     }
 
@@ -91,29 +95,46 @@ impl OutputView {
         self.lines.len() + usize::from(self.dropped() > 0)
     }
 
-    /// Take a batch of `run` whose first line has index `first_line` (contract C2).
-    fn take(&mut self, run: RunId, first_line: u64, lines: Vec<String>) {
+    /// Take a batch of `run` whose first line has index `first_line`, from a daemon that no longer
+    /// keeps the run's first `dropped` lines (contract C2). Returns the line to watch again from
+    /// when the batch shows the daemon holds lines of a new run this view has not asked for.
+    fn take(
+        &mut self,
+        run: RunId,
+        first_line: u64,
+        dropped: u64,
+        lines: Vec<String>,
+    ) -> Option<u64> {
+        if let Some(from) = self.pending {
+            // The backlog starts at `from`, or at the first line the daemon keeps past it.
+            if first_line > from.max(dropped) {
+                return None;
+            }
+            self.pending = None;
+        }
+        if self.run != Some(run) && first_line > dropped {
+            // A watch resumed from a line of the run this view held, answered by a newer run: the
+            // daemon still holds that run's lines from `dropped` (M6 review A-F1).
+            self.pending = Some(dropped);
+            return Some(dropped);
+        }
         let end = self.next_line();
-        if self.run != Some(run) || first_line > end {
-            // A new run starts over; a gap means the lines between were dropped.
-            self.run = Some(run);
-            self.first_line = first_line;
-            self.lines = lines;
-        } else {
+        if self.run == Some(run) && (self.first_line..=end).contains(&first_line) {
             // What overlaps the held lines (a watch resumed from earlier) is held already.
             let skip = usize::try_from(end - first_line).unwrap_or(usize::MAX);
             self.lines.extend(lines.into_iter().skip(skip));
+        } else {
+            // A new run, or a backlog, starts over; a gap means the lines between were dropped.
+            self.run = Some(run);
+            self.first_line = first_line;
+            self.lines = lines;
         }
         let excess = self.lines.len().saturating_sub(KEEP_LINES);
         if excess > 0 {
             self.lines.drain(..excess);
             self.first_line += excess as u64;
         }
-    }
-
-    /// The list's content height, in pixels.
-    fn content(&self) -> u32 {
-        (self.rows() as f32 * ROW_HEIGHT) as u32
+        None
     }
 }
 
@@ -149,7 +170,7 @@ pub enum Msg {
         names: Names,
     },
     /// A `SetupOutput` batch from `daemon` (contract C2): `lines` of `run`, the first at index
-    /// `first_line`.
+    /// `first_line`; the daemon no longer keeps the run's first `dropped` lines.
     Output {
         daemon: DaemonId,
         project: PathBuf,
@@ -157,6 +178,7 @@ pub enum Msg {
         run: RunId,
         first_line: u64,
         lines: Vec<String>,
+        dropped: u64,
     },
     /// **Setup output** was chosen for a location: open its view (contract U3, U4).
     ViewOpened(Key),
@@ -164,8 +186,13 @@ pub enum Msg {
     ViewClosed,
     /// Follow the tail, or stop following it.
     FollowToggled,
-    /// The view's list scrolled to `offset`, `viewport` pixels of it visible.
-    Scrolled { offset: u32, viewport: u32 },
+    /// The view's list scrolled to `offset`, `viewport` pixels of it visible, of `content` pixels
+    /// as the list measured them.
+    Scrolled {
+        offset: u32,
+        viewport: u32,
+        content: u32,
+    },
     /// **Copy output**.
     CopyRequested,
 }
@@ -181,6 +208,8 @@ pub enum Effect {
     ScrollToEnd,
     /// Put this text on the clipboard.
     Copy(String),
+    /// Send this watch: the daemon holds lines the view has not asked for (M6 review A-F1).
+    Watch(Request),
 }
 
 /// Apply `msg` to `state`.
@@ -219,16 +248,22 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             run,
             first_line,
             lines,
+            dropped,
         } => {
             let key = (daemon, project, location);
             let Some(view) = state.view.as_mut().filter(|view| view.key == key) else {
                 return Effect::None;
             };
-            view.take(run, first_line, lines);
-            following(view)
+            match view.take(run, first_line, dropped, lines) {
+                Some(from_line) => Effect::Watch(Request::Watch { key, from_line }),
+                None => following(view),
+            }
         }
         Msg::ViewOpened(key) => {
-            state.view = Some(OutputView::new(key));
+            // The location shown already keeps its lines and its watch.
+            if state.view.as_ref().is_none_or(|view| view.key != key) {
+                state.view = Some(OutputView::new(key));
+            }
             Effect::None
         }
         Msg::ViewClosed => {
@@ -247,13 +282,24 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             };
             following(view)
         }
-        Msg::Scrolled { offset, viewport } => {
+        Msg::Scrolled {
+            offset,
+            viewport,
+            content,
+        } => {
             let Some(view) = state.view.as_mut() else {
                 return Effect::None;
             };
+            // A new viewport height is a relayout (the window resized, the list first shown), not
+            // the user scrolling: a following view stays at the end (M6 review V-F1).
+            let relayout = view.viewport != viewport;
             view.offset = offset;
             view.viewport = viewport;
-            let content = view.content();
+            if relayout && view.follow == Follow::Following {
+                return Effect::ScrollToEnd;
+            }
+            // Judged against the content the list measured, so a report from a frame laid out
+            // before the latest batch is at its own end (M6 review A-F3).
             (view.follow, _) = view.follow.scrolled(offset, viewport, content);
             Effect::None
         }
@@ -277,10 +323,11 @@ fn following(view: &OutputView) -> Effect {
 /// shows, when they differ. Marks the view's location watched. Run after every message, so a view
 /// closed by any route (Escape, the scrim, another dialog) stops its watch.
 pub fn sync_watch(state: &mut State) -> Vec<Request> {
-    let wanted = state.view.as_ref().map(|view| view.key.clone());
-    if wanted == state.watched {
+    let wanted = state.view.as_ref().map(|view| &view.key);
+    if wanted == state.watched.as_ref() {
         return Vec::new();
     }
+    let wanted = wanted.cloned();
     let mut requests = Vec::new();
     if let Some(key) = state.watched.take() {
         requests.push(Request::Unwatch { key });
@@ -296,12 +343,15 @@ pub fn sync_watch(state: &mut State) -> Vec<Request> {
 }
 
 /// The watch `daemon` is sent again when it reconnects (FR-018): the open view's location, from
-/// the line after the last one held, when the view shows a location on that daemon.
-pub fn rewatch(state: &State, daemon: DaemonId) -> Option<Request> {
-    let view = state.view.as_ref().filter(|view| view.key.0 == daemon)?;
+/// the line after the last one held, when the view shows a location on that daemon. Batches
+/// before its backlog are not taken.
+pub fn rewatch(state: &mut State, daemon: DaemonId) -> Option<Request> {
+    let view = state.view.as_mut().filter(|view| view.key.0 == daemon)?;
+    let from_line = view.next_line();
+    view.pending = Some(from_line);
     Some(Request::Watch {
         key: view.key.clone(),
-        from_line: view.next_line(),
+        from_line,
     })
 }
 

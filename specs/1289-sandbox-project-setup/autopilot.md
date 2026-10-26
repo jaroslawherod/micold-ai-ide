@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
 - **Phase**: M6
-- **Next step**: M6 reviews A/B round 1 and visual pass on snapshot 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926; then full gate, rebase, PR
+- **Next step**: M6 review A round 2 (scoped, sonnet) and visual-pass re-check (V-F1–V-F3) on the round-1 fix snapshot; then rebase, PR
 
 ## Pull requests
 
@@ -93,6 +93,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 visual pass | 1 (U1, U2) | 476492d091f0d2e0bd6a3cbde8ff0a980626c037:6cf38804df1079c1dba2f287d81c55b4d9090d87 | PASS; V-F1 left: the tag's tooltip shows with the row's, as the leading status chip's does (`status_chip.rs:96` inside a `row_tooltip` row), the existing pattern; V-F2 fixed (placeholder *e.g. mise trust && mise install*); evidence in `visual-pass/` |
 | M5 A | 2 (scoped, sonnet) | 1107e0107dc91a44d1323966ca70bcde87d9de44:7f5b8a36eaf2e15a4cb3532d59d873e553b54b08 | CLEAN; no findings |
 | M5 rebase-2 daemon_sync resolution | scoped (sonnet) | — | CLEAN — every production ProjectAdd goes through `add_project`, bug 1423 ordering kept, setup command sent once per project on connect |
+| M6 A | 1 (high) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `Msg::Output` carries `dropped`; a batch of a newer run starting past `dropped` (a resumed watch) returns `Effect::Watch` from `dropped`; F2 `OutputView::pending` ignores batches past `max(from, dropped)` until the watch's backlog arrives, a same-run batch outside the held lines replaces them; F3 `Msg::Scrolled` carries the measured content (`VirtualRows::on_scroll_metrics`); F4 `sync_watch` compares by reference; cycle log M6 cycle 2 |
+| M6 B | 1 (sonnet) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | CLEAN; Verify green (features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4). MINORs: B-F1 `FollowToggled` has no sender — accepted, intentional: the follow toggle stays in the reducer, tested, for a control to send; following resumes by scrolling to the end; B-F2 G2 never run red alone — accepted, disclosed in cycle log M6 cycle 1; B-F3 `confirm_delete::modal` 8 args — left (optional) |
+| M6 visual pass | 1 (U4, U6) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | FAIL: V-F1 MAJOR follow lost on window resize — fixed: a report with a new viewport while following keeps the follow and snaps to the end; V-F2 row menu left open — fixed: `State::update_setup` closes it on `ViewOpened`; V-F3 scrollbar over text — fixed: rows padded `BAR_FOOTPRINT`, clip inside; evidence `visual-pass/m6-*` |
 
 ## Declined review findings
 
