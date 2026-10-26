@@ -1291,7 +1291,8 @@ fn a_session_without_a_switch_has_two_rows_and_an_empty_slot() {
         .find(|s| s.name == "session-area-one-tab")
         .expect("the covered state exists")
         .build;
-    let builds: [(&str, Box<dyn Fn() -> State>); 2] = [
+    type Build = Box<dyn Fn() -> State>;
+    let builds: [(&str, Build); 2] = [
         ("plain terminal", Box::new(move || plain().state)),
         (
             "transcript",
@@ -1337,7 +1338,7 @@ fn a_long_caption_is_cut_before_the_switch_or_restart_is_clipped() {
             3,
             "{what}: words, switch slot, restart: {cluster:?}"
         );
-        for (name, part) in cluster.iter().enumerate().map(|(i, p)| (i, p)) {
+        for (name, part) in cluster.iter().enumerate() {
             assert!(
                 inside(part, &area) && inside(part, &Rectangle::with_size(window)),
                 "{what}: cluster child {name} {part:?} lies inside the area {area:?}"
