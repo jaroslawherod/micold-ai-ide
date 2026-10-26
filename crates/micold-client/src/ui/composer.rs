@@ -520,6 +520,19 @@ pub fn key_binding(
     }
 }
 
+/// A press as the review key map reads it (#1274 contract K5); `None` for a key the keymap does not
+/// know. Shared by the review's listener and its comment box.
+pub(crate) fn review_press(
+    key: &iced::keyboard::Key,
+    physical: &iced::keyboard::key::Physical,
+    modifiers: iced::keyboard::Modifiers,
+    text: Option<&str>,
+    repeat: bool,
+) -> Option<micold_core::review::keys::Press> {
+    let input = key_input(key, physical, modifiers, text)?;
+    Some(crate::keymap::review_press(&input, repeat))
+}
+
 /// A press as the keymap reads it; `None` for a key it does not know. Shared by the composer's
 /// binding and the transcript's listener.
 pub(crate) fn key_input(

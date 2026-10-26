@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M4 verify: scoped gate + review A, then review B + visual pass (T047), full gate, PR.
+- **Next step**: M4 visual pass (T047, release build), then full gate, PR.
 
 ## Pull requests
 
@@ -62,8 +62,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 2 (sonnet) | tree of c78577d96 | CLEAN: gate GATE_EXIT=0, review::keys 18 ok, settings tests ok, settings_sections ok |
 | Review A M3 (code review high, headless reviewer) | 1 | adde9b38f77bb64399106bfd29f0aa938e49c034:0956edfa59b3efca63cd24a2ac226930fec0e927 | CLEAN: 3 MINOR; F1 (`reset_diff_pane` keeps `pending_edge`) and F3 (`select` of the selected file keeps the current hunk) fixed, F2 declined |
 | Review B M3 (conformance, sonnet, headless) | 1 | a8df1179a0a164f1635bb3278ad9b68849fefdc6:af6b01c9f13795709c5e62d92e749c3f375f0366 | CLEAN: 2 MINOR declined (F1 = review A's F2; F2 a re-read keeps `current_hunk`: an index past the new count marks nothing and `step_hunk` clamps it). Client suite TEST_EXIT=0 (all client tests) |
+| Review A M4 (code review high, headless reviewer) | 1 | ed5be9d8e88d85fc6fd992076485015db62ff00d:8ab608743e35d9b25ac8218c9a017e6b5ec3d323 | CLEAN: 2 MINOR; F1 (`composer_chord` duplicated the listener's key_input → review_press step) fixed with `ui::composer::review_press`; F2 (composer chord has no repeat flag) declined, see below. A first run returned a bare CLEAN; re-run with JSON output (15 turns) gave this |
+| Review B M4 (conformance, sonnet, headless) | 1 | 4128587d1fe3d3ebf9f6c615f96914f7c478b947:eb55db847cf5dac44c9c683d98cdb24abfa07d4b | CLEAN: 2 MINOR; F1 (T037 has no red) fixed, prose only (cycle log: a guard); F2 (T047 open) — the visual pass runs next. Bash refused in the reviewer, so Verify is the unit's targeted runs + scoped gate |
 
 ## Declined review findings
+
+- Review A M4 F2: the comment box's send chord passes `repeat: false` — iced's editor `KeyPress` has no repeat flag, so it cannot be known there; a repeat reaches `SendPressed`, which sends nothing once the service reports the send under way (as a double click on **Send review (n)** does). MINOR.
 
 - Review A M1: declined (1) AltGr heuristic lets Ctrl+Alt+key act — contract K3 / research R7 say Ctrl+Alt without logo counts as none, on purpose (AltGr layouts); (2) comment `name` is whole text — contract J1 says text with lines joined by spaces; (3) jump-to uses the stored `range.start()`, not the located line — jump-to lists comments of unloaded files, whose located line is unknown; revisit in M4 when it is wired; (4) `header_rows` builds all rows — research R9's choice, once per `n`/`p`, MINOR; (5) `Press.primary` derivable from `ctrl`/`logo` — contract K5's shape, taste; (6) placeholder `has_hunks`/`in_diff` in `review_candidates` — `comment_order` reads neither, MINOR; (7) client `resolve` returns `None` for review keys — M4 (T052–T057) wires it.
 - Review A M2: declined (1) `?` dead under `Holder::Sheet` with the switch off — spec FR-012/FR-022 as clarified: `?` is a single key and off; Escape and outside click close the sheet (T041 tests it); (3) `SINGLE_KEYS_OFF_NOTE` literal assert — pins contract K4a's text, as the K1 sheet-text tests do; (6) `"jknp][vgc?"` restates the table — it pins FR-001's ten keys in the public, stable order (#1276); (7) no daemon-write test for the field — same client-held path as `reduce_motion`, kept by `update_reporting`'s re-read (BUG-025 tests); (4) placeholder `true` — covered now by the new persist test, replaced in T064.

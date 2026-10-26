@@ -1488,13 +1488,15 @@ fn composer_box<'a>(
 /// The review's message for a press in the comment box (#1274 contract K6): the send chord's,
 /// else `None`, which leaves the press to the box.
 fn composer_chord(press: &text_editor::KeyPress, single_keys: bool) -> Option<Message> {
-    let input = crate::ui::composer::key_input(
+    // iced's editor press carries no repeat flag; a held chord's repeats reach `SendPressed`, which
+    // sends nothing while the service reports the send under way.
+    let press = crate::ui::composer::review_press(
         &press.key,
         &press.physical_key,
         press.modifiers,
         press.text.as_deref(),
+        false,
     )?;
-    let press = crate::keymap::review_press(&input, false);
     changes::composer_press(&press, single_keys).map(Message::Changes)
 }
 
