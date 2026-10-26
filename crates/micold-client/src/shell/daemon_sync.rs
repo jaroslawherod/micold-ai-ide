@@ -2048,6 +2048,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         app.core.notify_error(message);
                     }
                 }
+                // A stop that raced the run's end (or a second click) finds nothing to stop: the
+                // row already shows how it ended (feature 1289, M7 review A-F2).
+                Some(PendingOp::SetupStop)
+                    if kind == micold_core::protocol::messages::ErrorKind::NotFound => {}
                 Some(op) => app
                     .core
                     .notify_error(format!("Couldn't {}: {message}", op.describe())),
