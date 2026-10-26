@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
 - **Phase**: amendment (spec amendment D8, 2026-10-26)
-- **Next step**: tasks re-review round 2 on the amendment (spec and plan reviews done), dispatched by the orchestrator; then the specs-only gate, PR title/body to the scratchpad, push; then M1 once #1289 has merged (#1435 merged)
+- **Next step**: amendment reviews done (all CLEAN); specs-only gate passed; PR title/body in the scratchpad, pushed; orchestrator opens the PR; then the specs-only gate, PR title/body to the scratchpad, push; then M1 once #1289 has merged (#1435 merged)
 - **Gate**: specs-only `scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md` exit 0 (spec has no criteria table; not opted in); every changed file is under `specs/`
 
 ## Pull requests
@@ -58,7 +58,7 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | Review spec (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CLEAN; 3 MINOR, all fixed, prose only: F1 FR-014 'everything an install keeps' under the home, temp files excepted; F2 FR-017 says curl from #1435, git/tar/gzip from the existing image, adds only xz/unzip; F3 checklist Note: FR-015 values are user-visible contract (FR-018) |
 | Review plan (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CLEAN; 3 MINOR, all fixed: F1 A10 + FR-014 row add `go install` (mise Go, local module) and `pip install --user` (mise Python); F2 FR-005 row adds D8, A10 (session half); F3 contract I4 + spec edge case 'An AI CLI updates itself through npm' accepted as harmless (offered bins first on PATH, `only_offered`, state.rs:1200) + plan map row |
 | Review tasks (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CHANGES: 2 MAJOR, 2 MINOR — all fixed. F1 (verified: start_tests.rs:388 asserts deletes = pod only, created.len()==1): T036 now cites the existing test as A9 evidence, no new test; plan D9, quickstart A9, research R12, plan file list, M5 Verify follow. F2: T037, A10, plan FR-014 row add `mise use -g go@<pin>` + `go install` of a test-written local module and `mise use -g python@<pin>` + `pip install --user`; M5 Deliverable and Phase 10 Goal name pip. F3: T040 + plan D6 M5 paragraph say image-linked tools may need reinstalling after an image update; edge case in M5 Satisfies. F4: M5 Satisfies adds FR-005 (session half) |
-| Review tasks (amendment D8) | 2 | a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057 | pending (scoped re-review of the fix diff, sonnet; orchestrator dispatches) |
+| Review tasks (amendment D8) | 2 | a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057 | CLEAN, no findings |
 
 speckit-analyze (run inline on spec/plan/tasks before tasks review round 2; the skill is not invocable through the Skill tool in this cloud session; no analyze hooks in `.specify/extensions.yml`): 0 CRITICAL; 1 HIGH — C1 coverage: FR-009, SC-001, SC-002 and US2 AS1–AS4 mapped only to Phase 9 tasks outside any milestone (same as review F1) — fixed by moving T032–T033 into M4. MEDIUM: C2 three edge cases with no test/quickstart row (= F4, fixed); I1 checklist item unticked though no markers remain (= F3, fixed). LOW: none acted on. Coverage after fixes: FR-001–FR-013 and SC-001–SC-005 each have ≥1 task in a milestone (SC-004 via T015/T019); every task maps to a story or requirement; constitution I (tests first in each milestone), VI (two arches, daemon code on three CI platforms) and VII (user guide in M1 T009/T014, M2 T018, M3 T025, M4 T030) hold.
 
@@ -71,14 +71,10 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
 
 ## Handover
 
-Amendment part 2 (2026-10-26): recorded the three round-1 verdicts on amendment D8 and applied every
-finding (commit after 6294a8553); round-2 snapshot `a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057` taken for the tasks review (its two MAJORs
-were fixed). Spec and plan reviews are done (CLEAN, MINORs fixed).
+Amendment D8 is done. All three reviews are CLEAN (tasks round 2 found nothing). The specs-only gate
+exits 0. The PR title and body are in the session scratchpad, and the branch is pushed.
 
-- **Next**: the orchestrator dispatches a scoped tasks re-review (round 2, sonnet) of
-  `scripts/autopilot/review-snapshot.sh diff 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc`; if CLEAN, the specs-only gate
-  (`scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md`, exit 0 at
-  part 2), PR title/body to the scratchpad, push. Never `gh pr`/`gh issue`.
+- **Next**: the orchestrator opens the amendment PR and merges it; then M1 once #1289 has merged.
 - **Open findings**: none.
 
 ## Open escalation
