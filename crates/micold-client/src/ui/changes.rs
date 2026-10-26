@@ -11,6 +11,7 @@ use iced::widget::{column, container, row, stack, text_editor, Row, Space};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
 use micold_core::review::comment::{ReviewComment, Status};
+use micold_core::review::keys::ReviewAction;
 use micold_core::review::Side;
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
@@ -85,6 +86,11 @@ pub const SOURCE_CONTROL_WIDTH: f32 = 360.0;
 /// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
 pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
     std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-diff"));
+
+/// The changed-file tree's scroll viewport, by name: a review key brings the selected row into view
+/// (#1274 FR-003).
+pub static LIST_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-list"));
 
 /// The composer's text area, by name: a drag's release puts the keyboard in it (feature 1275,
 /// FR-015). One composer is open at a time.
@@ -753,6 +759,7 @@ fn change_tree<'a>(
     )
     .offset(view.list_offset)
     .viewport(view.list_viewport)
+    .id(LIST_SCROLL_ID.clone())
     .on_scroll(|offset, viewport| Message::Changes(Msg::ListScrolled { offset, viewport }))
     .into()
 }
@@ -1138,6 +1145,30 @@ fn diff_pane_body<'a>(
                 .into(),
         ),
     }
+    let single_keys = state.settings.review_single_keys;
+    // #1274 (FR-013): previous / next hunk, which `p` / `n` duplicate.
+    if changes::hunk_controls(view) {
+        let step = |icon: Icon, action: ReviewAction, tip: &str| -> Element<'a, Message> {
+            Tooltip::new(
+                IconButton::new(icon, r)
+                    .compact()
+                    .on_press(Message::Changes(Msg::ReviewKey(action))),
+                changes::with_key_hint(tip, action, single_keys),
+                r,
+            )
+            .into()
+        };
+        layouts.push(step(
+            Icon::MoveUp,
+            ReviewAction::PrevHunk,
+            changes::PREVIOUS_HUNK,
+        ));
+        layouts.push(step(
+            Icon::MoveDown,
+            ReviewAction::NextHunk,
+            changes::NEXT_HUNK,
+        ));
+    }
     // Feature 1271 (FR-002): the selected file's mark control, beside **Whole file**.
     if let Some(control) = mark_control(&state.changes, view, connected) {
         layouts.push(
@@ -1147,7 +1178,12 @@ fn diff_pane_body<'a>(
                     .one_line()
                     .active(control.pressed)
                     .disabled(control.block.is_some()),
-                control.tooltip(),
+                // #1274 (FR-013): `v` does what this control does.
+                changes::with_key_hint(
+                    control.tooltip(),
+                    ReviewAction::ToggleReviewed,
+                    single_keys,
+                ),
                 r,
             )
             .into(),
@@ -1177,6 +1213,7 @@ fn diff_pane_body<'a>(
                 .map(|(anchor, height)| (*anchor, *height as f32))
                 .collect();
             let mut diff = DiffView::new(&loaded.diff, layout, r)
+                .current_row(changes::current_header_row(view, layout))
                 .scroll_id(DIFF_SCROLL_ID.clone())
                 .spans(spans)
                 .offset(view.diff_offset)
@@ -1407,7 +1444,8 @@ fn composer_box<'a>(
             let mut area = TextArea::new(content, r)
                 .id(COMPOSER_ID.clone())
                 .placeholder(placeholder)
-                .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))));
+                .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))))
+                .track_focus(FieldId::ReviewComposer, None);
             if has_text {
                 area = area.on_submit(save.clone());
             }

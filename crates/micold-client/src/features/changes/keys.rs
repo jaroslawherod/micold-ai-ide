@@ -1,0 +1,306 @@
+//! The Review tab's keyboard (#1274, plan D4–D5): who has the keyboard ([`review_holder`]), the
+//! decision of a press ([`key_pressed`]) and what each review key does to the shown view
+//! ([`review_key`], contract K7). The keys and the rules they follow are core's
+//! (`micold_core::review::{keys, navigate}`); this module only feeds them the view's state.
+
+use micold_core::navigation::Dir;
+use micold_core::review::diff::header_rows;
+use micold_core::review::keys::{key_hint, resolve, Holder, Press, ReviewAction};
+use micold_core::review::marks::ReviewState;
+use micold_core::review::navigate::{
+    has_hunks, next_unreviewed, resolve_edge, step_file, step_hunk, HunkMove, NavFile,
+    SelectedDiff, Unreviewed, ALL_FILES_REVIEWED,
+};
+use micold_core::review::tree;
+use micold_core::review::RelPath;
+use micold_core::settings::DiffLayout;
+use micold_core::typeahead::Query;
+
+use super::{
+    change_leaves, diff_body, file_reviews, list_body, mark_toggled, reviewed_paths, selected_file,
+    shown_hunks, update, DiffBody, Effect, ListBody, Load, Msg, OpenView, Source, State,
+};
+use crate::features::window::FieldId;
+
+/// Who has the keyboard for the review keys (#1274 research R7, FR-002, SC-002): `Review` while
+/// the shown entry's Review tab is on screen and nothing else holds the keyboard; `Composer` while
+/// its comment box has it; `Other` for a focused field, Settings, the Overview, the quick switcher
+/// or any other registered surface on top.
+pub fn review_holder(app: &crate::app::State) -> Holder {
+    if app.review_shown().is_none()
+        || app.settings.settings_draft.is_some()
+        || app.overview.open
+        || app.terminal_focused()
+        || crate::overlay::registry::topmost(app).is_some()
+    {
+        return Holder::Other;
+    }
+    let composer_open = app
+        .changes
+        .tabs
+        .shown_view()
+        .is_some_and(|view| view.composer.is_some());
+    match app.window.focused_field {
+        None => Holder::Review,
+        Some(FieldId::ReviewComposer) if composer_open => Holder::Composer,
+        // A closed comment box, or the session's own composer and queued message, which the Review
+        // tab replaces on screen: their text areas never report losing the keyboard as they go.
+        Some(FieldId::ReviewComposer | FieldId::Composer(_) | FieldId::QueuedMessage(_)) => {
+            Holder::Review
+        }
+        Some(_) => Holder::Other,
+    }
+}
+
+/// A press the review's listener heard (contract K6), decided at the press: by who has the keyboard
+/// now and the window's single-key switch (FR-022). `None` leaves it to whatever has the keyboard.
+pub fn key_pressed(app: &crate::app::State, press: &Press) -> Option<Msg> {
+    resolve(press, review_holder(app), app.settings.review_single_keys).map(Msg::ReviewKey)
+}
+
+/// `first`, then `then` unless it is nothing.
+pub(super) fn with(first: Effect, then: Effect) -> Effect {
+    match (first, then) {
+        (first, Effect::None) => first,
+        (Effect::None, then) => then,
+        (Effect::Batch(mut list), then) => {
+            list.push(then);
+            Effect::Batch(list)
+        }
+        (first, then) => Effect::Batch(vec![first, then]),
+    }
+}
+
+/// What a review key does to the shown view (contract K7); `] [ c ? Send` act from M4.
+pub(super) fn review_key(state: &mut State, action: ReviewAction) -> Effect {
+    if state.tabs.shown_view().is_none() {
+        return Effect::None;
+    }
+    match action {
+        ReviewAction::NextFile => step_files(state, Dir::Next),
+        ReviewAction::PrevFile => step_files(state, Dir::Previous),
+        ReviewAction::NextHunk => step_hunks(state, Dir::Next),
+        ReviewAction::PrevHunk => step_hunks(state, Dir::Previous),
+        ReviewAction::ToggleReviewed => mark_toggled(state),
+        ReviewAction::NextUnreviewed => to_unreviewed(state),
+        ReviewAction::NextComment
+        | ReviewAction::PrevComment
+        | ReviewAction::Comment
+        | ReviewAction::ToggleSheet
+        | ReviewAction::Send => Effect::None,
+    }
+}
+
+/// The shown source's files in the tree's order (its sort and filter, folds ignored: FR-003), with
+/// whether each has hunks `n`/`p` stop on.
+fn nav_order(state: &State, view: &OpenView) -> Vec<NavFile> {
+    let ListBody::Files(files) = list_body(view) else {
+        return Vec::new();
+    };
+    let leaves = change_leaves(files);
+    let reviewed = reviewed_paths(state, view);
+    let is_reviewed = |path: &str| reviewed.contains(path);
+    let query = Query::new(&view.tree.filter);
+    let large = match &view.source {
+        Source::Changes => &view.shown_large,
+        Source::PullRequest(pr) => &pr.shown_large,
+    };
+    tree::file_order(&leaves, &view.tree, &query, &is_reviewed)
+        .into_iter()
+        .filter_map(|leaf| files.get(leaf))
+        .map(|file| NavFile {
+            path: file.path.clone(),
+            has_hunks: has_hunks(file, large.contains(&file.path)),
+        })
+        .collect()
+}
+
+/// `j` / `k` (FR-003).
+fn step_files(state: &mut State, dir: Dir) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let order = nav_order(state, view);
+    match step_file(&order, selected_file(view), dir) {
+        Some(path) => select(state, path),
+        None => Effect::None,
+    }
+}
+
+/// Select `path` as a tree click does (the one select path, `Msg::FileSelected`: its row revealed,
+/// the current hunk cleared), show its diff from the top and bring its row into view (FR-003).
+fn select(state: &mut State, path: RelPath) -> Effect {
+    let selected = update(state, Msg::FileSelected(path.clone()));
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return selected;
+    };
+    view.diff_offset = 0;
+    let mut effect = with(selected, Effect::ScrollDiff { offset: 0 });
+    if let Some(offset) = row_into_view(view, &path) {
+        view.list_offset = offset;
+        effect = with(effect, Effect::ScrollList { offset });
+    }
+    effect
+}
+
+/// The tree offset that brings `path`'s row into view, `None` when it is in view already.
+fn row_into_view(view: &OpenView, path: &RelPath) -> Option<u32> {
+    let files = match list_body(view) {
+        ListBody::Files(files) => files,
+        _ => return None,
+    };
+    let index = view.change_rows.iter().position(|row| {
+        matches!(row.kind, tree::RowKind::File { leaf } if files.get(leaf).is_some_and(|f| &f.path == path))
+    })?;
+    let height = crate::ui::changes::ROW_HEIGHT;
+    let top = (index as f32 * height) as u32;
+    let bottom = ((index + 1) as f32 * height) as u32;
+    let (from, viewport) = (view.list_offset, view.list_viewport);
+    if viewport == 0 || top < from {
+        (top != from).then_some(top)
+    } else if bottom > from + viewport {
+        Some(bottom - viewport)
+    } else {
+        None
+    }
+}
+
+/// The selected file's diff as `step_hunk` reads it.
+fn selected_diff(view: &OpenView) -> SelectedDiff {
+    match (&view.source, &view.diff) {
+        (Source::PullRequest(_), _) | (Source::Changes, Load::Ready(_)) => {
+            SelectedDiff::Hunks(shown_hunks(view).len())
+        }
+        (Source::Changes, Load::Failed(_)) => SelectedDiff::Failed,
+        (Source::Changes, Load::Idle | Load::Loading { .. }) => SelectedDiff::Loading,
+    }
+}
+
+/// `n` / `p` (FR-004).
+fn step_hunks(state: &mut State, dir: Dir) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let order = nav_order(state, view);
+    let step = step_hunk(
+        &order,
+        selected_file(view),
+        selected_diff(view),
+        view.current_hunk,
+        dir,
+    );
+    match step {
+        HunkMove::Current(index) => {
+            current(state, index).map_or(Effect::None, |offset| Effect::ScrollDiff { offset })
+        }
+        HunkMove::File { path, edge } => {
+            let selected = select(state, path.clone());
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.pending_edge = Some((path, edge));
+            }
+            // A pull request's file is parsed at once: its edge is current now.
+            match resolve_pending_edge(state) {
+                Some(offset) => with(selected, Effect::ScrollDiff { offset }),
+                None => selected,
+            }
+        }
+        HunkMove::Nothing => Effect::None,
+    }
+}
+
+/// Make hunk `index` of the selected file current and return the offset that puts its header at
+/// the top of the diff (FR-004), with `jump_offset`'s arithmetic: rows above it, and the measured
+/// cards and composers hung above its first line.
+fn current(state: &mut State, index: usize) -> Option<u32> {
+    let layout = state.layout;
+    let view = state.tabs.shown_view_mut()?;
+    let row = *header_rows(&view.shaped, layout).get(index)?;
+    let hunk = shown_hunks(view).get(index)?;
+    let (old, new) = (hunk.old_start, hunk.new_start);
+    let hung: u32 = view
+        .slot_heights
+        .iter()
+        .filter(|((side, line), _)| match side {
+            micold_core::review::Side::Old => *line < old,
+            micold_core::review::Side::New => *line < new,
+        })
+        .map(|(_, height)| *height)
+        .sum();
+    let offset = (row as f32 * crate::ui::material::DIFF_ROW_HEIGHT) as u32 + hung;
+    view.current_hunk = Some(index);
+    view.diff_offset = offset;
+    Some(offset)
+}
+
+/// The pending edge of the selected file, once its diff is shown: its hunk is made current and the
+/// diff scrolled to it (research R5). A file whose diff has no hunk drops the edge.
+pub(super) fn resolve_pending_edge(state: &mut State) -> Option<u32> {
+    let view = state.tabs.shown_view_mut()?;
+    let (path, edge) = view.pending_edge.clone()?;
+    if selected_file(view) != Some(&path) {
+        return None;
+    }
+    let SelectedDiff::Hunks(count) = selected_diff(view) else {
+        return None;
+    };
+    view.pending_edge = None;
+    current(state, resolve_edge(edge, count)?)
+}
+
+/// `g` (FR-008): the next file not marked reviewed, read now, so a mark made in another window
+/// counts (US2 s5).
+fn to_unreviewed(state: &mut State) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let order = nav_order(state, view);
+    let reviews = file_reviews(state, view, true);
+    let is_reviewed = |path: &RelPath| {
+        reviews
+            .get(path)
+            .is_some_and(|review| review.state == ReviewState::Reviewed)
+    };
+    match next_unreviewed(&order, selected_file(view), is_reviewed) {
+        Unreviewed::Select(path) => select(state, path),
+        Unreviewed::AllReviewed => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.notice = Some(ALL_FILES_REVIEWED);
+            }
+            Effect::None
+        }
+        Unreviewed::Nothing => Effect::None,
+    }
+}
+
+/// The tooltip of the previous-hunk control in the diff header (FR-013).
+pub const PREVIOUS_HUNK: &str = "Previous change";
+/// The tooltip of the next-hunk control in the diff header (FR-013).
+pub const NEXT_HUNK: &str = "Next change";
+
+/// `text` naming `action`'s key in the platform's form (FR-013, contract K4a): nothing added while
+/// the single-key switch is off, so a tooltip never names a key that does nothing.
+pub fn with_key_hint(text: &str, action: ReviewAction, single_keys: bool) -> String {
+    match key_hint(action, single_keys) {
+        Some(row) => {
+            let (other, mac) = row.labels();
+            let label = if cfg!(target_os = "macos") {
+                mac
+            } else {
+                other
+            };
+            format!("{text} ({label})")
+        }
+        None => text.to_owned(),
+    }
+}
+
+/// The diff row of the current hunk's header in `layout`, which the diff marks (FR-005).
+pub fn current_header_row(view: &OpenView, layout: DiffLayout) -> Option<usize> {
+    let index = view.current_hunk?;
+    header_rows(&view.shaped, layout).get(index).copied()
+}
+
+/// Whether the diff header shows the previous / next hunk controls: a diff with hunks is shown.
+pub fn hunk_controls(view: &OpenView) -> bool {
+    matches!(diff_body(view), DiffBody::Diff(_)) && !shown_hunks(view).is_empty()
+}

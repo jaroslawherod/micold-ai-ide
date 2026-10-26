@@ -252,6 +252,8 @@ pub enum FieldId {
     SettingsReduceMotion,
     /// Settings → Appearance → **Suggestion chips** (#1275).
     SettingsSuggestionChips,
+    /// Settings: **Single-key shortcuts in the Review tab** (#1274, FR-022).
+    SettingsReviewSingleKeys,
     /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
     SettingsCpuLimit,
     /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).
@@ -287,6 +289,9 @@ pub enum FieldId {
     Composer(micold_core::session::SessionId),
     /// The review's changed-file tree's filter box (feature 1273, FR-009).
     ReviewTreeFilter,
+    /// The review's comment box (#1274 research R7): while it has the keyboard, the review keys
+    /// leave its text alone.
+    ReviewComposer,
 }
 
 /// What the window reports about itself (feature 028, FR-001).

@@ -422,6 +422,46 @@ Marks are kept by the session service, beside the entry's comments: every window
 shows the same marks, and they are still there after a restart. They are removed with the
 worktree.
 
+## Reviewing from the keyboard
+
+While the Review tab is shown and no text field, dialog or terminal has the keyboard, single keys
+move through the review and mark it:
+
+| Key | What it does |
+|---|---|
+| `j` | Select the next file |
+| `k` | Select the previous file |
+| `n` | Make the next change (hunk) current |
+| `p` | Make the previous change current |
+| `v` | Mark the selected file reviewed, or take the mark back |
+| `g` | Select the next file not marked reviewed |
+
+`j` and `k` follow the files in the order the tree lists them, with its filter and sort: a filtered
+tree visits only the files it shows. A file inside a collapsed folder is visited too, and its folder
+opens. The selected file's diff is shown from the top and its row is scrolled into view. Both wrap
+at the ends of the list; with no file selected, `j` selects the first and `k` the last.
+
+`n` and `p` step through the selected file's changes and scroll the diff so the change's header is
+at the top. The current change's header is drawn in the accent colour. Past the last change of a
+file, `n` goes on to the first change of the next file that has changes; before the first, `p` goes
+to the last change of the previous one. Files without changes to step through (binary, renamed only,
+mode only, or a large file whose diff is not shown) are passed over, and both wrap at the ends of the
+list. Selecting another file, however you select it, clears the current change. Moving never
+changes picked lines, a comment you are writing, **Whole file**, or **Unified** / **Side by side**.
+The arrows in the diff header, beside **Mark reviewed**, do what `p` and `n` do.
+
+`v` does exactly what **Mark reviewed** does (see [Marking files reviewed](#marking-files-reviewed)),
+for the selected file only. `g` selects the first file after the selected one, wrapping, that is not
+marked reviewed — a mark made in another window counts. With every file reviewed it leaves the
+selection where it is and says *All files reviewed*.
+
+The keys act only while the review has the keyboard: typed into the tree's filter, a comment box or
+any other field, a letter is just text; with Ctrl, Cmd or Alt held, or while an input method is
+composing, nothing happens. Holding `j`, `k`, `n` or `p` steps once per key repeat; `v` and `g` act
+once per press. The tooltips of the arrows and of **Mark reviewed** name their key. To turn the
+single keys off, see [Settings → Single-key shortcuts in the Review
+tab](settings.md#single-key-shortcuts-in-the-review-tab).
+
 ## Commenting on lines
 
 You can leave comments on the diff, the way you would in a code review, for the session to act on

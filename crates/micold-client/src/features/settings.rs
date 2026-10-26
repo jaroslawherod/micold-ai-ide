@@ -128,6 +128,9 @@ pub struct State {
     /// Whether comment boxes show the suggestion chips (#1275, FR-022; persisted). Set by a save,
     /// like `reduce_motion`; the draft's copy is the unsaved edit.
     pub suggestion_chips: bool,
+    /// Whether the Review tab's single keys act (#1274, FR-022; persisted, on by default). Set by a
+    /// save, like `reduce_motion`; the draft's copy is the unsaved edit.
+    pub review_single_keys: bool,
     /// Where sessions are running **now** (FR-035b; BUG-003).
     ///
     /// Not the draft's `daemon.placement`, which is what the user is *choosing*, and not the
@@ -179,6 +182,7 @@ impl Default for State {
             theme_pref: Default::default(),
             reduce_motion: false,
             suggestion_chips: false,
+            review_single_keys: true,
             placement_in_force: Default::default(),
             daemons: Default::default(),
             legacy_default_daemon: None,
@@ -303,6 +307,8 @@ pub struct AppearanceDraft {
     pub reduce_motion: bool,
     /// Show *Rename*, *Add test* and *Why?* under every comment box (#1275, FR-022).
     pub suggestion_chips: bool,
+    /// **Single-key shortcuts in the Review tab** (#1274, FR-022).
+    pub review_single_keys: bool,
 }
 
 /// The Terminal section's fields.
@@ -748,6 +754,8 @@ pub struct ValidSettings {
     pub reduce_motion: bool,
     /// Appearance: **Suggestion chips** (#1275).
     pub suggestion_chips: bool,
+    /// Appearance: **Single-key shortcuts in the Review tab** (#1274).
+    pub review_single_keys: bool,
     /// Terminal.
     pub scrollback_lines: usize,
     /// Environment.
@@ -833,9 +841,7 @@ impl ValidSettings {
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
             diff_layout: micold_core::settings::DiffLayout::Unified,
-            // Not in the form yet (feature 1274, T064 adds the Appearance row): `set_changed`
-            // skips it, so the save keeps the stored value.
-            review_single_keys: true,
+            review_single_keys: self.review_single_keys,
             // Not in the form (feature 491): the registry is service-owned; a save sets only
             // the changed fields on the stored settings (`set_changed`) and keeps the registry.
             daemons: Vec::new(),
@@ -1188,6 +1194,7 @@ impl SettingsDraft {
             theme: self.appearance.theme,
             reduce_motion: self.appearance.reduce_motion,
             suggestion_chips: self.appearance.suggestion_chips,
+            review_single_keys: self.appearance.review_single_keys,
             scrollback_lines,
             env_include_enabled: self.environment.enabled,
             env_include_script_path: self.environment.script_path.clone(),
@@ -1535,6 +1542,7 @@ impl SettingsDraft {
                     theme: _,
                     reduce_motion: _,
                     suggestion_chips: _,
+                    review_single_keys: _,
                 },
             terminal:
                 TerminalDraft {
@@ -1615,6 +1623,7 @@ impl SettingsDraft {
             appearance.theme,
             appearance.reduce_motion,
             appearance.suggestion_chips,
+            appearance.review_single_keys,
             terminal.scrollback_lines,
             terminal.save_terminal_history,
             environment.enabled,
@@ -1665,6 +1674,7 @@ impl SettingsDraft {
                 theme: settings.theme,
                 reduce_motion: settings.reduce_motion,
                 suggestion_chips: settings.suggestion_chips,
+                review_single_keys: settings.review_single_keys,
             },
             terminal: TerminalDraft {
                 scrollback_lines: settings.scrollback_lines.to_string(),
@@ -1794,6 +1804,9 @@ pub enum Msg {
     /// The Settings **Suggestion chips** switch was toggled (#1275, FR-022). Edits the draft; Save
     /// applies it and Cancel discards it.
     SuggestionChipsToggled(bool),
+    /// The Settings **Single-key shortcuts in the Review tab** switch was toggled (#1274,
+    /// FR-022). Edits the draft; Save applies it and Cancel discards it.
+    ReviewSingleKeysToggled(bool),
     /// The Settings scrollback field changed.
     ScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
@@ -1939,6 +1952,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::ThemeChanged(theme) => theme_changed(state, theme),
         Msg::ReduceMotionToggled(on) => reduce_motion_toggled(state, on),
         Msg::SuggestionChipsToggled(on) => suggestion_chips_toggled(state, on),
+        Msg::ReviewSingleKeysToggled(on) => review_single_keys_toggled(state, on),
         Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
         Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),
         Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
@@ -2146,6 +2160,11 @@ pub fn reduce_motion_toggled(state: &mut crate::app::State, on: bool) {
 /// Appearance: the **Suggestion chips** switch was toggled (#1275, FR-022).
 pub fn suggestion_chips_toggled(state: &mut crate::app::State, on: bool) {
     edit(state, |draft| draft.appearance.suggestion_chips = on);
+}
+
+/// Appearance: the **Single-key shortcuts in the Review tab** switch was toggled (#1274, FR-022).
+pub fn review_single_keys_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.appearance.review_single_keys = on);
 }
 
 /// Terminal: the scrollback field was edited.
@@ -2918,5 +2937,63 @@ mod suggestion_chips_tests {
             .unwrap()
             .refresh_untouched(&now);
         assert!(draft(&state).appearance.suggestion_chips);
+    }
+}
+
+#[cfg(test)]
+mod review_single_keys_tests {
+    //! #1274 (FR-022, US1 s7, T063): **Single-key shortcuts in the Review tab** is a draft field
+    //! like **Reduce motion**, but on by default: the draft opens with the window's copy, a toggle
+    //! edits only the draft, Save's validated copy carries it and Cancel discards it.
+
+    use super::*;
+
+    fn open_off() -> crate::app::State {
+        let mut state = crate::app::State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&Settings {
+            review_single_keys: false,
+            ..Settings::default()
+        }));
+        state
+    }
+
+    fn shown(state: &crate::app::State) -> bool {
+        let draft = state.settings.settings_draft.as_ref().expect("open");
+        draft.appearance.review_single_keys
+    }
+
+    #[test]
+    fn the_switch_is_on_by_default_and_the_draft_opens_with_the_stored_value() {
+        assert!(crate::app::State::default().settings.review_single_keys);
+        let fresh = SettingsDraft::from_settings(&Settings::default());
+        assert!(fresh.appearance.review_single_keys);
+        assert!(!shown(&open_off()));
+    }
+
+    #[test]
+    fn a_toggle_edits_the_draft_save_carries_it_and_cancel_discards_it() {
+        let mut state = crate::app::State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&Settings::default()));
+        update(&mut state, Msg::ReviewSingleKeysToggled(false));
+        assert!(!shown(&state), "the page shows it");
+        assert!(
+            state.settings.review_single_keys,
+            "nothing applied before Save"
+        );
+        let valid = state
+            .settings
+            .settings_draft
+            .as_ref()
+            .unwrap()
+            .validate()
+            .expect("the defaults are valid");
+        assert!(!valid.review_single_keys);
+        assert!(
+            !valid.into_settings().review_single_keys,
+            "the stored shape"
+        );
+        update(&mut state, Msg::Cancelled);
+        assert!(state.settings.settings_draft.is_none());
+        assert!(state.settings.review_single_keys, "Cancel applies nothing");
     }
 }

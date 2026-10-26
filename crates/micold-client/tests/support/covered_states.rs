@@ -1721,6 +1721,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
                         suggestion_chips: false,
+                        review_single_keys: true,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -1797,6 +1798,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
                         suggestion_chips: false,
+                        review_single_keys: true,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -2034,6 +2036,24 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-review-marks-unavailable",
             build: review_marks_unavailable,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+            ],
+        },
+        // --- Feature 1274: the current hunk marked (T021, FR-005, FR-021) ---------------------
+        //
+        // `changes-review-marks` after `n`: the diff's one hunk header in the accent, and the diff
+        // header's previous / next hunk controls beside **Reviewed**.
+        CoveredState {
+            name: "review-current-hunk",
+            build: review_current_hunk,
             anchors: &[
                 Anchor {
                     name: "shell.root",
@@ -2663,6 +2683,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                         theme: micold_core::theme::ThemePreference::Dark,
                         reduce_motion: false,
                         suggestion_chips: false,
+                        review_single_keys: true,
                     },
                     terminal: TerminalDraft {
                         scrollback_lines: "12000".to_string(),
@@ -3639,6 +3660,18 @@ pub fn review_marks() -> StateUnderTest {
                 },
             ]),
         },
+    );
+    under
+}
+
+/// [`review_marks`] after `n` made the selected file's hunk current (feature 1274, T021).
+pub fn review_current_hunk() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::keys::ReviewAction;
+    let mut under = review_marks();
+    changes::update(
+        &mut under.state.changes,
+        Msg::ReviewKey(ReviewAction::NextHunk),
     );
     under
 }

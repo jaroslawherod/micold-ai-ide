@@ -14884,6 +14884,40 @@ fn suggestion_chips_are_applied_by_save_and_discarded_by_cancel() {
     );
 }
 
+/// #1274 (T063, FR-022): Save turns the saving window's review keys off at once and writes it;
+/// Cancel discards it.
+#[test]
+fn the_single_key_switch_is_applied_by_save_and_discarded_by_cancel() {
+    let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(
+        micold_core::settings::Settings::default(),
+    ));
+    let mut app = base_app();
+    app.caps = app.caps.clone().with_settings(store.clone());
+    assert!(app.core.settings.review_single_keys, "on by default");
+
+    let toggle = Message::Settings(SettingsMsg::ReviewSingleKeysToggled(false));
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(&mut app, toggle.clone());
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Cancelled));
+    assert!(app.core.settings.review_single_keys, "Cancel discards it");
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(&mut app, toggle);
+    assert!(app.core.settings.review_single_keys, "the draft alone");
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    assert!(
+        !app.core.settings.review_single_keys,
+        "Save applies it here"
+    );
+    assert!(
+        store
+            .saves()
+            .last()
+            .is_some_and(|saved| !saved.review_single_keys),
+        "and writes it"
+    );
+}
+
 /// T021 (feature 939, research R9): the shell routes a structured session's events to its
 /// transcript, performs the transcript view's scroll requests, and drops the transcript with the
 /// session.

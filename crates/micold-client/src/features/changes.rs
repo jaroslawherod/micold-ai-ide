@@ -49,8 +49,15 @@ use micold_core::task_progress::Ratio;
 use micold_core::tokens::Rgb;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
 
+mod keys;
 mod stale;
 
+pub use keys::{
+    current_header_row, hunk_controls, key_pressed, review_holder, with_key_hint, NEXT_HUNK,
+    PREVIOUS_HUNK,
+};
+use micold_core::review::keys::{Press, ReviewAction};
+use micold_core::review::navigate::Edge;
 pub use stale::{changed_since_you_looked, no_longer_changed, stale_notice, DiffRow, HeldPr};
 
 /// The note beside the Default entry's unavailable Committed toggle (L1, US1 s9), worded in core.
@@ -496,6 +503,12 @@ pub struct OpenView {
     /// What [`OpenView::change_rows`] was laid out from, so a message that changes neither the
     /// files nor the choices lays nothing out again.
     change_key: u64,
+    /// The hunk of the selected file `n`/`p` made current, marked in the diff (#1274 FR-004,
+    /// FR-005); cleared whenever another file is selected.
+    pub current_hunk: Option<usize>,
+    /// `n`/`p` crossed into this file: once its diff is shown, the hunk at the edge becomes
+    /// current (#1274 research R5); cleared whenever another file is selected.
+    pub pending_edge: Option<(RelPath, Edge)>,
 }
 
 /// A repository file opened from the tree or the picker (feature 1150, data-model §8).
@@ -1815,6 +1828,12 @@ pub enum Msg {
     },
     /// The × beside the bar's send error.
     SendErrorDismissed,
+    /// A key press the review's listener heard (#1274 contract K6). The root decides it with
+    /// [`key_pressed`] (who has the keyboard, the single-key switch) before this reducer sees it, as
+    /// [`Msg::ReviewKey`]; reaching [`update`] itself it does nothing.
+    KeyPressed(Press),
+    /// A review key's action, decided by [`key_pressed`] (#1274 contract K7).
+    ReviewKey(ReviewAction),
 }
 
 /// What the shell must do.
@@ -1922,6 +1941,12 @@ pub enum Effect {
     FocusComposer,
     /// Scroll the diff to this offset, in pixels (a panel jump).
     ScrollDiff {
+        /// The offset.
+        offset: u32,
+    },
+    /// Scroll the changed-file tree to this offset, in pixels: the selected row brought into view
+    /// (#1274 FR-003).
+    ScrollList {
         /// The offset.
         offset: u32,
     },
@@ -2220,6 +2245,8 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         change_rows: Vec::new(),
         change_scale: 0,
         change_key: 0,
+        current_hunk: None,
+        pending_edge: None,
     }
 }
 
@@ -2602,6 +2629,11 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.tabs.shown_view_mut() else {
                 return Effect::None;
             };
+            // #1274 FR-004: selecting another file, by any means, clears the current hunk.
+            if selected_file(view) != Some(&path) {
+                view.current_hunk = None;
+                view.pending_edge = None;
+            }
             // FR-008: the selected file's row is listed, whichever way it was selected.
             view.tree.reveal(path.as_str());
             // Choosing a changed file leaves the browser and forgets where Back led.
@@ -2851,9 +2883,14 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             let moves = judge_anchors(state);
             let waiting = state.tabs.shown_view().is_some_and(|v| v.drawer.to_show);
-            match waiting.then(|| jump_offset(state)).flatten() {
-                Some(offset) => Effect::ScrollDiff { offset },
-                None => reanchor_effect(state, moves),
+            if let Some(offset) = waiting.then(|| jump_offset(state)).flatten() {
+                return Effect::ScrollDiff { offset };
+            }
+            let reanchor = reanchor_effect(state, moves);
+            // #1274 R5: `n`/`p` crossed into this file; its edge hunk is current now it is shown.
+            match keys::resolve_pending_edge(state) {
+                Some(offset) => keys::with(Effect::ScrollDiff { offset }, reanchor),
+                None => reanchor,
             }
         }
         Msg::Drawer(event) => {
@@ -2940,6 +2977,8 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::ListRead { seq, result, whole } => list_read(state, seq, result, whole),
         Msg::StaleApplied => stale::applied(state),
         Msg::MarkToggled => mark_toggled(state),
+        Msg::KeyPressed(_) => Effect::None,
+        Msg::ReviewKey(action) => keys::review_key(state, action),
         Msg::WorktreesListed { project, names } => {
             state.tabs.drop_gone_worktrees(&project, &names);
             // Feature 1126: the header's worktree gone, it follows nothing until the root's follow
@@ -4221,6 +4260,7 @@ fn request_head(view: &mut OpenView, next_seq: &mut u64, force_large: bool) -> E
 /// belong to the file that was shown.
 fn reset_diff_pane(view: &mut OpenView) {
     close_new(view);
+    view.current_hunk = None;
     view.browse = None;
     view.stack.clear();
     view.diff_offset = 0;

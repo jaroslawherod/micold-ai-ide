@@ -1093,3 +1093,68 @@ fn the_user_guide_lists_the_switcher_chord_in_both_forms() {
         }
     }
 }
+
+// --- #1274 contract K5: building a review press --------------------------------------------------
+
+use micold_client::keymap::{primary_held, review_press};
+use micold_core::review::keys::{Press, PressKey};
+
+/// K5: the primary modifier is Cmd on macOS and Ctrl elsewhere.
+#[test]
+fn the_primary_modifier_is_cmd_on_macos_and_ctrl_elsewhere() {
+    let logo = Mods {
+        logo: true,
+        ..Mods::NONE
+    };
+    if cfg!(target_os = "macos") {
+        assert!(primary_held(logo));
+        assert!(!primary_held(ctrl()));
+    } else {
+        assert!(primary_held(ctrl()));
+        assert!(!primary_held(logo));
+    }
+    assert!(!primary_held(Mods::NONE));
+}
+
+/// K5: the key is the produced character, Enter, or `Other`; every modifier is copied.
+#[test]
+fn a_review_press_carries_the_produced_text_and_every_modifier() {
+    let j = review_press(&ki(Key::Char('j'), Mods::NONE, Some("j")), false);
+    assert_eq!(
+        j,
+        Press {
+            key: PressKey::Char('j'),
+            primary: false,
+            ctrl: false,
+            alt: false,
+            logo: false,
+            shift: false,
+            repeat: false,
+        }
+    );
+    // `?` is the produced text, Shift included (research R2).
+    let shift = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let question = review_press(&ki(Key::Char('/'), shift, Some("?")), true);
+    assert_eq!(question.key, PressKey::Char('?'));
+    assert!(question.shift && question.repeat);
+    let all = Mods {
+        shift: true,
+        ctrl: true,
+        alt: true,
+        logo: true,
+    };
+    let enter = review_press(&ki(Key::Named(NamedKey::Enter), all, Some("\r")), false);
+    assert_eq!(enter.key, PressKey::Enter);
+    assert!(enter.ctrl && enter.alt && enter.logo && enter.shift && enter.primary);
+    // A dead key or an input method composing produces no text.
+    let dead = review_press(&ki(Key::Char('`'), Mods::NONE, None), false);
+    assert_eq!(dead.key, PressKey::Other);
+    let ctrl_j = review_press(&ki(Key::Char('j'), ctrl(), Some("\n")), false);
+    assert_eq!(ctrl_j.key, PressKey::Other, "a control character is no key");
+    assert_eq!(ctrl_j.primary, !cfg!(target_os = "macos"));
+    let two = review_press(&ki(Key::Char('a'), Mods::NONE, Some("ab")), false);
+    assert_eq!(two.key, PressKey::Other);
+}

@@ -46,8 +46,8 @@ snapshot)
 OS branch (Principle VI); no stand-in for a blocker's work
 
 **Scale/Scope**: M1: 3 new core modules (`review/keys.rs`, `review/navigate.rs`, `review/jump.rs`),
-2 extended (`quick_switch.rs`, `review/diff.rs`). M3/M4: `keymap.rs`, `features/changes.rs` (or #1269's
-Review tab module), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M5:
+2 extended (`quick_switch.rs`, `review/diff.rs`). M3/M4: `keymap.rs`, `features/changes.rs` (the
+Review tab state, #1269), core `review/tree.rs` (`file_order`, M3), `ui/mod.rs` listener, `ui/material/text_area.rs`, a sheet surface, 3 docs. M5:
 `features/quick_switch.rs`, the switcher's row view, 1 doc section. M2: `settings.rs` and `review/keys.rs` extended (plus compile-only lines in the client's
 `features/settings.rs` and `shell/persist.rs`); M3 also `features/settings.rs`,
 `ui/settings/appearance.rs`, `shell/{persist,startup}.rs` for the switch.
@@ -113,7 +113,7 @@ row builders.
 `crates/micold-client/src/keymap.rs`: `primary_held`, `review_press` (K5); no key match.
 `ui/mod.rs`: a `review_key_listener` subscribed while the holder is `Review` or `Sheet`, mapping
 `KeyPressed` → `Press` → `resolve` → one Review-tab message. The holder function is render-free
-beside the Review tab's state (#1269's module, else `features/changes.rs`), reading
+beside the Review tab's state (`features/changes.rs`: #1269 kept the Review tab state there), reading
 `window.focused_field`, `overlay::registry::topmost`, quick-switcher, Settings, Overview and
 terminal focus. `ui/material/text_area.rs`: `.on_press(..)`, and Ctrl/Cmd+Enter submit excludes
 Shift (today it saves on Ctrl+Shift+Enter); the composer in `ui/changes.rs` sets
@@ -125,11 +125,19 @@ The Review tab view (#1269) gains `current_hunk`, `pending_edge`, `last_comment`
 path (tree click, `j`/`k`, `g`, `n`/`p` crossing, `]`/`[`, jump-to) clears the hunk and the pending
 edge, brings the row into view and expands a collapsed directory (#1273's tree). Effects per
 action as K7. Hunk scroll reuses `jump_offset`'s arithmetic and the pending-jump flag; `v` sends
-#1271's **Mark reviewed** message; `Send` sends `Msg::SendPressed`.
+#1271's **Mark reviewed** message (`Msg::MarkToggled`); `Send` sends `Msg::SendPressed`.
+
+T012 (merged code): the one select path is `Msg::FileSelected` (it already reveals the file in
+#1273's tree, `TreeChoices::reveal`). The file order is core `review::tree::file_order`: #1273's
+layout with the view's sort and filter but **no folds**, since `OpenView::change_rows` holds only the
+visible rows and FR-003 visits files in collapsed folders too. The tree had no scroll effect:
+`Effect::ScrollList` and `ui::changes::LIST_SCROLL_ID` bring the selected row into view. `g` reads
+the reviewed state as **Mark reviewed** does (`file_reviews`). The holder needs the composer's focus,
+which was not tracked: `FieldId::ReviewComposer`.
 
 ### D6 — Current hunk mark and hunk controls (client, M3; **Send review** tooltip M4) — R9
 
-`ui/changes.rs` (or #1270's diff header): the current hunk's header row drawn with a theme-role
+`ui/changes.rs` (#1270's diff header is drawn there): the current hunk's header row drawn with a theme-role
 accent; previous / next hunk icon buttons in the diff header if #1270/#1273 did not add them, sending
 the `n`/`p` messages. Tooltips on those, **Mark reviewed** and **Send review (n)** read
 `ReviewKey::labels` (FR-013).
@@ -252,7 +260,7 @@ crates/micold-core/src/
 crates/micold-client/src/
 ├── keymap.rs                                   # M3: primary_held, review_press
 ├── features/settings.rs, ui/settings/appearance.rs, shell/{persist.rs, startup.rs}   # M3: switch (persist.rs literal M2)
-├── features/{changes.rs or #1269's review tab module, quick_switch.rs (M1 literals; M5)}
+├── features/{changes.rs (the Review tab state, #1269), quick_switch.rs (M1 literals; M5)}
 ├── overlay/registry.rs                         # M4: ShortcutSheet
 ├── ui/{mod.rs, changes.rs, shortcut_sheet.rs (new)}, ui/material/text_area.rs   # M3, M4
 └── showcase/sections/review.rs                 # M4
