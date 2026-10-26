@@ -88,7 +88,7 @@ own `FROM` the basic image with the packages it needs, and give it to a second c
 **My own image**. This one adds `libpq`'s development files:
 
 ```dockerfile
-FROM ghcr.io/jaroslawherod/micold-basic:113535f6f5551276
+FROM ghcr.io/jaroslawherod/micold-basic:97e0b963519fe8d8
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libpq-dev \
  && rm -rf /var/lib/apt/lists/*
