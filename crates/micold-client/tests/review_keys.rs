@@ -878,7 +878,7 @@ fn c_opens_the_composer_on_the_current_hunks_changed_lines() {
     };
     assert_eq!(view(&state).pick, Some(pick));
     assert_eq!(
-        view(&state).composer.as_ref().map(|c| c.target.clone()),
+        view(&state).composer.as_ref().map(|c| c.target),
         Some(ComposerTarget::New(pick))
     );
 }
