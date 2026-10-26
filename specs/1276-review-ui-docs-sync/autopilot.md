@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M1 reviews
-- **Next step**: full gate, then the draft M1 PR
+- **Phase**: M1 PR
+- **Next step**: orchestrator waits on CI of #1473 and merges; then M2 once its blockers merge
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
+| #1473 | M1 guide + review_keys_doc | draft, CI | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
 | M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
@@ -75,11 +76,8 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-M1 part 2: review A (CLEAN, 3 MINOR) and review B (1 MAJOR, 2 MINOR) all fixed and pushed; T013
-ticked; red-before-green in `tdd/cycle-log.md`. Next: orchestrator re-runs review B round 2 on the
-fix diff (`review-snapshot.sh diff 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866`);
-then the full gate (`scripts/gate.sh` detached, `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
-CARGO_INCREMENTAL=0`) and the draft M1 PR. No PR open yet.
+M1 done: reviews A and B clean, full gate (`scripts/gate.sh`) green at 59ee1a02, draft PR #1473
+open. Next: CI and merge (orchestrator), then M2.
 
 ## Open escalation
 
