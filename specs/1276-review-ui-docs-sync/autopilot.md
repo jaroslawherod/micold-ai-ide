@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M2 stop (b)
-- **Next step**: stop (b): origin/main merged (not rebased); T019–T021 re-record and explain, T025 full gate, push, draft PR
+- **Phase**: M2 PR
+- **Next step**: orchestrator waits on CI for #1495 (T025) and merges; then M3
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
 | #1473 | M1 guide + review_keys_doc | merged | 1669ef5df6520fead74b379ed75d307d20f3d81c |
+| #1495 | M2 layout snapshot + review_tab_fits | open (draft) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | merged; T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
-| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | T014–T024 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; T025 full gate next. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | T014–T024 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh); T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
