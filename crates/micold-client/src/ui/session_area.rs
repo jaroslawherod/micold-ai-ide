@@ -153,7 +153,7 @@ pub fn over_review<'a>(
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
 /// selected while `location`'s Review tab is shown, its tooltip saying what a press does. The label
-/// is one line: where the title line cannot hold it (four-digit counts at the smallest window) it
+/// is one line: where the header line cannot hold it (four-digit counts at the smallest window) it
 /// is cut with an ellipsis and the tooltip holds it whole (FR-013, H10's bound).
 pub fn changes_button<'a>(
     state: &State,
