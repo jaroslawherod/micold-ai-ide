@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1289
 - **Worktree branch**: claude/project-thread-d7q05f
 - **Started**: 2026-10-24
-- **Phase**: M7
-- **Next step**: orchestrator waits on CI for PR #1476 (M7), merges; then close (T060–T061)
+- **Phase**: close
+- **Next step**: close — speckit-tdd-verify and the close diff review (orchestrator), then the docs gate and the close PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1407 | M4 setup persistence and delete | merged (rebase) | 8a49a7780b9b3021fe4a41b6a56be18a067a8b0a |
 | #1414 | M5 setup settings and state | merged (rebase) | 15d62e891bb1292c94c58b585a0a975869c291dd |
 | #1472 | M6 setup output dialog | merged (rebase) | 419198cb9ec060aa7576ad523479a62ae8e9873a |
-| #1476 | M7 run and stop setup | open | — |
+| #1476 | M7 run and stop setup | merged (rebase) | 308ab390a1d0c1f6212f7eebb0e9f82977227bb3 |
 
 ## Milestones
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T031–T039 | full | records persist, restart → Interrupted, attach catch-up, delete stops first | #1407 | merged |
 | M5 | T040–T049 | full | Settings › Project, ProjectSetupSet sync, row tag, failure notification | #1414 | merged |
 | M6 | T050–T055 | full | Setup output dialog, delete confirmation line | #1472 | merged |
-| M7 | T056–T059 | light | Run setup / Stop setup menu entries | #1476 | PR open |
+| M7 | T056–T059 | light | Run setup / Stop setup menu entries | #1476 | merged |
 
 ## Decisions
 
@@ -113,6 +113,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+Close (2026-10-26) on main 308ab390a (#1476 merged by rebase): T060–T061 done docs-only — quickstart §Results (Part B per step with its evidence: B3–B5 from the M5–M7 visual passes on a host daemon, B1 from CI's sandbox job, B2/B6/B7 not run by hand with the reason; U1–U6 table citing `visual-pass/m5-*`, `m6-*`, `m7-*`; T061 macOS/Windows table from CI runs 40305573743 and 40314588666), A15 says version 70, spec **Status** Closed. Converge skipped: every milestone has a CLEAN review B. Next: speckit-tdd-verify and the close diff review (orchestrator), fix findings; docs gate; close PR.
 M7 PR (2026-10-26): review A round 2 CLEAN; rebased onto main 1669ef5df (no conflicts, protocol stays 70, no new ProjectAdd site); `cargo test -p micold-client --no-run` and full gate (scripts/gate.sh) green; pushed; PR #1476 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; close unit (T060–T061).
 M7 round 1 fixed (2026-10-26): V-F1, A-F2, A-F3 (cycle log M7 cycle 2); A-F1 left as follow-up. micold-core setup_commands 6, client setup tests green, clippy and fmt clean. Next: review A round 2 (scoped, sonnet); then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
 M7 implemented (2026-10-26) on 419198cb9 (#1472 merged by rebase): T056–T059 ticked; `cargo test -p micold-client` green, clippy -D warnings and fmt clean (cycle log § M7 cycle 1). Icons: StateRunning (play) for Run setup, Close for Stop setup (no stop glyph exists; no new icon). Snapshot c8113a6898e50ebfe41e9f02b66ba171f0fd813c:11af658045dd6a57c8c8f59b174544bcfe95d8f4. Next: reviews A and B round 1 + visual pass (orchestrator dispatches), fix; then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
@@ -137,6 +138,9 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 
 ## Follow-ups not done
 
+- Close: client setup tests (`features_setup`, `features_settings`, `setup_*_geometry`) run on Linux only; the daemon's `setup_run` and `mcp_create_worktree_setup` are `cfg(unix)`, so Windows runs no end-to-end setup (only the core model, shell and `streaming_child`). A Windows `setup_run` variant would need a PowerShell command.
+- Close: quickstart B2 (MCP server through `uvx`, SC-001), B6 (Claude calls `create_worktree`), B7 (client quit and reopen mid-run) and SC-002's `python --version` were not run by hand: no container runtime or Claude Code sign-in in the close unit. Run them once on a real sandbox.
+- Close, another feature's: main's Windows daemon lib is red on `supervisor::container_git_tests` (`/var/lib/micold-ai-ide\gitconfig` where `/var/lib/micold-ai-ide/gitconfig` is expected), seen at 419198cb9.
 - M7 A-F1: Run setup's availability reads `state.settings.setup_commands`, refreshed from the store only when Settings reads `in_force`; a command saved in another window shows after the next refresh. Refresh when a row menu opens.
 - Another feature's, not changed here: `jira_base_urls` has the same shape as V-F1 (`skip_serializing_if` empty + `merged_with_existing` keeps the old key), so clearing the last one may not persist.
 - M7 observation: SIGKILL of the daemon orphans a running setup's child process (the daemon cannot end the tree if it is itself killed). There is no stop glyph in the icon set.

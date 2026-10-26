@@ -423,9 +423,9 @@ setup** in the output view (U3, U4).
 
 ## Phase 10: Polish (close unit)
 
-- [ ] T060 Quickstart Part B (B1–B8) on a real sandbox and the visual pass of U1–U6 in light and
+- [x] T060 Quickstart Part B (B1–B8) on a real sandbox and the visual pass of U1–U6 in light and
   dark; record the results in quickstart.md §Results and the screenshots in `visual-pass/`
-- [ ] T061 Record in quickstart.md what CI's macOS and Windows runners proved (`streaming_child`,
+- [x] T061 Record in quickstart.md what CI's macOS and Windows runners proved (`streaming_child`,
   the setup model, the client tests) and what needs a sandbox (`sandbox_real_toolchain_path`)
 
 ---
