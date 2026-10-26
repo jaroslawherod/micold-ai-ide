@@ -196,7 +196,7 @@ The setting and the `single_keys` filters serve US1–US5 and FR-022; no story l
 - [x] T054 [US6] Insert `review_candidates` for the current entry's Review tab in `crates/micold-client/src/features/quick_switch.rs::candidates` and resolve the two keys to `navigation::Step::Review(ReviewJump)`, applied by `State::apply_navigation` as `ReviewChangesRequested` then `changes::Msg::Jumped`; add core `navigate::comment_move` (shared with `step_comment`), so T053 passes
 - [x] T055 [US6] Show the reviewed state on file rows and status, `path:line` and first text line on comment rows in the quick-switcher's row view (`crates/micold-client/src/ui/quick_switcher.rs::view_of`), with `Via` spans emphasising the matched text (FR-016)
 - [x] T056 [US6] Add the jump-to entries to *Reviewing from the keyboard* in `docs/user-guide/reviewing-changes.md` (FR-020)
-- [ ] T057 [US6] Run the `visual-pass` skill (through an `autopilot-worker`) for quickstart §B B14 at 1280×800, light and dark; save the evidence under `specs/1274-review-keyboard-map/visual-pass/`
+- [x] T057 [US6] Run the `visual-pass` skill (through an `autopilot-worker`) for quickstart §B B14 at 1280×800, light and dark; save the evidence under `specs/1274-review-keyboard-map/visual-pass/`
 
 ---
 

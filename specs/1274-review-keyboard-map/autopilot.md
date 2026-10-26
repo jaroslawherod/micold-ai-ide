@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M5 (T052–T057) in progress on cc2e4548a.
+- **Next step**: M5 PR open (CI, merge); then the close unit (T058, quickstart §C).
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | #1415 | merged |
 | M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs (blockers merged) | #1451 | merged |
 | M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | #1458 | merged |
-| M5 | T052–T057 | full | jump-to review entries — #1127 merged, after M4 | — | in progress |
+| M5 | T052–T057 | full | jump-to review entries — #1127 merged, after M4 | (this PR) | PR open |
 
 ## Decisions
 
@@ -66,6 +66,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code review high, headless reviewer) | 1 | ed5be9d8e88d85fc6fd992076485015db62ff00d:8ab608743e35d9b25ac8218c9a017e6b5ec3d323 | CLEAN: 2 MINOR; F1 (`composer_chord` duplicated the listener's key_input → review_press step) fixed with `ui::composer::review_press`; F2 (composer chord has no repeat flag) declined, see below. A first run returned a bare CLEAN; re-run with JSON output (15 turns) gave this |
 | Review B M4 (conformance, sonnet, headless) | 1 | 4128587d1fe3d3ebf9f6c615f96914f7c478b947:eb55db847cf5dac44c9c683d98cdb24abfa07d4b | CLEAN: 2 MINOR; F1 (T037 has no red) fixed, prose only (cycle log: a guard); F2 (T047 open) — the visual pass runs next. Bash refused in the reviewer, so Verify is the unit's targeted runs + scoped gate |
 
+| Review A M5 (code review high, headless reviewer) | 1 | 4f066f04435f09fefea5d5cd9f065c042c62afc2:d9f6ffef903abc189362d6ed09103d76f12326ed | CLEAN: 2 MINOR; F1 (comment rows at the stored line, not the shown one) fixed in `jump_entries`; F2 (tree filter limits the list) kept, guide now says so |
+| Review B M5 (conformance, sonnet, headless) | 1 | bbb4f93d3d9f0c7f8f72980ee6bf072531f2072c:27c21a934a89794cbd253c7412012ba1993b0692 | CLEAN: 2 MINOR declined (below). Bash refused in the reviewer: Verify = the unit's targeted runs + full gate GATE_EXIT=0 |
+
 ## Declined review findings
 
 - Review A M4 F2: the comment box's send chord passes `repeat: false` — iced's editor `KeyPress` has no repeat flag, so it cannot be known there; a repeat reaches `SendPressed`, which sends nothing once the service reports the send under way (as a double click on **Send review (n)** does). MINOR.
@@ -79,6 +82,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | M3 | A | F2: a pending drawer jump returns before `resolve_pending_edge` | They cannot both be pending for one read: `DrawerRowSelected` selects through `Msg::FileSelected`, which clears `pending_edge` for another file; for the same file the jump is the newer request and wins |
 | M3 | B | F2: a re-read of the selected file keeps `current_hunk` | The mark is drawn from `header_rows(..).get(i)`, so an index past a shorter diff marks nothing; `step_hunk` clamps it (M1 review A fix); a file change clears it |
+| M5 | A | F2: the tree's filter limits the listed files | What `j` reaches is what `jumped` selects (`nav_order`); the guide now says the filter applies |
+| M5 | B | F1: no client test of name-before-path ranking | J2 ranking is core `quick_switch::filter`'s, tested in M1; the client only feeds candidates |
+| M5 | B | F2: FR-019 / unlisted-key tests are guards | Logged as guards in the cycle log; nothing to fix |
 
 ## Handover
 
@@ -90,6 +96,8 @@ None.
 
 ## Follow-ups not done
 
+- T057 visual pass M5 (2026-10-26, this unit, by hand per `.claude/skills/visual-pass/SKILL.md`; no Agent tool): **PASS** for B14. Release build of the M5 tree (client + its own daemon, pinned under `.visual-pass/`) on Xvfb, tiny-skia, XTest via python-xlib, private `MICOLD_DATA_DIR`, 1280×800, light and dark. Fixture: Default entry with `daemon/tests.rs`, `src/auth/login.rs`, `guide.md` (two hunks each); Review tab opened from the row's **Review changes**; one draft *retry loop is slow* on `daemon/tests.rs:3` made with `j n c` + Ctrl+Enter; `login.rs` marked with `v`. Ctrl+Shift+P, empty query: Default, then `tests.rs` / `login.rs` (*reviewed*) / `guide.md` / the comment (*Comment · daemon/tests.rs:3 · Draft*); `tests`: the file first (name emphasised), the comment by its path (path emphasised); Enter selected `tests.rs`, diff from the top; `retry` + Enter scrolled the draft's card into view, outlined. Evidence `specs/1274-review-keyboard-map/visual-pass/m5-b14-*.png`. Environment artefact, not M5's: in dark under this software renderer, list rows other than the highlighted one fade to black after their first frame (location rows and the field's placeholder alike, also over the Overview); `m5-b14-dark-rows-on-move.png` shows each row drawn correctly when the highlight reaches it. Not re-recorded: `layout_snapshot.txt` (no covered state shows the quick switcher; the gate's snapshot tests passed unchanged).
+- M5 full gate: `scripts/gate.sh` GATE_EXIT=0 at 2c11cc455 (first run failed `feature_registration_cost`: `navigation`/`quick_switch` named `changes` — `ReviewJump` moved to core `review::jump`, `quick_switch → changes` (`jump_entries`, a pure read) allow-listed with its reason). origin/main gained 2 unrelated commits (#1453, picker/transcript) after the gate; not rebased.
 - M5 T052 (#1127 re-read, 2026-10-26): the merged title bar's jump-to field (`ui/toolbar.rs::jump_press`) only sends the chord's `QuickSwitch(Msg::Toggled)`, so entries still go in `features/quick_switch.rs::candidates` (plan D8 kept). Divergences from the plan: the row view is `ui/quick_switcher.rs::view_of` (not `ui/quick_switch.rs`); a choice is a `navigation::Step` applied by `shell::navigation::apply_step` → `State::apply_navigation`, so the Review-tab step is a new `Step::Review(ReviewJump)` that dispatches `Sidebar(ReviewChangesRequested(shown location))` then `changes::Msg::Jumped`; `step_comment` split into core `navigate::comment_move` for one id; `Entry` gained `label` (a comment row shows its first line). The Overview left the title bar (sidebar row / Ctrl+Shift+O): no effect here — `ReviewChangesRequested` closes the Overview as the Changes button does. "Current entry" = `shown_location()` in the active project. Files listed in `j`/`k` order (tree sort and filter); comments those of the shown scope, at their stored first line (M1 decline 3 kept: hidden tabs have no located lines).
 - M4 full gate: `scripts/gate.sh` GATE_EXIT=0 at f2c78e5aa. Gate fixes after the reviews: the sheet's key column moved to a new material `Keycap` (`material_boundary`: no `style` in `ui/`), Keycap posed in the showcase, dialog counts in `popover_displacement.rs` (28). The visual pass predates the Keycap swap (cap outline instead of fill; layout snapshot re-recorded).
 
