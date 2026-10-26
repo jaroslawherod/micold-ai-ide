@@ -2,7 +2,7 @@
 
 ## Part A. Automated
 1. `mise run test-core`
-2. `cargo test -p micold-client --test session_area_stability --test layout_snapshot` (through `mise run gate`): header one line, strip order, restart last, stable child list, tiled fixtures unchanged.
+2. `cargo test -p micold-client --test session_area_stability --test layout_snapshot` (through `mise run gate`): header one line, strip order, restart last, stable child list, tiled geometry relative to the pane-area origin unchanged (absolute fixtures re-recorded).
 3. `mise run gate` before pushing.
 
 ## Part B. Visual pass (needs a display; use the `visual-pass` skill)

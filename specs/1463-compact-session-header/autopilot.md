@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
 - **Phase**: plan
-- **Next step**: tasks unit (plan done)
+- **Next step**: gate (specs-only), design PR
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001, T003–T008 | full | One-line header | | pending |
+| M2 | T002, T009–T018 | full | Switch control in strip | | pending |
 
 ## Decisions
 
@@ -52,3 +54,7 @@ None.
 ## Follow-ups not done
 
 None yet. Pre-existing failure on main: ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth.
+
+## Tasks unit
+
+- Review round 1 (tasks, snapshot b95ec35da:421a1eab3): F1 Verify targets fixed (verified: gates are a module of `layout_snapshot`), F2 checklist ticked, F3 note added; fixed, prose only. speckit-analyze HIGH findings I1-I3, C1 fixed.
