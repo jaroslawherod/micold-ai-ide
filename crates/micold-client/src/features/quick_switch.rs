@@ -4,11 +4,10 @@
 
 use micold_core::navigation::Dir;
 use micold_core::quick_switch::{self, Candidate, EntryKey, Ranked};
-use micold_core::review::jump::ReviewEntry;
+use micold_core::review::jump::{ReviewEntry, ReviewJump};
 use micold_core::typeahead::Query;
 
 use crate::app::{Message, State as Root};
-use crate::features::changes::ReviewJump;
 use crate::features::navigation::{self, Step};
 use crate::features::sidebar::RowRef;
 use crate::floating_surface;

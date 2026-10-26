@@ -8,7 +8,7 @@ use micold_core::quick_switch::Candidate;
 use micold_core::review::comment::{CommentId, ReviewComment};
 use micold_core::review::diff::header_rows;
 use micold_core::review::drawer::{DrawerEvent, DrawerTab};
-use micold_core::review::jump::{review_candidates, ReviewEntry};
+use micold_core::review::jump::{review_candidates, ReviewEntry, ReviewJump};
 use micold_core::review::keys::{
     key_hint, resolve, sheet_rows, Holder, Press, ReviewAction, ReviewKey, SINGLE_KEYS_OFF_NOTE,
 };
@@ -348,15 +348,6 @@ fn reach_comment(
             selected
         }
     }
-}
-
-/// A review entry of the jump-to field (#1274 contract J5).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReviewJump {
-    /// Select this file, as `j` reaching it does.
-    File(RelPath),
-    /// Reach this comment, as `]` reaching it does.
-    Comment(CommentId),
 }
 
 /// What a chosen review entry does to the shown view (contract J5): nothing for a file or comment

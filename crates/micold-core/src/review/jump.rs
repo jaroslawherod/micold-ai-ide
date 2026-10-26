@@ -34,6 +34,15 @@ pub enum ReviewEntry {
     },
 }
 
+/// What choosing a review entry of the jump-to field reaches (contract J5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReviewJump {
+    /// Select this file, as `j` reaching it does.
+    File(RelPath),
+    /// Reach this comment, as `]` reaching it does.
+    Comment(CommentId),
+}
+
 /// The review's entries for the jump-to field (contract J1): `files` in file order, then
 /// `comments` in comment order ([`super::navigate::comment_order`]), each with what its row shows.
 pub fn review_candidates(
