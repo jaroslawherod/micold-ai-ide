@@ -97,3 +97,22 @@ dark it was marked on its current change just before the append (so its row carr
 |---|---|---|
 | `m6-c-1-held-blocked-{light,dark}-1280.png` | `a.txt` open, a line appended from a shell: *1 file changed since you looked*, **Mark reviewed** shown unavailable, hovering it: *This file changed since you looked: select it again to see its latest change*; clicking it changed nothing (frame identical, the row stays ○) | PASS |
 | `m6-c-2-reselected-{light,dark}-1280.png` | `a.txt` selected again: the notice is gone, the row's counts and diff are the latest, **Mark reviewed** available again | PASS |
+
+## Close — quickstart §A in full (T047)
+
+Real client (debug build of the M6 tree) on a cloud Xvfb display at 1280x800, on a fresh fixture
+(`a.txt` 120 lines with every fifth edited). Results and the per-step table:
+[quickstart.md *Results*](../quickstart.md#results-close-unit-t047-2026-10-26).
+
+| File | Shows | Verdict |
+|---|---|---|
+| `close-a1-scrolled-dark-1280.png` | §A step 1: new line 40 first visible | PASS |
+| `close-a2-held-{dark,light}-1280.png` | step 2: *3 files changed since you looked*, three dots, diff unchanged | PASS |
+| `close-a3-restored-dark-1280.png` | step 3: `b.txt` restored, count 2, its dot gone | PASS |
+| `close-a4-counts-again-dark-1280.png` | step 4: a reworded added line counts again with equal counts | PASS |
+| `close-a5-select-in-set-dark-1280.png` | step 5: `c.txt` selected shows its latest diff, count 1, `a.txt` keeps its dot | PASS |
+| `close-a6-composer-held-dark-1280.png`, `close-a6-applied-dark-1280.png` | step 6: box with text and a pick while held; applied: edits shown, text and pick kept | PASS |
+| `close-a8-sc001-held-dark-1280.png`, `close-a8-applied-dark-1280.png` | step 8: after the SC-001 loop, *10 files changed since you looked* and line 40 unmoved; applied, 15 rows | PASS |
+
+Step 7 could not run on screen: opening the source menu panics the client, also on `main` before
+this feature's client code (quickstart *Results*).

@@ -15,8 +15,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1275
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
-- **Phase**: review M6
-- **Next step**: orchestrator: merge the M6 PR on green CI, then the close unit (T047, close the spec, close #1275).
+- **Phase**: done
+- **Next step**: handoff. Orchestrator: merge M6 (#1450) on green CI, rebase branch `1275-close` onto it, open the close PR (body in the close unit's scratchpad, `pr-body-1275-close.md`), merge it; the run ends there. A fresh-context review of the close diff (close.md step 4) did not run: the close unit had no Agent tool.
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -27,6 +27,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1380 | M1 | merged | 8c0711181531461916b4e025a22d3da0b615f577 |
 | #1413 | M2 | merged | 055754352429f96b08c2b5df561b32d6a34d764d |
 | #1424 | M3 | merged | b582c2563adbebd6e31ba41bc274124e7939b49b |
+| #1443 | M4 | merged | 39f44d65cddefd89a03845fdc0e7d50184ad3642 |
+| #1447 | M5 | merged | d20412df0d352ec309bea83ed82e1f31bf15e593 |
+| #1450 | M6 | open (CI) at close | |
+| close PR | T047, TDD verification, spec closed (branch `1275-close`) | to open (orchestrator) | |
 
 ## Milestones
 
@@ -35,9 +39,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | change identity in every row + `review::stale` (core, tests) | #1380 | merged |
 | M2 | T009–T014 | full | `review::drag`, `review::chips`, `Settings::suggestion_chips` (core, tests) | #1413 | merged |
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
-| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | reviews done (A round 2 clean); gate green; PR open |
-| M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | rebased on main after M4 merged; gate green; reviews A and B clean; PR open |
-| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | reviews done (A round 2 clean); gate green; PR open |
+| M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | #1443 | merged |
+| M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | #1447 | merged |
+| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | #1450 | reviews done (A round 2 clean); gate green; PR open, in CI at close |
 
 ## Decisions
 
@@ -184,3 +188,22 @@ None. FR-014 answered by the user on 2026-10-25: **A, whole-view hold** (as appl
 - M5 gate: full `scripts/gate.sh` exit 0 on 4d6bfa59b (stacked on 8dba8f621); after M4 merged, rebased onto main 39f44d65c as 1753b0557 (code) + ledger (conflicts in `covered_states.rs`, both sides kept; snapshot re-recorded, additions only) and gated again by the orchestrator before the push; Rust 1.99 clippy (client, core, all targets, `-D warnings`) clean (target-shared was removed for disk first, so the next build is cold). Review snapshot (code commit): `73317283b7aa2efc041a3da99c4ad635d6058940:4d6bfa59b911978b73d0ce520a558fbb5f72310d`; review range `8dba8f621..4d6bfa59b`, rebased range `39f44d65c..1753b0557` (reviews ran on that). PR body: session scratchpad `pr-body-1275-m5.md`.
 - M6 (unit, 2026-10-26): T044–T046 on local branch `1275-m6`, rebased onto origin/main fdba23093 after M5 merged (code 5202ca075, docs e34c97a0c). Design: core `marks::held_file_review(mark, current, drafts, held)`: a marked file with a held change is ○/◉ whichever id the mark is on, `changed_since` as `file_review` says (review A F3); `changes::judged` passes `changed_since_you_looked`, so rows, *n of m reviewed* and the mark control follow it. No UI change was needed (`RowDot::of` already reads `changed_since`). Not changed: `whole` still updates live (so an edit to a reviewed file already dropped it back via #1271's id rule; M6 adds the case where the mark is on the latest id, e.g. marked in another window, and a kept `whole` after a failed read); the **Unreviewed first** sort (`reviewed_paths`) now judges the hold too (review A F2). Layout snapshot unchanged (`layout_snapshot` passes). Visual pass PASS (`visual-pass/m6-*`, README § M6; quickstart §B step 6 added). Full `scripts/gate.sh` exit 0 and Rust 1.99 clippy (client, core, all targets) clean on 5202ca075's rebased tree; again on 93100cd9a with the review fixes.
 - M6 review A r1 fixes (unit, 2026-10-26, 93100cd9a): F1 `MarkBlock::Held` (core) blocks **Mark reviewed** while the selected file is held (after `Disconnected`); `mark_toggled` sends nothing for a blocked control and `MarkToggled` has no keyboard path (only the chip); selecting the file again reads its latest diff and unblocks it. F2 `reviewed_paths` uses `held_file_review`. F3 `held_file_review` keeps `file_review`'s `changed_since` (core table updated; user guide names both tooltips). F4 H16 test: held read `== Effect::None`, Batch-aware `writes` for the apply. Red tests in `tdd/cycle-log.md`. Layout snapshot unchanged (no covered state has a held selected file). Visual pass `visual-pass/m6-c-*` PASS (README § M6 review A fixes; quickstart §B step 6 extended).
+- Close unit (2026-10-26, branch `1275-close` on M6's tip 02f5abe50, not rebased: #1450 not merged
+  yet). T047: quickstart §A run on a fresh fixture in the real client (cloud Xvfb, 1280x800): steps
+  1–6 and 8 PASS (SC-001 loop: 276 frames of the diff pane, none moved), step 7 not run on screen
+  (see below; H3 stands in); §C not run (no macOS/Windows), what stood in recorded in
+  `quickstart.md` *Results*. Evidence `visual-pass/close-*.png` and /mnt/project-files/issue-1275/.
+  `speckit-tdd-verify` (by hand, no Agent tool): FAIL on ordering (M1–M3 TEST_AFTER, accepted at
+  close), no weakened test, 10/10 deliberate mutants caught, every FR/SC traced
+  (`tdd/verification.md`). `speckit-converge` (needed: M2 B pending, M3 B not recorded) by hand:
+  every task T001–T046's deliverable found (D1–D9, K1–K5, H1–H16, Q1–Q12, docs, snapshot states);
+  no unbuilt behaviour, no new milestone. Spec **Status** set to Closed; T047 ticked; checklist
+  already 16/16.
+- Found in the close pass, not this feature's (follow-up issue for the orchestrator): clicking the
+  Review header's **Working tree** source field panics the client at
+  `iced_widget-0.14.2/src/scrollable.rs:1371` (`layout.children().next().unwrap()`, in
+  `Scrollable::overlay` under `cdk::picker::Menu` → `Scale` → `Fade` → `Container` → `Container`,
+  through `overlay::Group`). Reproduced with nothing held on the M6 tree, on `origin/main`
+  63cf1dc4e and on main before any #1275 client code (58ef1146d), debug builds under Xvfb.
+- Observation (not filed): with more rows than fit, the file list's scrollbar overlaps the right
+  half of the row dots (`visual-pass/close-a2-held-light-1280.png`).

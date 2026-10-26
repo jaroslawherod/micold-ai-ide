@@ -69,3 +69,61 @@ On each: §A steps 2, 5 and 6, and §B steps 2 and 5 (save shortcut **Cmd+Enter*
 
 Record in `visual-pass/` any step a container without a display could not run, and what stood in
 for it (482's and 946's practice).
+
+## Results (close unit, T047, 2026-10-26)
+
+Run on the M6 tree (`02f5abe50`; debug build of the client and daemon pair) in a Linux cloud
+container on an Xvfb display at 1280x800, driven with Xlib XTest. Fresh fixture: a repository
+whose `a.txt` has 120 lines with every fifth line edited (one long hunk), `b.txt`–`e.txt` one
+edited line each, and `f1.txt`–`f10.txt` committed unchanged; a fresh data directory; the
+**Default** entry's Review tab. Screenshots: `visual-pass/close-*.png`.
+
+### §0 — Automated
+
+`micold-core` `review::` 337 passed (1 ignored); `micold-client --test features_changes` 224
+passed. The full `scripts/gate.sh` result is in the ledger.
+
+### §A — Holding while files change
+
+| Step | Result | Evidence |
+|---|---|---|
+| 1 | PASS: new line 40 the first visible line after scrolling | `close-a1-scrolled-dark-1280.png` |
+| 2 | PASS: 2 s after appending to `a.txt`, `b.txt`, `c.txt`: *3 files changed since you looked*, three dots, diff and first visible line unchanged (`+24 −24` still shown) | `close-a2-held-{dark,light}-1280.png` |
+| 3 | PASS: a second edit to `a.txt` keeps 3; `b.txt` restored byte for byte drops it to 2 and its dot goes | `close-a3-restored-dark-1280.png` |
+| 4 | PASS: after applying, rewording `c.txt`'s added line 10 (counts stay `+2 −1`) counts again: *1 file changed since you looked* (AS12) | `close-a4-counts-again-dark-1280.png` |
+| 5 | PASS: with `a.txt` and `c.txt` in the set, selecting `c.txt` shows its latest diff (*reworded*), its dot goes, the count drops to 1, `a.txt` keeps its dot | `close-a5-select-in-set-dark-1280.png` |
+| 6 | PASS: lines 6–7 of `a.txt` picked by a drag, *check this* typed, then `a.txt` and `b.txt` changed: notice and dots; pressing the notice shows the edits (`+2,123`, `+28 −24`, `b.txt` `+2 −1`), dots and notice gone, the box keeps *check this*, lines 6–7 stay picked | `close-a6-composer-held-dark-1280.png`, `close-a6-applied-dark-1280.png` |
+| 7 | NOT RUN on screen: opening the source menu (to switch **Uncommitted** off and on) panics the client, on this tree, on `origin/main` (`63cf1dc4e`) and on main before any #1275 client code (`58ef1146d`), so not this feature's (see below). Stood in: H3 `a_read_the_user_causes_applies_even_queued_behind_a_watch_read` (`Msg::UncommittedToggled` while held: the read applies, nothing stays held) | test |
+| 8 | PASS: the SC-001 loop (`f1`–`f10` appended 0.5 s apart) while `a.txt` was open at line 40: 276 frames of the diff pane grabbed every 25 ms over the loop and 3 s after it, 0 differed from the first; header *10 files changed since you looked*, the new files not listed until the notice was pressed (then 15 rows, `0 of 15 reviewed`, line 40 still first) | `close-a8-sc001-held-dark-1280.png`, `close-a8-applied-dark-1280.png` |
+
+Found, not this feature's: clicking the **Working tree** source field panics at
+`iced_widget-0.14.2/src/scrollable.rs:1371` (`layout.children().next().unwrap()` on `None`, in
+`Scrollable::overlay` under `cdk::picker::Menu` → `Scale` → `Fade` → `Container` → `Container`,
+reached through `overlay::Group`), with nothing held, on all three builds above. Reported to the
+orchestrator for its own issue.
+
+Observation, not a failure: with more rows than fit (after step 8) the list's scrollbar sits over
+the right half of the row dots (`close-a2-held-light-1280.png`).
+
+### §B — Recorded pass on Linux
+
+Run per milestone and recorded in `visual-pass/README.md`: steps 1 (M3), 2 and 4 (M4), 5 (M5), 6
+(M6), all PASS in both themes. Step 3 (touchpad) not run: Xvfb has no touchpad; a touchpad
+press-and-drag reaches iced as the same left-button press, motion and release that step 2 drove.
+
+### §C — macOS and Windows
+
+Not run: this run had only a Linux cloud container, with no macOS or Windows machine or runner.
+What stood in, per step:
+
+- §A steps 2, 5, 6 and §B steps 2, 5: the Linux runs above and in `visual-pass/`. None of the
+  feature's code is platform-specific: the hold, the dot and the notice are iced widgets and
+  core logic; the drag uses iced's mouse events, which winit maps the same on all three; the file
+  watch is the daemon's existing watcher (#482), unchanged here.
+- The save shortcut (**Cmd+Enter** on macOS, Ctrl+Enter elsewhere) is the existing
+  `TextArea::on_submit` binding of `micold-material`, not touched by this feature.
+- CI runs the workspace tests on macOS and Windows for every PR: M1–M5 merged green there; M6
+  (#1450) was in CI when this was written.
+
+Left for a person with those machines: §C as written, in particular a trackpad drag on macOS
+and the notice under Windows' scaling.
