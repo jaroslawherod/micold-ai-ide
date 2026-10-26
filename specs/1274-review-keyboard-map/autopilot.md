@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1366 | design (spec, plan, tasks) | merged | 76c1335e705aec8ebf02d278273bcc578d91112f |
 | #1404 | M1 core key map | merged | 8f38e9ca85309f92e24376c870038cd481eff913 |
 | #1415 | M2 single-key switch core (+ D4 design amendment) | merged | 83f693ff7c3b14e115a2ae17dc67fa5085546242 |
+| #1451 | M3 move and mark (j k n p v g, Settings switch) | open | — |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | #1404 | merged |
 | M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | #1415 | merged |
-| M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs (blockers merged) | — | in progress |
+| M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs (blockers merged) | #1451 | PR open (T027 open) |
 | M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | — | blocked |
 | M5 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M4 | — | blocked |
 
