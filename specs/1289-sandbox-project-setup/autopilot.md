@@ -99,6 +99,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 visual pass | 1 (U4, U6) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | FAIL: V-F1 MAJOR follow lost on window resize — fixed: a report with a new viewport while following keeps the follow and snaps to the end; V-F2 row menu left open — fixed: `State::update_setup` closes it on `ViewOpened`; V-F3 scrollbar over text — fixed: rows padded `BAR_FOOTPRINT`, clip inside; evidence `visual-pass/m6-*` |
 | M6 A | 2 (scoped, sonnet) | 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1 | CLEAN. Confirmed: A-F1 re-watch cannot loop, `pending` cannot wedge, `on_scroll_metrics` leaves other `VirtualRows` users unchanged. 1 MINOR declined: `features/setup.rs:296` a scroll-up in the same report as a new viewport height is dropped while following (one-frame edge, matches V-F1 intent) |
 | M6 visual pass | 2 (V-F1–V-F3 re-check) | 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1 | PASS light and dark, 1600×1000 and 640×480: 9+ resizes keep the tail and keep following; scroll up stops, bottom resumes; menu closes on Setup output; scrollbar no longer covers text; empty/failed unchanged. Evidence `visual-pass/m6-r2-*`, notes `m6-u4-u6-notes.md` § Round 2 |
+| M7 A | 1 (high) | 5bfdce4949f420bcf771692ba465709f42165b8a:9e7407c734baf19ef852320b4de2df5c5d038318 | CLEAN, 3 MINOR: A-F1 Run setup reads `state.settings.setup_commands`, refreshed from the store only by `in_force` (stale across windows) — not fixed, follow-up; A-F2 a Stop racing the run's end got a spurious NotFound error — fixed (`SetupStop` + `NotFound` is silent); A-F3 640x480 test checked only y — fixed (x/width bound added) |
+| M7 B | 1 (sonnet) | same | CLEAN; features_setup 33, setup_output_geometry 11. MINORs accepted: B-F1 Stop uses `Icon::Close` (no stop glyph); B-F2 red not run separately (compile-failure red, disclosed); B-F3 Run uses `StateRunning`, which U3 allows |
+| M7 visual pass | 1 (U3, U4) | same | PASS light and dark, 1600x1000 and 640x480 (Busy not reachable from the UI). V-F1 MAJOR: clearing a project's setup command was not persisted (`merged_with_existing` kept the old `setup_commands` key as the field is skipped when empty) — fixed: a known key omitted when empty is removed from the merged document; test `clearing_the_last_setup_command_removes_it_from_the_file` (written with the fix; not run red first). Evidence `visual-pass/m7-*`, notes `m7-u3-u4-notes.md` |
 
 ## Declined review findings
 
@@ -108,6 +111,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+M7 round 1 fixed (2026-10-26): V-F1, A-F2, A-F3 (cycle log M7 cycle 2); A-F1 left as follow-up. micold-core setup_commands 6, client setup tests green, clippy and fmt clean. Next: review A round 2 (scoped, sonnet); then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
 M7 implemented (2026-10-26) on 419198cb9 (#1472 merged by rebase): T056–T059 ticked; `cargo test -p micold-client` green, clippy -D warnings and fmt clean (cycle log § M7 cycle 1). Icons: StateRunning (play) for Run setup, Close for Stop setup (no stop glyph exists; no new icon). Snapshot c8113a6898e50ebfe41e9f02b66ba171f0fd813c:11af658045dd6a57c8c8f59b174544bcfe95d8f4. Next: reviews A and B round 1 + visual pass (orchestrator dispatches), fix; then full gate (`scripts/gate.sh`), rebase onto main + `cargo test -p micold-client --no-run`, PR.
 M6 PR (2026-10-26): review A round 2 CLEAN (1 MINOR declined), visual re-check V-F1–V-F3 PASS (evidence `visual-pass/m6-r2-*` committed); rebased onto main 02421815f (7 docs/test commits, no conflicts, protocol stays 70, no new ProjectAdd site); `cargo test -p micold-client --no-run` clean; full gate (scripts/gate.sh) green at 9c330e1c9; pushed; PR #1472 opened, assigned jaroslawherod. Next: orchestrator waits on CI, merges; M7.
 M6 review round 1 fixed (2026-10-26) at a6b1f4d97: A-F1–A-F4, V-F1–V-F3 (cycle log M6 cycle 2; features_setup 29, setup_output_geometry 7); B MINORs recorded; visual-pass evidence committed; full gate (scripts/gate.sh) green and pushed. Snapshot 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1. Next: review A round 2 (scoped, sonnet) and visual-pass re-check of V-F1–V-F3; then rebase onto main, PR.
@@ -129,6 +133,10 @@ M3 rebase 2 (2026-10-25): onto 36459b958 (38 commits), then f92be5b68 (3 test/sp
 None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 
 ## Follow-ups not done
+
+- M7 A-F1: Run setup's availability reads `state.settings.setup_commands`, refreshed from the store only when Settings reads `in_force`; a command saved in another window shows after the next refresh. Refresh when a row menu opens.
+- Another feature's, not changed here: `jira_base_urls` has the same shape as V-F1 (`skip_serializing_if` empty + `merged_with_existing` keeps the old key), so clearing the last one may not persist.
+- M7 observation: SIGKILL of the daemon orphans a running setup's child process (the daemon cannot end the tree if it is itself killed). There is no stop glyph in the icon set.
 
 - ~~M3 review A-F3~~: done in M4 T038 (`stop_and_wait` before git, `forget` after); test `deleting_a_worktree_stops_its_setup_first_and_forgets_it` recreates the same `dir_name` and runs setup again.
 - M6 visual pass round 2 observation: with ~700 output lines at 640×480 the Setup output scrollbar thumb shrinks to 2–3 px; a minimum thumb length would help (not a finding).

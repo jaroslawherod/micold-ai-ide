@@ -406,3 +406,7 @@ output is copied from the session's logs.
   `setup_output.rs` adds the outlined **Stop setup** before **Close** while running. The M6 menu test
   now expects **Stop setup** between Setup output and Delete while running. `cargo test -p
   micold-client` all green, clippy `-D warnings` clean, fmt clean.
+
+## M7 cycle 2: review round 1 fixes (V-F1, A-F2, A-F3)
+
+- red/green: V-F1 `settings::setup_commands_tests::clearing_the_last_setup_command_removes_it_from_the_file` (save with a command, clear, save: key must be gone) written together with the fix, not run red first; `merged_with_existing` now drops the old `setup_commands` key when the new document lacks it. A-F2 `shell::setup::tests::a_stop_refused_as_not_found_is_silent` with a `SetupStop`/`NotFound` arm in `daemon_sync`. A-F3 the 640x480 action-row test also bounds x + width. All pass; clippy and fmt clean.

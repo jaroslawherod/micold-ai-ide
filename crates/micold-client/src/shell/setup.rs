@@ -276,4 +276,25 @@ mod tests {
             "{shown:?}"
         );
     }
+
+    /// M7 review A-F2: a stop that finds no run (it ended first) says nothing; other refusals do.
+    #[test]
+    fn a_stop_refused_as_not_found_is_silent() {
+        let (mut app, mut rx) = connected();
+        let _ = update(&mut app, Msg::StopRequested(key()));
+        let Some(ClientMsg::SetupStop { req, .. }) = rx.try_recv().ok() else {
+            panic!("a SetupStop was sent");
+        };
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DAEMON,
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::NotFound,
+                message: "There is no worktree here.".into(),
+                detail: None,
+            },
+        );
+        assert!(app.core.notifications.queue.visible().is_none());
+    }
 }

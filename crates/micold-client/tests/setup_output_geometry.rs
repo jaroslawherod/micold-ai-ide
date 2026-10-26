@@ -388,6 +388,14 @@ fn the_output_view_offers_stop_setup_before_close_while_running() {
             at.content,
             window.height
         );
+        assert!(
+            at.on_screen.x >= 0.0 && at.on_screen.x + at.natural_width <= window.width,
+            "{} at x {}..{} outside the {}dp window",
+            at.content,
+            at.on_screen.x,
+            at.on_screen.x + at.natural_width,
+            window.width
+        );
     }
 
     report(&mut state, host, Some(SetupState::Stopped));
