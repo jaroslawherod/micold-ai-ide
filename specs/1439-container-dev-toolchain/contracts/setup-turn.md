@@ -25,6 +25,11 @@ daemons run setups concurrently, as 1289 specifies.
 - A run forgotten while its shell still runs (a delete whose wait for the stopped run passed
   `RUN_OVERRUN`) lets the turn go at once: nothing can **Stop** it any more, so a tree that escaped
   the kill must not hold every later setup until the daemon restarts (M3 review A-F2).
+  Forgetting a live run without that wait (removing its project, `forget_project`, or a bare
+  `forget`) drops its stop sender in the same call that starts the kill, so the turn goes before
+  the killed tree has drained: the next setup can overlap a dying one for at most the kill's time.
+  Accepted: it happens only on project or run removal, and a drain bound there would put a wait on
+  a path that returns at once today (M3 review A round 2, F1).
 - A run that has to wait is `Running` (no new state, no protocol change) and its output starts with
   one line: `Waiting for another setup on this daemon to finish…`. The line goes through the same
   buffer, log and `SetupOutput` path as the shell's lines. A run that gets the turn at once prints
