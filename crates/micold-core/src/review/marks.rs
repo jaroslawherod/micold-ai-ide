@@ -389,21 +389,23 @@ pub fn file_review(
 }
 
 /// [`file_review`] for a file whose change may be `held` (feature 1275, FR-013, research R10): a
-/// marked file with a held change is not Reviewed, and is changed since its mark, whichever id the
-/// mark is on, since the change on screen is not the one the hold has seen.
+/// marked file with a held change is not Reviewed, whichever id the mark is on, since the change
+/// on screen is not the one the hold has seen. It is changed since its mark as [`file_review`]
+/// says: only when the mark is on another id than `current`.
 pub fn held_file_review(
     mark: Option<&ChangeId>,
     current: Option<&ChangeId>,
     drafts: usize,
     held: bool,
 ) -> FileReview {
+    let review = file_review(mark, current, drafts);
     if held && mark.is_some() {
         FileReview {
             state: file_review(None, None, drafts).state,
-            changed_since: true,
+            ..review
         }
     } else {
-        file_review(mark, current, drafts)
+        review
     }
 }
 
@@ -430,6 +432,9 @@ pub enum MarkBlock {
     Unreadable,
     /// A Committed or Uncommitted toggle hides part of the file's change (D4, provisional A).
     HiddenKind,
+    /// The file changed since the user looked and the change is held (feature 1275, FR-013): the
+    /// diff on screen is not the change a mark would be kept on until the file is selected again.
+    Held,
 }
 
 /// [`MarkBlock::HiddenKind`]'s tooltip (research R7).
@@ -441,6 +446,9 @@ pub const DISCONNECTED_TOOLTIP: &str = "The session service is not connected";
 pub const NOT_READ_TOOLTIP: &str = "This file's change is still being read";
 /// [`MarkBlock::Unreadable`]'s tooltip.
 pub const UNREADABLE_TOOLTIP: &str = "This file's change could not be read";
+/// [`MarkBlock::Held`]'s tooltip.
+pub const HELD_TOOLTIP: &str =
+    "This file changed since you looked: select it again to see its latest change";
 
 impl MarkBlock {
     /// Its tooltip.
@@ -450,6 +458,7 @@ impl MarkBlock {
             Self::NotRead => NOT_READ_TOOLTIP,
             Self::Unreadable => UNREADABLE_TOOLTIP,
             Self::HiddenKind => HIDDEN_KIND_TOOLTIP,
+            Self::Held => HELD_TOOLTIP,
         }
     }
 }
@@ -952,17 +961,18 @@ mod tests {
         }
     }
 
-    // Feature 1275 FR-013, research R10: a held change makes a marked file unseen, changed since
-    // its mark, whatever id the mark is on; an unmarked or unheld file is judged as above.
+    // Feature 1275 FR-013, research R10: a held change makes a marked file unseen, whatever id
+    // the mark is on; it is changed since its mark only when the mark is on another id than the
+    // current one (review A F3). An unmarked or unheld file is judged as above.
     #[test]
     fn a_held_change_to_a_marked_file_is_not_reviewed() {
         use ReviewState::{HasDrafts, Reviewed, Unseen};
         let (m, c) = (id(1), id(2));
         let rows = [
-            (Some(&m), Some(&m), 0, true, review(Unseen, true)),
-            (Some(&m), Some(&m), 2, true, review(HasDrafts, true)),
+            (Some(&m), Some(&m), 0, true, review(Unseen, false)),
+            (Some(&m), Some(&m), 2, true, review(HasDrafts, false)),
             (Some(&m), Some(&c), 0, true, review(Unseen, true)),
-            (Some(&m), None, 0, true, review(Unseen, true)),
+            (Some(&m), None, 0, true, review(Unseen, false)),
             (None, Some(&c), 0, true, review(Unseen, false)),
             (None, Some(&c), 1, true, review(HasDrafts, false)),
             (Some(&m), Some(&m), 0, false, review(Reviewed, false)),

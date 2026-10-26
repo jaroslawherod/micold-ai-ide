@@ -5881,6 +5881,127 @@ mod reviewed_marks {
         assert_eq!(states(&state, false)[0].1, Unseen, "disconnected: no marks");
     }
 
+    /// Whether `effect` writes to the review service, also inside a batch.
+    fn writes(effect: &Effect) -> bool {
+        match effect {
+            Effect::ReviewEdit { .. } => true,
+            Effect::Batch(effects) => effects.iter().any(writes),
+            _ => false,
+        }
+    }
+
+    /// `THREE` with `a.rs` selected and its diff shown, marked `marks`, then `a.rs` and `c.rs`
+    /// changed on disk (ids 7 and 8): the read is held. Returns the latest read's rows.
+    fn held_with_a_selected(marks: &[(&str, u8)]) -> (State, ChangeList) {
+        use micold_client::features::changes::changed_since_you_looked;
+        let mut state = opened(THREE);
+        let (seq, _) = select(&mut state, "a.rs");
+        changes::update(
+            &mut state,
+            Msg::DiffRead {
+                seq,
+                result: Ok(text_diff()),
+                row: DiffRow::NotRead,
+            },
+        );
+        pushed(&mut state, &[], marks);
+        let latest: Spec<'_> = &[
+            ("a.rs", Origin::Uncommitted, 7),
+            ("b.rs", Origin::Uncommitted, 2),
+            ("c.rs", Origin::Uncommitted, 8),
+        ];
+        let mut rows = listed(latest);
+        rows.files[0].added = 5;
+        rows.files[2].added = 6;
+        let Effect::ReadList { seq, .. } = changes::update(&mut state, Msg::Changed) else {
+            panic!("a change on disk rereads the list");
+        };
+        answer(&mut state, seq, Ok(rows.clone()), Ok(whole(latest)));
+        assert!(changed_since_you_looked(view(&state), &path("a.rs")));
+        (state, rows)
+    }
+
+    /// Feature 1275 FR-013, review A F1. While the selected file is held its diff is not the
+    /// change a mark would be kept on, so the mark control is blocked and a press writes nothing,
+    /// marked or not; selecting the file again reads its latest diff and the control works.
+    #[test]
+    fn the_mark_control_is_blocked_while_the_selected_file_is_held() {
+        use micold_core::review::marks::HELD_TOOLTIP;
+        for marks in [&[("a.rs", 1)][..], &[("a.rs", 7)], &[]] {
+            let (mut state, rows) = held_with_a_selected(marks);
+            let blocked = control(&state, true).expect("a.rs is selected");
+            assert_eq!(blocked.block, Some(MarkBlock::Held), "marks {marks:?}");
+            assert!(!blocked.pressed, "marks {marks:?}");
+            assert_eq!(blocked.tooltip(), HELD_TOOLTIP);
+            assert_eq!(
+                control(&state, false).and_then(|c| c.block),
+                Some(MarkBlock::Disconnected),
+                "disconnected says so first"
+            );
+            let before = state.clone();
+            let effect = changes::update(&mut state, Msg::MarkToggled);
+            assert!(!writes(&effect), "marks {marks:?}: {effect:?}");
+            assert_eq!(state, before, "a blocked press changes nothing");
+
+            let (seq, _) = select(&mut state, "a.rs");
+            changes::update(
+                &mut state,
+                Msg::DiffRead {
+                    seq,
+                    result: Ok(text_diff()),
+                    row: DiffRow::Row(rows.files[0].clone()),
+                },
+            );
+            let control = control(&state, true).expect("a.rs is selected");
+            assert_eq!(
+                control.block, None,
+                "marks {marks:?}: shown, it can be marked"
+            );
+            let Effect::ReviewEdit {
+                edit: ReviewEditOp::SetReviewed { change, .. },
+                ..
+            } = changes::update(&mut state, Msg::MarkToggled)
+            else {
+                panic!("marks {marks:?}: the press asks the service");
+            };
+            let expected = if marks == [("a.rs", 7)] {
+                None
+            } else {
+                Some(id(7))
+            };
+            assert_eq!(change, expected, "marks {marks:?}: on the change shown");
+        }
+    }
+
+    /// Feature 1275 FR-013, FR-014, review A F2. **Unreviewed first** judges the marks as the
+    /// rows' glyphs do: a held marked file sorts with the unreviewed, and a mark another window
+    /// puts on its latest change does not move it while held.
+    #[test]
+    fn unreviewed_first_judges_a_held_file_as_its_glyph() {
+        use micold_core::review::tree::TreeSort;
+        let (mut state, _) = held_with_a_selected(&[("a.rs", 1), ("b.rs", 2), ("c.rs", 3)]);
+        changes::update(&mut state, Msg::TreeSortChosen(TreeSort::UnreviewedFirst));
+        assert_eq!(
+            tree_files(&state),
+            ["a.rs", "c.rs", "b.rs"],
+            "held a.rs and c.rs are unreviewed, as their glyphs say"
+        );
+        pushed(&mut state, &[], &[("a.rs", 7), ("b.rs", 2), ("c.rs", 8)]);
+        assert_eq!(
+            states(&state, true),
+            vec![
+                ("a.rs".to_string(), ReviewState::Unseen),
+                ("b.rs".to_string(), ReviewState::Reviewed),
+                ("c.rs".to_string(), ReviewState::Unseen),
+            ]
+        );
+        assert_eq!(
+            tree_files(&state),
+            ["a.rs", "c.rs", "b.rs"],
+            "marks on the held change do not move the rows"
+        );
+    }
+
     /// Feature 1275 H16, FR-013, research R10. A reviewed file whose change is held shows unseen
     /// with the dot and *n of m reviewed* counts it as not reviewed, even with its mark on the
     /// latest change (marked in another window); the hold writes nothing to the service, and
@@ -5910,12 +6031,18 @@ mod reviewed_marks {
             panic!("a change on disk rereads the list");
         };
         let effect = answer(&mut state, seq, Ok(rows), Ok(whole(latest)));
-        assert!(
-            !matches!(effect, Effect::ReviewEdit { .. } | Effect::Batch(_)),
-            "the hold writes nothing to the service: {effect:?}"
-        );
+        assert_eq!(effect, Effect::None, "the held read sends nothing");
         assert!(changed_since_you_looked(view(&state), &path("a.rs")));
         assert!(!changed_since_you_looked(view(&state), &path("b.rs")));
+        let reviews = file_reviews(&state, view(&state), true);
+        assert_eq!(
+            (
+                reviews[&path("a.rs")].state,
+                reviews[&path("a.rs")].changed_since
+            ),
+            (Unseen, true),
+            "held, marked on an older change: unseen, changed since its mark"
+        );
 
         // Another window shows the change and marks a.rs and c.rs on it.
         pushed(
@@ -5928,8 +6055,13 @@ mod reviewed_marks {
             let review = reviews[&path(p)];
             (review.state, review.changed_since)
         };
-        assert_eq!(of("a.rs"), (Unseen, true), "held: unseen, with the dot");
-        assert_eq!(of("c.rs"), (HasDrafts, true), "held with a draft: ●");
+        assert_eq!(
+            of("a.rs"),
+            (Unseen, false),
+            "held: unseen; marked on the latest change, so not changed since its mark (the row \
+             carries the looked dot)"
+        );
+        assert_eq!(of("c.rs"), (HasDrafts, false), "held with a draft: ●");
         assert_eq!(of("b.rs"), (Reviewed, false), "not held: still reviewed");
         assert_eq!(progress_of(&state, true), ratio(1, 3), "reviewed ∖ changed");
         assert_eq!(
@@ -5944,10 +6076,7 @@ mod reviewed_marks {
 
         // Showing what is held: the marks are on the shown change, so they are Reviewed again.
         let applied = changes::update(&mut state, Msg::StaleApplied);
-        assert!(
-            !matches!(applied, Effect::ReviewEdit { .. }),
-            "applying writes nothing: {applied:?}"
-        );
+        assert!(!writes(&applied), "applying writes nothing: {applied:?}");
         assert!(!changed_since_you_looked(view(&state), &path("a.rs")));
         assert_eq!(progress_of(&state, true), ratio(3, 3));
     }
