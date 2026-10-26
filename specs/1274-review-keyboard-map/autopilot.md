@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M3 PR open (CI, merge); T027 visual pass still to run (see *Handover*).
+- **Next step**: M3 PR open (CI, merge); T027 visual pass done (see *Handover*).
 
 ## Pull requests
 
@@ -78,6 +78,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 M3 unit part 2 (2026-10-26): T012–T026, T063–T065 done; reviews A and B CLEAN; `scripts/gate.sh` GATE_EXIT=0 at f8ebb7f79; PR opened (see *Pull requests*). **Open: T027** (visual pass, quickstart §B B1–B6, B12, B13, B16 at 1280×800 light/dark): not run — the `visual-pass` skill is not loadable in this session (`Unknown skill: visual-pass`, the workspace is not trusted) and this unit has no Agent tool; a headless worker would need unrestricted Bash. Next: run T027 through an `autopilot-worker` (debug build with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; ~4.5 GB disk free; xdotool not installed), save evidence to `specs/1274-review-keyboard-map/visual-pass/`, tick T027, push to the PR.
+
+T027 visual pass (2026-10-26, autopilot-worker): **PASS** for the M3 checks. Ran the real client + daemon (release, pinned pair, `client attached to daemon` confirmed) on Xvfb + tiny-skia software rendering in the cloud container, not a real display; XTest input via python-xlib; private `MICOLD_DATA_DIR`; window 1280×800; light and dark (theme seeded in the private `settings.json`). Fixture: a git repo, Default entry (uncommitted), `a.rs` `b.rs` `c.rs` with two hunks each and a binary `d.bin`; no comments (B7–B11 are M4). Evidence: `specs/1274-review-keyboard-map/visual-pass/`.
+- B1 `j` `j` `k`: a → b → c → b, diff from the top (`b1-jk-light.png`, `dark-b1-b6.png`). B2/B3 `n` ×3 then `p`: b hunk 1, b hunk 2, c hunk 1; `p` → b's last hunk (`b2-b3-np-light.png`). The second hunk is not scrolled to the very top only because the short fixture's diff is already at its scroll end. B4: mark = header in primary container roles; dark is strong, light is a pale lavender against the grey unmarked header (≈1.1:1 luminance between the two fills; told apart by hue) — visible, noted, not changed (`b4-current-hunk-light-dark.png`); side-by-side also marks (`side-by-side-current-hunk-dark.png`). B5 `v` ×2: 0 → 1 of 4 (**Reviewed** active) → 0 (`b5-v-light.png`). B6 `g`: c, d.bin, a (wrap), b; all marked → "All files reviewed" is drawn (`b6-all-reviewed-note-light.png`, ~50 ms frame) but gone within ~150 ms — see finding below. B12: "Previous change (p)", "Next change (n)", "Mark this file reviewed on its current change (v)" / "Reviewed on its current change; press to unmark (v)", both themes; hunk buttons hidden on `d.bin`; placement (↑ ↓ before **Mark reviewed**) matches the mockup's `DiffView` header. B13: `jk` typed in the tree filter, selection unchanged. B16 (M3 part): row and note under **Suggestion chips**, same style; cleared + Save → `review_single_keys: false` stored, `j` and `v` do nothing, tooltip names no key; still off after a restart (`b16-switch-light.png`, `b13-b16-dark.png`). Not covered: B12's **Send review** chord tooltip (M4), animation/frame pacing.
+- Finding, not M3 and not fixed (out of scope): on Linux the Changes watch re-reads the list about every 0.5 s with no file change. notify 8.2's inotify backend watches `OPEN`, and `shell/changes_watch.rs` `watch_loop` forwards every event's paths regardless of `event.kind`, so git's own reads of the work tree (`Access(Open)`) wake the next read — a self-sustaining loop (seen from attach, before the Review tab opened). Each `ListRead` clears `view.notice`, so M3's "All files reviewed" note (and any other notice) vanishes within one cycle. Likely fix: drop `EventKind::Access(_)` events in the watcher callback; needs its own issue (482/1269 watcher, idle-CPU impact).
+
 
 ## Open escalation
 
