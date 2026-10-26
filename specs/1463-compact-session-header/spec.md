@@ -112,7 +112,7 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 - **SC-001**: A Claude terminal session in a single pane shows 2 rows above the terminal, about 90 px, down from 4 rows and about 190 px.
 - **SC-002**: Every other session shows 2 rows, down from 3.
 - **SC-003**: At 640x480 with the sidebar at 300 px and at 1280x800, light and dark, no header or strip element overlaps another or leaves the session area, checked by the visual pass.
-- **SC-004**: Tiled panes render identically to before (layout snapshots of tiled states unchanged).
+- **SC-004**: Tiled panes render identically to before (each pane's row size and position relative to the pane-area origin unchanged; absolute fixtures move with the shorter header and are re-recorded).
 - **SC-005**: Every control reachable before the change is still reachable, and a press on any acts on the first try.
 - **SC-006**: At 640x480 with a long held-queue caption, the switch control and restart are fully visible.
 
