@@ -346,5 +346,16 @@ for image in basic sandbox; do
   fi
 done
 
+# --- the X11/Wayland libraries match CI's Linux test job (1439, FR-007) -------------------------
+cases=$((cases + 1))
+dev_libs() { grep -oE 'lib[a-z0-9]+-dev' | sort -u | tr '\n' ' '; }
+ci_libs="$(grep -A2 'apt-get install -y' "$ROOT/.github/workflows/ci.yml" | grep -E 'libxkbcommon-dev|libxcursor-dev' | dev_libs)"
+image_libs="$(grep -v '^[[:space:]]*#' "$BASIC/Containerfile" | grep -E 'lib(xkbcommon|wayland|x11|xcursor|xrandr|xi)-dev' | dev_libs)"
+if [ -n "$ci_libs" ] && [ "$ci_libs" = "$image_libs" ]; then
+  pass "the Containerfile's X11/Wayland libraries are ci.yml's: $ci_libs"
+else
+  fail "the Containerfile's X11/Wayland libraries are ci.yml's" "ci.yml: [$ci_libs] Containerfile: [$image_libs]"
+fi
+
 printf '\n%d case(s), %d failure(s)\n' "$cases" "$failures"
 [ "$failures" -eq 0 ]

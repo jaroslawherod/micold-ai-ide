@@ -77,7 +77,7 @@ RUN set -eu; \
     rm -f "$file" /tmp/mise.sha256
 
 # The X11/Wayland development libraries this repository's own gate links (#1439, FR-007), the set
-# `.github/workflows/ci.yml:270-272` installs for the Linux test job, so the default image builds and
+# the Linux test job of `.github/workflows/ci.yml` installs with its `apt-get install`, so the default image builds and
 # tests this repository. Its own layer, apart from the toolchain above, so dropping or changing it
 # (the owner's FR-007 decision) touches nothing else. Anything else a project links comes from an
 # own image built `FROM` this one (FR-012).

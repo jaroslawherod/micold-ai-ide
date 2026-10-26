@@ -20,7 +20,7 @@ For building (#1439), before any setup has run:
   `SHASUMS256.txt`); a mismatch or a failed download fails the build. See "Update mise" below;
 - a C/C++ toolchain (`gcc`, `g++`, `cc`, `c++`, `ld`, the C library headers), `make` and
   `pkg-config` (`pkgconf`), so a Rust toolchain installed by mise links crates with C code;
-- `python3`, and `xz` and `unzip` for what installers download.
+- `python3`, and `xz` and `unzip` for what installers download;
 - the X11/Wayland development libraries this repository's tests link (`libxkbcommon-dev`,
   `libwayland-dev`, `libx11-dev`, `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`, FR-007), in a layer
   of their own after the mise step, so `pkg-config` finds them and the default image builds and tests
