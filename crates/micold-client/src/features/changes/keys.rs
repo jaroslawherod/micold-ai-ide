@@ -398,7 +398,15 @@ pub fn jump_entries(app: &crate::app::State) -> Vec<(Candidate, ReviewEntry)> {
         .collect();
     let reviews = file_reviews(state, view, true);
     let comments: Vec<ReviewComment> = review_of(state, view)
-        .map(|review| in_scope(review, view_scope(view)).cloned().collect())
+        // At their shown first line, as `]` orders them (FR-006).
+        .map(|review| {
+            in_scope(review, view_scope(view))
+                .map(|comment| ReviewComment {
+                    range: shown_range(view, comment),
+                    ..comment.clone()
+                })
+                .collect()
+        })
         .unwrap_or_default();
     review_candidates(
         &files,
