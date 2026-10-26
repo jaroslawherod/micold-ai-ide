@@ -149,6 +149,7 @@ const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] = &[
 /// Popover-*shaped* fields that open nothing floating: the sidebar's filter accordion sits inline
 /// under the chip bar (BUG-1470), so it has no overlay to register.
 /// `an_inline_flag_registers_no_overlay` holds this list to that.
+#[allow(clippy::type_complexity)]
 const INLINE_FLAGS: &[(&str, fn(&mut State))] =
     &[("sidebar.filter_open", |s| s.sidebar.filter_open = true)];
 
