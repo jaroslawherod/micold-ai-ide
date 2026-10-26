@@ -368,7 +368,7 @@ copies them; a delete of a worktree whose setup runs says so (U4, U6).
 **Independent test**: T050, T052 pass; quickstart B3 (output view), B4 (last line), B7; visual
 pass U4, U6.
 
-- [ ] T050 [P] [US2] Test A16 (view), red until T051, in `client/tests/features_setup.rs`:
+- [x] T050 [P] [US2] Test A16 (view), red until T051, in `client/tests/features_setup.rs`:
   `ViewOpened` sends `SetupOutputWatch` from 0 and `ViewClosed` sends `SetupOutputUnwatch`;
   `Output` appends contiguous lines, a gap in `first_line` shows as dropped lines, and a batch for
   a new `run` resets the lines; `FollowToggled` and scrolling up stop the follow, reaching the
@@ -376,23 +376,23 @@ pass U4, U6.
   view is open re-sends the watch from the last line held (FR-018); `output_offered` is true exactly
   when a record exists; `delete_warns_setup(summary)` is true exactly while the run is Running
   (none, Succeeded, Failed, Stopped, Interrupted → false) (U6)
-- [ ] T051 [US2] `client/src/features/setup.rs`: `view: Option<OutputView>` and `Msg::Output`,
+- [x] T051 [US2] `client/src/features/setup.rs`: `view: Option<OutputView>` and `Msg::Output`,
   `ViewOpened`, `ViewClosed`, `FollowToggled`, `CopyRequested`, `output_offered`,
   `delete_warns_setup`;
   `client/src/shell/daemon_sync.rs` routes `SetupOutput` and re-watches on reconnect. T050 passes
-- [ ] T052 [US2] Test G2, red until T053, new `client/tests/setup_output_geometry.rs`: at 10,000
+- [x] T052 [US2] Test G2, red until T053, new `client/tests/setup_output_geometry.rs`: at 10,000
   lines the dialog builds only the visible rows, and the action row stays inside the dialog at the
   smallest window size
-- [ ] T053 [US2] New `client/src/ui/setup_output.rs`: contract U4 — `ScrollingDialog` titled
+- [x] T053 [US2] New `client/src/ui/setup_output.rs`: contract U4 — `ScrollingDialog` titled
   *Setup — <location display name>*, the command in monospace clamped to 3 lines with its full text
   in the tooltip, the state worded as U2, a `VirtualRows` body of monospace lines (first row *<n>
   earlier lines not kept* when `dropped > 0`, *No output yet.* when empty), actions **Copy output**
   and **Close** (last). `client/src/ui/mod.rs` `location_menu_items` (line 866): **Setup output**
   above **Delete** on a worktree and appended on the Default row, with an existing terminal-like
   icon, when `output_offered`. T052 passes
-- [ ] T054 [US2] `client/src/ui/confirm_delete.rs`: when T051's `delete_warns_setup` is true for
+- [x] T054 [US2] `client/src/ui/confirm_delete.rs`: when T051's `delete_warns_setup` is true for
   the worktree's summary, the line *Setup is running here. It will be stopped first.* (U6)
-- [ ] T055 [P] [US2] `guide/worktrees-and-sessions.md`: **Setup output** (what it shows, the 10,000
+- [x] T055 [P] [US2] `guide/worktrees-and-sessions.md`: **Setup output** (what it shows, the 10,000
   line limit, follow, copy, that it survives a reconnect) and the delete line
 
 ---

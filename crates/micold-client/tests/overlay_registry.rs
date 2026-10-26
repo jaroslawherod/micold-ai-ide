@@ -213,6 +213,38 @@ fn dialogs() -> Vec<Dialog> {
             cancel: Message::Runs(micold_client::features::runs::Msg::CleanupDismissed),
             open: |state| state.runs.cleanup = Some(a_cleanup_offer(Some(vec![1]))),
         },
+        // The setup output view (feature 1289, contract U4).
+        Dialog {
+            id: "setup_output",
+            cancel: Message::Setup(micold_client::features::setup::Msg::ViewClosed),
+            open: |state| {
+                use micold_client::features::setup::{update, Msg, Names};
+                use micold_core::setup::{RunId, SetupCommand, SetupRun, SetupRunSummary};
+                let key = (
+                    micold_core::daemons::DaemonId(1),
+                    std::path::PathBuf::from("/p"),
+                    micold_core::session::SessionLocation::Default,
+                );
+                let run = SetupRun::start(RunId(1), SetupCommand::parse("true").unwrap(), 0);
+                update(
+                    &mut state.setup,
+                    Msg::Changed {
+                        daemon: key.0,
+                        project: key.1.clone(),
+                        location: key.2.clone(),
+                        run: Some(SetupRunSummary {
+                            run,
+                            output_lines: 0,
+                        }),
+                        names: Names {
+                            project: "p".into(),
+                            location: "Default".into(),
+                        },
+                    },
+                );
+                update(&mut state.setup, Msg::ViewOpened(key));
+            },
+        },
     ]);
     all
 }
@@ -311,17 +343,17 @@ fn every_dialog_is_in_the_list() {
     //
     // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
     // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
-    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942). Twenty-three with the switch of kind's confirmation (#943). Twenty-four with the Review tab's shortcut sheet (#1274).
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942). Twenty-three with the switch of kind's confirmation (#943). Twenty-four with the Review tab's shortcut sheet (#1274). Twenty-five with the setup output view (feature 1289).
     assert_eq!(
         dialogs().len(),
-        24,
-        "the dialog list has drifted. Add the new dialog here, or the twenty-four states this file \
-         is meant to cover are no longer twenty-four"
+        25,
+        "the dialog list has drifted. Add the new dialog here, or the twenty-five states this file \
+         is meant to cover are no longer twenty-five"
     );
     assert_eq!(
         every_state().len(),
-        50,
-        "twenty-four dialogs (the Bypass confirmations, #942, the switch confirmation, #943, and the shortcut sheet, #1274) plus nothing open, each with the more menu open and closed"
+        52,
+        "twenty-five dialogs (the Bypass confirmations, #942, the switch confirmation, #943, the shortcut sheet, #1274, and the setup output, 1289) plus nothing open, each with the more menu open and closed"
     );
 
     let registered_dialogs = registry::probes()

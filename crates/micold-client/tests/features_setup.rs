@@ -336,3 +336,249 @@ fn a_changed_command_goes_to_each_daemon_that_holds_the_project_with_its_catalog
         "no daemon connected"
     );
 }
+
+// ---- M6: the setup output view (test A16 view; FR-016, FR-018, FR-021, FR-024; U4, U6) ----
+
+use micold_client::features::setup::{
+    delete_warns_setup, output_offered, rewatch, sync_watch, Key, Request, ROW_HEIGHT,
+};
+use micold_client::features::structured_transcript::Follow;
+
+fn key(location: SessionLocation) -> Key {
+    (HOST, PathBuf::from("/src/app"), location)
+}
+
+fn output(run: u64, first_line: u64, lines: &[&str]) -> Msg {
+    Msg::Output {
+        daemon: HOST,
+        project: PathBuf::from("/src/app"),
+        location: wt("feat-a"),
+        run: RunId(run),
+        first_line,
+        lines: lines.iter().map(|l| (*l).to_owned()).collect(),
+    }
+}
+
+fn opened() -> State {
+    let mut state = State::default();
+    update(&mut state, Msg::ViewOpened(key(wt("feat-a"))));
+    state
+}
+
+fn held(state: &State) -> (u64, Vec<String>) {
+    let view = state.view.as_ref().expect("the view is open");
+    (view.first_line, view.lines.clone())
+}
+
+#[test]
+fn opening_the_view_watches_from_line_0_and_closing_it_unwatches() {
+    let mut state = opened();
+    assert_eq!(
+        sync_watch(&mut state),
+        vec![Request::Watch {
+            key: key(wt("feat-a")),
+            from_line: 0
+        }]
+    );
+    assert_eq!(sync_watch(&mut state), vec![], "a watch is sent once");
+    update(&mut state, Msg::ViewClosed);
+    assert_eq!(state.view, None);
+    assert_eq!(
+        sync_watch(&mut state),
+        vec![Request::Unwatch {
+            key: key(wt("feat-a"))
+        }]
+    );
+    assert_eq!(sync_watch(&mut state), vec![]);
+}
+
+#[test]
+fn opening_another_location_unwatches_the_first_then_watches_the_second() {
+    let mut state = opened();
+    sync_watch(&mut state);
+    update(&mut state, Msg::ViewOpened(key(SessionLocation::Default)));
+    assert_eq!(
+        sync_watch(&mut state),
+        vec![
+            Request::Unwatch {
+                key: key(wt("feat-a"))
+            },
+            Request::Watch {
+                key: key(SessionLocation::Default),
+                from_line: 0
+            },
+        ]
+    );
+}
+
+#[test]
+fn contiguous_batches_append_and_an_overlap_is_not_held_twice() {
+    let mut state = opened();
+    update(&mut state, output(1, 0, &["a", "b"]));
+    update(&mut state, output(1, 2, &["c"]));
+    update(&mut state, output(1, 1, &["b", "c", "d"]));
+    assert_eq!(
+        held(&state),
+        (0, vec!["a".into(), "b".into(), "c".into(), "d".into()])
+    );
+    assert_eq!(state.view.as_ref().unwrap().dropped(), 0);
+}
+
+#[test]
+fn a_gap_in_first_line_shows_as_dropped_lines() {
+    let mut state = opened();
+    update(&mut state, output(1, 0, &["a", "b"]));
+    update(&mut state, output(1, 7, &["h"]));
+    assert_eq!(held(&state), (7, vec!["h".into()]));
+    assert_eq!(state.view.as_ref().unwrap().dropped(), 7);
+    // A backlog that starts past line 0: the daemon kept only its last lines (FR-021).
+    let mut state = opened();
+    update(&mut state, output(1, 12, &["m"]));
+    assert_eq!(state.view.as_ref().unwrap().dropped(), 12);
+}
+
+#[test]
+fn the_view_keeps_at_most_the_last_10000_lines() {
+    let mut state = opened();
+    let lines: Vec<String> = (0..10_005).map(|i| i.to_string()).collect();
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    update(&mut state, output(1, 0, &lines));
+    let view = state.view.as_ref().unwrap();
+    assert_eq!(view.lines.len(), 10_000);
+    assert_eq!(view.dropped(), 5);
+    assert_eq!(view.lines[0], "5");
+}
+
+#[test]
+fn a_batch_for_a_new_run_resets_the_lines() {
+    let mut state = opened();
+    update(&mut state, output(1, 0, &["a", "b", "c"]));
+    update(&mut state, output(2, 0, &["x"]));
+    assert_eq!(held(&state), (0, vec!["x".into()]));
+    assert_eq!(state.view.as_ref().unwrap().run, Some(RunId(2)));
+}
+
+#[test]
+fn output_for_another_location_or_with_no_view_open_is_ignored() {
+    let mut state = State::default();
+    assert_eq!(update(&mut state, output(1, 0, &["a"])), Effect::None);
+    let mut state = State::default();
+    update(&mut state, Msg::ViewOpened(key(SessionLocation::Default)));
+    update(&mut state, output(1, 0, &["a"]));
+    assert_eq!(held(&state), (0, vec![]));
+}
+
+#[test]
+fn following_scrolls_to_each_new_batch_and_scrolling_up_stops_it_until_the_bottom() {
+    let mut state = opened();
+    assert_eq!(state.view.as_ref().unwrap().follow, Follow::Following);
+    assert_eq!(
+        update(&mut state, output(1, 0, &["a"; 40])),
+        Effect::ScrollToEnd
+    );
+    let content = (40.0 * ROW_HEIGHT) as u32;
+    // Scrolled up: the follow stops and new lines move nothing.
+    update(
+        &mut state,
+        Msg::Scrolled {
+            offset: 0,
+            viewport: 200,
+        },
+    );
+    assert_eq!(
+        state.view.as_ref().unwrap().follow,
+        Follow::Detached { offset: 0 }
+    );
+    assert_eq!(update(&mut state, output(1, 40, &["b"])), Effect::None);
+    // Back at the bottom: it resumes.
+    let content = content + ROW_HEIGHT as u32;
+    update(
+        &mut state,
+        Msg::Scrolled {
+            offset: content - 200,
+            viewport: 200,
+        },
+    );
+    assert_eq!(state.view.as_ref().unwrap().follow, Follow::Following);
+    assert_eq!(
+        update(&mut state, output(1, 41, &["c"])),
+        Effect::ScrollToEnd
+    );
+}
+
+#[test]
+fn follow_toggled_stops_the_follow_and_starts_it_again_at_the_end() {
+    let mut state = opened();
+    assert_eq!(update(&mut state, Msg::FollowToggled), Effect::None);
+    assert!(matches!(
+        state.view.as_ref().unwrap().follow,
+        Follow::Detached { .. }
+    ));
+    assert_eq!(update(&mut state, Msg::FollowToggled), Effect::ScrollToEnd);
+    assert_eq!(state.view.as_ref().unwrap().follow, Follow::Following);
+}
+
+#[test]
+fn copy_yields_the_kept_lines_joined_with_newlines() {
+    let mut state = opened();
+    update(
+        &mut state,
+        output(1, 3, &["one", "two", "Exited with status 2."]),
+    );
+    assert_eq!(
+        update(&mut state, Msg::CopyRequested),
+        Effect::Copy("one\ntwo\nExited with status 2.".to_owned())
+    );
+    assert_eq!(
+        update(&mut State::default(), Msg::CopyRequested),
+        Effect::None
+    );
+}
+
+#[test]
+fn a_reconnect_with_the_view_open_watches_again_from_the_last_line_held() {
+    let mut state = opened();
+    sync_watch(&mut state);
+    update(&mut state, output(1, 0, &["a", "b", "c"]));
+    assert_eq!(
+        rewatch(&state, HOST),
+        Some(Request::Watch {
+            key: key(wt("feat-a")),
+            from_line: 3
+        })
+    );
+    assert_eq!(rewatch(&state, CONTAINER), None, "another daemon's view");
+    update(&mut state, Msg::ViewClosed);
+    assert_eq!(rewatch(&state, HOST), None);
+}
+
+#[test]
+fn the_record_going_away_closes_the_view() {
+    let mut state = opened();
+    update(&mut state, changed(wt("feat-a"), Some(running(1))));
+    update(&mut state, changed(wt("other"), None));
+    assert!(state.view.is_some());
+    update(&mut state, changed(wt("feat-a"), None));
+    assert_eq!(state.view, None);
+}
+
+#[test]
+fn output_is_offered_exactly_when_a_record_exists() {
+    assert!(!output_offered(None));
+    assert!(output_offered(Some(&running(1))));
+    assert!(output_offered(Some(&ended(1, failed(2)))));
+}
+
+#[test]
+fn the_delete_line_shows_exactly_while_setup_runs() {
+    assert!(delete_warns_setup(Some(&running(1))));
+    assert!(!delete_warns_setup(None));
+    for to in [
+        SetupState::Succeeded,
+        failed(1),
+        SetupState::Stopped,
+        SetupState::Interrupted,
+    ] {
+        assert!(!delete_warns_setup(Some(&ended(1, to.clone()))), "{to:?}");
+    }
+}

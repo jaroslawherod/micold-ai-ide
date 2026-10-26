@@ -259,7 +259,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-six with `confirm_bypass_start` and `confirm_bypass_mode` (#942).
     // Twenty-seven with `confirm_switch_kind`, a switch of kind's confirmation (#943).
     // Twenty-eight with `review_shortcut_sheet`, the Review tab's shortcut sheet (#1274).
-    const DIALOGS: usize = 28;
+    // Twenty-nine with `setup_output`, a location's setup output (feature 1289).
+    const DIALOGS: usize = 29;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

@@ -2301,8 +2301,26 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             let msg = crate::shell::setup::changed(app, daemon, project, location, run);
             follow_up = Task::batch([follow_up, crate::shell::setup::update(app, msg)]);
         }
-        // Other control messages (Pong) are consumed as their flows land; `SetupOutput` with the
-        // output view (feature 1289, M6).
+        // Feature 1289 (C2, U4): a batch of the watched location's output, for the open view.
+        DaemonMsg::SetupOutput {
+            project,
+            location,
+            run,
+            first_line,
+            lines,
+            dropped: _,
+        } => {
+            let msg = micold_client::features::setup::Msg::Output {
+                daemon,
+                project,
+                location,
+                run,
+                first_line,
+                lines,
+            };
+            follow_up = Task::batch([follow_up, crate::shell::setup::update(app, msg)]);
+        }
+        // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
     follow_up
@@ -2431,6 +2449,8 @@ pub fn on_connected(
     // Feature 1289 (C3): every project it already holds learns its setup command, or that it has
     // none.
     crate::shell::setup::on_connect(app, daemon);
+    // Feature 1289 (FR-018): an output view open on one of its locations resumes where it was.
+    crate::shell::setup::rewatch(app, daemon);
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).
     //

@@ -4,8 +4,10 @@
 //! module keeps the latest summary per `(daemon, project, location)`, decides when a failed run
 //! is worth the one error notification each client posts for it (FR-017, contract U5), words the
 //! row's tag (contract U2), and picks which daemons a project's setup command is sent to (contract
-//! C3). The shell routes the wire messages here and acts on what comes back; every decision is a
-//! pure function the tests call.
+//! C3). It also holds the one open setup output view (contract U4): the lines it was sent, whether
+//! it follows the tail, and which location the shell watches for it (FR-016, FR-018, FR-021). The
+//! shell routes the wire messages here and acts on what comes back; every decision is a pure
+//! function the tests call.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -14,7 +16,14 @@ use micold_core::daemons::DaemonId;
 use micold_core::local_time::{LocalTime, UtcOffset};
 use micold_core::session::SessionLocation;
 use micold_core::settings::SetupCommandChange;
-use micold_core::setup::{SetupCommand, SetupRunSummary, SetupState};
+use micold_core::setup::output::KEEP_LINES;
+use micold_core::setup::{RunId, SetupCommand, SetupRunSummary, SetupState};
+
+use crate::features::structured_transcript::Follow;
+
+/// The height of one line of the output view, in dp: the list is virtual, so every row is this
+/// tall, and the follow arithmetic measures the content by it.
+pub const ROW_HEIGHT: f32 = 20.0;
 
 /// Which location's run a summary is: the daemon that runs it, the project path in that daemon's
 /// catalog, and the worktree or the project folder.
@@ -28,6 +37,93 @@ pub struct State {
     /// connected client a run started, and replays its records on each attach, so a run first
     /// seen already failed ended before this client was there to hear it (M5 review A-F3).
     pub summaries: BTreeMap<Key, SetupRunSummary>,
+    /// The setup output view, while it is open (contract U4).
+    pub view: Option<OutputView>,
+    /// The location whose output the shell last asked a daemon to send ([`sync_watch`]).
+    pub watched: Option<Key>,
+}
+
+/// The open setup output view (contract U4): the kept lines of one location's latest run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputView {
+    /// The location shown.
+    pub key: Key,
+    /// The run the lines belong to; `None` until the first batch arrives.
+    pub run: Option<RunId>,
+    /// The index of `lines[0]` in the run's output: how many earlier lines this view does not hold.
+    pub first_line: u64,
+    /// The lines held, oldest first, at most [`KEEP_LINES`] (FR-021).
+    pub lines: Vec<String>,
+    /// Whether new lines keep the end in view.
+    pub follow: Follow,
+    /// The list's scroll offset, as last reported, in pixels from the top.
+    pub offset: u32,
+    /// The list's viewport height, as last reported; 0 before the first report.
+    pub viewport: u32,
+}
+
+impl OutputView {
+    fn new(key: Key) -> Self {
+        Self {
+            key,
+            run: None,
+            first_line: 0,
+            lines: Vec::new(),
+            follow: Follow::Following,
+            offset: 0,
+            viewport: 0,
+        }
+    }
+
+    /// How many of the run's earliest lines this view does not hold, which its first row says
+    /// (FR-021): the daemon no longer kept them, or the view let them go past [`KEEP_LINES`].
+    pub fn dropped(&self) -> u64 {
+        self.first_line
+    }
+
+    /// The index of the next line this view wants: where a watch resumes after a reconnect.
+    pub fn next_line(&self) -> u64 {
+        self.first_line + self.lines.len() as u64
+    }
+
+    /// The rows the list shows: the kept lines, under a first row that counts the dropped ones.
+    pub fn rows(&self) -> usize {
+        self.lines.len() + usize::from(self.dropped() > 0)
+    }
+
+    /// Take a batch of `run` whose first line has index `first_line` (contract C2).
+    fn take(&mut self, run: RunId, first_line: u64, lines: Vec<String>) {
+        let end = self.next_line();
+        if self.run != Some(run) || first_line > end {
+            // A new run starts over; a gap means the lines between were dropped.
+            self.run = Some(run);
+            self.first_line = first_line;
+            self.lines = lines;
+        } else {
+            // What overlaps the held lines (a watch resumed from earlier) is held already.
+            let skip = usize::try_from(end - first_line).unwrap_or(usize::MAX);
+            self.lines.extend(lines.into_iter().skip(skip));
+        }
+        let excess = self.lines.len().saturating_sub(KEEP_LINES);
+        if excess > 0 {
+            self.lines.drain(..excess);
+            self.first_line += excess as u64;
+        }
+    }
+
+    /// The list's content height, in pixels.
+    fn content(&self) -> u32 {
+        (self.rows() as f32 * ROW_HEIGHT) as u32
+    }
+}
+
+/// What the shell sends a daemon so the open view gets its output (contract C1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Request {
+    /// `SetupOutputWatch` of `key` from line `from_line`.
+    Watch { key: Key, from_line: u64 },
+    /// `SetupOutputUnwatch` of `key`.
+    Unwatch { key: Key },
 }
 
 /// The names a notification shows for a location, as the app shows them elsewhere.
@@ -52,6 +148,26 @@ pub enum Msg {
         /// What the notification calls the project and the location.
         names: Names,
     },
+    /// A `SetupOutput` batch from `daemon` (contract C2): `lines` of `run`, the first at index
+    /// `first_line`.
+    Output {
+        daemon: DaemonId,
+        project: PathBuf,
+        location: SessionLocation,
+        run: RunId,
+        first_line: u64,
+        lines: Vec<String>,
+    },
+    /// **Setup output** was chosen for a location: open its view (contract U3, U4).
+    ViewOpened(Key),
+    /// The view was closed.
+    ViewClosed,
+    /// Follow the tail, or stop following it.
+    FollowToggled,
+    /// The view's list scrolled to `offset`, `viewport` pixels of it visible.
+    Scrolled { offset: u32, viewport: u32 },
+    /// **Copy output**.
+    CopyRequested,
 }
 
 /// What the shell does after a message.
@@ -61,6 +177,10 @@ pub enum Effect {
     None,
     /// Post this error notification (contract U5).
     NotifyError(String),
+    /// Scroll the view's list to its end.
+    ScrollToEnd,
+    /// Put this text on the clipboard.
+    Copy(String),
 }
 
 /// Apply `msg` to `state`.
@@ -75,8 +195,11 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
         } => {
             let key = (daemon, project, location);
             let Some(summary) = run else {
-                // The record went away with its worktree.
+                // The record went away with its worktree, and with it what the view showed.
                 state.summaries.remove(&key);
+                if state.view.as_ref().is_some_and(|view| view.key == key) {
+                    state.view = None;
+                }
                 return Effect::None;
             };
             let id = summary.run.id();
@@ -89,7 +212,108 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 _ => Effect::None,
             }
         }
+        Msg::Output {
+            daemon,
+            project,
+            location,
+            run,
+            first_line,
+            lines,
+        } => {
+            let key = (daemon, project, location);
+            let Some(view) = state.view.as_mut().filter(|view| view.key == key) else {
+                return Effect::None;
+            };
+            view.take(run, first_line, lines);
+            following(view)
+        }
+        Msg::ViewOpened(key) => {
+            state.view = Some(OutputView::new(key));
+            Effect::None
+        }
+        Msg::ViewClosed => {
+            state.view = None;
+            Effect::None
+        }
+        Msg::FollowToggled => {
+            let Some(view) = state.view.as_mut() else {
+                return Effect::None;
+            };
+            view.follow = match view.follow {
+                Follow::Following => Follow::Detached {
+                    offset: view.offset,
+                },
+                Follow::Detached { .. } => Follow::Following,
+            };
+            following(view)
+        }
+        Msg::Scrolled { offset, viewport } => {
+            let Some(view) = state.view.as_mut() else {
+                return Effect::None;
+            };
+            view.offset = offset;
+            view.viewport = viewport;
+            let content = view.content();
+            (view.follow, _) = view.follow.scrolled(offset, viewport, content);
+            Effect::None
+        }
+        Msg::CopyRequested => state
+            .view
+            .as_ref()
+            .map_or(Effect::None, |view| Effect::Copy(view.lines.join("\n"))),
     }
+}
+
+/// Keep the end in view when `view` follows it.
+fn following(view: &OutputView) -> Effect {
+    match view.follow {
+        Follow::Following => Effect::ScrollToEnd,
+        Follow::Detached { .. } => Effect::None,
+    }
+}
+
+/// What the shell sends so the daemons send the output the view shows, and no other (contract
+/// C1, U4): an unwatch for the location it watched, and a watch from line 0 for the one the view
+/// shows, when they differ. Marks the view's location watched. Run after every message, so a view
+/// closed by any route (Escape, the scrim, another dialog) stops its watch.
+pub fn sync_watch(state: &mut State) -> Vec<Request> {
+    let wanted = state.view.as_ref().map(|view| view.key.clone());
+    if wanted == state.watched {
+        return Vec::new();
+    }
+    let mut requests = Vec::new();
+    if let Some(key) = state.watched.take() {
+        requests.push(Request::Unwatch { key });
+    }
+    if let Some(key) = wanted {
+        requests.push(Request::Watch {
+            key: key.clone(),
+            from_line: 0,
+        });
+        state.watched = Some(key);
+    }
+    requests
+}
+
+/// The watch `daemon` is sent again when it reconnects (FR-018): the open view's location, from
+/// the line after the last one held, when the view shows a location on that daemon.
+pub fn rewatch(state: &State, daemon: DaemonId) -> Option<Request> {
+    let view = state.view.as_ref().filter(|view| view.key.0 == daemon)?;
+    Some(Request::Watch {
+        key: view.key.clone(),
+        from_line: view.next_line(),
+    })
+}
+
+/// Whether a location's menu offers **Setup output** (contract U3): while it has a run record.
+pub fn output_offered(summary: Option<&SetupRunSummary>) -> bool {
+    summary.is_some()
+}
+
+/// Whether the delete confirmation says setup will be stopped first (contract U6): while the
+/// worktree's run is running.
+pub fn delete_warns_setup(summary: Option<&SetupRunSummary>) -> bool {
+    summary.is_some_and(|summary| matches!(summary.run.state(), SetupState::Running))
 }
 
 impl State {
@@ -214,4 +438,68 @@ pub fn on_change(
                 .map(|path| (*daemon, path.clone(), change.command.clone()))
         })
         .collect()
+}
+
+/// Which run record `location` of the active project has, by the daemon its binding names: the
+/// key the row's tag, its menu and the delete confirmation read (contract U2, U3, U6). `None` with
+/// no project open or no daemon bound.
+pub fn key_of(state: &crate::app::State, location: &SessionLocation) -> Option<Key> {
+    let project = state.workspace.active.clone()?;
+    let binding_key = match location {
+        SessionLocation::Worktree(dir) => dir.as_str(),
+        SessionLocation::Default => "",
+    };
+    let micold_core::daemons::Binding::Bound(daemon) = state.daemon_binding(binding_key) else {
+        return None;
+    };
+    Some((daemon, project, location.clone()))
+}
+
+/// The run record of `location` in the active project, if it has one.
+pub fn summary_of<'a>(
+    state: &'a crate::app::State,
+    location: &SessionLocation,
+) -> Option<&'a SetupRunSummary> {
+    let (daemon, project, location) = key_of(state, location)?;
+    state.setup.summary(daemon, &project, &location)
+}
+
+/// What a notification or the output view calls `project` and `location`: the names the sidebar
+/// shows.
+pub fn names(state: &crate::app::State, project: &Path, location: &SessionLocation) -> Names {
+    let workspace = &state.workspace;
+    let project_name = workspace
+        .projects
+        .iter()
+        .find(|p| p.path == project)
+        .map(|p| p.display_name.clone())
+        .unwrap_or_else(|| {
+            project
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| project.display().to_string())
+        });
+    let location = match location {
+        SessionLocation::Default => "Default".to_owned(),
+        SessionLocation::Worktree(dir) if workspace.active.as_deref() == Some(project) => {
+            state.worktree_display_name(dir)
+        }
+        SessionLocation::Worktree(dir) => micold_core::naming::display_name(dir),
+    };
+    Names {
+        project: project_name,
+        location,
+    }
+}
+
+/// The setup output view, as a floating surface (contract U4): open while the view is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetupOutputDialog;
+
+crate::floating_surface!(SetupOutputDialog, id: crate::overlay::SurfaceId::new("setup_output"), layer: Dialog, cancelled_by: crate::app::Message::Setup(Msg::ViewClosed));
+
+impl crate::overlay::registry::Registered for SetupOutputDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.setup.view.as_ref().map(|_| SetupOutputDialog)
+    }
 }

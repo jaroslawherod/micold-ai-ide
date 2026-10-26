@@ -19,13 +19,16 @@ use micold_core::tokens::{self};
 /// [`Modal`](crate::ui::material::Modal) transition. `branch` is the worktree's associated git
 /// branch, when it has one (feature 013) — `None` skips the branch-deletion checkbox entirely.
 /// `keep_branch` is the user's current choice (feature 013, FR-011): the checkbox reads "delete,"
-/// so it is drawn checked when `!keep_branch`.
+/// so it is drawn checked when `!keep_branch`. `setup_running` adds the line that says the
+/// worktree's running setup is stopped first (feature 1289, contract U6; FR-024).
+#[allow(clippy::too_many_arguments)]
 pub fn modal<'a>(
     dir_name: &str,
     friendly: &str,
     branch: Option<&str>,
     outside: Option<&std::path::Path>,
     keep_branch: bool,
+    setup_running: bool,
     scheme: ColorScheme,
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
@@ -50,6 +53,9 @@ pub fn modal<'a>(
         Text::new(format!("Delete “{friendly}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
     ];
+    if setup_running {
+        fields = fields.push(Text::new(SETUP_RUNNING_LINE, TypeRole::Body, r));
+    }
 
     // The branch-deletion choice (feature 013, FR-011): only offered when this worktree
     // actually has an associated branch to act on (edge case — an orphan/invalid worktree may
@@ -76,6 +82,10 @@ pub fn modal<'a>(
     )
 }
 
+/// The line a worktree whose setup is running adds (contract U6): the daemon stops the run, then
+/// deletes.
+pub const SETUP_RUNNING_LINE: &str = "Setup is running here. It will be stopped first.";
+
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but
 /// the live state it renders is absent, so nothing is drawn rather than an empty dialog.
 ///
@@ -92,12 +102,17 @@ pub fn dialog<'a>(
         let worktree = state.worktree.worktrees.iter().find(|w| &w.dir_name == dir);
         let branch = worktree.and_then(|w| w.branch.as_deref());
         let outside = worktree.filter(|w| w.included).map(|w| w.path.as_path());
+        let summary = crate::features::setup::summary_of(
+            state,
+            &micold_core::session::SessionLocation::Worktree(dir.clone()),
+        );
         modal(
             dir,
             &state.worktree_display_name(dir),
             branch,
             outside,
             state.worktree.delete_keep_branch,
+            crate::features::setup::delete_warns_setup(summary),
             scheme,
             state.window.focused_field,
         )

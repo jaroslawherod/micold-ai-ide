@@ -337,3 +337,29 @@ output is copied from the session's logs.
   updated). `setup_chip` moved above `build_default_item`'s doc (A-F5); guide says seven sections
   (B-F1); placeholder *e.g. mise trust && mise install* (V-F2) -> features_setup 10, the three new
   bin tests pass; full gate below
+
+## M6 cycle 1: the setup output view and the delete line (T050–T055)
+
+- red: A16 (view) — 14 tests appended to `features_setup.rs` (watch on open from 0, unwatch on
+  close and on a switch of location, contiguous and overlapping batches, a gap and a late backlog
+  as dropped lines, the 10,000-line cap, a new run resets, other locations ignored, follow stops on
+  scrolling up and resumes at the bottom, `FollowToggled`, copy joins with `\n`, reconnect
+  re-watches from the next line, a deleted record closes the view, `output_offered`,
+  `delete_warns_setup` for each state) failed to compile at 15d62e891: `unresolved imports
+  delete_warns_setup, output_offered, rewatch, sync_watch, Request, ROW_HEIGHT`.
+- green: `features::setup` gains `OutputView` (`run`, `first_line`, `lines`, `follow` reusing
+  `structured_transcript::Follow`, `offset`, `viewport`; `dropped()` is `first_line`), `view`,
+  `watched`, `Msg::{Output, ViewOpened, ViewClosed, FollowToggled, Scrolled, CopyRequested}`,
+  `Effect::{ScrollToEnd, Copy}`, `sync_watch`/`rewatch` (pure: the shell runs `sync_watch` after
+  every message, so Escape and the scrim also unwatch), `output_offered`, `delete_warns_setup`,
+  `key_of`/`summary_of`/`names` (moved from `shell/setup.rs`; the sidebar tag reads `summary_of`).
+  `Message::Setup`; `shell/setup.rs` performs the scroll (`snap_to_end`), the copy (clipboard
+  `Outcome`) and the watch sends; `daemon_sync` routes `SetupOutput` and re-watches on connect ->
+  features_setup 24 passed.
+- G2 (`setup_output_geometry.rs`, 5 tests) was written with the view (T052 with T053), so it was
+  not run red on its own; first run failed one real assertion (the title uses the row's display
+  name *A*, not the folder `feat-a`), fixed in the test. Then 5 passed: at 10,000 lines fewer than
+  100 rows are painted, **Copy output** and **Close** inside 640×480 with Close last; header,
+  dropped row, *No output yet.*, the menu entry above Delete / last on Default, and the U6 line
+  exactly while running. overlay_registry 26 and popover_displacement 4 passed with the new
+  `setup_output` surface counted (29 dialogs; 25 in the registry list).

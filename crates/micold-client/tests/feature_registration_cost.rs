@@ -86,6 +86,14 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "setup",
+        "structured_transcript",
+        "Follow — the setup output view follows its tail by the transcript's own rule (at the end \
+         within END_SLACK, detached at the offset the user left), so the two views cannot follow \
+         differently; the type and its pure `scrolled` are read, no transcript state is touched \
+         (feature 1289, contract U4)",
+    ),
+    (
         "quick_switch",
         "changes",
         "jump_entries — the jump-to field lists the current entry's Review tab files and comments \
