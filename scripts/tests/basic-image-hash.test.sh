@@ -207,9 +207,19 @@ mise_problems() {
     echo "Containerfile does not download mise from github.com/jdx/mise/releases"
     return
   fi
-  unchecked="$(printf '%s\n' "$downloads" | grep -Ev 'sha256sum[[:space:]]+-c.*mise\.sha256' || true)"
+  # The check comes after the download in the same RUN, and nothing (`|| true`, `|| :`) excuses it.
+  unchecked="$(printf '%s\n' "$downloads" | grep -Ev 'jdx/mise/releases/download.*;[[:space:]]*sha256sum[[:space:]]+-c[^;]*mise\.sha256' || true)"
   if [ -n "$unchecked" ]; then
-    echo "a RUN downloads mise without 'sha256sum -c' of mise.sha256: $unchecked"
+    echo "a RUN downloads mise without 'sha256sum -c' of mise.sha256 after it: $unchecked"
+    return
+  fi
+  excused="$(printf '%s\n' "$downloads" | grep -E 'sha256sum[[:space:]]+-c[^;]*\|\|' || true)"
+  if [ -n "$excused" ]; then
+    echo "a RUN lets the mise checksum check fail ('||' after 'sha256sum -c'): $excused"
+    return
+  fi
+  if ! printf '%s\n' "$downloads" | grep -Eq 'install[[:space:]][^;]*/usr/local/bin/mise'; then
+    echo "the RUN that downloads mise does not install it at /usr/local/bin/mise"
     return
   fi
   if [ ! -f "$dir/mise.sha256" ]; then
@@ -265,6 +275,20 @@ sed -i.bak -e '/sha256sum/s/sha256sum[[:space:]]*-c/true/' "$bad/Containerfile" 
 mise_refuses "a download without the checksum check" "$bad"
 
 bad="$(copy_basic)"
+sed -i.bak -e 's/\(sha256sum[[:space:]]*-c[^;]*\);/\1 || true;/' "$bad/Containerfile" && rm -f "$bad/Containerfile.bak"
+mise_refuses "a checksum check excused by '|| true'" "$bad"
+
+bad="$(copy_basic)"
+# The checksum line moved before the download: the check runs on a file not yet there.
+awk '/sha256sum[[:space:]]*-c/ { next } /curl -fsSLo/ { print "    sha256sum -c --ignore-missing /tmp/mise.sha256; \\" } { print }' \
+  "$bad/Containerfile" >"$bad/c" && mv "$bad/c" "$bad/Containerfile"
+mise_refuses "a checksum check before the download" "$bad"
+
+bad="$(copy_basic)"
+sed -i.bak -e 's#/usr/local/bin/mise#/opt/mise#' "$bad/Containerfile" && rm -f "$bad/Containerfile.bak"
+mise_refuses "mise installed somewhere other than /usr/local/bin/mise" "$bad"
+
+bad="$(copy_basic)"
 cat "$bad/mise.sha256" <(head -n1 "$bad/mise.sha256") >"$bad/m" && mv "$bad/m" "$bad/mise.sha256"
 mise_refuses "a mise.sha256 with three lines" "$bad"
 
@@ -290,13 +314,16 @@ mise_refuses "a README that does not name the pinned version" "$bad"
 cases=$((cases + 1))
 instructions="$(grep -v '^[[:space:]]*#' "$BASIC/Containerfile")"
 missing=""
-for pkg in gh curl wget jq ripgrep make python3; do
-  printf '%s\n' "$instructions" | grep -Eq "^[[:space:]]+$pkg([[:space:]]|\\|$)" || missing="$missing $pkg"
+# 1439 adds the C toolchain, pkg-config and what installers unpack with (FR-003, FR-017).
+packages="gh curl wget jq ripgrep make python3 gcc g++ libc6-dev pkgconf xz-utils unzip"
+for pkg in $packages; do
+  re="$(printf '%s' "$pkg" | sed 's/[+.]/\\&/g')"
+  printf '%s\n' "$instructions" | grep -Eq "^[[:space:]]+$re([[:space:]]|\\|$)" || missing="$missing $pkg"
 done
 if [ -n "$missing" ]; then
-  fail "Containerfile installs gh, curl, wget, jq, ripgrep, make and python3" "missing:$missing"
+  fail "Containerfile installs $packages" "missing:$missing"
 else
-  pass "Containerfile installs gh, curl, wget, jq, ripgrep, make and python3"
+  pass "Containerfile installs $packages"
 fi
 
 # --- no image sets XDG_DATA_HOME (1286) ---------------------------------------------------------

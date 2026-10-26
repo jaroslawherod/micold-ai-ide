@@ -23,7 +23,9 @@ For building (#1439), before any setup has run:
 - `python3`, and `xz` and `unzip` for what installers download.
 
 The entrypoint also creates `~/.local/bin` and mise's shims folder in the home before sshd starts,
-the two folders every session's `PATH` holds (#1289), leaving anything already in them alone.
+the two folders every session's `PATH` holds (#1289), leaving anything already in them alone. It
+picks the shims folder from the container's environment: a `MISE_DATA_DIR` or `XDG_DATA_HOME` set
+only by a project's environment-include puts another folder on `PATH`, which mise creates itself.
 
 Must not carry: `micold-daemon`, any AI CLI, or any key, token or credential. The SSH host key and
 authorized key are mounted read-only at `/run/micold/ssh` at run time, and AI CLI sign-ins reach the

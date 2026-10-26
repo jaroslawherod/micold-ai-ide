@@ -55,14 +55,16 @@ RUN apt-get update \
 # same step, so a download that does not match the pin, or no download, fails the build (#1439,
 # FR-001, FR-002). The version is read from `mise.sha256`, not a build `ARG`, so nothing at build
 # time can swap the binary without changing this directory's content hash. How to update the pin:
-# README.md, "Update mise".
+# README.md, "Update mise". `TARGETARCH` is empty under the legacy (non-BuildKit) builder, so the
+# architecture falls back to the build container's own `dpkg --print-architecture`.
 ARG TARGETARCH
 COPY mise.sha256 /tmp/mise.sha256
 RUN set -eu; \
-    case "${TARGETARCH:-}" in \
+    arch_name="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch_name" in \
       amd64) arch=x64 ;; \
       arm64) arch=arm64 ;; \
-      *) echo "mise: no release for TARGETARCH '${TARGETARCH:-}'" >&2; exit 1 ;; \
+      *) echo "mise: no release for architecture '$arch_name'" >&2; exit 1 ;; \
     esac; \
     version="$(sed -n 's/^[0-9a-f]\{64\}  mise-v\(.*\)-linux-x64$/\1/p' /tmp/mise.sha256)"; \
     test -n "$version"; \

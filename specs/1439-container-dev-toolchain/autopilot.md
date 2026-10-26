@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M1 verify (implementation done; reviews A and B due)
-- **Next step**: orchestrator dispatches review A (code-review high) and review B (conformance, sonnet) on M1's snapshot (Review rounds); then fix findings, full gate, PR
+- **Phase**: M1 PR (reviews done, fixes applied, pushed; PR opened by the orchestrator)
+- **Next step**: orchestrator opens the M1 PR from the scratchpad's `pr-title.txt` / `pr-body.md`, waits on CI (the `sandbox-runtime` job closes review B F1), merges; then the M2 unit
 - **Gate**: full `scripts/gate.sh` (mise not installed here) exit 0 at 395662059 (first run: one flaky client UI test `card_grid::a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and in the rerun); real-runtime clippy (`--features sandbox-real-runtime --tests`) clean
 
 ## Pull requests
@@ -62,8 +62,8 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | Review plan (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CLEAN; 3 MINOR, all fixed: F1 A10 + FR-014 row add `go install` (mise Go, local module) and `pip install --user` (mise Python); F2 FR-005 row adds D8, A10 (session half); F3 contract I4 + spec edge case 'An AI CLI updates itself through npm' accepted as harmless (offered bins first on PATH, `only_offered`, state.rs:1200) + plan map row |
 | Review tasks (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CHANGES: 2 MAJOR, 2 MINOR — all fixed. F1 (verified: start_tests.rs:388 asserts deletes = pod only, created.len()==1): T036 now cites the existing test as A9 evidence, no new test; plan D9, quickstart A9, research R12, plan file list, M5 Verify follow. F2: T037, A10, plan FR-014 row add `mise use -g go@<pin>` + `go install` of a test-written local module and `mise use -g python@<pin>` + `pip install --user`; M5 Deliverable and Phase 10 Goal name pip. F3: T040 + plan D6 M5 paragraph say image-linked tools may need reinstalling after an image update; edge case in M5 Satisfies. F4: M5 Satisfies adds FR-005 (session half) |
 | Review tasks (amendment D8) | 2 | a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057 | CLEAN, no findings |
-| Review A M1 (code-review high) | 1 | 1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58 | pending (orchestrator dispatches) |
-| Review B M1 (conformance, sonnet) | 1 | 1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58 | pending (orchestrator dispatches) |
+| Review A M1 (code-review high) | 1 | 1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58 | CLEAN; 3 MINOR. F1 fixed: mise step uses `${TARGETARCH:-$(dpkg --print-architecture)}` (legacy builder leaves TARGETARCH empty). F2 documented, not coded (see Declined): entrypoint + README say the shims folder comes from the container's env, so an env-include `MISE_DATA_DIR`/`XDG_DATA_HOME` names another folder (still on PATH; mise creates it). F3 fixed: package guard adds gcc g++ libc6-dev pkgconf xz-utils unzip (`+` escaped); mise guard requires `sha256sum -c` after the download in the RUN, no `\|\|` after it, install at `/usr/local/bin/mise`; 3 new refusal cases. Hash → `695339aa04f97c3e` |
+| Review B M1 (conformance, sonnet) | 1 | 1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58 | CHANGES; 1 MAJOR. F1: Verify `mise run image && mise run test-sandbox` not observed on a built image (no apt egress here). Satisfied by CI (**pending**): `.gitattributes:185` marks `packaging/basic/**` `micold-daemon-runtime`, so ci.yml's `sandbox-runtime` job ("sandbox against a real runtime (linux)") runs on the PR; it `docker build`s `micold-basic:dev` from the tree (ci.yml:617) and runs `cargo test -p micold-core --features sandbox-real-runtime sandbox_real_` (`sandbox_real_basic_image_*`) and `cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_` (`sandbox_real_toolchain_path_*`). Record the job's result here when it is green |
 
 speckit-analyze (run inline on spec/plan/tasks before tasks review round 2; the skill is not invocable through the Skill tool in this cloud session; no analyze hooks in `.specify/extensions.yml`): 0 CRITICAL; 1 HIGH — C1 coverage: FR-009, SC-001, SC-002 and US2 AS1–AS4 mapped only to Phase 9 tasks outside any milestone (same as review F1) — fixed by moving T032–T033 into M4. MEDIUM: C2 three edge cases with no test/quickstart row (= F4, fixed); I1 checklist item unticked though no markers remain (= F3, fixed). LOW: none acted on. Coverage after fixes: FR-001–FR-013 and SC-001–SC-005 each have ≥1 task in a milestone (SC-004 via T015/T019); every task maps to a story or requirement; constitution I (tests first in each milestone), VI (two arches, daemon code on three CI platforms) and VII (user guide in M1 T009/T014, M2 T018, M3 T025, M4 T030) hold.
 
@@ -73,6 +73,7 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F2 (code half): daemon `create_dir_all`s the two folders where `with_sandbox_path` computes PATH | Documented instead. `with_sandbox_path` (state.rs, #1289's code) runs per spawn and is otherwise filesystem-free; the desync needs an env-include setting `MISE_DATA_DIR`/`XDG_DATA_HOME`, and the named folder is on PATH anyway (toolchain_path is pure by design, FR-003) and mise creates it on first install. A daemon-side create would widen M1 into #1289's module with its own tests |
 
 ## M1 notes
 
@@ -89,24 +90,17 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
   159,113,415 B. Expected growth ≈ 61 MB (mise, gzip of the x64 binary measured 59.6 MB) + ~75 MB
   toolchain (R6) ≈ 136 MB. Measure from the image basic-image.yml publishes on merge (same manifest
   query) before the pin PR (T042), and write it into `packaging/basic/README.md` then.
-- `BASIC_IMAGE_CONTENT_HASH` → `4ced569b91cd3da5`; `BASIC_IMAGE` left on the published
+- `BASIC_IMAGE_CONTENT_HASH` → `695339aa04f97c3e` (was `4ced569b91cd3da5` before review fixes); `BASIC_IMAGE` left on the published
   `113535f6f5551276@sha256:61d27fed…` (pin is T042). Note `kube::settings::pod_image` uses the
   content-hash tag, so Kubernetes defaults reach the new tag once basic-image.yml publishes it.
 
 ## Handover
 
-M1 T001–T014 done and committed (395662059); full gate exit 0 there. T015 open only for B5's
-measured size (see M1 notes); B4 recorded.
+M1 T001–T014 done; reviews A and B recorded and fixed (Review rounds); committed and pushed.
+T015 open only for B5's measured size (see M1 notes); B4 recorded.
 
-- **Next**: reviews A (code-review high, `origin/main...HEAD`) and B (conformance rubric, sonnet,
-  `brief.py milestone specs/1439-container-dev-toolchain M1`) on snapshot
-  `1305fa9b8fc3b8db867f484855579a767fac51b4:395662059d4303051b4bd3751ce3147b4acb0d58`; fix
-  findings; full gate; push `git push -u origin claude/project-thread-xudko5 --force-with-lease`;
-  PR title/body drafted in the M1 unit's scratchpad (`pr-title.txt`, `pr-body.md`; REVIEW_A,
-  REVIEW_B, GATE_SHA placeholders) — the title is "#1439: Container sessions cannot build the
-  project: basic image has no mise / compiler toolchain / python3 and no way to install them",
-  body ends `Refs #1439`.
-- **Open findings**: none yet. Branch not pushed.
+- **Next**: orchestrator opens the PR (title/body: `/tmp/claude-0/-home-user-micold-ai-ide/1cae4e28-bf2c-59fc-853a-e0ae2ff28e49/scratchpad/pr-title.txt`, `pr-body.md`; title changed to the milestone form `feat(1439): … (#1439)` per tasks/pr.md), records the PR number here, waits on CI. The `sandbox-runtime` job's result closes review B F1: write it into that Review rounds row. Then merge; then M2.
+- **Open findings**: review B F1 pending on CI (above). No others.
 
 ## Open escalation
 
