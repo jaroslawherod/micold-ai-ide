@@ -4261,6 +4261,7 @@ fn request_head(view: &mut OpenView, next_seq: &mut u64, force_large: bool) -> E
 fn reset_diff_pane(view: &mut OpenView) {
     close_new(view);
     view.current_hunk = None;
+    view.pending_edge = None;
     view.browse = None;
     view.stack.clear();
     view.diff_offset = 0;
