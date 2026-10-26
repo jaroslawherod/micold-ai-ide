@@ -1479,8 +1479,8 @@ fn review_key(event: iced::keyboard::Event) -> Option<Message> {
     else {
         return None;
     };
-    let input = crate::ui::composer::key_input(&key, &physical_key, modifiers, text.as_deref())?;
-    let press = crate::keymap::review_press(&input, repeat);
+    let press =
+        crate::ui::composer::review_press(&key, &physical_key, modifiers, text.as_deref(), repeat)?;
     Some(Message::Changes(crate::features::changes::Msg::KeyPressed(
         press,
     )))
