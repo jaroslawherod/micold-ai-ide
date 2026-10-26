@@ -20,7 +20,9 @@
 //! write never undoes a newer one.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -903,7 +905,7 @@ fn spawn_run(
 
 /// [`spawn_run`] with the blocking part, `shell`, given: on a sandbox daemon it runs only while
 /// this run holds the setup turn (#1439, contract setup-turn S2), which is let go once the run's
-/// end is written, however it ended.
+/// end is written, however it ended, or once the run is forgotten.
 fn spawn_run_with(
     state: &Arc<DaemonState>,
     key: Key,
@@ -913,9 +915,14 @@ fn spawn_run_with(
     shell: impl FnOnce() -> Ended + Send + 'static,
 ) {
     let state = Arc::clone(state);
+    // Here, not in the task: runs join the turn's queue in the order they asked (review A-F3).
+    let queued = join_turn(&state, &key, id);
     tokio::spawn(async move {
-        let (ended, turn) = match take_turn(&state, &key, id, &mut stop).await {
-            Turn::Go(turn) => (run_shell(&state, &key, id, shell).await, turn),
+        let (ended, turn) = match take_turn(&state, &key, queued, &mut stop).await {
+            Turn::Go(mut turn) => {
+                let ended = run_shell(&state, &key, id, shell, &mut stop, &mut turn).await;
+                (ended, turn)
+            }
             // Recorded `Stopped`, or dropped when the run was interrupted or forgotten (S3).
             Turn::Stopped => (
                 Ended::NotStarted("stopped while waiting for another setup".into()),
@@ -938,36 +945,73 @@ fn spawn_run_with(
     });
 }
 
+/// The daemon's setup turn, owned.
+type TurnGuard = tokio::sync::OwnedMutexGuard<()>;
+
+/// A wait for the setup turn that has its place in the queue.
+type TurnLock = Pin<Box<dyn Future<Output = TurnGuard> + Send>>;
+
+/// Where a run stands with the daemon's setup turn once it has asked for it.
+enum Queued {
+    /// The daemon has no turn (S1): host and remote daemons run setups side by side.
+    NoTurn,
+    /// The turn was free and is this run's.
+    Held(TurnGuard),
+    /// In the turn's queue behind another setup, its place kept by the pending lock; the waiting
+    /// line is in the run's output, and in its record to write when there is one.
+    Waiting(TurnLock, Option<Persist>),
+}
+
+/// Ask for the daemon's setup turn for run `id`, when it has one (S1). The first poll of the lock
+/// takes the run's place in the fair queue, so the order runs ask in is the order they run in.
+/// When another setup holds the turn, record [`WAITING_LINE`] (S2).
+fn join_turn(state: &DaemonState, key: &Key, id: RunId) -> Queued {
+    let Some(turn) = state.setup_turn() else {
+        return Queued::NoTurn;
+    };
+    let mut lock: TurnLock = Box::pin(turn.lock_owned());
+    // The task's own poll later replaces the waker; the place in the queue stays.
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    match lock.as_mut().poll(&mut cx) {
+        std::task::Poll::Ready(guard) => Queued::Held(guard),
+        std::task::Poll::Pending => {
+            let persist = state.setup(|runs, out| runs.waiting(key, id, out));
+            Queued::Waiting(lock, persist)
+        }
+    }
+}
+
 /// Whether a run may spawn its shell.
 enum Turn {
     /// Yes, holding the daemon's setup turn when it has one.
-    Go(Option<tokio::sync::OwnedMutexGuard<()>>),
+    Go(Option<TurnGuard>),
     /// No: it was ended while it waited, or before its turn came (S3).
     Stopped,
 }
 
-/// Take the daemon's setup turn for run `id`, when the daemon has one (S1). When another setup
-/// holds it, record [`WAITING_LINE`] and wait, in the order the runs asked, until the turn comes
-/// or a stop path ends the run.
+/// Wait, when `queued` is in the queue, until the turn comes or a stop path ends the run.
 async fn take_turn(
     state: &Arc<DaemonState>,
     key: &Key,
-    id: RunId,
+    queued: Queued,
     stop: &mut watch::Receiver<bool>,
 ) -> Turn {
-    let Some(turn) = state.setup_turn() else {
-        return Turn::Go(None);
-    };
-    let guard = match Arc::clone(&turn).try_lock_owned() {
-        Ok(guard) => guard,
-        Err(_) => {
-            // No await between the line and the wait: a run whose line is out is in the queue.
-            let persist = state.setup(|runs, out| runs.waiting(key, id, out));
-            if let (Some(persist), Some(store)) = (persist, state.setup_store()) {
-                store.write(key, &persist);
+    let guard = match queued {
+        Queued::NoTurn => return Turn::Go(None),
+        Queued::Held(guard) => guard,
+        Queued::Waiting(lock, persist) => {
+            if let Some(persist) = persist.filter(|_| state.setup_store().is_some()) {
+                let writer = Arc::clone(state);
+                let key = key.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Some(store) = writer.setup_store() {
+                        store.write(&key, &persist);
+                    }
+                })
+                .await;
             }
             tokio::select! {
-                guard = turn.lock_owned() => guard,
+                guard = lock => guard,
                 _ = stop.wait_for(|stopped| *stopped) => return Turn::Stopped,
             }
         }
@@ -980,12 +1024,16 @@ async fn take_turn(
 }
 
 /// Run `shell` on the blocking pool, sending the run's new lines to its watchers every
-/// [`BATCH_EVERY`] until it ends.
+/// [`BATCH_EVERY`] until it ends. A run forgotten meanwhile (its stop sender gone: a delete that
+/// stopped waiting for it, [`stop_and_wait`]) lets `turn` go at once: nothing can **Stop** it any
+/// more, so a tree that escaped the kill must not hold every later setup (review A-F2).
 async fn run_shell(
     state: &Arc<DaemonState>,
     key: &Key,
     id: RunId,
     shell: impl FnOnce() -> Ended + Send + 'static,
+    stop: &mut watch::Receiver<bool>,
+    turn: &mut Option<TurnGuard>,
 ) -> Ended {
     let mut run = tokio::task::spawn_blocking(shell);
     let mut tick = tokio::time::interval(BATCH_EVERY);
@@ -996,6 +1044,16 @@ async fn run_shell(
                 break ended.unwrap_or_else(|join| Ended::NotStarted(join.to_string()));
             }
             _ = tick.tick() => state.setup(|runs, out| runs.flush(key, id, out)),
+            changed = stop.changed(), if turn.is_some() => {
+                if changed.is_err() {
+                    tracing::warn!(
+                        project = %key.0.display(),
+                        location = place(&key.1),
+                        "a forgotten setup run still runs; the setup turn goes to the next run"
+                    );
+                    *turn = None;
+                }
+            }
         }
     }
 }
@@ -1421,7 +1479,7 @@ mod tests {
 
     /// 1439 setup-turn S2: the waiting line is kept, logged and sent like a line the run printed.
     #[test]
-    fn the_waiting_line_goes_to_the_buffer_the_log_and_the_watchers() {
+    fn setup_turn_the_waiting_line_goes_to_the_buffer_the_log_and_the_watchers() {
         let mut runs = runs_with("true");
         let mut out = Vec::new();
         let id = runs
@@ -1457,7 +1515,8 @@ mod tests {
 
     #[cfg(unix)]
     impl Turns {
-        /// A sandbox daemon (an `offered.json` of its own) when `sandbox`, else a host one.
+        /// A sandbox daemon (in its container, an `offered.json` of its own) when `sandbox`, else
+        /// a host one.
         fn new(sandbox: bool, body: &str) -> Self {
             let root = tempfile::tempdir().unwrap();
             let state = DaemonState::new(crate::catalog::Catalog::load(
@@ -1471,6 +1530,7 @@ mod tests {
                 std::fs::create_dir_all(&clis).unwrap();
                 std::fs::write(clis.join("offered.json"), r#"{"version":1,"clis":[]}"#).unwrap();
                 state.set_ai_clis_dir(clis);
+                state.set_in_sandbox(true);
             }
             state.set_setup_command(
                 root.path(),
@@ -1567,7 +1627,7 @@ mod tests {
     /// turn at once prints nothing extra.
     #[cfg(unix)]
     #[tokio::test]
-    async fn on_a_sandbox_daemon_runs_take_turns_in_the_order_they_asked() {
+    async fn setup_turn_on_a_sandbox_daemon_runs_take_turns_in_the_order_they_asked() {
         let t = Turns::new(true, "sleep 0.3");
         let a = t.start("a");
         t.started("a").await;
@@ -1597,7 +1657,7 @@ mod tests {
     /// both to have started.
     #[cfg(unix)]
     #[tokio::test]
-    async fn on_a_host_daemon_runs_overlap() {
+    async fn setup_turn_on_a_host_daemon_runs_overlap() {
         let both = "i=0; while [ $(grep -c start ../order) -lt 2 ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done";
         let t = Turns::new(false, both);
         let a = t.start("a");
@@ -1614,7 +1674,7 @@ mod tests {
     /// and its shell never spawns, not even once the turn comes.
     #[cfg(unix)]
     #[tokio::test]
-    async fn stop_setup_on_a_waiting_run_ends_it_at_once_and_it_never_spawns() {
+    async fn setup_turn_stop_setup_on_a_waiting_run_ends_it_at_once_and_it_never_spawns() {
         let t = Turns::new(true, "sleep 30");
         let a = t.start("a");
         t.started("a").await;
@@ -1633,7 +1693,7 @@ mod tests {
     /// S3: stopping the run that holds the turn lets the first waiting run spawn, then the next.
     #[cfg(unix)]
     #[tokio::test]
-    async fn stopping_the_holder_lets_the_first_waiting_run_spawn() {
+    async fn setup_turn_stopping_the_holder_lets_the_first_waiting_run_spawn() {
         let t = Turns::new(true, r#"if [ "$d" = a ]; then sleep 30; fi"#);
         let a = t.start("a");
         t.started("a").await;
@@ -1655,7 +1715,7 @@ mod tests {
     /// `Interrupted`, each at once and without its shell.
     #[cfg(unix)]
     #[tokio::test]
-    async fn a_delete_or_a_daemon_stop_ends_a_waiting_run_at_once() {
+    async fn setup_turn_a_delete_or_a_daemon_stop_ends_a_waiting_run_at_once() {
         let t = Turns::new(true, "sleep 30");
         let a = t.start("a");
         t.started("a").await;
@@ -1680,7 +1740,7 @@ mod tests {
     /// blocking part panicked, so the run waiting behind each goes on.
     #[cfg(unix)]
     #[tokio::test]
-    async fn the_turn_is_released_after_a_failed_a_not_started_and_a_panicking_run() {
+    async fn setup_turn_the_turn_is_released_after_a_failed_a_not_started_and_a_panicking_run() {
         let t = Turns::new(true, r#"if [ "$d" = a ]; then sleep 0.3; exit 3; fi"#);
         let a = t.start("a");
         t.started("a").await;
@@ -1725,5 +1785,50 @@ mod tests {
         let d = t.start("d");
         assert_eq!(t.ended(&d).await, SetupState::Succeeded);
         assert!(!t.lines(&d).iter().any(|line| line == WAITING_LINE));
+    }
+
+    /// Review A-F2: a run forgotten while its blocking part still runs (a delete that gave up
+    /// waiting for a tree that escaped the kill) lets the turn go, so later setups are not held
+    /// until the daemon restarts.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn setup_turn_is_let_go_when_a_still_running_run_is_forgotten() {
+        let t = Turns::new(true, "true");
+        let escaped = t.key("escaped");
+        let begun = t
+            .state
+            .setup(|runs, out| runs.start(&escaped.0, &escaped.1, 1, out))
+            .unwrap();
+        let mut done = begun.done.subscribe();
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let running = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let shell_running = Arc::clone(&running);
+        spawn_run_with(
+            &t.state,
+            escaped.clone(),
+            begun.id,
+            begun.done,
+            begun.stop,
+            move || {
+                shell_running.store(true, std::sync::atomic::Ordering::SeqCst);
+                let _ = held.recv();
+                Ended::NotStarted("released".into())
+            },
+        );
+        t.until("the shell runs", |_| {
+            running.load(std::sync::atomic::Ordering::SeqCst)
+        })
+        .await;
+        assert!(!t.turn_is_free(), "the run holds the turn");
+        forget(&t.state, &escaped.0, &escaped.1);
+        t.until("the turn is let go", Turns::turn_is_free).await;
+        let d = t.start("d");
+        assert_eq!(t.ended(&d).await, SetupState::Succeeded);
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), done.wait_for(|done| *done))
+            .await
+            .expect("the forgotten run ended in time")
+            .unwrap();
+        assert!(t.turn_is_free());
     }
 }

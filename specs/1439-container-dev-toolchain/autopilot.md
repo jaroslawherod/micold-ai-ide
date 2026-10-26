@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M3 implemented (T020–T025); full gate green; reviews A/B due
-- **Next step**: orchestrator dispatches review A (code-review high, origin/main...HEAD) and B (conformance, sonnet) on snapshot `a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07`; no visual pass (nothing visible changes); then the M3 PR (title/body in the session scratchpad `pr-title.txt`, `pr-body.md`)
-- **Gate**: M3 full gate (`scripts/gate.sh`, CI's order) exit 0 on the tree of snapshot a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07, with `--skip a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (micold-client card_grid; failed twice under the full parallel run, passes alone; client code M3 does not touch — see Follow-ups). Red check: with `setup_turn()` forced to `None`, the six turn tests fail (host-overlap test passes either way).
+- **Phase**: M3 round-1 reviews (A CHANGES, B CHANGES) fixed; scoped gate run; round 2 due
+- **Next step**: orchestrator dispatches scoped round 2 of review A (sonnet, fix diff from snapshot in *Review rounds*) and of B (its F1 MAJOR fixed: re-runs **Verify** `cargo test -p micold-daemon setup_turn`); then full gate (`scripts/gate.sh`, unmodified, no `--skip`) and the M3 PR (title/body in the session scratchpad `pr-title.txt`, `pr-body.md`)
+- **Gate**: M3 full gate (`scripts/gate.sh`, CI's order) exit 0 on the tree of snapshot a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07, with `--skip a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (micold-client card_grid; failed twice under the full parallel run, passes alone; client code M3 does not touch — see Follow-ups). Red check: with `setup_turn()` forced to `None`, the six turn tests fail (host-overlap test passes either way). After the round-1 fixes: `cargo test -p micold-daemon --lib setup_turn` 9 passed; scoped gate (`scripts/autopilot/scoped-gate.sh`, micold-daemon) fmt, clippy and every test green except `tests/sessions` `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports`, which fails the same on the unfixed `fcbafc896` because this cloud session runs as uid 0 (root unlinks inside the test's 0555 dir; see Follow-ups); the full gate is due again before the PR, run unmodified (the card_grid test is a flake outside M3 if it fails; CI judges).
 
 ## Pull requests
 
@@ -54,7 +54,9 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| M3 A (code-review high) + B (conformance) | 1 | a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07 | due (orchestrator dispatches) |
+| M3 A (code-review high) | 1 | a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07 | CHANGES: F1 MAJOR (host daemon reading the container's `{"clis":[]}` gets a setup turn) fixed — `DaemonState::set_in_sandbox`, set by `server::run` when the data dir is `STATE_CONTAINER_DIR`, gates `setup_turn` (contract S1 amended; `with_sandbox_path`/`only_offered` left: Follow-ups); F2 MINOR (forgotten run keeps the turn) fixed — `run_shell` drops the guard when the stop sender is gone, new test `setup_turn_is_let_go_when_a_still_running_run_is_forgotten`; F3 MINOR (queue joined after blocking I/O) fixed — `join_turn` polls `lock_owned` once synchronously in `spawn_run_with` (the order of `start_in` calls), waiting line recorded only when that poll is pending, its store write on `spawn_blocking` |
+| M3 B (conformance, sonnet) | 1 | a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07 | CHANGES: F1 MAJOR (Verify filter matched 1 of 7 tests) fixed — the seven setup.rs tests renamed `setup_turn_*`, the state.rs one renamed `setup_turn_only_on_a_sandbox_daemon_with_an_offer_of_its_own`; Verify now runs 9; F2 MINOR fixed — `tdd/cycle-log.md` added (M3 cycles 1–2; recent features all keep one) |
+| M3 A + B round 2 | 2 | SNAPSHOT_PLACEHOLDER | due (A scoped on sonnet; B re-runs Verify) |
 | Review spec | 1 | 88a57bc11916cbc5c1b545009cfdd9cb331ed559:acefceb57addd2b636a783099b5c1664b60c8efe | CHANGES: 1 MAJOR (F1 pkg-config fixture untestable), 2 MINOR — all fixed |
 | Review spec | 2 | 0dd79911c49382f93e7e6c046c4ab2dda6be0d1a:6da15512d5f7e13d3544e0ea3cc3c60143156e3a | CLEAN; 1 MINOR for the plan: AS4 (spec.md:67) names no library the image provides — plan picks a fixture library (one the image installs, or a test-built .pc file) |
 | Review plan | 1 | af5ff41a6aea3437938c9f5176c59cdfd38c8f28:fc2ae166b80b5b08990a56af109bf79b1406f498 | CHANGES: 1 MAJOR (F1 no step obtains/verifies mise checksums; README update step unspecific), 2 MINOR (F2 SC-001/002/005 rows; F3 hung holder blocks setups) — all fixed: plan D1a (signed SHASUMS256, two lines, npm cross-check, provenance in ledger), M1 row, D6 README steps, D7, R1; requirement-map rows SC-001/002/005 + B3 reads the section; setup-turn S2/S3 + D6 sentence + A4 case |
@@ -114,12 +116,11 @@ Reviews due for M2 (snapshot `5820c4018:7acea440d`, diff `origin/main...HEAD`, 7
 - Deviation: `spawn_run_with` takes the blocking part as a closure so the panicking-run case of T022 is testable; `spawn_run` passes `run_blocking`.
 - T021/T022 tests in `setup.rs` `mod tests` (`Turns` harness, real shells, `cfg(unix)`; setup turns apply only to Linux sandboxes).
 - T025: user guide, "Running setup again, and stopping it" (a short paragraph, not one sentence: also says host/remote daemons run side by side).
+- Round-1 fixes: `set_in_sandbox` (state.rs, set in server.rs), `join_turn`/`Queued`/`TurnLock` and the forgotten-run arm in `run_shell` (setup.rs). Red check: with the `in_sandbox` gate and the release arm disabled, the two affected tests fail (`tdd/cycle-log.md` M3 cycle 2).
 
 ## Handover
 
-M3 T020–T025 done, full gate green, committed and pushed (no PR yet). Context over the cap after the gate.
-- **Next**: reviews A and B on the snapshot in *Review rounds* (orchestrator); then act on findings per review-rounds.md, scoped gate, open the M3 PR (title/body: session scratchpad `pr-title.txt`, `pr-body.md`; fill the review lines and the gate sha).
-- **Open findings**: none yet.
+None.
 
 ## Open escalation
 
@@ -129,5 +130,9 @@ If the user picks B or C, the coordinator dispatches a revision.
 ## Follow-ups not done
 
 - `micold-client` `ui::material::card_grid::tests::a_link_scrolled_out_of_the_body_is_not_under_the_pointer` fails under the full `cargo test --workspace` load in this container (`left: ["body true true", "rest 0"]`), passes alone: timing-dependent; not this flow's code.
+
+- `micold-daemon` `tests/sessions` `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports` fails when the tests run as root (uid 0 in this cloud session: a 0555 directory does not block root's unlink, so the delete removes everything and the test's `set_permissions` hits NotFound). Fails identically on `fcbafc896` without the round-1 fixes; environment, not M3. The full gate in this container will hit it too; CI (non-root) judges.
+
+- Pre-existing (1289, not M3): a host daemon also reads the container's `offered.json` through the mounted state directory, and one listing no CLI (`{"version":1,"clis":[]}`, written by `check_script` even for an empty selection, `provision/mod.rs:503`) passes `offered_clis()`'s ownership check (`state.rs`, `any` over an empty list). `with_sandbox_path` then gives host spawns the sandbox `PATH` order and `only_offered` hides every AI CLI on the host. M3 gates only `setup_turn` (on `set_in_sandbox`); `offered_clis` itself was left because provisioned remote (non-container) daemons own an offer outside `STATE_CONTAINER_DIR`. Fix belongs in an issue of its own (M3 review A-F1).
 
 - `gh` GraphQL is blocked in the cloud container, so `scripts/autopilot/issue.sh` could not set labels; in-progress and flow:feature were set through the GitHub MCP.

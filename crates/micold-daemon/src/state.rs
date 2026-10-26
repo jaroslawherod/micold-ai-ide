@@ -171,6 +171,10 @@ pub struct DaemonState {
     pasted_data_dir: std::sync::OnceLock<PathBuf>,
     /// Where `offered.json` lists the AI CLIs a provisioning step installed (feature 806, FR-012).
     ai_clis_dir: std::sync::OnceLock<PathBuf>,
+    /// Whether this daemon runs in an app-owned container: its data directory is the container's
+    /// state directory (`sandbox::STATE_CONTAINER_DIR`), set once at startup by `server::run`.
+    /// Gates the setup turn (#1439, contract setup-turn S1).
+    in_sandbox: std::sync::atomic::AtomicBool,
     /// Whether the warning for a missing history directory (a sandbox made before the feature,
     /// R15) has been logged in this service run.
     history_directory_warned: std::sync::atomic::AtomicBool,
@@ -1158,6 +1162,7 @@ impl DaemonState {
             interrupt_overdue: Mutex::new(crate::structured::INTERRUPT_OVERDUE),
             pasted_data_dir: std::sync::OnceLock::new(),
             ai_clis_dir: std::sync::OnceLock::new(),
+            in_sandbox: std::sync::atomic::AtomicBool::new(false),
             history_directory_warned: std::sync::atomic::AtomicBool::new(false),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
@@ -1176,6 +1181,14 @@ impl DaemonState {
     /// (feature 806). A no-op if already set; with none set, or no file in it, nothing changes.
     pub fn set_ai_clis_dir(&self, dir: PathBuf) {
         let _ = self.ai_clis_dir.set(dir);
+    }
+
+    /// Record whether this daemon runs in an app-owned container (its data directory is
+    /// `sandbox::STATE_CONTAINER_DIR`). Only such a daemon has a setup turn: a host daemon sees the
+    /// container's `offered.json` through the mounted state directory, and one that lists no CLI
+    /// passes [`Self::offered_clis`]'s ownership check (#1439 review A-F1).
+    pub fn set_in_sandbox(&self, in_sandbox: bool) {
+        self.in_sandbox.store(in_sandbox, Ordering::Relaxed);
     }
 
     /// What a provisioning step recorded as installed, read afresh on each call (FR-012). Missing:
@@ -3566,10 +3579,13 @@ impl DaemonState {
     }
 
     /// The daemon-wide setup turn (#1439, contract setup-turn S1): `Some` only on an app-owned
-    /// sandbox (an `offered.json` of its own, as [`Self::with_sandbox_path`] decides), where
-    /// concurrent installs into the one home break. Host and remote daemons run setups
-    /// concurrently (1289).
+    /// sandbox (in its container, [`Self::set_in_sandbox`], with an `offered.json` of its own),
+    /// where concurrent installs into the one home break. Host and remote daemons run setups
+    /// concurrently (1289), even a host daemon that sees the container's offer through the mount.
     pub(crate) fn setup_turn(&self) -> Option<Arc<tokio::sync::Mutex<()>>> {
+        if !self.in_sandbox.load(Ordering::Relaxed) {
+            return None;
+        }
         self.offered_clis().map(|_| Arc::clone(&self.setup_turn))
     }
 
@@ -8736,12 +8752,18 @@ mod offered_tests {
         );
     }
 
-    /// 1439 setup-turn S1: a daemon with an `offered.json` of its own (an app-owned sandbox) has
-    /// one setup turn; without one (host and remote daemons) it has none.
+    /// 1439 setup-turn S1: a daemon in its container with an `offered.json` of its own (an
+    /// app-owned sandbox) has one setup turn; without one (host and remote daemons) it has none.
     #[test]
-    fn only_a_daemon_with_an_offer_of_its_own_has_a_setup_turn() {
+    fn setup_turn_only_on_a_sandbox_daemon_with_an_offer_of_its_own() {
         let store = tempfile::tempdir().unwrap();
         let (state, dir) = daemon(store.path());
+        // A host daemon sees the container's offer through the mounted state directory; one
+        // listing no CLI passes the ownership check, yet the host gets no turn (review A-F1).
+        offer(&dir, &[]);
+        assert!(state.setup_turn().is_none(), "host daemon: no turn");
+        state.set_in_sandbox(true);
+        std::fs::remove_file(dir.join("offered.json")).unwrap();
         assert!(state.setup_turn().is_none(), "no offer: no turn");
         offer(&dir, &[]);
         let turn = state.setup_turn().expect("a sandbox daemon has a turn");

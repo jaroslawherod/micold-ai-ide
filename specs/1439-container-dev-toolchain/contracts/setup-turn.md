@@ -7,8 +7,12 @@ Spec: edge case "Concurrent setup", Principle II.
 
 ## S1. Scope
 
-Applies when the daemon is an app-owned sandbox: it has an `offered.json` of its own
-(`DaemonState::offered_clis()` is `Some`), the predicate `with_sandbox_path` uses. Host and remote
+Applies when the daemon is an app-owned sandbox: it runs in its container (its data directory is
+`sandbox::STATE_CONTAINER_DIR`, recorded at startup by `DaemonState::set_in_sandbox`) and has an
+`offered.json` of its own (`DaemonState::offered_clis()` is `Some`, the predicate
+`with_sandbox_path` uses). The first condition is needed because the host's data directory is
+mounted as the container's state directory: a host daemon reads the container's `offered.json`, and
+one that lists no CLI passes `offered_clis()`'s ownership check (M3 review A-F1). Host and remote
 daemons run setups concurrently, as 1289 specifies.
 
 ## S2. Turn
@@ -16,6 +20,11 @@ daemons run setups concurrently, as 1289 specifies.
 - A daemon-wide turn (one `tokio::sync::Mutex<()>` in `DaemonState`, fair, so runs go in the order
   they asked) is taken by `spawn_run` before the setup shell is spawned and held until that run has
   ended, whatever the outcome (success, failure, stop, not started, a panic: the guard is dropped).
+  A run joins the turn's queue when it is started (`start_in`), before its task runs, so the order
+  is the order of the starts (M3 review A-F3).
+- A run forgotten while its shell still runs (a delete whose wait for the stopped run passed
+  `RUN_OVERRUN`) lets the turn go at once: nothing can **Stop** it any more, so a tree that escaped
+  the kill must not hold every later setup until the daemon restarts (M3 review A-F2).
 - A run that has to wait is `Running` (no new state, no protocol change) and its output starts with
   one line: `Waiting for another setup on this daemon to finish…`. The line goes through the same
   buffer, log and `SetupOutput` path as the shell's lines. A run that gets the turn at once prints
