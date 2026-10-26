@@ -744,11 +744,14 @@ impl CredentialLayout {
             .iter()
             .chain(layout.ai_cli_auth.iter())
             .filter(|path| exists(path))
+            // Joined with `/` whatever the host: the names are of files in a container home.
             .map(|path| {
                 path.strip_prefix(home)
                     .unwrap_or(path)
-                    .display()
-                    .to_string()
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/")
             })
             .collect()
     }
