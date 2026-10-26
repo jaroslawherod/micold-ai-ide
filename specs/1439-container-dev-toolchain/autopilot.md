@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
 - **Phase**: amendment (spec amendment D8, 2026-10-26)
-- **Next step**: reviewers on the amendment (spec, plan, tasks rubrics, scoped to D8), dispatched by the orchestrator; then the specs-only gate, PR title/body to the scratchpad, push; then M1 once #1289 has merged (#1435 merged)
+- **Next step**: tasks re-review round 2 on the amendment (spec and plan reviews done), dispatched by the orchestrator; then the specs-only gate, PR title/body to the scratchpad, push; then M1 once #1289 has merged (#1435 merged)
 - **Gate**: specs-only `scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md` exit 0 (spec has no criteria table; not opted in); every changed file is under `specs/`
 
 ## Pull requests
@@ -55,9 +55,10 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | Review plan | 2 | e09cd372e8cfa3fbb30220e2448a3333f6565b25:e81fbb8fe8ff14ae09217d96f48c4f69f3853cf3 | CLEAN |
 | Review tasks | 1 | 0010f9786fa9af34eb25056d18835b54ca350499:9a68b76ae2e005a488eb37c80654e92131ce0b64 | CHANGES: 2 MAJOR, 3 MINOR — all fixed. F1 (US2/FR-009/SC-001/SC-002 in no milestone; T032 may change code): T032, T033 moved into M4 (Phase 9 now US2, in M4), M4 Satisfies/Verify add US2 AS1–AS4, FR-009, SC-001, SC-002, B1, B2, B6; M4 depends on M2; only T034 left to the close unit. F2 (no speckit-analyze record): run inline, see below. F3: checklist item ticked (confirmed no markers), note says FR-007 provisional option A (D3) — fixed, prose only. F4 (three edge cases uncovered): T027 + A7 stopped-mid-download rerun case; T012 + A6 `~/.local/bin` mise stub wins on PATH; T033 + B2 two concurrent `cargo build`s; plan requirement map rows for all three. F5: D7 records why US3 rides in M1 — fixed, prose only |
 | Review tasks | 2 | e730638a6a858dd31b1e9a1ca2182700ff53f73c:a340a65ab195ba153e293986c0e198f4c6046b90 | CLEAN; 1 MINOR: T034 (publish and pin) is in no milestone — kept as is: it ships via the separate pin PR of plan D7 after M4 merges, as tasks.md's Milestones section already says (no change) |
-| Review spec (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | pending (orchestrator dispatches; scope: spec.md US5, FR-005, FR-014–FR-018, SC-006, new edge cases, Assumptions persistence item, Clarifications amendment) |
-| Review plan (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | pending (scope: plan Summary amendment, D1 step 1, D6 M5 paragraph, D8, D9, requirement-map rows FR-014–FR-018/SC-006/edges, M5; research R12–R15; contracts/sandbox-install-env.md; basic-image-build B1; data-model; quickstart A8–A10, B6, B7) |
-| Review tasks (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | pending (scope: tasks T004, T006, Phase 10 T034–T041, T042 renumber, dependencies, M1 Satisfies, M5) |
+| Review spec (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CLEAN; 3 MINOR, all fixed, prose only: F1 FR-014 'everything an install keeps' under the home, temp files excepted; F2 FR-017 says curl from #1435, git/tar/gzip from the existing image, adds only xz/unzip; F3 checklist Note: FR-015 values are user-visible contract (FR-018) |
+| Review plan (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CLEAN; 3 MINOR, all fixed: F1 A10 + FR-014 row add `go install` (mise Go, local module) and `pip install --user` (mise Python); F2 FR-005 row adds D8, A10 (session half); F3 contract I4 + spec edge case 'An AI CLI updates itself through npm' accepted as harmless (offered bins first on PATH, `only_offered`, state.rs:1200) + plan map row |
+| Review tasks (amendment D8) | 1 | 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc | CHANGES: 2 MAJOR, 2 MINOR — all fixed. F1 (verified: start_tests.rs:388 asserts deletes = pod only, created.len()==1): T036 now cites the existing test as A9 evidence, no new test; plan D9, quickstart A9, research R12, plan file list, M5 Verify follow. F2: T037, A10, plan FR-014 row add `mise use -g go@<pin>` + `go install` of a test-written local module and `mise use -g python@<pin>` + `pip install --user`; M5 Deliverable and Phase 10 Goal name pip. F3: T040 + plan D6 M5 paragraph say image-linked tools may need reinstalling after an image update; edge case in M5 Satisfies. F4: M5 Satisfies adds FR-005 (session half) |
+| Review tasks (amendment D8) | 2 | a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057 | pending (scoped re-review of the fix diff, sonnet; orchestrator dispatches) |
 
 speckit-analyze (run inline on spec/plan/tasks before tasks review round 2; the skill is not invocable through the Skill tool in this cloud session; no analyze hooks in `.specify/extensions.yml`): 0 CRITICAL; 1 HIGH — C1 coverage: FR-009, SC-001, SC-002 and US2 AS1–AS4 mapped only to Phase 9 tasks outside any milestone (same as review F1) — fixed by moving T032–T033 into M4. MEDIUM: C2 three edge cases with no test/quickstart row (= F4, fixed); I1 checklist item unticked though no markers remain (= F3, fixed). LOW: none acted on. Coverage after fixes: FR-001–FR-013 and SC-001–SC-005 each have ≥1 task in a milestone (SC-004 via T015/T019); every task maps to a story or requirement; constitution I (tests first in each milestone), VI (two arches, daemon code on three CI platforms) and VII (user guide in M1 T009/T014, M2 T018, M3 T025, M4 T030) hold.
 
@@ -70,22 +71,15 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
 
 ## Handover
 
-Amendment unit (D8) hit the 150k context cap after committing the amendment (1efe85bfd, pushed to
-`claude/project-thread-xudko5`, branch based on main 26ac5a75e).
+Amendment part 2 (2026-10-26): recorded the three round-1 verdicts on amendment D8 and applied every
+finding (commit after 6294a8553); round-2 snapshot `a2903af7dc709325eb44a703dfdd61845bcb872a:80c50c3bd5c4b8ed7c8b983071b63bef836a2057` taken for the tasks review (its two MAJORs
+were fixed). Spec and plan reviews are done (CLEAN, MINORs fixed).
 
-- **Done**: spec (US5, FR-005 widened, FR-014–FR-018, SC-006, edge cases, cited persistence
-  assumption, Clarifications amendment), plan (Summary, D1 step 1, D6, D8, D9, map rows, M5),
-  research R12–R15, new contracts/sandbox-install-env.md, basic-image-build B1, data-model,
-  quickstart A8–A10/B6/B7, tasks Phase 10 = M5 (T034–T041), publish renumbered T042, ledger D8, M5
-  row, #1444 row, three pending review rows (snapshot 1c9a4d24…:26ac5a75e).
-- **Next**: the orchestrator dispatches the three reviews (spec, plan, tasks rubrics, scoped to the
-  amendment; scopes in the pending rows); act on verdicts per review-rounds.md; then the specs-only
-  gate `scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md`; write the
-  PR title ("#1439: Container sessions cannot build the project: basic image has no mise / compiler
-  toolchain / python3 and no way to install them") and body (ends `Refs #1439`) to the scratchpad;
-  commit, `git push -u origin claude/project-thread-xudko5 --force-with-lease`. Never `gh pr`/`gh
-  issue`.
-- **Open findings**: none yet.
+- **Next**: the orchestrator dispatches a scoped tasks re-review (round 2, sonnet) of
+  `scripts/autopilot/review-snapshot.sh diff 1c9a4d24475f2f0f6f09aaaa7172e38c42f5cfd5:26ac5a75e24e8f4971c81280b410f794ae986dcc`; if CLEAN, the specs-only gate
+  (`scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md`, exit 0 at
+  part 2), PR title/body to the scratchpad, push. Never `gh pr`/`gh issue`.
+- **Open findings**: none.
 
 ## Open escalation
 
