@@ -256,6 +256,10 @@ downloaded again.
   `cargo install` of a crate linking OpenSSL, an `npm` package with a native module): that tool can
   stop working after the update and is reinstalled. Tools mise installs as prebuilt binaries, and
   Rust toolchains, do not depend on the image's libraries beyond glibc.
+- **An AI CLI updates itself through npm**: with `NPM_CONFIG_PREFIX=$HOME/.local` (FR-015), an AI
+  CLI's own `npm`-based self-update can now succeed and leave a second copy in `~/.local/bin`. This
+  is accepted as harmless: the offered CLI's folder stays ahead of `~/.local/bin` on `PATH` (#1289),
+  so the offered copy still runs, and the daemon reports only offered CLIs.
 - **A daemon whose network posture blocks outbound connections**: a session there cannot download
   anything, so it cannot install tools itself; tools already in the home keep working.
 - **Hosts whose container runtime shares folders through a VM** (macOS, Windows): the sandbox home
@@ -317,7 +321,8 @@ downloaded again.
   be able to install user-level tools as the session user, with no root or `sudo`: with mise (`mise
   use -g`, `mise install`) and with each language's own installer (`npm install -g`, `cargo
   install`, `uv tool install`, `go install`, `pip install --user` under a mise-installed Python).
-  Each install MUST write only under the sandbox home (and the worktree, for a project-local one).
+  Everything an install keeps MUST be under the sandbox home (and the worktree, for a project-local
+  one); temporary files an installer writes and removes (for example under `/tmp`) are excepted.
 - **FR-015**: The binaries those installs create MUST be found by later sessions on any worktree of
   the daemon through #1289's `PATH` (`~/.local/bin` or mise's shims), with no further
   configuration. Where an installer's own default target is outside the home or off that `PATH`,
@@ -332,7 +337,9 @@ downloaded again.
   container) and, on Kubernetes, the pod's recreation, so nothing installed in it has to be
   installed or downloaded again.
 - **FR-017**: The basic image MUST carry what those installers need to download, unpack and build:
-  `curl`, `git`, `tar`, `gzip`, `xz`, `unzip`, and the C toolchain of FR-003.
+  `curl`, `git`, `tar`, `gzip`, `xz`, `unzip`, and the C toolchain of FR-003. `curl` comes from
+  #1435 and `git`, `tar` and `gzip` from the existing image; this feature adds only `xz` and `unzip`
+  (and FR-003's toolchain).
 - **FR-018**: System packages MUST stay out of a session's reach (no root, no `sudo`; feature 806).
   The sandbox page MUST say that a session can install user-level tools itself and that they
   persist in the sandbox home, name the defaults of FR-015, and say that system packages come from

@@ -38,3 +38,6 @@
 - The feature is about the contents of a container image, so naming the tools the image must carry
   (`mise`, a C toolchain, `pkg-config`, `python3`) is the requirement itself, not an implementation
   choice. How they are added (packages, download step) is left to the plan.
+- FR-015 names exact environment values (`NPM_CONFIG_PREFIX=$HOME/.local`, `CARGO_INSTALL_ROOT`,
+  `GOBIN`). These defaults are user-visible contract, not implementation detail: FR-018 documents
+  them on the sandbox page, and a user overrides any of them through the environment.

@@ -203,10 +203,11 @@ Checked in the code on `main` at `26ac5a75e`, 2026-10-26:
 - **Kubernetes daemons**: `HOME=/data/home` (`crates/micold-core/src/kube/manifest.rs:21-26`, env
   test `:459`) on the volume `data`, a PersistentVolumeClaim (`:238-240`). Stop deletes the pod and
   keeps the claim (`crates/micold-core/src/kube/lifecycle.rs:187-191`, tested); a drifted pod is
-  recreated by deleting only the pod (`crates/micold-core/src/kube/start.rs:543-548`, not yet
-  tested for the claim: A9); only Remove deletes the claim (`kube/lifecycle.rs:93-117`).
-- **Decision**: no code change for persistence. FR-016 makes it a requirement with tests: A9 (pod
-  recreation keeps the claim) and A10 (a session's installs survive a restart and two
+  recreated by deleting only the pod (`crates/micold-core/src/kube/start.rs:543-548`, tested by
+  `recreate_deletes_the_drifted_pod_and_creates_a_new_one_keeping_the_volume` in
+  `kube/start_tests.rs:388`: only the pod deleted, the claim adopted; A9); only Remove deletes the claim (`kube/lifecycle.rs:93-117`).
+- **Decision**: no code change for persistence. FR-016 makes it a requirement with tests: A9 (the
+  existing pod-recreation test) and A10 (a session's installs survive a restart and two
   replacements).
 - **Caveat recorded as an edge case**: a tool linked against an image system library may break when
   an image update changes that library; the home persists, the library does not.
