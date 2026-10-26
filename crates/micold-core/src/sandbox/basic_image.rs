@@ -20,7 +20,7 @@ pub const BASIC_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-basic";
 ///
 /// Change it in the same commit as any file under `packaging/basic/`;
 /// `scripts/tests/basic-image-hash.test.sh` fails while it disagrees with the tree.
-pub const BASIC_IMAGE_CONTENT_HASH: &str = "dc80481f77d8a7c9";
+pub const BASIC_IMAGE_CONTENT_HASH: &str = "5d9ed63715e43146";
 
 /// The basic image the client starts a new container daemon from: the tag the publish workflow
 /// pushed for [`BASIC_IMAGE_CONTENT_HASH`], pinned by the digest of its multi-architecture index
