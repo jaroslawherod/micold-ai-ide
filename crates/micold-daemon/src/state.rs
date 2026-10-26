@@ -8922,6 +8922,7 @@ mod offered_tests {
 
     /// 1439 A8 (I2): the daemon's own environment is not overridden (lower-case
     /// `npm_config_prefix` included), and its `HOME` serves when the resolved one has none.
+    #[cfg(unix)]
     #[test]
     fn install_env_does_not_override_the_daemons_own_environment() {
         let store = tempfile::tempdir().unwrap();

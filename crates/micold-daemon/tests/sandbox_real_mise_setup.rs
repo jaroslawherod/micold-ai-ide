@@ -35,8 +35,8 @@ use micold_core::session::{SessionLocation, TerminalMode};
 use micold_core::setup::{RunId, SetupCommand, SetupState};
 use micold_core::worktree::CreateMode;
 use sandbox_real_support::{
-    cli, input_serial, open_session, repo, seed_projects, start_sandbox, wait_for_accept,
-    tagged_lines, written_outside, SandboxSpec, Terminal,
+    cli, input_serial, open_session, repo, seed_projects, start_sandbox, tagged_lines,
+    wait_for_accept, written_outside, SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-mise-setup-probe";
