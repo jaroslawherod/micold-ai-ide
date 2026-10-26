@@ -436,42 +436,77 @@ worktree.
 ## Reviewing from the keyboard
 
 While the Review tab is shown and no text field, dialog or terminal has the keyboard, single keys
-move through the review and mark it:
+move through the review, mark it and comment on it, and one chord sends it. Press `?` for the same
+list in the app:
 
-| Key | What it does |
-|---|---|
-| `j` | Select the next file |
-| `k` | Select the previous file |
-| `n` | Make the next change (hunk) current |
-| `p` | Make the previous change current |
-| `v` | Mark the selected file reviewed, or take the mark back |
-| `g` | Select the next file not marked reviewed |
+| Key (Linux / Windows) | Key (macOS) | What it does |
+|---|---|---|
+| `j` | `j` | Next file |
+| `k` | `k` | Previous file |
+| `n` | `n` | Next change |
+| `p` | `p` | Previous change |
+| `]` | `]` | Next comment |
+| `[` | `[` | Previous comment |
+| `v` | `v` | Mark file reviewed / not reviewed |
+| `g` | `g` | Next file not reviewed |
+| `c` | `c` | Comment on the picked lines or the current change |
+| `?` | `?` | Show or hide these shortcuts |
+| `Ctrl+Shift+Enter` | `Cmd+Shift+Enter` | Send review |
+| `Ctrl+Enter` | `Cmd+Enter` | Save comment (in the comment box) |
 
 `j` and `k` follow the files in the order the tree lists them, with its filter and sort: a filtered
 tree visits only the files it shows. A file inside a collapsed folder is visited too, and its folder
 opens. The selected file's diff is shown from the top and its row is scrolled into view. Both wrap
 at the ends of the list; with no file selected, `j` selects the first and `k` the last.
 
-`n` and `p` step through the selected file's changes and scroll the diff so the change's header is
-at the top. The current change's header is drawn in the accent colour. Past the last change of a
-file, `n` goes on to the first change of the next file that has changes; before the first, `p` goes
-to the last change of the previous one. Files without changes to step through (binary, renamed only,
-mode only, or a large file whose diff is not shown) are passed over, and both wrap at the ends of the
-list. Selecting another file, however you select it, clears the current change. Moving never
-changes picked lines, a comment you are writing, **Whole file**, or **Unified** / **Side by side**.
-The arrows in the diff header, beside **Mark reviewed**, do what `p` and `n` do.
+`n` and `p` step through the selected file's changes (hunks) and scroll the diff so the change's
+header is at the top. The current change's header is drawn in the accent colour. Past the last
+change of a file, `n` goes on to the first change of the next file that has changes; before the
+first, `p` goes to the last change of the previous one. Files without changes to step through
+(binary, renamed only, mode only, or a large file whose diff is not shown) are passed over, and both
+wrap at the ends of the list. Selecting another file, however you select it, clears the current
+change. Moving never changes picked lines, a comment you are writing, **Whole file**, or
+**Unified** / **Side by side**. The arrows in the diff header, beside **Mark reviewed**, do what `p`
+and `n` do.
+
+`]` and `[` step through the comments of what the diff shows — drafts and sent ones alike — in
+file order (the tree's), then by line, wrapping at both ends. Each press selects the comment's file
+when it is another one and scrolls its card into view, highlighted, as a press on its row in the
+[comments drawer](#the-comments-drawer) does. A comment that is not in the diff (outdated, or its
+file is not listed) opens the drawer on it instead.
+
+`c` opens the comment box with the keyboard in it: on the picked lines, as **Add comment** does;
+with no lines picked, on the current change's changed lines (the new version's, or the base
+version's for a change that only removes lines); with neither it opens nothing and says *Pick lines
+or move to a hunk (n) to comment*. A comment box already open keeps its text and gets the keyboard
+back.
 
 `v` does exactly what **Mark reviewed** does (see [Marking files reviewed](#marking-files-reviewed)),
 for the selected file only. `g` selects the first file after the selected one, wrapping, that is not
 marked reviewed — a mark made in another window counts. With every file reviewed it leaves the
 selection where it is and says *All files reviewed*.
 
-The keys act only while the review has the keyboard: typed into the tree's filter, a comment box or
-any other field, a letter is just text; with Ctrl, Cmd or Alt held, or while an input method is
-composing, nothing happens. Holding `j`, `k`, `n` or `p` steps once per key repeat; `v` and `g` act
-once per press. The tooltips of the arrows and of **Mark reviewed** name their key. To turn the
-single keys off, see [Settings → Single-key shortcuts in the Review
-tab](settings.md#single-key-shortcuts-in-the-review-tab).
+**Ctrl+Shift+Enter** (**Cmd+Shift+Enter** on macOS) sends the review exactly as **Send review (n)**
+does, and does nothing while that button is unavailable (no drafts, or a send under way in any
+window). It also works while you are typing in the comment box: only the saved drafts are sent, and
+the box stays open with its text and the keyboard. **Ctrl+Enter** (**Cmd+Enter**) in the box saves
+the comment; with Shift held too it sends instead, so it never saves. The tooltip of **Send review
+(n)** names the chord.
+
+### The shortcut sheet
+
+`?`, or **Keyboard shortcuts** in the review bar's ⋮ menu, opens the shortcut sheet over the Review
+tab: every key above with what it does, in your platform's form. While it is open no other review key
+acts; Escape, `?` or a click outside closes it and gives the keyboard back to the Review tab.
+
+The single keys act only while the review has the keyboard: typed into the tree's filter, a comment
+box or any other field, a letter is just text; with Ctrl, Cmd or Alt held, or while an input method
+is composing, nothing happens. Holding `j`, `k`, `n`, `p`, `]` or `[` steps once per key repeat;
+`v`, `g`, `c` and `?` act once per press. The tooltips of the arrows and of **Mark reviewed** name
+their key. To turn the single keys off, see [Settings → Single-key shortcuts in the Review
+tab](settings.md#single-key-shortcuts-in-the-review-tab): with them off, `?` does nothing, the send
+chord and the comment box's save chord keep working, and the sheet — opened from the ⋮ menu — lists
+only those two chords and says *Single-key shortcuts are off (Settings → Appearance)*.
 
 ## Commenting on lines
 

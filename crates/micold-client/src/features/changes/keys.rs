@@ -5,11 +5,15 @@
 
 use micold_core::navigation::Dir;
 use micold_core::review::diff::header_rows;
-use micold_core::review::keys::{key_hint, resolve, Holder, Press, ReviewAction};
+use micold_core::review::drawer::{DrawerEvent, DrawerTab};
+use micold_core::review::keys::{
+    key_hint, resolve, sheet_rows, Holder, Press, ReviewAction, ReviewKey, SINGLE_KEYS_OFF_NOTE,
+};
 use micold_core::review::marks::ReviewState;
 use micold_core::review::navigate::{
-    has_hunks, next_unreviewed, resolve_edge, step_file, step_hunk, HunkMove, NavFile,
-    SelectedDiff, Unreviewed, ALL_FILES_REVIEWED,
+    comment_order, comment_target, has_hunks, next_unreviewed, resolve_edge, step_comment,
+    step_file, step_hunk, CommentFact, CommentOpen, HunkMove, NavFile, SelectedDiff, Show,
+    Unreviewed, ALL_FILES_REVIEWED, PICK_OR_HUNK,
 };
 use micold_core::review::tree;
 use micold_core::review::RelPath;
@@ -17,23 +21,31 @@ use micold_core::settings::DiffLayout;
 use micold_core::typeahead::Query;
 
 use super::{
-    change_leaves, diff_body, file_reviews, list_body, mark_toggled, reviewed_paths, selected_file,
-    shown_hunks, update, DiffBody, Effect, ListBody, Load, Msg, OpenView, Source, State,
+    change_leaves, diff_body, file_reviews, in_scope, is_outdated, jump_offset, jump_target,
+    list_body, mark_toggled, pick_allowed, review_of, reviewed_paths, selected_file, sheet_on_top,
+    shown_hunks, shown_range, update, view_scope, DiffBody, Effect, Jump, ListBody, Load, Msg,
+    OpenView, Pick, Source, State,
 };
 use crate::features::window::FieldId;
 
 /// Who has the keyboard for the review keys (#1274 research R7, FR-002, SC-002): `Review` while
 /// the shown entry's Review tab is on screen and nothing else holds the keyboard; `Composer` while
-/// its comment box has it; `Other` for a focused field, Settings, the Overview, the quick switcher
-/// or any other registered surface on top.
+/// its comment box has it; `Sheet` while the shortcut sheet is on top; `Other` for a focused
+/// field, Settings, the Overview, the quick switcher or any other registered surface on top.
 pub fn review_holder(app: &crate::app::State) -> Holder {
     if app.review_shown().is_none()
         || app.settings.settings_draft.is_some()
         || app.overview.open
         || app.terminal_focused()
-        || crate::overlay::registry::topmost(app).is_some()
     {
         return Holder::Other;
+    }
+    if crate::overlay::registry::topmost(app).is_some() {
+        return if sheet_on_top(app) {
+            Holder::Sheet
+        } else {
+            Holder::Other
+        };
     }
     let composer_open = app
         .changes
@@ -71,7 +83,7 @@ pub(super) fn with(first: Effect, then: Effect) -> Effect {
     }
 }
 
-/// What a review key does to the shown view (contract K7); `] [ c ? Send` act from M4.
+/// What a review key does to the shown view (contract K7).
 pub(super) fn review_key(state: &mut State, action: ReviewAction) -> Effect {
     if state.tabs.shown_view().is_none() {
         return Effect::None;
@@ -83,11 +95,17 @@ pub(super) fn review_key(state: &mut State, action: ReviewAction) -> Effect {
         ReviewAction::PrevHunk => step_hunks(state, Dir::Previous),
         ReviewAction::ToggleReviewed => mark_toggled(state),
         ReviewAction::NextUnreviewed => to_unreviewed(state),
-        ReviewAction::NextComment
-        | ReviewAction::PrevComment
-        | ReviewAction::Comment
-        | ReviewAction::ToggleSheet
-        | ReviewAction::Send => Effect::None,
+        ReviewAction::NextComment => step_comments(state, Dir::Next),
+        ReviewAction::PrevComment => step_comments(state, Dir::Previous),
+        ReviewAction::Comment => comment(state),
+        ReviewAction::ToggleSheet => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.sheet_open = !view.sheet_open;
+            }
+            Effect::None
+        }
+        // FR-010: exactly **Send review (n)**, which does nothing while it is unavailable.
+        ReviewAction::Send => update(state, Msg::SendPressed),
     }
 }
 
@@ -249,6 +267,109 @@ pub(super) fn resolve_pending_edge(state: &mut State) -> Option<u32> {
     current(state, resolve_edge(edge, count)?)
 }
 
+/// What `]` and `[` know of the shown scope's comments (FR-006): each at its shown first line, in
+/// the diff when a press on its drawer row would jump to it there and it is not outdated.
+fn comment_facts(state: &State, view: &OpenView) -> Vec<CommentFact> {
+    let Some(review) = review_of(state, view) else {
+        return Vec::new();
+    };
+    in_scope(review, view_scope(view))
+        .map(|c| CommentFact {
+            id: c.id,
+            path: c.path.clone(),
+            line: shown_range(view, c).start(),
+            created: c.created,
+            in_diff: matches!(jump_target(state, c.id), Some(Jump::Shown { .. }))
+                && !is_outdated(view, c),
+        })
+        .collect()
+}
+
+/// `]` / `[` (FR-006): the next or previous comment in comment order, its file selected first when
+/// it is another; a card in the diff is reached by the drawer row's jump, any other comment by the
+/// drawer opened on it.
+fn step_comments(state: &mut State, dir: Dir) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let order = nav_order(state, view);
+    let ordered = comment_order(&comment_facts(state, view), &order);
+    let Some(step) = step_comment(
+        &ordered,
+        &order,
+        selected_file(view),
+        view.last_comment,
+        dir,
+    ) else {
+        return Effect::None;
+    };
+    let tab = review_of(state, view)
+        .and_then(|r| r.comments.iter().find(|c| c.id == step.id))
+        .map(|c| DrawerTab::of(c.state.status()));
+    let selected = match step.select {
+        Some(path) => select(state, path),
+        None => Effect::None,
+    };
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return selected;
+    };
+    view.last_comment = Some(step.id);
+    view.drawer.hidden = None;
+    view.drawer.focus = Some(step.id);
+    match step.show {
+        Show::Card => {
+            view.drawer.to_show = true;
+            match jump_offset(state) {
+                Some(offset) => with(selected, Effect::ScrollDiff { offset }),
+                None => selected,
+            }
+        }
+        Show::Drawer => {
+            view.drawer.to_show = false;
+            if !view.drawer.state.open {
+                view.drawer.state.apply(DrawerEvent::Toggle);
+            }
+            if let Some(tab) = tab {
+                view.drawer.state.apply(DrawerEvent::SelectTab(tab));
+            }
+            selected
+        }
+    }
+}
+
+/// `c` (FR-009): focus the open composer, else open **Add comment**'s on the picked lines, else
+/// pick the current hunk's changed lines and open it there, else say what to do.
+fn comment(state: &mut State) -> Effect {
+    let Some(view) = state.tabs.shown_view() else {
+        return Effect::None;
+    };
+    let current = view.current_hunk.and_then(|i| shown_hunks(view).get(i));
+    let target = comment_target(view.composer.is_some(), view.pick.is_some(), current);
+    let target = match target {
+        CommentOpen::Hunk { .. } if !pick_allowed(view) => CommentOpen::Refused,
+        target => target,
+    };
+    let Some(view) = state.tabs.shown_view_mut() else {
+        return Effect::None;
+    };
+    match target {
+        CommentOpen::FocusComposer => Effect::FocusComposer,
+        CommentOpen::Picked => with(update(state, Msg::AddComment), Effect::FocusComposer),
+        CommentOpen::Hunk { side, range } => {
+            view.pick = Some(Pick {
+                side,
+                anchor: range.start(),
+                head: range.end(),
+            });
+            with(update(state, Msg::AddComment), Effect::FocusComposer)
+        }
+        CommentOpen::Refused => {
+            view.notice = Some(PICK_OR_HUNK);
+            Effect::None
+        }
+    }
+}
+
 /// `g` (FR-008): the next file not marked reviewed, read now, so a mark made in another window
 /// counts (US2 s5).
 fn to_unreviewed(state: &mut State) -> Effect {
@@ -274,6 +395,57 @@ fn to_unreviewed(state: &mut State) -> Effect {
     }
 }
 
+/// The press the comment composer's text area offers the review (contract K6, US4 s4): the send
+/// chord sends the review as **Send review (n)** does; every other press stays the text area's.
+pub fn composer_press(press: &Press, single_keys: bool) -> Option<Msg> {
+    match resolve(press, Holder::Composer, single_keys)? {
+        ReviewAction::Send => Some(Msg::SendPressed),
+        _ => None,
+    }
+}
+
+/// What the shortcut sheet lists (FR-012, FR-022, contract K4a): each row's key in the running
+/// platform's form with its text, in table order, and the note shown while the single keys are off.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetModel {
+    /// `(key, what it does)`, in [`micold_core::review::keys::REVIEW_KEYS`]' order.
+    pub rows: Vec<(String, &'static str)>,
+    /// [`micold_core::review::keys::SINGLE_KEYS_OFF_NOTE`] while the single-key switch is off.
+    pub note: Option<&'static str>,
+}
+
+/// The shortcut sheet's content while it is open, for the window's single-key switch.
+pub fn shortcut_sheet(app: &crate::app::State) -> Option<SheetModel> {
+    app.changes
+        .tabs
+        .shown_view()
+        .filter(|view| view.sheet_open)?;
+    Some(sheet_model(app.settings.review_single_keys))
+}
+
+/// The sheet's content with the single-key switch at `single_keys` (contract K4a).
+pub fn sheet_model(single_keys: bool) -> SheetModel {
+    SheetModel {
+        rows: sheet_rows(single_keys)
+            .map(|row| (platform_label(row), row.sheet))
+            .collect(),
+        note: (!single_keys).then_some(SINGLE_KEYS_OFF_NOTE),
+    }
+}
+
+/// `row`'s key in the running platform's form (contract K4).
+fn platform_label(row: &ReviewKey) -> String {
+    let (other, mac) = row.labels();
+    if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    }
+}
+
+/// The tooltip of **Send review (n)** (FR-013), naming the send chord.
+pub const SEND_TOOLTIP: &str = "Send the draft comments";
+
 /// The tooltip of the previous-hunk control in the diff header (FR-013).
 pub const PREVIOUS_HUNK: &str = "Previous change";
 /// The tooltip of the next-hunk control in the diff header (FR-013).
@@ -283,15 +455,7 @@ pub const NEXT_HUNK: &str = "Next change";
 /// the single-key switch is off, so a tooltip never names a key that does nothing.
 pub fn with_key_hint(text: &str, action: ReviewAction, single_keys: bool) -> String {
     match key_hint(action, single_keys) {
-        Some(row) => {
-            let (other, mac) = row.labels();
-            let label = if cfg!(target_os = "macos") {
-                mac
-            } else {
-                other
-            };
-            format!("{text} ({label})")
-        }
+        Some(row) => format!("{text} ({})", platform_label(row)),
         None => text.to_owned(),
     }
 }

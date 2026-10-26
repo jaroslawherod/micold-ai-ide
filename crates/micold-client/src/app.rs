@@ -1176,7 +1176,10 @@ impl State {
                 msg @ (crate::features::changes::Msg::DiscardCancelled
                 | crate::features::changes::Msg::ReplyClosed
                 | crate::features::changes::Msg::OverflowToggled
-                | crate::features::changes::Msg::OverflowDismissed),
+                | crate::features::changes::Msg::OverflowDismissed
+                // #1274: the shortcut sheet is a registered dialog, opened and closed as pure state.
+                | crate::features::changes::Msg::ShortcutsOpened
+                | crate::features::changes::Msg::ShortcutsClosed),
             ) => {
                 let _ = crate::features::changes::update(&mut self.changes, msg);
             }

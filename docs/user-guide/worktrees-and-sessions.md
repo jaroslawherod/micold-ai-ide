@@ -2242,6 +2242,10 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
 - **Overview**: **Ctrl+Shift+O** (Cmd+Shift+O on macOS) opens and closes the
   [worktree Overview](overview.md), also from a focused terminal; the app takes it and the
   terminal never sees it.
+- **Send a review**: **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS) sends the shown Review tab's
+  draft comments, as **Send review (n)** does, also from its comment box. It is not a terminal
+  chord: a focused terminal receives it as before. See [Reviewing from the
+  keyboard](reviewing-changes.md#reviewing-from-the-keyboard).
 - **Overview full screen**: **Ctrl+Shift+F** (Cmd+Shift+F on macOS), while the Overview is open,
   hides the sidebar so the cards fill the window, and brings it back as it was. It is not a
   terminal chord: a focused terminal receives Ctrl+Shift+F as before.

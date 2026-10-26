@@ -266,6 +266,8 @@ register! {
     crate::features::changes::FullReplyDialog => crate::ui::changes::reply_dialog,
     // Feature 1270: the review bar's overflow menu closes nothing by opening (R8).
     crate::features::changes::ReviewOverflowMenu,
+    // #1274: the Review tab's shortcut sheet (FR-012, research R8).
+    crate::features::changes::ShortcutSheet => crate::ui::shortcut_sheet::dialog,
     crate::features::help::AboutDialog => crate::ui::about::dialog,
     crate::features::help::HelpMenu {
         displaces:

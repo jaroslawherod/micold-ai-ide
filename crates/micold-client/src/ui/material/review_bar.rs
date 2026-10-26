@@ -23,7 +23,9 @@ use micold_core::tokens::{anatomy, spacing, Roles};
 
 use super::icons::Icon;
 use super::shaped_text::width_of;
-use super::{style, Button, Divider, Ellipsized, IconButton, Text, TypeRole};
+use super::{
+    style, Button, Divider, Ellipsized, IconButton, Text, Tooltip, TooltipPosition, TypeRole,
+};
 
 /// The leading part's text role.
 const ROLE: TypeRole = TypeRole::Body;
@@ -45,6 +47,7 @@ pub struct ReviewBar<'a, M> {
     drawer_open: bool,
     error: Option<String>,
     on_send: Option<M>,
+    send_tooltip: Option<String>,
     on_overflow: Option<M>,
     on_toggle_drawer: Option<M>,
     on_dismiss_error: Option<M>,
@@ -62,6 +65,7 @@ impl<'a, M: Clone + 'a> ReviewBar<'a, M> {
             drawer_open: false,
             error: None,
             on_send: None,
+            send_tooltip: None,
             on_overflow: None,
             on_toggle_drawer: None,
             on_dismiss_error: None,
@@ -84,6 +88,12 @@ impl<'a, M: Clone + 'a> ReviewBar<'a, M> {
     /// The message **Send review (n)** sends while the button is enabled.
     pub fn on_send(mut self, message: M) -> Self {
         self.on_send = Some(message);
+        self
+    }
+
+    /// The tooltip of **Send review (n)**, naming its chord (#1274 FR-013).
+    pub fn send_tooltip(mut self, text: impl Into<String>) -> Self {
+        self.send_tooltip = Some(text.into());
         self
     }
 
@@ -160,12 +170,21 @@ impl<'a, M: Clone + 'a> From<ReviewBar<'a, M>> for Element<'a, M> {
         if bar.send.enabled {
             send = send.on_press_maybe(bar.on_send);
         }
+        let send: Element<'a, M> = send
+            .width(Length::Fixed(anatomy::review_bar::SEND_WIDTH))
+            .into();
+        let send = match bar.send_tooltip {
+            Some(tip) => Tooltip::new(send, tip, r)
+                .position(TooltipPosition::Top)
+                .into(),
+            None => send,
+        };
         let trailing = row![
             toggle,
             IconButton::new(Icon::Menu, r)
                 .compact()
                 .on_press_maybe(bar.on_overflow),
-            send.width(Length::Fixed(anatomy::review_bar::SEND_WIDTH)),
+            send,
         ]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);

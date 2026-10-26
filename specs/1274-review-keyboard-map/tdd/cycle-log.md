@@ -44,3 +44,23 @@ Refactor after review A (M2): one `ReviewKey::is_on(single_keys)` predicate for 
 | T017 → T018 | K7 `j`/`k` (wrap, diff from top, collapsed folder revealed, row scrolled into view, filter), `n`/`p` (current hunk + header offset, crossing with `pending_edge` resolved only by the current read, `p` to the last), `Nothing`, picks/layout kept, hidden tab untouched, SC-003 200 files / 500 comments < 100 ms; core `tree::file_order` (folds ignored, filter, sort) | `review_key` stubbed: `test result: FAILED. 5 passed; 10 failed`; `file_order` stubbed `Vec::new()`: `file_order_ignores_folds_and_keeps_the_filter_and_sort ... FAILED` | `15 passed; 0 failed`; `-- file_order`: `2 passed` |
 | T024 → T025 | `v` = **Mark reviewed**'s edit for the selected file only, unmark; `g` 2, 4, 2, another window's mark skipped, `AllReviewed` note; SC-001 30 files `j`+`v` | same stubbed run (`v_sends…`, `g_selects…`, `j_then_v…` FAILED) | `15 passed; 0 failed` |
 | T063 → T064 | switch off: `j n v k p g` presses `Effect::None`, state unchanged, tooltips name no key; on: `j` acts, "Next change (n)", "… (v)"; settings draft/save/cancel; persist keeps other fields; Save applies at once (`main_tests`) | same stubbed run (`with_the_switch_off…` FAILED); settings/persist tests written with the code (accepted red) | in the gate |
+
+### M4 — comments, send chord and shortcut sheet (T033–T046)
+
+Red: one run of `scripts/build-lock.sh cargo test -p micold-client --test review_keys --test
+overlay_registry --test keymap --test features_composer --no-fail-fast` against the new tests, with
+the reducer arms, `composer_press`, `shortcut_sheet` and the holder's `Sheet` stubbed (`Effect::None`
+/ `None`), and `TextArea`'s `.on_press` stored but never consulted and its submit still taking Shift.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T035 → T036 | `TextArea`: Ctrl/Cmd+Enter saves, with Shift it does not; `.on_press` claims presses before the bindings, unclaimed ones keep the editor's keys and the save (driven through the real widget: click to focus, then key events) | `features_composer`: `primary_enter_saves_and_primary_shift_enter_does_not`, `on_press_sends_its_message_for_each_press_it_claims` FAILED (`29 passed; 2 failed`) | `31 passed; 0 failed` |
+| T037 | FR-011: the send chord's labels are no 803 FR-006 reserved chord, no app chord label, and encode to terminal bytes | a check of existing behaviour: passed on the first run (no code needed) | — |
+| T033 → T034 | `]`/`[` in comment order with select, card jump (drawer focus + pending jump), drawer for outdated / unlisted, wrap, `last_comment`; `c` picked / hunk / refused / focus composer | `review_keys`: 5 tests FAILED (e.g. `close_bracket_and_open_bracket_step_through_the_comments_and_wrap` at review_keys.rs:739) | `29 passed; 0 failed` |
+| T038 → T039 | `Send` = `SendPressed` (s1, SC-006), nothing without drafts / while sending (s2–s3), composer chord sends saved drafts and keeps the box (s4), 30-file walk + one chord (SC-001), switch off still sends and names it (FR-022) | 4 tests FAILED (`the_send_chord_sends_as_send_review_does` …) | same run green |
+| T041 → T042, T043 | sheet: `?` opens/closes, holder `Sheet`, `j` inert, Escape closes, overflow item opens it, switch off: `?` inert, rows = `sheet_rows(false)` + note; registered dialog (`review_shortcut_sheet`, Dialog, Escape / outside click → `ShortcutsClosed`, drawn from the registry) | `review_keys`: 3 sheet tests FAILED; `overlay_registry`: `the_reducer_opens_a_dialog_through_that_mechanism`, `an_agent_prompt_waits_behind_the_open_dialog_rather_than_closing_it` FAILED (the root did not route `ShortcutsClosed`) | `overlay_registry` `26 passed`; `surface_registration_cost` `10 passed` |
+| T044 → T045 | SC-004: *Reviewing from the keyboard* names every `REVIEW_KEYS` label (both forms, in backticks) and sheet text | `keymap`: `the_user_guide_names_every_review_key_and_its_text` FAILED (`the section says "Next file"`) | `keymap` `52 passed` after the docs |
+
+Refactor: `platform_label` shared by the tooltips and the sheet; `sheet_model` shared by the dialog
+and the showcase. A fixture fix: US3 s1's line 20 became line 5, since the 12-line fixture made a
+line-20 quote outdated (a drawer jump, the next test's case).

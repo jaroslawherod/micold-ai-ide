@@ -1158,3 +1158,106 @@ fn a_review_press_carries_the_produced_text_and_every_modifier() {
     let two = review_press(&ki(Key::Char('a'), Mods::NONE, Some("ab")), false);
     assert_eq!(two.key, PressKey::Other);
 }
+
+// ---- The review's send chord (#1274 FR-011, SC-004) ----
+
+/// The `Send` row of the review key table.
+fn send_row() -> &'static micold_core::review::keys::ReviewKey {
+    micold_core::review::keys::REVIEW_KEYS
+        .iter()
+        .find(|row| row.action == Some(micold_core::review::keys::ReviewAction::Send))
+        .expect("the table has a send chord")
+}
+
+/// FR-011: the send chord, in both platform forms, is no reserved system shortcut of
+/// `specs/803-keyboard-navigation/spec.md#FR-006` (macOS, Windows, GNOME) and no app chord.
+#[test]
+fn the_send_chord_is_no_reserved_or_app_chord() {
+    // 803 FR-006's lists, arrows spelled out.
+    let arrows = ["Up", "Down", "Left", "Right"];
+    let mut reserved: Vec<String> = [
+        "Cmd+Tab",
+        "Alt+Tab",
+        "Cmd+`",
+        "Cmd+Space",
+        "Super+Tab",
+        "Alt+F4",
+        "Cmd+C",
+        "Cmd+V",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    for arrow in arrows {
+        for prefix in [
+            "Win+",
+            "Super+",
+            "Ctrl+Alt+",
+            "Cmd+Ctrl+",
+            "Ctrl+Shift+",
+            "Cmd+Shift+",
+        ] {
+            reserved.push(format!("{prefix}{arrow}"));
+        }
+    }
+    for c in ["E", "T", "D", "H", "W", "C", "V", "O"] {
+        reserved.push(format!("Ctrl+Shift+{c}"));
+        reserved.push(format!("Cmd+Shift+{c}"));
+    }
+    // The app's own chords with labels of their own.
+    for action in NAV_CHORDS.iter().map(|(action, _)| *action) {
+        let (linux, mac) = nav_chord_labels(action);
+        reserved.extend([linux, mac]);
+    }
+    let (linux, mac) = switcher_chord_labels();
+    reserved.extend([linux, mac]);
+
+    let (linux, mac) = send_row().labels();
+    assert_eq!(
+        (linux.as_str(), mac.as_str()),
+        ("Ctrl+Shift+Enter", "Cmd+Shift+Enter")
+    );
+    for label in [&linux, &mac] {
+        assert!(
+            !reserved.iter().any(|r| r.eq_ignore_ascii_case(label)),
+            "{label} is reserved"
+        );
+    }
+    // In a terminal the chord is input, never one of the app's actions.
+    let out = encode(
+        &ki(Key::Named(NamedKey::Enter), chord_mods(), None),
+        TermMode::default(),
+    );
+    assert!(
+        matches!(out, KeyOutput::Bytes(_)),
+        "{out:?} is an app chord"
+    );
+}
+
+/// SC-004 (#1274 T044): the user guide's *Reviewing from the keyboard* names every review key in
+/// both platform forms with what the sheet says it does.
+#[test]
+fn the_user_guide_names_every_review_key_and_its_text() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/user-guide");
+    let text = std::fs::read_to_string(root.join("reviewing-changes.md")).expect("the page reads");
+    let section = text
+        .split("## Reviewing from the keyboard")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .expect("the page has the section");
+    for row in micold_core::review::keys::REVIEW_KEYS {
+        let (linux, mac) = row.labels();
+        for label in [linux, mac] {
+            assert!(
+                section.contains(&format!("`{label}`")),
+                "the section names `{label}` ({})",
+                row.sheet
+            );
+        }
+        assert!(
+            section.contains(row.sheet),
+            "the section says \"{}\"",
+            row.sheet
+        );
+    }
+}

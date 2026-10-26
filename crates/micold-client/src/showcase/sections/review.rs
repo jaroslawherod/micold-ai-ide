@@ -573,7 +573,8 @@ pub fn review_panel_row<'a>(
 }
 
 /// `ReviewBar` — no comments, drafts with the drawer open, a send under way, a send error, and a
-/// narrow bar whose counts are hidden (feature 1270, T010). What has to be checked by eye is that
+/// narrow bar whose counts are hidden (feature 1270, T010), then the shortcut sheet with the single
+/// keys on and off (#1274). What has to be checked by eye is that
 /// **Send review (n)**, ⋮ and **Comments** sit in the same place in every pose of one width.
 pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let counts = |draft, sent, applied, answered| ScopeCounts {
@@ -622,6 +623,25 @@ pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
             posed(
                 "narrow, counts hidden",
                 sized(bar(mixed, false), NARROWEST_BAR_WIDTH),
+                roles,
+            ),
+            // #1274 (FR-012, FR-022): the shortcut sheet the overflow menu and `?` open.
+            posed(
+                "shortcut sheet",
+                crate::ui::shortcut_sheet::sheet(
+                    crate::features::changes::sheet_model(true),
+                    Message::NoOp,
+                    roles,
+                ),
+                roles,
+            ),
+            posed(
+                "shortcut sheet, single keys off",
+                crate::ui::shortcut_sheet::sheet(
+                    crate::features::changes::sheet_model(false),
+                    Message::NoOp,
+                    roles,
+                ),
                 roles,
             ),
         ],

@@ -108,6 +108,24 @@ fn dialogs() -> Vec<Dialog> {
                 state.switch_needs_confirmation(request, "A turn is running.".to_owned());
             },
         },
+        // The Review tab's shortcut sheet (#1274 FR-012).
+        Dialog {
+            id: "review_shortcut_sheet",
+            cancel: Message::Changes(micold_client::features::changes::Msg::ShortcutsClosed),
+            open: |state| {
+                use micold_client::features::changes::{self, Msg};
+                // Feature 1269: a review is shown only under the active project.
+                let project = state.workspace.active.clone().unwrap_or_default();
+                changes::update(
+                    &mut state.changes,
+                    Msg::Opened {
+                        project,
+                        entry: micold_core::session::SessionLocation::Worktree("w".into()),
+                    },
+                );
+                changes::update(&mut state.changes, Msg::ShortcutsOpened);
+            },
+        },
         // Attach existing worktrees (feature 582).
         Dialog {
             id: "attach_worktrees",
@@ -293,17 +311,17 @@ fn every_dialog_is_in_the_list() {
     //
     // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
     // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
-    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942). Twenty-three with the switch of kind's confirmation (#943).
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968). Twenty-two with the two Bypass confirmations (#942). Twenty-three with the switch of kind's confirmation (#943). Twenty-four with the Review tab's shortcut sheet (#1274).
     assert_eq!(
         dialogs().len(),
-        23,
-        "the dialog list has drifted. Add the new dialog here, or the twenty-three states this file \
-         is meant to cover are no longer twenty-three"
+        24,
+        "the dialog list has drifted. Add the new dialog here, or the twenty-four states this file \
+         is meant to cover are no longer twenty-four"
     );
     assert_eq!(
         every_state().len(),
-        48,
-        "twenty-three dialogs (the Bypass confirmations, #942, and the switch confirmation, #943) plus nothing open, each with the more menu open and closed"
+        50,
+        "twenty-four dialogs (the Bypass confirmations, #942, the switch confirmation, #943, and the shortcut sheet, #1274) plus nothing open, each with the more menu open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -1060,5 +1078,26 @@ fn the_review_overflow_menu_is_a_registered_popover() {
         on_escape(&under_dialog),
         Some(Message::Changes(ChangesMsg::DiscardCancelled)),
         "the dialog above it first"
+    );
+}
+
+/// #1274 T041 (FR-012, research R8): the shortcut sheet is a registered dialog under its own name;
+/// Escape and a click outside close it, and it is drawn from the registry.
+#[test]
+fn the_shortcut_sheet_is_a_registered_dialog() {
+    use micold_client::features::changes::Msg as ChangesMsg;
+    let closed = Message::Changes(ChangesMsg::ShortcutsClosed);
+    let state = review_shown(|view| view.sheet_open = true);
+    let open = registry::topmost(&state).expect("the sheet is open");
+    assert_eq!(open.id().as_str(), "review_shortcut_sheet");
+    assert_eq!(open.layer(), Layer::Dialog);
+    for trigger in [Trigger::OutsideClick, Trigger::Escape] {
+        assert_eq!(open.on(trigger), Some(&closed), "{trigger:?}");
+    }
+    assert_eq!(on_escape(&state), Some(closed));
+    assert!(registry::open_dialog(&state).is_some_and(|open| open.view().is_some()));
+    assert!(
+        registry::topmost(&review_shown(|_| {})).is_none(),
+        "closed: not open"
     );
 }

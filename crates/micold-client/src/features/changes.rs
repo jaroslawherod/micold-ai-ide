@@ -53,8 +53,8 @@ mod keys;
 mod stale;
 
 pub use keys::{
-    current_header_row, hunk_controls, key_pressed, review_holder, with_key_hint, NEXT_HUNK,
-    PREVIOUS_HUNK,
+    composer_press, current_header_row, hunk_controls, key_pressed, review_holder, sheet_model,
+    shortcut_sheet, with_key_hint, SheetModel, NEXT_HUNK, PREVIOUS_HUNK, SEND_TOOLTIP,
 };
 use micold_core::review::keys::{Press, ReviewAction};
 use micold_core::review::navigate::Edge;
@@ -509,6 +509,10 @@ pub struct OpenView {
     /// `n`/`p` crossed into this file: once its diff is shown, the hunk at the edge becomes
     /// current (#1274 research R5); cleared whenever another file is selected.
     pub pending_edge: Option<(RelPath, Edge)>,
+    /// The comment the last `]` or `[` reached, where the next one steps from (#1274 FR-006).
+    pub last_comment: Option<CommentId>,
+    /// The shortcut sheet is open over the Review tab (#1274 FR-012; a registered dialog, R8).
+    pub sheet_open: bool,
 }
 
 /// A repository file opened from the tree or the picker (feature 1150, data-model §8).
@@ -1818,6 +1822,10 @@ pub enum Msg {
     OverflowToggled,
     /// Esc, an outside click or a scroll beneath the open overflow menu: it closes (Story 2 #4).
     OverflowDismissed,
+    /// The overflow menu's **Keyboard shortcuts**: open the shortcut sheet (#1274 US5 s4).
+    ShortcutsOpened,
+    /// Esc or a click outside the shortcut sheet: it closes (#1274 FR-012).
+    ShortcutsClosed,
     /// A send of `worktree_dir` of `project` failed with `message` (FR-006, R10). Sent by the
     /// shell, which also shows today's error snackbar.
     SendFailed {
@@ -2249,6 +2257,8 @@ fn fresh_view(project: PathBuf, entry: SessionLocation) -> OpenView {
         change_key: 0,
         current_hunk: None,
         pending_edge: None,
+        last_comment: None,
+        sheet_open: false,
     }
 }
 
@@ -2948,6 +2958,19 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
         Msg::OverflowDismissed => {
             if let Some(view) = state.tabs.shown_view_mut() {
                 view.overflow_open = false;
+            }
+            Effect::None
+        }
+        Msg::ShortcutsOpened => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.overflow_open = false;
+                view.sheet_open = true;
+            }
+            Effect::None
+        }
+        Msg::ShortcutsClosed => {
+            if let Some(view) = state.tabs.shown_view_mut() {
+                view.sheet_open = false;
             }
             Effect::None
         }
@@ -3774,6 +3797,38 @@ impl crate::overlay::registry::Registered for ReviewOverflowMenu {
             .is_some_and(|view| view.overflow_open)
             .then_some(ReviewOverflowMenu)
     }
+}
+
+/// The shortcut sheet (#1274 FR-012, research R8): a dialog over the Review tab, closed by Esc or
+/// a click outside.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShortcutSheet;
+
+crate::floating_surface!(
+    ShortcutSheet,
+    id: crate::overlay::SurfaceId::new("review_shortcut_sheet"),
+    layer: Dialog,
+    cancelled_by: crate::app::Message::Changes(Msg::ShortcutsClosed),
+);
+
+impl crate::overlay::registry::Registered for ShortcutSheet {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(|view| view.sheet_open)
+            .then_some(ShortcutSheet)
+    }
+}
+
+/// Whether the shortcut sheet is the surface on top, so it has the keyboard (#1274 research R7).
+pub fn sheet_on_top(app: &crate::app::State) -> bool {
+    use crate::overlay::registry::Registered;
+    use crate::overlay::FloatingSurface;
+    ShortcutSheet::open_in(app).is_some_and(|sheet| {
+        crate::overlay::registry::topmost(app).is_some_and(|top| top.id() == sheet.id())
+    })
 }
 
 /// The discard confirmation's question while it is open (S3): "Discard n draft comments? This
