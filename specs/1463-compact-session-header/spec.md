@@ -16,6 +16,12 @@
 - **Switch control**: the control that switches a terminal session between its terminal view and its structured view ("Open in structured view"), with the held-queue caption beside it.
 - **Single pane**: the session area shows one session; **tiled panes** show several, each with its own per-pane control row.
 
+## Clarifications
+
+### Session 2026-10-26
+
+- Q: Is changing the fixed `tab::SESSION_WIDTH` in scope (issue item 4, optional)? → A: No, deferred. It is a fixed, derived constant (1126 R8) that the strip's reveal and edge-fade arithmetic and the stability gates rely on; changing it would re-record tab snapshots unrelated to the header move. _(agent-resolved: crates/micold-material/src/tab.rs#SESSION_WIDTH; specs/1126-session-context-header R8)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See the header on one line (Priority: P1)
@@ -92,7 +98,7 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 - **FR-008**: No strip control moves or is missed between session states (idle, running, stopped, held queue, Review shown) beyond the switch control's own space; a press lands on its first try.
 - **FR-009**: A Claude terminal session in a single pane MUST need two rows above the terminal (about 90 px instead of about 190 px); any other session two rows instead of three.
 - **FR-010**: The layout snapshots, the header layout contract (H9) of spec 1126 and the user-guide header description MUST describe the new layout.
-- **FR-011**: The session tab width SHOULD be reconsidered so a short label does not leave blank space [NEEDS CLARIFICATION: is changing the fixed session tab width in scope, or deferred as optional?]
+- **FR-011**: The session tab width (`tab::SESSION_WIDTH`) MUST stay as it is; reconsidering it is deferred (see Clarifications).
 - **FR-012**: In a narrow strip the held-queue caption MUST be cut with an ellipsis (full text in a tooltip) before the switch control, restart or any fixed control is clipped; session tabs scroll as in 1126.
 
 ### Key Entities
@@ -115,7 +121,7 @@ Existing behaviour of the strip (stable child list, fixed controls, scrolling) i
 - New widgets or new controls; only existing ones are moved and resized.
 - Changing what the chips, Changes button or switch control do.
 - Tiled-pane layout.
-- The session tab width (FR-011), unless clarification brings it in.
+- The session tab width (FR-011): deferred to a separate issue.
 
 ## Assumptions
 

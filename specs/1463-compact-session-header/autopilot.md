@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1463
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
-- **Phase**: clarify
-- **Next step**: Run the clarify unit on spec.md (one open marker: FR-011 tab width)
+- **Phase**: plan
+- **Next step**: plan unit (clarify done: FR-011 deferred, SESSION_WIDTH unchanged)
 
 ## Pull requests
 
