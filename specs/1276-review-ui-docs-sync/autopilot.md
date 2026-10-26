@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M2 implement
-- **Next step**: orchestrator runs M2 reviews A and B on the snapshot; then stop (b): rebase, re-record the fixture (T019–T021), full gate, PR
+- **Phase**: M2 stop (b)
+- **Next step**: stop (b): origin/main merged (not rebased); T019–T021 re-record and explain, T025 full gate, push, draft PR
 
 ## Pull requests
 
@@ -71,6 +71,8 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | M1 A (correctness) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CLEAN, 3 MINOR (high, session model, run by orchestrator); all fixed: F1 `key_cell` builds from `ReviewKey::labels()`, the hand-rolled `chord` removed; F2 § Clearing and discarding says the ⋮ menu also holds **Keyboard shortcuts** → #the-shortcut-sheet (prose only); F3 the row-count assert moved before the zip loop |
 | M1 B (conformance) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CHANGES, 1 MAJOR 2 MINOR (sonnet, run by orchestrator); Verify: cargo tests pass, documentation-set.test.sh pass, links.sh exit 2 (no lychee). All fixed: F1 red-before-green recorded in `tdd/cycle-log.md` (tests run against origin/main's guide in a scratch worktree: 3 failed, then green on the branch); F2 T013 ticked, lychee/mdBook left to CI; F3 parallel-runs.md edited lines rewrapped to 100 columns. Re-reviewed in round 2 |
 | M1 B (conformance) | 2 | 55c8a7de13a6327a4e09ea4d89482e75712c28f1:9938200b23e98e38be8e66626ade678b854710e5 | CLEAN, 1 MINOR (sonnet, run by orchestrator); Verify: 3+3+2 tests pass, documentation-set.test.sh pass. F1 cycle-log.md last line ended mid-sentence — fixed, prose only ("loop.") |
+| M2 A (correctness) | 1 | 0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880 | CLEAN, 3 MINOR (high, session model, run by orchestrator); all fixed: F1 `SMALLEST_WINDOW` entries keyed by (states, parent, edge, layer), the drawer's `/` subtree entry split into its seven parents, each (state, entry) pair required to fire (checked: an extra state fails naming it); F2 `describe_difference` names `inside <anchor>` for `base` lines only, test `an_unanchored_base_difference_names_the_anchor_holding_it_and_an_over_one_does_not`; F3 layout-snapshot.md "Four states are new" (prose only) |
+| M2 B (conformance) | 1 | 0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880 | CLEAN (sonnet, run by orchestrator); Verify: `layout_snapshot review_tab_fits` 2 passed, `layout_coverage_registry` 3 passed; decision 6 holds |
 
 ## Declined review findings
 
@@ -79,15 +81,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-M2 stop (a) done at 0af2331d (pushed; review snapshot
-`0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880`): T014–T018 and
-T022–T024 ticked; scoped gate green except `the_layout_matches_the_committed_fixture` (fixture not
-re-recorded yet, by design). Next, after reviews: act on findings; rebase onto origin/main; T019
-`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`; T020 explain the
-diff by group into the PR body (expected: `@` anchor lines on the slice states, four new state
-blocks; anything else needs a reason, FR-005); T021 +1 px on `review_bar.rs`'s strip padding
-(`.padding([0.0, spacing::MD])`) fails naming `path …, inside review.bar`, revert; T025
-`scripts/gate.sh` detached; draft PR. No PR open yet. #1474 filed (smallest-window squeeze).
+None.
 
 ## Open escalation
 

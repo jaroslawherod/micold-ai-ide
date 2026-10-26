@@ -144,19 +144,20 @@ under the drawer as `review.diff`; `review-source-open` the source control's flo
 `review.tree`, with its filter box and sort chips as `review.tree.filter` and `review.tree.sort`;
 `changes-review-marks` the *n of m reviewed* row as `review.progress` and the first file row's ✓ as
 `review.tree.row.mark`; `review-shortcut-sheet` the sheet's dialog as `review.sheet`;
-`changes-review-held` the *2 files changed since you looked* notice as `review.stale`. Three states
-are new: `review-drag-composer`, `changes-review-marks` after a drag over two line numbers, the
-composer under the range anchored as `review.composer`; `review-empty`, nothing changed, the drawer
-open with no drafts and no replies and **Send review** disabled (`review.tree`, `review.bar`,
-`review.bar.send`, `review.drawer`); and `review-two-worktrees`, `fix-a-bug`'s Review tab shown while
-`feat-short`'s keeps `src/a.rs` selected (`session.strip.tabs.review`, `review.tree`).
+`changes-review-held` the *2 files changed since you looked* notice as `review.stale`. Four states
+are new: `review-tab-beside-sessions`, above; `review-drag-composer`, `changes-review-marks` after
+a drag over two line numbers, the composer under the range anchored as `review.composer`;
+`review-empty`, nothing changed, the drawer open with no drafts and no replies and **Send review**
+disabled (`review.tree`, `review.bar`, `review.bar.send`, `review.drawer`); and
+`review-two-worktrees`, `fix-a-bug`'s Review tab shown while `feat-short`'s keeps `src/a.rs`
+selected (`session.strip.tabs.review`, `review.tree`).
 `gates/review_tab_fits.rs` lays every one of them out at the smallest window and at 1280×800 in both
 themes: no text past its clip, no node past its parent beyond `gates/containment.rs`'s exemptions,
 the review bar at or above the status bar and both inside the window, an open drawer inside the diff
 pane without narrowing it, the status bar's own invariants and the session area's header and strip
 checks. At the smallest window it also allows the overhangs its `SMALLEST_WINDOW` list names: three
-scrolling viewports, and the review tab squeezed at 640×480, filed as #1474. Each entry must keep
-firing.
+scrolling viewports, and the review tab squeezed at 640×480, filed as #1474. Each entry names the
+states it holds in, and must keep firing in each of them.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session
@@ -352,11 +353,12 @@ fix for the bug it was written against.
   list and child list stay index-aligned without it occupying space. The exemption follows from the
   invariant's own premise — a node that is nowhere paints on nothing — but it does buy silence about
   content pushed off-screen *accidentally*, which is a real defect class and a different one.
-- **`SMALLEST_WINDOW` in `gates/review_tab_fits.rs` — ten entries, at 640×480 only.** Three are
-  scrolling (the tree's rows, the diff's lines and the source control's list past their viewports);
-  seven are the review tab squeezed at the smallest window (the progress slot, the wrapped sort chips
-  and diff header controls, the diff's loading placeholder, a narrow drawer's controls), filed as
-  #1474. Fixing one means deleting its entry.
+- **`SMALLEST_WINDOW` in `gates/review_tab_fits.rs` — sixteen entries, at 640×480 only.** Each
+  names the states, the parent, the edge and the layer it allows. Three are scrolling (the tree's
+  rows, the diff's lines and the source control's list past their viewports); thirteen are the
+  review tab squeezed at the smallest window (the progress slot, the wrapped sort chips and diff
+  header controls, the diff's loading placeholder, a narrow drawer's header and rows), filed as
+  #1474. Fixing one means dropping its state from the entry, and the entry once none is left.
 - **Two geometric differences between the schemes.** Structure is identical everywhere; two boxes
   differ in size because a string differs in length between schemes. Each carries its reason and
   each must keep firing.

@@ -383,6 +383,33 @@ fn an_unanchored_difference_is_named_by_path() {
     );
 }
 
+/// An unanchored `base` node is named by the deepest anchor holding it, and an `over` node at a
+/// path under that anchor is not (feature 1276, US2): the overlay tree is not inside the base one.
+#[test]
+fn an_unanchored_base_difference_names_the_anchor_holding_it_and_an_over_one_does_not() {
+    let fixture = |base_x: f32, over_x: f32| {
+        format!(
+            "## review-bar\n@ review.bar -> 0/1\n\
+             base 0/1          0.0  700.0  1280.0    40.0\n\
+             base   0/1/0 {base_x:>10.1}  704.0   100.0    32.0\n\
+             over 0/1/0   {over_x:>10.1}  704.0   100.0    32.0\n"
+        )
+    };
+    let committed = fixture(12.0, 40.0);
+
+    let moved_base = describe_difference(&fixture(13.0, 40.0), &committed);
+    assert!(
+        moved_base.contains("path 0/1/0, inside review.bar"),
+        "a moved child of review.bar is named inside it; got:\n{moved_base}"
+    );
+
+    let moved_over = describe_difference(&fixture(12.0, 41.0), &committed);
+    assert!(
+        moved_over.contains("element : path 0/1/0\n") && !moved_over.contains("inside"),
+        "an over node is not inside a base anchor; got:\n{moved_over}"
+    );
+}
+
 /// A state whose differences come after the twenty the report details is still named (feature
 /// 1128, SC-005): a whole-window state sits late in the fixture, and an edge moved in every state
 /// must not be reported as a change to the first state alone.
@@ -1035,7 +1062,9 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
         let path = path_of(r.or(o));
         // An unanchored node is named by its path and by the deepest anchor holding it (feature
         // 1276, US2): a padding change moves a bar's children, not the bar, and the failure should
-        // still say which bar.
+        // still say which bar. Only a `base` node: an `over` tree's paths share their prefixes
+        // with the base tree's, so a base anchor does not hold it.
+        let base = r.or(o).and_then(|l| l.split_whitespace().next()) == Some("base");
         let named = anchors
             .iter()
             .find(|(_, p)| *p == path)
@@ -1043,7 +1072,7 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
             .unwrap_or_else(|| {
                 anchors
                     .iter()
-                    .filter(|(_, p)| path.starts_with(&format!("{p}/")))
+                    .filter(|(_, p)| base && path.starts_with(&format!("{p}/")))
                     .max_by_key(|(_, p)| p.len())
                     .map_or_else(
                         || format!("path {path}"),

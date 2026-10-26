@@ -115,93 +115,179 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-/// Overhangs allowed at the smallest window only, as `(parent, edge, layer, why)`: an escape from
-/// `parent`, or from a node under it when `parent` ends in `/`, past `edge`. At 1280×800 none fires
-/// and none is allowed. Each must keep firing, or it is widening the gate silently: delete an entry
-/// once its node fits.
+/// Overhangs allowed at the smallest window only, as `(states, parent, edge, layer, why)`: in one
+/// of `states`, a child escaping `parent` past `edge` in `layer`. At 1280×800 none fires and none
+/// is allowed. Each entry must keep firing in each of its states, or it is widening the gate
+/// silently: drop a state once its node fits there, and the entry once no state is left.
 ///
 /// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
 /// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
 /// filed as #1474 rather than fixed here (feature 1276 changes no review layout, spec § Out of
 /// Scope).
-const SMALLEST_WINDOW: &[(&str, &str, &str, &str)] = &[
+const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     (
+        &[
+            "changes-review-held",
+            "changes-review-marks",
+            "changes-tree-filter",
+            "review-drag-composer",
+            "review-shortcut-sheet",
+            "review-source-open",
+            "review-two-worktrees",
+        ],
         "0/0/0/1/1/2/1/0/0/0/2",
         "bottom",
         "base",
         "the tree's VirtualRows: rows past its viewport",
     ),
     (
+        &[
+            "changes-review-held",
+            "changes-review-marks",
+            "review-drag-composer",
+            "review-shortcut-sheet",
+            "review-source-open",
+        ],
         "0/0/0/1/1/2/1/1/0/0/1",
         "bottom",
         "base",
         "the diff's Scrollable: lines past its viewport",
     ),
     (
+        &["review-source-open"],
         "0/0/0/0/0/0/0/0/0/0",
         "bottom",
         "over",
         "the source control's open list: rows past its viewport",
     ),
     (
+        &[
+            "changes-review-marks",
+            "changes-tree-filter",
+            "review-drag-composer",
+            "review-shortcut-sheet",
+            "review-source-open",
+            "review-two-worktrees",
+        ],
         "0/0/0/1/1/2/0/0/2/0/0",
         "right",
         "base",
         "#1474: the progress bar past its slot",
     ),
     (
+        &["changes-review-held"],
         "0/0/0/1/1/2/0/0/2/0/0/0",
         "right",
         "base",
         "#1474: the progress words past their box",
     ),
     (
+        &["changes-review-held"],
         "0/0/0/1/1/2/0/0/3/0/0",
         "right",
         "base",
         "#1474: the progress bar past its slot, beside the stale notice",
     ),
     (
+        &[
+            "changes-review-held",
+            "changes-review-marks",
+            "review-drag-composer",
+            "review-shortcut-sheet",
+            "review-source-open",
+        ],
         "0/0/0/1/1/2/1/0/0/0/1",
         "bottom",
         "base",
         "#1474: the wrapped sort chips below their row",
     ),
     (
+        &[
+            "changes-review-held",
+            "changes-review-marks",
+            "changes-tree-filter",
+            "review-drag-composer",
+            "review-shortcut-sheet",
+            "review-source-open",
+            "review-two-worktrees",
+        ],
         "0/0/0/1/1/2/1/1/0/0/0",
         "bottom",
         "base",
         "#1474: the diff header's wrapped controls below their row",
     ),
     (
+        &["changes-tree-filter", "review-two-worktrees"],
         "0/0/0/1/1/2/1/1/0/0/1/0/0",
         "bottom",
         "base",
         "#1474: the diff's loading placeholder past its box",
     ),
     (
-        "0/0/0/1/1/2/1/1/1/0/",
+        &["drawer-drafts", "drawer-replies", "review-empty"],
+        "0/0/0/1/1/2/1/1/1/0/0/0/0",
         "right",
         "base",
-        "#1474: the drawer's header, tabs and row controls past a narrow drawer",
+        "#1474: the drawer's header past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts", "drawer-replies", "review-empty"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/0/0/0/0/1/0",
+        "right",
+        "base",
+        "#1474: a draft or reply row's controls past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts", "drawer-replies", "review-empty"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/0/1/0/0/1/0",
+        "right",
+        "base",
+        "#1474: a draft or reply row's controls past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts", "drawer-replies"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/0",
+        "right",
+        "base",
+        "#1474: a draft or reply row past a narrow drawer",
+    ),
+    (
+        &["drawer-replies"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/2",
+        "right",
+        "base",
+        "#1474: a reply row's controls past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts", "drawer-replies"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/1/0/0",
+        "right",
+        "base",
+        "#1474: a draft or reply row past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts", "drawer-replies"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/2/0/0",
+        "right",
+        "base",
+        "#1474: a draft or reply row past a narrow drawer",
     ),
 ];
 
-/// The [`SMALLEST_WINDOW`] entry `escape` falls under, at `window`.
-fn known_at(window: Size, escape: &lay::Escape) -> Option<&'static str> {
+/// The [`SMALLEST_WINDOW`] entry `escape` falls under, in the state `name` at `window`.
+fn known_at(name: &str, window: Size, escape: &lay::Escape) -> Option<&'static str> {
     if window != MIN_WINDOW_SIZE {
         return None;
     }
     SMALLEST_WINDOW
         .iter()
-        .find(|(parent, edge, layer, _)| {
-            let under = match parent.strip_suffix('/') {
-                Some(root) => escape.parent_path.starts_with(*parent) || escape.parent_path == root,
-                None => escape.parent_path == *parent,
-            };
-            under && escape.edge == *edge && escape.layer.token() == *layer
+        .find(|(states, parent, edge, layer, _)| {
+            states.contains(&name)
+                && escape.parent_path == *parent
+                && escape.edge == *edge
+                && escape.layer.token() == *layer
         })
-        .map(|(parent, ..)| *parent)
+        .map(|(_, parent, ..)| *parent)
 }
 
 /// The registered state named `name`.
@@ -253,7 +339,7 @@ fn findings(
     name: &str,
     theme: ThemePreference,
     window: Size,
-    fired: &mut std::collections::BTreeSet<&'static str>,
+    fired: &mut std::collections::BTreeSet<(String, &'static str)>,
 ) -> Vec<String> {
     let what = format!("{name} {theme:?} {window:?}");
     let build = covered(name).build;
@@ -282,9 +368,9 @@ fn findings(
     let escapes: Vec<String> = lay::escapes(&records, TOLERANCE)
         .into_iter()
         .filter(|e| clips_deliberately(name, e).is_none())
-        .filter(|e| match known_at(window, e) {
+        .filter(|e| match known_at(name, window, e) {
             Some(entry) => {
-                fired.insert(entry);
+                fired.insert((name.to_string(), entry));
                 false
             }
             None => true,
@@ -363,11 +449,13 @@ fn every_review_state_fits_at_both_windows_in_both_themes() {
     assert!(found.is_empty(), "{}", found.join("\n"));
     let silent: Vec<_> = SMALLEST_WINDOW
         .iter()
-        .filter(|(parent, ..)| !fired.contains(parent))
+        .flat_map(|(states, parent, ..)| states.iter().map(move |state| (*state, *parent)))
+        .filter(|(state, parent)| !fired.contains(&(state.to_string(), *parent)))
         .collect();
     assert!(
         silent.is_empty(),
-        "these smallest-window exemptions fired in no review state; delete them: {silent:?}"
+        "these smallest-window exemptions, as (state, parent), no longer fire; drop them: \
+         {silent:?}"
     );
     for (_, name, _) in REVIEW_STATES {
         assert_fits_under(name, covered(name).build);
