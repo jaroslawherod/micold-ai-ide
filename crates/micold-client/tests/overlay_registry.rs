@@ -640,10 +640,12 @@ fn the_keyboard_subscription_names_no_surface() {
     // So is the Overview's full-screen chord (feature 970, R7): a toggle the reducer gates itself.
     // So is the Overview's arrow step (feature 1122, R9), which replaced `Message::FocusMoved` for
     // the arrows there: like it, it names a direction, not a surface a key dismisses.
+    // So is the Review tab's key press (feature 1274, K6): it names the press, and the root decides
+    // it against who has the keyboard, which asks the registry for the topmost surface.
     // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
     // Each name runs to the first character a path cannot hold (`,`, `{`, `;`, `=`), and is compared
     // whole, so a longer message sharing a prefix with an exempt one is still found.
-    const EXEMPT: [&str; 9] = [
+    const EXEMPT: [&str; 10] = [
         "Message::EscapePressed",
         "Message::EscapePressed)",
         "Message::FocusMoved",
@@ -655,6 +657,7 @@ fn the_keyboard_subscription_names_no_surface() {
         // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it may
         // carry are pinned below.
         "Message::Overview(msg))",
+        "Message::Changes(crate::features::changes::Msg::KeyPressed(press",
     ];
     let named: Vec<String> = body
         .match_indices("Message::")

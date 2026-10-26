@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code-review high) | 1 | 5d0dfa4de1f0e3e6bbdbfb83edf55e23bc661685:110db9b34069c52a9f73af2e6e6df4c0d4524846 | CLEAN: 7 findings, no BLOCKER/MAJOR; 2 fixed (one `ReviewKey::is_on` predicate shared by `resolve`/`sheet_rows`/`key_hint`; persist test: a form save keeps a stored `false`), 5 declined |
 | Review B M2 (conformance, sonnet) | 1 | 5d0dfa4de1f0e3e6bbdbfb83edf55e23bc661685:110db9b34069c52a9f73af2e6e6df4c0d4524846 | CHANGES: BLOCKER Verify not run (gate died, disk full); MINOR TDD red wording — fixed |
 | Review B M2 | 2 (sonnet) | tree of c78577d96 | CLEAN: gate GATE_EXIT=0, review::keys 18 ok, settings tests ok, settings_sections ok |
+| Review A M3 (code review high, headless reviewer) | 1 | adde9b38f77bb64399106bfd29f0aa938e49c034:0956edfa59b3efca63cd24a2ac226930fec0e927 | CLEAN: 3 MINOR; F1 (`reset_diff_pane` keeps `pending_edge`) and F3 (`select` of the selected file keeps the current hunk) fixed, F2 declined |
 
 ## Declined review findings
 
@@ -69,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | F2: a pending drawer jump returns before `resolve_pending_edge` | They cannot both be pending for one read: `DrawerRowSelected` selects through `Msg::FileSelected`, which clears `pending_edge` for another file; for the same file the jump is the newer request and wins |
 
 ## Handover
 

@@ -134,7 +134,9 @@ fn select(state: &mut State, path: RelPath) -> Effect {
     let Some(view) = state.tabs.shown_view_mut() else {
         return selected;
     };
+    // Shown from the top: no hunk is current, even when the file was selected already.
     view.diff_offset = 0;
+    view.current_hunk = None;
     let mut effect = with(selected, Effect::ScrollDiff { offset: 0 });
     if let Some(offset) = row_into_view(view, &path) {
         view.list_offset = offset;
