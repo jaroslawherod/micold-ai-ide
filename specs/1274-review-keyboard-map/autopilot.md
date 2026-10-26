@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M3 implemented (T012–T026, T063–T065); reviews, visual pass (T027), full gate and PR next.
+- **Next step**: M3 PR open (CI, merge); T027 visual pass still to run (see *Handover*).
 
 ## Pull requests
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 (conformance, sonnet) | 1 | 5d0dfa4de1f0e3e6bbdbfb83edf55e23bc661685:110db9b34069c52a9f73af2e6e6df4c0d4524846 | CHANGES: BLOCKER Verify not run (gate died, disk full); MINOR TDD red wording — fixed |
 | Review B M2 | 2 (sonnet) | tree of c78577d96 | CLEAN: gate GATE_EXIT=0, review::keys 18 ok, settings tests ok, settings_sections ok |
 | Review A M3 (code review high, headless reviewer) | 1 | adde9b38f77bb64399106bfd29f0aa938e49c034:0956edfa59b3efca63cd24a2ac226930fec0e927 | CLEAN: 3 MINOR; F1 (`reset_diff_pane` keeps `pending_edge`) and F3 (`select` of the selected file keeps the current hunk) fixed, F2 declined |
+| Review B M3 (conformance, sonnet, headless) | 1 | a8df1179a0a164f1635bb3278ad9b68849fefdc6:af6b01c9f13795709c5e62d92e749c3f375f0366 | CLEAN: 2 MINOR declined (F1 = review A's F2; F2 a re-read keeps `current_hunk`: an index past the new count marks nothing and `step_hunk` clamps it). Client suite TEST_EXIT=0 (all client tests) |
 
 ## Declined review findings
 
@@ -71,10 +72,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M3 | A | F2: a pending drawer jump returns before `resolve_pending_edge` | They cannot both be pending for one read: `DrawerRowSelected` selects through `Msg::FileSelected`, which clears `pending_edge` for another file; for the same file the jump is the newer request and wins |
+| M3 | B | F2: a re-read of the selected file keeps `current_hunk` | The mark is drawn from `header_rows(..).get(i)`, so an index past a shorter diff marks nothing; `step_hunk` clamps it (M1 review A fix); a file change clears it |
 
 ## Handover
 
-None.
+M3 unit part 2 (2026-10-26): T012–T026, T063–T065 done; reviews A and B CLEAN; `scripts/gate.sh` GATE_EXIT=0 at f8ebb7f79; PR opened (see *Pull requests*). **Open: T027** (visual pass, quickstart §B B1–B6, B12, B13, B16 at 1280×800 light/dark): not run — the `visual-pass` skill is not loadable in this session (`Unknown skill: visual-pass`, the workspace is not trusted) and this unit has no Agent tool; a headless worker would need unrestricted Bash. Next: run T027 through an `autopilot-worker` (debug build with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; ~4.5 GB disk free; xdotool not installed), save evidence to `specs/1274-review-keyboard-map/visual-pass/`, tick T027, push to the PR.
 
 ## Open escalation
 
