@@ -55,10 +55,12 @@ const SECOND: &str = "second";
 /// What a session runs to install its tools, in order: each `(what, command)` runs in the project.
 const INSTALLS: &[(&str, &str)] = &[
     // `mise use` has no profile flag, so the minimal profile goes in the global config as a tool
-    // option, as mise's Rust page gives it.
+    // option, as mise's Rust page gives it. The entry is added to whatever the config already
+    // holds (under its `[tools]` table, or a new one), never written over it, and left alone when
+    // the config already names rust.
     (
         "rust through mise",
-        r#"mkdir -p "$HOME/.config/mise" && printf '[tools]\nrust = { version = "1.90.0", profile = "minimal" }\n' > "$HOME/.config/mise/config.toml" && mise install rust"#,
+        r#"f="$HOME/.config/mise/config.toml" && mkdir -p "${f%/*}" && touch "$f" && rust='rust = { version = "1.90.0", profile = "minimal" }' && { grep -q '^rust *=' "$f" || if grep -q '^\[tools\]' "$f"; then sed -i "/^\[tools\]/a $rust" "$f"; else printf '\n[tools]\n%s\n' "$rust" >> "$f"; fi; } && mise install rust"#,
     ),
     ("uv through mise", "mise use -g uv@0.8.0"),
     ("go through mise", "mise use -g go@1.24.0"),
@@ -311,13 +313,16 @@ async fn sandbox_real_self_install_a_session_installs_its_tools_and_they_stay() 
         // AS5.6: system packages are out of a session's reach.
         let apt = term
             .run_within(
-                "apt-get install -y libpq-dev >/tmp/apt.log 2>&1; echo APT-EXIT=$?",
+                "apt-get install -y libpq-dev >/tmp/apt.log 2>&1; echo APT\"-EXIT=$?\"",
                 Duration::from_secs(120),
             )
             .await;
         assert!(
-            apt.lines()
-                .any(|l| l.trim().starts_with("APT-EXIT=") && l.trim() != "APT-EXIT=0"),
+            apt.lines().any(|l| l
+                .trim()
+                .strip_prefix("APT-EXIT=")
+                .and_then(|code| code.trim().parse::<u32>().ok())
+                .is_some_and(|code| code != 0)),
             "apt-get install succeeded as the session user: {apt}"
         );
         sandbox_home
