@@ -172,7 +172,7 @@ The setting and the `single_keys` filters serve US1–US5 and FR-022; no story l
 - [x] T044 [US5] Write a failing docs test in `crates/micold-client/tests/keymap.rs` (SC-004): `docs/user-guide/reviewing-changes.md` names every `REVIEW_KEYS` row's labels (both forms) and `sheet` text
 - [x] T045 [US5] Complete *Reviewing from the keyboard* in `docs/user-guide/reviewing-changes.md`: the full key table from `REVIEW_KEYS` (`]` `[` `c` `?`, send chord, save-comment chord), the shortcut sheet and the overflow item, and what the sheet shows with the single-key switch off; extend *Single-key shortcuts in the Review tab* in `docs/user-guide/settings.md` with `]` `[` `c` `?`, the send chord that keeps working and the sheet, so T044 passes (FR-020, FR-022)
 - [x] T046 [US5] Add layout snapshot states `review-shortcut-sheet` and `review-shortcut-sheet-single-keys-off` (only the two chords and the note, SC-004's off case) in `crates/micold-client/tests/support/covered_states.rs` and list it in `docs/development/layout-snapshot.md` (FR-021)
-- [ ] T047 [US5] Run the `visual-pass` skill (through an `autopilot-worker`) for quickstart §B B7–B12, B15 and B16 (M4 part) at 1280×800, light and dark; save the evidence under `specs/1274-review-keyboard-map/visual-pass/` (FR-021)
+- [x] T047 [US5] Run the `visual-pass` skill (through an `autopilot-worker`) for quickstart §B B7–B12, B15 and B16 (M4 part) at 1280×800, light and dark; save the evidence under `specs/1274-review-keyboard-map/visual-pass/` (FR-021)
 
 ---
 

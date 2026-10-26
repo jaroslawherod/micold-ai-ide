@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M4 visual pass (T047, release build), then full gate, PR.
+- **Next step**: M4 full gate, then PR.
 
 ## Pull requests
 
@@ -88,6 +88,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- T047 visual pass M4 (2026-10-26, this unit, by hand per `.claude/skills/visual-pass/SKILL.md`): **PASS**. Release build of the M4 tree (client + its own daemon) on Xvfb :77, tiny-skia, XTest via python-xlib, private `MICOLD_DATA_DIR`, 1280×800, light and dark; fixture `a.rs` `b.rs` `c.rs` (two hunks each) + `d.bin`, Default entry. Evidence `specs/1274-review-keyboard-map/visual-pass/m4-*.png`. B8: `j n c` opens the composer on hunk 1's added line with the keyboard in it (typed text landed), three drafts made with `c` + Ctrl+Enter; on `c.rs` with no hunk `c` draws *Pick lines or move to a hunk (n) to comment* — visible only in the first ~30 ms frame, then cleared (the known changes_watch re-read bug: each `ListRead` clears `view.notice`; not fixed here). B7: `]`×4 `[` → a.rs:3, a.rs:45, b.rs:3 (selects b.rs), wraps to a.rs:3, `[` → b.rs:3, each card highlighted (the outdated → drawer case is unit-tested only: no outdated comment in the fixture). B9: in the composer `j` is typed, Ctrl+Shift+Enter sends (a session starts; the send then fails in this container with Claude Code's folder-trust message), composer stays open with `j`, nothing saved (still 3 drafts). B10: the chord and **Send review (3)** give the same result and bar error. B11: `?` opens the sheet (12 rows, Linux labels), `j` changes no pixel, Escape / outside click / `?` close it, overflow → **Keyboard shortcuts** opens the same sheet. B12: **Send review** tooltip *Send the draft comments (Ctrl+Shift+Enter)* (light and dark). B16 (M4 part, `review_single_keys: false` seeded): `?` does nothing, overflow item opens the sheet with only the two chords and the note, the chord still sends. B15: layout snapshot re-recorded with both sheet states (`eb55db847`). xdotool absent; `?` needs Shift_L+slash through XTest.
 
 - M4 (2026-10-26): T036's `text_area.rs` is `crates/micold-material/src/text_area.rs` now (the client re-exports it); `.on_press` takes iced's `KeyPress`, and the composer turns it into a core `Press` with `ui::composer::key_input` + `keymap::review_press`. iced's `KeyPress` has no repeat flag, so the composer passes `repeat: false`: a held chord there could resend (the service's `sending` flag then refuses it).
 - M4: the shortcut sheet's open state is per view (`OpenView::sheet_open`, like `overflow_open`); `ShortcutsOpened`/`ShortcutsClosed` are routed as pure state in `app::State::update` (as the overflow menu's), so the registry's cancel reaches them.
