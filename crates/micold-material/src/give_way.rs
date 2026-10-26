@@ -681,6 +681,47 @@ impl<'a, M: 'a> From<FirstThatFits<'a, M>> for Element<'a, M> {
     }
 }
 
+/// A row that gives way by rank when it is too narrow (feature 1463): as wide as its children at
+/// their natural widths, `gap` apart, and narrower only when its room is. Children yield in
+/// ascending rank, each down to the width it lays out at with no room; a [`GiveWayRow::keep`] child
+/// never yields. A plain `row!` squeezes whichever child it lays out last; this one squeezes the
+/// child that was named to give way first.
+pub struct GiveWayRow<'a, M>(Lane<'a, M>);
+
+impl<'a, M> GiveWayRow<'a, M> {
+    /// An empty row with `gap` between children.
+    pub fn new(gap: f32) -> Self {
+        Self(Lane::hugging(gap))
+    }
+
+    /// A child that never yields.
+    pub fn keep(self, child: impl Into<Element<'a, M>>) -> Self {
+        self.slot(child, GiveWay::Keep)
+    }
+
+    /// A child that gives way at `rank`, lower ranks first.
+    pub fn shorten(self, rank: u8, child: impl Into<Element<'a, M>>) -> Self {
+        self.slot(child, GiveWay::Shorten(rank))
+    }
+
+    fn slot(self, child: impl Into<Element<'a, M>>, give_way: GiveWay) -> Self {
+        Self(self.0.push(
+            child.into(),
+            Slot {
+                give_way,
+                group: Group::Leading,
+                floor: Floor::Squeezed,
+            },
+        ))
+    }
+}
+
+impl<'a, M: 'a> From<GiveWayRow<'a, M>> for Element<'a, M> {
+    fn from(row: GiveWayRow<'a, M>) -> Self {
+        row.0.into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -759,46 +800,5 @@ mod tests {
             plan(&items, 0.0, 160.0),
             vec![Some(100.0), Some(50.0), None]
         );
-    }
-}
-
-/// A row that gives way by rank when it is too narrow (feature 1463): as wide as its children at
-/// their natural widths, `gap` apart, and narrower only when its room is. Children yield in
-/// ascending rank, each down to the width it lays out at with no room; a [`GiveWayRow::keep`] child
-/// never yields. A plain `row!` squeezes whichever child it lays out last; this one squeezes the
-/// child that was named to give way first.
-pub struct GiveWayRow<'a, M>(Lane<'a, M>);
-
-impl<'a, M> GiveWayRow<'a, M> {
-    /// An empty row with `gap` between children.
-    pub fn new(gap: f32) -> Self {
-        Self(Lane::hugging(gap))
-    }
-
-    /// A child that never yields.
-    pub fn keep(self, child: impl Into<Element<'a, M>>) -> Self {
-        self.slot(child, GiveWay::Keep)
-    }
-
-    /// A child that gives way at `rank`, lower ranks first.
-    pub fn shorten(self, rank: u8, child: impl Into<Element<'a, M>>) -> Self {
-        self.slot(child, GiveWay::Shorten(rank))
-    }
-
-    fn slot(self, child: impl Into<Element<'a, M>>, give_way: GiveWay) -> Self {
-        Self(self.0.push(
-            child.into(),
-            Slot {
-                give_way,
-                group: Group::Leading,
-                floor: Floor::Squeezed,
-            },
-        ))
-    }
-}
-
-impl<'a, M: 'a> From<GiveWayRow<'a, M>> for Element<'a, M> {
-    fn from(row: GiveWayRow<'a, M>) -> Self {
-        row.0.into()
     }
 }

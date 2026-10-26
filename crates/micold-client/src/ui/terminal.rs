@@ -663,7 +663,7 @@ pub(crate) fn switch_button_shrinking<'a>(
         .next()?;
     let tint = crate::ui::material::ButtonVariant::Outlined.content(r, None);
     let label = crate::ui::material::Ellipsized::<Message>::at_role_spaced(
-        entry.label.clone(),
+        entry.label,
         TypeRole::Action,
         tint,
     )
