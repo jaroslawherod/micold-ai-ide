@@ -49,3 +49,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run test-core`; `cargo test -p micold-client --test features_daemons`; quickstart Part A
 - **Depends on**: —
 - **Tier**: full
+
+## Phase 5: TDD remediation
+
+Verdict is PASS_WITH_GAPS; nothing blocks, but close these.
+
+- [x] T010 [US1] Finding 2: add a test in `crates/micold-client/tests/features_daemons.rs` that daemon name `a!` with an empty container name is refused with the min-length message; prove with `cargo test -p micold-client --test features_daemons`.
+- [x] T011 [US1] Findings 3-4: add a Save test for daemon name `ab` (stores `ab`) and a refuse-then-type-`ab` sequence in one form; same command.
+- [x] T012 [US1] Finding 4: assert a Kubernetes (and host) draft is unaffected by the minimum; same command.

@@ -332,6 +332,16 @@ mod kubernetes {
     }
 
     #[test]
+    fn a_one_character_daemon_name_saves_for_a_kubernetes_daemon() {
+        let (mut w, id) = world();
+        let mut state = open(&mut w, id);
+        send(&mut state, &mut w, Msg::NameEdited("a".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none());
+        assert_eq!(w.registry.get(id).unwrap().name.as_str(), "a");
+    }
+
+    #[test]
     fn the_row_shows_kubernetes_and_the_endpoint() {
         let (mut w, id) = world();
         let state = State::default();
@@ -1619,5 +1629,65 @@ mod default_container_name {
         let entry = w.registry.entries().last().unwrap();
         assert!(matches!(entry.runtime, DaemonRuntime::Ssh(_)));
         assert_eq!(entry.container_name(), None);
+    }
+
+    #[test]
+    fn a_sanitized_default_of_one_character_is_refused() {
+        let mut w = World::new();
+        let before = w.registry.entries().len();
+        let state = save(&mut w, "a!", "");
+        let err = state.form_error.as_ref().unwrap();
+        assert_eq!(err.field, "container_name");
+        assert_eq!(err.message, TOO_SHORT);
+        assert!(state.draft.is_some(), "the form stays open");
+        assert_eq!(w.registry.entries().len(), before, "nothing is added");
+    }
+
+    #[test]
+    fn a_two_character_daemon_name_with_an_empty_field_stores_it() {
+        let mut w = World::new();
+        let state = save(&mut w, "ab", "");
+        assert!(state.form_error.is_none());
+        assert_eq!(stored(&w, "ab").as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn typing_a_two_character_name_after_a_refusal_saves_in_the_same_form() {
+        let mut w = World::new();
+        let mut state = save(&mut w, "build", "x");
+        assert_eq!(state.form_error.as_ref().unwrap().message, TOO_SHORT);
+        send(&mut state, &mut w, Msg::ContainerNameEdited("ab".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none());
+        assert_eq!(stored(&w, "build").as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn a_one_character_name_is_not_refused_for_ssh_and_host_daemons() {
+        let mut w = World::new();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::AddOpened);
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+        send(&mut state, &mut w, Msg::NameEdited("a".into()));
+        send(&mut state, &mut w, Msg::SshHostEdited("example.org".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none(), "{:?}", state.form_error);
+        let entry = w.registry.entries().last().unwrap();
+        assert_eq!(entry.name.as_str(), "a");
+        assert_eq!(entry.container_name(), None);
+
+        let host = w
+            .registry
+            .entries()
+            .iter()
+            .find(|e| matches!(e.runtime, DaemonRuntime::Host))
+            .unwrap()
+            .id;
+        let mut state = State::default();
+        daemons::begin_edit(&mut state, &w.model(), host).unwrap();
+        send(&mut state, &mut w, Msg::NameEdited("h".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none(), "{:?}", state.form_error);
+        assert_eq!(w.registry.get(host).unwrap().name.as_str(), "h");
     }
 }
