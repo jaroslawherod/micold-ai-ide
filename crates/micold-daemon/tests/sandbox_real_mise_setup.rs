@@ -495,13 +495,19 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
             .run_within(
                 "find \"$HOME\" -type f -newer \"$HOME/.mise-setup-second-marker\" \\( \
                  -path '*/toolchains/*' -o -path '*/installs/*' -o -path '*/downloads/*' \\) \
-                 -print 2>/dev/null",
+                 -printf 'NEWER''FILE %p\\n' 2>/dev/null",
                 Duration::from_secs(60),
             )
             .await;
+        // The command wraps on the terminal, so its echo can leak into the output: count only the
+        // lines `-printf` wrote, whose tag is typed split so the echo never carries it whole.
+        let fetched: Vec<&str> = fetched
+            .lines()
+            .filter(|l| l.contains("NEWERFILE "))
+            .collect();
         assert!(
-            fetched.trim().is_empty(),
-            "the second worktree's setup installed or downloaded:\n{fetched}\noutput: {lines:#?}"
+            fetched.is_empty(),
+            "the second worktree's setup installed or downloaded:\n{fetched:#?}\noutput: {lines:#?}"
         );
 
         // 4. A project with no mise.toml.
@@ -526,16 +532,21 @@ async fn sandbox_real_mise_setup_builds_a_mise_project_and_keeps_its_toolchain()
                     "find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run \
                      -o -path /tmp -o -path /var/tmp \
                      -o -path '{sandbox_home}' -o -path '{}' -o -path '{}' \\) -prune \
-                     -o -type f -newer \"$HOME/.mise-setup-probe-marker\" -print 2>/dev/null",
+                     -o -type f -newer \"$HOME/.mise-setup-probe-marker\" \
+                     -printf 'NEWER''FILE %p\\n' 2>/dev/null",
                     projects.display(),
                     sandbox_real_support::CONTAINER_STATE
                 ),
                 Duration::from_secs(120),
             )
             .await;
+        let outside: Vec<&str> = outside
+            .lines()
+            .filter(|l| l.contains("NEWERFILE "))
+            .collect();
         assert!(
-            outside.trim().is_empty(),
-            "setup wrote outside the sandbox home and the projects:\n{outside}"
+            outside.is_empty(),
+            "setup wrote outside the sandbox home and the projects:\n{outside:#?}"
         );
     }
 
