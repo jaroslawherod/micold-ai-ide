@@ -41,3 +41,31 @@ Findings
 
 Not covered: Stop setup in the dialog (contract U4; later milestone T058); Copy output's clipboard
 contents (no xclip/xsel in the container); reconnect resume; animation/smoothness.
+
+## Round 2 (scoped re-check of F1–F3) — 2026-10-26
+
+Same recipe: Xvfb :77 + lavapipe (WGPU_BACKEND=vulkan), xdotool, client + host daemon built together
+(debug, CARGO_PROFILE_DEV_DEBUG=0) from claude/project-thread-d7q05f @ fe8cfd113 (source = a6b1f4d97;
+only autopilot.md differs), pinned copies, "client attached to daemon" in the daemon log. Private XDG
+dirs, git project "demo-app"; setup command and theme seeded in the private settings.json, worktrees
+created from the form. Default record seeded on disk from a failed run, as in round 1.
+
+- F1 (follow on resize) — fixed. Light (400-line `echo line $i; sleep 0.3`) and dark (3,000 lines of
+  300 chars): 5 resizes each, 1600x1000 ↔ 900x700 ↔ 640x480, both directions; after every resize the
+  list sat on the tail and two frames 3 s apart showed advancing numbers (e.g. 127→135 / 138→146 at
+  640, 121→153 / 130→163 at 1600); repeated in light with long lines (4 more resizes, 645→716).
+  Scrolling up stops the follow (two frames identical, 208–231 / 193–216) and scrolling back to the
+  bottom resumes it (289–312 → 299–322; 273–296 → 284–307).
+  `m6-r2-{light,dark}-resize-follow*.png`, `m6-r2-{light,dark}-scroll-stop-resume.png`.
+- F2 (row menu left open) — fixed. Choosing **Setup output** from a worktree menu and from Default's
+  menu closes the menu: nothing under the scrim, nothing after Close, no menu item below the dialog at
+  640x480. `m6-r2-light-worktree-menu-closed-on-open.png`, `m6-r2-*-after-close-no-menu.png`,
+  `m6-r2-dark-default-*.png`, `m6-r2-light-default-menu-failed-close-empty.png`.
+- F3 (scrollbar over text) — fixed. Long lines clip before the scrollbar rail at both sizes and in
+  both themes; no glyph under the thumb (`m6-r2-{light,dark}-scrollbar-clip.png`, 4x crops: large left,
+  640 right).
+- Sanity: empty ("No output yet.", `sleep 900`) and failed ("before" / "Exited with status 2.", Default)
+  render as in round 1, light and dark, large and 640x480 (`m6-r2-*-640-*.png`, `m6-r2-dark-empty-large.png`).
+
+No new findings. Observation only (not a regression, out of scope): with ~700 lines at 640x480 the
+scrollbar thumb is a sliver of about 2–3 px.

@@ -96,11 +96,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 A | 1 (high) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | CHANGES: 1 MAJOR, 3 MINOR — all fixed: F1 `Msg::Output` carries `dropped`; a batch of a newer run starting past `dropped` (a resumed watch) returns `Effect::Watch` from `dropped`; F2 `OutputView::pending` ignores batches past `max(from, dropped)` until the watch's backlog arrives, a same-run batch outside the held lines replaces them; F3 `Msg::Scrolled` carries the measured content (`VirtualRows::on_scroll_metrics`); F4 `sync_watch` compares by reference; cycle log M6 cycle 2 |
 | M6 B | 1 (sonnet) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | CLEAN; Verify green (features_setup 24, setup_output_geometry 5, overlay_registry 26, popover_displacement 4). MINORs: B-F1 `FollowToggled` has no sender — accepted, intentional: the follow toggle stays in the reducer, tested, for a control to send; following resumes by scrolling to the end; B-F2 G2 never run red alone — accepted, disclosed in cycle log M6 cycle 1; B-F3 `confirm_delete::modal` 8 args — left (optional) |
 | M6 visual pass | 1 (U4, U6) | 7a8321df8443aaacfc759d37adfa845f4b28b09e:3e4881d6fec1dd92a4d00353e6e9d5f5bafc7926 | FAIL: V-F1 MAJOR follow lost on window resize — fixed: a report with a new viewport while following keeps the follow and snaps to the end; V-F2 row menu left open — fixed: `State::update_setup` closes it on `ViewOpened`; V-F3 scrollbar over text — fixed: rows padded `BAR_FOOTPRINT`, clip inside; evidence `visual-pass/m6-*` |
+| M6 A | 2 (scoped, sonnet) | 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1 | CLEAN. Confirmed: A-F1 re-watch cannot loop, `pending` cannot wedge, `on_scroll_metrics` leaves other `VirtualRows` users unchanged. 1 MINOR declined: `features/setup.rs:296` a scroll-up in the same report as a new viewport height is dropped while following (one-frame edge, matches V-F1 intent) |
+| M6 visual pass | 2 (V-F1–V-F3 re-check) | 5ec1b5ed1516167eeda931585b6e1447f63fb4a5:a6b1f4d97356d2d307e7b92e9758a5018212f5e1 | PASS light and dark, 1600×1000 and 640×480: 9+ resizes keep the tail and keep following; scroll up stops, bottom resumes; menu closes on Setup output; scrollbar no longer covers text; empty/failed unchanged. Evidence `visual-pass/m6-r2-*`, notes `m6-u4-u6-notes.md` § Round 2 |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M6 | A round 2 | MINOR `features/setup.rs:296`: a user scroll-up arriving in the same report as a new viewport height is dropped while following | One-frame edge; keeping the follow on a resize is V-F1's intent; the next scroll report stops following |
 
 ## Handover
 
@@ -125,5 +128,6 @@ None. (Clarify Q1/Q2 asked of the user; provisional answers in *Decisions*.)
 ## Follow-ups not done
 
 - ~~M3 review A-F3~~: done in M4 T038 (`stop_and_wait` before git, `forget` after); test `deleting_a_worktree_stops_its_setup_first_and_forgets_it` recreates the same `dir_name` and runs setup again.
+- M6 visual pass round 2 observation: with ~700 output lines at 640×480 the Setup output scrollbar thumb shrinks to 2–3 px; a minimum thumb length would help (not a finding).
 - Per-project sandbox image (spec Story 4, deferred by clarify Q2): needs its own issue.
 - M1 review A round 3 MINOR: an `offered.json` with `clis: []` cannot be told apart from the daemon's own, so a host daemon sharing the state dir would prepend home folders to its PATH. Fix: an ownership marker (`#[serde(default)] state: Option<PathBuf>` in `Offered`, filled by the writer; `offered_clis` returns None when Some and differs from `dir`).
