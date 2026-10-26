@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1422
 - **Worktree branch**: feat/1422_container-name-enforce-a-minimum-length-docker
 - **Started**: 2026-10-25
-- **Phase**: milestone
-- **Next step**: M1 PR #1489 CI and merge
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1433 | design | merged | 48cda33fe6d376055f88aa7ad672842fa3aa8c6a |
-| #1489 | M1 | open | |
+| #1489 | M1 | merged | 3caed28b397b372439b3cf1202c3af9395fc271c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Container names under 2 characters refused at Save; placeholder hidden; legacy loads | #1489 | PR open |
+| M1 | T001–T009 | full | Container names under 2 characters refused at Save; placeholder hidden; legacy loads | #1489 | merged |
 
 ## Decisions
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | c100ddba0515c7c28900f913580f41407520fd2d:ab6e6b6e7fe761534a06c67a4cf8183dfd268da6 | CLEAN (3 MINOR, fixed, prose only) |
 | M1 review A (code-review high) | 1 | feefce5d3f513eb09b1aef3350ad78fc9e14d616:dc42fcc829c22d8bf3748cb07201d402ffc182d7 | no BLOCKER/MAJOR; MINORs declined or deferred |
 | M1 review B (conformance) | 1 | same | CLEAN |
+| Close review (sonnet) | 1 | 5a6722d46522f3fe29889155e9fd9c299abbab77:3caed28b397b372439b3cf1202c3af9395fc271c | CLEAN (1 MINOR, fixed, prose only) |
 | Spec review | 1 | a56d0f73c3192bb09fcf2e27967a43a6c3e7cdeb:357d48d5be4eedc191d9a5b91cc25f19270f23ef | CLEAN (3 MINOR, fixed, prose only) |
 
 ## Declined review findings

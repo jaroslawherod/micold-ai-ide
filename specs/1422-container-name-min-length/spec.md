@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-25
 
-**Status**: Draft
+**Status**: Closed 2026-10-26 — shipped in PRs #1433, #1489
 
 **Input**: GitHub issue #1422: "Container name: enforce a minimum length (Docker needs 2+ characters)". Follow-up from #1116 (specs/1116-container-name-default). A defaulted container name of one character (a daemon named `a`) satisfies the 1116 charset and 63-character maximum, but Docker requires at least two characters, so container creation fails. Typed names are not length-checked either. Decide: minimum for defaulted names only or typed names too, and what the user sees when the daemon name is too short.
 
