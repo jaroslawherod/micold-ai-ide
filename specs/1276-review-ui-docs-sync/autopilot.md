@@ -72,7 +72,12 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-None.
+M1 stop (a) done (context over 150k at its end): T001–T012 implemented and pushed on
+`claude/project-thread-kxels1` (ea01a8b9 plus this ledger), full gate green (`scripts/gate.sh`).
+Next: handle review A/B findings from the orchestrator, re-run `scripts/gate.sh` detached (with
+`CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0` — the disk filled at
+~30 GB with debug info), tick T013 (links and mdBook left to CI: no lychee or mdbook here), open
+the draft M1 PR. No PR open yet; no findings received yet.
 
 ## Open escalation
 
