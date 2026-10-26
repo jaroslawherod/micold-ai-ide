@@ -339,7 +339,7 @@ composer. **Independent test**: Q10–Q12, the settings tests; quickstart §B st
 - [x] T045 [US1] Implement it in `crates/micold-client/src/features/changes.rs` (the reviewed count)
   and in the row glue of `crates/micold-client/src/ui/changes.rs` (no reviewed mark on a dotted row)
   (research R10).
-- [ ] T046 [US1] Update `docs/user-guide/reviewing-changes.md` (reviewed marks and held changes),
+- [x] T046 [US1] Update `docs/user-guide/reviewing-changes.md` (reviewed marks and held changes),
   regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` if the row changed, and run a
   1280×800 light and dark visual pass of a reviewed file with the dot; evidence in
   `specs/1275-review-stale-quick-comment/visual-pass/`.

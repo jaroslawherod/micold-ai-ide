@@ -71,3 +71,19 @@ data directory starts with no `suggestion_chips` key (a fresh install's value).
 | `m5-b5-3-tab-order-light-crop.png` (four frames stacked), `m5-b5-3-tab-add-test-dark-1280.png` | the box already open shows the chips once saved (FR-026); **Tab** from the text area reaches *Rename*, *Add test*, *Why?*, then **Cancel**, each with the focus ring (FR-027) | PASS |
 | `m5-b5-4-add-test-filled-light-1280.png`, `m5-b5-4-add-test-by-key-dark-1280.png` | *Add test* pressed in the empty box (light: clicked; dark: **Space** on the focused chip): the box reads *Add a test that covers this.* with the caret at the end and **Save** available; typing ` ok` then appended at the end | PASS |
 | `m5-b5-5-notice-dot-chips-{light,dark}-1280.png` | `b.txt` and `c.txt` appended to from a shell with the box open: *2 files changed since you looked*, the two dots and the chips together (SC-006); in light, **Space** on the focused *Why?* had added *Why is this needed?* on a new line after the text, the caret back in the box | PASS |
+
+## M6 — reviewed files while held (T046)
+
+Real client (debug build of the M6 tree, client and daemon pair) on a cloud Xvfb display at
+1280x800, driven with Xlib XTest. Fixture: the M5 repository, its **Default** entry's Review tab
+(quickstart §B step 6).
+
+| File | Shows | Verdict |
+|---|---|---|
+| `m6-b6-1-marked-{light,dark}-1280.png` | `a.txt` and `b.txt` marked with **Mark reviewed**: both rows ✓, header *2 of 5 reviewed*, `b.txt` open | PASS |
+| `m6-b6-2-held-reviewed-{light,dark}-1280.png` | a line appended to `a.txt` from a shell: *1 file changed since you looked*, `a.txt`'s row back to ○ with the dot, `b.txt` still ✓, *1 of 5 reviewed*; the open `b.txt` diff unchanged | PASS |
+| `m6-b6-3-dot-tooltip-{light,dark}-1280.png` | hovering `a.txt`'s dot: *Changed since you looked, and since you marked it reviewed* | PASS |
+
+Observation, not a failure: the tree stays in the order it had (Path sort). Under **Unreviewed
+first** the order follows #1271's judgement on the live whole-change ids, not the hold, so it can
+move while changes are held (unchanged by M6).

@@ -52,8 +52,12 @@ micold-client --test layout_snapshot` records the notice, dot and chips; the dif
    chips. Turn it on and Save: a composer shows *Rename*, *Add test*, *Why?*; **Tab** from the text
    area reaches each chip with its focus ring; pressing *Add test* in an empty box fills it with the
    caret at the end.
+6. (M6, FR-013) Mark `a.txt` and `b.txt` reviewed (header *2 of m reviewed*), then append a line to
+   `a.txt` from a terminal: `a.txt`'s row shows ○ with the dot (tooltip *Changed since you looked,
+   and since you marked it reviewed*), `b.txt` keeps ✓, the header reads *1 of m reviewed* beside
+   *1 file changed since you looked*.
 
-Screenshots of steps 1, 2 and 5 in both themes go in `visual-pass/`.
+Screenshots of steps 1, 2, 5 and 6 in both themes go in `visual-pass/`.
 
 ## §C — macOS and Windows
 
