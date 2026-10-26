@@ -111,6 +111,9 @@ pub struct DaemonState {
     /// Where setup's records, logs and run id counter are written (feature 1289, M4); `None` for
     /// the ephemeral catalog and stores that persist nothing. Written without either lock.
     setup_store: Option<crate::setup::SetupStore>,
+    /// One setup at a time on an app-owned sandbox (#1439, contract setup-turn S2), through
+    /// [`DaemonState::setup_turn`]. Fair: runs take it in the order they asked.
+    setup_turn: Arc<tokio::sync::Mutex<()>>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -1138,6 +1141,7 @@ impl DaemonState {
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
             setup: Mutex::new(setup_runs),
             setup_store,
+            setup_turn: Arc::default(),
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
@@ -3559,6 +3563,14 @@ impl DaemonState {
     /// Where setup's files are written; `None` when nothing persists (feature 1289, M4).
     pub(crate) fn setup_store(&self) -> Option<&crate::setup::SetupStore> {
         self.setup_store.as_ref()
+    }
+
+    /// The daemon-wide setup turn (#1439, contract setup-turn S1): `Some` only on an app-owned
+    /// sandbox (an `offered.json` of its own, as [`Self::with_sandbox_path`] decides), where
+    /// concurrent installs into the one home break. Host and remote daemons run setups
+    /// concurrently (1289).
+    pub(crate) fn setup_turn(&self) -> Option<Arc<tokio::sync::Mutex<()>>> {
+        self.offered_clis().map(|_| Arc::clone(&self.setup_turn))
     }
 
     /// What a client attaching to `project` is sent about its setup runs (feature 1289, FR-018).
@@ -8721,6 +8733,27 @@ mod offered_tests {
         assert_eq!(
             path_var(&state.ai_cli_env_for(cwd.path(), AiCli::ClaudeCode)),
             want
+        );
+    }
+
+    /// 1439 setup-turn S1: a daemon with an `offered.json` of its own (an app-owned sandbox) has
+    /// one setup turn; without one (host and remote daemons) it has none.
+    #[test]
+    fn only_a_daemon_with_an_offer_of_its_own_has_a_setup_turn() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        assert!(state.setup_turn().is_none(), "no offer: no turn");
+        offer(&dir, &[]);
+        let turn = state.setup_turn().expect("a sandbox daemon has a turn");
+        assert!(
+            Arc::ptr_eq(&turn, &state.setup_turn().unwrap()),
+            "one turn per daemon"
+        );
+        let elsewhere = bin_of(store.path(), "other-bin", &[AiCli::ClaudeCode]);
+        offer(&dir, &[(AiCli::ClaudeCode, &elsewhere)]);
+        assert!(
+            state.setup_turn().is_none(),
+            "another daemon's offer is not this daemon's"
         );
     }
 

@@ -560,6 +560,12 @@ When setup hangs or takes too long, choose **Stop setup** (in the same menu whil
 the setup output dialog). The command and every process it started are ended, and the row shows
 *Setup stopped*, not *Setup failed* and not *Set up*.
 
+On a container or Kubernetes daemon, one setup runs at a time, because installs into the one
+sandbox home break when two run together: a later run shows *Setting up…* and its output begins
+with *Waiting for another setup on this daemon to finish…* until the earlier one ends. **Stop
+setup** on the running one lets the next start; on a waiting one it ends it at once. A daemon on
+your own machine or a remote host runs setups side by side.
+
 ## Creating a worktree
 
 Click **add** on the sidebar's chip bar to open the New worktree form. At the top, three chips choose
