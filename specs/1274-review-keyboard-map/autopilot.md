@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-m7gq7k
 - **Started**: 2026-10-24
 - **Phase**: milestones
-- **Next step**: M4 full gate, then PR.
+- **Next step**: M4 PR #1458 open (CI, merge); then M5 (blocked by #1127).
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1404 | M1 core key map | merged | 8f38e9ca85309f92e24376c870038cd481eff913 |
 | #1415 | M2 single-key switch core (+ D4 design amendment) | merged | 83f693ff7c3b14e115a2ae17dc67fa5085546242 |
 | #1451 | M3 move and mark (j k n p v g, Settings switch) | merged | 6cbd52f0ed4581036bec4dd0f6527022dcd4a046 |
+| #1458 | M4 comments, send chord, shortcut sheet | open | — |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T011, T022–T023, T028–T032, T048–T051 | full | core REVIEW_KEYS + resolve, navigate rules, header_rows, jump candidates + detail ranking, unit tests (no blocker) | #1404 | merged |
 | M2 | T059–T062 | full | core single-key switch: `Settings.review_single_keys` (default on) + `resolve(.., single_keys)`, `sheet_rows`, `key_hint`, unit tests (no blocker) | #1415 | merged |
 | M3 | T012–T021, T063–T065, T024–T027 | full | j/k/n/p/v/g in the Review tab, hunk mark, Settings → Appearance switch row, docs (blockers merged) | #1451 | merged |
-| M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | — | in progress |
+| M4 | T033–T047 | full | ]/[, c, send chord, shortcut sheet (filtered by the switch), full docs — after M3 (same blockers) | #1458 | PR open |
 | M5 | T052–T057 | full | jump-to review entries — **blocked by #1127**, after M4 | — | blocked |
 
 ## Decisions
@@ -88,6 +89,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M4 full gate: `scripts/gate.sh` GATE_EXIT=0 at f2c78e5aa. Gate fixes after the reviews: the sheet's key column moved to a new material `Keycap` (`material_boundary`: no `style` in `ui/`), Keycap posed in the showcase, dialog counts in `popover_displacement.rs` (28). The visual pass predates the Keycap swap (cap outline instead of fill; layout snapshot re-recorded).
 
 - T047 visual pass M4 (2026-10-26, this unit, by hand per `.claude/skills/visual-pass/SKILL.md`): **PASS**. Release build of the M4 tree (client + its own daemon) on Xvfb :77, tiny-skia, XTest via python-xlib, private `MICOLD_DATA_DIR`, 1280×800, light and dark; fixture `a.rs` `b.rs` `c.rs` (two hunks each) + `d.bin`, Default entry. Evidence `specs/1274-review-keyboard-map/visual-pass/m4-*.png`. B8: `j n c` opens the composer on hunk 1's added line with the keyboard in it (typed text landed), three drafts made with `c` + Ctrl+Enter; on `c.rs` with no hunk `c` draws *Pick lines or move to a hunk (n) to comment* — visible only in the first ~30 ms frame, then cleared (the known changes_watch re-read bug: each `ListRead` clears `view.notice`; not fixed here). B7: `]`×4 `[` → a.rs:3, a.rs:45, b.rs:3 (selects b.rs), wraps to a.rs:3, `[` → b.rs:3, each card highlighted (the outdated → drawer case is unit-tested only: no outdated comment in the fixture). B9: in the composer `j` is typed, Ctrl+Shift+Enter sends (a session starts; the send then fails in this container with Claude Code's folder-trust message), composer stays open with `j`, nothing saved (still 3 drafts). B10: the chord and **Send review (3)** give the same result and bar error. B11: `?` opens the sheet (12 rows, Linux labels), `j` changes no pixel, Escape / outside click / `?` close it, overflow → **Keyboard shortcuts** opens the same sheet. B12: **Send review** tooltip *Send the draft comments (Ctrl+Shift+Enter)* (light and dark). B16 (M4 part, `review_single_keys: false` seeded): `?` does nothing, overflow item opens the sheet with only the two chords and the note, the chord still sends. B15: layout snapshot re-recorded with both sheet states (`eb55db847`). xdotool absent; `?` needs Shift_L+slash through XTest.
 
