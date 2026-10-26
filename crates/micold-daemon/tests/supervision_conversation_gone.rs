@@ -21,7 +21,6 @@ use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use micold_daemon::supervisor::PtySession;
 use uuid::Uuid;
 
 fn state_with_copilot_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
