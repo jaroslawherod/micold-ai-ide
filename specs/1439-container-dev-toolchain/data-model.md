@@ -19,9 +19,13 @@ No new persisted app state, no settings field, no protocol message. Three things
 - **Folders**: `~/.local/bin`, the mise shims folder (B5), mise's data (`~/.local/share/mise`),
   rustup's `~/.rustup` and cargo's `~/.cargo` (mise's rust backend defaults), mise's cache
   (`~/.cache/mise`).
+- **Also**: `~/.config/mise` (`mise use -g`), `~/.local/lib/node_modules` (`npm install -g`, via
+  `NPM_CONFIG_PREFIX`), `~/.local/share/uv` (uv tools), binaries of `cargo install` and `go install`
+  in `~/.local/bin` (contract [sandbox-install-env.md](contracts/sandbox-install-env.md)).
 - **Rules**: created empty by the entrypoint (the first two) before any session; filled by a
-  setup command; never removed by the app; shared by every worktree and session on the daemon;
-  persists across container restarts (FR-005).
+  setup command or by a session itself (FR-014); never removed by the app while the daemon exists;
+  shared by every worktree and session on the daemon; persists across container restarts, container
+  replacement and pod recreation (FR-005, FR-016).
 
 ## Setup turn (daemon, memory only)
 

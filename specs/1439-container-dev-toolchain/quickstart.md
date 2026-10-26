@@ -20,6 +20,9 @@ once per milestone that changes the image, and once at the end, with results rec
 | A4 | `cargo test -p micold-daemon setup_turn` (in `mise run gate`) | S1–S3: one shell at a time on a sandbox daemon, order kept, stop/delete/daemon stop of a waiting run, stopping the holder lets the next waiting run spawn, host daemon not serialised |
 | A5 | `mise run test-sandbox` → `sandbox_real_basic_image` | B1, B2 in the built image: `mise --version` = pinned version, `cc`/`c++`/`make`/`pkg-config`/`python3` present, a C file compiles and links, `pkg-config --libs x11` = `-lX11`, the six `.pc` files found; the same as uid 10001 with `--read-only` and a writable `/data/home` (FR-001, FR-003, FR-004, FR-006, FR-007, FR-010) |
 | A6 | `mise run test-sandbox` → `sandbox_real_toolchain_path` | the two home folders exist in a new sandbox before any setup (FR-011, AS3.1); a `mise` in `~/.local/bin` wins over `/usr/local/bin/mise` on `PATH` (edge case) |
+| A8 | `cargo test -p micold-core install_env` and `cargo test -p micold-daemon install_env` (in `mise run gate`) | contract sandbox-install-env I1–I2: the three defaults on a sandbox daemon, a value from environment-include or the daemon's own environment kept, lower-case `npm_config_prefix` counts, no `HOME` sets none, host daemon unchanged (FR-015) |
+| A9 | `cargo test -p micold-core kube::start` (in `mise run gate`) | recreating a drifted pod deletes only the pod and keeps the claim (FR-016, Kubernetes half) |
+| A10 | `mise run test-sandbox` → `sandbox_real_self_install` (new, needs network) | Story 5 with no setup command: in a session terminal `mise use -g uv@<pin>` and `mise use -g rust@<pin>` (minimal profile), `npm install -g` of a local tarball, `cargo install --path` of the A7 fixture crate, `uv tool install` of a small pinned package; each as the non-root user, nothing written outside the sandbox home (FR-014, FR-017); a new session in a second worktree finds every binary under `~/.local/bin` or the shims (FR-015); after a container restart, and after the container is replaced by switching the daemon to a second tag of the same image (`DifferentImage`), every binary is found and runs; a last replacement onto the no-outbound network posture (a posture change also replaces the container) runs the same check offline, so nothing was downloaded again (FR-016, SC-006, AS5.3–AS5.4); `apt-get install` fails (AS5.6) |
 | A7 | `mise run test-sandbox` → `sandbox_real_mise_setup` (new, needs network) | Story 1 on a fixture project (rust pinned, minimal profile; a `build.rs` that runs `cc` on a C file and links it, no crates.io dependency): setup `mise trust && mise install` succeeds; `cargo build`/`cargo test` succeed in a terminal; `command -v cargo` resolves under the sandbox home; after a container restart still found; a second worktree's setup ends in under 60 s and its output shows no download; a worktree with no `mise.toml` sets up; a setup stopped mid-download is followed by a rerun that succeeds (AS1.1–AS1.5, FR-005, SC-003; edge cases "Empty project", "Network failure during setup") |
 
 ## Part B — by hand
@@ -59,4 +62,11 @@ previous pin. Expected: growth ≤ 250 MB; record both numbers in the ledger and
 
 **B6. Kubernetes (edge case, FR-006).** With the 686 setup (kind or a real cluster), a pod daemon on
 the dev image: `mise --version`, `cc --version`, `python3 --version` work, and setup installs into
-`/data/home`.
+`/data/home`. Then (AS5.5) a session runs `mise use -g uv@<pin>` and `npm install -g` of a small
+package; stop and start the daemon (the pod is recreated): both binaries are found and run.
+
+**B7. A session's own installs on a VM-shared home (Story 5, Principle VI).** On a macOS host and on
+a Windows host (Docker Desktop or Podman machine), a container daemon on `micold-basic:dev` with no
+setup command: a session runs `mise use -g uv@<pin>` and `npm install -g` of a small package; both
+are found in a new session; restart the container: both still run. Record the host and runtime in
+the ledger.

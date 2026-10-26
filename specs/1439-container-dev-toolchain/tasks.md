@@ -29,7 +29,7 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: can run in parallel (different files, no dependency on an unfinished task)
-- **[Story]**: US1–US4 from spec.md
+- **[Story]**: US1–US5 from spec.md
 
 ---
 
@@ -49,12 +49,12 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 ### Tests (write first, see them fail)
 
 - [ ] T003 [P] [US1] Add the guard cases of contract B4 to `scripts/tests/basic-image-hash.test.sh` (reuse its `copy_basic` helper): the real `Containerfile` downloads mise only in the same `RUN` as a `sha256sum -c` of `mise.sha256` (a temp copy with the check removed fails); `mise.sha256` has exactly two lines `<64 lowercase hex>  mise-v<version>-linux-x64` / `-linux-arm64` with one version (temp copies with three lines, uppercase hex, mixed versions each fail); `packaging/basic/README.md` names that version (a temp README without it fails); every existing refusal (key/token/`.ssh`/daemon `COPY`/`ADD`, `npm`/`npx`/`pnpm`/`yarn` install, `curl|wget … | sh`) still refuses.
-- [ ] T004 [P] [US1] Extend `crates/micold-core/tests/sandbox_real_basic_image.rs` (feature `sandbox-real-runtime`) per quickstart A5 without FR-007: add `mise`, `cc`, `c++`, `make`, `pkg-config`, `python3` to `PRESENT`; `mise --version` prints the version read from `packaging/basic/mise.sha256` (first field after `mise-v`, so a bump needs no Rust change); a C file compiles and links with `cc` and runs; `python3 -c 'print(1)'` prints `1`; the same checks as uid 10001 with `--read-only` and a writable `/data/home`; `ABSENT` unchanged (FR-006).
+- [ ] T004 [P] [US1] Extend `crates/micold-core/tests/sandbox_real_basic_image.rs` (feature `sandbox-real-runtime`) per quickstart A5 without FR-007: add `mise`, `cc`, `c++`, `make`, `pkg-config`, `python3`, `xz`, `unzip` to `PRESENT` (FR-017); `mise --version` prints the version read from `packaging/basic/mise.sha256` (first field after `mise-v`, so a bump needs no Rust change); a C file compiles and links with `cc` and runs; `python3 -c 'print(1)'` prints `1`; the same checks as uid 10001 with `--read-only` and a writable `/data/home`; `ABSENT` unchanged (FR-006).
 
 ### Implementation
 
 - [ ] T005 [US1] Create `packaging/basic/mise.sha256` from T002's two lines, in data-model's format ("exactly two lines, `sha256sum` format; one version on both lines; 64 lowercase hex").
-- [ ] T006 [US1] In `packaging/basic/Containerfile`, add `gcc g++ make libc6-dev pkgconf python3` to the existing `apt-get install` list (one layer, research R2/R3), with a comment naming #1439, FR-003 and FR-004 in the file's style.
+- [ ] T006 [US1] In `packaging/basic/Containerfile`, add `gcc g++ libc6-dev pkgconf xz-utils unzip` to the existing `apt-get install` list (one layer, research R2/R3/R14; `make` and `python3` are already there from #1435), with a comment naming #1439, FR-003, FR-004 and FR-017 in the file's style.
 - [ ] T007 [US1] In `packaging/basic/Containerfile`, add the mise step of contract B3: `ARG TARGETARCH`; `COPY mise.sha256 /tmp/mise.sha256`; one `RUN` that maps `amd64`→`x64`, `arm64`→`arm64` (anything else exits non-zero), reads the version from `/tmp/mise.sha256` (not a build `ARG`), `curl -fsSLo` the release binary, `sha256sum -c --ignore-missing`, checks the file exists, `install -m 0755` to `/usr/local/bin/mise`, removes the temp files. Comment names #1439 and FR-001/FR-002.
 - [ ] T008 [US1] Update `packaging/basic/README.md` (plan D6): new contents (C toolchain, `pkg-config`, `python3`, `mise`), the pinned mise version and that `mise.sha256` holds its checksums, and an "Update mise" section repeating plan D1a's five steps, then write `mise.sha256`, recompute the content hash, publish, pin.
 - [ ] T009 [US1] Update the "Which image it runs on" section of `docs/user-guide/sandboxed-daemon.md`: the basic image now carries `mise`, a C/C++ toolchain with `pkg-config`, and `python3` (one sentence; the full building section is T030).
@@ -147,9 +147,31 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 - [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, `cargo build` in both sessions at once succeeds (edge case "Several sessions on one daemon"), Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
 ---
 
-## Phase 10: Publish and pin (follow-up PR; close unit)
+## Phase 10: User Story 5 — an AI session installs the build tools it needs itself, and they stay (Priority: P1; amendment 2026-10-26)
 
-- [ ] T034 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
+**Goal**: with no setup command, a session installs user-level tools with mise, `npm install -g`, `cargo install`, `uv tool install` and `go install` as the session user; every binary is found by later sessions and survives a restart, a container replacement and a pod recreation (FR-014–FR-018, SC-006; contract sandbox-install-env I1–I5).
+
+**Independent test**: `cargo test -p micold-core install_env`, `cargo test -p micold-daemon install_env` (quickstart A8), the kube test of A9, and `mise run test-sandbox` → `sandbox_real_self_install` (A10).
+
+### Tests (write first; every unit test name contains `install_env`, except A9's)
+
+- [ ] T034 [P] [US5] In `crates/micold-core/src/sandbox/toolchain_path.rs`'s tests module: `install_env_defaults` with a `HOME` returns `NPM_CONFIG_PREFIX=$HOME/.local`, `CARGO_INSTALL_ROOT=$HOME/.local`, `GOBIN=$HOME/.local/bin`; a variable reported set is left out and the others stay; an empty value counts as unset; a set `npm_config_prefix` leaves out `NPM_CONFIG_PREFIX`; no `HOME` (or an empty one) returns none (contract I2).
+- [ ] T035 [P] [US5] In `crates/micold-daemon/src/state.rs`'s tests module, beside the `offered.json` / `with_sandbox_path` tests: on a daemon with its own `offered.json` a spawn environment carries the three defaults under the resolved `HOME`; a value set by environment-include is kept unchanged; a value in the daemon's own environment is not overridden; a daemon without an `offered.json` gets none of them (I1); the `PATH` it orders is the same as without this change (1289's P2 untouched).
+- [ ] T036 [P] [US5] In `crates/micold-core/src/kube/start.rs`'s tests (fake cluster, as `kube/lifecycle.rs:187`'s stop test): a drifted pod started with `DriftChoice::Recreate` is deleted and recreated, and the PersistentVolumeClaim is neither deleted nor recreated (A9, FR-016).
+- [ ] T037 [US5] Create `crates/micold-daemon/tests/sandbox_real_self_install.rs` (feature `sandbox-real-runtime`, needs network; reuse `sandbox_real_support` and the fixture of T026) per quickstart A10: a sandbox daemon with no setup command; in a session terminal `mise use -g uv@<pin>` and `mise use -g rust@<pin>` (minimal profile), `npm install -g` of a local tarball, `cargo install --path` of the fixture crate, `uv tool install` of one small pinned package, each as the non-root user and writing nothing outside the sandbox home (FR-014); a new session in a second worktree finds each binary under `~/.local/bin` or the shims (FR-015); after a container restart, after a replacement onto a second tag of the same image (`DifferentImage`), and after a replacement onto the no-outbound posture (checked offline), each binary is found and runs (FR-016, SC-006); `apt-get install -y libpq-dev` fails (AS5.6). Green after T038–T039 and M1's image.
+
+### Implementation
+
+- [ ] T038 [US5] `crates/micold-core/src/sandbox/toolchain_path.rs`: pure `install_env_defaults(home, is_set)` per plan D8 / contract I2 (no filesystem access, like `toolchain_path`).
+- [ ] T039 [US5] `crates/micold-daemon/src/state.rs` `with_sandbox_path`: after ordering `PATH`, append `install_env_defaults` to `resolved.vars`, using the function's existing `var` closure for `HOME` and for `is_set` (plan D8). No protocol change; host and remote daemons unchanged.
+- [ ] T040 [US5] `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home": the paragraph of plan D6 (M5): a session installs user-level tools itself, the three defaults and that the environment's own value wins, installs persist across restarts, image updates and pod recreation for the life of the daemon, session installs are not serialised (rerun a failed one), system packages come from the image or an own image (FR-018).
+- [ ] T041 Quickstart B6 second half (AS5.5: a session's installs survive the pod's recreation) and B7 (macOS and Windows hosts), recorded in the ledger.
+
+---
+
+## Phase 11: Publish and pin (follow-up PR; close unit)
+
+- [ ] T042 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
 
 ---
 
@@ -159,15 +181,16 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 - Phase 2 (T003–T010) and Phase 3 (T011–T015) form M1; T010 runs last in M1 (hash covers the entrypoint).
 - Phase 4 (M2) needs M1's Containerfile. Phase 5 (M3) needs only T001 (daemon code), so M3 may run before M2 if FR-007 is still undecided.
 - Phases 6–9 (M4) need M1 (tools in the image), M2 (the gate's dev libraries, for T032) and M3 (concurrent setups are safe). T027, T032 and T033 run against `:dev` built with M1–M2; T032 runs after T029 (the components it checks).
-- Phase 10 (T034) after M4 merges, the last `packaging/basic/` change being M2's.
+- Phase 10 (M5) needs M1 (`mise`, `xz`, `unzip` in the image) and M4 (T026's fixture crate, for T037). T034–T036, T038–T039 need nothing else and may be written earlier.
+- Phase 11 (T042) after M5 merges, the last `packaging/basic/` change being M2's.
 
 ### Parallel opportunities
 
-- T003 ∥ T004 ∥ T011 ∥ T012 (different files). T026 ∥ T028. T020 ∥ T021 (different files).
+- T003 ∥ T004 ∥ T011 ∥ T012 (different files). T026 ∥ T028. T020 ∥ T021 (different files). T034 ∥ T035 ∥ T036.
 
 ## Implementation Strategy
 
-M1 first: once merged, a container on the branch's image has mise, a C toolchain and python3 and true `PATH` folders. Then M2 (FR-007, swappable for option B), M3 (setup turn), M4 (end-to-end proof, this repository and its gate in a container, user guide). Only the publish-and-pin follow-up (T034) goes to the close unit.
+M1 first: once merged, a container on the branch's image has mise, a C toolchain and python3 and true `PATH` folders. Then M2 (FR-007, swappable for option B), M3 (setup turn), M4 (end-to-end proof, this repository and its gate in a container, user guide), M5 (a session's own installs, and that they stay). Only the publish-and-pin follow-up (T042) goes to the close unit.
 
 ## Milestones
 
@@ -177,7 +200,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T001–T015
 - **Deliverable**: a container started from the basic image built from `main` has the pinned `mise`, `cc`/`c++`/`make`/`pkg-config` and `python3` before any setup, as any uid and with `--read-only`, and the sandbox home's `~/.local/bin` and mise shims folder exist before the first session.
-- **Satisfies**: US1 AS1, AS6; US3 AS1–AS2; FR-001, FR-002, FR-003 (toolchain), FR-004, FR-006, FR-011, FR-013; edge cases "checksum mismatch fails the build", "A `mise` already in `~/.local/bin`"
+- **Satisfies**: US1 AS1, AS6; US3 AS1–AS2; FR-001, FR-002, FR-003 (toolchain), FR-004, FR-006, FR-011, FR-013, FR-017; edge cases "checksum mismatch fails the build", "A `mise` already in `~/.local/bin`"
 - **Verify**: `scripts/tests/basic-image-hash.test.sh`; `scripts/tests/basic-entrypoint.test.sh`; `mise run image && mise run test-sandbox` (`sandbox_real_basic_image`, `sandbox_real_toolchain_path`); quickstart B4, B5 recorded in the ledger
 - **Depends on**: — (#1435, #1289 merged)
 - **Tier**: full
@@ -209,4 +232,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M1, M2 (the gate links the six dev libraries), M3
 - **Tier**: full
 
-Phase 10 (T034, publish and pin per D7) is the only task outside the milestones: the close unit opens the pin PR after M4 merges. SC-004 is measured in M1 (T015) and M2 (T019).
+### M5 — A session installs its own build tools, and they stay (amendment 2026-10-26)
+
+- **Tasks**: T034–T041
+- **Deliverable**: on a container or Kubernetes daemon with no setup command, a session installs tools with mise, `npm install -g`, `cargo install`, `uv tool install` and `go install` without root; each binary is found by later sessions in any worktree and still runs after a container restart, a container replacement and a pod recreation.
+- **Satisfies**: US5 AS1–AS6; FR-014, FR-015, FR-016, FR-018 (FR-017's packages ship in M1's T006); SC-006; edge cases "A session installs while setup or another session installs", "The environment already names an install location", "A daemon whose network posture blocks outbound connections", "Hosts whose container runtime shares folders through a VM"
+- **Verify**: `cargo test -p micold-core install_env`; `cargo test -p micold-daemon install_env`; `cargo test -p micold-core kube::start` (A9); `mise run image && mise run test-sandbox` (`sandbox_real_self_install`); quickstart B6 second half and B7 recorded in the ledger
+- **Depends on**: M1, M4 (T026's fixture)
+- **Tier**: full (spawn environment of sandbox daemons; real-runtime test)
+
+Phase 11 (T042, publish and pin per D7) is the only task outside the milestones: the close unit opens the pin PR after M5 merges. SC-004 is measured in M1 (T015) and M2 (T019).

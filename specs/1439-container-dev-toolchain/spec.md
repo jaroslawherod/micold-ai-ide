@@ -46,6 +46,20 @@ Both are assumed to have landed before this feature is built.
   other projects' extra system libraries come from an own image. _(provisional: recommended option
   A, awaiting user decision)_
 
+### Amendment 2026-10-26 (repository owner, on #1439)
+
+- Requirement, verbatim: "as part of image push enough tools that agent can install them on it's
+  own. It shoould have persistentn space so they will not disapear after container restart" — "I
+  mean that it cann install tools needed to build project".
+- Read as (confirmed back to the owner): an AI session in a container session, with **no** setup
+  command configured, can install the user-level tools the project's build needs by itself (mise,
+  and each language's own installer: `npm install -g`, `cargo install`, `uv tool install`, `go
+  install`, `pip install --user` under a mise-installed Python), without root or `sudo`; the
+  installs land in the persistent sandbox home, are on `PATH` for later sessions, and survive a
+  container restart and the container's replacement on an image update. System packages (`apt`)
+  stay out of reach: they come from the basic image or an own image built `FROM` it. → User Story 5,
+  FR-005 widened, FR-014 to FR-018, SC-006.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A mise project's toolchain installs itself in a new container daemon (Priority: P1)
@@ -158,6 +172,50 @@ example that builds with `docker build` or `podman build` as given.
 
 ---
 
+### User Story 5 - An AI session installs the build tools it needs itself, and they stay (Priority: P1)
+
+A user adds a container daemon on the basic image and configures **no** setup command. An AI session
+in a worktree finds that the project's build needs a tool the image does not carry (a Rust
+toolchain, `uv`, a `cargo`- or `npm`-distributed helper). It installs the tool itself, as the
+session user, with mise or with the language's own installer. The tool is found by every later
+session on that daemon, in any worktree, and it is still there after the container restarts and
+after the container is replaced because the basic image was updated. Only system packages are out
+of reach, and the user guide says where they come from instead.
+
+**Why this priority**: The repository owner's requirement. A setup command is the planned route,
+but an agent working in a project nobody configured must not stop at "command not found", and what
+it installs must not vanish at the next restart or image update and cost another download.
+
+**Independent Test**: Start a container daemon on the basic image built from the branch, with no
+setup command. In a session terminal, install a Rust toolchain and `uv` with `mise use -g`, a
+package with `npm install -g` and a crate with `cargo install`. Each succeeds without root, and a new
+session in a second worktree finds each binary. Restart the container, then replace it by switching
+the daemon to another tag of the image: every binary is still found and runs, and nothing is
+downloaded again.
+
+**Acceptance Scenarios**:
+
+1. **Given** a container daemon on the basic image with no setup command, **When** a session runs
+   `mise use -g` for a tool (for example `rust` or `uv`), **Then** it succeeds as the session user,
+   the tool is installed under the sandbox home, and a new session on any worktree of the daemon
+   finds it with `command -v`.
+2. **Given** such a daemon, **When** a session runs `npm install -g <package>`, `cargo install
+   <crate>` (with a mise-installed Rust) or `uv tool install <package>` (with a mise-installed
+   `uv`), **Then** each succeeds without root or `sudo`, writes only under the sandbox home, and
+   the binary it creates is found by a new session with no further configuration.
+3. **Given** tools a session installed itself, **When** the container restarts, **Then** each is
+   still found and runs, and none is downloaded again.
+4. **Given** tools a session installed itself, **When** the container is replaced (the daemon moves
+   to an updated basic image, or another of its settings forces a new container), **Then** each is
+   still found and runs, and none is downloaded again.
+5. **Given** a Kubernetes daemon, **When** its pod is recreated, **Then** tools a session installed
+   into `/data/home` are still found and run.
+6. **Given** a session that needs a system package (for example `apt-get install libpq-dev`),
+   **When** it tries to install it, **Then** it fails for lack of root, as today, and the sandbox
+   page tells the user to add it through an own image built `FROM` the basic image.
+
+---
+
 ### Edge Cases
 
 - **Empty project / no `mise.toml`**: `mise install` with nothing declared succeeds and installs
@@ -187,6 +245,22 @@ example that builds with `docker build` or `podman build` as given.
 - **A `mise` already in `~/.local/bin`** (installed by hand earlier): it comes first on `PATH`
   (#1289's order) and is used; the image's copy is the fallback.
 - **Image size**: the first start downloads a larger image; later starts are unaffected (cached).
+- **A session installs while setup or another session installs** (Story 5): the setup turn
+  serialises setup runs only; installs sessions start themselves are not serialised. Two installs
+  of the same Rust toolchain at once can fail one of them (research R5); rerunning the failed
+  command succeeds. A lost component update is repaired by rerunning `rustup component add`.
+- **The environment already names an install location** (an environment-include script or the
+  daemon's own environment sets `NPM_CONFIG_PREFIX`, `CARGO_INSTALL_ROOT` or `GOBIN`): that value is
+  kept; the defaults of FR-015 apply only where nothing is set.
+- **An image update changes a system library** that a tool installed in the home links against (a
+  `cargo install` of a crate linking OpenSSL, an `npm` package with a native module): that tool can
+  stop working after the update and is reinstalled. Tools mise installs as prebuilt binaries, and
+  Rust toolchains, do not depend on the image's libraries beyond glibc.
+- **A daemon whose network posture blocks outbound connections**: a session there cannot download
+  anything, so it cannot install tools itself; tools already in the home keep working.
+- **Hosts whose container runtime shares folders through a VM** (macOS, Windows): the sandbox home
+  is a host folder shared into the container; mise's shims and rustup's proxies (links and
+  executables) work there as on Linux.
 
 ## Requirements *(mandatory)*
 
@@ -206,9 +280,9 @@ example that builds with `docker build` or `podman build` as given.
   The development libraries of FR-007 are part of what the image provides.
 - **FR-004**: The basic image MUST provide `python3` on the default `PATH`, usable before any setup
   has run.
-- **FR-005**: Tools that a setup command installs with `mise` MUST land in the sandbox home, so they
-  persist across container restarts and are shared by every worktree on that daemon, and MUST be
-  found by sessions through #1289's `PATH` without further configuration.
+- **FR-005**: Tools installed with `mise`, whether by a setup command or by a session itself (FR-014),
+  MUST land in the sandbox home, so they persist (FR-016) and are shared by every worktree on that
+  daemon, and MUST be found by sessions through #1289's `PATH` without further configuration.
 - **FR-006**: The basic image MUST still carry no key, token, credential, daemon or AI CLI
   (feature 806, FR-013), and MUST keep working as the base for **My own image** and for Kubernetes
   daemons.
@@ -237,6 +311,33 @@ example that builds with `docker build` or `podman build` as given.
   MUST contain `~/.local/bin` and the mise shims folder that #1289 puts on `PATH`; creating them
   MUST NOT change any file already in them.
 
+**A session installs its own tools (Story 5)**
+
+- **FR-014**: With no setup command configured, a session on a container or Kubernetes daemon MUST
+  be able to install user-level tools as the session user, with no root or `sudo`: with mise (`mise
+  use -g`, `mise install`) and with each language's own installer (`npm install -g`, `cargo
+  install`, `uv tool install`, `go install`, `pip install --user` under a mise-installed Python).
+  Each install MUST write only under the sandbox home (and the worktree, for a project-local one).
+- **FR-015**: The binaries those installs create MUST be found by later sessions on any worktree of
+  the daemon through #1289's `PATH` (`~/.local/bin` or mise's shims), with no further
+  configuration. Where an installer's own default target is outside the home or off that `PATH`,
+  every spawn on a container or Kubernetes daemon MUST get a default under the home:
+  `NPM_CONFIG_PREFIX=$HOME/.local`, `CARGO_INSTALL_ROOT=$HOME/.local`, `GOBIN=$HOME/.local/bin`,
+  each only when the spawn environment (environment-include, else the daemon's own) does not set
+  it. Installers whose default is already in the home (mise's data folder, `~/.cargo`,
+  `~/.rustup`, uv's tool folder, pip's user base `~/.local`) MUST be left on their defaults. Host
+  and remote daemons MUST keep their current environment (as #1289 FR-008).
+- **FR-016**: The sandbox home MUST persist for the life of the daemon across a container restart,
+  the container's replacement (a new basic image, or any other setting that forces a new
+  container) and, on Kubernetes, the pod's recreation, so nothing installed in it has to be
+  installed or downloaded again.
+- **FR-017**: The basic image MUST carry what those installers need to download, unpack and build:
+  `curl`, `git`, `tar`, `gzip`, `xz`, `unzip`, and the C toolchain of FR-003.
+- **FR-018**: System packages MUST stay out of a session's reach (no root, no `sudo`; feature 806).
+  The sandbox page MUST say that a session can install user-level tools itself and that they
+  persist in the sandbox home, name the defaults of FR-015, and say that system packages come from
+  the basic image or an own image built `FROM` it.
+
 **Documentation (Story 4)**
 
 - **FR-012**: The sandbox page of the user guide MUST say what the basic image carries for building
@@ -250,8 +351,9 @@ example that builds with `docker build` or `podman build` as given.
 
 - **Pinned `mise` release**: a version and one checksum per architecture, kept in the repository and
   checked when the basic image is built.
-- **Sandbox home toolchain**: the tools mise installs under the sandbox home; persistent per daemon
-  and shared by its worktrees.
+- **Sandbox home toolchain**: the tools mise and the language installers put under the sandbox
+  home, by a setup command or by a session; persistent per daemon (FR-016) and shared by its
+  worktrees.
 
 ## Success Criteria *(mandatory)*
 
@@ -267,6 +369,9 @@ example that builds with `docker build` or `podman build` as given.
 - **SC-004**: The basic image's compressed download grows by no more than 250 MB per architecture.
 - **SC-005**: A user who reads the sandbox page can tell, without trying it, whether the basic image
   can build their project and, if not, has a working own-image example to start from.
+- **SC-006**: Every tool a session installed itself (Story 5) is found and runs, with nothing
+  downloaded again, after a container restart and after the container's replacement, in every run
+  of the check.
 
 ## Out of scope
 
@@ -274,10 +379,12 @@ example that builds with `docker build` or `podman build` as given.
 - `gh`, `curl`, `wget` and `jq` in the basic image (#1435).
 - The session environment issue #1438.
 - Installing any project's toolchain (Rust, uv, node, ffmpeg) into the image itself: it installs
-  per daemon through setup.
+  per daemon through setup or by a session (Story 5).
 - A per-project image choice in the app (deferred by #1289; a second container daemon covers it).
 - Host and remote (SSH) daemons, which use the user's own environment.
 - Caching toolchain downloads across different daemons.
+- Installing system packages from a session (`apt`, root, `sudo`): they come from the image.
+- Serialising installs that sessions start themselves (only setup runs take the setup turn).
 
 ## Assumptions
 
@@ -287,9 +394,22 @@ example that builds with `docker build` or `podman build` as given.
   rust-analyzer) can be declared in `mise.toml`.
 - `uv` installed by mise does not provide `python3` on `PATH` by default, so the image ships
   `python3` (also needed by the repository's hooks before any setup runs).
+- The image's `python3` (Debian's) has no `pip` and is marked externally managed, so Python
+  packages and tools install through `uv` or a mise-installed Python, whose `pip install --user`
+  writes to `~/.local`.
 - `ffmpeg` installs through mise's conda backend without root, as `mise.toml` already says.
 - The sandbox home is persistent per daemon and writable by the session user, including on
-  Kubernetes (the pod's home volume).
+  Kubernetes. Checked in the code on 2026-10-26: a container daemon's home is the host folder
+  `<daemon state dir>/sandbox-home` (`crates/micold-core/src/sandbox/mod.rs:496-500`, `:841`; per
+  daemon `crates/micold-core/src/daemons.rs:984-1010`), created by the client before the container
+  (`crates/micold-client/src/shell/sandbox.rs:321-331`) and bind-mounted read-write at the home path
+  (`crates/micold-core/src/sandbox/argv.rs:289-297`), so it outlives a container replaced for a
+  different image (`crates/micold-core/src/sandbox/lifecycle.rs:324-331`). A Kubernetes daemon's
+  home is `/data/home` on its PersistentVolumeClaim (`crates/micold-core/src/kube/manifest.rs:21-26`,
+  `:238-240`); stopping or recreating the pod deletes only the pod
+  (`crates/micold-core/src/kube/lifecycle.rs:187-191`, `crates/micold-core/src/kube/start.rs:543-548`),
+  and only removing the daemon deletes the claim (`crates/micold-core/src/kube/lifecycle.rs:93-117`).
+  FR-016 turns this into a tested requirement.
 - A new basic image reaches users through the existing hash, publish and pin steps (feature 806);
   existing containers move to it on their next restart.
 - Two `mise install` runs into one sandbox home at the same time do not corrupt each other (mise

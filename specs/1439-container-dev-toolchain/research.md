@@ -181,7 +181,87 @@ Each decision: what was chosen, why, and what was rejected. Probes ran in this c
   | `docs/user-guide/sandboxed-daemon.md` | image contents | PATH, setup pointer, own image | build section |
   | `crates/micold-daemon/src/setup.rs`, `state.rs` | — | M4 (#1407) and later | setup turn |
   | `docs/user-guide/worktrees-and-sessions.md` | — | setup docs (M5–M7) | one sentence on serialisation |
+  | `crates/micold-core/src/sandbox/toolchain_path.rs` | — | M1 (merged) | install defaults (R13) |
 
   The hash is a function of the whole directory, so whichever lands second recomputes
   `BASIC_IMAGE_CONTENT_HASH`; the publish-and-pin follow-up (806) runs once after this feature's
   image PR merges.
+
+## R12. Does the sandbox home really persist? (amendment, FR-016)
+
+Checked in the code on `main` at `26ac5a75e`, 2026-10-26:
+
+- **Container daemons**: the home is the host folder `<daemon state dir>/sandbox-home`
+  (`SANDBOX_HOME_DIR`, `crates/micold-core/src/sandbox/mod.rs:496-500`, whose doc says it "persists
+  across container recreation"; built into the mount set at `:841`). The state directory is per
+  daemon, `base/daemons/<slug>` (`crates/micold-core/src/daemons.rs:984-1010`). The client creates
+  the folder before the container (`crates/micold-client/src/shell/sandbox.rs:321-331`) and the
+  argv bind-mounts it read-write at the home path, first of all mounts
+  (`crates/micold-core/src/sandbox/argv.rs:289-297`). A restart keeps the container; a replacement
+  (`Adoption::Replace` for `DifferentImage`, `crates/micold-core/src/sandbox/lifecycle.rs:324-331`,
+  or another network posture, test at `:1230`) removes the container but not the host folder.
+- **Kubernetes daemons**: `HOME=/data/home` (`crates/micold-core/src/kube/manifest.rs:21-26`, env
+  test `:459`) on the volume `data`, a PersistentVolumeClaim (`:238-240`). Stop deletes the pod and
+  keeps the claim (`crates/micold-core/src/kube/lifecycle.rs:187-191`, tested); a drifted pod is
+  recreated by deleting only the pod (`crates/micold-core/src/kube/start.rs:543-548`, not yet
+  tested for the claim: A9); only Remove deletes the claim (`kube/lifecycle.rs:93-117`).
+- **Decision**: no code change for persistence. FR-016 makes it a requirement with tests: A9 (pod
+  recreation keeps the claim) and A10 (a session's installs survive a restart and two
+  replacements).
+- **Caveat recorded as an edge case**: a tool linked against an image system library may break when
+  an image update changes that library; the home persists, the library does not.
+
+## R13. Where a session's own installs land (amendment, FR-014, FR-015)
+
+- **Probe of defaults** (tools' documented defaults with `HOME` set to the sandbox home and no other
+  variable, as the basic image runs — it sets no `XDG_DATA_HOME`, `Containerfile` comment, #1286):
+  mise data `~/.local/share/mise`, `mise use -g` config `~/.config/mise/config.toml`; rustup
+  `~/.rustup`, cargo `~/.cargo`; uv tools `~/.local/share/uv/tools`, their entry points
+  `~/.local/bin`; pip `--user` `~/.local`. All under the home; their binaries reach 1289's `PATH`.
+  Three do not: npm's global prefix is the image's `/usr/local` (Node's official image; not writable
+  by the session user, so `npm install -g` fails with `EACCES`), `cargo install` writes
+  `~/.cargo/bin` (off `PATH`; mise shims it only after `mise reshim`), `go install` writes
+  `~/go/bin` (off `PATH`).
+- **Decision**: on sandbox daemons the daemon adds `NPM_CONFIG_PREFIX=$HOME/.local`,
+  `CARGO_INSTALL_ROOT=$HOME/.local` and `GOBIN=$HOME/.local/bin` to every spawn's environment when
+  none is set (contract [sandbox-install-env.md](contracts/sandbox-install-env.md)). A pure function
+  beside 1289's `toolchain_path` (`crates/micold-core/src/sandbox/toolchain_path.rs`) computes them;
+  `DaemonState::with_sandbox_path` (`crates/micold-daemon/src/state.rs:1162`) applies them with the
+  same `HOME` resolution and the same `offered.json` predicate. Every binary then lands in
+  `~/.local/bin`, which is already on `PATH`, so 1289's `PATH` contract is unchanged.
+- **Alternatives rejected**:
+  - `ENV` in the image: sshd builds each session's environment afresh (the reason
+    `crates/micold-client/src/daemon.rs:1297-1301` passes `HOME` on the remote command), and the
+    value depends on `HOME`, which differs per user.
+  - A global `npmrc` in the image (`/usr/local/etc/npmrc`, `prefix=${HOME}/.local`): covers npm
+    only; cargo and go have no system-wide setting.
+  - Setting them in the client's `container_env`: Kubernetes daemons start through another path
+    (`kube/start.rs`), so it would be two places; the daemon is the one place both share.
+  - Adding `~/.cargo/bin` and `~/go/bin` to `PATH`: changes 1289's contract P2 and its ordering
+    tests, for the same result.
+  - Setting `MISE_DATA_DIR`, `CARGO_HOME`, `RUSTUP_HOME`, `UV_TOOL_DIR`: already in the home by
+    default; setting them would change 1289's shims input and override a project's choice.
+- **pip**: Debian's `python3` has no `pip` and carries `EXTERNALLY-MANAGED` (PEP 668), so `pip
+  install --user` is not offered against it; a session uses `uv` or a mise-installed Python. No
+  `python3-pip`/`python3-venv` in the image (R3 stands).
+
+## R14. What installers need from the image (amendment, FR-017)
+
+- **Decision**: add `xz-utils` and `unzip` to the toolchain layer (D1 step 1). `node:24-trixie-slim`
+  purges `xz-utils` after unpacking Node, and Debian slim has no `unzip`; release archives of many
+  tools mise's `ubi`/`github`/`aqua` backends and `go` toolchains fetch are `.tar.xz` or `.zip`.
+  `tar` and `gzip` are Debian-essential; `curl` and `git` are in #1435's list. `make` and `python3`
+  are also already in #1435's list on `main` (`packaging/basic/Containerfile`), so D1 step 1 adds
+  only `gcc g++ libc6-dev pkgconf xz-utils unzip`.
+- T004's `PRESENT` list confirms each command in the built image.
+
+## R15. Overlap with #1289 (amendment)
+
+- 1289 owns the setup command and the `PATH` (`~/.local/bin`, shims). Its spec assumes setup's
+  installs persist because the home does (`specs/1289-sandbox-project-setup/spec.md:333-335`); it
+  has no requirement for installs a session makes without setup, nor for npm/cargo/go install
+  locations. No 1289 task covers Story 5, so nothing is duplicated.
+- **Collision**: Story 5's code sits in `state.rs` beside 1289's `with_sandbox_path` and in its
+  `toolchain_path.rs` module; 1289's remaining milestones (M4 #1407 open, M5–M7 UI) touch
+  `state.rs`'s setup records, not that function. Expect a textual rebase conflict only; keep both.
+- Like 1289's `PATH` (its FR-006), environment-include wins: a value it sets is kept (I2).

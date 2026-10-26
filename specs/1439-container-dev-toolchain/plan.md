@@ -17,6 +17,13 @@ turn at a time. This repository declares its Rust components in `mise.toml`, doc
 container setup command, and the user guide and the image README say what the basic image can build
 and how to extend it with an own image.
 
+**Amendment 2026-10-26 (Story 5)**: with no setup command, a session installs the tools a build needs
+itself. The image adds `xz-utils` and `unzip` for installers' archives (FR-017); on sandbox daemons
+the daemon gives every spawn `NPM_CONFIG_PREFIX`, `CARGO_INSTALL_ROOT` and `GOBIN` under the home
+when unset, so `npm install -g`, `cargo install` and `go install` land in `~/.local/bin` (D8,
+contract [sandbox-install-env.md](contracts/sandbox-install-env.md)); the home already persists
+across restarts and replacements (research R12), which new tests pin down (D9). Milestone M5.
+
 ## Technical Context
 
 **Language/Version**: Rust stable (`rust-toolchain.toml`), POSIX `sh` (entrypoint), Bash (shell
@@ -45,7 +52,8 @@ platform-neutral.
 research R6); no root, `sudo` or writes outside the sandbox home and worktree (FR-010); the image
 stays free of keys, tokens, the daemon and AI CLIs (FR-006).
 
-**Scale/Scope**: one image directory, one entrypoint, one daemon module, `mise.toml`, three docs.
+**Scale/Scope**: one image directory, one entrypoint, two daemon functions (setup turn, install
+defaults) and one pure core function, `mise.toml`, three docs.
 
 ## Dependencies and collisions
 
@@ -62,12 +70,12 @@ mise download step uses #1435's `curl`.
 | Principle | Status | How |
 |---|---|---|
 | **I. Test-First** | PASS | Each requirement has a failing test first: guard and entrypoint shell tests (B3–B5), `mise-toolchain.test.sh` (FR-008), daemon tests for the setup turn (S1–S3), real-runtime tests for the built image and the setup flow. What cannot be automated cheaply (the full gate in a container, the own-image example, size) is quickstart Part B, recorded in the ledger. |
-| **II. Multi-Session** | PASS | The setup turn (contract S2) keeps concurrent setups on one daemon from corrupting the shared home; sessions never wait for it (S4). The toolchain is shared read-mostly by every session, by design (FR-005). |
+| **II. Multi-Session** | PASS | The setup turn (contract S2) keeps concurrent setups on one daemon from corrupting the shared home; sessions never wait for it (S4). The toolchain is shared read-mostly by every session, by design (FR-005). Installs a session starts itself are not serialised (spec edge case; a failed concurrent install is rerun), documented in the guide. |
 | **III. Worktree Integration** | PASS | Setup still runs per app-created worktree (1289); this feature adds no location and no git step. |
 | **IV. Local-First** | PASS | No app state leaves the device and nothing in the app needs a remote service. The image build downloads mise at publish time; a project's toolchain is downloaded by the user's own setup command, which they configure. A daemon whose home already holds the toolchain works offline. |
 | **V. Rust + iced** | PASS | The only app code is daemon Rust (`setup.rs`, `state.rs`); waiting is `Running` + one output line, so no new state can contradict the existing ones. Packaging stays in `packaging/basic/` as feature 806 set it up. |
-| **VI. Cross-Platform** | PASS | The image is built and checked for both architectures by `basic-image.yml`; the mise step maps `TARGETARCH` and fails on anything else. Docker and Podman both build it (quickstart B3, B4). The setup turn is a tokio mutex, compiled and tested on all three CI platforms; it applies only where `offered.json` exists. |
-| **VII. Documentation** | PASS | Same change: `docs/user-guide/sandboxed-daemon.md` (what the basic image builds, the setup command, the own-image example), `packaging/basic/README.md` (contents, pin, update steps), `CONTRIBUTING.md` (the container setup command), `worktrees-and-sessions.md` (one setup at a time on a sandbox daemon). |
+| **VI. Cross-Platform** | PASS | The image is built and checked for both architectures by `basic-image.yml`; the mise step maps `TARGETARCH` and fails on anything else. Docker and Podman both build it (quickstart B3, B4). The setup turn is a tokio mutex, compiled and tested on all three CI platforms; it applies only where `offered.json` exists. A session's own installs on a VM-shared home (macOS, Windows) are checked by hand (quickstart B7). |
+| **VII. Documentation** | PASS | Same change: `docs/user-guide/sandboxed-daemon.md` (what the basic image builds, the setup command, the own-image example), `packaging/basic/README.md` (contents, pin, update steps), `CONTRIBUTING.md` (the container setup command), `worktrees-and-sessions.md` (one setup at a time on a sandbox daemon), and the sandbox page's "Tools installed in the sandbox's home" (a session's own installs, the defaults, what stays out of reach; M5). |
 | **VIII. Reusable UI** | PASS (N/A) | No UI change. |
 
 Post-design re-check: unchanged, no violation. Complexity Tracking is empty.
@@ -78,8 +86,8 @@ Post-design re-check: unchanged, no violation. Complexity Tracking is empty.
 
 `packaging/basic/Containerfile`, after #1435's package step:
 
-1. Add `gcc g++ make libc6-dev pkgconf python3` to the existing `apt-get install` list (one layer;
-   research R2, R3).
+1. Add `gcc g++ libc6-dev pkgconf xz-utils unzip` to the existing `apt-get install` list (one layer;
+   research R2, R3, R14). `make` and `python3` are already in it from #1435.
 2. A new step: `ARG TARGETARCH`; `COPY mise.sha256 /tmp/mise.sha256`; a `RUN` that maps the arch,
    reads the version from `mise.sha256`, downloads the release binary with `curl -fsSLo`, runs
    `sha256sum -c --ignore-missing`, checks the file exists, installs `/usr/local/bin/mise` 0755 and
@@ -176,9 +184,36 @@ does not exist on a test host: the guard keeps that test working, and new cases 
   verify the GPG and minisign signatures with the documented keys, keep only the two raw `linux-x64`/`linux-arm64` lines, cross-check against the npm
   platform packages, record provenance), then write `mise.sha256`, update the content hash,
   publish, pin; plus the measured size (B5).
+- `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home" (M5, FR-018): a
+  session can install user-level tools itself (mise, `npm install -g`, `cargo install`, `uv tool
+  install`, `go install`; pip through `uv` or a mise Python), the three defaults and that a value
+  the environment sets wins, that installs persist across restarts, image updates and pod
+  recreation for the life of the daemon, that installs a session starts are not serialised, and
+  that system packages come from the image or an own image (link to the building section).
 - `docs/user-guide/worktrees-and-sessions.md`: the setup section 1289 adds gets one sentence on S2:
   one setup at a time on a sandbox daemon, a waiting run's output says it is waiting for another
   setup, and stopping the running setup (Stop setup) lets the next one start (S3).
+
+### D8. A session's own installs (FR-014, FR-015, FR-017; contract [sandbox-install-env.md](contracts/sandbox-install-env.md))
+
+- `crates/micold-core/src/sandbox/toolchain_path.rs`: a pure `install_env_defaults(home, is_set)`
+  beside `toolchain_path`, returning the I2 variables whose `is_set` is false (with
+  `npm_config_prefix` counting for `NPM_CONFIG_PREFIX`), none without a `HOME`. Pure, like
+  `toolchain_path`: no filesystem.
+- `crates/micold-daemon/src/state.rs` `with_sandbox_path` (`:1162`): after it orders `PATH`, it adds
+  those defaults to `resolved.vars`, using its existing `var` closure (resolved environment, else
+  the daemon's own) for both `HOME` and `is_set`. Same `offered_clis()` predicate, so host and remote
+  daemons are unchanged (I1); same caller `spawn_env_for`, so every spawn gets them (I4). No new
+  helper for the lookup: the closure is reused.
+- The image half (FR-017) is D1 step 1.
+
+### D9. The home persists (FR-016)
+
+No code change (research R12). Tests: a `kube::start` unit test that a drifted pod recreated with
+`DriftChoice::Recreate` deletes only the pod and keeps the claim (beside
+`kube/lifecycle.rs:187`'s stop test); the real-runtime `sandbox_real_self_install` (quickstart A10)
+checks a session's installs after a restart, a replacement for another image tag, and a replacement
+onto the no-outbound posture, run offline.
 
 ### D7. Publish and pin
 
@@ -209,11 +244,22 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | Edge: network failure during setup | #1289 reports the failure; mise/rustup resume a partial install | real-runtime A7 (a setup stopped mid-download, then a rerun succeeds) |
 | Edge: several sessions on one daemon | read-only use of the shared toolchain; cargo's file locks guard `~/.cargo`, each worktree has its own `target` | quickstart B2 (`cargo build` in two sessions at once) |
 | Edge: a `mise` already in `~/.local/bin` | #1289's `PATH` order | real-runtime A6 (a stub in `~/.local/bin` wins) |
+| FR-014 | D8; D1 step 1 | real-runtime A10 (each installer as the non-root user, writes only under the home) |
+| FR-015 | D8; contract I1–I4 | core + daemon unit tests A8; real-runtime A10 (a new session in a second worktree finds each binary) |
+| FR-016 | D9; research R12 | kube unit test A9; real-runtime A10 (restart, image-tag replacement, offline posture replacement); quickstart B6 (pod recreated), B7 |
+| FR-017 | D1 step 1 | real-runtime A5 (`xz`, `unzip` in `PRESENT`) |
+| FR-018 | D6 (M5 paragraph) | real-runtime A10 (`apt-get install` fails); docs CI |
+| Edge: a session installs while setup or another session installs | not serialised; rerun | user guide (D6 M5 paragraph) |
+| Edge: the environment already names an install location | contract I2 | unit tests A8 |
+| Edge: an image update changes a system library | documented (R12) | — (by design) |
+| Edge: no-outbound posture | sessions cannot download; installed tools keep working | real-runtime A10 (offline check) |
+| Edge: VM-shared home (macOS, Windows) | Principle VI | quickstart B7 |
 | SC-001 | D5, D7 | quickstart B1 (after the documented setup command ends Set up, `mise run gate` exits 0 with no manual install step) |
 | SC-002 | D1, D5 | quickstart B1 (`command -v cargo rust-analyzer uv python3 gh` prints five paths in each session opened) |
 | SC-003 | D4 | real-runtime A7 (< 60 s, no download) |
 | SC-004 | research R6 | quickstart B5, recorded |
 | SC-005 | D6 | quickstart B3 step 1 (the section lists contents, limits, and an own-image example that builds) |
+| SC-006 | D9 | real-runtime A10 |
 
 No client or geometry-gate layer: no UI changes. No visual pass.
 
@@ -225,6 +271,7 @@ No client or geometry-gate layer: no UI changes. No visual pass.
 | M2 | FR-007's six dev libraries (isolated layer); AS4 fixture `x11`; hash | FR-003 (AS4), FR-007 |
 | M3 | Setup turn on sandbox daemons; `worktrees-and-sessions.md` sentence | edge case, Principle II |
 | M4 | `mise.toml` components; `CONTRIBUTING.md`; sandbox page section and own-image example; real-runtime `sandbox_real_mise_setup`; quickstart B1–B6 | FR-005, FR-008–FR-010, FR-012, SC-001–SC-005 |
+| M5 | Install defaults (D8), pod-recreation test (D9), real-runtime `sandbox_real_self_install`, guide paragraph; quickstart B6 second half, B7. `xz-utils`/`unzip` ride in M1's apt layer | FR-014–FR-018, SC-006 |
 
 M1 and M2 each change `packaging/basic/` and so the content hash; one publish after M2 (or after the
 last image milestone) and one pin PR are enough.
@@ -241,6 +288,7 @@ specs/1439-container-dev-toolchain/
 ├── quickstart.md
 ├── contracts/
 │   ├── basic-image-build.md
+│   ├── sandbox-install-env.md
 │   └── setup-turn.md
 └── tasks.md             # tasks unit
 ```
@@ -255,12 +303,15 @@ packaging/basic/
 └── README.md                 # contents, pin, update steps, size (D6)
 crates/micold-core/src/sandbox/basic_image.rs        # BASIC_IMAGE_CONTENT_HASH (+ BASIC_IMAGE in the pin PR)
 crates/micold-core/tests/sandbox_real_basic_image.rs # PRESENT, version, compile, pkg-config, read-only uid 10001
-crates/micold-daemon/src/state.rs                    # setup_turn (D4)
+crates/micold-daemon/src/state.rs                    # setup_turn (D4); install defaults in with_sandbox_path (D8)
 crates/micold-daemon/src/setup.rs                    # spawn_run waits for the turn; waiting line; stop of a waiting run (D4)
 crates/micold-daemon/tests/setup_turn.rs             # NEW: S1–S3 (or in setup.rs's tests module, beside the existing ones)
 crates/micold-daemon/tests/sandbox_real_toolchain_path.rs  # folders exist before setup (A6)
 crates/micold-daemon/tests/sandbox_real_mise_setup.rs      # NEW: Story 1 end to end (A7)
 crates/micold-daemon/tests/fixtures/mise-c-crate/          # NEW: fixture project (mise.toml, Cargo.toml, build.rs, hello.c)
+crates/micold-daemon/tests/sandbox_real_self_install.rs    # NEW: Story 5 (A10)
+crates/micold-core/src/sandbox/toolchain_path.rs           # install_env_defaults (D8)
+crates/micold-core/src/kube/start.rs                       # test: pod recreation keeps the claim (D9)
 scripts/tests/basic-image-hash.test.sh   # mise cases (B4)
 scripts/tests/basic-entrypoint.test.sh   # home folder cases (B5)
 scripts/tests/mise-toolchain.test.sh     # NEW: FR-008
