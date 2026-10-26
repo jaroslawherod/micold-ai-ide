@@ -1350,7 +1350,10 @@ fn a_long_caption_is_cut_before_the_switch_or_restart_is_clipped() {
             rect(at(&records, &path).unwrap_or_else(|| panic!("{what}: slot child {i}")))
         });
         assert!(
-            caption.width <= micold_client::ui::session_area::SWITCH_CAPTION_MAX_WIDTH + TOLERANCE
+            caption.width
+                <= micold_client::ui::session_area::SWITCH_CAPTION_MAX_WIDTH
+                    + micold_core::tokens::spacing::SM
+                    + TOLERANCE
                 && button.width > 0.0
                 && button.x + button.width <= switch.x + switch.width + TOLERANCE,
             "{what}: caption {caption:?} is capped and the button {button:?} is whole in {switch:?}"
@@ -1461,4 +1464,12 @@ fn a_tiled_pane_still_has_its_switch_row() {
         !tiles.is_empty(),
         "no tiled pane draws a switch row: the tiled path was lost (FR-007)"
     );
+    // Each switch row sits within one row's height of the pane area's top, under its pane header,
+    // and not in the strip's rows above.
+    for row in &tiles {
+        assert!(
+            row.y >= panes.y - TOLERANCE && row.y - panes.y < 80.0,
+            "a tiled switch row {row:?} sits at the top of the pane area {panes:?} (SC-004)"
+        );
+    }
 }

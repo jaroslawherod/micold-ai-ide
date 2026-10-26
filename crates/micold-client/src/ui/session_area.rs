@@ -335,26 +335,33 @@ fn switch_slot<'a>(
     let slot =
         terminal::strip_switch_offer(state, several, model.review_shown()).and_then(|offer| {
             let button = terminal::switch_button_shrinking(state, offer.session, r)?;
-            let caption = offer.caption.map(|line| {
-                Tooltip::new(
-                    container(
-                        Ellipsized::<Message>::at_role(
-                            line.clone(),
-                            TypeRole::Caption,
-                            r.on_surface_variant,
+            // Always two children, so a held queue coming and going moves no widget state from
+            // the button to the caption; the caption carries its own gap as right padding.
+            let caption: Element<'a, Message> = match offer.caption {
+                Some(line) => container(
+                    Tooltip::new(
+                        container(
+                            Ellipsized::<Message>::at_role(
+                                line.clone(),
+                                TypeRole::Caption,
+                                r.on_surface_variant,
+                            )
+                            .shrink(),
                         )
-                        .shrink(),
+                        .max_width(SWITCH_CAPTION_MAX_WIDTH),
+                        line,
+                        r,
                     )
-                    .max_width(SWITCH_CAPTION_MAX_WIDTH),
-                    line,
-                    r,
+                    .position(TooltipPosition::Bottom),
                 )
-                .position(TooltipPosition::Bottom)
-            });
-            let mut slot = material::GiveWayRow::new(spacing::SM);
-            if let Some(caption) = caption {
-                slot = slot.shorten(0, caption);
-            }
+                .padding(iced::Padding {
+                    right: spacing::SM,
+                    ..iced::Padding::ZERO
+                })
+                .into(),
+                None => container(Space::new()).into(),
+            };
+            let slot = material::GiveWayRow::new(0.0).shorten(0, caption);
             Some(slot.shorten(1, button))
         });
     match slot {

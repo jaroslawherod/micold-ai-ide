@@ -1526,6 +1526,14 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/give_way.rs",
+        component: "GiveWayRow",
+        reason: "the row whose children give way by rank when it is too narrow: a layout primitive \
+                 with no look of its own, public only so the session strip can compose it across the \
+                 Material crate's boundary (feature 1463), and every row it lays out is posed by the \
+                 strip's own gates.",
+    },
+    Exemption {
         module: "material/picker.rs",
         component: "EmphasisedLabel",
         reason: "the type-ahead row's label with its matched characters emphasised: public only so \
