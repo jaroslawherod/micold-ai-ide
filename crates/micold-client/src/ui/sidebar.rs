@@ -333,8 +333,14 @@ fn filter_label(filter: TagFilter) -> String {
 }
 
 /// A toggle chip for one tag filter (feature 008, FR-024): filled in its tag color when active,
-/// outlined when inactive. Pressing it toggles the filter.
-fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Message> {
+/// outlined when inactive. Pressing it toggles the filter. `clearable` marks an active chip on the
+/// collapsed line with a ✕ (BUG-1470): the press clears just that filter.
+fn filter_chip(
+    filter: TagFilter,
+    active: bool,
+    clearable: bool,
+    r: Roles,
+) -> Element<'static, Message> {
     // Feature 014: the pill styling that used to live here is now the shared `ToggleChip`
     // primitive, so this and the reveal chip below stay identical by construction rather than by
     // two copies drifting apart (Principle VIII Component-reuse gate).
@@ -343,48 +349,116 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
         TagFilter::HasIssue => r.issue_tag(),
         TagFilter::Untyped => material::chip_neutral_accent(r),
     };
+    let label = filter_label(filter);
+    let label = if clearable {
+        format!("{label} \u{2715}")
+    } else {
+        label
+    };
     ToggleChip::new(
-        filter_label(filter),
+        label,
         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
         r,
     )
     .active(active)
     .accent(fill, on)
+    .one_line()
     .into()
 }
 
-/// The chip bar (feature 1125, contract S3, research R11): **All** and the tag filter chips
-/// (feature 008), wrapping onto further lines, left of add, hide and more (⋯), which stay on the
-/// first line (US4.7, FR-016). Every control takes the keyboard, in display order (FR-017).
+/// How many active chips the collapsed line has room for at `width` (BUG-1470): what is left once
+/// **All**, the toggle, `+N` and the three actions have their room, in chip widths.
+// ponytail: an estimate, not a measure; the layout snapshot gates that nothing is cut off at the
+// narrowest and widest width. Measure in layout if a longer chip label ever breaks it.
+fn inline_active_fit(width: u16) -> usize {
+    usize::from(width.saturating_sub(250) / 75)
+}
+
+/// The chip bar (feature 1125, contract S3, research R11; one line since BUG-1470, FR-016):
+/// one chip line, always `anatomy::chip::HEIGHT` tall, then the accordion under it.
+///
+/// With 3 or fewer filters on offer the line is **All** and every filter chip, inline. With more it
+/// is **All**, the **Filter** toggle (count of active filters), the active chips with ✕, `+N`, and
+/// the accordion under the line holds every filter, wrapped. Add, hide and more (⋯) end the line.
+/// Every control takes the keyboard, in display order; the accordion's chips only while open.
 fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
-    use crate::features::sidebar::{chip_bar_chips, ChipBarChip};
-    let chips: Vec<Element<'static, Message>> =
-        chip_bar_chips(&state.available_tag_filters(), &state.sidebar.filters)
-            .into_iter()
-            .map(|(chip, active)| match chip {
-                // Selected while no filter is; pressing it clears every filter (US4.2, US4.3).
-                ChipBarChip::All => {
-                    let clear = Message::Sidebar(SidebarMsg::FiltersCleared);
-                    takes_the_keyboard(
-                        ToggleChip::new("All", clear.clone(), r).active(active),
-                        clear,
+    use crate::features::sidebar::{chip_bar_chips, collapsed_bar, ChipBarChip};
+    let available = state.available_tag_filters();
+    let active = &state.sidebar.filters;
+    let open = state.sidebar.filter_open;
+    let clear = Message::Sidebar(SidebarMsg::FiltersCleared);
+    let toggle = Message::Sidebar(SidebarMsg::FilterOpenToggled);
+    let all = |active| {
+        takes_the_keyboard(
+            ToggleChip::new("All", clear.clone(), r).active(active),
+            clear.clone(),
+            r,
+        )
+    };
+    let collapsed = collapsed_bar(
+        &available,
+        active,
+        inline_active_fit(state.sidebar_width_px()),
+    );
+    let (line, panel): (
+        Vec<Element<'static, Message>>,
+        Option<Element<'static, Message>>,
+    ) = match collapsed {
+        None => {
+            let chips = chip_bar_chips(&available, active)
+                .into_iter()
+                .map(|(chip, on)| match chip {
+                    // Selected while no filter is; pressing it clears every filter (US4.2, US4.3).
+                    ChipBarChip::All => all(on),
+                    ChipBarChip::Filter(filter) => takes_the_keyboard(
+                        filter_chip(filter, on, false, r),
+                        Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                         r,
-                    )
-                }
-                ChipBarChip::Filter(filter) => takes_the_keyboard(
-                    filter_chip(filter, active, r),
+                    ),
+                })
+                .collect();
+            (chips, None)
+        }
+        Some(bar) => {
+            let mut line = vec![all(bar.all_active)];
+            let label = if open {
+                "Filter \u{25b4}"
+            } else {
+                "Filter \u{25be}"
+            };
+            line.push(takes_the_keyboard(
+                ToggleChip::new(label, toggle.clone(), r)
+                    .active(open)
+                    .count(bar.active_count)
+                    .one_line(),
+                toggle.clone(),
+                r,
+            ));
+            line.extend(bar.shown.iter().map(|&filter| {
+                takes_the_keyboard(
+                    filter_chip(filter, true, true, r),
                     Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                     r,
-                ),
-            })
-            .collect();
+                )
+            }));
+            if bar.overflow > 0 {
+                line.push(takes_the_keyboard(
+                    ToggleChip::new(format!("+{}", bar.overflow), toggle.clone(), r).one_line(),
+                    toggle.clone(),
+                    r,
+                ));
+            }
+            (line, Some(filter_panel(&available, active, open, r)))
+        }
+    };
     let chips = container(
-        iced::widget::Row::with_children(chips)
+        iced::widget::Row::with_children(line)
             .spacing(spacing::XS)
-            .wrap()
-            .vertical_spacing(spacing::XS),
+            .align_y(Alignment::Center),
     )
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .height(Length::Fixed(micold_core::tokens::anatomy::chip::HEIGHT))
+    .align_y(Alignment::Center);
 
     let add_message = Message::WorktreeForm(FormMsg::Opened);
     let add = Tooltip::new(
@@ -439,10 +513,44 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
     )
     .height(Length::Fixed(micold_core::tokens::anatomy::chip::HEIGHT))
     .align_y(Alignment::Center);
-    row![chips, actions]
+    let line = row![chips, actions]
         .spacing(spacing::XS)
-        .align_y(Alignment::Start)
-        .into()
+        .align_y(Alignment::Start);
+    match panel {
+        Some(panel) => column![line, panel].spacing(spacing::XS).into(),
+        None => line.into(),
+    }
+}
+
+/// The accordion under the collapsed line (BUG-1470, FR-016): every filter on offer as today's
+/// wrapped chips. Its chips are Tab stops only while it is open.
+fn filter_panel(
+    available: &[TagFilter],
+    active: &std::collections::BTreeSet<TagFilter>,
+    open: bool,
+    r: Roles,
+) -> Element<'static, Message> {
+    let chips: Vec<Element<'static, Message>> = available
+        .iter()
+        .map(|&filter| {
+            let chip = filter_chip(filter, active.contains(&filter), false, r);
+            if open {
+                takes_the_keyboard(chip, Message::Sidebar(SidebarMsg::FilterToggled(filter)), r)
+            } else {
+                chip
+            }
+        })
+        .collect();
+    material::Accordion::new(
+        iced::widget::Row::with_children(chips)
+            .spacing(spacing::XS)
+            .wrap()
+            .vertical_spacing(spacing::XS),
+        r,
+    )
+    .width(Length::Fill)
+    .open(open)
+    .into()
 }
 
 /// `control` as a Tab stop answering Enter and Space with `message`, with §5's focus ring: the
@@ -1619,6 +1727,52 @@ mod tests {
                 .map(|&g| m(Message::Sidebar(SidebarMsg::GroupToggled(g)))),
         );
         assert_eq!(stops, expected);
+    }
+
+    /// BUG-1470 (T065, FR-017): with more than three filters on offer the line is Overview,
+    /// **All**, the **Filter** toggle, the active chips, add, hide, more; the accordion's chips
+    /// join the order, under the line, only while it is open.
+    #[test]
+    fn tab_visits_the_filter_toggle_and_the_accordion_chips_only_while_open() {
+        let mut state = with_project();
+        state.worktree.worktrees = [
+            "feat-1_a", "fix-b", "docs-c", "chore-d", "perf-e", "ci-f", "scratch",
+        ]
+        .into_iter()
+        .map(|dir| micold_core::worktree::Worktree {
+            dir_name: dir.into(),
+            path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
+            branch: Some(dir.replace('-', "/")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        })
+        .collect();
+        let available = state.available_tag_filters();
+        assert!(available.len() > 3, "{available:?}");
+        let m = |message: Message| vec![format!("{message:?}")];
+        let sidebar = |msg| m(Message::Sidebar(msg));
+        let toggle = sidebar(SidebarMsg::FilterOpenToggled);
+        let tail = [
+            m(Message::WorktreeForm(FormMsg::Opened)),
+            sidebar(SidebarMsg::Toggled),
+            sidebar(SidebarMsg::MoreMenuToggled),
+        ];
+        let head = [vec![opened()], sidebar(SidebarMsg::FiltersCleared), toggle];
+
+        let closed = tab_order(&state, head.len() + tail.len());
+        assert_eq!(closed, [head.to_vec(), tail.to_vec()].concat(), "closed");
+
+        state.sidebar.filter_open = true;
+        let chips: Vec<_> = available
+            .iter()
+            .map(|&f| sidebar(SidebarMsg::FilterToggled(f)))
+            .collect();
+        let open = tab_order(&state, head.len() + chips.len() + tail.len());
+        assert_eq!(
+            open,
+            [head.to_vec(), tail.to_vec(), chips].concat(),
+            "open: every filter chip, in the accordion under the line, after the actions"
+        );
     }
 
     #[test]

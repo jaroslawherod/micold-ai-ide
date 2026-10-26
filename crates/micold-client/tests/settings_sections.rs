@@ -79,6 +79,12 @@ const DEFERRED: &[(&str, &str)] = &[
 /// counter and the legacy default it was migrated into are chosen there (T034). Feature 804 moved
 /// the legacy `daemon` block's controls into that form, so they are chosen there too.
 const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
+    // BUG-1470's filter accordion is opened by the sidebar's Filter toggle.
+    (
+        "filter_open",
+        "src/ui/sidebar.rs",
+        "SidebarMsg::FilterOpenToggled",
+    ),
     // Feature 551's folded origins are toggled on a session row in the sidebar.
     (
         "folded_origins",

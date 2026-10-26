@@ -106,6 +106,10 @@ pub struct State {
     /// The location the Overview sent the user to (feature 813, R12): scrolled into view and drawn
     /// with a session row's selected look until the next selection.
     pub revealed: Option<SessionLocation>,
+    /// Whether the filter accordion under the chip bar's line is open (BUG-1470, FR-016).
+    /// Persisted as `Settings.filter_open`, which the shell writes after every toggle and reads at
+    /// boot.
+    pub filter_open: bool,
     /// Whether the chip bar's more (⋯) menu is shown (feature 1125, FR-015). It took the place of
     /// the tag-filter panel's flag, whose chips are always on the chip bar now. Mutually exclusive
     /// with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted; closing it
@@ -387,6 +391,51 @@ pub fn chip_bar_chips(
                 .map(|&filter| (ChipBarChip::Filter(filter), active.contains(&filter))),
         )
         .collect()
+}
+
+/// How many filters on offer still show inline beside **All**; more go behind the **Filter**
+/// toggle (BUG-1470, FR-016).
+pub const INLINE_FILTERS: usize = 3;
+
+/// The chip bar's one line when more than [`INLINE_FILTERS`] filters are on offer (BUG-1470,
+/// FR-016): **All**, the **Filter** toggle with the count of active filters, the active filters
+/// that fit, and `+N` for those that do not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollapsedBar {
+    /// **All** looks selected exactly when no filter is active.
+    pub all_active: bool,
+    /// The count the toggle carries.
+    pub active_count: usize,
+    /// Active filters drawn on the line, each a selected chip whose ✕ clears just it, in
+    /// `available`'s order.
+    pub shown: Vec<TagFilter>,
+    /// Active filters that did not fit: the `+N` chip.
+    pub overflow: usize,
+}
+
+/// The collapsed bar for `available` and `active`, with room for `fit` active chips; `None` when
+/// the filters are few enough to show inline (see [`chip_bar_chips`]).
+pub fn collapsed_bar(
+    available: &[TagFilter],
+    active: &BTreeSet<TagFilter>,
+    fit: usize,
+) -> Option<CollapsedBar> {
+    if available.len() <= INLINE_FILTERS {
+        return None;
+    }
+    let mut on: Vec<TagFilter> = available
+        .iter()
+        .copied()
+        .filter(|f| active.contains(f))
+        .collect();
+    let overflow = on.len().saturating_sub(fit);
+    on.truncate(fit);
+    Some(CollapsedBar {
+        all_active: active.is_empty(),
+        active_count: active.len(),
+        shown: on,
+        overflow,
+    })
 }
 
 /// **Run in parallel** was chosen: the root opens the dialog for the active project.
@@ -2226,6 +2275,9 @@ pub enum Msg {
     DefaultExpansionToggled,
     FilterToggled(TagFilter),
     FiltersCleared,
+    /// The **Filter** toggle or the `+N` chip was pressed (BUG-1470, FR-016); the shell persists
+    /// the flag after it.
+    FilterOpenToggled,
     /// The chip bar's more (⋯) action was pressed (feature 1125, FR-015).
     MoreMenuToggled,
     /// The more action's press reported its trigger's bottom-left corner, ahead of the toggle.
@@ -2272,6 +2324,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::MoreMenuChosen(_) => more_menu_chosen(state),
         Msg::FilterToggled(filter) => filter_toggled(state, filter),
         Msg::FiltersCleared => filters_cleared(state),
+        Msg::FilterOpenToggled => state.sidebar.filter_open = !state.sidebar.filter_open,
         Msg::Scrolled(offset) => scrolled(state, offset),
         Msg::ViewportResized(height) => viewport_resized(state, height),
         Msg::Toggled => toggled(state),

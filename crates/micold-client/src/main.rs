@@ -1208,6 +1208,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::persist::persist_folded_origins(app.caps.settings(), &mut app.core, origin);
             Task::none()
         }
+        // BUG-1470, FR-016: the filter accordion's open state is written as it is toggled.
+        Message::Sidebar(SidebarMsg::FilterOpenToggled) => {
+            app.core
+                .update(Message::Sidebar(SidebarMsg::FilterOpenToggled));
+            shell::persist::persist_filter_open(app.caps.settings(), &mut app.core);
+            Task::none()
+        }
         // Feature 483: Run in parallel / the dialog's messages leave a request in `runs.pending`.
         Message::Sidebar(msg @ SidebarMsg::RunInParallelRequested) => {
             app.core.update(Message::Sidebar(msg));

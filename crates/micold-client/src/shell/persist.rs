@@ -208,6 +208,12 @@ pub fn persist_folded_origins(
     });
 }
 
+/// Write the filter accordion's open state after a toggle (BUG-1470, FR-016).
+pub fn persist_filter_open(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
+    let open = core.sidebar.filter_open;
+    write_setting(store, core, &mut |settings| settings.filter_open = open);
+}
+
 fn write_setting(
     store: Option<&(dyn SettingsStore + Send + Sync)>,
     core: &mut State,
@@ -466,6 +472,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         diff_layout: _,
         // Written by its own toggle in the sidebar, never by a save of the form (feature 551).
         folded_origins: _,
+        // Written by the filter toggle in the sidebar, never by a save of the form (BUG-1470).
+        filter_open: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
         daemons: _,
         next_daemon_id: _,
@@ -1241,6 +1249,7 @@ mod tests {
             next_daemon_id: 0,
             legacy_default_daemon: None,
             folded_origins: [micold_core::session::SessionId::new()].into(),
+            filter_open: true,
             review_single_keys: false,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
@@ -1303,6 +1312,19 @@ mod tests {
             stored,
             "every field but `reduce_motion` came back unchanged"
         );
+    }
+
+    /// BUG-1470, FR-016: the toggle writes the open state and leaves the rest as stored.
+    #[test]
+    fn a_filter_toggle_writes_the_open_state() {
+        let store = FakeSettingsStore::loaded(Settings::default());
+        let mut core = State::default();
+        core.sidebar.filter_open = true;
+        persist_filter_open(Some(&store), &mut core);
+        assert!(store.saves()[0].filter_open);
+        core.sidebar.filter_open = false;
+        persist_filter_open(Some(&store), &mut core);
+        assert!(!store.saves()[1].filter_open);
     }
 
     /// Feature 551, FR-017: a toggle adds or removes its own id and keeps the folds another window

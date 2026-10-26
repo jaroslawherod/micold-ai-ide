@@ -398,6 +398,10 @@ pub struct Settings {
     /// then would erase a fold the user left. Client-owned: the daemon never reads it.
     #[serde(default)]
     pub folded_origins: BTreeSet<SessionId>,
+    /// Whether the sidebar's filter accordion is open (BUG-1470, FR-016). Off by default; a file
+    /// written before it reads as closed. Client-owned: the daemon never reads it.
+    #[serde(default)]
+    pub filter_open: bool,
     /// Whether the Review tab answers its single keys (`j k n p ] [ v g c ?`; feature 1274,
     /// FR-022). On by default; a file written before the key existed reads as on. Client-owned,
     /// like `reduce_motion`: the daemon's settings write re-reads the file and keeps it.
@@ -487,6 +491,7 @@ impl Default for Settings {
             plan_usage_enabled: default_plan_usage_enabled(),
             plan_usage_warn_percent: crate::plan_usage::WarnPercent::DEFAULT,
             folded_origins: BTreeSet::new(),
+            filter_open: false,
             review_single_keys: default_review_single_keys(),
         }
     }
@@ -941,6 +946,8 @@ struct StoredSettings {
     plan_usage_warn_percent: u64,
     #[serde(default)]
     folded_origins: BTreeSet<SessionId>,
+    #[serde(default)]
+    filter_open: bool,
     /// Missing in files written before feature 1274's switch → on (FR-022). Additive and
     /// defaulted, so `settings_version` does not move.
     #[serde(default = "default_review_single_keys")]
@@ -999,6 +1006,7 @@ impl StoredSettings {
             plan_usage_enabled: settings.plan_usage_enabled,
             plan_usage_warn_percent: u64::from(settings.plan_usage_warn_percent),
             folded_origins: settings.folded_origins.clone(),
+            filter_open: settings.filter_open,
             review_single_keys: settings.review_single_keys,
         }
     }
@@ -1060,6 +1068,7 @@ impl StoredSettings {
             plan_usage_enabled: self.plan_usage_enabled,
             plan_usage_warn_percent: clamp_plan_usage_warn_percent(self.plan_usage_warn_percent),
             folded_origins: self.folded_origins,
+            filter_open: self.filter_open,
             review_single_keys: self.review_single_keys,
         }
     }

@@ -56,12 +56,14 @@ const TOLERANCE: f32 = 0.5;
 /// Keyed by path alone, not by `(covered state, path)`: being a clip-revealing wrapper's child is a
 /// property of the widget, not of the screen it appears on (FR-016).
 ///
-/// **Empty since feature 1125.** Its two entries were the sidebar's collapsed filter accordion
-/// under two shell arrangements; the chip bar replaced the accordion (FR-014), so no covered state
-/// holds a collapsed `Expand` at rest any more. A new entry means either a new clip-revealing
-/// wrapper, to be named here with its reason and an attribution test that drives it open, or a
-/// child escaping a parent that does not clip, which is a bug.
-const CLIP_REVEALED: &[&str] = &[];
+/// The one entry is the sidebar's collapsed filter accordion under the chip bar's line, which the
+/// chip bar holds again since BUG-1470 (FR-016) once more than three filters are on offer. Feature
+/// 1125 had emptied the list when the always-visible chip bar replaced the accordion. At rest the
+/// child is a full-height node inside a 0px one; `the_recorded_escapes_are_the_accordion_reveal`
+/// drives the panel open and shows the same node come clean. A new entry means either a new
+/// clip-revealing wrapper, to be named here with its reason and an attribution test that drives it
+/// open, or a child escaping a parent that does not clip, which is a bug.
+const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/1/0"];
 
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
@@ -890,6 +892,49 @@ fn the_recorded_tab_overflow_is_the_instance_strip() {
              overflow the strip, and FR-010 is uncovered again",
             strip.width,
             viewport.width,
+        );
+    }
+}
+
+/// The recorded escape is `Expand`'s, and this is what proves it rather than asserting it.
+///
+/// A zero-height parent holding a full-height child is `Expand::layout` at `progress` 0, but that
+/// is inference from a shape. So drive the one input that changes `Expand`'s progress and nothing
+/// else: the chip bar's filter accordion is `Accordion`, which *is* `expand(...)`. Closed, the
+/// escape is there; open, the same node is clean.
+#[test]
+fn the_recorded_escapes_are_the_accordion_reveal() {
+    let escaping_nodes = |filter_open: bool| -> Vec<String> {
+        let state = covered_states::with_nine_filters(300, false, filter_open);
+        let element = micold_client::ui::view(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
+        );
+        let renderer = lay::renderer();
+        lay::escapes(&lay::resolve(element, &renderer), TOLERANCE)
+            .into_iter()
+            .map(|e| e.child_path)
+            .collect()
+    };
+    let closed = escaping_nodes(false);
+    let opened = escaping_nodes(true);
+    assert!(
+        closed.iter().any(|n| n.as_str() == CLIP_REVEALED[0]),
+        "the chip bar with its filter accordion closed reports no escape, so the entry in \
+         CLIP_REVEALED cannot be attributed to the accordion at all"
+    );
+    // The scrolled list overhangs in both (`SCROLL_CONTENT`); only the accordion's node moves.
+    for node in closed.iter().filter(|n| n.as_str() == CLIP_REVEALED[0]) {
+        assert!(
+            !opened.contains(node),
+            "node {node} escapes whether the accordion is open or closed, so it is not the \
+             accordion's reveal and the attribution recorded in CLIP_REVEALED is wrong"
         );
     }
 }

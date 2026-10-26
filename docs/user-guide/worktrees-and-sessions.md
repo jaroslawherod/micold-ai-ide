@@ -344,9 +344,13 @@ the application cannot then tell that the branch holds nothing newer.
 ### Filtering worktrees by tag
 
 The tag filters are the chips on the sidebar's **chip bar**, under the **Overview** row, shown at
-all times. **All** comes first and looks selected while no filter is on; when there are more chips
-than fit one line they wrap onto further lines, and the **add**, **hide** and **more** (⋯) actions
-stay at the end of the first line:
+all times, and one line tall. **All** comes first and looks selected while no filter is on. With
+three or fewer tags in use their chips sit on that line. With more, a **Filter** toggle (▾ closed,
+▴ open, with the number of active filters) follows **All**: it opens a panel under the line holding
+every chip, wrapped. While it is closed, each active filter stays on the line as a selected chip
+with a ✕ that clears just that filter, and a `+N` chip stands for those that do not fit and opens the
+panel. The panel stays open or closed as you left it, across restarts. The **add**, **hide** and
+**more** (⋯) actions end the line:
 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
 - Tap **issue** to show only worktrees that have a Jira key.
@@ -355,8 +359,7 @@ stay at the end of the first line:
 - **All** restores the full list in one tap. If a filter matches nothing, an empty message with
   a **Clear filters** action is shown, and the Overview row and the chip bar stay.
 
-Only chips for tags actually present in your worktrees are offered. Tab reaches every chip and
-action on the chip bar, after the Overview row; Enter or Space presses the one with the focus
+Only chips for tags actually present in your worktrees are offered. Tab reaches every control on the line, after the Overview row, and the panel's chips while it is open; Enter or Space presses the one with the focus
 ring.
 
 **One exception, and only one.** The worktree holding your current session stays listed even when
