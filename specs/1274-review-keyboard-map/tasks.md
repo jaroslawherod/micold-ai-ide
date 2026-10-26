@@ -202,7 +202,16 @@ The setting and the `single_keys` filters serve US1–US5 and FR-022; no story l
 
 ## Phase 9: Polish (close unit)
 
-- [ ] T058 Record quickstart §C (macOS Cmd+Shift+Enter, Windows German layout `[` `]` `?`, focused terminal unchanged) in `specs/1274-review-keyboard-map/quickstart.md`, from CI and a manual run where available
+- [X] T058 Record quickstart §C (macOS Cmd+Shift+Enter, Windows German layout `[` `]` `?`, focused terminal unchanged) in `specs/1274-review-keyboard-map/quickstart.md`, from CI and a manual run where available
+
+## Phase 10: TDD remediation (close unit)
+
+From `tdd/verification.md` (verdict FAIL: test-first breach in three M3 rows, history only; S1 HIGH).
+
+- [X] T066 [S1] `crates/micold-client/tests/review_keys.rs::moving_changes_nothing_but_the_selection_and_the_current_hunk`: capture `whole_file` before the `n` presses and compare after, not against a clone of the same state. Verify: `cargo test -p micold-client --test review_keys`
+- [X] T067 [quickstart §C] `crates/micold-client/tests/review_keys.rs::a_focused_terminal_keeps_every_review_key`: with the terminal focused, no `REVIEW_KEYS` row resolves. Verify: `cargo test -p micold-client --test review_keys`
+
+Finding 1 (TEST_AFTER for T013/T014, T015/T016, T063/T064 settings and persist) is history; deliberate mutants G, H, I, K, L now catch each of those behaviors. S2–S9 kept, reasons in the report.
 
 ---
 

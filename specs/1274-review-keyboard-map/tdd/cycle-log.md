@@ -82,3 +82,10 @@ inserting the review entries and `view_of` not yet moving detail spans.
 Refactor: `step_comments` and the comment jump share `reach_comment`; the Review tab fixtures
 (`path`, `file`, `id`, `whole`, `open_into`, `marked`, `draft`) moved to
 `tests/support/review_fixture.rs`, used by `review_keys` and `quick_switch`.
+
+### Close unit — TDD remediation (T066, T067)
+
+| Task | Behaviour | Red | Green |
+|---|---|---|---|
+| T066 | S1: the whole-file choice is compared with its value before the `n` presses | a test fix, not a behaviour: the old assertion compared a clone with itself | `--test review_keys`: `30 passed; 0 failed` |
+| T067 | §C: a focused terminal keeps every review key | a guard: green on its first run (the holder already returns `Other`); fails if a review key starts resolving while the terminal has the keyboard | same run |
