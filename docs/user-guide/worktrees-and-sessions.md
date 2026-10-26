@@ -348,8 +348,8 @@ all times, and one line tall. **All** comes first and looks selected while no fi
 three or fewer tags in use their chips sit on that line. With more, a **Filter** toggle (▾ closed,
 ▴ open, with the number of active filters) follows **All**: it opens a panel under the line holding
 every chip, wrapped. While it is closed, each active filter stays on the line as a selected chip
-with a ✕ that clears just that filter, and a `+N` chip stands for those that do not fit and opens the
-panel. The panel stays open or closed as you left it, across restarts. The **add**, **hide** and
+with a ✕ that clears just that filter, and a `+N` chip (only beside at least one shown chip) stands for those that do not fit and opens the
+panel. In a narrow sidebar the toggle is just ▾ or ▴. The panel stays open or closed as you left it, across restarts. The **add**, **hide** and
 **more** (⋯) actions end the line:
 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.

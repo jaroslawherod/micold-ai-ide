@@ -378,7 +378,7 @@ fn inline_active_fit(width: u16) -> usize {
 /// one chip line, always `anatomy::chip::HEIGHT` tall, then the accordion under it.
 ///
 /// With 3 or fewer filters on offer the line is **All** and every filter chip, inline. With more it
-/// is **All**, the **Filter** toggle (count of active filters), the active chips with ✕, `+N`, and
+/// is **All**, the **Filter** toggle (count of active filters), the active chips with ✕, `+N` (only beside a shown chip; the toggle is glyph-only under 250px), and
 /// the accordion under the line holds every filter, wrapped. Add, hide and more (⋯) end the line.
 /// Every control takes the keyboard, in display order; the accordion's chips only while open.
 fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
@@ -421,10 +421,12 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
         }
         Some(bar) => {
             let mut line = vec![all(bar.all_active)];
-            let label = if open {
-                "Filter \u{25b4}"
+            // Glyph only at the narrowest widths: the word does not fit beside All and the actions.
+            let glyph = if open { "\u{25b4}" } else { "\u{25be}" };
+            let label = if state.sidebar_width_px() < 250 {
+                glyph.to_string()
             } else {
-                "Filter \u{25be}"
+                format!("Filter {glyph}")
             };
             line.push(takes_the_keyboard(
                 ToggleChip::new(label, toggle.clone(), r)
@@ -441,7 +443,8 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
                     r,
                 )
             }));
-            if bar.overflow > 0 {
+            // `+N` only beside a shown chip; with none shown the toggle's count says it.
+            if bar.overflow > 0 && !bar.shown.is_empty() {
                 line.push(takes_the_keyboard(
                     ToggleChip::new(format!("+{}", bar.overflow), toggle.clone(), r).one_line(),
                     toggle.clone(),
