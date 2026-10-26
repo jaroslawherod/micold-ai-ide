@@ -29,6 +29,7 @@ use micold_core::review::diff::{
 use micold_core::review::drag::{gutter_line, Drag, Release};
 use micold_core::review::drawer::{self, Drawer, DrawerEvent, DrawerTab};
 use micold_core::review::expand::{gaps, shape, Expansion, GapKey, Shaped, ShapedRef};
+use micold_core::review::jump::ReviewJump;
 use micold_core::review::marks::{
     held_file_review, mark_block, progress, ChangeId, EntryMarks, FileReview, MarkBlock,
     ReviewMark, ReviewState, WholeChange,
@@ -54,8 +55,7 @@ mod stale;
 
 pub use keys::{
     composer_press, current_header_row, hunk_controls, jump_entries, key_pressed, review_holder,
-    sheet_model, shortcut_sheet, with_key_hint, ReviewJump, SheetModel, NEXT_HUNK, PREVIOUS_HUNK,
-    SEND_TOOLTIP,
+    sheet_model, shortcut_sheet, with_key_hint, SheetModel, NEXT_HUNK, PREVIOUS_HUNK, SEND_TOOLTIP,
 };
 use micold_core::review::keys::{Press, ReviewAction};
 use micold_core::review::navigate::Edge;

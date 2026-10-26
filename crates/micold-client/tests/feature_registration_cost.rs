@@ -86,6 +86,13 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "quick_switch",
+        "changes",
+        "jump_entries — the jump-to field lists the current entry's Review tab files and comments \
+         from the changes feature's pure read, in the order its `j` and `]` visit them; choosing \
+         one is a `Step` the root applies, never a write here (#1274 M5, contract J4)",
+    ),
+    (
         "session_strip",
         "changes",
         "Msg::TabClosed, entry_dir, is_pending — the strip's Review tab reads the review's draft \

@@ -1382,8 +1382,9 @@ fn applying_a_project_choice_activates_it_and_keeps_every_session_running() {
 
 // ---- review entries (#1274 M5: T053, T055) ----
 
-use micold_client::features::changes::{self as review, ReviewJump};
+use micold_client::features::changes as review;
 use micold_core::review::comment::ReviewComment;
+use micold_core::review::jump::ReviewJump;
 use micold_core::review::keys::ReviewAction;
 use support::review_fixture::{draft, file, marked, open_into, path};
 
