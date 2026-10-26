@@ -258,7 +258,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-four with `daemon_details`, the read-only details dialog (feature 1092).
     // Twenty-six with `confirm_bypass_start` and `confirm_bypass_mode` (#942).
     // Twenty-seven with `confirm_switch_kind`, a switch of kind's confirmation (#943).
-    const DIALOGS: usize = 27;
+    // Twenty-eight with `review_shortcut_sheet`, the Review tab's shortcut sheet (#1274).
+    const DIALOGS: usize = 28;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),
