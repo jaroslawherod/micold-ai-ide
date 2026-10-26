@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: done
-- **Next step**: handoff. Orchestrator: merge M6 (#1450) on green CI, rebase branch `1275-close` onto it, open the close PR (body in the close unit's scratchpad, `pr-body-1275-close.md`), merge it; the run ends there. A fresh-context review of the close diff (close.md step 4) did not run: the close unit had no Agent tool.
+- **Next step**: handoff. Orchestrator: merge the close PR on green CI; then close #1275. The run ends there.
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1424 | M3 | merged | b582c2563adbebd6e31ba41bc274124e7939b49b |
 | #1443 | M4 | merged | 39f44d65cddefd89a03845fdc0e7d50184ad3642 |
 | #1447 | M5 | merged | d20412df0d352ec309bea83ed82e1f31bf15e593 |
-| #1450 | M6 | open (CI) at close | |
-| close PR | T047, TDD verification, spec closed (branch `1275-close`) | to open (orchestrator) | |
+| #1450 | M6 | merged | 83637b39c2bef0dd8fff9fdc4efeca75059c8e58 |
+| close PR | T047, TDD verification, spec closed | open (orchestrator merges on green CI) | |
 
 ## Milestones
 
@@ -41,7 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | #1443 | merged |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | #1447 | merged |
-| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | #1450 | reviews done (A round 2 clean); gate green; PR open, in CI at close |
+| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | #1450 | reviews done (A round 2 clean); gate green; merged |
 
 ## Decisions
 
