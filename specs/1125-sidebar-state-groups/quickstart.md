@@ -36,7 +36,8 @@ failing checks), light then dark. Compare with the mockup board's sidebar
 | B5 | Press **All** and type chips; open ⋯ and choose each item; press Escape on the open menu | filters as before; each item does what the old header button did; the menu closes (US4.2–US4.6) |
 | B6 | Tab through the sidebar; Enter on a header; a location chord into collapsed Done | ring visits every control in order; the header toggles; Done opens and the row is selected (US5.1–US5.4) |
 | B7 | Make a session start working while its row has the keyboard | the row moves to Working; the ring stays on it; counts update (US1.6, US5.5) |
-| B8 | Drag the sidebar to its narrowest (180 px) and widest | both lines and headers ellipsize; counts stay; chips wrap; nothing overlaps (Edge Cases) |
+| B8 | Drag the sidebar to its narrowest (180 px) and widest | both lines and headers ellipsize; counts stay; the chip bar stays one line; nothing overlaps (Edge Cases) |
+| B8a | With 9 filters on offer: press the toggle, activate two filters, close it, press ✕ on one, press `+N`; Tab through | collapsed shows All, toggle with count, active chips with ✕, `+N`; the accordion holds all nine wrapped; the open state survives a restart; chips are Tab stops only while open (US4.7, FR-016, FR-017) |
 | B9 | Repeat B1–B4 in dark | the same, every text legible (FR-019) |
 | B10 | Compare B1–B4 screenshots with the mockup | grouping, order, two-line rows and the Overview row match; differences recorded with a reason (sentence-case headers, Done in the list rather than pinned at the foot: research R8) |
 
