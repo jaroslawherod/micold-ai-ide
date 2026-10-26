@@ -20,7 +20,7 @@ use micold_client::features::changes::Msg;
 use micold_core::git::Git;
 use micold_core::review::watch::{self, Debouncer};
 use micold_core::session::SessionLocation;
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::App;
 
@@ -127,7 +127,9 @@ where
         let watcher = RecommendedWatcher::new(
             move |event: notify::Result<Event>| {
                 if let Ok(event) = event {
-                    let _ = events.send(event.paths);
+                    if is_change(&event.kind) {
+                        let _ = events.send(event.paths);
+                    }
                 }
             },
             Config::default(),
@@ -194,6 +196,14 @@ where
     })
 }
 
+/// Whether an event of this kind is a change to a file. Opening, reading or closing a file is not:
+/// inotify reports every open as `Access(Open)`, and the files git opens during a re-read would
+/// otherwise start the next burst and the next re-read, forever. A close after a write comes with
+/// its own `Modify`, so nothing is lost.
+fn is_change(kind: &EventKind) -> bool {
+    !matches!(kind, EventKind::Access(_))
+}
+
 /// Watch each of `targets`, returning those that could not be watched (a directory that does not
 /// exist yet), so the caller can try them again.
 fn watch_targets(
@@ -239,6 +249,32 @@ pub(crate) fn counts(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use notify::event::{AccessKind, AccessMode, CreateKind, MetadataKind, ModifyKind, RemoveKind};
+
+    #[test]
+    fn opening_reading_or_closing_a_file_is_not_a_change() {
+        for kind in [
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Close(AccessMode::Read),
+            AccessKind::Any,
+        ] {
+            assert!(!is_change(&EventKind::Access(kind)), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn creating_modifying_removing_or_touching_a_file_is_a_change() {
+        for kind in [
+            EventKind::Create(CreateKind::File),
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+            EventKind::Remove(RemoveKind::File),
+            EventKind::Any,
+            EventKind::Other,
+        ] {
+            assert!(is_change(&kind), "{kind:?}");
+        }
+    }
 
     /// A target missing when the watch starts is returned for a later try, and watched once made.
     #[test]
