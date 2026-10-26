@@ -225,6 +225,41 @@ fn a_field_settings_the_overview_or_a_surface_on_top_has_the_keyboard() {
     );
 }
 
+/// Quickstart §C, FR-002: with the terminal shown and focused (the review hidden behind it), no
+/// review key or chord resolves, so each one reaches the terminal as it does today.
+#[test]
+fn a_focused_terminal_keeps_every_review_key() {
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_core::review::keys::{KeyName, REVIEW_KEYS};
+    use micold_core::session::{AiCli, Session};
+    let mut app = app_with(&["a.rs"]);
+    app.update(Message::Session(SessionMsg::Started(Session::start_new(
+        SessionLocation::Worktree("feat-b".to_string()),
+        AiCli::ClaudeCode,
+    ))));
+    app.update(Message::Session(SessionMsg::TerminalFocused));
+    assert!(
+        app.terminal_focused(),
+        "precondition: the terminal has the keyboard"
+    );
+    assert_eq!(review_holder(&app), Holder::Other);
+    for row in &REVIEW_KEYS {
+        let held = match row.key {
+            KeyName::Char(c) => press(c),
+            KeyName::Enter => Press {
+                shift: row.mods.shift,
+                ..chord()
+            },
+        };
+        assert_eq!(
+            key_pressed(&app, &held),
+            None,
+            "`{}` goes to the terminal",
+            row.labels().0
+        );
+    }
+}
+
 // --- T017: j k n p ----------------------------------------------------------------------------------
 
 /// US1 s1–s2, FR-003: `j`/`k` select through the tree's select, wrap, show the diff from the top.
@@ -383,21 +418,19 @@ fn moving_changes_nothing_but_the_selection_and_the_current_hunk() {
     let pick = view(&state).pick;
     assert!(pick.is_some(), "precondition");
     let layout = state.layout;
+    let whole = changes::whole_file(view(&state));
     key(&mut state, ReviewAction::NextHunk);
     key(&mut state, ReviewAction::NextHunk);
     assert_eq!(view(&state).pick, pick, "the pick stays");
-    assert_eq!(state.layout, layout);
-    assert_eq!(changes::whole_file(view(&state)), {
-        let mut again = state.clone();
-        changes::update(
-            &mut again,
-            Msg::DiffScrolled {
-                offset: 0,
-                viewport: 0,
-            },
-        );
-        changes::whole_file(view(&again))
-    });
+    assert_eq!(
+        state.layout, layout,
+        "the unified/side-by-side choice stays"
+    );
+    assert_eq!(
+        changes::whole_file(view(&state)),
+        whole,
+        "the whole-file choice stays"
+    );
 }
 
 /// FR-014: a press acts on the shown entry's tab only.

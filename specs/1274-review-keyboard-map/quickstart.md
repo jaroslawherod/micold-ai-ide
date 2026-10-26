@@ -45,3 +45,23 @@ reviewed, and comments on `a.rs:3`, `a.rs:20`, `c.rs:7` plus one outdated commen
 - macOS: Cmd+Shift+Enter sends; Ctrl+Shift+Enter does not; sheet and tooltips show `Cmd+…`.
 - Windows with a German layout: `[`, `]` (AltGr) and `?` (Shift+ß) act; Ctrl+J and Alt+J do nothing.
 - Both: a focused terminal receives every one of the review keys unchanged.
+
+### §C results (2026-10-26, close unit)
+
+No macOS or Windows machine was available for a manual run; this container is Linux only. Each
+check is recorded from the CI suite instead: PR #1460's run
+([40280111614](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/40280111614)) passed
+**build + test** on `macos-latest` and `windows-latest` (as on `ubuntu-latest`; read from the PR's
+check runs, 2026-10-26), and these are the
+tests that carry each check there.
+
+| Check | Carried by | Manual run |
+|---|---|---|
+| macOS: Cmd+Shift+Enter sends, Ctrl+Shift+Enter does not | `keymap.rs::the_primary_modifier_is_cmd_on_macos_and_ctrl_elsewhere` (its `cfg!(target_os = "macos")` arm runs on the macOS job: logo is primary, Ctrl is not); core `the_send_chord_needs_primary_and_shift_and_nothing_else`; `review_keys.rs::the_send_chord_sends_as_send_review_does` (its `chord()` is Cmd+Shift+Enter on macOS) | not run |
+| macOS: sheet and tooltips show `Cmd+…` | core `labels_give_the_linux_windows_and_the_macos_form`; `review_keys.rs::with_the_switch_off_the_send_chord_still_sends_and_is_named` and `with_the_switch_off_the_sheet_lists_only_the_chords` pick the macOS label on the macOS job | not run |
+| Windows, German layout: `[` `]` with AltGr and `?` with Shift+ß act | core `ctrl_alt_or_logo_alone_refuses_a_single_key_but_altgr_does_not` (Ctrl+Alt without logo, as Windows reports AltGr, with `[` acts) and `shift_is_part_of_the_character_not_a_modifier` (`?` with Shift acts: the key is the produced character, whatever the layout); `keymap.rs::a_review_press_carries_the_produced_text_and_every_modifier` | not run: no German layout in CI |
+| Windows: Ctrl+J and Alt+J do nothing | core `ctrl_alt_or_logo_alone_refuses_a_single_key_but_altgr_does_not` | not run |
+| Both: a focused terminal receives every review key unchanged | `review_keys.rs::a_focused_terminal_keeps_every_review_key` (added at close: no review key resolves while the terminal has the keyboard; the Review tab and the terminal never share the screen, `State::terminal_focused`); `keymap.rs::plain_ctrl_brackets_still_reach_the_terminal` | not run |
+
+Open: a manual pass on a Mac and on Windows with a German layout. The CI evidence covers the
+decision rules; it does not cover the OS delivering AltGr or Shift+ß as those modifiers and text.
