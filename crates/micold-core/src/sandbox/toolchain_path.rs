@@ -5,9 +5,13 @@
 //! yet is on the path all the same, and a tool installed there later is found without a restart
 //! (FR-003). The daemon decides whether the rule applies (only with an `offered.json`, R2) and
 //! where the inputs come from.
+//!
+//! [`install_env_defaults`] names, just as purely, where a session's own `npm install -g`,
+//! `cargo install` and `go install` put their binaries (#1439 FR-015;
+//! `specs/1439-container-dev-toolchain/contracts/sandbox-install-env.md`).
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// What [`toolchain_path`] orders. An empty `home`, `mise_data_dir` or `xdg_data_home` counts as
 /// unset.
@@ -63,4 +67,32 @@ pub fn toolchain_path(input: ToolchainPathInput) -> OsString {
         }
     }
     std::env::join_paths(ordered).unwrap_or(rest)
+}
+
+/// The install locations a sandbox spawn gets unless its environment names its own (contract
+/// sandbox-install-env I2): `NPM_CONFIG_PREFIX` and `CARGO_INSTALL_ROOT` are `home/.local` and
+/// `GOBIN` is `home/.local/bin`, the folder [`toolchain_path`] puts on `PATH`, so a tool a session
+/// installs without root lands in the sandbox home and later spawns find it.
+///
+/// `current` gives a variable's value in the spawn's environment; a variable with a non-empty value
+/// is left out, and for `NPM_CONFIG_PREFIX` a non-empty lower-case `npm_config_prefix` counts too
+/// (npm reads both). Without `home`, or with an empty one, nothing is returned.
+pub fn install_env_defaults(
+    home: Option<&Path>,
+    current: impl Fn(&str) -> Option<OsString>,
+) -> Vec<(&'static str, PathBuf)> {
+    let Some(home) = home.filter(|home| !home.as_os_str().is_empty()) else {
+        return Vec::new();
+    };
+    let is_set = |name: &str| current(name).is_some_and(|value| !value.is_empty());
+    let local = home.join(".local");
+    [
+        ("NPM_CONFIG_PREFIX", local.clone(), "npm_config_prefix"),
+        ("CARGO_INSTALL_ROOT", local.clone(), "CARGO_INSTALL_ROOT"),
+        ("GOBIN", local.join("bin"), "GOBIN"),
+    ]
+    .into_iter()
+    .filter(|(name, _, alias)| !is_set(name) && !is_set(alias))
+    .map(|(name, value, _)| (name, value))
+    .collect()
 }
