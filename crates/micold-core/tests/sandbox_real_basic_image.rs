@@ -177,7 +177,8 @@ fn sandbox_real_basic_image_builds_before_any_setup() {
     let cases: [(&str, &[&str]); 2] = [
         ("as root", &["-e", "WORK=/tmp"]),
         // The Kubernetes pod (feature 686): uid 10001, a read-only root file system, and the
-        // daemon's volume as the only writable home (FR-006).
+        // daemon's volume as the only writable home (FR-006). Docker mounts a tmpfs `noexec`
+        // by default; the pod's volume is not, so the tmpfs asks for `exec`.
         (
             "as uid 10001 with --read-only",
             &[
@@ -185,7 +186,7 @@ fn sandbox_real_basic_image_builds_before_any_setup() {
                 "10001:0",
                 "--read-only",
                 "--tmpfs",
-                "/data/home:mode=1777",
+                "/data/home:mode=1777,exec",
                 "-e",
                 "HOME=/data/home",
                 "-e",
