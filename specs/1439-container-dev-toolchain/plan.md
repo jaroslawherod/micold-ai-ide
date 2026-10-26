@@ -188,7 +188,9 @@ does not exist on a test host: the guard keeps that test working, and new cases 
   session can install user-level tools itself (mise, `npm install -g`, `cargo install`, `uv tool
   install`, `go install`; pip through `uv` or a mise Python), the three defaults and that a value
   the environment sets wins, that installs persist across restarts, image updates and pod
-  recreation for the life of the daemon, that installs a session starts are not serialised, and
+  recreation for the life of the daemon (a tool built against an image library, such as a `cargo
+  install` linking OpenSSL, may need reinstalling after an image update), that installs a session
+  starts are not serialised, and
   that system packages come from the image or an own image (link to the building section).
 - `docs/user-guide/worktrees-and-sessions.md`: the setup section 1289 adds gets one sentence on S2:
   one setup at a time on a sandbox daemon, a waiting run's output says it is waiting for another
@@ -209,9 +211,11 @@ does not exist on a test host: the guard keeps that test working, and new cases 
 
 ### D9. The home persists (FR-016)
 
-No code change (research R12). Tests: a `kube::start` unit test that a drifted pod recreated with
-`DriftChoice::Recreate` deletes only the pod and keeps the claim (beside
-`kube/lifecycle.rs:187`'s stop test); the real-runtime `sandbox_real_self_install` (quickstart A10)
+No code change (research R12). Evidence: the existing unit test
+`recreate_deletes_the_drifted_pod_and_creates_a_new_one_keeping_the_volume`
+(`crates/micold-core/src/kube/start_tests.rs:388`, the tests module of `start.rs:866`) already shows
+that a drifted pod recreated with `DriftChoice::Recreate` deletes only the pod (`deletes` = the pod)
+and adopts the claim (one object created); no new unit test. The real-runtime `sandbox_real_self_install` (quickstart A10)
 checks a session's installs after a restart, a replacement for another image tag, and a replacement
 onto the no-outbound posture, run offline.
 
@@ -231,7 +235,7 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | FR-002 | D1 step 2, D1a; B3, B4 | shell `basic-image-hash.test.sh` (A1); build failure by hand (B4); CI image build |
 | FR-003 | D1 step 1; B1 | real-runtime A5 (compile and link C); A7 (Rust crate with a C build script) |
 | FR-004 | D1 step 1; B1 | real-runtime A5 (`python3 -c`, before setup) |
-| FR-005 | D4, data model "Sandbox home toolchain" | real-runtime A7 (restart, second worktree) |
+| FR-005 | D4, D8, data model "Sandbox home toolchain" | real-runtime A7 (setup half: restart, second worktree); A10 (session half) |
 | FR-006 | B6; D1 keeps the guard | shell A1 (refusals kept); real-runtime A5 (`ABSENT` unchanged; uid 10001, `--read-only`); B6 |
 | FR-007 | D2; B2 | real-runtime A5 (six `.pc`, `-lX11`) |
 | FR-008 | D5 | shell `mise-toolchain.test.sh` (A3); B1 |
@@ -244,14 +248,15 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | Edge: network failure during setup | #1289 reports the failure; mise/rustup resume a partial install | real-runtime A7 (a setup stopped mid-download, then a rerun succeeds) |
 | Edge: several sessions on one daemon | read-only use of the shared toolchain; cargo's file locks guard `~/.cargo`, each worktree has its own `target` | quickstart B2 (`cargo build` in two sessions at once) |
 | Edge: a `mise` already in `~/.local/bin` | #1289's `PATH` order | real-runtime A6 (a stub in `~/.local/bin` wins) |
-| FR-014 | D8; D1 step 1 | real-runtime A10 (each installer as the non-root user, writes only under the home) |
+| FR-014 | D8; D1 step 1 | real-runtime A10 (mise, `npm install -g`, `cargo install`, `uv tool install`, `go install` under a mise Go, `pip install --user` under a mise Python; each as the non-root user, keeps nothing outside the home) |
 | FR-015 | D8; contract I1–I4 | core + daemon unit tests A8; real-runtime A10 (a new session in a second worktree finds each binary) |
 | FR-016 | D9; research R12 | kube unit test A9; real-runtime A10 (restart, image-tag replacement, offline posture replacement); quickstart B6 (pod recreated), B7 |
 | FR-017 | D1 step 1 | real-runtime A5 (`xz`, `unzip` in `PRESENT`) |
 | FR-018 | D6 (M5 paragraph) | real-runtime A10 (`apt-get install` fails); docs CI |
 | Edge: a session installs while setup or another session installs | not serialised; rerun | user guide (D6 M5 paragraph) |
 | Edge: the environment already names an install location | contract I2 | unit tests A8 |
-| Edge: an image update changes a system library | documented (R12) | — (by design) |
+| Edge: an image update changes a system library | documented (R12) | user guide (D6 M5 paragraph: reinstall such a tool) |
+| Edge: an AI CLI updates itself through npm | accepted: offered bins precede `~/.local/bin` on `PATH` (1289 contract), `only_offered` filters availability (`state.rs:1200`) | contract I4 (no test; nothing changes) |
 | Edge: no-outbound posture | sessions cannot download; installed tools keep working | real-runtime A10 (offline check) |
 | Edge: VM-shared home (macOS, Windows) | Principle VI | quickstart B7 |
 | SC-001 | D5, D7 | quickstart B1 (after the documented setup command ends Set up, `mise run gate` exits 0 with no manual install step) |
@@ -311,7 +316,6 @@ crates/micold-daemon/tests/sandbox_real_mise_setup.rs      # NEW: Story 1 end to
 crates/micold-daemon/tests/fixtures/mise-c-crate/          # NEW: fixture project (mise.toml, Cargo.toml, build.rs, hello.c)
 crates/micold-daemon/tests/sandbox_real_self_install.rs    # NEW: Story 5 (A10)
 crates/micold-core/src/sandbox/toolchain_path.rs           # install_env_defaults (D8)
-crates/micold-core/src/kube/start.rs                       # test: pod recreation keeps the claim (D9)
 scripts/tests/basic-image-hash.test.sh   # mise cases (B4)
 scripts/tests/basic-entrypoint.test.sh   # home folder cases (B5)
 scripts/tests/mise-toolchain.test.sh     # NEW: FR-008

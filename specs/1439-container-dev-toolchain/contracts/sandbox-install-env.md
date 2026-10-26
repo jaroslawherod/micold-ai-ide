@@ -45,7 +45,12 @@ shims rule and override a project's or user's own choice, for no gain.
 Every spawn the daemon makes through its spawn environment (`spawn_env_for`): sessions, terminals,
 setup runs and the tool servers the AI CLI starts. The AI CLI provisioning step is not a daemon spawn
 and passes its own `--prefix` (`crates/micold-core/src/provision/ai_cli.rs:231`), so it is
-unaffected.
+unaffected. An AI CLI's own npm self-update, run inside a session, now reaches `~/.local` and can
+leave a second copy in `~/.local/bin` (only OpenCode's updater is disabled,
+`crates/micold-core/src/provider.rs:2093`). This is accepted as harmless: the offered CLI's bin
+folders precede `~/.local/bin` on `PATH` (1289's toolchain-path contract), so the offered copy runs,
+and `DaemonState::only_offered` reports only offered CLIs (spec edge case "An AI CLI updates itself
+through npm").
 
 ## I5. Persistence (FR-016)
 
