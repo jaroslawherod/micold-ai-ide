@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M3 reviews done (round 2 A and B CLEAN); full gate, then the M3 PR
-- **Next step**: full gate (`scripts/gate.sh`, unmodified), commit, push, M3 PR (title/body in the session scratchpad `pr-title.txt`, `pr-body.md`)
-- **Gate**: M3 full gate (`scripts/gate.sh`, CI's order) exit 0 on the tree of snapshot a1fe868270949d44e53a8c1433592b4811f26bc3:e3575514b42a48e8aa579b0abf6cc85769644a07, with `--skip a_link_scrolled_out_of_the_body_is_not_under_the_pointer` (micold-client card_grid; failed twice under the full parallel run, passes alone; client code M3 does not touch — see Follow-ups). Red check: with `setup_turn()` forced to `None`, the six turn tests fail (host-overlap test passes either way). After the round-1 fixes: `cargo test -p micold-daemon --lib setup_turn` 9 passed; scoped gate (`scripts/autopilot/scoped-gate.sh`, micold-daemon) fmt, clippy and every test green except `tests/sessions` `mutation_semantics::worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports`, which fails the same on the unfixed `fcbafc896` because this cloud session runs as uid 0 (root unlinks inside the test's 0555 dir; see Follow-ups); the full gate is due again before the PR, run unmodified (the card_grid test is a flake outside M3 if it fails; CI judges).
+- **Phase**: M3 reviews done; full gate green at f5ff218e6; pushed; M3 PR due (orchestrator opens it)
+- **Next step**: orchestrator opens the M3 PR from the session scratchpad `pr-title.txt`, `pr-body.md`, waits on CI and merges; then M4
+- **Gate**: M3 full gate (`scripts/gate.sh`, unmodified, CI's order, root-only tests as a normal user, nothing skipped) exit 0 at f5ff218e6 (code tree of 1071fc852; only specs changed after); the nine `setup_turn` tests pass in it. Earlier runs: see Follow-ups (card_grid flake under an earlier `--skip`; root-only `mutation_semantics` test now run unprivileged by the gate).
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; T015 B5 measured value open (T042) |
 | M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
-| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | — | implemented; gate green; reviews due |
+| M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | — | reviews clean (round 2); gate green at f5ff218e6; pushed, PR due |
 | M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | waits for M1, M2, M3 |
 | M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | waits for M1, M4 |
 
