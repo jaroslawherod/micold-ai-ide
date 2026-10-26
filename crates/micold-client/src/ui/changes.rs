@@ -1588,6 +1588,14 @@ mod tests {
     /// depth the indentation it takes leaves a 24-character name its whole width.
     #[test]
     fn a_24_character_name_keeps_its_room_at_every_depth() {
+        // Measure with the shipped Roboto, not whatever face the host falls back to.
+        static FONTS: std::sync::Once = std::sync::Once::new();
+        FONTS.call_once(|| {
+            let mut fonts = iced::advanced::graphics::text::font_system()
+                .write()
+                .expect("the global font system lock was poisoned");
+            crate::ui::install_roboto(&mut fonts);
+        });
         assert_eq!(NAME_SAMPLE.chars().count(), 24);
         let name = width_of(NAME_SAMPLE, NAME_ROLE);
         let cap = tree_indent_cap(FILE_LIST_WIDTH);

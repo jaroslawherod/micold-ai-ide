@@ -358,20 +358,23 @@ fn shaped_glyphs_match_the_committed_face_exactly() {
     }
 }
 
-/// And the pin is doing something: an unresolvable family falls back to the host's sans-serif,
-/// which measures differently. If these ever agreed, the guard above would be vacuous.
+/// And the pin is doing something: another shipped face measures differently. The renderer drops
+/// the host's faces (no host fallback to measure against), so the other face is the bundled mono
+/// one. If these ever agreed, the guard above would be vacuous.
 #[test]
-fn the_reference_font_differs_from_the_host_fallback() {
+fn the_reference_font_differs_from_another_face() {
     let _ = lay::renderer();
 
     let pinned = measure(REFERENCE_STRING, lay::reference_font());
-    let fallback = measure(REFERENCE_STRING, iced::Font::with_name("NoSuchFamilyXYZ"));
+    let fallback = measure(
+        REFERENCE_STRING,
+        iced::Font::with_name(micold_client::ui::MONO_FAMILY),
+    );
 
     assert!(
         (pinned - fallback).abs() > 1.0,
-        "the pinned face and the host fallback measured the same ({pinned:.1}px). Either this \
-         host's default sans-serif is Roboto, or the reference font is not being applied at all — \
-         and in the second case the fixture is not portable."
+        "the pinned face and the mono face measured the same ({pinned:.1}px): the reference font \
+         is not being applied at all, and the fixture is not portable."
     );
 }
 

@@ -389,3 +389,29 @@ output is copied from the session's logs.
   inner container (V-F3). Two existing tests sent backlogs past line 0 with `dropped: 0`, which no
   daemon sends (`send_from` reports `first_index` as `dropped`); they now pass the daemon's
   `dropped` -> features_setup 29, setup_output_geometry 7 passed.
+
+## M7 cycle 1: Run setup / Stop setup (T056–T059)
+
+- red: tests written before the code, in `features_setup.rs` (`run_offered`, `stop_offered`, the
+  Default row, `RunRequested`/`StopRequested` -> `Effect::Run`/`Effect::Stop`),
+  `setup_output_geometry.rs` (menu order above Delete, Default row last, menu closes, **Stop setup**
+  before **Close** inside 640×480 and gone once the run ends) and `shell/setup.rs` (`SetupRun`/
+  `SetupStop` sent; a `Busy` answer notifies with the daemon's text). They referenced items that did
+  not exist yet (compile failure was the red); not run separately before the code.
+- green: `features/setup.rs` gains the two predicates, two `Msg`s and two `Effect`s;
+  `PendingOp::SetupRun`/`SetupStop` (describe -> "run setup"/"stop setup", so the default
+  `OperationError` arm says `Couldn't run setup: <daemon text>`); `shell/setup.rs` sends them;
+  `ui/mod.rs` `setup_items` (Setup output, then Stop setup or Run setup; icons `Close` for stop, `StateRunning`
+  (play_arrow) for run — no new icon); `State::update_setup` closes the row menu for both;
+  `setup_output.rs` adds the outlined **Stop setup** before **Close** while running. The M6 menu test
+  now expects **Stop setup** between Setup output and Delete while running. `cargo test -p
+  micold-client` all green, clippy `-D warnings` clean, fmt clean.
+
+## M7 cycle 2: review round 1 fixes (V-F1, A-F2, A-F3)
+
+- red/green: V-F1 `settings::setup_commands_tests::clearing_the_last_setup_command_removes_it_from_the_file` (save with a command, clear, save: key must be gone) written together with the fix, not run red first; `merged_with_existing` now drops the old `setup_commands` key when the new document lacks it. A-F2 `shell::setup::tests::a_stop_refused_as_not_found_is_silent` with a `SetupStop`/`NotFound` arm in `daemon_sync`. A-F3 the 640x480 action-row test also bounds x + width. All pass; clippy and fmt clean.
+
+## Close note (2026-10-26)
+
+- Protocol: M3 cycle 1 above says 69; M3's rebase 2 renumbered it to 70 (main's feature 1271 took
+  69). The test is now `the_setup_messages_bump_the_protocol_to_70`. Entries above are kept as written.

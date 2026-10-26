@@ -23,6 +23,9 @@ that it starts in seconds. See [Which image it runs on](#which-image-it-runs-on)
 A container daemon starts from the **basic image** (recommended): a small Linux image with an SSH
 server. The application connects to it with its own keys, copies its own service into it, so the
 daemon always has the version of the application you run, and installs the AI CLIs you offer.
+Besides the session tools, the basic image carries what a project needs to build before anything
+is installed: `mise` at a pinned version, a C/C++ compiler with `make` and `pkg-config`, and
+`python3`. It also carries the X11/Wayland development libraries this repository's tests link.
 
 To use your own image, choose **My own image** and give a reference (or an image archive path). Your
 image must:
@@ -298,8 +301,9 @@ starts get this `PATH`, in this order:
    `$XDG_DATA_HOME/mise/shims`, otherwise `~/.local/share/mise/shims`;
 4. the image's own `PATH`, or the one the environment-include script leaves.
 
-Both home folders are on the `PATH` even when they do not exist yet, so a tool installed there
-during a session is found by its next lookup, with no restart and no change to your startup files.
+On the basic image both home folders exist before the first session starts. An image of your own
+may not create them; they are on the `PATH` all the same, so a tool installed there during a session
+is found by its next lookup, with no restart and no change to your startup files.
 A folder already on the image's `PATH` appears once, in the position above. A project's tool server
 entry such as `uvx <server>` therefore finds `uv` in `~/.local/bin`. Folders an environment-include
 script puts on `PATH` keep their order after these.

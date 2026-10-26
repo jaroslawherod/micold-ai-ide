@@ -195,6 +195,11 @@ pub enum Msg {
     },
     /// **Copy output**.
     CopyRequested,
+    /// **Run setup** was chosen for a location (FR-022, contract U3): the project's current
+    /// command runs there again.
+    RunRequested(Key),
+    /// **Stop setup** was chosen for a location (FR-023, contract U3, U4).
+    StopRequested(Key),
 }
 
 /// What the shell does after a message.
@@ -210,6 +215,10 @@ pub enum Effect {
     Copy(String),
     /// Send this watch: the daemon holds lines the view has not asked for (M6 review A-F1).
     Watch(Request),
+    /// Send `SetupRun` for this location (FR-022).
+    Run(Key),
+    /// Send `SetupStop` for this location (FR-023).
+    Stop(Key),
 }
 
 /// Apply `msg` to `state`.
@@ -303,6 +312,8 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             (view.follow, _) = view.follow.scrolled(offset, viewport, content);
             Effect::None
         }
+        Msg::RunRequested(key) => Effect::Run(key),
+        Msg::StopRequested(key) => Effect::Stop(key),
         Msg::CopyRequested => state
             .view
             .as_ref()
@@ -360,10 +371,22 @@ pub fn output_offered(summary: Option<&SetupRunSummary>) -> bool {
     summary.is_some()
 }
 
+/// Whether a location's menu offers **Run setup** (FR-022, contract U3): while its project has a
+/// setup command and no run is in progress there, whatever the last run came to.
+pub fn run_offered(command_set: bool, summary: Option<&SetupRunSummary>) -> bool {
+    command_set && !stop_offered(summary)
+}
+
+/// Whether a location's menu, and the output view, offer **Stop setup** (FR-023, contract U3, U4):
+/// exactly while its run is running.
+pub fn stop_offered(summary: Option<&SetupRunSummary>) -> bool {
+    summary.is_some_and(|summary| matches!(summary.run.state(), SetupState::Running))
+}
+
 /// Whether the delete confirmation says setup will be stopped first (contract U6): while the
 /// worktree's run is running.
 pub fn delete_warns_setup(summary: Option<&SetupRunSummary>) -> bool {
-    summary.is_some_and(|summary| matches!(summary.run.state(), SetupState::Running))
+    stop_offered(summary)
 }
 
 impl State {

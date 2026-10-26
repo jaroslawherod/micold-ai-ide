@@ -404,28 +404,28 @@ setup** in the output view (U3, U4).
 
 **Independent test**: T056 passes; quickstart B4 (re-run), B5; visual pass U3.
 
-- [ ] T056 [P] [US3] Test A16 (menu), red until T057, in `client/tests/features_setup.rs`:
+- [x] T056 [P] [US3] Test A16 (menu), red until T057, in `client/tests/features_setup.rs`:
   `run_offered(command_set, summary)` true with a command and no Running run (none, Succeeded,
   Failed, Stopped, Interrupted), false without a command (Story 3 scenario 4) or while Running
   (scenario 3); `stop_offered` true exactly while Running; on the Default location the same
   (scenario 5); `RunRequested` sends `SetupRun`, `StopRequested` sends `SetupStop`, and a `Busy`
   answer becomes an error notification with the daemon's text
-- [ ] T057 [US3] `client/src/features/setup.rs`: `run_offered`, `stop_offered`, `Msg::RunRequested`,
+- [x] T057 [US3] `client/src/features/setup.rs`: `run_offered`, `stop_offered`, `Msg::RunRequested`,
   `Msg::StopRequested` with `PendingOp` entries in `client/src/shell/daemon_sync.rs`. T056 passes
-- [ ] T058 [US3] `client/src/ui/mod.rs` `location_menu_items`: **Run setup** and **Stop setup**
+- [x] T058 [US3] `client/src/ui/mod.rs` `location_menu_items`: **Run setup** and **Stop setup**
   after **Setup output** (above **Delete** on a worktree, appended on the Default row), existing
   play/refresh and stop icons, offered by T057's predicates; `client/src/ui/setup_output.rs`:
   **Stop setup** before **Close** while Running
-- [ ] T059 [P] [US3] `guide/worktrees-and-sessions.md`: **Run setup** (re-run after a fix, also on
+- [x] T059 [P] [US3] `guide/worktrees-and-sessions.md`: **Run setup** (re-run after a fix, also on
   the Default entry; refused while one runs) and **Stop setup** (ends the whole process tree)
 
 ---
 
 ## Phase 10: Polish (close unit)
 
-- [ ] T060 Quickstart Part B (B1–B8) on a real sandbox and the visual pass of U1–U6 in light and
+- [x] T060 Quickstart Part B (B1–B8) on a real sandbox and the visual pass of U1–U6 in light and
   dark; record the results in quickstart.md §Results and the screenshots in `visual-pass/`
-- [ ] T061 Record in quickstart.md what CI's macOS and Windows runners proved (`streaming_child`,
+- [x] T061 Record in quickstart.md what CI's macOS and Windows runners proved (`streaming_child`,
   the setup model, the client tests) and what needs a sandbox (`sandbox_real_toolchain_path`)
 
 ---

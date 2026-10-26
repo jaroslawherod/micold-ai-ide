@@ -63,6 +63,8 @@ fn main() {
 /// stuck disk never finishes (feature 041, stop-request contract §4). Everything the stop needs has
 /// finished by the time `run` returns, so what is left is given 5 s and then left behind.
 fn start() -> std::io::Result<()> {
+    // Before the runtime has threads: a container daemon runs with the container's home (#1459).
+    micold_daemon::state::align_container_home();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;

@@ -19,6 +19,10 @@ FROM docker.io/library/node:24-trixie-slim
 # session run `gh pr create`, `gh pr checks` and `gh issue view`; it carries no login, so it reads
 # `GH_TOKEN` or `GITHUB_TOKEN` from the run-time environment, and nothing is baked in (1435).
 # `curl`, `wget`, `jq`, `ripgrep`, `make` and `python3` are what scripts and AI CLIs reach for.
+# `gcc`, `g++`, `libc6-dev` and `pkgconf` are the C/C++ toolchain a Rust toolchain installed by mise
+# links crates with C code through, and `pkg-config` to find their libraries (#1439, FR-003);
+# `python3` is FR-004. `xz-utils` and `unzip` unpack what mise, npm, cargo, uv and go installers
+# download (#1439, FR-017).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -31,6 +35,12 @@ RUN apt-get update \
       ripgrep \
       make \
       python3 \
+      gcc \
+      g++ \
+      libc6-dev \
+      pkgconf \
+      xz-utils \
+      unzip \
       openssh-client \
       openssh-server \
       util-linux \
@@ -40,6 +50,46 @@ RUN apt-get update \
       tzdata \
  && rm -rf /var/lib/apt/lists/* \
  && rm -f /etc/ssh/ssh_host_*
+
+# `mise`, pinned: the release binary for this architecture, checked against `mise.sha256` in the
+# same step, so a download that does not match the pin, or no download, fails the build (#1439,
+# FR-001, FR-002). The version is read from `mise.sha256`, not a build `ARG`, so nothing at build
+# time can swap the binary without changing this directory's content hash. How to update the pin:
+# README.md, "Update mise". `TARGETARCH` is empty under the legacy (non-BuildKit) builder, so the
+# architecture falls back to the build container's own `dpkg --print-architecture`.
+ARG TARGETARCH
+COPY mise.sha256 /tmp/mise.sha256
+RUN set -eu; \
+    arch_name="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch_name" in \
+      amd64) arch=x64 ;; \
+      arm64) arch=arm64 ;; \
+      *) echo "mise: no release for architecture '$arch_name'" >&2; exit 1 ;; \
+    esac; \
+    version="$(sed -n 's/^[0-9a-f]\{64\}  mise-v\(.*\)-linux-x64$/\1/p' /tmp/mise.sha256)"; \
+    test -n "$version"; \
+    file="mise-v${version}-linux-${arch}"; \
+    cd /tmp; \
+    curl -fsSLo "$file" "https://github.com/jdx/mise/releases/download/v${version}/${file}"; \
+    sha256sum -c --ignore-missing /tmp/mise.sha256; \
+    test -f "$file"; \
+    install -m 0755 "$file" /usr/local/bin/mise; \
+    rm -f "$file" /tmp/mise.sha256
+
+# The X11/Wayland development libraries this repository's own gate links (#1439, FR-007), the set
+# the Linux test job of `.github/workflows/ci.yml` installs with its `apt-get install`, so the default image builds and
+# tests this repository. Its own layer, apart from the toolchain above, so dropping or changing it
+# (the owner's FR-007 decision) touches nothing else. Anything else a project links comes from an
+# own image built `FROM` this one (FR-012).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libxkbcommon-dev \
+      libwayland-dev \
+      libx11-dev \
+      libxcursor-dev \
+      libxrandr-dev \
+      libxi-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 # The daemon's state directory, bind-mounted from the host at run time (feature 027, FR-011), and
 # found through `MICOLD_DATA_DIR`. Not `XDG_DATA_HOME`: every process in the container inherits that,

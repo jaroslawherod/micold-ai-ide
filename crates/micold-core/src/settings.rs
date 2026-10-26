@@ -1120,6 +1120,11 @@ impl JsonFileSettingsStore {
 
         match (existing, fresh) {
             (serde_json::Value::Object(mut base), serde_json::Value::Object(new)) => {
+                // A key this build knows but omits when empty is cleared by being absent, not kept
+                // from the old file (feature 1289, M7 V-F1: a cleared setup command came back).
+                if !new.contains_key("setup_commands") {
+                    base.remove("setup_commands");
+                }
                 base.extend(new);
                 Ok(serde_json::Value::Object(base))
             }
@@ -1733,6 +1738,23 @@ mod setup_commands_tests {
             Some(&serde_json::json!({"/home/me/src/app": "mise trust && mise install"}))
         );
         assert_eq!(store.load().settings, settings);
+    }
+
+    /// M7 V-F1: clearing the last command removes it from a file that already holds one.
+    #[test]
+    fn clearing_the_last_setup_command_removes_it_from_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        let mut settings = Settings {
+            setup_commands: BTreeMap::from([("/a".to_owned(), command("make"))]),
+            ..Settings::default()
+        };
+        store.save(&settings).unwrap();
+        assert!(written(&dir).get("setup_commands").is_some());
+        settings.setup_commands.clear();
+        store.save(&settings).unwrap();
+        assert_eq!(written(&dir).get("setup_commands"), None);
+        assert!(store.load().settings.setup_commands.is_empty());
     }
 
     #[test]

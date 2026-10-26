@@ -107,6 +107,30 @@ pub fn update(app: &mut App, msg: micold_client::features::setup::Msg) -> Task<M
     match app.core.update_setup(msg) {
         Effect::NotifyError(text) => app.core.notify_error(text),
         Effect::Watch(request) => send_watch(app, request),
+        Effect::Run((daemon, project, location)) => {
+            send_op_bound(
+                app,
+                Binding::Bound(daemon),
+                PendingOp::SetupRun,
+                move |req| ClientMsg::SetupRun {
+                    req,
+                    project,
+                    location,
+                },
+            );
+        }
+        Effect::Stop((daemon, project, location)) => {
+            send_op_bound(
+                app,
+                Binding::Bound(daemon),
+                PendingOp::SetupStop,
+                move |req| ClientMsg::SetupStop {
+                    req,
+                    project,
+                    location,
+                },
+            );
+        }
         Effect::ScrollToEnd => {
             return iced::widget::operation::snap_to_end(SETUP_OUTPUT_SCROLL_ID.clone());
         }
@@ -176,5 +200,101 @@ pub fn changed(
         project,
         location,
         run,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::base_app;
+    use micold_core::protocol::messages::{DaemonMsg, ErrorKind};
+
+    const DAEMON: DaemonId = DaemonId(1);
+
+    fn key() -> setup::Key {
+        (
+            DAEMON,
+            PathBuf::from("/repo"),
+            SessionLocation::Worktree("feat-a".into()),
+        )
+    }
+
+    fn connected() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+        (app, rx)
+    }
+
+    /// M7 (T056): the entries send `SetupRun` and `SetupStop` for the location to its daemon.
+    #[test]
+    fn run_and_stop_requests_send_the_wire_messages() {
+        let (mut app, mut rx) = connected();
+        let _ = update(&mut app, Msg::RunRequested(key()));
+        let _ = update(&mut app, Msg::StopRequested(key()));
+        let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert!(
+            matches!(&sent[0], ClientMsg::SetupRun { project, location, .. }
+                if project == &PathBuf::from("/repo")
+                    && location == &SessionLocation::Worktree("feat-a".into())),
+            "{sent:?}"
+        );
+        assert!(matches!(&sent[1], ClientMsg::SetupStop { .. }), "{sent:?}");
+        assert_eq!(sent.len(), 2);
+    }
+
+    /// M7 (T056, FR-023a): the daemon's `Busy` answer reaches the user with the daemon's text.
+    #[test]
+    fn a_busy_answer_becomes_an_error_notification_with_the_daemons_text() {
+        let (mut app, mut rx) = connected();
+        let _ = update(&mut app, Msg::RunRequested(key()));
+        let Some(ClientMsg::SetupRun { req, .. }) = rx.try_recv().ok() else {
+            panic!("a SetupRun was sent");
+        };
+        assert!(app.core.notifications.queue.visible().is_none());
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DAEMON,
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::Busy,
+                message: "Setup is already running in feat-a.".into(),
+                detail: None,
+            },
+        );
+        let shown = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("an error notification");
+        assert!(
+            format!("{shown:?}").contains("Setup is already running in feat-a."),
+            "{shown:?}"
+        );
+    }
+
+    /// M7 review A-F2: a stop that finds no run (it ended first) says nothing; other refusals do.
+    #[test]
+    fn a_stop_refused_as_not_found_is_silent() {
+        let (mut app, mut rx) = connected();
+        let _ = update(&mut app, Msg::StopRequested(key()));
+        let Some(ClientMsg::SetupStop { req, .. }) = rx.try_recv().ok() else {
+            panic!("a SetupStop was sent");
+        };
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            DAEMON,
+            DaemonMsg::OperationError {
+                req,
+                kind: ErrorKind::NotFound,
+                message: "There is no worktree here.".into(),
+                detail: None,
+            },
+        );
+        assert!(app.core.notifications.queue.visible().is_none());
     }
 }

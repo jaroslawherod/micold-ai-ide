@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Closed 2026-10-26 — shipped in PRs #1347, #1353, #1385, #1393, #1407, #1414, #1472, #1476 and the close PR
 
 **Input**: User description: "Sandbox: per-project setup command and PATH for project toolchains
 (issue #1289). A sandbox has no per-project setup. The only customization is a daemon-wide 'My own
