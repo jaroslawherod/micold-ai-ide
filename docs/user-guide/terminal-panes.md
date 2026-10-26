@@ -51,9 +51,14 @@ to go back to the AI CLI. Nothing is drawn under the terminal.
   session…* does, confirmation included. Cancel changes nothing; confirm adds the new helper's tab
   after the others and shows it.
 - **Split buttons** at the right end: split the focused pane side by side or stacked.
+- For a Claude Code terminal session in a single pane, **Open in structured view** sits in the
+  strip after the status words and before **restart**, with a note beside it when messages typed
+  for the structured view are waiting. It is hidden while the Review tab is shown. With split
+  panes each pane keeps its own row for it.
 
 When the tabs do not fit, the row scrolls with the mouse wheel rather than shrinking a tab. New
-session and the split buttons stay at the right end. A faded edge says more tabs lie beyond it, and
+session, the split buttons and restart stay whole at the right end; in a narrow window the waiting-messages
+note is cut first, then the **Open in structured view** label, each with its full text on hover. A faded edge says more tabs lie beyond it, and
 it takes the accent colour when the marked tab is the one out of view.
 
 ## Split and pick a terminal
