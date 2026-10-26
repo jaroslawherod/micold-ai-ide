@@ -1977,6 +1977,51 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "session.strip.split",
                     path: SESSION_STRIP_SPLIT,
                 },
+                Anchor {
+                    name: "review.tab.badge",
+                    path: REVIEW_TAB_BADGE,
+                },
+                Anchor {
+                    name: "review.tab.changed",
+                    path: REVIEW_TAB_CHANGED,
+                },
+            ],
+        },
+        // Feature 1276 (M2, FR-006): `session-area-review-shown` with three drafts, the shown
+        // Review tab beside the main session, its shell and the helper carrying the badge
+        // *Review · 3*.
+        CoveredState {
+            name: "review-tab-beside-sessions",
+            build: review_tab_beside_sessions,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.strip",
+                    path: SESSION_STRIP,
+                },
+                Anchor {
+                    name: "session.strip.tabs",
+                    path: SESSION_STRIP_TABS,
+                },
+                Anchor {
+                    name: "session.strip.tabs.review",
+                    path: &SESSION_STRIP_TAB_REVIEW,
+                },
+                Anchor {
+                    name: "review.tab.badge",
+                    path: REVIEW_TAB_BADGE,
+                },
+                Anchor {
+                    name: "session.strip.new_session",
+                    path: SESSION_STRIP_NEW_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.split",
+                    path: SESSION_STRIP_SPLIT,
+                },
             ],
         },
         // No status words (no session), so `session.strip` is not anchored: the fixed-controls
@@ -2033,6 +2078,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "session.header",
                     path: SESSION_HEADER,
                 },
+                Anchor {
+                    name: "review.progress",
+                    path: REVIEW_PROGRESS,
+                },
+                Anchor {
+                    name: "review.tree",
+                    path: REVIEW_TREE,
+                },
+                Anchor {
+                    name: "review.tree.row.mark",
+                    path: REVIEW_TREE_ROW_MARK,
+                },
             ],
         },
         CoveredState {
@@ -2075,10 +2132,16 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "review-shortcut-sheet",
             build: review_shortcut_sheet,
-            anchors: &[Anchor {
-                name: "shell.root",
-                path: &[],
-            }],
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "review.sheet",
+                    path: REVIEW_SHEET,
+                },
+            ],
         },
         CoveredState {
             name: "review-shortcut-sheet-single-keys-off",
@@ -2104,6 +2167,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.header",
                     path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.stale",
+                    path: REVIEW_STALE,
                 },
             ],
         },
@@ -2141,6 +2208,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.header",
                     path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.tree",
+                    path: REVIEW_TREE,
+                },
+                Anchor {
+                    name: "review.tree.filter",
+                    path: REVIEW_TREE_FILTER,
+                },
+                Anchor {
+                    name: "review.tree.sort",
+                    path: REVIEW_TREE_SORT,
                 },
             ],
         },
@@ -2211,6 +2290,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "review.source",
                     path: REVIEW_SOURCE,
+                },
+                Anchor {
+                    name: "review.source.list",
+                    path: REVIEW_SOURCE_LIST,
                 },
             ],
         },
@@ -2310,6 +2393,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "review.bar.send",
                     path: REVIEW_BAR_SEND,
                 },
+                Anchor {
+                    name: "review.bar.overflow",
+                    path: REVIEW_BAR_OVERFLOW,
+                },
+                Anchor {
+                    name: "status_bar",
+                    path: STATUS_BAR,
+                },
             ],
         },
         CoveredState {
@@ -2339,6 +2430,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "review.drawer",
                     path: REVIEW_DRAWER,
+                },
+                Anchor {
+                    name: "review.drawer.tabs",
+                    path: REVIEW_DRAWER_TABS,
+                },
+                Anchor {
+                    name: "review.diff",
+                    path: REVIEW_DIFF_PANE,
                 },
             ],
         },
@@ -2370,6 +2469,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "review.drawer",
                     path: REVIEW_DRAWER,
                 },
+                Anchor {
+                    name: "review.drawer.tabs",
+                    path: REVIEW_DRAWER_TABS,
+                },
+                Anchor {
+                    name: "review.diff",
+                    path: REVIEW_DIFF_PANE,
+                },
             ],
         },
         CoveredState {
@@ -2391,6 +2498,102 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "review.bar.send",
                     path: REVIEW_BAR_SEND,
+                },
+            ],
+        },
+        // --- Feature 1276: the review tab's last states (M2, FR-006) ----------------------------
+        //
+        // `changes-review-marks` with a comment's composer opened by dragging over the line numbers
+        // of `src/a.rs`'s two new lines; a review with nothing changed, its drawer open with no drafts
+        // and no replies and **Send review** disabled; and `fix-a-bug`'s Review tab shown while
+        // `feat-short`'s keeps `src/a.rs` selected.
+        CoveredState {
+            name: "review-drag-composer",
+            build: review_drag_composer,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.diff",
+                    path: REVIEW_DIFF_PANE,
+                },
+                Anchor {
+                    name: "review.composer",
+                    path: REVIEW_COMPOSER,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-empty",
+            build: review_empty,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "review.tree",
+                    path: REVIEW_TREE,
+                },
+                Anchor {
+                    name: "review.bar",
+                    path: REVIEW_BAR,
+                },
+                Anchor {
+                    name: "review.bar.send",
+                    path: REVIEW_BAR_SEND,
+                },
+                Anchor {
+                    name: "review.drawer",
+                    path: REVIEW_DRAWER,
+                },
+            ],
+        },
+        CoveredState {
+            name: "review-two-worktrees",
+            build: review_two_worktrees,
+            anchors: &[
+                Anchor {
+                    name: "shell.root",
+                    path: &[],
+                },
+                Anchor {
+                    name: "session.header",
+                    path: SESSION_HEADER,
+                },
+                Anchor {
+                    name: "session.strip",
+                    path: SESSION_STRIP,
+                },
+                Anchor {
+                    name: "session.strip.tabs",
+                    path: SESSION_STRIP_TABS,
+                },
+                Anchor {
+                    name: "session.strip.tabs.review",
+                    path: &SESSION_STRIP_TAB_REVIEW,
+                },
+                Anchor {
+                    name: "session.strip.new_session",
+                    path: SESSION_STRIP_NEW_SESSION,
+                },
+                Anchor {
+                    name: "session.strip.split",
+                    path: SESSION_STRIP_SPLIT,
+                },
+                Anchor {
+                    name: "review.tree",
+                    path: REVIEW_TREE,
                 },
             ],
         },
@@ -4004,6 +4207,46 @@ pub const REVIEW_DIFF_PANE: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0];
 /// The drawer's panel: the diff area's second layer, the sheet's only child.
 pub const REVIEW_DRAWER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 1, 0];
 
+// Feature 1276 (M2, contracts/review-states.md): the elements the review states introduce, filled
+// in from the recorded tree. An anchor that does not resolve fails by name
+// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`).
+
+/// The Review tab's draft badge: the tab's content row → the label's slot → its row's second child.
+pub const REVIEW_TAB_BADGE: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1, 0, 1];
+/// The hidden Review tab's changed mark: the dot in the content row's leading slot.
+pub const REVIEW_TAB_CHANGED: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0];
+/// The bar's ⋮: the trailing group's second control, between **Comments** and **Send review (n)**.
+pub const REVIEW_BAR_OVERFLOW: &[usize] = &[0, 0, 1, 1, 2, 2, 0, 1, 1, 1];
+/// The status bar, the window column's last child.
+pub const STATUS_BAR: &[usize] = &[0, 0, 2];
+/// The drawer's **Drafts** / **Replies** tabs: the panel → its column → the content → the drawer's
+/// padding → the tabs-and-rows column → its first child.
+pub const REVIEW_DRAWER_TABS: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 1, 0, 0, 1, 0, 0, 0];
+/// The source control's open list, in the overlay layer: the floated surface under the overlay's
+/// full-window wrappers. No base node has this path in the states that anchor it.
+pub const REVIEW_SOURCE_LIST: &[usize] = &[0, 0, 0, 0, 0, 0, 0];
+/// The file column's list: the filter box, the sort chips and the tree, or the sentence that takes
+/// their place (no changes, a failed read).
+pub const REVIEW_TREE: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0];
+/// The tree's filter box, the list's first child.
+pub const REVIEW_TREE_FILTER: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0, 0];
+/// The tree's sort chips, the list's second child.
+pub const REVIEW_TREE_SORT: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0, 1];
+/// The review mark of `changes-review-marks`'s first file row (`src/a.rs`, under the `src` row):
+/// the row → its tooltip → the button → its clip → the line → the text column → the title row's
+/// first child.
+pub const REVIEW_TREE_ROW_MARK: &[usize] =
+    &[0, 0, 1, 1, 2, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 0];
+/// *n of m reviewed* with its bar: the progress slot's row, the header's last control.
+pub const REVIEW_PROGRESS: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 2, 0, 0];
+/// *n files changed since you looked*: the header's second control, before the source control.
+pub const REVIEW_STALE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
+/// The shortcut sheet's dialog surface, over its scrim at the root.
+pub const REVIEW_SHEET: &[usize] = &[10, 0];
+/// The new comment's composer a line-number drag opened: the diff pane's padding → the diff's
+/// column → its lines → the dragged range's last line, whose slot hangs the composer under it.
+pub const REVIEW_COMPOSER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0, 0, 1, 0, 3, 1];
+
 /// The mixed review of `feat-short`'s working tree the feature 1270 states show: 3 drafts, 2 sent,
 /// 1 applied with a one-line reply and 1 answered with a reply that wraps over several lines.
 pub fn feat_short_mixed_review(state: &mut State) {
@@ -4114,6 +4357,129 @@ pub fn review_overflow() -> StateUnderTest {
     under
 }
 
+/// [`review_shown`] with three drafts: the shown Review tab carries the badge *Review · 3*
+/// (feature 1276, `review-tab-beside-sessions`).
+pub fn review_tab_beside_sessions() -> StateUnderTest {
+    let mut under = review_shown();
+    feat_short_drafts(&mut under.state, 3);
+    under
+}
+
+/// [`review_marks`] after a drag over the line numbers of `src/a.rs`'s two new lines: the new
+/// comment's composer opened on the range (feature 1275 FR-015, feature 1276
+/// `review-drag-composer`).
+pub fn review_drag_composer() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    let mut under = review_marks();
+    let changes = &mut under.state.changes;
+    changes::update(
+        changes,
+        Msg::GutterPressed {
+            old: Some(1),
+            new: Some(1),
+            extend: false,
+        },
+    );
+    changes::update(
+        changes,
+        Msg::GutterDragOver {
+            old: None,
+            new: Some(2),
+        },
+    );
+    changes::update(changes, Msg::GutterDragReleased);
+    assert!(
+        changes
+            .tabs
+            .shown_view()
+            .is_some_and(|v| v.composer.is_some()),
+        "the drag opened a composer"
+    );
+    under
+}
+
+/// `files` read as the shown review's list, against `main`'s merge base.
+fn list_read(under: &mut StateUnderTest, files: Vec<micold_core::review::changes::ChangedFile>) {
+    use micold_client::features::changes::{self, Load, Msg};
+    use micold_core::review::changes::ChangeList;
+    let changes = &mut under.state.changes;
+    let Some(Load::Loading { seq, .. }) = changes.tabs.shown_view().map(|v| v.list.clone()) else {
+        panic!("the shown review reads its list");
+    };
+    changes::update(
+        changes,
+        Msg::ListRead {
+            seq,
+            result: Ok(ChangeList {
+                files,
+                scope: micold_core::review::base::ReviewScope::Worktree {
+                    base: micold_core::review::base::Base::MergeBase {
+                        branch: "main".into(),
+                        commit: "0123456789abcdef0123456789abcdef01234567".into(),
+                    },
+                },
+            }),
+            whole: Ok(Default::default()),
+        },
+    );
+}
+
+/// [`review_shown`] with nothing changed and the drawer open: an empty list, no comments, **Send
+/// review** disabled, the drawer with no drafts and no replies (feature 1276, `review-empty`).
+pub fn review_empty() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::drawer::DrawerEvent;
+    let mut under = review_shown();
+    list_read(&mut under, vec![]);
+    changes::update(&mut under.state.changes, Msg::Drawer(DrawerEvent::Toggle));
+    under
+}
+
+/// [`review_marks`] (`feat-short`'s review, `src/a.rs` selected), then `fix-a-bug`'s main session
+/// and a helper with its own Review tab shown, listing `src/main.rs`: B shown while A keeps its
+/// selection (feature 1276, `review-two-worktrees`).
+pub fn review_two_worktrees() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::changes::{ChangeIdentity, ChangeKind, ChangedFile, Content, Origin};
+    use micold_core::review::RelPath;
+    let feat_short = (
+        PathBuf::from(PROJECT),
+        SessionLocation::Worktree("feat-short".to_string()),
+    );
+    let mut under = strip_at(review_marks().state, "fix-a-bug", 1, 1);
+    under.state = with_review_of(
+        under.state,
+        SessionLocation::Worktree("fix-a-bug".to_string()),
+    );
+    let main = RelPath::from_native("src/main.rs").expect("a relative path");
+    list_read(
+        &mut under,
+        vec![ChangedFile {
+            path: main.clone(),
+            kind: ChangeKind::Modified,
+            content: Content::Text,
+            added: 2,
+            removed: 2,
+            large: false,
+            origin: Origin::Uncommitted,
+            identity: ChangeIdentity::Unknown,
+        }],
+    );
+    changes::update(&mut under.state.changes, Msg::FileSelected(main));
+    let kept = under
+        .state
+        .changes
+        .tabs
+        .get(&feat_short)
+        .expect("feat-short keeps its Review tab");
+    assert_eq!(
+        changes::selected_file(&kept.view).map(|p| p.as_str()),
+        Some("src/a.rs"),
+        "feat-short's hidden Review tab keeps its selection"
+    );
+    under
+}
+
 /// How many strip members (tabs and the "+") each strip state's keyed row holds (feature 1126,
 /// S9): read by `gates/containment.rs` and `gates/strip_controls_hold_their_size.rs`.
 pub const STRIP_MEMBERS: &[(&str, usize)] = &[
@@ -4122,6 +4488,8 @@ pub const STRIP_MEMBERS: &[(&str, usize)] = &[
     ("session-area-twelve-tabs", 13),
     ("session-area-review-shown", 5),
     ("session-area-review-hidden", 5),
+    ("review-tab-beside-sessions", 5),
+    ("review-two-worktrees", 5),
 ];
 
 /// The main session of `feat-short` with `shells` shell instances (the second marked, the third

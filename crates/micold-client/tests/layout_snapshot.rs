@@ -284,6 +284,11 @@ mod session_area_fits;
 // moving it (SC-001, SC-002, SC-004, FR-017).
 #[path = "gates/review_bar_fixed.rs"]
 mod review_bar_fixed;
+// Feature 1276 (M2, FR-007): every review state at the smallest window and at 1280×800, light and
+// dark: no text overflow, no undeclared escape, the review bar above the status bar, the drawer over
+// the diff without resizing it, and the status bar's and the session area's own checks.
+#[path = "gates/review_tab_fits.rs"]
+mod review_tab_fits;
 
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
@@ -1028,11 +1033,23 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
                 .to_string()
         };
         let path = path_of(r.or(o));
+        // An unanchored node is named by its path and by the deepest anchor holding it (feature
+        // 1276, US2): a padding change moves a bar's children, not the bar, and the failure should
+        // still say which bar.
         let named = anchors
             .iter()
             .find(|(_, p)| *p == path)
             .map(|(n, _)| (*n).to_string())
-            .unwrap_or_else(|| format!("path {path}"));
+            .unwrap_or_else(|| {
+                anchors
+                    .iter()
+                    .filter(|(_, p)| path.starts_with(&format!("{p}/")))
+                    .max_by_key(|(_, p)| p.len())
+                    .map_or_else(
+                        || format!("path {path}"),
+                        |(n, _)| format!("path {path}, inside {n}"),
+                    )
+            });
 
         out.push_str(&format!(
             "\n  in covered state: {section}\n    element : {named}\n    recorded: {}\n    observed: {}\n",

@@ -17,6 +17,35 @@ use micold_core::tokens::anatomy::status_bar::HEIGHT;
 /// Half a pixel, matching every geometry gate beside this one.
 const TOLERANCE: f32 = 0.5;
 
+/// The status bar's invariants in `records` laid out in `window`: the window column's last child,
+/// [`HEIGHT`] dp high, flush with the window's bottom edge and as wide as the window. `what` names
+/// the state in a failure; the bar's record is returned. Also called by `review_tab_fits.rs`
+/// (feature 1276, FR-007).
+pub(crate) fn assert_the_bar_holds_its_place<'r>(
+    what: &str,
+    records: &'r [lay::LayoutRecord],
+    window: iced::Size,
+) -> &'r lay::LayoutRecord {
+    let bar = records
+        .iter()
+        .filter(|r| r.layer == lay::Layer::Base && r.path.len() == 3 && r.path[..2] == [0, 0])
+        .max_by_key(|r| r.path[2])
+        .unwrap_or_else(|| panic!("{what}: the window column has children"));
+    assert_eq!(
+        bar.height, HEIGHT,
+        "{what}: the bar is {HEIGHT} dp high: {bar:?}"
+    );
+    assert!(
+        (bar.y + bar.height - window.height).abs() <= TOLERANCE,
+        "{what}: the bar is flush with the window's bottom edge: {bar:?} in {window:?}"
+    );
+    assert_eq!(
+        bar.width, window.width,
+        "{what}: the bar spans the window: {bar:?}"
+    );
+    bar
+}
+
 #[test]
 fn at_the_smallest_window_the_bars_texts_stay_in_their_boxes() {
     let window = MIN_WINDOW_SIZE;
@@ -24,18 +53,7 @@ fn at_the_smallest_window_the_bars_texts_stay_in_their_boxes() {
     let (painted, records) =
         lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
 
-    // The bar is the window column's last child.
-    let bar = records
-        .iter()
-        .filter(|r| r.layer == lay::Layer::Base && r.path.len() == 3 && r.path[..2] == [0, 0])
-        .max_by_key(|r| r.path[2])
-        .expect("the window column has children");
-    assert_eq!(bar.height, HEIGHT, "the bar is {HEIGHT} dp high: {bar:?}");
-    assert!(
-        (bar.y + bar.height - window.height).abs() <= TOLERANCE,
-        "the bar is flush with the window's bottom edge: {bar:?} in {window:?}"
-    );
-    assert_eq!(bar.width, window.width, "the bar spans the window: {bar:?}");
+    let bar = assert_the_bar_holds_its_place("status-bar-long-texts", &records, window);
 
     let in_bar: Vec<_> = painted
         .iter()

@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M1 PR
-- **Next step**: orchestrator waits on CI of #1473 and merges; then M2 once its blockers merge
+- **Phase**: M2 implement
+- **Next step**: orchestrator runs M2 reviews A and B on the snapshot; then stop (b): rebase, re-record the fixture (T019–T021), full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
-| #1473 | M1 guide + review_keys_doc | draft, CI | — |
+| #1473 | M1 guide + review_keys_doc | merged | 1669ef5df6520fead74b379ed75d307d20f3d81c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
-| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | merged; T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | T014–T018, T022–T024 done; T019–T021 (re-record, diff explanation, +1 px proof) and T025 wait for stop (b). Smallest-window squeeze found by the new gate filed as #1474 and declared in `SMALLEST_WINDOW` |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
@@ -54,6 +54,9 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | 3 | clarify | FR-012: unbuilt mockup elements removed or labelled? | Doc-listed follow-ups (split option, FR-013 list) stay labelled "follow-up, not built"; other unbuilt elements removed | agent | review-redesign.md#0 ("Split option … Follow-up") |
 | 4 | tasks | M1 has 13 tasks, over the ~10-task split threshold: split? | No: M1 is mostly docs plus one test, under ~800 lines | agent | tasks review round 1 F2 |
 | 5 | tasks | M2 has 12 tasks, over the ~10-task split threshold: split? | No: M2's single fixture re-record (FR-005) cannot be split across PRs | agent | tasks review round 1 F2; spec FR-005 |
+| 6 | M2 implement | `review_tab_fits` finds the review tab squeezed at 640×480 (progress slot, sort chips, diff header, narrow drawer): fix here? | No: spec § Out of Scope (no review layout change); filed #1474, declared per node in `SMALLEST_WINDOW`, each required to keep firing; three scrolled-viewport overhangs declared beside them | agent | review_tab_fits run log; spec Out of Scope |
+| 7 | M2 implement | T016 redefine `session-area-changes-open`? | Already done by #1269 as `session-area-review-shown`; the contract's anchors are on it; no change | agent | covered_states.rs (1269 block) |
+| 8 | M2 implement | US2 "+1 px fails naming `review.bar`": the padding moves the bar's children, not the bar | `describe_difference` names an unanchored node by its path and the deepest anchor holding it (`path …, inside review.bar`) | agent | layout_snapshot.rs describe_difference |
 
 ## Review rounds
 
@@ -76,8 +79,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-M1 done: reviews A and B clean, full gate (`scripts/gate.sh`) green at 59ee1a02, draft PR #1473
-open. Next: CI and merge (orchestrator), then M2.
+None.
 
 ## Open escalation
 

@@ -106,7 +106,7 @@ const CHANGES_BUTTON: &[usize] = &[0, 0, 0, 1];
 
 /// The header's title and chips in `records`: the title line, each chip of the chips row, then
 /// the Changes button.
-fn header_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
+pub(crate) fn header_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let header = [SESSION_AREA, &[0]].concat();
     let title = [header.as_slice(), &[0, 0, 0]].concat();
     let chips = [header.as_slice(), &[0, 1]].concat();
@@ -146,7 +146,7 @@ fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
 
 /// The strip's own row's children: its scrolling region, status cluster, New session and splits
 /// (S7). The members inside the region scroll, so they are not parts that must fit the window.
-fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
+pub(crate) fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let row = [SESSION_AREA, &[1, 0]].concat();
     const NAMES: [&str; 4] = ["tab region", "status", "New session", "split buttons"];
     records
@@ -158,7 +158,7 @@ fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
 
 /// A1, A2: the session area holds the header, the strip and the pane area, in that order, each
 /// once, and nothing under the pane area.
-fn assert_order(name: &str, records: &[LayoutRecord], area: &Rectangle) {
+pub(crate) fn assert_order(name: &str, records: &[LayoutRecord], area: &Rectangle) {
     let children: Vec<&LayoutRecord> = records
         .iter()
         .filter(|r| r.path.len() == SESSION_AREA.len() + 1 && r.path.starts_with(SESSION_AREA))
@@ -217,7 +217,7 @@ fn assert_button_unsqueezed(what: &str, records: &[LayoutRecord], state: &State)
     );
 }
 
-fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
+pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         for window in [MIN_WINDOW_SIZE, WINDOW] {
             let mut under = build();

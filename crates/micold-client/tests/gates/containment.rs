@@ -323,7 +323,7 @@ fn is_drawer_rows_scroll(state: &str, escape: &lay::Escape) -> bool {
 }
 
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
-fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
+pub(crate) fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
     let child_path = escape.child_path.as_str();
     if CLIP_REVEALED.contains(&child_path) {
         Some("CLIP_REVEALED")
