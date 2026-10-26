@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1273
 - **Worktree branch**: claude/project-thread-p2tb7i
 - **Started**: 2026-10-24
-- **Phase**: close
-- **Next step**: close unit: tdd-verify, T040 quickstart results, spec Status, review, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1375 | M2 totals, bars, filter, sort | merged (rebase) | c592cb89 |
 | #1426 | M3 tree state in the Changes reducer; Files on core | merged (rebase) | d84e94860 |
 | #1430 | M4+M5: tree rows, ChangeBar, filter box, sort chips (rebased onto main after conflicts) | merged (rebase) | c9a21a6a |
+| close | TDD verification, T040 quickstart results, spec closed | open | — |
 
 ## Milestones
 
@@ -104,9 +105,7 @@ Analyze fixes (spec, plan, data-model, research, tasks): I1 sibling order by nam
 
 ## Handover
 
-Close unit over the context cap. Done: #1430 merge recorded; tdd-verify run inline (`tdd/verification.md`, FAIL for TEST_AFTER history, accepted; HIGH smell F1 fixed in `review_tree.rs`, mutant M10 caught; 10 deliberate mutants all caught); T040 quickstart results, spec Status, cycle-log close row; close review CLEAN (2 MINOR fixed, prose only). Not converge: review B CLEAN for every milestone.
-
-Next: the full gate (`/mnt/project-files/scripts/split-gate.sh`) is running detached on this committed tree, log `/tmp/claude-0/-home-user-micold-ai-ide/3e0b603d-be90-55f9-b18f-51657d9a856c/scratchpad/gate-1792973201.log`; hold on it with `scripts/autopilot/hold.sh <log> 'GATE_EXIT='`. Green: set **Phase** `done`, **Next step** `handoff`, add the close PR row to *Pull requests*, set this section to `None.`, commit (`docs(1273): close the spec`), push with `git push --force-with-lease=claude/project-thread-p2tb7i: -u origin claude/project-thread-p2tb7i`, and write the PR title/body to the orchestrator's scratchpad files (title `#1273: Review UI: file tree, filter and sort — close`, body ends `Refs #1273`). Red: fix (known flake: micold-daemon attention_error_notice) and re-run. Open findings: none. PR: none yet.
+None.
 
 ## Open escalation
 
