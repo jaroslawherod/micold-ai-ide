@@ -238,6 +238,10 @@ struct Inner {
     /// the text"; it is that the two failures are different failures. This one spends no restart
     /// budget (`attempts: 0`) and is cleared by a start rather than by a survival.
     start_failures: HashMap<SessionId, String>,
+    /// Sessions whose current run was started by resuming a conversation (#1459). Only such a run
+    /// that exits is asked whether the conversation is still there before it is restarted: a new
+    /// conversation has not necessarily recorded anything yet.
+    resumed: std::collections::HashSet<SessionId>,
     /// Each structured session's events (feature 938, R6): the history and the live channel, kept
     /// apart from the process so a restart continues it and an exit keeps it (FR-009); dropped
     /// with the session's record (`remove_live_by_ids`).
@@ -761,6 +765,42 @@ pub(crate) fn image_reference() -> String {
     std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default()
 }
 
+/// The `HOME` a container daemon must run with: `MICOLD_HOME` when the daemon is in a container
+/// (`image` non-empty) and `HOME` is something else. sshd resets `HOME` to the image user's passwd
+/// home, so a daemon started through it sent every session's conversations, sign-ins and config
+/// into the image's ephemeral layer, lost with the container (#1459). `None`: nothing to change.
+fn container_home_fix(
+    image: &str,
+    micold_home: Option<&std::ffi::OsStr>,
+    home: Option<&std::ffi::OsStr>,
+) -> Option<PathBuf> {
+    let wanted = micold_home.filter(|h| !h.is_empty())?;
+    (!image.is_empty() && home != Some(wanted)).then(|| PathBuf::from(wanted))
+}
+
+/// Make this daemon's `HOME` the container's `MICOLD_HOME`, before anything reads it, so the
+/// sessions it spawns keep their data where the container mounts it ([`container_home_fix`]).
+/// Call it once, at startup, before other threads exist.
+pub fn align_container_home() {
+    let fix = container_home_fix(
+        &image_reference(),
+        std::env::var_os("MICOLD_HOME").as_deref(),
+        std::env::var_os("HOME").as_deref(),
+    );
+    if let Some(home) = fix {
+        tracing::info!(home = %home.display(), "container HOME differs from MICOLD_HOME; using MICOLD_HOME");
+        std::env::set_var("HOME", home);
+    }
+}
+
+/// What a session is told when its CLI no longer has its conversation.
+fn conversation_gone_text(provider: &dyn micold_core::provider::AiCliProvider) -> String {
+    format!(
+        "{} no longer has this conversation. Close this session, or start a new one.",
+        provider.display_name()
+    )
+}
+
 /// In a container, say which `HOME` a session starts with and which shared credential files are
 /// there (names only, never contents): sshd resets the environment, so a daemon started without
 /// the container's home looks in the image user's home and the CLI asks to sign in (#1434).
@@ -1064,6 +1104,7 @@ impl DaemonState {
                 announced_dead_shells: std::collections::HashSet::new(),
                 worktrees: HashMap::new(),
                 start_failures: HashMap::new(),
+                resumed: std::collections::HashSet::new(),
                 event_streams: HashMap::new(),
                 structured_inputs: HashMap::new(),
                 queue_saves: None,
@@ -5809,19 +5850,9 @@ impl DaemonState {
                 && plan.resumable
                 && provider.identity() == ConversationIdentity::AppAssigned
             {
-                let gone = match provider.config_dir() {
-                    Some(config) => {
-                        !provider.has_recorded_conversation(&config, &plan.cwd, plan.resume_handle)
-                    }
-                    // An unresolvable config directory is ignorance, not evidence of absence —
-                    // attempt the resume and let the CLI answer.
-                    None => false,
-                };
+                let gone = Self::conversation_gone(provider, &plan.cwd, plan.resume_handle);
                 if gone {
-                    let reason = format!(
-                        "{} no longer has this conversation. Close this session, or start a new one.",
-                        provider.display_name()
-                    );
+                    let reason = conversation_gone_text(provider);
                     tracing::warn!(
                         session = %id.0,
                         cli = provider.command(),
@@ -5909,6 +5940,11 @@ impl DaemonState {
         {
             let mut inner = self.lock();
             inner.start_failures.remove(&id);
+            if launch == LaunchMode::Resume {
+                inner.resumed.insert(id);
+            } else {
+                inner.resumed.remove(&id);
+            }
             Self::take_carried(&mut inner.carried, id, seeded.as_ref());
         }
         self.register_proc(id, session);
@@ -6588,6 +6624,15 @@ impl DaemonState {
             .into_iter()
             .filter_map(|(id, gate)| Some((id, gate.try_lock_owned().ok()?)))
             .collect();
+        // A session whose CLI exited and whose conversation is gone is not restarted: `--resume`
+        // would fail on it again and again (#1459). Asked off the state lock, it reads the disk.
+        let gone: HashMap<SessionId, String> = {
+            let exited: Vec<SessionId> = gates.keys().copied().collect();
+            exited
+                .into_iter()
+                .filter_map(|id| Some((id, self.gone_conversation_reason(id)?)))
+                .collect()
+        };
         {
             let mut inner = self.lock();
             scrollback = inner.catalog.settings_wire().scrollback_lines;
@@ -6616,6 +6661,15 @@ impl DaemonState {
                 // after the gates were tried. The next tick sees it.
             }
             for (id, outcome, dead) in exited {
+                // Reported as the start refuses it, and settled like a stop: nothing counted.
+                let outcome = match gone.get(&id) {
+                    Some(reason) if matches!(outcome, ExitOutcome::Crashed { .. }) => {
+                        tracing::warn!(session = %id.0, "no recorded conversation to resume; not restarting");
+                        inner.start_failures.insert(id, reason.clone());
+                        ExitOutcome::Clean
+                    }
+                    _ => outcome,
+                };
                 match inner.catalog.supervise_session_exit(id, outcome) {
                     Some((project, SupervisionAction::Restart, cwd, mode, provider)) => {
                         // Session exit + restart-attempt event, with the reason (FR-045).
@@ -7486,6 +7540,38 @@ impl DaemonState {
                 // be the last anything ever heard of this session (BUG-024).
             }
         }
+    }
+
+    /// Whether `provider` has lost the conversation `handle` of the session in `cwd`: a provider
+    /// that assigns its own ids, and a recorded conversation that is not there. An unresolvable
+    /// config directory is ignorance, not evidence of absence, so it is not "gone". Reads the disk.
+    fn conversation_gone(
+        provider: &dyn micold_core::provider::AiCliProvider,
+        cwd: &Path,
+        handle: uuid::Uuid,
+    ) -> bool {
+        provider.identity() == ConversationIdentity::AppAssigned
+            && provider
+                .config_dir()
+                .is_some_and(|config| !provider.has_recorded_conversation(&config, cwd, handle))
+    }
+
+    /// The sentence for a session whose exited CLI would be resumed again but whose conversation
+    /// is gone (#1459), or `None` when it is there, when its run did not start by resuming, or is not an AI-CLI session of a provider that
+    /// assigns its own ids. Known before any respawn, so it never reaches the crash-loop counter.
+    /// **Blocking**: stats the transcript.
+    fn gone_conversation_reason(&self, id: SessionId) -> Option<String> {
+        let (cli, cwd, handle) = {
+            let inner = self.lock();
+            if !inner.resumed.contains(&id) {
+                return None;
+            }
+            let (project, s) = inner.catalog.workspace().find_session(id)?;
+            (s.mode == TerminalMode::AiCli)
+                .then(|| (s.provider, s.location.cwd(project), s.resume_handle()))?
+        };
+        let provider = cli.provider();
+        Self::conversation_gone(provider, &cwd, handle).then(|| conversation_gone_text(provider))
     }
 
     /// Whether `process` is `id`'s primary process right now.
@@ -8850,5 +8936,32 @@ mod setup_lock_tests {
             drop(held);
             assert!(pushed.is_ok(), "the push waited on the state lock");
         });
+    }
+}
+
+#[cfg(test)]
+mod container_home_tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    /// #1459: a container daemon whose `HOME` is not `MICOLD_HOME` writes user data into the image
+    /// layer; it takes `MICOLD_HOME` instead, and only in a container.
+    #[test]
+    fn a_container_daemon_takes_micold_home_as_its_home() {
+        let fix = |image, micold: Option<&str>, home: Option<&str>| {
+            container_home_fix(image, micold.map(OsStr::new), home.map(OsStr::new))
+        };
+        assert_eq!(
+            fix("img", Some("/home/jaro"), Some("/home/node")),
+            Some(PathBuf::from("/home/jaro"))
+        );
+        assert_eq!(
+            fix("img", Some("/home/jaro"), None),
+            Some(PathBuf::from("/home/jaro"))
+        );
+        assert_eq!(fix("img", Some("/home/jaro"), Some("/home/jaro")), None);
+        assert_eq!(fix("img", None, Some("/home/node")), None);
+        assert_eq!(fix("img", Some(""), Some("/home/node")), None);
+        assert_eq!(fix("", Some("/home/jaro"), Some("/home/node")), None);
     }
 }
