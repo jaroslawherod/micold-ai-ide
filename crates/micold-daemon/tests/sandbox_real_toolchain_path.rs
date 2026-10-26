@@ -3,6 +3,9 @@
 //! image's own `PATH`. The unit tests prove the order from fixed inputs; this proves the inputs the
 //! daemon reads inside the container are the ones it should, and that the order reaches a shell.
 //!
+//! And #1439 (FR-011, US3): the basic image's entrypoint creates both home folders before the first
+//! session, and a `mise` the user put in `~/.local/bin` wins over the image's `/usr/local/bin/mise`.
+//!
 //! Behind `sandbox-real-runtime` (Principle VI: the default suite needs nothing installed).
 //!
 //! ```text
@@ -104,5 +107,37 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
     assert!(
         image_rest.iter().all(|entry| !want.contains(entry)),
         "a folder appears twice on the sandbox PATH: {path:?}"
+    );
+
+    // #1439 FR-011: before any setup, both folders exist (the entrypoint made them), so a session
+    // listing its PATH sees what is there.
+    let folders = term
+        .run(&format!(
+            "test -d '{local_bin}' && test -d '{shims}' && echo FOLDERS-EXIST"
+        ))
+        .await;
+    assert!(
+        folders.lines().any(|l| l.trim() == "FOLDERS-EXIST"),
+        "{local_bin} or {shims} does not exist in a new sandbox: {folders}"
+    );
+
+    // Edge case "A `mise` already in `~/.local/bin`": the user's copy comes first on PATH, ahead of
+    // the image's own.
+    let stub = format!("{local_bin}/mise");
+    let resolved = term
+        .run(&format!(
+            "test -x /usr/local/bin/mise && echo IMAGE-MISE; \
+             printf '#!/bin/sh\\necho stub\\n' > '{stub}' && chmod 0755 '{stub}' && \
+             hash -r 2>/dev/null; command -v mise"
+        ))
+        .await;
+    let lines: Vec<&str> = resolved.lines().map(str::trim).collect();
+    assert!(
+        lines.contains(&"IMAGE-MISE"),
+        "the image has no /usr/local/bin/mise: {resolved}"
+    );
+    assert!(
+        lines.contains(&stub.as_str()),
+        "`command -v mise` does not resolve to {stub}: {resolved}"
     );
 }
