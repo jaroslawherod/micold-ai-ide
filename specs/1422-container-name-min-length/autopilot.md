@@ -52,7 +52,7 @@ None.
 
 ## Open escalation
 
-None.
+M1 is implemented, reviewed (A and B clean) and rebased on origin/main 3a0c42592, but `mise run gate` is red here and the gate hook blocks the push. `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` fails identically on plain origin/main in this environment ("depth 0: 198 px of room for a 201.59996 px name"; text-width measurement, file untouched by this feature). Main's CI is green, so it looks like this machine's fonts. Needs a decision: run the gate elsewhere, or get the test made environment-independent. Local branch has 3 unpushed commits, no PR.
 
 ## Follow-ups not done
 
