@@ -9,9 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1439
 - **Worktree branch**: claude/project-thread-xudko5
 - **Started**: 2026-10-25
-- **Phase**: M5 implemented (T034–T040; T041 open, D17), reviews A (CHANGES) and B (CLEAN) round 1 acted on, full gate exit 0 after the fixes; committed on `1439-m5`, rebased onto the M4 PR head 865f3f83e (`origin/claude/project-thread-xudko5`, PR #1497); not pushed
-- **Next step**: orchestrator: after M4 (#1497) merges, rebase `1439-m5` onto main and open the M5 PR from the scratchpad `pr-title-m5.txt`/`pr-body-m5.md` (reviews filled in); record the first real-runtime CI run of `sandbox_real_self_install`
-- **Gate**: M5 review fixes (on 865f3f83e): full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11522 tests passed, 0 failed, all scripts/tests cases ok; `cargo clippy -p micold-daemon --features sandbox-real-runtime --all-targets -D warnings` clean. M5: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11522 tests passed, 0 failed, all scripts/tests cases ok; `cargo clippy -p micold-daemon --features sandbox-real-runtime --tests -D warnings` clean. M4 review fixes: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11513 tests passed, 0 failed, all scripts/tests cases ok. Before: M4 full gate (`scripts/gate.sh`, unmodified, CI's order, nothing skipped) exit 0 at e26591dbd. M3: exit 0 at f5ff218e6.
+- **Phase**: pin (T042, T019b) committed on `claude/project-thread-xudko5` from main 8e6e592b2 (M5 #1498 merged) and pushed; pin PR not opened (orchestrator)
+- **Next step**: handoff. Orchestrator opens the pin PR from the scratchpad `pr-title-pin.txt`/`pr-body-pin.md`; after it merges, T031 (B3 second half), T032 (B1), T033 (B2, B6) and T041 (B6 second half, B7) are carried to the owner's local verification on the published image `97e0b963519fe8d8` (D14, D17)
+- **Gate**: Pin: full gate (`scripts/gate.sh`, CI's order, nothing skipped, CARGO_INCREMENTAL=0, no debuginfo) exit 0 on 8e6e592b2 + pin, 11527 tests passed, 0 failed, all scripts/tests cases ok (guide-own-image included). M5 review fixes (on 865f3f83e): full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11522 tests passed, 0 failed, all scripts/tests cases ok; `cargo clippy -p micold-daemon --features sandbox-real-runtime --all-targets -D warnings` clean. M5: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11522 tests passed, 0 failed, all scripts/tests cases ok; `cargo clippy -p micold-daemon --features sandbox-real-runtime --tests -D warnings` clean. M4 review fixes: full gate (`scripts/gate.sh`, CI's order, nothing skipped) exit 0, 11513 tests passed, 0 failed, all scripts/tests cases ok. Before: M4 full gate (`scripts/gate.sh`, unmodified, CI's order, nothing skipped) exit 0 at e26591dbd. M3: exit 0 at f5ff218e6.
 
 ## Pull requests
 
@@ -22,18 +22,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1484 | M1 | merged (rebase) | 5820c4018 |
 | #1485 | M2 | merged (rebase); CI's real-runtime sandbox job passed on head e426fe7e4 (M2 Verify) | e3575514b |
 | #1494 | M3 | merged (rebase). First CI run failed only in "container daemon end to end (docker, linux)": the basic-image build's `curl` of the mise release got HTTP 504 from github.com; one re-run of the failed job passed (fix: D12, M4) | 66e3e18f6 |
+| #1497 | M4 | merged (rebase) | c5ad5973c (basic-image.yml run 40403141964 on it published `97e0b963519fe8d8`) |
+| #1498 | M5 | merged (rebase) | 8e6e592b2 |
+| — | pin (T042, T019b) | pushed on `claude/project-thread-xudko5`; PR due (orchestrator) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; T015 B5 measured value open (T042) |
+| M1 | T001–T015 | full | basic image has pinned mise, C toolchain, pkg-config, python3; home PATH folders exist before first session | #1484 | merged; B5 measured at T042 (growth 159.7 / 154.1 MB) |
 | M2 | T016–T019 | light | FR-007 six X11/Wayland dev libs (provisional A); `pkg-config --libs x11` = `-lX11` | #1485 | merged; FR-007 still provisional A |
 | M3 | T020–T025 | full | one setup at a time on a sandbox daemon (setup-turn S1–S4) | #1494 | merged |
-| M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | — | T026–T030 done; reviews round 1 acted on, full gate exit 0 after the fixes; T032–T033 open (D14); PR due (orchestrator) |
-| M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | — | T034–T040 done on `1439-m5` (stacked on M4 #1497); reviews round 1 acted on, gate exit 0; T041 open (D17); PR due (orchestrator, after #1497 merges) |
+| M4 | T026–T033 | full | fixture mise project builds end to end; repo `mise.toml` components + CONTRIBUTING; this repository's gate exits 0 in a container session on `:dev` (B1), B2, B6; sandbox page building section + own-image example (B3) | #1497 | merged; T031–T033 open, carried to the owner's verification on the published image (D14) |
+| M5 | T034–T041 | full | session installs its own build tools (mise, npm -g, cargo install, uv tool, go install) without root; install defaults on sandbox daemons; installs survive restart, container replacement, pod recreation | #1498 | merged; T041 open, carried to the owner's verification on the published image (D17) |
 
-T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
+T042 (publish and pin, D7; was T034 before amendment D8): done. `BASIC_IMAGE` = `ghcr.io/jaroslawherod/micold-basic:97e0b963519fe8d8@sha256:b2b9bebd…` (basic-image.yml run 40403141964, publish job 121854750538, on main c5ad5973c); guide own-image example `FROM` moved to the same tag. PR due (orchestrator).
 
 ## Decisions
 
@@ -56,6 +59,7 @@ T042 (publish and pin, D7; was T034 before amendment D8) goes to the close unit.
 | D15 | M4 | The guide's own-image example `FROM` is the currently published pin (review B-F3) | No code change: the example is accurate once the new basic image is published and pinned (T042, whose pin PR moves the tag; `guide-own-image.test.sh` enforces it). The PR body says so | orchestrator | review B M4 F3 |
 | D16 | M5 | How T037/A10 install Rust with the minimal profile (review B M5 F1) | Through the global mise config: a `rust = { version = "1.90.0", profile = "minimal" }` tool entry added to `~/.config/mise/config.toml` (under its `[tools]` table or a new one, never overwriting the file, left alone if it already names rust; review A M5 F4), then `mise install rust`, because `mise use` has no profile flag. T037 and quickstart A10 reworded | orchestrator | review B M5 F1, review A M5 F4 |
 | D17 | M5 | T041 (B6 second half, B7) cannot be observed in the cloud session or CI (review B M5 F2) | Waived for the M5 PR, carried like D14 to verification after T042 publishes and pins the image (jaro: cluster, macOS and Windows hosts). T041 stays open in tasks.md; the PR body says AS5.5 on a live cluster is unverified | orchestrator | review B M5 F2 |
+| D18 | pin | T019b/B5 says to write the size into `packaging/basic/README.md`, but `scripts/basic-image-hash.sh` hashes every file under `packaging/basic/`, README included | Size recorded in the ledger (M1 notes) and the pin PR body only: a README edit would change `BASIC_IMAGE_CONTENT_HASH`, publish a new tag of the same image and need another pin | agent-resolved | scripts/basic-image-hash.sh tree_hash |
 
 ## Review rounds
 
@@ -103,7 +107,7 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
   installed; `TARGETARCH=s390x` → `mise: no release for TARGETARCH 's390x'`, exit 1. CI's
   `sandbox-runtime` job builds `:dev` from the tree and runs `sandbox_real_basic_image` /
   `sandbox_real_toolchain_path`.
-- **B5** (size, SC-004: growth ≤ 250 MB compressed per arch): **open (T015)**. Baseline, the current
+- **B5** (size, SC-004: growth ≤ 250 MB compressed per arch): **measured at T042, passes**. Published `97e0b963519fe8d8` (index `sha256:b2b9bebd…`; sum of layer sizes from the GHCR per-arch manifests, anonymous pull token, 2026-10-26): amd64 `sha256:12aa3eea…` 319,843,846 B (15 layers), arm64 `sha256:873586ba…` 313,244,360 B (15 layers). Previous pin (amd64 `sha256:924f8c04…`, arm64 `sha256:9fa49612…`, re-queried the same way): 160,151,050 B / 159,113,415 B. Growth: amd64 +159,692,796 B (159.7 MB), arm64 +154,130,945 B (154.1 MB). Not written to the README (D18). Earlier note: Baseline, the current
   pin `113535f6f5551276@sha256:61d27fed…` (layer sizes from GHCR manifests): 160,151,050 B and
   159,113,415 B. Expected growth ≈ 61 MB (mise, gzip of the x64 binary measured 59.6 MB) + ~75 MB
   toolchain (R6) ≈ 136 MB. Measure from the image basic-image.yml publishes on merge (same manifest

@@ -91,7 +91,7 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 - [x] T017 [US1] In `packaging/basic/Containerfile`, a separate `RUN apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev` layer after the mise step, its comment naming FR-007 and `ci.yml:270-272` (plan D2).
 - [x] T018 [US1] One paragraph in `packaging/basic/README.md` and one sentence in `docs/user-guide/sandboxed-daemon.md` "Which image it runs on": the image carries the X11/Wayland development libraries this repository's tests link.
 - [x] T019 [US1] Recompute `BASIC_IMAGE_CONTENT_HASH` in `crates/micold-core/src/sandbox/basic_image.rs`.
-- [ ] T019b [US1] Re-measure B5 from the image basic-image.yml publishes and update the README size and the ledger (open; done with T042, the pin PR).
+- [x] T019b [US1] Re-measure B5 from the image basic-image.yml publishes and update the README size and the ledger (open; done with T042, the pin PR). Done: growth 159.7 MB (amd64) and 154.1 MB (arm64) compressed, ≤ 250 MB; recorded in the ledger (M1 notes, D18) and the pin PR, not in `packaging/basic/README.md`, which the content hash covers (D18).
 
 ---
 
@@ -174,7 +174,7 @@ _T032 and T033 are carried past the M4 PR (ledger D14): they run after T042 publ
 
 ## Phase 11: Publish and pin (follow-up PR; close unit)
 
-- [ ] T042 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
+- [x] T042 Publish and pin per feature 806 (plan D7): after the last image milestone merges, `basic-image.yml` publishes; a follow-up PR sets `BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs`.
 
 ---
 
