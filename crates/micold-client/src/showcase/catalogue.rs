@@ -1244,6 +1244,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::review::review_bar,
     },
     Entry {
+        module: "material/keycap.rs",
+        component: "Keycap",
+        variants: &[],
+        density: &[],
+        posed: &["single key", "chord"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::review::keycap,
+    },
+    Entry {
         module: "material/side_sheet.rs",
         component: "SideSheet",
         variants: &[],

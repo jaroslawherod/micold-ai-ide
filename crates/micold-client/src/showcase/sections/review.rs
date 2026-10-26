@@ -649,6 +649,26 @@ pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
     )
 }
 
+/// `Keycap` — a single key and a chord, as the shortcut sheet lists them (#1274). Check that the
+/// outline and the label read in both themes.
+pub fn keycap<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "single key",
+                crate::ui::material::Keycap::new("j", roles),
+                roles,
+            ),
+            posed(
+                "chord",
+                crate::ui::material::Keycap::new("Ctrl+Shift+Enter", roles),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `ChangeBar` — a file's added and removed lines (feature 1273, T026): 40 added to 10 removed
 /// (four to one), a large and a small change against the same scale, and a one-line change at the
 /// bar's minimum length. Check that green and red sit side by side, the large bar is the longer,
