@@ -314,8 +314,9 @@ mise_refuses "a README that does not name the pinned version" "$bad"
 cases=$((cases + 1))
 instructions="$(grep -v '^[[:space:]]*#' "$BASIC/Containerfile")"
 missing=""
-# 1439 adds the C toolchain, pkg-config and what installers unpack with (FR-003, FR-017).
-packages="gh curl wget jq ripgrep make python3 gcc g++ libc6-dev pkgconf xz-utils unzip"
+# 1439 adds the C toolchain, pkg-config and what installers unpack with (FR-003, FR-017) and the gate's X11/Wayland
+# development libraries (FR-007).
+packages="gh curl wget jq ripgrep make python3 gcc g++ libc6-dev pkgconf xz-utils unzip libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev"
 for pkg in $packages; do
   re="$(printf '%s' "$pkg" | sed 's/[+.]/\\&/g')"
   printf '%s\n' "$instructions" | grep -Eq "^[[:space:]]+$re([[:space:]]|\\|$)" || missing="$missing $pkg"

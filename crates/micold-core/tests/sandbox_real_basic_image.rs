@@ -54,6 +54,18 @@ const PRESENT: [&str; 14] = [
     "unzip",
 ];
 
+/// The `pkg-config` modules of the X11/Wayland development libraries this repository's gate links
+/// (#1439, FR-007): `libxkbcommon-dev`, `libwayland-dev`, `libx11-dev`, `libxcursor-dev`,
+/// `libxrandr-dev`, `libxi-dev`.
+const DEV_PKG_CONFIG: [&str; 6] = [
+    "xkbcommon",
+    "wayland-client",
+    "x11",
+    "xcursor",
+    "xrandr",
+    "xi",
+];
+
 /// The oldest glibc the image may carry: trixie's, which the daemon's glibc builds need.
 const MIN_GLIBC: (u32, u32) = (2, 41);
 
@@ -210,5 +222,34 @@ fn sandbox_real_basic_image_builds_before_any_setup() {
                 "{name}: no {want:?} line in: {stdout}"
             );
         }
+    }
+}
+
+#[test]
+fn sandbox_real_basic_image_pkg_config_finds_the_gate_libraries() {
+    let script = format!(
+        "set -e; for m in {}; do pkg-config --exists \"$m\" || {{ echo \"missing $m\"; exit 1; }}; done; pkg-config --libs x11",
+        DEV_PKG_CONFIG.join(" ")
+    );
+    let cases: [(&str, &[&str]); 2] = [
+        ("as root", &[]),
+        (
+            "as uid 10001 with --read-only",
+            &["--user", "10001:0", "--read-only"],
+        ),
+    ];
+    for (name, options) in cases {
+        let out = in_image_with(options, &script);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{name}: pkg-config does not find {DEV_PKG_CONFIG:?} in {}: {stdout}{}",
+            image(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            stdout.split_whitespace().any(|flag| flag == "-lX11"),
+            "{name}: `pkg-config --libs x11` does not print -lX11: {stdout}"
+        );
     }
 }

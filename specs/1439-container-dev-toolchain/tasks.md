@@ -87,10 +87,10 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 
 **Independent test**: `sandbox_real_basic_image` checks the six `.pc` files and `-lX11`.
 
-- [ ] T016 [US1] Test first: add `DEV_PKG_CONFIG = ["xkbcommon", "wayland-client", "x11", "xcursor", "xrandr", "xi"]` to `crates/micold-core/tests/sandbox_real_basic_image.rs`; `pkg-config --exists` succeeds for each, `pkg-config --libs x11` prints `-lX11`, also as uid 10001 `--read-only`.
-- [ ] T017 [US1] In `packaging/basic/Containerfile`, a separate `RUN apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev` layer after the mise step, its comment naming FR-007 and `ci.yml:270-272` (plan D2).
-- [ ] T018 [US1] One paragraph in `packaging/basic/README.md` and one sentence in `docs/user-guide/sandboxed-daemon.md` "Which image it runs on": the image carries the X11/Wayland development libraries this repository's tests link.
-- [ ] T019 [US1] Recompute `BASIC_IMAGE_CONTENT_HASH` in `crates/micold-core/src/sandbox/basic_image.rs`; re-measure B5 and update the README size and the ledger.
+- [x] T016 [US1] Test first: add `DEV_PKG_CONFIG = ["xkbcommon", "wayland-client", "x11", "xcursor", "xrandr", "xi"]` to `crates/micold-core/tests/sandbox_real_basic_image.rs`; `pkg-config --exists` succeeds for each, `pkg-config --libs x11` prints `-lX11`, also as uid 10001 `--read-only`.
+- [x] T017 [US1] In `packaging/basic/Containerfile`, a separate `RUN apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev` layer after the mise step, its comment naming FR-007 and `ci.yml:270-272` (plan D2).
+- [x] T018 [US1] One paragraph in `packaging/basic/README.md` and one sentence in `docs/user-guide/sandboxed-daemon.md` "Which image it runs on": the image carries the X11/Wayland development libraries this repository's tests link.
+- [x] T019 [US1] Recompute `BASIC_IMAGE_CONTENT_HASH` in `crates/micold-core/src/sandbox/basic_image.rs`; re-measure B5 and update the README size and the ledger.
 
 ---
 
