@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1463
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
-- **Phase**: plan
-- **Next step**: gate (specs-only), design PR
+- **Phase**: tasks
+- **Next step**: merge design PR #1469, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1469 | Design | open | |
 
 ## Milestones
 
