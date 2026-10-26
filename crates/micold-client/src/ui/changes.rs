@@ -120,6 +120,7 @@ pub fn view<'a>(
     let composer = ComposerEditor {
         content: composer,
         chips: changes::chips_shown(&state.changes),
+        single_keys: state.settings.review_single_keys,
     };
     let title = match &view.entry {
         SessionLocation::Default => crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
@@ -192,7 +193,7 @@ pub fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill);
     if let Some(bar) = review_bar(&state.changes) {
-        tab = tab.push(bar_of(bar, r));
+        tab = tab.push(bar_of(bar, state.settings.review_single_keys, r));
     }
     tab.into()
 }
@@ -258,9 +259,16 @@ fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
 
 /// The review bar (feature 1270, B1–B8): the shown diff's counts, the send error with its ×, and
 /// **Comments**, ⋮ and **Send review (n)** at the trailing edge.
-fn bar_of<'a>(bar: ReviewBarModel, r: Roles) -> Element<'a, Message> {
+fn bar_of<'a>(bar: ReviewBarModel, single_keys: bool, r: Roles) -> Element<'a, Message> {
     let mut element = ReviewBar::new(bar.counts, bar.send, r)
         .drawer_open(bar.drawer_open)
+        // #1274 (FR-013): the send chord does what the button does; it is not a single key, so
+        // the switch never hides it.
+        .send_tooltip(changes::with_key_hint(
+            changes::SEND_TOOLTIP,
+            ReviewAction::Send,
+            single_keys,
+        ))
         .on_send(Message::Changes(Msg::SendPressed))
         .on_overflow(Message::Changes(Msg::OverflowToggled))
         .on_toggle_drawer(Message::Changes(Msg::Drawer(DrawerEvent::Toggle)))
@@ -284,6 +292,8 @@ pub fn overflow_menu<'a>(state: &'a State, r: Roles) -> Option<Surface<'a, Messa
             bar.overflow
                 .discard_drafts
                 .then_some(Msg::DiscardPendingPressed),
+            // #1274 (US5 s4): always offered, the single-key switch on or off (FR-022).
+            Some(Msg::ShortcutsOpened),
         ])
         .map(|(label, msg)| MenuItem {
             message: msg.map(Message::Changes),
@@ -310,8 +320,12 @@ pub fn overflow_menu<'a>(state: &'a State, r: Roles) -> Option<Surface<'a, Messa
     )
 }
 
-/// The overflow menu's items, in order (B7).
-pub const OVERFLOW_ITEMS: [&str; 2] = ["Clear sent", "Discard drafts\u{2026}"];
+/// The overflow menu's items, in order (B7; #1274 US5 s4 adds the shortcut sheet).
+pub const OVERFLOW_ITEMS: [&str; 3] = [
+    "Clear sent",
+    "Discard drafts\u{2026}",
+    crate::ui::shortcut_sheet::TITLE,
+];
 
 /// The comments drawer (feature 1270, D2–D9, T042, T043): a `SideSheet` over the diff area's
 /// right, from under the header to the bar; its Drafts and Replies tabs with their counts, a
@@ -1426,6 +1440,8 @@ fn comment_or_editor<'a>(
 struct ComposerEditor<'a> {
     content: Option<&'a text_editor::Content>,
     chips: bool,
+    /// The window's single-key switch, for the send chord's decision (#1274 FR-022).
+    single_keys: bool,
 }
 
 /// The composer (C2): the text area, the suggestion chips when on (#1275), Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
@@ -1445,7 +1461,9 @@ fn composer_box<'a>(
                 .id(COMPOSER_ID.clone())
                 .placeholder(placeholder)
                 .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))))
-                .track_focus(FieldId::ReviewComposer, None);
+                .track_focus(FieldId::ReviewComposer, None)
+                // #1274 (US4 s4): the send chord sends the saved drafts; the text stays.
+                .on_press(move |press| composer_chord(press, editor.single_keys));
             if has_text {
                 area = area.on_submit(save.clone());
             }
@@ -1465,6 +1483,19 @@ fn composer_box<'a>(
         parts = parts.push(suggestion_chips(r));
     }
     parts.push(actions).into()
+}
+
+/// The review's message for a press in the comment box (#1274 contract K6): the send chord's,
+/// else `None`, which leaves the press to the box.
+fn composer_chord(press: &text_editor::KeyPress, single_keys: bool) -> Option<Message> {
+    let input = crate::ui::composer::key_input(
+        &press.key,
+        &press.physical_key,
+        press.modifiers,
+        press.text.as_deref(),
+    )?;
+    let press = crate::keymap::review_press(&input, false);
+    changes::composer_press(&press, single_keys).map(Message::Changes)
 }
 
 /// *Rename*, *Add test* and *Why?* (#1275, FR-023, FR-027): after the text area in keyboard order,

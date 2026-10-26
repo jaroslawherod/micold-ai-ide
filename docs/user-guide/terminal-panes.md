@@ -93,6 +93,7 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
+| Send the review (only in the **Review** tab, and from its comment box; not taken from a focused terminal) — see [Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard) | Ctrl+Shift+Enter | Cmd+Shift+Enter |
 
 With the **Review** tab shown, every chord acts as it did while the Changes view was open, and a
 session chord (or any session you select) shows that session's terminal and keeps the Review tab in

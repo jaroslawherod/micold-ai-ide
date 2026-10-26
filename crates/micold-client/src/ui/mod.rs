@@ -84,6 +84,7 @@ pub use settings::container_fields::{
 pub mod session_area;
 pub(crate) mod settings_view;
 mod shell;
+pub(crate) mod shortcut_sheet;
 pub mod sidebar;
 pub(crate) mod source_menu;
 pub mod status_bar;

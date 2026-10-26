@@ -717,3 +717,129 @@ fn a_too_large_picture_and_a_failed_read_are_not_attached_and_named() {
         "{notice}"
     );
 }
+
+// --- #1274 T035: the shared text area's save chord and `.on_press` -------------------------------
+
+mod text_area_keys {
+    use iced::advanced::widget::Tree;
+    use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
+    use iced::keyboard::{self, key, Modifiers};
+    use iced::widget::text_editor::Content;
+    use iced::{Element, Event, Point, Rectangle, Size};
+    use micold_material::TextArea;
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum M {
+        Edited,
+        Saved,
+        Claimed(&'static str),
+    }
+
+    const ROOM: Size = Size {
+        width: 400.0,
+        height: 200.0,
+    };
+
+    /// The messages a text area over "note" sends for a click in it, then `presses`, as the
+    /// runtime delivers them; `claim` is its `.on_press`, when set.
+    fn messages(
+        presses: &[Event],
+        claim: Option<fn(&iced::widget::text_editor::KeyPress) -> Option<M>>,
+    ) -> Vec<M> {
+        let content = Content::with_text("note");
+        let renderer = super::support::layout::renderer();
+        let mut area = TextArea::new(&content, micold_core::tokens::LIGHT)
+            .on_action(|_| M::Edited)
+            .on_submit(M::Saved);
+        if let Some(claim) = claim {
+            area = area.on_press(claim);
+        }
+        let mut element: Element<'_, M> = area.into();
+        let mut tree = Tree::new(&element);
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, ROOM),
+        );
+        let inside = Point::new(20.0, 20.0);
+        let click = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        let mut out = Vec::new();
+        for event in std::iter::once(&click).chain(presses) {
+            let mut shell = Shell::new(&mut out);
+            element.as_widget_mut().update(
+                &mut tree,
+                event,
+                Layout::new(&node),
+                mouse::Cursor::Available(inside),
+                &renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(ROOM),
+            );
+        }
+        out.retain(|m| *m != M::Edited);
+        out
+    }
+
+    fn enter(modifiers: Modifiers) -> Event {
+        let key = keyboard::Key::Named(key::Named::Enter);
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: key::Physical::Code(key::Code::Enter),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        })
+    }
+
+    fn letter(c: &str) -> Event {
+        let key = keyboard::Key::Character(c.into());
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: key::Physical::Code(key::Code::KeyX),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: Some(c.into()),
+            repeat: false,
+        })
+    }
+
+    /// The comment box's save chord: Ctrl/Cmd+Enter saves; with Shift also held (the review's send
+    /// chord) it does not (#1274 US4 s4, research R7).
+    #[test]
+    fn primary_enter_saves_and_primary_shift_enter_does_not() {
+        assert_eq!(messages(&[enter(Modifiers::COMMAND)], None), [M::Saved]);
+        assert_eq!(
+            messages(&[enter(Modifiers::COMMAND | Modifiers::SHIFT)], None),
+            Vec::<M>::new()
+        );
+    }
+
+    /// `.on_press(..)` hears each press first: a press it claims sends its message (and never
+    /// the save), one it leaves goes on to the editor's own bindings.
+    #[test]
+    fn on_press_sends_its_message_for_each_press_it_claims() {
+        fn claim(press: &iced::widget::text_editor::KeyPress) -> Option<M> {
+            match press.key.as_ref() {
+                keyboard::Key::Named(key::Named::Enter) if press.modifiers.shift() => {
+                    Some(M::Claimed("chord"))
+                }
+                keyboard::Key::Character("x") => Some(M::Claimed("x")),
+                _ => None,
+            }
+        }
+        let chord = enter(Modifiers::COMMAND | Modifiers::SHIFT);
+        assert_eq!(
+            messages(&[chord.clone(), letter("x"), chord], Some(claim)),
+            [M::Claimed("chord"), M::Claimed("x"), M::Claimed("chord")]
+        );
+        assert_eq!(
+            messages(&[letter("y"), enter(Modifiers::COMMAND)], Some(claim)),
+            [M::Saved],
+            "unclaimed presses keep the editor's keys and the save"
+        );
+    }
+}

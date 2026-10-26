@@ -123,6 +123,12 @@ states at both windows and themes.
 Feature 1274's `review-current-hunk` is `changes-review-marks` after `n`: the selected file's hunk
 header drawn in the primary container's roles as the current hunk, and the diff header's previous /
 next hunk controls (tooltips *Previous change (p)* / *Next change (n)*) beside **Reviewed**.
+Its `review-shortcut-sheet` is `review-current-hunk` after `?`: the shortcut sheet over the Review
+tab, every row of `REVIEW_KEYS` in order with its Linux / Windows label and text; and
+`review-shortcut-sheet-single-keys-off` the same tab with the single-key switch off and the sheet
+opened from the review bar's ⋮ menu, listing only the send and save-comment chords and *Single-key
+shortcuts are off (Settings → Appearance)* (SC-004's off case). The bar's overflow menu
+(`review-overflow`) lists **Keyboard shortcuts** after **Discard drafts…**.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session

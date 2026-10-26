@@ -2065,6 +2065,27 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // --- Feature 1274: the shortcut sheet (T046, FR-012, FR-021, FR-022) --------------------
+        //
+        // `review-current-hunk` with `?` pressed: the sheet over the Review tab listing every
+        // review key; then with the single-key switch off, opened from the overflow menu, listing
+        // only the two chords and the note (SC-004's off case).
+        CoveredState {
+            name: "review-shortcut-sheet",
+            build: review_shortcut_sheet,
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
+        CoveredState {
+            name: "review-shortcut-sheet-single-keys-off",
+            build: review_shortcut_sheet_single_keys_off,
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
+        },
         // --- Feature 1275: the hold in the review view (T024, FR-007, FR-008) ----------------
         //
         // `changes-review-marks` after a background read found `src/b.rs` edited and `src/d.rs`
@@ -3673,6 +3694,28 @@ pub fn review_current_hunk() -> StateUnderTest {
         &mut under.state.changes,
         Msg::ReviewKey(ReviewAction::NextHunk),
     );
+    under
+}
+
+/// [`review_current_hunk`] with the shortcut sheet opened by `?` (#1274 T046, FR-012).
+pub fn review_shortcut_sheet() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    use micold_core::review::keys::ReviewAction;
+    let mut under = review_current_hunk();
+    changes::update(
+        &mut under.state.changes,
+        Msg::ReviewKey(ReviewAction::ToggleSheet),
+    );
+    under
+}
+
+/// [`review_current_hunk`] with the single-key switch off and the sheet opened from the overflow
+/// menu: only the two chords and the note (#1274 T046, FR-022, SC-004).
+pub fn review_shortcut_sheet_single_keys_off() -> StateUnderTest {
+    use micold_client::features::changes::{self, Msg};
+    let mut under = review_current_hunk();
+    under.state.settings.review_single_keys = false;
+    changes::update(&mut under.state.changes, Msg::ShortcutsOpened);
     under
 }
 

@@ -11,6 +11,10 @@
 //! Feature 941 (FR-008): `.max_height(…)` stops the growth at a height, past which the lines scroll
 //! inside the area; `.key_binding(…)` replaces the default keys, for a composer whose Enter sends
 //! and whose Up and Down step through its history.
+//!
+//! #1274 (research R7): `.on_press(…)` sees each press first and may claim it, falling through to
+//! the bindings otherwise, so the review's composer hears the send chord and keeps its own keys;
+//! Ctrl/Cmd+Enter submits only without Shift, which is the send chord's.
 
 use crate::cdk::passthrough::forward_to_child;
 use iced::advanced::text::highlighter::PlainText;
@@ -50,6 +54,7 @@ pub struct TextArea<'a, M> {
     on_action: Option<Box<dyn Fn(Action) -> M + 'a>>,
     on_submit: Option<M>,
     key_binding: Option<KeyBindingFn<'a, M>>,
+    on_press: Option<OnPressFn<'a, M>>,
     max_height: Option<f32>,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     id: Option<iced::widget::Id>,
@@ -57,6 +62,9 @@ pub struct TextArea<'a, M> {
 
 /// What a key press does, as `.key_binding(…)` decides it.
 type KeyBindingFn<'a, M> = Box<dyn Fn(KeyPress) -> Option<Binding<M>> + 'a>;
+
+/// What `.on_press(…)` makes of a press: `Some` claims it.
+type OnPressFn<'a, M> = Box<dyn Fn(&KeyPress) -> Option<M> + 'a>;
 
 impl<'a, M: Clone + 'a> TextArea<'a, M> {
     /// An area over `content`, themed by `roles`; read-only until [`Self::on_action`].
@@ -68,6 +76,7 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
             on_action: None,
             on_submit: None,
             key_binding: None,
+            on_press: None,
             max_height: None,
             on_focus_change: None,
             id: None,
@@ -86,7 +95,7 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
         self
     }
 
-    /// The message Ctrl/Cmd+Enter sends.
+    /// The message Ctrl/Cmd+Enter sends; with Shift also held it does not submit (#1274).
     pub fn on_submit(mut self, message: M) -> Self {
         self.on_submit = Some(message);
         self
@@ -97,6 +106,14 @@ impl<'a, M: Clone + 'a> TextArea<'a, M> {
     /// `Binding::from_key_press(press)` keeps the default for it.
     pub fn key_binding(mut self, f: impl Fn(KeyPress) -> Option<Binding<M>> + 'a) -> Self {
         self.key_binding = Some(Box::new(f));
+        self
+    }
+
+    /// Offer each press made while the area has the keyboard to `f` before any binding: a message
+    /// from it is sent and the press goes no further; `None` leaves the press to the bindings
+    /// (#1274: the review composer's send chord).
+    pub fn on_press(mut self, f: impl Fn(&KeyPress) -> Option<M> + 'a) -> Self {
+        self.on_press = Some(Box::new(f));
         self
     }
 
@@ -129,6 +146,7 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
         let line = super::TypeRole::Body;
         let on_submit = area.on_submit;
         let key_binding = area.key_binding;
+        let on_press = area.on_press;
         let mut editor = TextEditor::<PlainText, M, iced::Theme, iced::Renderer>::new(area.content)
             .placeholder(area.placeholder)
             .size(line.size())
@@ -154,12 +172,21 @@ impl<'a, M: Clone + 'a> From<TextArea<'a, M>> for Element<'a, M> {
                 }
             })
             .key_binding(move |press: KeyPress| {
+                let focused = matches!(press.status, text_editor::Status::Focused { .. });
+                let claimed = on_press
+                    .as_ref()
+                    .filter(|_| focused)
+                    .and_then(|f| f(&press));
+                if let Some(message) = claimed {
+                    return Some(Binding::Custom(message));
+                }
                 if let Some(f) = &key_binding {
                     return f(press);
                 }
                 let submit = matches!(press.key.as_ref(), Key::Named(key::Named::Enter))
                     && press.modifiers.command()
-                    && matches!(press.status, text_editor::Status::Focused { .. });
+                    && !press.modifiers.shift()
+                    && focused;
                 match (&on_submit, submit) {
                     (Some(message), true) => Some(Binding::Custom(message.clone())),
                     _ => Binding::from_key_press(press),
