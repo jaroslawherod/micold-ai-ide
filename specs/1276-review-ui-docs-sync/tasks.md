@@ -126,10 +126,12 @@ passes and fails on a changed `Does` cell; the §A2 grep returns nothing from th
   and `#statuses-and-replies` if T007 moved them (FR-014).
 - [x] T012 [P] [US1] `docs/user-guide/parallel-runs.md` (old lines 84, 91, 92) and `docs/README.md`
   (old line 45): reword *Changes view* to the Review tab per the outline's § *Inbound links*.
-- [ ] T013 [US1] Check US1: quickstart §A2 grep over the five pages returns nothing, and
+- [x] T013 [US1] Check US1: quickstart §A2 grep over the five pages returns nothing, and
   `grep -rn "Changes view" docs/` returns only `docs/development/layout-snapshot.md` (T024) and
   `docs/development/review-redesign.md` (T034); read each `committed\|pull requests` hit; §A3 holds;
   `site/checks/links.sh --sources` passes; the mdBook build passes; `scripts/gate.sh` green.
+  Done 2026-10-26: §A2/§A3 greps clean (review B); lychee and mdbook are not installed here
+  (`links.sh` exits 2), so the link check and mdBook build are left to CI's docs checks.
 
 **Checkpoint**: M1 deliverable observable.
 

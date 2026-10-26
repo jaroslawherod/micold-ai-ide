@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
 - **Phase**: M1 reviews
-- **Next step**: orchestrator runs M1 reviews A and B (+ visual pass if wanted); then full gate and the M1 PR
+- **Next step**: orchestrator re-runs review B (round 2) on the fix diff; then full gate and the M1 PR
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | T001–T012 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); in review. T013 open: lychee and mdbook missing here, CI's docs checks run them |
+| M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | — | T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
 | M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | — | blocked: M1, #1269–#1275, #1128 |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
@@ -64,6 +64,8 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | Plan | 2 | 82562df08a1ccd946a30c12d3291e816b721a0b9:be1df5925e6a15b503e9550140c38e290b0a4075 | CHANGES (sonnet): F2–F6 fixes verified; 1 MAJOR: §A2 `Changes view` grep would still hit settings.md:653/659, worktrees-and-sessions.md:978, agent-tools.md:299 — fixed: every hit listed in outline § Inbound links and plan §3 as reworded to the Review tab |
 | Plan | 3 | b071908fcf6dd7d0c516e4321efa5f0e7d2ee778:c8b7b7954d99ef1165f82f84f9e53ed1e8e5354a | CLEAN, 1 MINOR (sonnet): parallel-runs.md:84,91,92, docs/README.md:45, layout-snapshot.md:105 also say "Changes view" — fixed, prose only: added to outline § Inbound links and plan §3 as reworded to the Review tab |
 | Tasks | 1 | 2172de0899146cb46d218285f19e84958b64c45d:07827f22ca321e5ed423241daeacccd0ba41a4e7 | CLEAN, 3 MINOR (session model, run by orchestrator; speckit-analyze could not run, reviewer checked cross-artifact consistency in its place); all fixed: F1 checklist items 16–17 ticked, notes say clarify answered all three; F2 M1/M2 size kept, decisions 4–5; F3 T005 names the `#[path]` include of marked_table.rs, M1 Verify adds `review_sheet_doc` |
+| M1 A (correctness) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CLEAN, 3 MINOR (high, session model, run by orchestrator); all fixed: F1 `key_cell` builds from `ReviewKey::labels()`, the hand-rolled `chord` removed; F2 § Clearing and discarding says the ⋮ menu also holds **Keyboard shortcuts** → #the-shortcut-sheet (prose only); F3 the row-count assert moved before the zip loop |
+| M1 B (conformance) | 1 | 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866 | CHANGES, 1 MAJOR 2 MINOR (sonnet, run by orchestrator); Verify: cargo tests pass, documentation-set.test.sh pass, links.sh exit 2 (no lychee). All fixed: F1 red-before-green recorded in `tdd/cycle-log.md` (tests run against origin/main's guide in a scratch worktree: 3 failed, then green on the branch); F2 T013 ticked, lychee/mdBook left to CI; F3 parallel-runs.md edited lines rewrapped to 100 columns. Re-review of B due (own MAJOR) |
 
 ## Declined review findings
 
@@ -72,12 +74,11 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 ## Handover
 
-M1 stop (a) done (context over 150k at its end): T001–T012 implemented and pushed on
-`claude/project-thread-kxels1` (ea01a8b9 plus this ledger), full gate green (`scripts/gate.sh`).
-Next: handle review A/B findings from the orchestrator, re-run `scripts/gate.sh` detached (with
-`CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0` — the disk filled at
-~30 GB with debug info), tick T013 (links and mdBook left to CI: no lychee or mdbook here), open
-the draft M1 PR. No PR open yet; no findings received yet.
+M1 part 2: review A (CLEAN, 3 MINOR) and review B (1 MAJOR, 2 MINOR) all fixed and pushed; T013
+ticked; red-before-green in `tdd/cycle-log.md`. Next: orchestrator re-runs review B round 2 on the
+fix diff (`review-snapshot.sh diff 45a596e05a52bb4b0afd4ca059abc1830794ca8f:dabafb47c1799ed4cc34601f1f0777666981f866`);
+then the full gate (`scripts/gate.sh` detached, `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
+CARGO_INCREMENTAL=0`) and the draft M1 PR. No PR open yet.
 
 ## Open escalation
 

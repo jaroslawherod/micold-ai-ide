@@ -9,33 +9,20 @@
 
 mod support;
 
-use micold_core::review::keys::{KeyName, ReviewKey, REVIEW_KEYS};
+use micold_core::review::keys::{ReviewKey, REVIEW_KEYS};
 use support::marked_table::{guide_page, marked_section, markers, rows};
 
 const PAGE: &str = "docs/user-guide/reviewing-changes.md";
 const MARKER: &str = "review-shortcuts";
 const MACOS: &str = " on macOS)";
 
-/// The chord `row` binds with `primary` written as `primary` (`Ctrl` or `Cmd`).
-fn chord(row: &ReviewKey, primary: &str) -> String {
-    let key = match row.key {
-        KeyName::Char(c) => c.to_string(),
-        KeyName::Enter => "Enter".to_owned(),
-    };
-    if !row.mods.primary {
-        return key;
-    }
-    let shift = if row.mods.shift { "Shift+" } else { "" };
-    format!("{primary}+{shift}{key}")
-}
-
-/// The key cell the guide writes for `row`.
+/// The key cell the guide writes for `row`, from the labels the `?` sheet renders.
 fn key_cell(row: &ReviewKey) -> String {
-    let cell = format!("`{}`", chord(row, "Ctrl"));
+    let (linux, mac) = row.labels();
     if row.mods.primary {
-        format!("{cell} (`{}`{MACOS}", chord(row, "Cmd"))
+        format!("`{linux}` (`{mac}`{MACOS}")
     } else {
-        cell
+        format!("`{linux}`")
     }
 }
 
@@ -80,6 +67,7 @@ fn the_guides_table_is_the_review_key_table() {
 #[test]
 fn each_primary_chord_names_its_macos_form() {
     let found = table();
+    assert_eq!(found.len(), REVIEW_KEYS.len(), "one row per review key");
     for (row, (cell, _)) in REVIEW_KEYS.iter().zip(&found) {
         let suffixed = cell.ends_with(MACOS) && cell.contains("(`Cmd+");
         assert_eq!(
@@ -88,5 +76,4 @@ fn each_primary_chord_names_its_macos_form() {
              and no other key does"
         );
     }
-    assert_eq!(found.len(), REVIEW_KEYS.len(), "one row per review key");
 }

@@ -81,15 +81,16 @@ per run, in order:
   the sidebar), Prompt not delivered, Failed or Picked;
 - its changes, as `<files> files +<added> −<removed>`;
 - an `uncommitted` tag when the run's worktree holds changes that are not committed yet;
-- **Open diff**, which opens that run's Review tab. Close the tab and Compare is still there. A run without a worktree has no **Open diff**.
+- **Open diff**, which opens that run's Review tab. Close the tab and Compare is still there. A run
+  without a worktree has no **Open diff**.
 
 A failed run shows its reason in place of the counts.
 
 **Which base the counts use.** They compare the run with the group's base branch, committed and
 uncommitted changes together. When that branch is the repository's default branch, they equal the
-totals the run's Review tab shows with both **Committed** and **Uncommitted** on. For any other base branch they count
-against that branch, so they can differ from the Review tab, which compares with the default
-branch.
+totals the run's Review tab shows with both **Committed** and **Uncommitted** on. For any other
+base branch they count against that branch, so they can differ from the Review tab, which compares
+with the default branch.
 
 **Live refresh.** While Compare is open, a change in a run's worktree updates that run's counts
 within about 2 seconds, and its status follows its session. Closing Compare (or selecting a
