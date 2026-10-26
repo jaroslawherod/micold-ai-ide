@@ -70,7 +70,22 @@ Clarify round 1: 1 question (FR-007) → provisional option A, applied to FR-003
 
 ## Handover
 
-None.
+Amendment unit (D8) hit the 150k context cap after committing the amendment (1efe85bfd, pushed to
+`claude/project-thread-xudko5`, branch based on main 26ac5a75e).
+
+- **Done**: spec (US5, FR-005 widened, FR-014–FR-018, SC-006, edge cases, cited persistence
+  assumption, Clarifications amendment), plan (Summary, D1 step 1, D6, D8, D9, map rows, M5),
+  research R12–R15, new contracts/sandbox-install-env.md, basic-image-build B1, data-model,
+  quickstart A8–A10/B6/B7, tasks Phase 10 = M5 (T034–T041), publish renumbered T042, ledger D8, M5
+  row, #1444 row, three pending review rows (snapshot 1c9a4d24…:26ac5a75e).
+- **Next**: the orchestrator dispatches the three reviews (spec, plan, tasks rubrics, scoped to the
+  amendment; scopes in the pending rows); act on verdicts per review-rounds.md; then the specs-only
+  gate `scripts/check-criteria-observables.sh specs/1439-container-dev-toolchain/spec.md`; write the
+  PR title ("#1439: Container sessions cannot build the project: basic image has no mise / compiler
+  toolchain / python3 and no way to install them") and body (ends `Refs #1439`) to the scratchpad;
+  commit, `git push -u origin claude/project-thread-xudko5 --force-with-lease`. Never `gh pr`/`gh
+  issue`.
+- **Open findings**: none yet.
 
 ## Open escalation
 
