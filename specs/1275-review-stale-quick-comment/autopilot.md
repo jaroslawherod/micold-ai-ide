@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-1l3w9s
 - **Started**: 2026-10-24
 - **Phase**: review M6
-- **Next step**: orchestrator: M6 review A round 2 (sonnet) on the fix range `git diff e34c97a0c 93100cd9a` (F1–F4), then push `1275-m6` and open the M6 PR (body: session scratchpad `pr-body-1275-m6.md`; fill in Round 2).
+- **Next step**: orchestrator: merge the M6 PR on green CI, then the close unit (T047, close the spec, close #1275).
 - **Red CI 1 (#1424)**: `layout_snapshot` failed only in `changes-review-held`: main added a toolbar element (new child 0/0/0/0/0/0/3, 360x32 at x 578.6; the two 40px buttons shift to /4 and /5) under our state. Reproduced locally after `git rebase origin/main`; re-recorded, fixture diff confined to that state (15+/6-). No other code change.
 
 ## Pull requests
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T015–T025 | full | Review tab holds list+diff; notice, dots, apply; docs, snapshot, visual pass | #1424 | merged |
 | M4 | T026–T034 | full | drag over line numbers opens composer; docs, visual pass | | reviews done (A round 2 clean); gate green; PR open |
 | M5 | T035–T043 | full | suggestion chips + Settings switch; docs, snapshot, visual pass | | rebased on main after M4 merged; gate green; reviews A and B clean; PR open |
-| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | local `1275-m6` on origin/main fdba23093 (M5 in it): code 5202ca075, docs e34c97a0c, review A r1 fixes 93100cd9a; gate green on 93100cd9a; A r1 CHANGES fixed, B r1 CLEAN; A r2 pending |
+| M6 | T044–T046 | full | reviewed file with held change shows unseen + dot; docs, visual pass | | reviews done (A round 2 clean); gate green; PR open |
 
 ## Decisions
 
@@ -71,6 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 B (conformance, sonnet) | 1 | `39f44d65c..1b7c4273f` | CHANGES: 3 MINOR bookkeeping, fixed by the orchestrator: snapshot line count 523 → 560; stale SHAs after the rebase; ledger row and PR body review status, and the Verify line's bin target (`--bin micold-ai-ide`). |
 | M6 A (code-review high) | 1 | `e34c97a0c` (code 5202ca075) | CHANGES (run by the orchestrator): 1 MAJOR, 3 MINOR, all verified and fixed by the unit in 93100cd9a, red test first. F1 MAJOR: while the selected file is held and marked the mark control reads unpressed and a press marks the latest id under the old diff, again on every press, and cannot unmark → block the control while the selected file is held (`MarkBlock::Held`, select it again to see its latest change). F2 MINOR: `reviewed_paths` (Unreviewed first) judged without the hold → uses `held_file_review` like the glyphs. F3 MINOR: `held_file_review` always set `changed_since` → it is `file_review`'s (tooltip "and since you marked it reviewed" only when the mark is on an older id). F4 MINOR: the test's "hold writes nothing" check guarded a path that never wrote; the post-apply check missed a Batch. |
 | M6 B (conformance, sonnet) | 1 | `e34c97a0c` | CLEAN; 2 MINOR bookkeeping (fixed by the unit): ledger Next step, M6 row and entry cited pre-rebase SHAs and "reviews pending"; PR body *Local gate* cited them and *Agent review* pending. |
+| M6 A (code-review, sonnet) | 2 | fix diff `e34c97a0c..6a97f53e3` | CLEAN: F1–F4 verified fixed, no regression. 1 nit left as is: a held selected file the latest read no longer lists keeps the mark control blocked until the notice is applied (consistent with FR-014). |
 | M4 visual pass (review A F1 fix) | 2 | M4 tree + round 1 fixes, debug build | PASS (unit, cloud Xvfb, light and dark): XTest press+release back to back on a number picks the line, no drag left (moving over numbers and a plain click change nothing, pixel-identical), a full drag still opens the box. Evidence `visual-pass/m4-c-*`. |
 
 Plan: written 2026-10-24 (plan.md, research.md R1–R11, data-model.md, contracts/core-api.md,
