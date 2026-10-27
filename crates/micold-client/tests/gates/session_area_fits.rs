@@ -1493,9 +1493,21 @@ fn a_tiled_pane_still_has_its_switch_row() {
     };
     near("the switch row's width", row.width, 487.0);
     near("the switch row's height", row.height, 48.0);
-    near("the switch row's x offset from the pane area", row.x - panes.x, 0.0);
-    near("the switch row's y offset from the pane area", row.y - panes.y, 34.2);
-    near("the button's inset from the row's top (XS)", button.y - row.y, 4.0);
+    near(
+        "the switch row's x offset from the pane area",
+        row.x - panes.x,
+        0.0,
+    );
+    near(
+        "the switch row's y offset from the pane area",
+        row.y - panes.y,
+        34.2,
+    );
+    near(
+        "the button's inset from the row's top (XS)",
+        button.y - row.y,
+        4.0,
+    );
     near(
         "the button's inset from the row's right (SM)",
         row.x + row.width - (button.x + button.width),
