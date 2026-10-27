@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001, T003–T008 | full | One-line header | #1487 | merged |
 | M2 | T002, T009–T018 | full | Switch control in strip | #1505 | merged |
-| M3 | T021–T028 | full | Gates pinned against the surviving mutants of tdd/verification.md | | open |
+| M3 | T021–T028 | full | Gates pinned against the surviving mutants of tdd/verification.md | #1547 | open |
 
 ## Decisions
 
