@@ -104,8 +104,8 @@ controls inside the session area at the smallest window and at 1280×800, in tha
 panes; `gates/strip_controls_hold_their_size.rs` and `gates/strip_controls_anchor_the_trailing_edge.rs`
 hold every member at its own width and New session and the split buttons at the strip's right end.
 Feature 1269's three review states replace feature 1126's `session-area-changes-open`:
-`session-area-review-shown` draws the header and the strip, with the Review tab shown and marked,
-over the Changes view; `session-area-review-hidden` the panes under a strip whose Review tab
+`session-area-review-shown` draws the header, then the strip with the Review tab selected and
+marked, then the review's own header, body and bar, with nothing under them; `session-area-review-hidden` the panes under a strip whose Review tab
 carries a badge of 3 drafts and the changed mark; `session-area-review-sessionless` a sessionless
 worktree's review under its own header and a strip of its Review tab alone. The Review tab is
 anchored as `session.strip.tabs.review`, the Changes button as `session.header.changes`, and the
@@ -128,7 +128,37 @@ tab, every row of `REVIEW_KEYS` in order with its Linux / Windows label and text
 `review-shortcut-sheet-single-keys-off` the same tab with the single-key switch off and the sheet
 opened from the review bar's ⋮ menu, listing only the send and save-comment chords and *Single-key
 shortcuts are off (Settings → Appearance)* (SC-004's off case). The bar's overflow menu
-(`review-overflow`) lists **Keyboard shortcuts** after **Discard drafts…**.
+(`overflow`) lists **Keyboard shortcuts** after **Discard drafts…**.
+
+Feature 1276 holds the finished review tab: every review state of its contract
+(`specs/1276-review-ui-docs-sync/contracts/review-states.md`) is a covered state, a slice's own name
+standing, each anchored on what it introduces. `session-area-review-shown` stands for the contract's
+`session-area-changes-open` (`session.header`, `session.header.changes`, `session.strip`,
+`session.strip.tabs.review`, and `review.bar`, so that a change to the bar's padding fails naming
+the bar in the first state it moves); `review-tab-beside-sessions` is it with three drafts, the shown tab's
+badge *Review · 3* anchored as `review.tab.badge`; `session-area-review-hidden` adds the hidden tab's
+`review.tab.badge` and its changed mark, `review.tab.changed`. `review-bar` anchors the bar's ⋮ as
+`review.bar.overflow` and the status bar under it as `status_bar`; `drawer-drafts` and
+`drawer-replies` the drawer's **Drafts** / **Replies** tabs as `review.drawer.tabs` and the diff pane
+under the drawer as `review.diff`; `review-source-open` the source control's floated list as
+`review.source.list` (an `over` record); `changes-tree-filter` the file column's list as
+`review.tree`, with its filter box and sort chips as `review.tree.filter` and `review.tree.sort`;
+`changes-review-marks` the *n of m reviewed* row as `review.progress` and the first file row's ✓ as
+`review.tree.row.mark`; `review-shortcut-sheet` the sheet's dialog as `review.sheet`;
+`changes-review-held` the *2 files changed since you looked* notice as `review.stale`. Four states
+are new: `review-tab-beside-sessions`, above; `review-drag-composer`, `changes-review-marks` after
+a drag over two line numbers, the composer under the range anchored as `review.composer`;
+`review-empty`, nothing changed, the drawer open with no drafts and no replies and **Send review**
+disabled (`review.tree`, `review.bar`, `review.bar.send`, `review.drawer`); and
+`review-two-worktrees`, `fix-a-bug`'s Review tab shown while `feat-short`'s keeps `src/a.rs`
+selected (`session.strip.tabs.review`, `review.tree`).
+`gates/review_tab_fits.rs` lays every one of them out at the smallest window and at 1280×800 in both
+themes: no text past its clip, no node past its parent beyond `gates/containment.rs`'s exemptions,
+the review bar at or above the status bar and both inside the window, an open drawer inside the diff
+pane without narrowing it, the status bar's own invariants and the session area's header and strip
+checks. At the smallest window it also allows the overhangs its `SMALLEST_WINDOW` list names: three
+scrolling viewports, and the review tab squeezed at 640×480, filed as #1474. Each entry names the
+states it holds in, and must keep firing in each of them.
 
 Feature 1124 added the bottom status bar's states, each anchored on the bar (`status_bar`) and on
 the body's top edge (`shell.body`): `status-bar-steady` (connected, sandbox running, a session
@@ -325,6 +355,12 @@ fix for the bug it was written against.
   list and child list stay index-aligned without it occupying space. The exemption follows from the
   invariant's own premise — a node that is nowhere paints on nothing — but it does buy silence about
   content pushed off-screen *accidentally*, which is a real defect class and a different one.
+- **`SMALLEST_WINDOW` in `gates/review_tab_fits.rs` — sixteen entries, at 640×480 only.** Each
+  names the states, the parent, the edge and the layer it allows. Three are scrolling (the tree's
+  rows, the diff's lines and the source control's list past their viewports); thirteen are the
+  review tab squeezed at the smallest window (the progress slot, the wrapped sort chips and diff
+  header controls, the diff's loading placeholder, a narrow drawer's header and rows), filed as
+  #1474. Fixing one means dropping its state from the entry, and the entry once none is left.
 - **Two geometric differences between the schemes.** Structure is identical everywhere; two boxes
   differ in size because a string differs in length between schemes. Each carries its reason and
   each must keep firing.
@@ -363,6 +399,11 @@ most likely subject is font loading, which the original measurements found domin
 depends on the host's installed faces rather than on this repository. So treat both figures as
 observations rather than as a model: measure your own state, and if it comes out near 2s rather than
 near nothing, that is informative and worth recording here.
+
+Feature 1276's four states (`review-tab-beside-sessions`, `review-drag-composer`, `review-empty`,
+`review-two-worktrees`) cost about 0.7 s warm in `layout_snapshot`, 11.2 s with them against 10.5 s
+without (the mean of three runs each, `review_tab_fits` skipped, 2026-10-26); `review_tab_fits`
+itself runs in about 1.8 s.
 
 One caveat the tenth state exposed. A clip-revealing wrapper on a screen many states render (the
 sidebar's filter accordion, until feature 1125) used to need a containment entry per state. The

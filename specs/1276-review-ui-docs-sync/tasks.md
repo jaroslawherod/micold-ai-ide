@@ -148,16 +148,16 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
 
 ### Tests for US2 (write first)
 
-- [ ] T014 [US2] Run `cargo test -p micold-client --test layout_snapshot` on the rebased tree and
+- [x] T014 [US2] Run `cargo test -p micold-client --test layout_snapshot` on the rebased tree and
   confirm it passes as merged (each slice re-recorded its own states; plan §2 step 1). A failure here
   is a blocker's defect: file it, do not re-record over it.
-- [ ] T015 [US2] Register in `crates/micold-client/tests/support/covered_states.rs` every state of
+- [x] T015 [US2] Register in `crates/micold-client/tests/support/covered_states.rs` every state of
   [contracts/review-states.md](contracts/review-states.md) no slice registered (a slice's own name for
   a state stands), reusing the slices' state builders (`grep -n` each slice's builder first), with the
   anchors the contract lists and an anchor on each conditional child; `review-source-open` as a press
   with `over` records. Run `layout_snapshot`: it fails `the_layout_matches_the_committed_fixture`
   naming the new states.
-- [ ] T016 [US2] Redefine `session-area-changes-open` by changing `changes_open_under_header()` in
+- [x] T016 [US2] Redefine `session-area-changes-open` by changing `changes_open_under_header()` in
   `crates/micold-client/tests/support/covered_states.rs` in place (Review tab selected in the strip,
   header above, review body; research R5), and update its users:
   `crates/micold-client/tests/gates/session_area_fits.rs::the_header_stands_over_the_open_changes_view`
@@ -165,13 +165,13 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
   `crates/micold-client/tests/session_area_stability.rs` (`rendered_presses`,
   `pressing_changes_with_the_view_open_on_the_shown_location_closes_it`, whose expected message becomes
   R0's for **Changes** pressed while the Review tab is shown). If R0 already changed them, follow R0.
-- [ ] T017 [US2] Extract the status bar's invariants (28 dp high, flush with the window's bottom edge,
+- [x] T017 [US2] Extract the status bar's invariants (28 dp high, flush with the window's bottom edge,
   full width) from
   `crates/micold-client/tests/gates/status_bar_fits.rs::at_the_smallest_window_the_bars_texts_stay_in_their_boxes`
   into a `pub(crate) fn` that test calls; make `assert_fits_under`, `assert_order`, `header_parts` and
   `strip_parts` in `crates/micold-client/tests/gates/session_area_fits.rs` `pub(crate)`; where the
   Review tab changes the strip's child count, take it from `STRIP_MEMBERS`. Existing gates stay green.
-- [ ] T018 [US2] Write `crates/micold-client/tests/gates/review_tab_fits.rs`, registered in
+- [x] T018 [US2] Write `crates/micold-client/tests/gates/review_tab_fits.rs`, registered in
   `crates/micold-client/tests/layout_snapshot.rs` with a `#[path]` module as `session_area_fits` is:
   for every `review-*` state and `session-area-changes-open`, both themes, at `MIN_WINDOW_SIZE` and
   1280×800 — no `text_overflows`, no `escapes` beyond declared exemptions, `review.bar` bottom ≤
@@ -183,23 +183,23 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
 
 ### Implementation for US2
 
-- [ ] T019 [US2] Re-record the fixture once:
+- [x] T019 [US2] Re-record the fixture once:
   `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot`, updating
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` (FR-005); then `layout_snapshot` and
   `layout_text_overflow` pass without the variable, and `layout_snapshot.rs`'s
   coverage-narrowing test (that file's own T016, not this list's) passes.
-- [ ] T020 [US2] Write the fixture diff's explanation, line group by line group (review-tab states;
+- [x] T020 [US2] Write the fixture diff's explanation, line group by line group (review-tab states;
   any other group, e.g. #1128 Overview drift, with its reason), into the M2 PR body draft in the
   scratchpad (FR-005, US2 sc.1).
-- [ ] T021 [US2] Prove the gate is live: +1 px on the review bar's padding in the review bar's style
+- [x] T021 [US2] Prove the gate is live: +1 px on the review bar's padding in the review bar's style
   (the file R1 merged) fails `layout_snapshot` naming `review.bar`; revert; record the output line in
   the PR body draft (US2 Independent Test).
-- [ ] T022 [US2] Time each new covered state warm as `docs/development/layout-snapshot.md` § *Adding a
+- [x] T022 [US2] Time each new covered state warm as `docs/development/layout-snapshot.md` § *Adding a
   covered state* asks.
-- [ ] T023 [US2] `docs/development/layout-snapshot.md` § *What is covered*: one paragraph in the
+- [x] T023 [US2] `docs/development/layout-snapshot.md` § *What is covered*: one paragraph in the
   feature-paragraph form (features 1124–1126) naming each review state of the contract and what it
   anchors, and the warm timing from T022 in § *Adding a covered state* (FR-008).
-- [ ] T024 [US2] Same file: replace the `session-area-changes-open` sentences (old line ~105, "header
+- [x] T024 [US2] Same file: replace the `session-area-changes-open` sentences (old line ~105, "header
   over the open Changes view, with no strip") with what T016 records (US2 sc.3); `grep -n "Changes view"
   docs/development/layout-snapshot.md` returns nothing.
 - [ ] T025 [US2] `scripts/gate.sh` green; CI green on Linux, macOS and Windows (US2 sc.2).

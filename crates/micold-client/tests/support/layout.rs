@@ -1155,6 +1155,17 @@ pub fn painted_text_settled_at<'a, M: 'a>(
     painted(element, renderer, true, Before::Settled, window)
 }
 
+/// As [`text_overflows`], in a window of `window`, entrances settled first — and handing back the
+/// layout boxes of both layers beside the overflows, for a gate that asks both questions of one
+/// pass at more than one window (feature 1276, `gates/review_tab_fits.rs`).
+pub fn text_overflows_settled_at<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    window: Size,
+) -> (Vec<Overflow>, Vec<LayoutRecord>) {
+    painted(element, renderer, false, Before::Settled, window)
+}
+
 /// As [`painted_text_settled`], but first turning the mouse wheel a long way down with the cursor
 /// at `at` — far enough to reach the end of any list the window can hold.
 ///

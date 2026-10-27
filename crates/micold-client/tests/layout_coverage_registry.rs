@@ -192,10 +192,10 @@ fn constructs(line: &str, kind: &str) -> bool {
             .next_back()
             .is_some_and(|c| c.is_alphanumeric() || c == '_');
 
-        let defines = before
-            .split_whitespace()
-            .next_back()
-            .is_some_and(|word| DEFINING.contains(&word));
+        // `-> &'static X {` returns a reference to one: a type, then the function's body.
+        let defines = before.split_whitespace().next_back().is_some_and(|word| {
+            DEFINING.contains(&word) || (word.starts_with('&') && !word.ends_with('['))
+        });
 
         if !part_of_longer_name && !defines {
             return true;
@@ -297,6 +297,10 @@ fn defining_or_naming_the_type_is_not_registering_a_state() {
     assert!(!constructs("pub struct CoveredState {", "CoveredState"));
     assert!(!constructs("impl Debug for CoveredState {", "CoveredState"));
     assert!(!constructs("    covered: &CoveredState,", "CoveredState"));
+    assert!(!constructs(
+        "fn covered(name: &str) -> &'static CoveredState {",
+        "CoveredState"
+    ));
     assert!(!constructs(
         "    states: &'static [CoveredState],",
         "CoveredState"
