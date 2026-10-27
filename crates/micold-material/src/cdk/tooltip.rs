@@ -94,6 +94,8 @@ pub struct Tooltip<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     /// Asked of the trigger's tree before the panel opens: `None` opens it whenever the wait is
     /// over.
     open_if: Option<fn(&Tree) -> bool>,
+    /// While true the panel stays closed, however the pointer rests on the trigger.
+    suppressed: bool,
 }
 
 impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
@@ -111,7 +113,15 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
             wait: Wait::Hover,
             subject: None,
             open_if: None,
+            suppressed: false,
         }
+    }
+
+    /// Keep the panel closed while `suppressed` holds, as a trigger that opens a list of its own
+    /// does while the list is open (#1539). The trigger keeps its place in the tree.
+    pub fn suppressed(mut self, suppressed: bool) -> Self {
+        self.suppressed = suppressed;
+        self
     }
 
     /// Open only while `predicate` holds of the trigger's widget tree: a label cut with "…" reads
@@ -392,7 +402,8 @@ where
             let state = tree.state.downcast_ref::<State>();
             (state.open, state.pointer)
         };
-        let open = open && self.open_if.is_none_or(|holds| holds(&tree.children[0]));
+        let open =
+            open && !self.suppressed && self.open_if.is_none_or(|holds| holds(&tree.children[0]));
         let mut children = tree.children.iter_mut();
 
         let content = self.content.as_widget_mut().overlay(
