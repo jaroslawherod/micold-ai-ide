@@ -34,12 +34,12 @@ message }`:
 | terminal kind | `OperationError` (`Refused`, "Effort is changed from the structured view; the choice is used at the next launch") | yes | — |
 | not running | `OperationOk` | yes | `EffortChanged` |
 | running, idle | after the CLI's answer (≤ the 10 s control bound): success → `OperationOk`; refusal, no answer or the process ended → `OperationError` with the reason (FR-005) | on success only | `EffortChanged` on success |
-| running, busy | `OperationOk` at once | yes (put back if the CLI refuses at the turn's end) | at the turn's end: `EffortChanged`, or `EffortRefused` with the reason |
+| running, busy | `OperationOk` at once (from M3; M2 refuses a busy pick, no window sends one before M4) | yes (put back if the CLI refuses at the turn's end) | at the turn's end: `EffortChanged`, or `EffortRefused` with the reason |
 
 The new choice reaches every window in the next catalog snapshot (`SessionSummary.effort`), within
 1 s (SC-002).
 
-## Changed behaviour (M2)
+## Changed behaviour (M5)
 
 `SessionUserMessage` whose text `classify_draft` reads as `Effort(_)` → `OperationError` ("/effort
 is handled by the app"), nothing written to the CLI, nothing queued (FR-007, FR-008, SC-003). The

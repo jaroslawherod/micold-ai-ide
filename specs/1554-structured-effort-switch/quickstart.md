@@ -28,8 +28,11 @@ Prerequisite: a logged-in `claude` on `PATH`; the dev client against a scratch p
    (US2).
 5. Type `/eff`: one `/effort` row under **In this app** (FR-009).
 6. Restart the session, then **Open in terminal**: the terminal Claude Code's `/effort` (no
-   argument) reports `max`; **Open in structured view**: `Effort: max` (US3).
-7. Guide: `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and effort* describes
-   the picker, `/effort`, the levels and the terminal caveat (FR-014).
+   argument) reports the level picked last (`low` after step 3, `max` once step 4 has run);
+   **Open in structured view**: the same level on the trigger (US3).
+7. Guide: `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and effort*:
+   a. (M4) describes the picker, the levels, the unsupported-model wording and the terminal
+      caveat;
+   b. (M5) describes `/effort` (FR-014).
 
 Entities: [data-model.md](data-model.md). Contracts: [contracts/](contracts/).

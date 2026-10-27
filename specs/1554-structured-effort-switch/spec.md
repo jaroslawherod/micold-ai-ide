@@ -52,6 +52,10 @@ follow-up and does not change anything else #943 specified.
   app: Claude Code uses its own default, as configured for that location).
 - **Supported levels**: the levels the CLI reports the session model accepts. The CLI reports, per
   model, whether it supports effort at all and which levels (see Assumptions).
+- **Offered levels**: the levels the picker lists after Default: the supported levels when the
+  CLI reports some, otherwise all five.
+- **Effective level**: the level a session actually runs with: the effort choice when the session
+  model supports it (or support is unknown), otherwise none, so Claude Code's default applies.
 - **Effort picker**: the control in the structured view that shows the effort choice and changes
   it.
 - **Structured session**, **terminal session**, **turn**, **event history**: as feature 938
@@ -133,8 +137,8 @@ the fourth shows the accepted levels; none of them reaches the CLI as a user mes
    no user message reaches the CLI.
 2. **Given** the composer, **When** the user sends `/effort` with no argument, **Then** nothing
    reaches the CLI and the effort picker opens.
-3. **Given** the composer, **When** the user sends `/effort default`, **Then** it is treated as
-   picking Default.
+3. **Given** the composer, **When** the user sends `/effort default` or `/effort auto`, **Then**
+   it is treated as picking Default.
 4. **Given** the composer, **When** the user sends `/effort` with an argument that is not a level
    or `default`, **Then** nothing reaches the CLI, the draft is kept, and the view says which
    values are accepted.
@@ -198,6 +202,9 @@ check the terminal launch uses `xhigh`; switch back and check again.
 - **Sandboxed sessions** (CLI in a container): picking and keeping the level works the same.
 - **Effort changed inside the terminal** (the user ran `/effort` in the terminal screen): the app
   cannot see it; on switching back, the session's effort choice is used, and the guide says so.
+- **Terminal session** (a pick reaching the daemon for a session currently in the terminal kind,
+  e.g. from a window not yet updated): the choice is stored and used at the next launch, and the
+  answer says so (as a model pick does, feature 943); nothing is sent to the running terminal.
 - **Sessions of other AI CLIs**: they show no effort picker, and a request to set one is refused
   with a reason.
 - **Failure**: a change the CLI refuses, or one that cannot be delivered because the CLI process
@@ -227,7 +234,7 @@ check the terminal launch uses `xhigh`; switch back and check again.
 
 - **FR-004**: A change MUST apply from the next turn, MUST keep the conversation, MUST NOT interrupt
   or alter a turn in progress, and MUST be shown in every window viewing the session within 1
-  second of taking effect, with a marker in the transcript at that point.
+  second of the app accepting it, with a marker in the transcript where it starts to apply.
 - **FR-005**: A change the CLI refuses, or one that cannot be delivered, MUST leave the effort
   choice unchanged and show the reason; the session MUST keep running.
 - **FR-006**: Picking Default MUST return the session to Claude Code's own default effort from the
@@ -237,8 +244,9 @@ check the terminal launch uses `xhigh`; switch back and check again.
 
 - **FR-007**: Sending `/effort <level>` (any letter case), or `/effort default` or `/effort auto`
   (both meaning Default), MUST be treated as picking that value, and MUST send nothing to the CLI as a user message; sending `/effort` with no
-  argument MUST open the picker; any other argument MUST be refused in the view, naming the accepted
-  values, with the draft kept.
+  argument MUST open the picker; any other argument, including a level outside those the picker
+  offers for the session model, MUST be refused in the view, naming the accepted values, with the
+  draft kept.
 - **FR-008**: `/effort` MUST be acted on at once whether the session is idle or busy, never queued.
 - **FR-009**: The command palette MUST list `/effort` once, as an app-handled command, with a
   description, whether or not the CLI also reports it.
@@ -303,8 +311,8 @@ check the terminal launch uses `xhigh`; switch back and check again.
 
 - **SC-001**: In 100% of test runs, a level picked for an idle or busy session applies to the next
   turn and not to a turn in progress, without the conversation being lost.
-- **SC-002**: Every window viewing the session shows a new effort choice within 1 second of it
-  taking effect.
+- **SC-002**: Every window viewing the session shows a new effort choice within 1 second of the
+  app accepting it.
 - **SC-003**: In 100% of test runs, `/effort` in any of its forms (a level, `default`, no argument,
   a wrong argument) never reaches the CLI as a user message.
 - **SC-004**: Across restarts, a daemon restart and a structured → terminal → structured switch, the
@@ -318,7 +326,8 @@ check the terminal launch uses `xhigh`; switch back and check again.
 - The CLI's structured mode accepts a request to change the effort level of a running session for
   later turns, or the `/effort` command itself, without ending the process; if it does not, the
   plan applies a change by relaunching the session, resuming the same conversation, once it is
-  idle, which still meets FR-004. The plan settles which from a recording.
+  idle, which still meets FR-004. Settled by the plan (research P-1, R1): a running CLI takes the
+  change as a control request and keeps its process.
 - The CLI accepts an effort level at launch, in both kinds, so a stored choice can be applied when
   a session starts (FR-010).
 - The CLI reports, per model, whether effort is supported and which levels (recorded in
