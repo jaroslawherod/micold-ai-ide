@@ -6,6 +6,9 @@
 
 **Status**: Draft
 
+**Bugfix**: 2026-10-27 — [BUG-1500](bugs/BUG-1500.md) The AI agent in a container session is told
+what persists and how to install tools (FR-019, Story 5 scenario 7, edge cases).
+
 **Input**: User description: "Container sessions cannot build the project: basic image has no mise /
 compiler toolchain / python3 and no way to install them (issue #1439). An AI session in a container
 daemon on the basic image cannot build or verify this repository, and it cannot install what it
@@ -213,6 +216,12 @@ downloaded again.
 6. **Given** a session that needs a system package (for example `apt-get install libpq-dev`),
    **When** it tries to install it, **Then** it fails for lack of root, as today, and the sandbox
    page tells the user to add it through an own image built `FROM` the basic image.
+7. **Given** a container or Kubernetes daemon (BUG-1500), **When** a Claude Code or Codex session
+   starts on it, **Then** the agent's user-level instructions in the sandbox home name a guide that
+   says it runs as a non-root user without `sudo`, what persists (the home and the project folders)
+   and what is not (`/tmp` and everything else), and which install commands keep a tool on
+   `PATH`, and any text the user had in those files is unchanged. This holds on a Kubernetes daemon
+   that shares the Claude Code sign-in too, whose pod mounts that file inside `~/.claude`.
 
 ---
 
@@ -262,6 +271,18 @@ downloaded again.
   so the offered copy still runs, and the daemon reports only offered CLIs.
 - **A daemon whose network posture blocks outbound connections**: a session there cannot download
   anything, so it cannot install tools itself; tools already in the home keep working.
+- **The agent's instruction files already hold the user's own text** (BUG-1500): it is kept as it
+  is; only the marked block of FR-019 is added (at the end) or replaced in place. A file whose block
+  is already current is not rewritten.
+- **An instruction file cannot be written** (for example a read-only file, or a `~/.claude` that a
+  runtime already created as root to mount a sign-in file into, on a Kubernetes volume made before
+  this fix): the daemon logs it and starts as usual; the other files are still written. A new
+  Kubernetes pod creates the folders its credential files are mounted into (`~/.claude`) as the
+  image user before the daemon's container starts, so the runtime never makes them root-owned.
+- **A session started with its own `CLAUDE_CONFIG_DIR`** (an environment-include script or the
+  project's environment sets it for sessions but not for the daemon): that session reads
+  `$CLAUDE_CONFIG_DIR/CLAUDE.md`, which gets no block. The daemon writes only where its own
+  environment points.
 - **Hosts whose container runtime shares folders through a VM** (macOS, Windows): the sandbox home
   is a host folder shared into the container; mise's shims and rustup's proxies (links and
   executables) work there as on Linux.
@@ -344,6 +365,25 @@ downloaded again.
   The sandbox page MUST say that a session can install user-level tools itself and that they
   persist in the sandbox home, name the defaults of FR-015, and say that system packages come from
   the basic image or an own image built `FROM` it.
+- **FR-019** (BUG-1500): The agent MUST be told too. At each start, a container or Kubernetes daemon
+  (the daemons that get FR-015's defaults; host and remote daemons write nothing) MUST write a
+  short guide for the AI agent to `$HOME/.micold/AGENTS.md` in the sandbox home: it runs in a
+  container as a non-root user with no `sudo` or `apt`; the home and the project folders (with
+  their worktrees) persist, while `/tmp`, `/var/tmp` and everything else can be lost at any
+  restart and are lost when the container is replaced (an image update) or the pod recreated; how to install a tool so it persists and is
+  on `PATH` (`mise use -g`, or a project `mise.toml` and `mise install`; `npm install -g`, `cargo
+  install`, `uv tool install`, `go install`, `pip install --user` under a mise or uv Python) and
+  the defaults of FR-015; that a tool linked against an image library may need reinstalling after
+  an image update; that an old mise Python needs a newer patch release; and that a system library
+  needs the image or an own image, so it asks the user. The daemon MUST also put a marked block
+  that summarises the guide and names its path into the user-level instructions of each of
+  these CLIs it offers (a daemon offering no CLI writes nothing): Claude Code's
+  (`$CLAUDE_CONFIG_DIR/CLAUDE.md`, else `~/.claude/CLAUDE.md`) and Codex's (`$CODEX_HOME/AGENTS.md`,
+  else `~/.codex/AGENTS.md`), keeping everything outside the block; a newer daemon replaces an
+  older block. A write that fails MUST be logged and MUST NOT stop the daemon. The sandbox page
+  MUST say that the daemon writes these files. So that `~/.claude` is the image user's on a
+  Kubernetes daemon that shares the Claude Code sign-in, the pod MUST create the home folders its
+  credential files are mounted into, as the image user, before the daemon's container starts.
 
 **Documentation (Story 4)**
 

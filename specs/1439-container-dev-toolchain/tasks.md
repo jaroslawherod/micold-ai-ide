@@ -2,6 +2,8 @@
 
 **Input**: Design documents from `specs/1439-container-dev-toolchain/`
 
+**Bugfix**: 2026-10-27 — [BUG-1500](bugs/BUG-1500.md) Updated from bugfix patch (Phase 10b, T043–T048).
+
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
 [data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md)
 
@@ -171,6 +173,28 @@ _B6 (T033's Kubernetes part, T041's first half) is automated in CI's kind job (`
 - [x] T039 [US5] `crates/micold-daemon/src/state.rs` `with_sandbox_path`: after ordering `PATH`, append `install_env_defaults` to `resolved.vars`, using the function's existing `var` closure for `HOME` and for `is_set` (plan D8). No protocol change; host and remote daemons unchanged.
 - [x] T040 [US5] `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home": the paragraph of plan D6 (M5): a session installs user-level tools itself, the three defaults and that the environment's own value wins, installs persist across restarts, image updates and pod recreation for the life of the daemon, a tool built against an image library (a `cargo install` linking OpenSSL, an npm native module) may need reinstalling after an image update, session installs are not serialised (rerun a failed one), system packages come from the image or an own image (FR-018).
 - [ ] T041 Quickstart B6 second half (AS5.5: a session's installs survive the pod's recreation) and B7 (macOS and Windows hosts), recorded in the ledger. B6 second half: `kube_real_toolchain` in the kind job (D19), **passed** (PR #1515, run 40471592663); T041 stays open for B7 only.
+
+---
+
+## Phase 10b: The agent is told (BUG-1500; FR-019, Story 5 scenario 7)
+
+**Goal**: on a container or Kubernetes daemon, each start writes `~/.micold/AGENTS.md` and a marked block in Claude Code's and Codex's user-level instructions; user text kept; host and remote daemons write nothing; a failed write is logged, not fatal (plan D10).
+
+**Independent test**: `cargo test -p micold-core agent_guide`, `cargo test -p micold-daemon agent_guide`, and `sandbox_real_toolchain_path` in the real-runtime job.
+
+### Tests (write first; every unit test name contains `agent_guide`)
+
+- [x] T043 [P] [US5] `crates/micold-core/src/sandbox/agent_guide.rs` tests module: `merge_block` into an empty file gives the block alone; into a file with user text appends it after one blank line, the user text unchanged; into a file with an older block replaces only that block, text before and after unchanged; applied twice equals applied once; a begin marker without an end marker counts as no block (a new block is appended, nothing else changes); `guide_files` honours non-empty `CLAUDE_CONFIG_DIR` and `CODEX_HOME` and falls back to `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, an empty value counting as unset; the guide names `sudo`, `/tmp`, `mise use -g`, `npm install -g`, `cargo install`, `uv tool install`, `go install`, `pip install --user` and the three FR-015 variables; the block names the guide's path.
+- [x] T044 [P] [US5] `crates/micold-daemon/src/state.rs` tests module, beside the `install_env` tests: a daemon with its own `offered.json` writes the guide and merges the block into both instruction files under the given `HOME`, keeping a pre-existing user line; a second call leaves each file byte-identical; a daemon without one writes nothing; an instruction file that cannot be written (its folder is a file) does not stop the others and does not panic.
+- [x] T049 [P] [US5] `crates/micold-core/src/kube/manifest.rs` tests module: a pod allowing the Claude Code sign-in has an init container `home-dirs` on the pod's image, with the main container's security context and resources, the `data` volume at `DATA_MOUNT`, and command `["mkdir", "-p", "/data/home/.claude"]` (plus `/data/home` for a mount directly in the home, such as `.gitconfig`); a pod allowing no credential that mounts under the home has no init container; the pod stamp is unchanged by it.
+- [x] T045 [US5] `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`: after the session opens, `~/.micold/AGENTS.md` exists and `~/.claude/CLAUDE.md` contains the begin marker, read through a split-literal tag (wrapped-echo pitfall). Must compile under `--features sandbox-real-runtime`.
+
+### Implementation
+
+- [x] T046 [US5] `crates/micold-core/src/sandbox/agent_guide.rs` (+ `pub mod` in `sandbox/mod.rs`): `GUIDE`, markers, `pointer_block`, `merge_block`, `guide_files` per plan D10.
+- [x] T047 [US5] `crates/micold-daemon/src/state.rs` `write_agent_guide` and its call in `crates/micold-daemon/src/server.rs` startup per plan D10.
+- [x] T050 [US5] `crates/micold-core/src/kube/manifest.rs` `pod`: the `home-dirs` init container per plan D10.
+- [x] T048 [US5] `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home": a paragraph saying the daemon writes `~/.micold/AGENTS.md` and the marked block in `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` at each start, keeps the rest of those files, and that host and remote daemons write nothing (FR-019).
 
 ---
 

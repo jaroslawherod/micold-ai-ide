@@ -5,6 +5,7 @@
 //!
 //! And #1439 (FR-011, US3): the basic image's entrypoint creates both home folders before the first
 //! session, and a `mise` the user put in `~/.local/bin` wins over the image's `/usr/local/bin/mise`.
+//! The daemon also writes the agent's guide and its block in `~/.claude/CLAUDE.md` (FR-019).
 //!
 //! Behind `sandbox-real-runtime` (Principle VI: the default suite needs nothing installed).
 //!
@@ -119,6 +120,30 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
     assert!(
         folders.lines().any(|l| l.trim() == "FOLDERS-EXIST"),
         "{local_bin} or {shims} does not exist in a new sandbox: {folders}"
+    );
+
+    // #1439 FR-019 (BUG-1500): the daemon wrote the agent's guide at startup and pointed Claude
+    // Code's user-level instructions at it. The tag is split so the wrapped echo of the typed
+    // command never carries it joined.
+    // The block goes only into an offered CLI's file.
+    let begin = micold_core::sandbox::agent_guide::BEGIN;
+    let block_check: String = [
+        (micold_core::session::AiCli::ClaudeCode, ".claude/CLAUDE.md"),
+        (micold_core::session::AiCli::Codex, ".codex/AGENTS.md"),
+    ]
+    .iter()
+    .filter(|(cli, _)| offered.clis.iter().any(|c| c.cli == *cli))
+    .map(|(_, file)| format!("grep -qF '{begin}' '{sandbox_home}/{file}' && "))
+    .collect();
+    let guide = term
+        .run(&format!(
+            "test -s '{sandbox_home}/.micold/AGENTS.md' && {block_check}echo GUIDE\"-WRITTEN\""
+        ))
+        .await;
+    assert!(
+        guide.lines().any(|l| l.trim() == "GUIDE-WRITTEN"),
+        "no agent guide in {sandbox_home}/.micold/AGENTS.md or no marked block in an offered \
+         CLI's instruction file: {guide}"
     );
 
     // Edge case "A `mise` already in `~/.local/bin`": the user's copy comes first on PATH, ahead of

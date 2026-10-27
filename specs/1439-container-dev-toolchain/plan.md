@@ -4,6 +4,8 @@
 
 **Input**: Feature specification from `specs/1439-container-dev-toolchain/spec.md`
 
+**Bugfix**: 2026-10-27 — [BUG-1500](bugs/BUG-1500.md) Updated from bugfix patch (D10, FR-019).
+
 ## Summary
 
 The basic image gains what a session needs to install and build a project's toolchain without root:
@@ -219,6 +221,48 @@ and adopts the claim (one object created); no new unit test. The real-runtime `s
 checks a session's installs after a restart, a replacement for another image tag, and a replacement
 onto the no-outbound posture, run offline.
 
+### D10. The agent is told (FR-019; BUG-1500)
+
+- `crates/micold-core/src/sandbox/agent_guide.rs` (new, pure, no filesystem, like
+  `toolchain_path`): the guide text (`GUIDE`), the begin and end markers, `pointer_block(guide)`
+  (the short summary naming the guide's path), `merge_block(existing, block)` (replace the first
+  marked block in place, else append it after one blank line; text outside it byte for byte the
+  same; applying it twice gives the same result) and `guide_files(home, var)` (the guide at
+  `home/.micold/AGENTS.md`, the instruction files `$CLAUDE_CONFIG_DIR/CLAUDE.md` else
+  `home/.claude/CLAUDE.md`, and `$CODEX_HOME/AGENTS.md` else `home/.codex/AGENTS.md`; an empty
+  variable counts as unset, as in `install_env_defaults`). The guide's wording follows the sandbox
+  page's "Tools installed in the sandbox's home"; it names no path that differs per daemon except
+  through `~`, so it is the same text on a container and a Kubernetes daemon.
+- `crates/micold-daemon/src/state.rs`: `write_agent_guide(own)` behind the same `offered_clis()`
+  predicate as `with_sandbox_env` (container and Kubernetes; not `in_sandbox`, which is false on
+  Kubernetes), narrowed to an offer listing at least one CLI (an empty offer has no agent, and is
+  what a host daemon can see through the mounted state directory); only an offered CLI's file gets
+  the block, and none when the guide could not be written; files are written in place (mode,
+  owner and links kept) and not at all when unchanged; `HOME` and the two variables from `own` (the daemon's environment, which is the
+  sandbox's). It writes the guide, then merges the block into each instruction file, creating
+  missing folders; a file whose content would not change is not written. Each failure is a
+  `tracing::warn!` and the next file is still tried. Host and remote daemons write nothing.
+- `crates/micold-daemon/src/server.rs`: called once at startup, off the async runtime, right after
+  `set_ai_clis_dir`/`set_in_sandbox` (provisioning wrote `offered.json` in its `InstallAiClis` step,
+  before `Start`), so every daemon start refreshes it.
+- Limit: the daemon reads `CLAUDE_CONFIG_DIR` and `CODEX_HOME` from its own environment. A session
+  whose launch environment sets another `CLAUDE_CONFIG_DIR` (`session_dir_var`, `state.rs:860`)
+  reads a `CLAUDE.md` that gets no block; accepted and documented (spec edge case), not written at
+  session start.
+- `crates/micold-core/src/kube/manifest.rs` `pod`: a Kubernetes credential mount is a Secret
+  `subPath` inside the home volume (`kube/credentials.rs`, Claude's at
+  `/data/home/.claude/.credentials.json`); the runtime creates a missing mount-point folder as root,
+  so the daemon could not write `~/.claude/CLAUDE.md`. When any allowed credential mounts under
+  `POD_HOME`, the pod gets an init container `home-dirs` on the same image, with the main
+  container's security context and resources and the `data` volume, running `mkdir -p` (no shell)
+  on each such mount's parent folder. Init containers finish before the main container's mounts
+  are made, so the folders are the image user's (`runAsUser` of the pod). Not in the pod stamp, so
+  no running pod drifts; a pod recreated later gets it. A `~/.claude` that an older pod already made
+  root-owned stays so (the init container is not root) and the write is logged (spec edge case).
+- Real-runtime: `sandbox_real_toolchain_path` also checks that `~/.micold/AGENTS.md` exists and
+  `~/.claude/CLAUDE.md` holds the begin marker (tagged output, the wrapped-echo pitfall).
+- Docs: one paragraph in the sandbox page's "Tools installed in the sandbox's home" (D6).
+
 ### D7. Publish and pin
 
 Per feature 806: the PR that changes `packaging/basic/` updates `BASIC_IMAGE_CONTENT_HASH`;
@@ -253,6 +297,9 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | FR-016 | D9; research R12 | kube unit test A9; real-runtime A10 (restart, image-tag replacement, offline posture replacement); quickstart B6 (pod recreated), B7 |
 | FR-017 | D1 step 1 | real-runtime A5 (`xz`, `unzip` in `PRESENT`) |
 | FR-018 | D6 (M5 paragraph) | real-runtime A10 (`apt-get install` fails); docs CI |
+| FR-019 | D10 | core unit tests (`agent_guide`: merge, idempotence, user text kept, targets); daemon unit test (sandbox writes, host writes nothing, failure not fatal); real-runtime A6 (`sandbox_real_toolchain_path`: marker present) |
+| Edge: instruction files hold the user's text; a file cannot be written | D10 | core and daemon unit tests of FR-019; kube manifest unit test (`home-dirs` init container) |
+| Edge: a session with its own `CLAUDE_CONFIG_DIR` | D10 (limit) | none; documented |
 | Edge: a session installs while setup or another session installs | not serialised; rerun | user guide (D6 M5 paragraph) |
 | Edge: the environment already names an install location | contract I2 | unit tests A8 |
 | Edge: an image update changes a system library | documented (R12) | user guide (D6 M5 paragraph: reinstall such a tool) |
@@ -316,6 +363,7 @@ crates/micold-daemon/tests/sandbox_real_mise_setup.rs      # NEW: Story 1 end to
 crates/micold-daemon/tests/fixtures/mise-c-crate/          # NEW: fixture project (mise.toml, Cargo.toml, build.rs, hello.c)
 crates/micold-daemon/tests/sandbox_real_self_install.rs    # NEW: Story 5 (A10)
 crates/micold-core/src/sandbox/toolchain_path.rs           # install_env_defaults (D8)
+crates/micold-core/src/sandbox/agent_guide.rs              # guide text, marked block, merge (D10)
 scripts/tests/basic-image-hash.test.sh   # mise cases (B4)
 scripts/tests/basic-entrypoint.test.sh   # home folder cases (B5)
 scripts/tests/mise-toolchain.test.sh     # NEW: FR-008

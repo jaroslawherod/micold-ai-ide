@@ -151,9 +151,12 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
             "a git identity, with no credential opt-in (FR-004a)",
             format!("cat {host_home}/.gitconfig"),
         ),
+        // The sandbox home sits at the host home's path, and the daemon writes its agent guide
+        // block to the sandbox's own `~/.claude/CLAUDE.md` (FR-019): anything else there would
+        // have come from the user's directory.
         (
             "the AI CLI's auth directory, with no credential opt-in (FR-004a)",
-            format!("ls {host_home}/.claude"),
+            format!("ls -A {host_home}/.claude | grep -vx CLAUDE.md"),
         ),
     ] {
         let out = term.run(&cmd).await;

@@ -204,6 +204,13 @@ pub async fn run() -> io::Result<()> {
         state
             .set_in_sandbox(dir == std::path::Path::new(micold_core::sandbox::STATE_CONTAINER_DIR));
         state.set_pasted_data_dir(dir);
+        // #1439 FR-019: on an app-owned sandbox, tell the AI agent what persists and how to install
+        // tools, refreshed at every start. A failure is logged inside, never fatal.
+        let guiding = Arc::clone(&state);
+        let _ = tokio::task::spawn_blocking(move || {
+            guiding.write_agent_guide(|name| std::env::var_os(name))
+        })
+        .await;
     }
     let sweeping = Arc::clone(&state);
     let _ = tokio::task::spawn_blocking(move || sweeping.sweep_pasted_images()).await;

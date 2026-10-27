@@ -391,8 +391,20 @@ setup command; when two collide and one fails, run it again. System packages (`a
 stay out of reach: they come from the image, or from
 [an image of your own](#building-projects-in-the-basic-image).
 
+The AI agent is told all this too. Each time a container or Kubernetes daemon starts, it writes a
+short guide for the agent to `~/.micold/AGENTS.md` in the sandbox's home: that it runs without root
+or `sudo`, that only the home and the project folders persist, and which of the commands above
+install a tool so it stays on the `PATH`. For each of these CLIs it offers, it also adds a block that sums
+the guide up and points at it to Claude Code's `~/.claude/CLAUDE.md` (`$CLAUDE_CONFIG_DIR/CLAUDE.md` when the daemon's
+environment sets it) and Codex's `~/.codex/AGENTS.md` (`$CODEX_HOME/AGENTS.md`). The block sits
+between `<!-- micold:sandbox-guide begin -->` and `<!-- micold:sandbox-guide end -->`; anything you
+write outside it is kept, and a newer daemon replaces only the block. The guide file itself is
+rewritten at every start, so keep your own instructions in the other two files. A Kubernetes pod
+creates the home folders its shared sign-in files are mounted into before the daemon starts, so the
+daemon can write beside them.
+
 The host daemon and daemons on remote machines over SSH keep the `PATH` and the environment they
-had: none of this applies to them.
+had: none of this applies to them, and they write none of these files.
 
 ## Credentials
 
