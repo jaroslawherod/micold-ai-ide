@@ -48,8 +48,12 @@ pub enum Step {
 
 /// What `msg` resolves to in `app` (contracts/ui.md U3). A move sets `moving`.
 pub fn resolve(app: &mut crate::app::State, msg: Msg) -> Step {
-    let Msg::Pressed { dir, source: _ } = msg;
+    let Msg::Pressed { dir, source } = msg;
     if crate::features::navigation::blocked(app) {
+        return Step::None;
+    }
+    // FR-009: a focused terminal or text field keeps the keys (a side button still acts, FR-008).
+    if source == Source::Key && (app.terminal_focused() || app.live_focused_field().is_some()) {
         return Step::None;
     }
     let shown = app.shown_place();

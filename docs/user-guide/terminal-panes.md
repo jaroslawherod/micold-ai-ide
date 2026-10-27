@@ -91,7 +91,10 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 The mouse's side buttons go back and forward through the places you have been (sessions, Review
 tabs, the Overview and Compare) from anywhere in the window, over a terminal too; the terminal
 program never receives them. Places that are gone, such as a closed session or a removed worktree,
-are skipped.
+are skipped. Back and Forward's keys are the exception to "the app takes every chord": a focused
+text field or terminal keeps them (shells and fields use Alt+←/→ to move by word; on macOS
+Option+←/→ stays word movement and is not Back or Forward). Hold the key to keep stepping: a move
+made from the keyboard leaves the keyboard with the app, so click the terminal to type in it.
 
 | Action | Linux / Windows | macOS |
 |---|---|---|
@@ -105,8 +108,8 @@ are skipped.
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
-| Back | Mouse back button | Mouse back button |
-| Forward | Mouse forward button | Mouse forward button |
+| Back | Alt+← or the mouse back button | Cmd+[ or the mouse back button |
+| Forward | Alt+→ or the mouse forward button | Cmd+] or the mouse forward button |
 | Send the review (only in the **Review** tab, and from its comment box; not taken from a focused terminal) — see [Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard) | Ctrl+Shift+Enter | Cmd+Shift+Enter |
 
 While the **Review** tab is shown no terminal has the keyboard, so the pane chords, which act on

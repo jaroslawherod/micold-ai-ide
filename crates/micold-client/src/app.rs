@@ -2086,8 +2086,13 @@ impl State {
         crate::features::history::resolve(self, msg)
     }
 
-    /// A move's follow-ups have run (feature 1465, research R2): observation is back on.
-    pub fn finish_history_move(&mut self) {
+    /// A move's follow-ups have run (feature 1465, research R2): observation is back on. A move made
+    /// by a key leaves the keyboard with the app (US2 AS4, FR-012): the next press or repeat steps
+    /// again instead of reaching the terminal the move showed.
+    pub fn finish_history_move(&mut self, source: crate::features::history::Source) {
+        if source == crate::features::history::Source::Key && self.terminal_focused() {
+            self.release_terminal();
+        }
         let shown = self.shown_place();
         crate::features::history::finish(&mut self.history, shown);
     }
