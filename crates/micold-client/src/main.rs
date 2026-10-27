@@ -1287,6 +1287,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 1185: a filter message; a first focus or Retry asks Jira for the filter's choices,
         // and a change of the chosen filters reloads the listing with them.
         Message::WorktreeForm(FormMsg::JiraFilter(msg)) => shell::jira_filters::on_filter(app, msg),
+        // Feature 1400: a GitHub filter message; a filter change reloads the listing with the
+        // filter, a first focus of a label field or Retry asks for the labels.
+        Message::WorktreeForm(FormMsg::GithubFilter(msg)) => {
+            shell::github_filter::on_filter(app, msg)
+        }
         Message::Session(SessionMsg::StartRequested {
             location,
             provider,

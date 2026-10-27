@@ -168,11 +168,12 @@ fn is_settings_page_scroll(state: &str, escape: &lay::Escape) -> bool {
 /// Like [`SETTINGS_PAGE_CONTENT`] it holds only for what a scrolling block does: in an
 /// `add-worktree-dialog-issue-details…` state, past the **bottom** edge of the block's `Scrollable`
 /// ([`ISSUE_DETAILS_VIEWPORT`]). `the_recorded_details_overflow_is_the_loaded_state` shows the other
-/// details states come clean.
-const ISSUE_DETAILS_CONTENT: &[&str] = &["0/8/0/0/0/3/2/0"];
+/// details states come clean. The picker's fourth child since feature 1400, whose row of the
+/// GitHub **Filters** button heads the picker.
+const ISSUE_DETAILS_CONTENT: &[&str] = &["0/8/0/0/0/3/3/0"];
 
 /// The `Scrollable` the details scroll in: the parent of [`ISSUE_DETAILS_CONTENT`].
-const ISSUE_DETAILS_VIEWPORT: &str = "0/8/0/0/0/3/2";
+const ISSUE_DETAILS_VIEWPORT: &str = "0/8/0/0/0/3/3";
 
 /// Whether `escape`, in the covered state `state`, is the picked issue's details outgrowing their
 /// viewport downwards, which is the only overhang [`ISSUE_DETAILS_CONTENT`] allows.

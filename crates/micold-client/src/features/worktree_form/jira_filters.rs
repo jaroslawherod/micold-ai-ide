@@ -42,7 +42,7 @@ pub enum ChoiceLoad<T> {
 impl<T> ChoiceLoad<T> {
     /// Put the choices in flight under `seq`: a first request when never asked (`retry` false), a
     /// Retry when failed (`retry` true). `true` when they were put in flight.
-    fn start(&mut self, seq: u64, retry: bool) -> bool {
+    pub(super) fn start(&mut self, seq: u64, retry: bool) -> bool {
         let due = match self {
             ChoiceLoad::NotRequested => !retry,
             ChoiceLoad::Failed { .. } => retry,
@@ -55,7 +55,7 @@ impl<T> ChoiceLoad<T> {
     }
 
     /// Take the answer to the request awaited under `seq`; `false` (unchanged) for another seq.
-    fn answer(&mut self, seq: u64, result: Result<Vec<T>, IssueLoadError>) -> bool {
+    pub(super) fn answer(&mut self, seq: u64, result: Result<Vec<T>, IssueLoadError>) -> bool {
         if !matches!(self, ChoiceLoad::Loading { seq: awaited } if *awaited == seq) {
             return false;
         }
@@ -67,7 +67,7 @@ impl<T> ChoiceLoad<T> {
     }
 
     /// The seq the choices are awaited under, while in flight.
-    fn awaited(&self) -> Option<u64> {
+    pub(super) fn awaited(&self) -> Option<u64> {
         match self {
             ChoiceLoad::Loading { seq } => Some(*seq),
             _ => None,

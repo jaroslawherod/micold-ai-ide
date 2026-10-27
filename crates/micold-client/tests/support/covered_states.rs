@@ -1364,6 +1364,22 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || StateUnderTest::new(super::jira_picker::jira_filters_panel(with_project())),
             anchors: ADD_WORKTREE_ANCHORS,
         },
+        // Feature 1400: `in-progress` and `blocked` excluded over a capped GitHub list: the Filters
+        // button, Clear filters, the active line and the cap caption, the tallest GitHub form.
+        CoveredState {
+            name: "add-worktree-dialog-github-filtered",
+            build: || StateUnderTest::new(super::github_picker::github_filtered(with_project())),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 1400: the GitHub Filters panel open, six labels excluded: their chips wrap
+        // inside the panel and the panel fits the window.
+        CoveredState {
+            name: "add-worktree-dialog-github-filters-panel",
+            build: || {
+                StateUnderTest::new(super::github_picker::github_filters_panel(with_project()))
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         // Rows, a long title, and the cap caption: more open issues than the load holds.
         CoveredState {
             name: "add-worktree-dialog-issue-loaded",

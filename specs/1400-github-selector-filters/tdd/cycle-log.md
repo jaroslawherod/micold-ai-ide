@@ -29,3 +29,31 @@ red runs were reconstructed after the fact (M1 review B round 1 F1), two ways, o
 | review A F1 | `LabelName::parse` refuses `\` (`foo\`, `a\b`), so `label:"foo\"` can never leave its quote open | test written first, run before the fix: `a_label_name_is_any_non_empty_name_without_a_quote_backslash_or_control_character` FAILED `left: Some(<redacted>) right: None` | `github_filter` 48 passed |
 | review A F2 | a scope qualifier after any character but a letter, digit, `_` or `-` is refused (`(a)repo:other/x`, `"x"repo:other/x`, `label:a,repo:other/x`); `myrepo:x`, `my_repo:x`, `my-repo:x` stay `Ok` | test first: `a_scope_qualifier_is_refused` FAILED (`(a)repo:other/x` parsed) | same |
 | review A F3 | `FORBIDDEN` and `INSUFFICIENT_SCOPES` beside a refusal are `Load(graphql_error_of(..))`, not `Rejected`; through `GhCli` a SAML refusal is `NoAccess` | test first: `a_refused_access_or_missing_scope_is_a_load_failure_not_a_rejection` FAILED `left: Rejected(2 message(s)) right: Load(Other("Resource protected by SAML"))`; `a_saml_refused_search_is_no_access_not_a_rejection` FAILED `left: Rejected(1 message(s)) right: Load(NoAccess)` | `github_filter` 48, `github_gh_cli` 18 passed |
+
+## M2 (T019–T030)
+
+M2's tests were written before the code they drive, in this order: `tests/github_filter_state.rs`
+(T020–T022) first, then the reducer (T023), the shell (T025, T024's scan beside it), the view
+(T026, T028) and its gates (T027). The cloud unit could not afford a build per step (one client
+build is minutes behind the shared build lock), so the first run came after the code; red is shown
+the way M1's was reconstructed, by mutants, all applied together on the finished code and run with
+`cargo test -p micold-client --test github_filter_state --test
+issues_are_requested_only_on_named_events --no-fail-fast`: 10 of 22 `github_filter_state` tests
+and 2 of 4 named-events tests FAILED, each mutant failing its own task's tests. Green: the same
+command, 22 and 4 passed; `jira_filters_picker` 52 passed unchanged (T019, T026).
+
+| Task | Behaviour | Red evidence (mutant → failing test) | Green |
+|---|---|---|---|
+| T019 | `ChoiceLoad::{start, answer, awaited}` `pub(super)` | refactor, no behaviour change | `jira_filters_picker` 52 passed |
+| T020 (red), T023, T025 | FR-009 default filter → 034's listing, no scoped search | `GithubSelector`'s filter kept when default (`.filter(\|_\| true)`): `the_default_filter_loads_034s_listing` FAILED (`left: Some((1, GithubRepo { owner: "o", name: "r" }, ScopedSearch("<redacted>"))) right: None`), `no_match_with_a_filter_says_the_filter_is_active`, `an_empty_filtered_list_says_no_issue_matches_the_filters` FAILED | `github_filter_state` 22 passed |
+| T020 (red), T023 | FR-008 removing a label / Clear filters reloads | a removed chip reloads nothing (`reload = false`): `removing_a_value_and_clear_filters` FAILED (`called Option::unwrap() on a None value`: no filtered listing awaited) | same |
+| T021 (red), T023 | FR-005 labels asked once, on the first focus | every opening asks again (`labels = Loading { seq }; true`): `the_first_focus_of_a_label_field_loads_the_labels_once` FAILED (`left: Some(3) right: None`) | same |
+| T021 (red), T023 | US1 AS1 choices less the labels chosen in either list | chosen labels still offered: `the_choices_are_alphabetical_less_the_chosen`, `a_label_chosen_in_one_list_is_offered_in_neither` FAILED | same |
+| T022 (red), T023 | FR-018 `Rejected(m)` → `IssueList::Rejected(m)` | a rejection read as `Failed`: `a_rejection_and_a_load_failure` FAILED | same |
+| T022 (red), T023 | FR-023 statement names the filter | 034's statement kept (`if false`): `the_statement_names_the_filter_while_one_is_active` FAILED | same |
+| T022 (red), T023 | FR-016 no search beyond without a word | any typed text searches (`searchable = true \|\| …`): `an_incomplete_filtered_list_searches_beyond_it_with_the_filter` FAILED (`left: Some(4) right: None`: a search pending for `""`) | same |
+| T024 (red), T025 | requests only from the named events; the filter files log nothing | `start_issue_search`'s filtered branch removed: `every_allowlist_entry_still_matches` FAILED; an `eprintln!("{search:?}")` in `shell/github_filter.rs`: `the_github_filter_files_log_and_notify_nothing` FAILED | named-events 4 passed |
+| T026 | panel frame `filters_panel` shared by the Jira and GitHub buttons | refactor; `jira_filters_fit` unchanged | `layout_snapshot` 166 passed |
+| T027 (red), T028 | Filters button, Clear filters, active line, six chips wrapping, footer reachable | first run on the first layout (button beside the search, as selector-ui §1): `issue_rows_show_all_text` ×2, `picker_row_tooltip_clears_its_row` ×10 and `containment` FAILED, the search's list narrowed by the button wrapped long titles past the eight-row list; and `github_filters_fit` FAILED (search placeholder not painted). Moved the button to the row heading the picker (ledger M2 note) | `layout_snapshot` 166 passed after re-recording `layout_snapshot.txt` (GitHub issue states + 2 new) |
+| T029 | `examples/fake_gh.rs` | dev-only tool, no test; built by `clippy --all-targets` | — |
+| T030 | user guide "Filtering GitHub issues" | docs | — |

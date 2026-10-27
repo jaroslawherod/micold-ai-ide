@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | pending (orchestrator opens) | reviews clean, full gate green at 522f25800 (`scripts/gate.sh`, 593 test results ok, scripts 0 failures), pushed |
-| M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | planned |
+| M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | implemented on branch `1400-m2` (stacked on M1 522f25800), scoped gate green; review round 1 (A, B, visual pass) pending |
 | M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
 | M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
 | M5 | T040–T049 | full | Advanced GitHub search query with its errors (US3, US4) | | planned |
@@ -57,6 +57,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - `speckit-analyze` is a forked skill not loadable in this cloud unit; checked inline instead: FR-001–FR-027, SC-001–SC-007 and quickstart §B B1–B18 each map to a task and a milestone; no CRITICAL or HIGH found.
 - checklists/requirements.md: ticked "No [NEEDS CLARIFICATION] markers remain" (spec has none; D1 is a recorded provisional clarification, tracked in Open escalation). For the tasks reviewer to confirm.
 
+- M2: **Deviation from selector-ui §1 (layout)**: the GitHub **Filters** button trails the row heading the picker (with **Clear filters** before it while a filter is chosen), not the search's row. Beside the search it narrowed the search's floating list by 168 px, and long issue titles then wrapped into rows the eight-row list could not show whole: `issue_rows_show_all_text` (×2) and `picker_row_tooltip_clears_its_row` failed. That row is where M5's Basic/Advanced switch leads (selector-ui §1), so M5 adds no row for it. Cost: the GitHub issue form is one row taller than 034's with the default filter (SC-007 "looks as before" holds for the list, the statement and what is sent, not the height; any Filters control changes the look). `github_filters_fit` asserts the placement taken; `layout_snapshot.txt` re-recorded (only the 9 GitHub issue states changed, plus the 2 new). For review B / the visual pass to weigh.
+- M2: **Spec tension, Edge "Same label" vs quickstart B4**: T021/selector-ui §2 offer the labels "minus labels already chosen in either list", so `blocked` excluded is not offered in Include; B4's "try to include `blocked` → it moves" is reached by removing the chip, then picking it in Include. `BasicFilters::include_label` still moves a label (core, M1). For review B.
+- M2: the empty filtered list shows "No issue matches these filters." with **Clear filters** in the row above (not a second button beside the text), as 1185 does for Jira. `GithubSelector::from_remembered` returns the default until M3 (T034). A rejected search *beyond* the list (rare: the basic filter was accepted for the listing) shows in 034's search-failure line ("GitHub did not accept the search query. <messages>") with Retry; only a rejected listing takes the list's place (FR-018).
+- M2: the reducer tests stand in for the shell (`serve` runs `load_filtered` / `load_label_choices` / `search_filtered` on a `FakeIssueSource` exactly as `shell::github_filter` does) and assert `asked_searches()`; the shell itself is covered by the named-events scan. `on_filter` (shell) re-runs a pending search after a filtered reload with text typed (FR-016).
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -78,6 +83,7 @@ Clarify round 1, category 1 (product or scope decision the repo does not settle)
 ## Follow-ups not done
 
 - M1 (T018, deviation): `ISSUE_ADVANCED` (R3) and a refused search's error shape (R7, incl. `\` inside a quoted term) **not probed** live: no signed-in `gh` in the cloud container. `parse_search_page` tests use hand-written answers (search-rules §6), and `tests/fixtures/gh/search_filtered_page.json`, `search_rejected.json`, `labels_page.json` are hand-written, not recorded. Probe with a signed-in `gh` before release; if GitHub refuses the type, only `github_filter::search_type!` changes.
+- M2 unit: `mise` is not installed in this container; the gate steps ran as `scripts/build-lock.sh cargo …` (the M2 scoped gate: fmt --all --check, clippy -p micold-client --all-targets -D warnings, test -p micold-client). LSP not tried (grep used). Quickstart §B with `fake_gh` not run (no Agent tool for the visual pass in this unit).
 - M1 unit: LSP tool not available here either (ToolSearch found no `LSP`); symbols checked with grep.
 
 - Plan unit: LSP tool not available in this session (ToolSearch found no `LSP`); symbols checked with grep. ISSUE_ADVANCED and the refused-search error shape not probed live (no signed-in `gh`): research R3/R7, M1 fixture probe.
