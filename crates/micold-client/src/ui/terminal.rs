@@ -802,7 +802,7 @@ fn session_kind(state: &State, id: SessionId) -> micold_core::session::SessionKi
 /// 025 added a second: a session restored at launch, which is current, has no process, and has no
 /// output — none survives a restart, because output lives in the client's memory and is rebuilt
 /// from frames the daemon streams for a *running* process. Left alone, the pane told every such
-/// user to wait for something that would never happen, while the bar one row below said
+/// user to wait for something that would never happen, while the tab strip above said
 /// `interrupted` and offered `restart`.
 ///
 /// A give-up says more (`010` BUG-017 step 3). The daemon records *why* it stopped trying and how
@@ -1171,8 +1171,8 @@ mod tests {
     /// The terminal area falls to an empty state whenever it has no grid, and a restored session
     /// has none — output lives only in the client's memory and is rebuilt from frames the daemon
     /// streams for a *running* process, so nothing survives a restart. Saying "Starting…" there
-    /// tells the user to wait for an event that will never arrive, while the bar one row below
-    /// says `interrupted` and offers `restart`.
+    /// tells the user to wait for an event that will never arrive, while the tab strip above says
+    /// `interrupted` and offers `restart`.
     ///
     /// Driven over all three not-running lifecycles rather than the one that reaches this at
     /// launch: they are the set [`attached_process_restartable`] already names, and a fix keyed to
@@ -1252,9 +1252,9 @@ mod tests {
     /// (`029` quickstart §D, finding 1).
     ///
     /// The daemon reports a refusal as `Failed { attempts: 0 }`, and every refusal's sentence
-    /// already says what to change. Appending "Choose restart in the tab strip above to resume it." told a user
-    /// whose image lacks the CLI to retry something that fails the same way until the image
-    /// changes, and one whose conversation is gone to resume what cannot be resumed.
+    /// already says what to change. Appending "Choose restart in the tab strip above to resume
+    /// it." told a user whose image lacks the CLI to retry something that fails the same way until
+    /// the image changes, and one whose conversation is gone to resume what cannot be resumed.
     #[test]
     fn a_refused_start_is_not_pointed_at_restart() {
         let reason = "Pi Coding Agent isn't in registry.example/agents:7, where sessions run, and \
