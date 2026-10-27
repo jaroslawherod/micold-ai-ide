@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1541 | M3 visual pass + fixes + fixture | merged | 3054321a9cef77929487989d9cdc73097b417399 |
 | #1544 | M4 mockup canvas sync | merged | 589dec73779b6997459c81776c376618c041f5b1 |
 | #1545 | M5 redesign doc record | merged | 09ee4cb188b5b76f59512aa8e506f88ca2d7e7b7 |
-| #<close PR> | close (TDD verify, quickstart, status) | open | |
+| #1548 | close (TDD verify, quickstart, status) | open | |
 
 ## Milestones
 
@@ -99,7 +99,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 
 - converge skipped: every milestone has a CLEAN review B in *Review rounds*.
 - `speckit-tdd-verify` run by hand (no forked skill or subagent here): `tdd/verification.md`, PASS_WITH_GAPS (the six code behaviours LIKELY: squash merges; B2 is a refactor, NOT_APPLICABLE; 5 deliberate mutants, 5 caught). F1 (HIGH, conditional bar/drawer checks in `review_tab_fits`) and F2 (MED, eager `a_long_entry_name…` test) fixed as T037–T038; F3 (path addressing) kept, reason in the report.
-- Polish: quickstart results appended to quickstart.md; T025, T035, T036 ticked; spec Status Closed 2026-10-27 with `#<close PR>` to fill when the PR opens.
+- Polish: quickstart results appended to quickstart.md; T025, T035, T036 ticked; spec Status Closed 2026-10-27 with `#1548` to fill when the PR opens.
 - Close review CLEAN (3 MINOR, fixed prose only); origin/main merged (already up to date); full gate green (scripts/gate.sh, debug info off, target-shared wiped for disk; first run lost `capture-harness` "display.sh starts a private X display" to two gates running at once, passes alone and on rerun).
 
 ## Handover

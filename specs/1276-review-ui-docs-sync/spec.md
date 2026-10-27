@@ -5,7 +5,7 @@
 **Created**: 2026-10-24
 
 **Status**: Closed 2026-10-27 — shipped in PRs #1358, #1473, #1495, #1520, #1541, #1544, #1545,
-#<close PR>. The visual pass's unfixed FAILs are filed as #1519, #1539 and #1540; the 640×480
+#1548. The visual pass's unfixed FAILs are filed as #1519, #1539 and #1540; the 640×480
 squeeze as #1474 and the header title's cut as #1501. The mockup canvas was brought to the build by
 its owner's republish (FR-011 route: *writer* access, versions 10 and 11)
 
