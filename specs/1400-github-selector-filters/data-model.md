@@ -84,7 +84,8 @@ pub enum GithubFilter { Basic(BasicFilters), Advanced(UserQuery) }
 - `is_default(&self)`: `Basic(f)` with `f.is_default()`. A default filter is never turned into a
   `ScopedSearch`: the shell takes today's path (FR-009).
 - `ScopedSearch { text: String }`: only from `ScopedSearch::listing(repo, &filter)` and
-  `ScopedSearch::beyond(repo, &filter, typed_text)` (research R4 texts). `as_str()` is the `q`
+  `ScopedSearch::beyond(repo, &filter, typed_text) -> Option<ScopedSearch>` (research R4 texts;
+  the typed text enters only as quoted words, `None` when no word is left). `as_str()` is the `q`
   sent. `Debug` redacted.
 
 ## 5. `FilterFailure` (core) — why a filtered request listed nothing (FR-018, FR-019)
@@ -127,7 +128,8 @@ pub enum FilterFailure { Rejected(Vec<String>), Load(IssueLoadError) }
 | `closed` | `bool` | `false` for every listed default issue and every Jira issue; set from a search node's `state == "CLOSED"`. Builder `Issue::closed(self, bool)`, reader `is_closed()`. Takes no part in matching or ordering. |
 
 `ui::worktree_form::issue_row` draws a closed GitHub issue with the status chip `TicketStatus {
-name: "Closed", category: Some(StatusCategory::Done) }` (research R13).
+name: "Closed", category: Some(StatusCategory::Done) }` (research R13), ahead of any status-board
+entry for it, not stale (selector-ui §3).
 
 ## 9. `IssueList` (client, existing) — two variants
 
