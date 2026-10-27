@@ -26,7 +26,9 @@ flow lists. Overview for humans: [README.md](README.md).
 
 ## Route
 
-First `git fetch origin`, and check the worktree is clean.
+First `scripts/autopilot/preflight.sh`, before any fetch or claim. `PREFLIGHT-FAILED`: stop and tell the
+user what it names (it leaves no label, comment or claim on the issue). Then `git fetch origin`, and check
+the worktree is clean.
 
 | When | Read |
 |---|---|
