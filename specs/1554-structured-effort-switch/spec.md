@@ -59,6 +59,25 @@ follow-up and does not change anything else #943 specified.
   **Command palette**, **app-handled command**, **model choice**, **session model**, **switching
   kind**: as feature 943 defines them.
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: When the session model does not support effort, can the user still change the effort choice,
+  or is the picker unavailable? → A: It can be changed. The picker says the model does not support
+  effort and still opens, listing Default and the five levels; a pick is stored, sends nothing to
+  the CLI, and applies when the session moves to a model that supports it. Edge case "Model without
+  effort support" and FR-003 amended. _(agent-resolved:
+  specs/1554-structured-effort-switch/spec.md#FR-002 — "change … at any time"; #Edge Cases
+  "Session not running" — a choice is stored and used later; ledger D2)_
+- Q: When a launch (restart, restore, switch of kind) carries a stored level the session model is
+  known not to support, what happens? → A: The session launches anyway: a stored choice never
+  stops or fails a launch. The app names the level at launch only when the latest supported levels
+  known for that model include it, or none are known; otherwise it names no level, so Claude
+  Code's default applies, and the view says so (FR-003). Added FR-010a. _(agent-resolved:
+  ledger D2 — "CLI default applies until a supporting model"; spec.md#FR-011 — naming no level
+  leaves Claude Code's default)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pick the effort level from the view (Priority: P1)
@@ -157,8 +176,9 @@ check the terminal launch uses `xhigh`; switch back and check again.
   spaces is the same. `/effort` inside a longer message (not at the start) is not a command and is
   sent as text (feature 943 Edge Cases).
 - **Model without effort support**: when the CLI reports that the session model does not support
-  effort, the picker is shown unavailable with that reason in words; the stored choice is kept and
-  applies again when the session moves to a model that supports it.
+  effort, the picker says so in words and Claude Code's default applies; the picker still opens,
+  listing Default and the five levels, and a pick (or `/effort <level>`) is stored and applies when
+  the session moves to a model that supports it (see Clarifications).
 - **Model change to one that does not support the chosen level**: the choice is kept; while the
   session model does not support it, the view says the level is not available for this model and
   Claude Code's default applies; it applies again when the session moves to a model that supports
@@ -199,7 +219,9 @@ check the terminal launch uses `xhigh`; switch back and check again.
   its view; the picker MUST offer Default and the supported levels of the session model, in order
   from least to most, or all five levels when none are reported, and MUST mark the current choice.
 - **FR-003**: When the CLI reports that the session model does not support effort, or does not
-  support the chosen level, the view MUST say so in words; the stored choice MUST be kept.
+  support the chosen level, the view MUST say so in words; the stored choice MUST be kept, and the
+  user MUST still be able to change it (the change is stored and applies on a model that supports
+  it).
 
 **Applying**
 
@@ -225,6 +247,9 @@ check the terminal launch uses `xhigh`; switch back and check again.
 
 - **FR-010**: The effort choice MUST be persisted with the session and used on every later launch
   of it, in either kind (restart, restore after a daemon restart, switch of kind).
+- **FR-010a**: A stored effort choice MUST never stop or fail a launch: when the latest supported
+  levels known for the session model exclude the stored level, the launch MUST name no level, so
+  Claude Code's default applies (FR-003).
 - **FR-011**: A new session's effort choice MUST be Default, and launching with Default MUST name
   no level to the CLI, so that Claude Code's own default and the user's own Claude Code settings
   apply as today.
@@ -234,7 +259,8 @@ check the terminal launch uses `xhigh`; switch back and check again.
 **Testing and documentation**
 
 - **FR-013**: Picking a level, picking Default, a refused change, `/effort` with a level, with no
-  argument and with a wrong argument, and a relaunch with a stored choice MUST be covered by tests
+  argument and with a wrong argument, a relaunch with a stored choice, and a relaunch with a stored
+  level the session model does not support (FR-010a) MUST be covered by tests
   that run the daemon against the stand-in CLI.
 - **FR-014**: The user guide's structured-sessions section MUST describe the effort picker,
   `/effort`, what the levels mean in a sentence each, and that a change made inside the terminal
