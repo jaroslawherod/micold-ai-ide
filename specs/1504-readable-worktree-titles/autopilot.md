@@ -90,7 +90,8 @@ T018's "switch off or no connection sends nothing" case lives in `main_tests.rs`
 
 Pending reviews (M2): review A (`code-review` high) and review B (`rubrics/conformance.md`,
 sonnet) on `ac5ada9ea...HEAD`, brief `brief.py milestone specs/1504-readable-worktree-titles M2`;
-visual pass on quickstart §B rows C–D (title text only) with a loopback Jira stub.
+visual pass on quickstart §B rows C–D (title text only) with a loopback Jira stub. Round-1 snapshot
+for A and B: `9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7`.
 
 ## Declined review findings
 
