@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M1 reviews done (review A round 2 CLEAN, review B CLEAN, visual pass PASS); rebasing onto main after #1557 merged (24a2a839f)
-- **Next step**: rebase on origin/main, full gate, push claude/project-thread-t2a600, PR files pr-title-m1.md / pr-body-m1.md; orchestrator opens the M1 PR.
+- **Phase**: M1 rebased on main, full gate green at 454b29a1d, pushed to claude/project-thread-t2a600; PR pending (orchestrator opens it from pr-title-m1.md / pr-body-m1.md)
+- **Next step**: orchestrator opens the M1 PR, records its number, waits on CI and merges; then M2.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | — | in review |
+| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | pending | PR pending |
 | M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | pending |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
