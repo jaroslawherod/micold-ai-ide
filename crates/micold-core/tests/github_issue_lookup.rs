@@ -3,8 +3,8 @@
 //! tests inject.
 
 use micold_core::github::{
-    lookup_args, parse_lookup, FakeIssueSource, GithubRepo, IssueLoadError, IssueLookup,
-    IssueLookupError, IssueSnapshot, NotOpen,
+    lookup_args, parse_lookup, parse_title, FakeIssueSource, GithubRepo, IssueLoadError,
+    IssueLookup, IssueLookupError, IssueSnapshot, NotOpen,
 };
 
 fn repo() -> GithubRepo {
@@ -141,5 +141,75 @@ fn a_timeout_has_the_forms_ten_second_text() {
 #[test]
 fn a_fake_with_nothing_scripted_has_seen_no_lookup() {
     let fake = FakeIssueSource::new();
+    assert!(fake.lookup_calls().is_empty());
+}
+
+fn title(json: &str) -> Result<Option<String>, IssueLoadError> {
+    parse_title(json.as_bytes())
+}
+
+/// BUG-1488: the Overview's title read takes an issue in any state; a closed one keeps its title.
+#[test]
+fn a_title_is_read_for_an_open_and_a_closed_issue() {
+    for state in ["OPEN", "CLOSED"] {
+        let json = format!(
+            r#"{{"data":{{"repository":{{"issue":{{"number":4,"title":"Basic image","state":"{state}",
+            "labels":{{"nodes":[]}},"bodyText":""}}}}}}}}"#
+        );
+        assert_eq!(title(&json), Ok(Some("Basic image".to_string())), "{state}");
+    }
+}
+
+#[test]
+fn a_missing_issue_or_pull_request_has_no_title() {
+    assert_eq!(title(r#"{"data":{"repository":{"issue":null}}}"#), Ok(None));
+    assert_eq!(
+        title(
+            r#"{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND",
+            "path":["repository","issue"],"message":"Could not resolve"}]}"#
+        ),
+        Ok(None)
+    );
+}
+
+#[test]
+fn a_title_read_fails_like_the_lookup_without_data_or_repository() {
+    for json in [
+        r#"{"errors":[{"type":"RATE_LIMITED","message":"slow down"}]}"#,
+        r#"{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","message":"x"}]}"#,
+        "not json",
+    ] {
+        assert_eq!(
+            title(json),
+            Err(parse(json).expect_err("the lookup fails too")),
+            "{json}"
+        );
+    }
+}
+
+#[test]
+fn the_default_title_read_goes_through_the_lookup() {
+    let open = IssueSnapshot {
+        number: 5,
+        title: "Login crash".into(),
+        labels: vec![],
+        body_text: String::new(),
+    };
+    let fake = FakeIssueSource::new()
+        .with_lookup(Ok(open))
+        .with_lookup(Err(IssueLookupError::NotOpenIssue { closed: true }))
+        .with_lookup(Err(IssueLookupError::Load(IssueLoadError::NoAccess)));
+    assert_eq!(fake.read_title(&repo(), 5), Ok(Some("Login crash".into())));
+    assert_eq!(fake.read_title(&repo(), 6), Ok(None));
+    assert_eq!(
+        fake.read_title(&repo(), 7),
+        Err(IssueLookupError::Load(IssueLoadError::NoAccess))
+    );
+}
+
+#[test]
+fn a_scripted_title_answers_the_title_read_without_a_lookup() {
+    let fake = FakeIssueSource::new().with_title(Ok(Some("Closed one".into())));
+    assert_eq!(fake.read_title(&repo(), 9), Ok(Some("Closed one".into())));
     assert!(fake.lookup_calls().is_empty());
 }

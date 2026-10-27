@@ -1533,6 +1533,28 @@ impl IssueLookupError {
 pub trait IssueLookup: crate::issue_details::IssueDetailsSource {
     fn read_issue(&self, repo: &GithubRepo, number: u32)
         -> Result<IssueSnapshot, IssueLookupError>;
+
+    /// The title of issue `number` in any state, for the Overview (813 FR-015, BUG-1488): `None`
+    /// when the number is no issue. The default goes through [`IssueLookup::read_issue`], so it
+    /// knows only an open issue's title; [`GhCli`] reads a closed one's too.
+    fn read_title(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+    ) -> Result<Option<String>, IssueLookupError> {
+        open_title(self.read_issue(repo, number))
+    }
+}
+
+/// An open-only lookup's answer as a title read: the title, `None` for anything not open.
+fn open_title(
+    read: Result<IssueSnapshot, IssueLookupError>,
+) -> Result<Option<String>, IssueLookupError> {
+    match read {
+        Ok(issue) => Ok(Some(issue.title)),
+        Err(IssueLookupError::NotOpenIssue { .. }) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// The GraphQL document for one issue by number. One line, like [`LIST_QUERY`].
@@ -1570,37 +1592,68 @@ pub(crate) fn numbered_args(query: &str, repo: &GithubRepo, number: u32) -> Vec<
 /// `errors[]` decide only when there is no `data` to read, or beside a found repository when they
 /// are not the NOT_FOUND that an absent issue always comes with.
 pub fn parse_lookup(stdout: &[u8]) -> Result<Result<IssueSnapshot, NotOpen>, IssueLoadError> {
-    let json: serde_json::Value = serde_json::from_slice(stdout)
-        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
-    let unexpected = || IssueLoadError::Other("GitHub's answer had no issue".into());
-    let data = &json["data"];
-    if !data.is_object() {
-        return Err(graphql_error(&json).unwrap_or_else(unexpected));
-    }
-    let repository = &data["repository"];
-    if repository.is_null() {
-        return Err(graphql_error(&json).unwrap_or(IssueLoadError::NoAccess));
-    }
-    let node = &repository["issue"];
-    if node.is_null() {
-        let other = json["errors"]
-            .as_array()
-            .and_then(|errors| errors.iter().find(|e| e["type"] != "NOT_FOUND"));
-        return match other {
-            Some(error) => Err(graphql_error_of(error)),
-            None => Ok(Err(NotOpen { closed: false })),
-        };
-    }
+    let json = lookup_json(stdout)?;
+    let Some(node) = issue_node(&json)? else {
+        return Ok(Err(NotOpen { closed: false }));
+    };
     if node["state"] != "OPEN" {
         return Ok(Err(NotOpen { closed: true }));
     }
-    let issue = issue_from_node(node).ok_or_else(unexpected)?;
+    let issue = issue_from_node(node).ok_or_else(no_issue)?;
     Ok(Ok(IssueSnapshot {
         number: issue.number(),
         title: issue.title().to_string(),
         labels: issue.labels().to_vec(),
         body_text: issue.body().to_string(),
     }))
+}
+
+/// Parse `gh api graphql` stdout for [`ISSUE_QUERY`] as a title read (BUG-1488): the title of an
+/// issue in any state, `None` where [`parse_lookup`] finds no issue, and its errors otherwise.
+pub fn parse_title(stdout: &[u8]) -> Result<Option<String>, IssueLoadError> {
+    let json = lookup_json(stdout)?;
+    issue_node(&json)?
+        .map(|node| {
+            node["title"]
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(no_issue)
+        })
+        .transpose()
+}
+
+fn lookup_json(stdout: &[u8]) -> Result<serde_json::Value, IssueLoadError> {
+    serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))
+}
+
+fn no_issue() -> IssueLoadError {
+    IssueLoadError::Other("GitHub's answer had no issue".into())
+}
+
+/// The answer's issue node, `None` for a missing issue or a pull request number. `data.repository`
+/// and its `issue` decide; `errors[]` decide only when there is no `data` to read, or beside a
+/// found repository when they are not the NOT_FOUND that an absent issue always comes with.
+fn issue_node(json: &serde_json::Value) -> Result<Option<&serde_json::Value>, IssueLoadError> {
+    let data = &json["data"];
+    if !data.is_object() {
+        return Err(graphql_error(json).unwrap_or_else(no_issue));
+    }
+    let repository = &data["repository"];
+    if repository.is_null() {
+        return Err(graphql_error(json).unwrap_or(IssueLoadError::NoAccess));
+    }
+    let node = &repository["issue"];
+    if !node.is_null() {
+        return Ok(Some(node));
+    }
+    let other = json["errors"]
+        .as_array()
+        .and_then(|errors| errors.iter().find(|e| e["type"] != "NOT_FOUND"));
+    match other {
+        Some(error) => Err(graphql_error_of(error)),
+        None => Ok(None),
+    }
 }
 
 /// A scripted [`IssueSource`] for tests: answers each call with the next scripted page, search
@@ -1616,6 +1669,7 @@ pub struct FakeIssueSource {
         std::sync::Mutex<std::collections::VecDeque<Result<DescriptionPage, IssueLoadError>>>,
     description_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
     lookups: std::sync::Mutex<std::collections::VecDeque<Result<IssueSnapshot, IssueLookupError>>>,
+    titles: std::sync::Mutex<std::collections::VecDeque<Result<Option<String>, IssueLookupError>>>,
     lookup_calls: std::sync::Mutex<Vec<(String, u32)>>,
     details: std::sync::Mutex<
         std::collections::VecDeque<Result<crate::issue_details::IssueDetails, IssueLoadError>>,
@@ -1664,6 +1718,16 @@ impl FakeIssueSource {
     /// Answer the next unanswered `read_issue` call with `result`.
     pub fn with_lookup(self, result: Result<IssueSnapshot, IssueLookupError>) -> Self {
         self.lookups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// Answer the next unanswered `read_title` call with `result`, as `GhCli` answers it for an
+    /// issue in any state. With none scripted, `read_title` goes through `read_issue`.
+    pub fn with_title(self, result: Result<Option<String>, IssueLookupError>) -> Self {
+        self.titles
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push_back(result);
@@ -1846,6 +1910,19 @@ impl IssueLookup for FakeIssueSource {
                     "FakeIssueSource: no lookup scripted for this call".into(),
                 )))
             })
+    }
+
+    fn read_title(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+    ) -> Result<Option<String>, IssueLookupError> {
+        let scripted = self
+            .titles
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pop_front();
+        scripted.unwrap_or_else(|| open_title(self.read_issue(repo, number)))
     }
 }
 
@@ -2117,6 +2194,15 @@ impl IssueLookup for GhCli {
             Ok(Err(NotOpen { closed })) => Err(IssueLookupError::NotOpenIssue { closed }),
             Err(error) => Err(IssueLookupError::Load(error)),
         }
+    }
+
+    fn read_title(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+    ) -> Result<Option<String>, IssueLookupError> {
+        self.run(lookup_args(repo, number), parse_title)
+            .map_err(IssueLookupError::Load)
     }
 }
 

@@ -617,3 +617,33 @@ HIGH findings and the loosened gate) are cleared and `tdd-verify` is re-run.
 - [x] T084 [BUG-1493] `features/overview.rs` `badge()`: choose the verb by count (`needs` for 1, `need` otherwise)
 - [x] T085 [BUG-1493] Contract and guide: FR-012 (spec.md), `contracts/ui.md` U2, `docs/user-guide/overview.md`
 - [x] T086 [BUG-1493] Verify: `scripts/build-lock.sh cargo test -p micold-client` badge tests green
+
+## Phase 11: Bugfix BUG-1488 — a closed issue's title
+
+**Bugfix**: 2026-10-27 — BUG-1488 Updated from bugfix patch. Source: `bugs/BUG-1488.md`. T087 before
+T088; neither depends on other open tasks.
+
+- [x] T087 [US4] Regression tests, written first and seen failing: in
+  crates/micold-core/tests/github_issue_lookup.rs, `parse_title` gives `Some(title)` for an OPEN and a
+  CLOSED issue node, `None` for `issue: null` (with or without the NOT_FOUND error), and the
+  `parse_lookup` error for no `data` or a null repository; the default `IssueLookup::read_title` over
+  `FakeIssueSource` gives the scripted snapshot's title. In crates/micold-client/src/shell/issues.rs
+  `title_tests`, `read_title` over a source whose `read_title` answers a closed issue's title gives
+  `TitleLookup::Known(title)`, and over `None` or an error gives `Unavailable` (FR-015, BUG-1488)
+- [x] T088 [US4] Fix: in crates/micold-core/src/github.rs add `parse_title` and
+  `IssueLookup::read_title(repo, number) -> Result<Option<String>, IssueLookupError>` (default via
+  `read_issue`: an open issue's title, `NotOpenIssue` → `Ok(None)`), overridden by `GhCli` with
+  `lookup_args` + `parse_title`; crates/micold-client/src/shell/issues.rs `read_title` calls it, the
+  failure line still names the number only (FR-020); `TitleLookup::Unavailable`'s doc in
+  crates/micold-client/src/features/overview.rs drops "closed". `read_issue` is unchanged. T087 passes
+
+### M7 — A closed issue's title on the card (BUG-1488)
+
+- **Tasks**: T087–T088
+- **Deliverable**: a worktree whose linked issue is closed shows the issue's title on its Overview
+  card, sidebar row and session header, not its branch
+- **Satisfies**: FR-015 (closed issue), edge case *Linked issue closed*; FR-020 unchanged
+- **Verify**: `cargo test -p micold-core --test github_issue_lookup`; `cargo test -p micold-client --bin
+  micold-client title_tests`; `scripts/gate.sh`
+- **Depends on**: none
+- **Tier**: full

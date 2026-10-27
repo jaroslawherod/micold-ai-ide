@@ -986,8 +986,12 @@ fn read_title(
     let Ok(small) = u32::try_from(number) else {
         return TitleLookup::Unavailable;
     };
-    match gh.read_issue(repo, small) {
-        Ok(issue) => TitleLookup::Known(issue.title),
+    match gh.read_title(repo, small) {
+        Ok(Some(title)) => TitleLookup::Known(title),
+        Ok(None) => {
+            eprintln!("micold: no title for issue #{number} on the Overview: it is not an issue");
+            TitleLookup::Unavailable
+        }
         Err(error) => {
             eprintln!("{}", title_failure_line(number, &error));
             TitleLookup::Unavailable
@@ -1009,6 +1013,7 @@ fn title_failure_line(number: u64, error: &micold_core::github::IssueLookupError
 #[cfg(test)]
 mod title_tests {
     use super::*;
+    use micold_client::features::overview::TitleLookup;
     use micold_core::github::{IssueLoadError, IssueLookupError};
 
     /// FR-020: the line names the number, and nothing the error carries.
@@ -1024,5 +1029,36 @@ mod title_tests {
             assert!(line.contains("#813"), "{line}");
             assert!(!line.contains("SECRET"), "{line}");
         }
+    }
+
+    fn read(fake: micold_core::github::FakeIssueSource) -> TitleLookup {
+        let repo = micold_core::github::GithubRepo::from_remote_url("https://github.com/o/r.git")
+            .expect("a GitHub remote");
+        read_title(&fake, &repo, 1439)
+    }
+
+    /// BUG-1488: a closed issue's title is still the card's title.
+    #[test]
+    fn a_closed_issues_title_is_known() {
+        use micold_core::github::FakeIssueSource;
+        let fake = FakeIssueSource::new().with_title(Ok(Some("Basic image with X11".into())));
+        assert_eq!(
+            read(fake),
+            TitleLookup::Known("Basic image with X11".into())
+        );
+    }
+
+    #[test]
+    fn no_issue_or_a_failed_read_is_unavailable() {
+        use micold_core::github::FakeIssueSource;
+        assert_eq!(
+            read(FakeIssueSource::new().with_title(Ok(None))),
+            TitleLookup::Unavailable
+        );
+        let failed = Err(IssueLookupError::Load(IssueLoadError::NoAccess));
+        assert_eq!(
+            read(FakeIssueSource::new().with_title(failed)),
+            TitleLookup::Unavailable
+        );
     }
 }

@@ -137,6 +137,10 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
 - **Alternatives rejected**: the ledger's quoted issue title (only for autopilot worktrees);
   refreshing titles on a timer (polling).
 
+- **Bugfix**: 2026-10-27 — BUG-1488 `read_issue` is open-only (550 FR-007), so a closed issue's title
+  came back as `Unavailable`. Titles are read with `IssueLookup::read_title`, which takes the title of
+  an issue in any state from the same `ISSUE_QUERY` answer.
+
 ## R9 — Task progress from the worktree's files
 
 - **Decision**: pure core `micold-core/src/task_progress.rs`:
