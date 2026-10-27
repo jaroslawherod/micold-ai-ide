@@ -18,7 +18,8 @@ use iced::widget::{column, Space};
 use iced::{Element, Length};
 use micold_core::tokens::Roles;
 
-use crate::Scrollable;
+use crate::wide_content::{Pane, PaneWidth, Ruler};
+use crate::{ScrollDirection, Scrollable};
 
 /// Rows built beyond each edge of the viewport, so a fast scroll does not show a blank band.
 pub const OVERSCAN: usize = 8;
@@ -124,6 +125,7 @@ pub struct VirtualRows<'a, M> {
     on_scroll: Option<OnScroll<'a, M>>,
     extras: Vec<(usize, f32)>,
     id: Option<iced::advanced::widget::Id>,
+    least_width: Option<f32>,
 }
 
 impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
@@ -144,6 +146,7 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
             on_scroll: None,
             extras: Vec::new(),
             id: None,
+            least_width: None,
         }
     }
 
@@ -170,6 +173,14 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
     /// Name the list's scrollable, so a scroll operation can address it.
     pub fn id(mut self, id: iced::advanced::widget::Id) -> Self {
         self.id = Some(id);
+        self
+    }
+
+    /// Rows at least `width` pixels wide: the list also scrolls sideways when the pane is narrower
+    /// than that, and its rows stay as wide as the pane (or the widest content) so their tint
+    /// does not stop short (#1466). Rows must fill their width.
+    pub fn least_width(mut self, width: f32) -> Self {
+        self.least_width = Some(width);
         self
     }
 
@@ -208,7 +219,12 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
     fn from(list: VirtualRows<'a, M>) -> Self {
         let rows = list.rows();
         let (above, below) = spacers_with(&rows, list.row_height, list.len, &list.extras);
-        let mut content = column![Space::new().height(Length::Fixed(above))].width(Length::Fill);
+        let pane = PaneWidth::default();
+        let top: Element<'a, M> = match list.least_width {
+            Some(least) => Ruler::new(&pane, least, above).into(),
+            None => Space::new().height(Length::Fixed(above)).into(),
+        };
+        let mut content = column![top].width(Length::Fill);
         for index in rows {
             content = content.push((list.build_row)(index));
         }
@@ -221,6 +237,10 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
         }
         if let Some(f) = list.on_scroll {
             scroll = scroll.on_scroll_metrics(f);
+        }
+        if list.least_width.is_some() {
+            scroll = scroll.direction(ScrollDirection::Both);
+            return Pane::new(pane, scroll.into()).into();
         }
         scroll.into()
     }

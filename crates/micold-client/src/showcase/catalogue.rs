@@ -718,7 +718,7 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/scrollable.rs",
         component: "Scrollable",
-        variants: &["Vertical", "Horizontal"],
+        variants: &["Vertical", "Horizontal", "Both"],
         density: &[],
         posed: &[],
         live: &["hover over the scrollbar", "the scroll itself"],

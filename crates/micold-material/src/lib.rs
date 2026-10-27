@@ -105,6 +105,7 @@ pub mod toolbar;
 pub mod type_role_mapping;
 pub mod unread_mark;
 pub mod virtual_rows;
+mod wide_content;
 pub use accordion::Accordion;
 pub use accordion_group::AccordionGroup;
 pub use accordion_section::AccordionSection;
