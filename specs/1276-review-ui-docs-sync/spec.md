@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-24
 
-**Status**: Draft
+**Status**: Draft — visual pass (M3) recorded; its FAILs filed as #1519, #1539, #1540
 
 **Input**: User description: "Issue #1276 — Review UI: docs, layout snapshot, visual pass and mockup
 sync. Blocked by: #1269, #1270, #1272, #1273, #1271, #1274, #1275, #1128. Update

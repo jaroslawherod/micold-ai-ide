@@ -216,20 +216,20 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
 check and `results.md` with a verdict per check; each FAIL has a fix commit or an issue link
 (quickstart §B).
 
-- [ ] T026 [US3] Build the world of [data-model.md](data-model.md) § *Visual-pass world* in a private
+- [x] T026 [US3] Build the world of [data-model.md](data-model.md) § *Visual-pass world* in a private
   data directory in the scratchpad: worktree A (≥ 12 files, nested, deep path, long name, binary; 2
   drafts; 2 sent, 1 replied; 3 reviewed, 1 reviewed then changed), worktree B with its own open Review
   tab and selection, worktree C with no changes, and the stub `gh` (`sh` script first on the daemon's
   `PATH`, on the pattern of `crates/micold-core/tests/github_gh_cli.rs`) listing one long-titled PR for
   A and exiting non-zero on its diff. All invented data.
-- [ ] T027 [US3] Run the `visual-pass` skill (through an `autopilot-worker`) with the worktree path,
+- [x] T027 [US3] Run the `visual-pass` skill (through an `autopilot-worker`) with the worktree path,
   the checks of [contracts/visual-pass-checks.md](contracts/visual-pass-checks.md), the T026 world,
   1280×800, light and dark, output to `specs/1276-review-ui-docs-sync/visual-pass/`
   (`NN-<check>-{light,dark}.png`).
-- [ ] T028 [US3] Write `specs/1276-review-ui-docs-sync/visual-pass/results.md`: date, environment
+- [x] T028 [US3] Write `specs/1276-review-ui-docs-sync/visual-pass/results.md`: date, environment
   (Xvfb + lavapipe), verdict and one line per check, macOS / Windows recorded as not run with the
   reason unless a host was available.
-- [ ] T029 [US3] For each FAIL: a styling or doc defect is fixed in the shared component or page (never
+- [x] T029 [US3] For each FAIL: a styling or doc defect is fixed in the shared component or page (never
   a feature-local override) and its check re-shot; a behaviour defect is filed as an issue; the fix
   commit or issue link goes on the check's row in `results.md`, and the spec status names any filed
   issue (FR-010, US3 sc.2). A fix that changes geometry re-runs T019's re-record and says why in the

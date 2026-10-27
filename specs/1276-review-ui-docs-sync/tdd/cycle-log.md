@@ -53,3 +53,19 @@ failed before the implementation.
   `layout_coverage_registry` first read `review_tab_fits.rs`'s `-> &'static CoveredState {` as a
   registration; `constructs` now treats a `&…` word before the name as a type, with that line added
   to `defining_or_naming_the_type_is_not_registering_a_state`.
+
+## M3 — the visual pass's styling FAILs (T029)
+
+- red: four tests added to the shared components, run on the unfixed components
+  (`cargo test -p micold-client --lib` filtered to them) -> 0 passed, 4 failed:
+  `pull_request_row::a_long_title_is_one_ellipsized_line_inside_the_row` (check 02: the title
+  wrapped, its second line below the row), `review_bar::an_ellipsized_error_reads_whole_in_its_tooltip`
+  (check 07: no tooltip on the cut error), `review_panel_row::a_draft_rows_actions_fit_the_drawer_width_and_the_row_height`
+  (check 08: Edit/Delete past 360 px), `changes::a_long_entry_name_is_one_ellipsized_line` (check 11:
+  the header's name wrapped to two lines).
+- green: `PullRequestRow` and `changes::heading` use `Ellipsized`; `ReviewBar` wraps a cut error in a
+  `Tooltip`; `ReviewPanelRow` puts a draft's actions on their own line -> the four tests pass.
+- re-shot in both themes from a release build of the fixed tree (visual-pass/results.md).
+- not fixed here (behaviour or review-layout geometry, out of scope): #1519 (card width, checks 04
+  and 12), #1539 (source-control tooltip over its list, check 02), #1540 (rows under the list's
+  scrollbar, check 03).

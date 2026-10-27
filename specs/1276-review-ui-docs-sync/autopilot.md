@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M2 fix-main PR
-- **Next step**: orchestrator waits on CI for #1520 and merges; then M3 (stash holds M3 WIP)
+- **Phase**: M3 stop (a)
+- **Next step**: orchestrator runs M3 reviews A and B; then stop (b): merge origin/main, re-record the fixture if geometry changed, full gate, PR
 
 ## Pull requests
 
@@ -19,16 +19,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
 | #1473 | M1 guide + review_keys_doc | merged | 1669ef5df6520fead74b379ed75d307d20f3d81c |
 | #1495 | M2 layout snapshot + review_tab_fits | merged | ba0482621516b364c80b63df888257b5a8efe29b |
-| #1520 | fix red main after M2 + #1466/BUG-1470 | open | — |
+| #1520 | fix red main after M2 + #1466/BUG-1470 | merged | 2a4b372d52ab16e7165cc6f2e9c885b3b1af9656 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | merged; T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
-| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | T014–T024 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh). Second merge of origin/main (204cf601, for #1463's one-line header; conflict in session_area_fits.rs resolved: main's paths and wording, this branch's `pub(crate)`): `review_tab_fits` then found the header title's "…" painted past a 2–4 px clip at 640×480 in every review state (main's #1463 defect, filed as #1501, exempted narrowly as `HEADER_TITLE_TEXT`, required to fire) and the `review-source-open` overlay scroll exemption no longer firing (dropped); fixture re-recorded, same groups vs main as before (four new states, `@` lines on ten slice states, records unchanged); Third merge of origin/main (for BUG-1493, #1491; fixture conflict: took main's, re-recorded): same groups vs main (four new states, `@` lines on ten slice states, records unchanged); `review_tab_fits` passed unchanged; full gate green at c684c36f (first run hit a parallel-load flake in card_grid `a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and on rerun). T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
-| M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
-| M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | merged (ba048262); T014–T025 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh). Second merge of origin/main (204cf601, for #1463's one-line header; conflict in session_area_fits.rs resolved: main's paths and wording, this branch's `pub(crate)`): `review_tab_fits` then found the header title's "…" painted past a 2–4 px clip at 640×480 in every review state (main's #1463 defect, filed as #1501, exempted narrowly as `HEADER_TITLE_TEXT`, required to fire) and the `review-source-open` overlay scroll exemption no longer firing (dropped); fixture re-recorded, same groups vs main as before (four new states, `@` lines on ten slice states, records unchanged); Third merge of origin/main (for BUG-1493, #1491; fixture conflict: took main's, re-recorded): same groups vs main (four new states, `@` lines on ten slice states, records unchanged); `review_tab_fits` passed unchanged; full gate green at c684c36f (first run hit a parallel-load flake in card_grid `a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and on rerun). T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
+| M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | merged (2a4b372d); #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
+| M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | T026–T029 done; geometry changed (draft row actions line, header name, PR row): `review_tab_fits` declares the drafts actions rows under #1474 (passes), `the_layout_matches_the_committed_fixture` fails until the stop-(b) re-record; 34 crops + results.md; 11 PASS, 4 FAIL fixed test-first in shared components (f8c46db0: PullRequestRow, ReviewBar, ReviewPanelRow, changes::heading; checks 02, 07, 08, 11), FAIL/issue: #1519 (checks 04, 12), #1539 (02), #1540 (03); spec status names them. Release build on Xvfb at 1280×800, macOS/Windows not run |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
 
