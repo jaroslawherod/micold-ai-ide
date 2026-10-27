@@ -2989,6 +2989,7 @@ fn start_session(
         // Bound by the location the session starts at, not by the session on display: that one may
         // be another worktree's, or none, and sits on a different daemon (bug 1159).
         let binding = app.location_binding(&project, &location);
+        log_session_create(app, binding, &project, &location, false);
         let op = PendingOp::CreateSession {
             project: project.clone(),
             location: location.clone(),
@@ -3004,6 +3005,23 @@ fn start_session(
         });
     }
     Task::none()
+}
+
+/// Log where a session create goes and how this window saw its location (#1437).
+fn log_session_create(
+    app: &App,
+    binding: micold_core::daemons::Binding,
+    project: &std::path::Path,
+    location: &SessionLocation,
+    additional: bool,
+) {
+    crate::log_line(&micold_client::catalog_sync::create_session_log_line(
+        binding,
+        project,
+        location,
+        app.core.location_occupant(location),
+        additional,
+    ));
 }
 
 /// The create request of a confirmed additional session (feature 776, FR-016): a start like any
@@ -3051,6 +3069,7 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
             permission_mode: mode,
         };
         let binding = app.location_binding(&project, &location);
+        log_session_create(app, binding, &project, &location, true);
         send_op_bound(app, binding, op, move |req| {
             additional_session_request(req, project, &location, provider, kind, mode)
         });

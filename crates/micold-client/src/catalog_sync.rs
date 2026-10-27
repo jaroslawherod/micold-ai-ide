@@ -36,7 +36,7 @@ use micold_core::session::{
     TerminalMode,
 };
 
-use micold_core::daemons::DaemonId;
+use micold_core::daemons::{Binding, DaemonId};
 
 use crate::app::State;
 
@@ -522,6 +522,33 @@ pub fn attach_log_line(catalog: &CatalogSnapshot, active: Option<&Path>) -> Stri
     )
 }
 
+/// One line naming the daemon a session create is routed to and what this window believed of its
+/// location (#1437). Written to `micold-client.log` when the create is requested, before routing:
+/// a daemon that is unavailable then sends nothing and says so in a notice. A refusal "already has a
+/// main session" for a location the sidebar drew empty could not be told apart from a create sent
+/// to the wrong daemon, because the client logged neither the daemon nor its own view.
+pub fn create_session_log_line(
+    daemon: Binding,
+    project: &Path,
+    location: &SessionLocation,
+    occupied_by: Option<SessionId>,
+    additional: bool,
+) -> String {
+    let daemon = match daemon {
+        Binding::Bound(id) => id.0.to_string(),
+        Binding::NoDaemon => "<none>".into(),
+    };
+    let location = match location {
+        SessionLocation::Default => "<default>",
+        SessionLocation::Worktree(dir) => dir.as_str(),
+    };
+    let occupancy = occupied_by.map_or_else(|| "free".into(), |id| format!("taken({id})"));
+    format!(
+        "create session requested: daemon={daemon} project={} location={location} client_occupancy={occupancy} additional={additional}",
+        project.display()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -591,6 +618,66 @@ mod tests {
         let line = attach_log_line(&snapshot(vec![("/a", 0)]), Some(Path::new("/a")));
         assert!(line.starts_with("attach: connected"), "{line}");
         assert!(line.contains("active_sessions=0"), "{line}");
+    }
+
+    /// #1437: the create line names the daemon the request goes to, the location and this
+    /// window's own reading of it, so a refusal can be traced to a wrong daemon or a wrong view.
+    #[test]
+    fn the_create_session_line_names_the_daemon_location_and_client_occupancy() {
+        let occupant = SessionId::new();
+        let line = create_session_log_line(
+            Binding::Bound(DaemonId(3)),
+            Path::new("/a"),
+            &SessionLocation::Default,
+            Some(occupant),
+            true,
+        );
+        assert!(
+            line.starts_with("create session requested: daemon=3 project=/a"),
+            "{line}"
+        );
+        assert!(line.contains("location=<default>"), "{line}");
+        assert!(
+            line.contains(&format!("client_occupancy=taken({occupant})")),
+            "{line}"
+        );
+        assert!(line.contains("additional=true"), "{line}");
+        let line = create_session_log_line(
+            Binding::NoDaemon,
+            Path::new("/a"),
+            &SessionLocation::Worktree("wt".into()),
+            None,
+            false,
+        );
+        assert!(line.contains("daemon=<none>"), "{line}");
+        assert!(line.contains("location=wt client_occupancy=free"), "{line}");
+    }
+
+    /// #1437: a second daemon holding the same project (a container daemon with the folders
+    /// bind-mounted) lists no session at the root. Its snapshot must not drop the main session the
+    /// default daemon reported there, or the sidebar draws the location empty while the default
+    /// daemon, which "New session" is sent to, refuses it as occupied.
+    #[test]
+    fn another_daemons_snapshot_keeps_the_default_daemons_root_session() {
+        let project = PathBuf::from("/a");
+        let mut core = State::default();
+        core.workspace.active = Some(project.clone());
+        let host = core.settings.legacy_daemon();
+        let other = DaemonId(host.0 + 1);
+
+        let mut host_catalog = snapshot(vec![("/a", 1)]);
+        host_catalog.projects[0].sessions[0].main = true;
+        reconcile_catalog(&mut core, host, &host_catalog, false);
+        reconcile_catalog(&mut core, other, &snapshot(vec![("/a", 0)]), true);
+
+        assert_eq!(core.workspace.sessions[&project].len(), 1);
+        assert!(
+            !core.start_offered(&SessionLocation::Default),
+            "the root reads as taken, as the default daemon's refusal says"
+        );
+        // The owning daemon dropping it is still honoured.
+        reconcile_catalog(&mut core, host, &snapshot(vec![("/a", 0)]), true);
+        assert!(core.workspace.sessions[&project].is_empty());
     }
 
     /// 011 FR-022, BUG-454 (U4): the client keeps the failure list of the latest snapshot it
