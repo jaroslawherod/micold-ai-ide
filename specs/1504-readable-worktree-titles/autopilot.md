@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | f2abbf7224da5e36c1fdee21ec8fe71ba20af4ab:45a9b105ae6d57805c765b6343f57f6e573a90c7 | CLEAN (3 MINOR folded into clarify: FR-002 wording, FR-003 rewrap, SC-005 measurable) |
 | Plan review | 1 | a6363620134ea5fad5070c1cb4dacc71154cfb1e:0716b1a0459687647d249c43c1c5168d5a7f7e19 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 facts read on list/project change + Overview opening, `facts_round`/`facts_asked` replace `listing`, main_tests for created/included; F2 alternatives in R7/R9/R10/R11; F3 interpretation D5; F4 spec read by GitHub title ticket, D2 callers corrected) |
 | Plan review | 2 | 4d7a2d63c9bec458651d6712ce7f7909685829a8:157212aa9334caef6d3266340e08ae115b0f6f8f | CLEAN (1 MINOR fixed, prose only: FR-006 now reads facts on each worktree list change and each Overview opening, spec Amendments note) |
-| Tasks review | 1 | 0f930a23f65ea5adaf1156e6f73d4bb14da7d2e0:4b7a604d26b6ceae860e7a01d721df4f76a25140 | pending (snapshot is the pre-tasks base; review the commit after it: `git diff 4b7a604d2..HEAD`) |
+| Tasks review | 1 | ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1 | pending (full round; also speckit-analyze pending; specs-only gate green at 8e83f798b) |
 
 ## Declined review findings
 
