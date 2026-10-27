@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: tasks written; speckit-analyze and tasks review round 1 pending
-- **Next step**: speckit-analyze (forked) and tasks review round 1 (rubric .claude/skills/speckit-autopilot/rubrics/tasks.md; files specs/1504-readable-worktree-titles/{tasks,spec,plan,data-model}.md, contracts/location-title.md, quickstart.md; snapshot below); then specs-only gate, push, design PR title/body to scratchpad.
+- **Phase**: tasks review round 1 and speckit-analyze fixed; tasks review round 2 pending
+- **Next step**: tasks review round 2 (scoped, sonnet; rubric .claude/skills/speckit-autopilot/rubrics/tasks.md; fix diff `scripts/autopilot/review-snapshot.sh diff ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1`); then specs-only gate, push, design PR title/body to scratchpad.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | — | pending |
+| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | — | pending |
 | M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | pending |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
@@ -38,6 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | plan | Plan review 1 F3: keep Jira summaries on a failed refresh, given FR-004 "a failed or absent reading gives no title"? | Yes: FR-004 read as "a failure never yields a title of its own"; a summary from an earlier successful read stays until the board retires it, like the status | agent | research.md R4; jira_status FAILURES_BEFORE_RETIRING |
 | D6 | plan | Plan review 1 F1: when are spec/commit facts read? | On worktree list or active-project change (main.rs fingerprint check, covers set_worktrees, created, included, excluded) and on Overview opening; FR-006 "once per worktree list refresh" read as once per title-refreshing occasion | agent | research.md R5; main.rs:490; features/worktree.rs:266,339,348 |
 | D7 | tasks | M1 = Foundational (8 tasks) + US1 GitHub branch ticket (8) = 16 tasks, over ~10: split further? | No: US1 split along scenarios (M1: 1,3; M2: 2,4) and US2 (M3: 1,3,5–7; M4: 2,4); Foundational alone is never a milestone and is a behaviour-preserving refactor, so M1's new behaviour is 8 tasks | agent | milestones.md rules 1, 3 |
+| D9 | tasks | Analyze F1: spec "git missing" (commit only) vs plan "no local git → no read" | Two cases: `git` failing/missing loses only the commit (spec still read); no local git capability (remote daemon, 027) reads neither, paths are the daemon's. Spec edge case split, L7, T034/T036/T040 | agent | research.md R5; shell/capabilities.rs `git`/`without_local_git` |
+| D10 | tasks | Analyze F4: 813/1120 amendment notes only at close? | No: T048 moved into M1, with the first title-order change | agent | spec FR-013 |
 | D8 | tasks | Optional after_tasks hooks (tdd plan, docguard score), optional before_tasks docguard review | Skipped (optional; tests already first in every phase) | agent | .specify/extensions.yml |
 
 ## Review rounds
@@ -48,7 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | f2abbf7224da5e36c1fdee21ec8fe71ba20af4ab:45a9b105ae6d57805c765b6343f57f6e573a90c7 | CLEAN (3 MINOR folded into clarify: FR-002 wording, FR-003 rewrap, SC-005 measurable) |
 | Plan review | 1 | a6363620134ea5fad5070c1cb4dacc71154cfb1e:0716b1a0459687647d249c43c1c5168d5a7f7e19 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 facts read on list/project change + Overview opening, `facts_round`/`facts_asked` replace `listing`, main_tests for created/included; F2 alternatives in R7/R9/R10/R11; F3 interpretation D5; F4 spec read by GitHub title ticket, D2 callers corrected) |
 | Plan review | 2 | 4d7a2d63c9bec458651d6712ce7f7909685829a8:157212aa9334caef6d3266340e08ae115b0f6f8f | CLEAN (1 MINOR fixed, prose only: FR-006 now reads facts on each worktree list change and each Overview opening, spec Amendments note) |
-| Tasks review | 1 | ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1 | pending (full round; also speckit-analyze pending; specs-only gate green at 8e83f798b) |
+| Tasks review | 1 | ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 Verify commands: one filter per `cargo test --lib`, `mise run test-core` alt, `--bin micold-ai-ide` with named test prefixes `worktrees_fingerprint`/`title_facts`/`title_answer`; F2 M1/M2 Verify title text only, source words in M3; F3 [P] dropped from T003/T004, parallel line fixed; F4 M3 Refresh uses E (close PR) and G; F5 stamp with `micold_core::unix_time::unix_secs()`). speckit-analyze (0 CRIT/HIGH, 4 MED, 8 LOW): MED fixed — F1 git-missing split (D9), I1 `numeric_ticket` removal moved to T015, C1 T018 Jira-off case, C2 T005 Default/orphan case; LOW fixed — F2 lowercase key edge case + L2 folder-key-vs-branch-number row, F3 FR-008 names the three surfaces, F4 T048 in M1 (D10), F5 neutral clock, C4 non-ASCII path in T033, C6 stale edge case narrowed to spec/commit; LOW not fixed — C3 timeout test, C5/C7 per-occasion retry tests (covered by L5 table tests in T042) |
+| Tasks review | 2 | (pending; fix diff from round 1 snapshot) | pending (scoped, sonnet) |
 
 ## Declined review findings
 

@@ -39,18 +39,19 @@ all read, before any new source is fed in.
 - [ ] T002 [P] Write failing unit tests for `first_line` in `crates/micold-core/src/location_title.rs`
   (L4): BOM stripped, first line only, trailing `\r` stripped, trimmed, empty or whitespace-only →
   `None`
-- [ ] T003 [P] Write failing unit tests for `choose` in `crates/micold-core/src/location_title.rs`
+- [ ] T003 Write failing unit tests for `choose` in `crates/micold-core/src/location_title.rs`
   (L1): one test per source in FR-001 order (GitHub issue, Jira summary, pull request, spec,
   session, commit, branch, folder), each winning over every lower one; a source whose text
   normalises to nothing is skipped; `branch` and `display_name` used as they are. Move the five
   `card_title` tests from `crates/micold-core/src/overview_text.rs` (lines ~290–310) here as
   `choose` cases
-- [ ] T004 [P] Write a failing unit test in `crates/micold-core/src/location_title.rs` that
+- [ ] T004 Write a failing unit test in `crates/micold-core/src/location_title.rs` that
   `format!("{:?}", LocationTitle)` does not contain the title text (L9, FR-011)
 - [ ] T005 [P] Write failing client tests in `crates/micold-client/tests/features_sidebar.rs` that
   the Overview card title and `features::sidebar::row_title` agree for a worktree titled by its
-  GitHub issue, by its branch and by its folder, and that a custom name (1125) still wins in the
-  row (FR-007)
+  GitHub issue, by its branch and by its folder, that a custom name (1125) still wins in the
+  row (FR-007), and that the project root (Default location) and an orphan folder keep today's
+  title (display name, or branch; spec edge case *Project root*)
 
 ### Implementation
 
@@ -93,8 +94,8 @@ ticket gives its summary (FR-004).
   `feat/1504-readable-titles`; asks 813 (not 900) for folder `feat-813_x` + branch `feat/900_y`;
   asks nothing without GitHub (extend the test at ~line 1340); `State::issue_title` returns the
   branch ticket's known title (US1.1, US1.3, FR-003)
-- [ ] T011 [P] [US1] Write a failing test in `crates/micold-client/src/main_tests.rs` that
-  `shell::issues::worktrees_fingerprint` changes when only a worktree's branch changes (plan D2)
+- [ ] T011 [P] [US1] Write a failing test `worktrees_fingerprint_follows_the_branch` in
+  `crates/micold-client/src/main_tests.rs` that `shell::issues::worktrees_fingerprint` changes when only a worktree's branch changes (plan D2)
 - [ ] T012 [P] [US1] Write a failing test in `crates/micold-client/tests/features_sidebar.rs` that
   the card and the row of a worktree whose ticket is only in its branch both show that issue's
   title (US1.1, SC-002, FR-007)
@@ -105,11 +106,12 @@ ticket gives its summary (FR-004).
   research R2 (folder via `naming`, else branch via `short_branch`'s rule)
 - [ ] T014 [US1] In `crates/micold-client/src/features/overview.rs`: replace `known_title` with
   `State::issue_title(&TitleTicket, &StatusBoard)` (GitHub arm only here), make `titles_to_fetch`
-  take title tickets, and remove `numeric_ticket` once its three callers use `title_ticket`; feed
-  the title ticket into `location_title`
+  take title tickets, and switch the two `numeric_ticket` callers here to `title_ticket`; feed
+  the title ticket into `location_title` (`numeric_ticket` stays until T015)
 - [ ] T015 [US1] In `crates/micold-client/src/shell/issues.rs`: `request_titles` takes the
   worktrees' GitHub title tickets from `(dir_name, branch)` (~line 785), and
-  `worktrees_fingerprint` (~line 756) hashes `(dir_name, branch)`
+  `worktrees_fingerprint` (~line 756) hashes `(dir_name, branch)`; then remove
+  `features::overview::numeric_ticket`, which has no caller left
 - [ ] T016 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a ticket in the branch
   name gives the issue's title when the folder name has none; the folder's ticket wins
 
@@ -123,7 +125,8 @@ ticket gives its summary (FR-004).
   drops both; `summary_of`; `Debug` of the board and of `KeyedIssue` omit summaries (L6, L9)
 - [ ] T018 [P] [US1] Write failing client tests: in `crates/micold-client/tests/features_jira_status.rs`
   `State::plan` asks a branch-only Jira title ticket (folder without ticket, valid key of the
-  connection's project) as a summary-only key and skips a key of another project; in
+  connection's project) as a summary-only key, skips a key of another project, and asks it not
+  at all (nothing sent to Jira) with the Jira switch off or no connection (FR-004, L6); in
   `crates/micold-client/tests/jira_status_sidebar.rs` that worktree shows no status chip and is
   not in `linked_keys` (FR-002, FR-004)
 - [ ] T019 [P] [US1] Write a failing assertion in `crates/micold-client/tests/jira_http_adapter.rs`
@@ -200,19 +203,22 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 - [ ] T033 [P] [US2] Write failing core tests in `crates/micold-core/src/location_title.rs`:
   `spec_title` strips `Feature Specification:`, gives none for `[FEATURE NAME]`/`[...]`-only and no
   heading (L4, FR-012); `read_spec_title` on a temp dir finds the folder of `.specify/feature.json`,
-  else `specs/<n>-*` for ticket `n`, handles CRLF and BOM, gives none for a missing file
+  else `specs/<n>-*` for ticket `n`, handles CRLF and BOM, gives none for a missing file, and
+  reads a worktree whose path has non-ASCII characters (`wt-überblick`)
 - [ ] T034 [P] [US2] Write failing core tests in `crates/micold-core/tests/review_git.rs` for
   `GitCli::own_commit_subject` on a temp repo: own commit → its subject; fresh branch → none;
-  detached HEAD → none; no default branch → none; and in `crates/micold-core/tests/git_fake.rs`
+  detached HEAD → none; no default branch → none; a dir that is not a git repository → none; and in `crates/micold-core/tests/git_fake.rs`
   for `FakeGit::with_own_commit` (L7)
 - [ ] T035 [P] [US2] Write failing reducer tests in
   `crates/micold-client/tests/features_overview.rs`: `TitleFactsRequested` bumps `facts_round` and
   records it per dir; `TitleFactsRead` is dropped for an older round, an unlisted dir or another
   project, stored otherwise; `ProjectSwitched` clears facts; `Debug` of `TitleFacts` omits texts;
   stored facts title the card (spec over session, commit under session) (L7, L9, US2.2, US2.4)
-- [ ] T036 [P] [US2] Write failing tests in `crates/micold-client/src/main_tests.rs`: through
-  `update`, a `set_worktrees` listing, a created worktree (`features::worktree::created`), an
-  included one and an Overview opening each leave their dirs in `facts_asked` (FR-006, L7)
+- [ ] T036 [P] [US2] Write failing tests named `title_facts_*` in
+  `crates/micold-client/src/main_tests.rs`: through `update`, a `set_worktrees` listing, a created
+  worktree (`features::worktree::created`), an included one and an Overview opening each leave
+  their dirs in `facts_asked`; with capabilities `without_local_git` (worktrees not on this
+  machine) none does (FR-006, L7)
 
 ### Implementation — spec and commit facts
 
@@ -228,8 +234,10 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
   into `location_title`
 - [ ] T040 [US2] New `crates/micold-client/src/shell/location_titles.rs` (registered in the shell
   module): `read_facts(app, &dirs)` applies `TitleFactsRequested`, then per valid worktree one
-  `Task::perform` + `spawn_blocking` with `shell/changes.rs`'s `READ_DEADLINE`, no read without
-  local git; call it from `crates/micold-client/src/main.rs` beside the fingerprint check
+  `Task::perform` + `spawn_blocking` with `shell/changes.rs`'s `READ_DEADLINE` reading the spec
+  heading and the own-commit subject independently (a failing or missing `git` loses only the
+  commit); nothing at all (no `TitleFactsRequested`, no read) without local git
+  (`caps.shared_git()` none: the worktrees are the daemon's, not this machine's); call it from `crates/micold-client/src/main.rs` beside the fingerprint check
   (~line 490, also on an active-project change) and from `issues::on_overview_opened`
   (`crates/micold-client/src/shell/issues.rs` ~line 737); log no text (L9)
 - [ ] T041 [US2] Update `docs/user-guide/overview.md` *Title*: spec and latest-commit sources, read
@@ -251,9 +259,10 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
   `titles_to_fetch(..., now)` re-asks `Failed { at }` only when `now - at >= 300`, never
   `NoIssue`, `Known` or `Pending` (US3.1–3.3, L5); while `Failed` or `Pending` the card shows the
   next source's title, never a loading text
-- [ ] T043 [P] [US3] Write failing tests in `crates/micold-client/src/main_tests.rs`:
-  `on_title_remotes(None)` → `Failed`, no GitHub remote → `NoIssue`, `read_title` `Ok(None)` →
-  `NoIssue`, `Err(Load)` → `Failed` stamped with `features::jira_status::now()` (research R3)
+- [ ] T043 [P] [US3] Write failing tests named `title_answer_*` in
+  `crates/micold-client/src/main_tests.rs`: `on_title_remotes(None)` → `Failed`, no GitHub remote
+  → `NoIssue`, `read_title` `Ok(None)` → `NoIssue`, `Err(Load)` → `Failed { at }` stamped with
+  `micold_core::unix_time::unix_secs()` (Unix seconds, research R3)
 
 ### Implementation
 
@@ -261,7 +270,8 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
   and `Failed { at: u64 }` (replacing `Unavailable`); `titles_to_fetch` takes `now` and adds due
   retries
 - [ ] T045 [US3] In `crates/micold-client/src/shell/issues.rs`: map `on_title_remotes` (~line 882)
-  and `read_title` (~line 980) answers per research R3; pass `now` to `titles_to_fetch`
+  and `read_title` (~line 980) answers per research R3, stamping `Failed { at }` with
+  `micold_core::unix_time::unix_secs()`; pass that `now` to `titles_to_fetch`
 - [ ] T046 [US3] Update `docs/user-guide/overview.md` *Title*: a failed read is asked again after
   5 minutes, on the next Overview opening or list refresh
 
@@ -274,7 +284,7 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 - [ ] T047 Confirm `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` pass with caller counts
   unchanged (L8, SC-004)
-- [ ] T048 Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
+- [ ] T048 (ships in M1) Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
   `specs/1120-overview-card-readability/spec.md` US2 scenarios 1–2 (FR-013, plan D8)
 - [ ] T049 Run quickstart.md Part A and Part B (visual pass) and record the result in
   `specs/1504-readable-worktree-titles/quickstart.md`
@@ -288,11 +298,12 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 - US2 and US3 depend only on Foundational and T013–T015 (the title ticket); US3 does not depend on
   US2.
 - Within each block, tests first (red), then implementation, then the user-guide task.
-- T021 before T023 (board API); T037 and T038 before T040; T039 before T040.
+- T014 before T015 (T015 removes `numeric_ticket` once both moved its callers); T021 before T023
+  (board API); T037 and T038 before T040; T039 before T040.
 
 ## Parallel examples
 
-- Foundational: T002, T003, T004, T005 together.
+- Foundational: T002 then T003 then T004 (one file), alongside T005.
 - US1: T009–T012 together; T017–T020 together.
 - US2: T025–T027 together; T033–T036 together.
 - US3: T042, T043 together.
@@ -309,13 +320,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Chooser and branch tickets 🎯 MVP
 
-- **Tasks**: T001–T016
+- **Tasks**: T001–T016, T048 (the 813/1120 *Amended by 1504* notes ship with the first change to
+  the title order, so those specs never disagree with `main`)
 - **Deliverable**: a worktree whose GitHub ticket is only in its branch name shows that issue's
   title on its Overview card and sidebar row, through one chooser that every surface reads.
 - **Satisfies**: US1 acceptance scenarios 1 and 3; FR-001 (chooser), FR-002 (GitHub), FR-003,
   FR-007, FR-011 (`LocationTitle`), FR-012 (`first_line`); SC-002
-- **Verify**: `cargo test -p micold-core location_title`; `cargo test -p micold-client --test
-  overview --test features_sidebar`; quickstart §B rows A–B
+- **Verify**: `mise run test-core` (or `cargo test -p micold-core --lib location_title`);
+  `cargo test -p micold-client --test overview --test features_sidebar`;
+  `cargo test -p micold-client --bin micold-ai-ide worktrees_fingerprint`; quickstart §B rows A–B,
+  title text only: card and sidebar row show the issue's title (source words arrive in M3)
 - **Depends on**: —
 - **Tier**: full
 
@@ -325,9 +339,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: a worktree with a Jira title ticket (folder or branch) shows the Jira issue's
   summary as its title; a branch-only key gets no status chip.
 - **Satisfies**: US1 acceptance scenarios 2 and 4; FR-002 (Jira), FR-004, FR-011 (board)
-- **Verify**: `cargo test -p micold-core jira_status --test jira_parse`; `cargo test -p
-  micold-client --test features_jira_status --test jira_status_sidebar --test jira_http_adapter
-  --test features_sidebar`; quickstart §B rows C–D
+- **Verify**: `mise run test-core` (or `cargo test -p micold-core --lib jira_status` and
+  `cargo test -p micold-core --test jira_parse`); `cargo test -p micold-client --test
+  features_jira_status --test jira_status_sidebar --test jira_http_adapter --test
+  features_sidebar`; quickstart §B rows C–D, title text only: card and row show the Jira summary,
+  C has its status chip, D has none (source words arrive in M3)
 - **Depends on**: M1
 - **Tier**: full
 
@@ -339,8 +355,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US2 acceptance scenarios 1, 3, 5, 6, 7; FR-001 items 3 and 5, FR-005, FR-008,
   FR-010
 - **Verify**: `cargo test -p micold-client --test features_overview --test features_sidebar`;
-  `cargo test -p micold-core location_title context_header overview_text`; quickstart §B rows E, G,
-  I and *Refresh* (PR opened, session archived)
+  `mise run test-core` (or, one filter per command, `cargo test -p micold-core --lib
+  location_title`, `cargo test -p micold-core --lib context_header`, `cargo test -p micold-core
+  --lib overview_text`); quickstart §B rows A–E, G, I with their source words, and the *Refresh*
+  steps that exist in M3: close E's pull request (E falls to its branch name) and archive G's
+  session (G falls to the next source)
 - **Depends on**: M1
 - **Tier**: full
 
@@ -352,9 +371,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   Overview opens.
 - **Satisfies**: US2 acceptance scenarios 2 and 4; FR-001 items 4 and 6, FR-006, FR-011 (facts),
   FR-012 (spec); SC-001, SC-005
-- **Verify**: `cargo test -p micold-core location_title --test review_git --test git_fake`;
-  `cargo test -p micold-client --test features_overview` and the `main_tests` facts tests;
-  quickstart §B rows F, H and the late-commit *Refresh* step
+- **Verify**: `mise run test-core` (or `cargo test -p micold-core --lib location_title` and
+  `cargo test -p micold-core --test review_git --test git_fake`); `cargo test -p micold-client
+  --test features_overview`; `cargo test -p micold-client --bin micold-ai-ide title_facts`;
+  quickstart §B rows F, H and the *Refresh* steps open-a-PR-for-H and late commit
 - **Depends on**: M3 (tooltip words and `ExpandedText.source` show the new sources)
 - **Tier**: full
 
@@ -365,9 +385,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   at least 5 minutes later, so the card recovers without a restart; a "no such issue" answer is
   never re-asked.
 - **Satisfies**: US3 acceptance scenarios 1–3; FR-009; SC-003
-- **Verify**: `cargo test -p micold-client --test overview` and the `main_tests` title-answer
-  tests; quickstart §B *Retry*
+- **Verify**: `cargo test -p micold-client --test overview`; `cargo test -p micold-client --bin
+  micold-ai-ide title_answer`; quickstart §B *Retry*
 - **Depends on**: M1
 - **Tier**: light
 
-Polish (T047–T049) changes no code: the close unit does it in the close PR.
+Polish T047 and T049 change no code: the close unit does them in the close PR. T048 ships in M1.

@@ -170,6 +170,8 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **A source text that is empty or only whitespace after trimming**: that source gives no title.
 - **A very long or multi-line source text**: only its first line is used, trimmed; the card and
   row ellipsize it as they already do for long titles (1120).
+- **A Jira key written in lower case** in the folder or branch (`feat/abc-42_login`): it is read
+  as `ABC-42`.
 - **Both a GitHub number and a Jira key** in the folder or branch: the ticket the naming convention
   reads first is the title ticket; only that one is looked up.
 - **GitHub issues switched off, or no Jira connection**: that issue source gives no title and is
@@ -183,11 +185,15 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **Windows paths, and branch names or folders with `\` or non-ASCII characters**: the spec and
   commit sources read the worktree at its own path on every platform; a ticket is found in the
   branch name the same way on every platform.
-- **git missing, failing or timing out**: the commit source gives no title; the other sources still
-  apply and the window is not blocked.
-- **A title read (issue, spec, commit) that finishes after a newer refresh or after its worktree is
-  removed**: a stale result is dropped, never shown over the newer refresh's title; a removed
-  worktree's result is discarded.
+- **git missing, failing or timing out**: the commit source gives no title; the spec heading is
+  still read, the other sources still apply and the window is not blocked.
+- **Worktrees not on this machine** (a remote daemon placement, feature 027: the window has no
+  local git): neither the spec nor the commit source is read, since the paths are the daemon's;
+  the other sources still apply.
+- **A spec or commit read that finishes after a newer refresh or after its worktree is removed**:
+  a stale result is dropped, never shown over the newer refresh's title; a removed worktree's
+  result is discarded. (An issue title is kept per issue number, so a late answer is still that
+  issue's title.)
 - **The main session changes (archived, another becomes main) while titles are computed**: the next
   refresh uses the new main session's title (FR-010).
 - **Two windows asking for, or retrying, the same issue's title**: each number is read at most once
@@ -238,10 +244,10 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
   block the window while they are read.
 - **FR-007**: The Overview card and the sidebar row of a worktree MUST show the same location
   title (feature 1125), except where the sidebar shows the user's custom name.
-- **FR-008**: The title's tooltip MUST show the folder name and the title source, worded for a
-  person (*From GitHub issue #1504*, *From Jira ABC-42*, *From pull request #1520*, *From the
-  feature spec*, *From the session title*, *From the latest commit*, *Branch name*); a title that
-  is the folder name MUST keep today's tooltip.
+- **FR-008**: The title's tooltip (sidebar row, session-area header, expanded Overview card) MUST
+  show the folder name and the title source, worded for a person (*From GitHub issue #1504*, *From
+  Jira ABC-42*, *From pull request #1520*, *From the feature spec*, *From the session title*, *From
+  the latest commit*, *Branch name*); a title that is the folder name MUST keep today's tooltip.
 - **FR-009**: A GitHub issue title read that failed (offline, timeout, service or tooling error)
   MUST be asked for again on the next occasion the app already asks for titles, once at least
   5 minutes have passed since the failure; a read that answered that the number is no issue MUST

@@ -17,7 +17,8 @@ skipped. Only one issue source can apply: the title ticket is either a number or
 | `project-thread-t2a600` | `feat/1504-readable-titles` | `Github(1504)` (short-branch rule) |
 | `project-thread-t2a600` | `feat/1504_readable-titles` | `Github(1504)` |
 | `feat-ABC-42_login` | any | `Jira("ABC-42")` |
-| `wt` | `feat/abc-42_login` | `Jira("ABC-42")` |
+| `wt` | `feat/abc-42_login` | `Jira("ABC-42")` (key case-insensitive, uppercased) |
+| `feat-ABC-42_login` | `feat/1504_x` | `Jira("ABC-42")` (folder wins over the branch's number) |
 | `wt` | `fix/some_bug` | none (`some` is neither) |
 | `claude-project-thread-7041o6` | `claude/project-thread-7041o6` | none |
 | `wt` | none (detached) | none |
@@ -73,7 +74,9 @@ name). The folder name stays on each (row `Name:`/`Folder:` lines; header and ca
   title ticket `n` (folder or branch).
 - Commit: merge-base with the default branch (`review_base`), `log -1 --format=%s base..HEAD`;
   none without a branch, without a base, with an empty range, on error or timeout.
-- Not read without local git (`caps.shared_git()` none).
+- Spec and commit are read independently: a failing, missing or timed-out `git` loses only the
+  commit.
+- Nothing is read without local git (`caps.shared_git()` none: the paths are the daemon's).
 - An answer is dropped when its project is not active, its dir is not listed, or its round is not
   the last one asked for its dir.
 
