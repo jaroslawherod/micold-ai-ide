@@ -533,16 +533,9 @@ pub fn pane<'a>(
         None => body,
     };
 
-    // #943: above a Claude terminal session's own terminal, the held-queue line and **Open in
-    // structured view**; an empty element otherwise, so the terminal keeps its place in the tree.
-    // Outside the size reporter, so the terminal is sized to the room left under it. A transcript
-    // has its switch in its own header.
-    let body: Element<'a, Message> = if several.is_some() || shows_transcript(state, active) {
-        body
-    } else {
-        let shown = active_primary(state, active);
-        column![terminal_switch_strip(state, shown, r), body].into()
-    };
+    // Feature 1463 FR-004: a single pane's held-queue caption and **Open in structured view** sit in
+    // the tab strip above (`session_area::strip`), not in a row of their own over the terminal. A
+    // tiled pane keeps its own row (`panes::view`); a transcript has its switch in its own header.
 
     // A refusal with a single pane (closing the last one) has no pane area to sit in: say it above
     // the terminal, as the multi-pane view does.
@@ -658,6 +651,37 @@ pub(crate) fn switch_button<'a>(
     )
 }
 
+/// As [`switch_button`], its label cut with an ellipsis (the full label on hover) when the strip is
+/// too narrow for it (feature 1463 FR-012).
+pub(crate) fn switch_button_shrinking<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    let entry = crate::features::session::switch_entries(state, id)
+        .into_iter()
+        .next()?;
+    let tint = crate::ui::material::ButtonVariant::Outlined.content(r, None);
+    let label = crate::ui::material::Ellipsized::<Message>::at_role_spaced(
+        entry.label,
+        TypeRole::Action,
+        tint,
+    )
+    .shrink();
+    let button = crate::ui::material::Button::with_content(
+        label,
+        crate::ui::material::ButtonVariant::Outlined,
+        r,
+    )
+    .on_press(Message::Composer(
+        crate::features::composer::Msg::SwitchRequested {
+            session: id,
+            to: entry.to,
+        },
+    ));
+    Some(crate::ui::material::Tooltip::new(button, entry.label, r).into())
+}
+
 /// The primary terminal of `id` while the single pane shows its AI tab (#943).
 fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
     state
@@ -670,35 +694,73 @@ fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
         })
 }
 
-/// Above a Claude terminal session's terminal (#943 US4 scenario 4, US5 scenario 3): how many
-/// queued messages wait for the structured view, and **Open in structured view**. Anything else
-/// gets an empty element, so the terminal under it keeps its place in the widget tree.
+/// What a Claude terminal session offers beside its terminal (#943 US4 scenario 4, US5 scenario 3):
+/// **Open in structured view** and, when messages wait for the structured view, a caption saying
+/// how many.
+pub(crate) struct SwitchOffer {
+    /// The session the button switches.
+    pub session: SessionId,
+    /// How many queued messages wait, when any do.
+    pub caption: Option<String>,
+}
+
+/// The offer for `terminal`: only a Claude terminal session's primary terminal has one (the
+/// eligibility the tiled row and the strip share, feature 1463 D2).
+pub(crate) fn switch_offer_of(state: &State, terminal: Option<TerminalRef>) -> Option<SwitchOffer> {
+    let t = terminal
+        .filter(|t| t.process == micold_core::protocol::messages::SessionProcess::Primary)
+        .filter(|t| {
+            session_kind(state, t.session) == micold_core::session::SessionKind::Terminal
+        })?;
+    crate::features::session::switch_entries(state, t.session)
+        .first()
+        .map(|_| SwitchOffer {
+            session: t.session,
+            caption: state.held_queue_line(t.session),
+        })
+}
+
+/// The offer the tab strip carries for the shown session (feature 1463 FR-004, FR-006): a single
+/// pane showing a Claude terminal session's AI tab, not a transcript, and not while the Review tab
+/// is shown. Tiled panes keep their own row.
+pub(crate) fn strip_switch_offer(
+    state: &State,
+    several: bool,
+    review_shown: bool,
+) -> Option<SwitchOffer> {
+    let active = state.session.active?;
+    if several || review_shown || shows_transcript(state, active) {
+        return None;
+    }
+    switch_offer_of(state, active_primary(state, active))
+}
+
+/// Above a tiled pane's terminal (#943 US4 scenario 4, US5 scenario 3): how many queued messages
+/// wait for the structured view, and **Open in structured view**. Anything else gets an empty
+/// element, so the terminal under it keeps its place in the widget tree.
 pub(crate) fn terminal_switch_strip<'a>(
     state: &'a State,
     terminal: Option<TerminalRef>,
     r: tokens::Roles,
 ) -> Element<'a, Message> {
-    let strip = terminal
-        .filter(|t| t.process == micold_core::protocol::messages::SessionProcess::Primary)
-        .filter(|t| session_kind(state, t.session) == micold_core::session::SessionKind::Terminal)
-        .and_then(|t| {
-            let button = switch_button(state, t.session, r)?;
-            let held = state
-                .held_queue_line(t.session)
-                .map(|line| Text::new(line, TypeRole::Caption, r).muted());
-            Some(
-                container(
-                    row![]
-                        .push(held)
-                        .push(Space::new().width(Length::Fill))
-                        .push(button)
-                        .spacing(spacing::SM)
-                        .align_y(Alignment::Center),
-                )
-                .width(Length::Fill)
-                .padding([spacing::XS, spacing::SM]),
+    let strip = switch_offer_of(state, terminal).and_then(|offer| {
+        let button = switch_button(state, offer.session, r)?;
+        let held = offer
+            .caption
+            .map(|line| Text::new(line, TypeRole::Caption, r).muted());
+        Some(
+            container(
+                row![]
+                    .push(held)
+                    .push(Space::new().width(Length::Fill))
+                    .push(button)
+                    .spacing(spacing::SM)
+                    .align_y(Alignment::Center),
             )
-        });
+            .width(Length::Fill)
+            .padding([spacing::XS, spacing::SM]),
+        )
+    });
     // An empty container rather than a bare `Space`: a void child is dropped from the tree, which
     // would move the terminal under it (see `right_aligned_tabs`).
     match strip {
@@ -803,6 +865,62 @@ mod tests {
     //! tab's variant rule (feature 012 BUG-001). Bin unit tests — run with
     //! `cargo test --features gui`. See contracts/terminal-render-input.md.
     use super::*;
+
+    /// A shown Claude Code session of `kind` in its AI tab, from a project at `/repo`.
+    fn shown_session(kind: micold_core::session::SessionKind) -> State {
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, Session};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path.clone());
+        let session = Session::start_new_of_kind(SessionLocation::Default, AiCli::ClaudeCode, kind);
+        state.session.active = Some(session.id);
+        state.workspace.sessions.insert(path, vec![session]);
+        state
+    }
+
+    /// Feature 1463 FR-004, FR-006, T009: the strip carries a switch only for a Claude terminal
+    /// session's AI tab in a single pane with the Review tab not shown.
+    #[test]
+    fn the_strip_offers_the_switch_only_for_a_single_pane_claude_terminal_session() {
+        use micold_core::session::SessionKind;
+        let terminal = shown_session(SessionKind::Terminal);
+        let id = terminal.session.active.expect("a shown session");
+        let offer =
+            strip_switch_offer(&terminal, false, false).expect("a Claude terminal offers it");
+        assert_eq!(offer.session, id);
+        assert_eq!(offer.caption, None, "nothing waits");
+        assert!(
+            strip_switch_offer(&terminal, true, false).is_none(),
+            "tiled panes keep their own row (FR-007)"
+        );
+        assert!(
+            strip_switch_offer(&terminal, false, true).is_none(),
+            "hidden while the Review tab is shown (FR-006)"
+        );
+        let structured = shown_session(SessionKind::Structured);
+        assert!(
+            strip_switch_offer(&structured, false, false).is_none(),
+            "a transcript has its switch in its own header"
+        );
+        let mut regular = shown_session(SessionKind::Terminal);
+        for session in regular.workspace.sessions.values_mut().flatten() {
+            session.mode = TerminalMode::Regular;
+        }
+        assert!(
+            strip_switch_offer(&regular, false, false).is_none(),
+            "only the AI tab is offered the switch"
+        );
+        let none = State::default();
+        assert!(
+            strip_switch_offer(&none, false, false).is_none(),
+            "no session, no offer"
+        );
+    }
     use crate::features::session_strip::tests::{failed, state_showing, state_with_instances};
     use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Rgb as AnsiRgb};
     use micold_core::session::{SessionLifecycle, SessionLocation, ShellLifecycle};

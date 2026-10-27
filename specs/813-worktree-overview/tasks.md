@@ -244,7 +244,8 @@ closes, terminal gets nothing); a permission request puts a red badge on the but
   height; `UnreadMark::icon(Icon)` draws the icon and the count, tinted by the given role
 - [X] T034 [P] [US2] Client tests in micold-client/tests/overview.rs: `overview::badge(&cards)` →
   `Some { tone: Error, count, label: "N need action" }` with any NeedsAction card, else `Warning`
-  *N need attention*, else `None`, whether or not the Overview is open (US2.4, FR-012)
+  *N need attention*, else `None`, whether or not the Overview is open (US2.4, FR-012); a count of one
+  is singular, *1 needs action* / *1 needs attention* (BUG-1493, T083-T086)
 
 ### Implementation for US2
 
@@ -605,28 +606,40 @@ HIGH findings and the loosened gate) are cleared and `tdd-verify` is re-run.
 - [x] T082 [TDD] B2, B4, B5: a test for the connection banner that carries the stale-data strip (the root view placing it above the Overview is not asserted), a state-change-then-`cards` test (US1.6), and a note
   in quickstart B8 naming the OfferStart chain as visual-pass only
 
-## Phase 10: Bugfix BUG-1488 — a closed issue's title
+## Phase 10: Bugfix BUG-1493 — Singular Overview badge label
 
-**Bugfix**: 2026-10-27 — BUG-1488 Updated from bugfix patch. Source: `bugs/BUG-1488.md`. T083 before
-T084; neither depends on other open tasks.
+**Bugfix**: 2026-10-27 — BUG-1493 Added Phase 10 (T083–T086): the badge label said "1 need action" /
+"1 need attention". FR-012, `contracts/ui.md` U2 and the user guide now name the singular form.
 
-- [x] T083 [US4] Regression tests, written first and seen failing: in
+- [x] T083 [TDD] [BUG-1493] Update the pinned labels to the singular form: `tests/overview.rs` (`1 needs action`) and
+  `ui/overview.rs` (`1 needs attention`); proof: `scripts/build-lock.sh cargo test -p micold-client --test overview badge`
+  fails before T084
+- [x] T084 [BUG-1493] `features/overview.rs` `badge()`: choose the verb by count (`needs` for 1, `need` otherwise)
+- [x] T085 [BUG-1493] Contract and guide: FR-012 (spec.md), `contracts/ui.md` U2, `docs/user-guide/overview.md`
+- [x] T086 [BUG-1493] Verify: `scripts/build-lock.sh cargo test -p micold-client` badge tests green
+
+## Phase 11: Bugfix BUG-1488 — a closed issue's title
+
+**Bugfix**: 2026-10-27 — BUG-1488 Updated from bugfix patch. Source: `bugs/BUG-1488.md`. T087 before
+T088; neither depends on other open tasks.
+
+- [x] T087 [US4] Regression tests, written first and seen failing: in
   crates/micold-core/tests/github_issue_lookup.rs, `parse_title` gives `Some(title)` for an OPEN and a
   CLOSED issue node, `None` for `issue: null` (with or without the NOT_FOUND error), and the
   `parse_lookup` error for no `data` or a null repository; the default `IssueLookup::read_title` over
   `FakeIssueSource` gives the scripted snapshot's title. In crates/micold-client/src/shell/issues.rs
   `title_tests`, `read_title` over a source whose `read_title` answers a closed issue's title gives
   `TitleLookup::Known(title)`, and over `None` or an error gives `Unavailable` (FR-015, BUG-1488)
-- [x] T084 [US4] Fix: in crates/micold-core/src/github.rs add `parse_title` and
+- [x] T088 [US4] Fix: in crates/micold-core/src/github.rs add `parse_title` and
   `IssueLookup::read_title(repo, number) -> Result<Option<String>, IssueLookupError>` (default via
   `read_issue`: an open issue's title, `NotOpenIssue` → `Ok(None)`), overridden by `GhCli` with
   `lookup_args` + `parse_title`; crates/micold-client/src/shell/issues.rs `read_title` calls it, the
   failure line still names the number only (FR-020); `TitleLookup::Unavailable`'s doc in
-  crates/micold-client/src/features/overview.rs drops "closed". `read_issue` is unchanged. T083 passes
+  crates/micold-client/src/features/overview.rs drops "closed". `read_issue` is unchanged. T087 passes
 
 ### M7 — A closed issue's title on the card (BUG-1488)
 
-- **Tasks**: T083–T084
+- **Tasks**: T087–T088
 - **Deliverable**: a worktree whose linked issue is closed shows the issue's title on its Overview
   card, sidebar row and session header, not its branch
 - **Satisfies**: FR-015 (closed issue), edge case *Linked issue closed*; FR-020 unchanged

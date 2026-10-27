@@ -47,11 +47,11 @@ scene_frame_hold 2
 
 # The type. It is a list rather than a text field, so the list is opened and a row is pressed --
 # both are frames, because the list is where a reader sees that the types are fixed.
-scene_click "$scene_form_x" "$scene_form_type_y"
+scene_click "$scene_form_type_x" "$scene_form_type_y"
 scene_point_away
 scene_frame 1.0
 scene_frame_hold 1
-scene_click "$scene_form_x" "$scene_form_type_feat_y"
+scene_click "$scene_form_type_x" "$scene_form_type_feat_y"
 scene_point_away
 scene_frame 0.8
 

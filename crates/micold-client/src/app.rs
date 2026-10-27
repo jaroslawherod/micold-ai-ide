@@ -102,6 +102,11 @@ impl Editor {
         self.0.line_count()
     }
 
+    /// Whether some text is selected (Ctrl+C then copies it instead of interrupting).
+    pub fn has_selection(&self) -> bool {
+        self.0.selection().is_some_and(|text| !text.is_empty())
+    }
+
     /// The text shown.
     pub fn text(&self) -> String {
         self.0.text()

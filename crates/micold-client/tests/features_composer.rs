@@ -134,11 +134,25 @@ fn text_of(state: &State, session: SessionId) -> String {
 #[test]
 fn enter_sends_and_shift_enter_breaks_the_line() {
     assert_eq!(
-        composer_key(&plain(NamedKey::Enter), (0, 0), 1, false, TurnPhase::Idle),
+        composer_key(
+            &plain(NamedKey::Enter),
+            (0, 0),
+            1,
+            false,
+            false,
+            TurnPhase::Idle
+        ),
         KeyIntent::Send
     );
     assert_eq!(
-        composer_key(&shift(NamedKey::Enter), (0, 0), 1, false, TurnPhase::Idle),
+        composer_key(
+            &shift(NamedKey::Enter),
+            (0, 0),
+            1,
+            false,
+            false,
+            TurnPhase::Idle
+        ),
         KeyIntent::NewLine
     );
 }
@@ -146,7 +160,14 @@ fn enter_sends_and_shift_enter_breaks_the_line() {
 #[test]
 fn enter_during_an_ime_composition_completes_it() {
     assert_eq!(
-        composer_key(&plain(NamedKey::Enter), (0, 0), 1, true, TurnPhase::Idle),
+        composer_key(
+            &plain(NamedKey::Enter),
+            (0, 0),
+            1,
+            true,
+            false,
+            TurnPhase::Idle
+        ),
         KeyIntent::Edit
     );
 }
@@ -156,19 +177,19 @@ fn up_steps_back_only_on_the_first_line_and_down_forward_only_on_the_last() {
     let up = plain(NamedKey::ArrowUp);
     let down = plain(NamedKey::ArrowDown);
     assert_eq!(
-        composer_key(&up, (0, 3), 3, false, TurnPhase::Idle),
+        composer_key(&up, (0, 3), 3, false, false, TurnPhase::Idle),
         KeyIntent::HistoryBack
     );
     assert_eq!(
-        composer_key(&up, (1, 0), 3, false, TurnPhase::Idle),
+        composer_key(&up, (1, 0), 3, false, false, TurnPhase::Idle),
         KeyIntent::Edit
     );
     assert_eq!(
-        composer_key(&down, (2, 0), 3, false, TurnPhase::Idle),
+        composer_key(&down, (2, 0), 3, false, false, TurnPhase::Idle),
         KeyIntent::HistoryForward
     );
     assert_eq!(
-        composer_key(&down, (1, 0), 3, false, TurnPhase::Idle),
+        composer_key(&down, (1, 0), 3, false, false, TurnPhase::Idle),
         KeyIntent::Edit
     );
 }
@@ -177,19 +198,100 @@ fn up_steps_back_only_on_the_first_line_and_down_forward_only_on_the_last() {
 fn escape_interrupts_only_a_busy_session() {
     let escape = plain(NamedKey::Escape);
     assert_eq!(
-        composer_key(&escape, (0, 0), 1, false, busy()),
+        composer_key(&escape, (0, 0), 1, false, false, busy()),
         KeyIntent::Interrupt
     );
     assert_eq!(
-        composer_key(&escape, (0, 0), 1, false, overdue()),
+        composer_key(&escape, (0, 0), 1, false, false, overdue()),
         KeyIntent::Interrupt
     );
     for phase in [TurnPhase::Idle, TurnPhase::NotRunning] {
         assert_eq!(
-            composer_key(&escape, (0, 0), 1, false, phase),
+            composer_key(&escape, (0, 0), 1, false, false, phase),
             KeyIntent::Edit
         );
     }
+}
+
+fn ctrl_c(mods: Mods) -> KeyInput {
+    KeyInput {
+        key: Key::Char('c'),
+        mods,
+        text: Some("c".into()),
+        physical: PhysicalKey::Other,
+    }
+}
+
+const CTRL: Mods = Mods {
+    ctrl: true,
+    ..Mods::NONE
+};
+
+#[test]
+fn ctrl_c_interrupts_a_busy_session_without_a_selection() {
+    let press = ctrl_c(CTRL);
+    for phase in [busy(), overdue()] {
+        assert_eq!(
+            composer_key(&press, (0, 0), 1, false, false, phase),
+            KeyIntent::Interrupt
+        );
+        assert_eq!(transcript_key(&press, phase), KeyIntent::Interrupt);
+    }
+}
+
+#[test]
+fn ctrl_c_stays_the_editors_when_it_must_not_interrupt() {
+    let press = ctrl_c(CTRL);
+    // A selection: Ctrl+C copies it.
+    assert_eq!(
+        composer_key(&press, (0, 0), 1, false, true, busy()),
+        KeyIntent::Edit
+    );
+    // Composing.
+    assert_eq!(
+        composer_key(&press, (0, 0), 1, true, false, busy()),
+        KeyIntent::Edit
+    );
+    // Nothing to interrupt.
+    for phase in [TurnPhase::Idle, TurnPhase::NotRunning] {
+        assert_eq!(
+            composer_key(&press, (0, 0), 1, false, false, phase),
+            KeyIntent::Edit
+        );
+        assert_eq!(transcript_key(&press, phase), KeyIntent::Edit);
+    }
+    // Another modifier beside Ctrl, or none (a plain `c` is typing).
+    for mods in [
+        Mods {
+            shift: true,
+            ..CTRL
+        },
+        Mods { alt: true, ..CTRL },
+        Mods { logo: true, ..CTRL },
+        Mods {
+            logo: true,
+            ..Mods::NONE
+        },
+        Mods::NONE,
+    ] {
+        let press = ctrl_c(mods);
+        assert_eq!(
+            composer_key(&press, (0, 0), 1, false, false, busy()),
+            KeyIntent::Edit,
+            "{mods:?}"
+        );
+        assert_eq!(transcript_key(&press, busy()), KeyIntent::Edit, "{mods:?}");
+    }
+}
+
+#[test]
+fn an_editor_reports_whether_text_is_selected() {
+    use iced::widget::text_editor::{Action, Motion};
+    use micold_client::app::{Editor, EditorAction};
+    let mut editor = Editor::new("hello");
+    assert!(!editor.has_selection());
+    editor.act(&EditorAction(Action::Select(Motion::Right)));
+    assert!(editor.has_selection());
 }
 
 #[test]
@@ -204,7 +306,7 @@ fn no_composer_key_needs_a_platform_modifier() {
     for (press, intent) in presses {
         assert!(!press.mods.ctrl && !press.mods.alt && !press.mods.logo);
         assert_eq!(
-            composer_key(&press, (0, 0), 1, false, busy()),
+            composer_key(&press, (0, 0), 1, false, false, busy()),
             intent,
             "{press:?}"
         );
@@ -220,7 +322,7 @@ fn other_keys_are_the_editors() {
         physical: PhysicalKey::Other,
     };
     assert_eq!(
-        composer_key(&typed, (0, 0), 1, false, busy()),
+        composer_key(&typed, (0, 0), 1, false, false, busy()),
         KeyIntent::Edit
     );
 }
@@ -348,7 +450,14 @@ fn up_then_enter_resends_the_previous_message() {
     let (mut state, s) = composer_in(TurnPhase::Idle);
     let transcript = transcript_of(&["older", "previous"]);
     let caret = state.draft(s).map(|d| d.caret).unwrap_or_default();
-    let intent = composer_key(&plain(NamedKey::ArrowUp), caret, 1, false, TurnPhase::Idle);
+    let intent = composer_key(
+        &plain(NamedKey::ArrowUp),
+        caret,
+        1,
+        false,
+        false,
+        TurnPhase::Idle,
+    );
     assert_eq!(intent, KeyIntent::HistoryBack);
     assert!(state.history_back(s, Some(&transcript)));
     let draft = state.draft(s).unwrap();
@@ -357,6 +466,7 @@ fn up_then_enter_resends_the_previous_message() {
         &plain(NamedKey::Enter),
         draft.caret,
         lines,
+        false,
         false,
         TurnPhase::Idle,
     );

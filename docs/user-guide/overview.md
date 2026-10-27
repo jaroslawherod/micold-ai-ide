@@ -35,8 +35,9 @@ has the keyboard; the app takes it and the terminal never receives it. The row's
 
 When some location needs you, the sidebar's Overview row carries a badge: a chip with the words, for
 example "2 need action". Red means *N* locations **need action**; if none does, amber means *N*
-**need attention**. Hover the row for the same words in its tooltip. With neither, there is no
-badge. The badge shows whether or not the Overview is open.
+**need attention**. With exactly one location the words are singular: "1 needs action", "1 needs
+attention". Hover the row for the same words in its tooltip. With neither, there is no badge. The
+badge shows whether or not the Overview is open.
 
 The Overview replaces the main area; the sidebar, the [title bar](appearance-theming.md#title-bar)
 and the [status bar](appearance-theming.md#status-bar) stay. Switching project keeps it

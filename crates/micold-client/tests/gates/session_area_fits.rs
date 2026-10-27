@@ -148,12 +148,16 @@ fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
 /// (S7). The members inside the region scroll, so they are not parts that must fit the window.
 fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let row = [SESSION_AREA, &[1, 0]].concat();
-    const NAMES: [&str; 4] = ["tab region", "status", "New session", "split buttons"];
-    records
-        .iter()
-        .filter(|r| r.path.len() == row.len() + 1 && r.path.starts_with(&row))
-        .map(|r| (format!("strip {}", NAMES[r.path[row.len()]]), rect(r)))
-        .collect()
+    let controls = [row.as_slice(), &[1]].concat();
+    let mut parts: Vec<(String, Rectangle)> = Vec::new();
+    let named = |path: Vec<usize>, name: &str| {
+        at(records, &path).map(|r| (format!("strip {name}"), rect(r)))
+    };
+    parts.extend(named([row.as_slice(), &[0]].concat(), "tab region"));
+    parts.extend(named([controls.as_slice(), &[0]].concat(), "status"));
+    parts.extend(named([controls.as_slice(), &[1]].concat(), "New session"));
+    parts.extend(named([controls.as_slice(), &[2]].concat(), "split buttons"));
+    parts
 }
 
 /// A1, A2: the session area holds the header, the strip and the pane area, in that order, each
@@ -262,7 +266,7 @@ fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
             parts.extend(strip);
             for (what, part) in &parts {
                 assert!(
-                    (part.width > 0.0 || what == "title")
+                    (part.width > 0.0 || what == "title" || what == "strip tab region")
                         && inside(part, &area)
                         && inside(part, &screen),
                     "{name} {theme:?} {window:?}: the {what} {part:?} lies inside the session \
@@ -1154,6 +1158,318 @@ fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
         assert!(
             titles[2] < titles[0],
             "{theme:?}: the title column gives way first at 900 px: {titles:?}"
+        );
+    }
+}
+
+// ---- Feature 1463, M2: the switch control in the strip -------------------------------------------
+
+/// A Claude terminal session in its AI tab, its process in `lifecycle`, with `queued` messages
+/// waiting for the structured view (feature 1463 FR-004, FR-012).
+fn claude_terminal(stopped: bool, queued: usize) -> State {
+    use micold_client::features::composer::InputState;
+    use micold_core::protocol::messages::{QueueEntryId, QueuedSummary, TurnPhase};
+    let (mut state, id) = crate::support::covered_states::session_pane(
+        micold_core::session::SessionKind::Terminal,
+        &[],
+    );
+    for session in state.workspace.sessions.values_mut().flatten() {
+        session.lifecycle = if stopped {
+            micold_core::session::SessionLifecycle::Idle
+        } else {
+            micold_core::session::SessionLifecycle::Running
+        };
+    }
+    state.composers.input_reported(
+        id,
+        InputState {
+            phase: TurnPhase::Idle,
+            hold: true,
+            queue: (0..queued as u64)
+                .map(|n| QueuedSummary {
+                    id: QueueEntryId(n),
+                    text: "a message".into(),
+                    attachments: Vec::new(),
+                })
+                .collect(),
+        },
+    );
+    state
+}
+
+/// Two rows above the terminal: header (at most 40 px) and strip (64 px: a 48 dp touch target and
+/// its padding, which this feature does not change), against the 190 px of three rows before
+/// (FR-009, SC-001). The spec's "about 90" is this 100 within rounding of the strip's own height.
+const TWO_ROWS_MAX: f32 = 100.0;
+
+/// The header is at most this tall (FR-001).
+const HEADER_MAX: f32 = 40.0;
+
+/// The strip's status cluster: its words, switch slot and, while the process is stopped, restart.
+const CLUSTER: &[usize] = &[1, 0, 1, 0];
+
+fn cluster_children(records: &[LayoutRecord]) -> Vec<Rectangle> {
+    let path = [SESSION_AREA, CLUSTER].concat();
+    children_of(records, &path).into_iter().map(rect).collect()
+}
+
+fn each_window(mut check: impl FnMut(String, ThemePreference, Size)) {
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        for window in [MIN_WINDOW_SIZE, WINDOW] {
+            check(format!("{theme:?} {window:?}"), theme, window);
+        }
+    }
+}
+
+fn records_for(mut state: State, theme: ThemePreference, window: Size) -> Vec<LayoutRecord> {
+    state.settings.theme_pref = theme;
+    state.sidebar.width = SIDEBAR;
+    let under = StateUnderTest::new(state).panes(micold_core::pane_layout::PaneLayout::single());
+    records_of(under, window)
+}
+
+/// US2 scenarios 1, 2, 3 (FR-004, FR-005, FR-009, SC-001, SC-002): a Claude terminal session in a
+/// single pane has two rows above the terminal, the switch slot follows the status words and
+/// restart comes last; nothing is laid out between the strip and the terminal.
+#[test]
+fn a_claude_terminal_session_has_two_rows_and_its_switch_in_the_strip() {
+    for (stopped, queued) in [(false, 0), (true, 0), (true, 3)] {
+        each_window(|what, theme, window| {
+            let what = format!("stopped {stopped}, {queued} queued {what}");
+            let records = records_for(claude_terminal(stopped, queued), theme, window);
+            let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+            let [header, strip, panes] = [0, 1, 2]
+                .map(|i| rect(at(&records, &[SESSION_AREA, &[i]].concat()).expect("a row")));
+            assert!(
+                header.height <= HEADER_MAX + TOLERANCE,
+                "{what}: the header {header:?} is over {HEADER_MAX} px (FR-001)"
+            );
+            assert!(
+                panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
+                "{what}: the terminal starts {} px below the area, over {TWO_ROWS_MAX} (FR-009): header \
+                 {header:?}, strip {strip:?}",
+                panes.y - area.y
+            );
+            assert!(
+                (panes.y - (strip.y + strip.height)).abs() <= TOLERANCE,
+                "{what}: something sits between the strip {strip:?} and the pane area {panes:?} \
+                 (no switch row, FR-004)"
+            );
+            let cluster = cluster_children(&records);
+            let expected = if stopped { 3 } else { 2 };
+            assert_eq!(
+                cluster.len(),
+                expected,
+                "{what}: words, switch slot, restart? {cluster:?}"
+            );
+            let (words, switch) = (cluster[0], cluster[1]);
+            assert!(
+                switch.width > 0.0
+                    && switch.x >= words.x + words.width - TOLERANCE
+                    && inside(&switch, &area)
+                    && inside(&switch, &Rectangle::with_size(window)),
+                "{what}: the switch slot {switch:?} follows the words {words:?}, inside the area"
+            );
+            if let Some(restart) = cluster.get(2) {
+                assert!(
+                    restart.x >= switch.x + switch.width - TOLERANCE
+                        && restart.x + restart.width >= switch.x + switch.width,
+                    "{what}: restart {restart:?} is the last control, after the switch {switch:?} \
+                     (FR-005)"
+                );
+            }
+        });
+    }
+}
+
+/// US2 scenario 5 (FR-009): a session with no switch (a plain terminal, a transcript) has two rows
+/// too, and its switch slot is empty.
+#[test]
+fn a_session_without_a_switch_has_two_rows_and_an_empty_slot() {
+    let plain = covered_states()
+        .iter()
+        .find(|s| s.name == "session-area-one-tab")
+        .expect("the covered state exists")
+        .build;
+    type Build = Box<dyn Fn() -> State>;
+    let builds: [(&str, Build); 2] = [
+        ("plain terminal", Box::new(move || plain().state)),
+        (
+            "transcript",
+            Box::new(|| {
+                crate::support::covered_states::session_pane(
+                    micold_core::session::SessionKind::Structured,
+                    &[],
+                )
+                .0
+            }),
+        ),
+    ];
+    for (kind, build) in &builds {
+        each_window(|what, theme, window| {
+            let records = records_for(build(), theme, window);
+            let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+            let panes = rect(at(&records, &[SESSION_AREA, &[2]].concat()).expect("pane area"));
+            assert!(
+                panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
+                "{kind} {what}: the pane area starts {} px below the area (FR-009)",
+                panes.y - area.y
+            );
+            let cluster = cluster_children(&records);
+            assert!(
+                cluster.len() >= 2 && cluster[1].width == 0.0,
+                "{kind} {what}: the switch slot is empty: {cluster:?}"
+            );
+        });
+    }
+}
+
+/// US2 scenario 3, FR-012, SC-006: the longest held-queue caption is cut with an ellipsis before
+/// the switch control or restart is clipped, at the smallest window with the sidebar open.
+#[test]
+fn a_long_caption_is_cut_before_the_switch_or_restart_is_clipped() {
+    each_window(|what, theme, window| {
+        let records = records_for(claude_terminal(true, 12_345), theme, window);
+        let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+        let strip = strip_parts(&records);
+        let cluster = cluster_children(&records);
+        assert_eq!(
+            cluster.len(),
+            3,
+            "{what}: words, switch slot, restart: {cluster:?}"
+        );
+        for (name, part) in cluster.iter().enumerate() {
+            assert!(
+                inside(part, &area) && inside(part, &Rectangle::with_size(window)),
+                "{what}: cluster child {name} {part:?} lies inside the area {area:?}"
+            );
+        }
+        let switch = cluster[1];
+        let [caption, button] = [0, 1].map(|i| {
+            let path = [SESSION_AREA, CLUSTER, &[1, i]].concat();
+            rect(at(&records, &path).unwrap_or_else(|| panic!("{what}: slot child {i}")))
+        });
+        assert!(
+            caption.width
+                <= micold_client::ui::session_area::SWITCH_CAPTION_MAX_WIDTH
+                    + micold_core::tokens::spacing::SM
+                    + TOLERANCE
+                && button.width > 0.0
+                && button.x + button.width <= switch.x + switch.width + TOLERANCE,
+            "{what}: caption {caption:?} is capped and the button {button:?} is whole in {switch:?}"
+        );
+        let mut parts = strip;
+        parts.retain(|(name, _)| !name.contains("status"));
+        for (i, (a_name, a)) in parts.iter().enumerate() {
+            for (b_name, b) in &parts[i + 1..] {
+                assert!(
+                    !overlap(a, b),
+                    "{what}: {a_name} {a:?} overlaps {b_name} {b:?}"
+                );
+            }
+        }
+    });
+}
+
+/// US3 scenario 2 (FR-011): at the smallest window beside the sidebar, header and strip with the
+/// switch slot filled lie inside the area and overlap nothing, light and dark.
+#[test]
+fn the_filled_strip_and_the_header_fit_at_the_smallest_window() {
+    assert_fits_under("claude terminal, queue held", || {
+        StateUnderTest::new(claude_terminal(true, 3))
+    });
+}
+
+/// FR-006, FR-008, FR-005: with the Review tab shown the switch slot is empty and restart keeps
+/// its distance from the strip's right end, as it has with the Review tab hidden and the switch in
+/// place.
+#[test]
+fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
+    use micold_client::features::changes::{self, Msg};
+    let shown = || {
+        crate::support::covered_states::with_review_of(
+            claude_terminal(true, 3),
+            SessionLocation::Worktree("feat-short".to_string()),
+        )
+    };
+    let hidden = || {
+        let mut state = shown();
+        changes::update(&mut state.changes, Msg::SessionSelected);
+        state
+    };
+    for window in [MIN_WINDOW_SIZE, WINDOW] {
+        let mut from_right = Vec::new();
+        for (what, state) in [("shown", shown()), ("hidden", hidden())] {
+            let records = records_for(state, ThemePreference::Light, window);
+            let cluster = cluster_children(&records);
+            assert_eq!(
+                cluster.len(),
+                3,
+                "{what} {window:?}: words, slot, restart: {cluster:?}"
+            );
+            assert_eq!(
+                cluster[1].width > 0.0,
+                what == "hidden",
+                "{what} {window:?}: the switch slot is empty exactly while the Review is shown \
+                 (FR-006): {:?}",
+                cluster[1]
+            );
+            let controls = at(&records, &[SESSION_AREA, &[1, 0, 1]].concat()).expect("controls");
+            let restart = cluster[2];
+            from_right.push((controls.x + controls.width) - (restart.x + restart.width));
+        }
+        assert!(
+            (from_right[0] - from_right[1]).abs() <= TOLERANCE,
+            "{window:?}: restart sits {} from the controls' end with the Review shown, {} with it \
+             closed (FR-008)",
+            from_right[0],
+            from_right[1]
+        );
+    }
+}
+
+/// FR-007, SC-004: a tiled pane keeps its own switch row, directly under its pane header, its size
+/// and its offset from the pane area's origin the same whatever the strip does.
+#[test]
+fn a_tiled_pane_still_has_its_switch_row() {
+    use micold_core::pane_layout::{Axis, PaneLayout};
+    let mut state = claude_terminal(true, 2);
+    state.settings.theme_pref = ThemePreference::Light;
+    state.sidebar.width = SIDEBAR;
+    let mut layout = PaneLayout::single();
+    let first = layout.focused();
+    layout
+        .split(first, Axis::Vertical, (1000.0, 600.0), (80.0, 160.0), None)
+        .expect("a 1000 px pane splits in two");
+    let records = records_of(StateUnderTest::new(state).panes(layout), WINDOW);
+    let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
+    let panes = rect(at(&records, &[SESSION_AREA, &[2]].concat()).expect("pane area"));
+    assert!(
+        panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
+        "two rows above the tiles (FR-009)"
+    );
+    // Each tile is a column of pane header, switch row and terminal: find the tiles' switch rows
+    // by their height, the only fixed-height row between the header and the body.
+    let tiles: Vec<&LayoutRecord> = records
+        .iter()
+        .filter(|r| {
+            r.path.starts_with(SESSION_AREA)
+                && r.path.len() > SESSION_AREA.len() + 1
+                && r.path[SESSION_AREA.len()] == 2
+                && (r.height - 36.0).abs() < 12.0
+                && r.width > 100.0
+        })
+        .collect();
+    assert!(
+        !tiles.is_empty(),
+        "no tiled pane draws a switch row: the tiled path was lost (FR-007)"
+    );
+    // Each switch row sits within one row's height of the pane area's top, under its pane header,
+    // and not in the strip's rows above.
+    for row in &tiles {
+        assert!(
+            row.y >= panes.y - TOLERANCE && row.y - panes.y < 80.0,
+            "a tiled switch row {row:?} sits at the top of the pane area {panes:?} (SC-004)"
         );
     }
 }

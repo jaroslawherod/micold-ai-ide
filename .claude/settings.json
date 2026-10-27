@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/autopilot/context-hook.py\"; [ -x \"$f\" ] || exit 0; exec \"$f\"",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/autopilot/context-hook.py\"; [ -x \"$f\" ] && command -v python3 >/dev/null 2>&1 || exit 0; exec \"$f\"",
             "timeout": 10
           }
         ]

@@ -31,6 +31,11 @@ pub const CHIP_MAX_WIDTH: f32 = 240.0;
 /// words are in their tooltip.
 pub const STATUS_MAX_WIDTH: f32 = 160.0;
 
+/// The widest the held-queue caption beside the switch control grows before it is cut with an
+/// ellipsis (feature 1463 FR-012); the full text is in its tooltip. The session tabs keep at least
+/// one tab's width at the smallest window beside the sidebar (research R5).
+pub const SWITCH_CAPTION_MAX_WIDTH: f32 = 120.0;
+
 /// The session area for the shown session: the header, the strip, then the pane area (A1, A2). The
 /// header's and the strip's slots are there even when they have nothing to draw, empty, so the pane
 /// area's place in the tree never moves (feature 023 FR-008a).
@@ -297,7 +302,16 @@ pub(crate) fn strip<'a>(
         Some(pane) => crate::ui::panes::split_buttons(pane, r),
         None => container(Space::new()).into(),
     };
-    let strip = row![tabs, status_cluster(model, r), new_session, splits]
+    let switch = switch_slot(state, area, model, r);
+    // The controls after the tabs give way by rank when the strip is too narrow (feature 1463
+    // FR-012): the cluster's caption, then the switch button's label, then the status words, while
+    // New session and the split buttons stay whole. A plain `row!` would squeeze the controls it
+    // lays out last instead.
+    let controls = material::GiveWayRow::new(spacing::SM)
+        .shorten(0, status_cluster(model, switch, r))
+        .keep(new_session)
+        .keep(splits);
+    let strip = row![tabs, controls]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
     material::Surface::new(strip, SurfaceKind::Toolbar, r)
@@ -306,11 +320,67 @@ pub(crate) fn strip<'a>(
         .into()
 }
 
+/// The switch slot (feature 1463 FR-004, FR-006, FR-008): always one child, so the cluster's child
+/// list does not vary. A single pane's Claude terminal session gets the held-queue caption (cut
+/// with an ellipsis under [`SWITCH_CAPTION_MAX_WIDTH`], full text on hover) and **Open in
+/// structured view**; anything else, a tiled pane, a transcript and the shown Review tab included,
+/// gets an empty container.
+fn switch_slot<'a>(
+    state: &'a State,
+    area: Option<&crate::ui::panes::PaneArea<'a>>,
+    model: &StripModel,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let several = area.is_some_and(|a| a.layout.len() > 1);
+    let slot =
+        terminal::strip_switch_offer(state, several, model.review_shown()).and_then(|offer| {
+            let button = terminal::switch_button_shrinking(state, offer.session, r)?;
+            // Always two children, so a held queue coming and going moves no widget state from
+            // the button to the caption; the caption carries its own gap as right padding.
+            let caption: Element<'a, Message> = match offer.caption {
+                Some(line) => container(
+                    Tooltip::new(
+                        container(
+                            Ellipsized::<Message>::at_role(
+                                line.clone(),
+                                TypeRole::Caption,
+                                r.on_surface_variant,
+                            )
+                            .shrink(),
+                        )
+                        .max_width(SWITCH_CAPTION_MAX_WIDTH),
+                        line,
+                        r,
+                    )
+                    .position(TooltipPosition::Bottom),
+                )
+                .padding(iced::Padding {
+                    right: spacing::SM,
+                    ..iced::Padding::ZERO
+                })
+                .into(),
+                None => container(Space::new()).into(),
+            };
+            let slot = material::GiveWayRow::new(0.0).shorten(0, caption);
+            Some(slot.shorten(1, button))
+        });
+    match slot {
+        Some(slot) => slot.into(),
+        // An empty container rather than a bare `Space`: a void child is dropped from the tree,
+        // which would move the controls after it (see `right_aligned_tabs`).
+        None => container(Space::new()).into(),
+    }
+}
+
 /// The shown session's status words, cut under [`STATUS_MAX_WIDTH`] with the full words on hover,
-/// and while its marked process is stopped the restart as the cluster's last child, so its coming
-/// and going moves no other control (R9, US2 sc. 5 and 6). While the Review tab is shown the
-/// restart keeps its place, disabled (feature 1269, U15).
-fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Message> {
+/// then the switch slot, and while its marked process is stopped the restart as the cluster's last
+/// child, so its coming and going moves no other control (R9, US2 sc. 5 and 6). While the Review
+/// tab is shown the restart keeps its place, disabled (feature 1269, U15).
+fn status_cluster<'a>(
+    model: &StripModel,
+    switch: Element<'a, Message>,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
     let words = Tooltip::new(
         container(
             Ellipsized::<Message>::at_role(
@@ -325,9 +395,12 @@ fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Messa
         r,
     )
     .position(TooltipPosition::Bottom);
-    let mut cluster = row![words].spacing(spacing::SM).align_y(Alignment::Center);
+    // Rank 0 gives way first: the switch slot (its caption, then its button's label), then the words.
+    let mut cluster = material::GiveWayRow::new(spacing::SM)
+        .shorten(1, words)
+        .shorten(0, switch);
     if let Some(restart) = model.restart.clone() {
-        cluster = cluster.push(
+        cluster = cluster.keep(
             material::Button::with_content(
                 Text::new("restart", TypeRole::Label, r).muted(),
                 material::ButtonVariant::Text,

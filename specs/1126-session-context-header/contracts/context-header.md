@@ -101,6 +101,8 @@ narrower than it asks (gate, H10).
 
 ### H10. Fit (FR-013, SC-004)
 
+*Amended by feature 1463 (S7'/rows):* a Claude terminal session in a single pane has two rows above the terminal, the header (at most 40 px) and the strip (64 px), 100 px in all; its switch control and held-queue caption sit in the strip's status cluster, between the status words and restart (the cluster is words, switch slot, restart). In a narrow strip the controls after the tabs give way by rank: the caption, then the switch button's label, then the status words, each cut with an ellipsis and its full text in a tooltip; New session, the split buttons and restart stay whole, and the tab region may reach zero.
+
 At 640×480 with the sidebar at 300 px, and at 1280×800, light and dark: the title, every chip and the
 Changes button lie inside the session area and overlap nothing; the title and chips may be cut with
 an ellipsis; the Changes button is laid out at its requested width.
