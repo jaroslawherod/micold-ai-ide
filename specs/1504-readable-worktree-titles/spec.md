@@ -27,9 +27,12 @@ subject. The folder name stays secondary (tooltip). Owning specs: `specs/813-wor
   as opposed to a raw name (the branch name or the folder name).
 - **Title source**: where a location title came from: GitHub issue, Jira issue, pull request,
   spec, session, commit, branch or folder.
-- **Linked ticket**: the ticket the naming convention reads from the worktree's folder name, or,
-  when the folder name has none, from its branch name: a number (GitHub) or a `<PROJECT>-<digits>`
-  key (Jira).
+- **Linked ticket** (existing, unchanged): the ticket the naming convention reads from the
+  worktree's folder name. The sidebar's issue tag (533), the Jira status chip and the keys sent to
+  Jira (1101) keep reading it; this feature does not widen it.
+- **Title ticket**: the ticket used only to look up a location title: the linked ticket when the
+  folder name has one, else the ticket the same naming convention reads from the branch name. A
+  number (GitHub) or a `<PROJECT>-<digits>` key (Jira).
 - **Feature spec**: the spec file of the feature folder the Overview already picks for a worktree's
   progress (813, edge case *Several feature folders in one worktree*).
 
@@ -150,13 +153,28 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **A very long or multi-line source text**: only its first line is used, trimmed; the card and
   row ellipsize it as they already do for long titles (1120).
 - **Both a GitHub number and a Jira key** in the folder or branch: the ticket the naming convention
-  reads first is the linked ticket; only that one is looked up.
+  reads first is the title ticket; only that one is looked up.
 - **GitHub issues switched off, or no Jira connection**: that issue source gives no title and is
   not read (813 FR-019, 1102); the remaining sources still apply.
 - **A worktree renamed by the user** (feature 1125 custom name): the custom name still wins in the
   sidebar, as today.
 - **Pull request status off or unread**: the pull request source gives no title; no reading is
   started for it.
+- **Spec file with CRLF line endings or a byte-order mark before the heading**: the heading is
+  still found; the BOM and the trailing `\r` are not part of the title.
+- **Windows paths, and branch names or folders with `\` or non-ASCII characters**: the spec and
+  commit sources read the worktree at its own path on every platform; a ticket is found in the
+  branch name the same way on every platform.
+- **git missing, failing or timing out**: the commit source gives no title; the other sources still
+  apply and the window is not blocked.
+- **A title read (issue, spec, commit) that finishes after a newer refresh or after its worktree is
+  removed**: a stale result is dropped, never shown over the newer refresh's title; a removed
+  worktree's result is discarded.
+- **The main session changes (archived, another becomes main) while titles are computed**: the next
+  refresh uses the new main session's title (FR-010).
+- **Two windows asking for, or retrying, the same issue's title**: each number is read at most once
+  per asking occasion per window, and a pending read is not asked for again until it answers; a
+  retry is never sent while a read of the same number is pending.
 
 ## Requirements *(mandatory)*
 
@@ -164,8 +182,8 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 
 - **FR-001**: A worktree's location title MUST be the first source in this order that gives a
   non-empty text:
-  1. the linked ticket's GitHub issue title, when the linked ticket is a number;
-  2. the linked ticket's Jira issue summary, when the linked ticket is a Jira key;
+  1. the title ticket's GitHub issue title, when the title ticket is a number;
+  2. the title ticket's Jira issue summary, when the title ticket is a Jira key;
   3. the title of the open pull request for the worktree's branch;
   4. the title in the worktree's feature spec heading;
   5. the main session's title (recorded by its AI CLI, or derived from the first prompt);
@@ -176,16 +194,21 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
   [NEEDS CLARIFICATION: should the session title (item 5) rank above the pull request (item 3)
   and spec (item 4) titles, given that it describes the latest conversation rather than the
   worktree's purpose? Default as written: below them.]
-- **FR-002**: The linked ticket MUST be read from the folder name first and, when the folder name
+- **FR-002**: The title ticket MUST be read from the folder name first and, when the folder name
   has no ticket, from the branch name, with the same naming convention; a ticket in the folder name
-  MUST win over a different one in the branch name.
+  MUST win over a different one in the branch name. The title ticket MUST be used only for the
+  location title: the sidebar's issue tag, the Jira status chip and the set of keys whose status is
+  read keep using the linked ticket (folder name only), unchanged.
 - **FR-003**: A GitHub issue title read for a ticket in the branch name MUST follow the rules
-  titles from the folder name already follow: read once per issue, seeded from issues the app
+  titles from the folder name already follow: read once per issue unless the read failed (FR-009), seeded from issues the app
   already holds, any state counts (813 FR-015, BUG-1488), none read while GitHub issues are off or
   there is no route to the session service.
 - **FR-004**: A Jira issue summary MUST be read only for a valid `<PROJECT>-<digits>` key of the
-  project's Jira connection, and MUST come with the reading the app already makes for that key's
-  status (feature 1101), not from a reading of its own; a failed or absent reading gives no title.
+  project's Jira connection. For a linked ticket it MUST come with the reading the app already makes
+  for that key's status (feature 1101), not from a reading of its own. A title ticket that is a
+  Jira key only in the branch name MUST have its summary read with the same request, on the same
+  occasions and under the same Jira switch and disclosure as the status reading, but its status MUST
+  NOT be shown (no chip). A failed or absent reading gives no title.
 - **FR-005**: The pull request, session and branch sources MUST use data the app already holds
   (the pull request reading, the session list, the worktree list); building titles MUST NOT start
   any new network reading or polling (813 FR-019).
@@ -212,6 +235,10 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **FR-012**: Only the first line of a source's text, trimmed, MUST be used; a spec heading MUST
   have its `Feature Specification:` prefix removed, and the template placeholder MUST give no
   title.
+- **FR-013**: This feature amends 813 FR-015 (task summary: issue title, else branch, else display
+  name) and 1120 User Story 2 Acceptance Scenarios 1 and 2 (title is the issue title, else the
+  branch; the title's tooltip shows only the display name): FR-001 supersedes their order and FR-008
+  their tooltip. Those specs' text MUST be updated to point here when this feature ships.
 
 ### Key Entities
 
@@ -234,9 +261,11 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **SC-003**: After a failed issue read and a restored network, the card shows the issue's title at
   most one title-asking occasion after the retry interval has passed, without restarting the app.
 - **SC-004**: Opening the Overview with this feature starts no network reading that it did not
-  start before, apart from issue title reads for branch tickets and retries of failed reads.
-- **SC-005**: The window stays responsive (no frame delayed by title reading) while titles of 50
-  worktrees are computed.
+  start before, apart from GitHub issue title reads and Jira summary reads for title tickets found
+  only in branch names, and retries of failed GitHub reads (FR-009).
+- **SC-005**: No spec, commit or issue read for titles runs on the window's UI thread; with 50
+  worktrees, choosing their titles from data already read adds no more than 2 ms to an Overview
+  refresh.
 
 ## Out of scope
 

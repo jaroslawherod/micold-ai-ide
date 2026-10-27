@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
 - **Phase**: spec
-- **Next step**: run the spec review (fresh reviewer, rubric `.claude/skills/speckit-autopilot/rubrics/spec.md`, artifact `specs/1504-readable-worktree-titles/spec.md`, snapshot below), act on its findings, then the clarify unit.
+- **Next step**: spec review round 2 (scoped re-review on sonnet, fix diff from the round 1 snapshot), then the clarify unit.
 
 ## Pull requests
 
@@ -26,12 +26,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D1 | spec | Spec review F1: widen "linked ticket" to branch names? | No: new term "title ticket" for title lookup only; sidebar tag, Jira chip and Jira status keys unchanged | orchestrator | spec review round 1 F1 |
 
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec review | 1 | 541682421a341a1fafc3450b6b9036cdf9e549c0:828bc8e24442d9c9685869c35fe69134934bd233 | pending (orchestrator dispatches) |
+| Spec review | 1 | 541682421a341a1fafc3450b6b9036cdf9e549c0:828bc8e24442d9c9685869c35fe69134934bd233 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 title ticket term, orchestrator choice; F2 FR-013 amendment; F3 edge cases; F4 FR-003; F5 SC-005) |
+| Spec review | 2 | f2abbf7224da5e36c1fdee21ec8fe71ba20af4ab:45a9b105ae6d57805c765b6343f57f6e573a90c7 | pending (scoped re-review, sonnet) |
 
 ## Declined review findings
 
