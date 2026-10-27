@@ -122,3 +122,56 @@ the implementation it covers.
   passed; `tests/history.rs` 19 passed, `features_history` 2 passed, binary `history`/`side_button`
   5 passed. Research R3 records the rule.
 - refactor: none needed.
+
+## M2 — Back/Forward keys (T017–T023)
+
+Red is reproducible from commit c520924b8 (`test(1465): failing tests … stubs in keymap`): the
+tests and the stubbed `history_key` / `history_key_labels` / `history_key_label` are committed
+there.
+
+### Cycle 10 — H1 decode and labels (T017, T020)
+
+- tests: `tests/keymap.rs` `the_platforms_back_and_forward_keys_decode`,
+  `the_back_and_forward_labels_name_both_platform_forms`.
+- red (c520924b8): both FAILED (`history_key` returned `None`, labels empty); 56 passed, 3 failed
+  with the docs test below.
+- green: `keymap::history_key` (Alt alone on ←/→; macOS Cmd alone on physical `[`/`]` with the
+  logical fallback) and the labels → keymap 58 passed (docs test still red until cycle 13).
+- guards, passed on arrival: `near_misses_of_the_back_and_forward_keys_decode_to_nothing`,
+  `no_back_or_forward_key_is_another_chord`, `no_other_chord_is_a_back_or_forward_key`,
+  `the_terminal_encodes_the_back_and_forward_keys_as_before` (H2, SC-003: `encode` is untouched;
+  a stub returning `None` cannot fail them, the implementation could).
+
+### Cycle 11 — routing (T018, T021)
+
+- tests: `ui::app_chord_tests::the_back_and_forward_keys_press_the_history_from_the_keyboard`
+  (press and repeat), `ui::overview_arrow_tests::a_back_or_forward_key_is_not_a_card_step`.
+- red (c520924b8): both FAILED (`app_chord` gave `None`; `overview_arrow` gave `CardStepped`);
+  `near_misses_of_the_back_and_forward_keys_are_not_app_chords` passed on arrival (guard).
+- green: `app_chord` checks `history_key` after the other chords; `overview_arrow` returns `None`
+  for a press it decodes → lib filter `app_chord overview_arrow history` 15 passed.
+
+### Cycle 12 — the key gate (T019, T022)
+
+- tests: `tests/history.rs` `a_key_press_does_nothing_while_a_field_holds_the_keyboard`,
+  `a_key_press_does_nothing_while_the_terminal_holds_the_keyboard`.
+- red (c520924b8): both FAILED at `assert_key_ignored` (the key stepped back).
+  `a_key_press_acts_over_a_closed_comment_boxs_stale_focus`, `a_key_press_does_nothing_over_settings`
+  passed on arrival (the stale-field rule and `navigation::blocked` are M1's).
+- green: `resolve` returns `Step::None` for `Source::Key` while `terminal_focused()` or
+  `live_focused_field()` → history 23 passed, 1 failed (cycle 12b).
+
+### Cycle 12b — holding the key walks on through sessions (US2 AS4, FR-012)
+
+- test: `three_key_presses_step_back_three_entries` (Overview → B → A → D by key).
+- red: passed before the gate (nothing stopped a key), then FAILED once the gate was in: "back to
+  A" — landing on B focused B's terminal, so the next press was the terminal's.
+- green: `State::finish_history_move(source)` releases the terminal a key move focused (research
+  R8, contracts/ui.md U4, ledger decision 6) → history 25 passed.
+- guard, passed on arrival: `a_button_move_lands_on_the_terminal_as_a_click_would`.
+
+### Cycle 13 — the guide (T023, FR-013)
+
+- test: `tests/keymap.rs` `the_user_guide_lists_back_and_forward_with_their_keys_and_buttons`.
+- red: FAILED — `Back row lists "Alt+←": | Back | Mouse back button | Mouse back button |`.
+- green: terminal-panes.md rows and intro → keymap 59 passed.

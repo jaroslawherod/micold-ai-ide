@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: 1465-m2 (M2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
 - **Phase**: M1 reviews done (A and B round 2 CLEAN); M1 PR being opened by the orchestrator. M2 implementing on 1465-m2
-- **Next step**: M2 tasks T017–T023 test-first, then scoped gate and review A/B
+- **Next step**: scoped gate, then review A (high) + review B on M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1559 | design | merged | ed945a97b54efe6e58c68c39a91c29f019c3741d |
+| #1567 | M1 | open (head c359a7871, gate green) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | (opening) | reviews clean |
+| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | open |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | — | planned |
 | M3 | T024–T026 | light | The Review tab's own Back first | — | planned |
 | M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | planned |
@@ -37,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | tasks | Cut of M1 (16 tasks, over ~10)? | Kept whole: Foundational alone is never a milestone and US1 needs all of it; cross-project (R5 lookup, `runs.known`, `Reopened`) split out to M4 (US4), so M1 passes another project's places over as gone until M4 | agent | milestones.md rules 1, 3; tasks.md T010/T012/T028 |
 | 4 | tasks | Guide updates per milestone | Each feat milestone adds its own line to terminal-panes.md §Keyboard shortcuts (plan D7: the only page), so the user-guide gate passes without docs-not-needed | agent | milestones.md rule 4; tasks T016, T023, T026, T033, T036 |
 | 5 | tasks | speckit-analyze | Not available in this environment (no skill, no subagent); coverage checked by grep: every FR-001–015 and SC-001–005 named by a task or milestone. Tasks review round 1 stands in for analyze (reviewer checked coverage, paths, anchors, test-first order and milestone deps: no gaps) | agent | tasks.md; tasks review r1 F3 |
+| 6 | M2 implement | After a key-made move shows a session, its terminal takes the keyboard and swallows the next Alt+← (US2 AS4 broken after one step). Keep U4's click landing for keys? | No: a `Source::Key` move ends with `release_terminal` if it focused one (`finish_history_move(source)`); a side-button move still lands as a click. The user clicks the terminal (or it focuses on the next selection) to type | agent | spec US2 AS4 + FR-012 (each repeat steps until none) vs contracts/ui.md U4 (plan-level); quickstart B5 expects a held key to walk to the oldest entry; tests `three_key_presses_step_back_three_entries`, `a_button_move_lands_on_the_terminal_as_a_click_would`; U4, R8, guide amended |
 
 ## Review rounds
 

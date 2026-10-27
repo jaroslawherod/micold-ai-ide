@@ -32,7 +32,7 @@ fn press(state: &mut State, dir: Dir, source: Source) -> Step {
         send(state, message);
     }
     if matches!(step, Step::Show(_)) {
-        state.finish_history_move();
+        state.finish_history_move(source);
     }
     state.observe_place();
     step
@@ -437,7 +437,7 @@ fn finishing_a_move_records_only_a_place_other_than_the_target() {
     for message in state.apply_history(step) {
         send(&mut state, message);
     }
-    state.finish_history_move();
+    state.finish_history_move(Source::Button);
     assert!(!state.history.moving);
     assert_eq!(
         entries(&state).len(),
@@ -452,7 +452,7 @@ fn finishing_a_move_records_only_a_place_other_than_the_target() {
         source: Source::Button,
     });
     assert!(state.history.moving);
-    state.finish_history_move();
+    state.finish_history_move(Source::Button);
     assert_eq!(
         state.history.list.current(),
         Some(&at_session(worktree("feat-a"), a)),
@@ -590,7 +590,17 @@ fn three_key_presses_step_back_three_entries() {
         );
         assert_eq!(state.session.active, Some(id), "{want} shown");
         assert!(!state.overview.open, "the Overview closed");
+        assert!(!state.terminal_focused(), "the keyboard stays with the app");
     }
     assert_eq!(key_back(&mut state), Step::None, "until there is none");
     assert_eq!(entries(&state).len(), 4, "moving recorded nothing (FR-007)");
+}
+
+#[test]
+fn a_button_move_lands_on_the_terminal_as_a_click_would() {
+    // Only a key move keeps the keyboard with the app; a side button lands as a sidebar click.
+    let (mut state, _, a, _) = walked_released();
+    assert!(matches!(back(&mut state), Step::Show(_)));
+    assert_eq!(state.session.active, Some(a));
+    assert!(state.terminal_focused(), "A's terminal has the keyboard");
 }

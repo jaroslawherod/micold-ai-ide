@@ -164,6 +164,10 @@ with the code it was checked against.
   composer and queued message hidden by the Review tab, do not hold it), extracted so both share it.
 - **Overview arrows**: `ui/mod.rs::overview_arrow` steps cards on any arrow regardless of modifiers;
   it skips a press that is a history key, so Alt+← in the Overview does one thing.
+- **Keyboard after a key move** (M2): showing a session focuses its terminal (`session::selected`
+  → `focus_terminal`), which would swallow the next Alt+← and break US2 AS4 after one step. A move
+  made by a key therefore ends with `release_terminal` when the move focused one
+  (`State::finish_history_move(source)`); a side-button move lands as a click does.
 - **Rationale**: spec Clarifications (macOS chord), FR-009, FR-012 (auto-repeat arrives as further
   `KeyPressed` events, which `app_chord` does not filter).
 - **Alternatives considered**: tier-1 (reserved from terminals) — contradicts FR-009; Option+←/→ on

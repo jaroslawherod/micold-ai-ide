@@ -43,8 +43,11 @@ No decision of its own: which messages, and whether to switch project, is `apply
 | `Overview` | `Runs(CompareClosed)` if open, `Overview(Opened { settings_open: false })` |
 | `Compare(group)` | `Overview(Closed)` if open, `Runs(CompareOpened { group, project })`; in another project the group is found in `runs.known[project]` (research R5) |
 
-`ReviewBack` → `Changes(BrowseBack)`. The keyboard lands as a click on that place leaves it (spec
-*Assumptions*); no `finish_navigation`.
+`ReviewBack` → `Changes(BrowseBack)`. A side-button move lands the keyboard as a click on that place
+leaves it (spec *Assumptions*); no `finish_navigation`. A key move (`Source::Key`) then gives the
+keyboard back to the app (`State::finish_history_move(source)` releases a terminal the move focused),
+so the next press or repeat steps again (US2 AS4, FR-012) rather than reaching that terminal
+(M2, ledger decision 6).
 
 ## U5 — Gone targets
 
