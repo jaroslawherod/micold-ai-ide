@@ -85,7 +85,7 @@ pub enum GithubFilter { Basic(BasicFilters), Advanced(UserQuery) }
   `ScopedSearch`: the shell takes today's path (FR-009).
 - `ScopedSearch { text: String }`: only from `ScopedSearch::listing(repo, &filter)` and
   `ScopedSearch::beyond(repo, &filter, typed_text) -> Option<ScopedSearch>` (research R4 texts;
-  the typed text enters only as quoted words, `None` when no word is left). `as_str()` is the `q`
+  the typed text enters only as quoted words with `"` and `\` removed, `None` when no word is left). `as_str()` is the `q`
   sent. `Debug` redacted.
 
 ## 5. `FilterFailure` (core) — why a filtered request listed nothing (FR-018, FR-019)
