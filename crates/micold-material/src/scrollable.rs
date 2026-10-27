@@ -48,6 +48,10 @@ pub enum ScrollDirection {
     Vertical,
     /// Leading to trailing. The tab strip's axis.
     Horizontal,
+    /// Both axes, for content wider than its viewport and taller (#1466: a diff with a long line).
+    /// The metrics and the offset report stay vertical, as for [`ScrollDirection::Vertical`]; a
+    /// horizontal position is the scrollable's own state.
+    Both,
 }
 
 /// Scrollable content with the design system's scrollbar. Builder form (Principle VIII):
@@ -185,6 +189,10 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
             .direction(match s.direction {
                 ScrollDirection::Vertical => scrollable::Direction::Vertical(bar),
                 ScrollDirection::Horizontal => scrollable::Direction::Horizontal(bar),
+                ScrollDirection::Both => scrollable::Direction::Both {
+                    vertical: bar,
+                    horizontal: bar,
+                },
             })
             .style(style::scrollbar(s.roles));
         if let Some(height) = s.height {
@@ -203,7 +211,9 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
                 let window = viewport.bounds();
                 let content = viewport.content_bounds();
                 let (o, w, c) = match axis {
-                    ScrollDirection::Vertical => (offset.y, window.height, content.height),
+                    ScrollDirection::Vertical | ScrollDirection::Both => {
+                        (offset.y, window.height, content.height)
+                    }
                     ScrollDirection::Horizontal => (offset.x, window.width, content.width),
                 };
                 f(
@@ -217,7 +227,7 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
             widget = widget.on_scroll(move |viewport| {
                 let offset = viewport.absolute_offset();
                 f(scroll_offset_px(match axis {
-                    ScrollDirection::Vertical => offset.y,
+                    ScrollDirection::Vertical | ScrollDirection::Both => offset.y,
                     ScrollDirection::Horizontal => offset.x,
                 }))
             });

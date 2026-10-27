@@ -225,9 +225,36 @@ pub fn scrollable<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
                 .width(Length::Fixed(220.0)),
                 roles,
             ),
+            posed(
+                "Both — scroll it either way (a diff with a long line, #1466)",
+                iced::widget::container(
+                    material::Scrollable::new(
+                        iced::widget::column![wide_rows(samples::WORKTREES, roles)],
+                        roles,
+                    )
+                    .direction(material::ScrollDirection::Both),
+                )
+                .width(Length::Fixed(220.0))
+                .height(Length::Fixed(120.0)),
+                roles,
+            ),
         ],
         Layout::Inline,
     )
+}
+
+/// Rows of the sample names laid side by side, one row per name: content wider and taller than
+/// the viewport it is posed in.
+fn wide_rows<'a, M: 'a>(names: &[(&'a str, u16)], roles: Roles) -> Element<'a, M> {
+    let mut rows = iced::widget::column![].spacing(spacing::XS);
+    for _ in 0..4 {
+        let mut line = iced::widget::row![].spacing(spacing::MD);
+        for (name, _) in names.iter() {
+            line = line.push(material::Text::new(*name, TypeRole::Body, roles));
+        }
+        rows = rows.push(line);
+    }
+    rows.into()
 }
 
 /// `Accordion` — closed, open, and paired with the trigger that drives it.

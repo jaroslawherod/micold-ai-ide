@@ -131,6 +131,51 @@ fn body<'a>(diff: &'a FileDiff, shaped: Option<&'a Shaped>, layout: DiffLayout) 
     }
 }
 
+/// The width of a glyph of [`Font::MONOSPACE`] at [`CODE_SIZE`], as a share of the size: the
+/// widest of the usual monospace faces, so a long line is never cut short of its last character.
+const GLYPH_EM: f32 = 0.62;
+
+/// The width a slot (a review comment) is held to in a diff that scrolls sideways.
+const SLOT_CAP: f32 = 1200.0;
+
+/// Room after the last character, so the text does not touch the pane's edge when scrolled to it.
+const TEXT_TAIL: f32 = 16.0;
+
+/// Whether `c` is drawn two cells wide: Hangul Jamo, CJK and kana, fullwidth forms, emoji.
+fn is_wide(c: char) -> bool {
+    matches!(u32::from(c),
+        0x1100..=0x115F | 0x2E80..=0xA4CF | 0xAC00..=0xD7A3 | 0xF900..=0xFAFF
+        | 0xFE30..=0xFE6F | 0xFF00..=0xFF60 | 0xFFE0..=0xFFE6
+        | 0x1F300..=0x1FAFF | 0x20000..=0x3FFFD)
+}
+
+/// How many cells wide `text` is: a wide character takes two.
+fn cells(text: &str) -> usize {
+    text.chars().map(|c| if is_wide(c) { 2 } else { 1 }).sum()
+}
+
+/// The cells of the widest line of `hunks`. A line's bytes bound its cells (a wide character is
+/// at least three bytes), so only a line longer in bytes than the widest so far is counted.
+fn widest_line(hunks: &[Hunk]) -> usize {
+    let mut widest = 0;
+    for line in hunks.iter().flat_map(|h| &h.lines) {
+        if line.text.len() > widest {
+            widest = widest.max(cells(&line.text));
+        }
+    }
+    widest
+}
+
+/// The least width the rows of `layout` need to show every character of `hunks` (#1466): the
+/// widest line's text beside the cells that precede it, twice over side by side.
+fn least_width(hunks: &[Hunk], layout: DiffLayout) -> f32 {
+    let text = widest_line(hunks) as f32 * CODE_SIZE * GLYPH_EM + TEXT_TAIL;
+    match layout {
+        DiffLayout::Unified => 2.0 * NUMBER_WIDTH + MARKER_WIDTH + text,
+        DiffLayout::SideBySide => 2.0 * (NUMBER_WIDTH + MARKER_WIDTH + text),
+    }
+}
+
 /// The background of a `kind` line: its tint role, or none for context (D2).
 pub fn tint(kind: LineKind, roles: Roles) -> Option<Rgb> {
     match kind {
@@ -560,7 +605,8 @@ fn line_spans<'s>(
     }
 }
 
-/// A line's text in its syntax colours, the rest in `on_surface`; monospace, never wrapped.
+/// A line's text in its syntax colours, the rest in `on_surface`; monospace, never wrapped (a
+/// long line is reached by scrolling the diff sideways, #1466).
 /// Shared with [`InlineDiff`](super::InlineDiff) (feature 940, research R9).
 pub(super) fn line_text<'a, M: 'a>(
     content: impl Into<std::borrow::Cow<'a, str>>,
@@ -1012,7 +1058,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Gutter<'a, M> {
     }
 }
 
-/// Diff text: monospace, one line, never wrapped (a long line is clipped by its row).
+/// Diff text: monospace, one line, never wrapped (a long line is reached by scrolling sideways).
 pub(super) fn code<'a, M: 'a>(content: impl text::IntoFragment<'a>, color: Rgb) -> Element<'a, M> {
     text(content)
         .font(Font::MONOSPACE)
@@ -1040,11 +1086,20 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
         let anchors: Vec<Anchor> = view.slots.keys().copied().collect();
         let hung = slot_rows(&shown, &anchors);
         let extras = slot_extras(&hung, &view.slot_heights);
+        let least = match view.diff {
+            FileDiff::Text(hunks) => least_width(
+                view.shaped.map_or(hunks.as_slice(), |s| &s.hunks),
+                view.layout,
+            ),
+            _ => 0.0,
+        };
         let slots = Slots {
             rows: hung,
             measured: view.slot_heights,
             elements: RefCell::new(view.slots),
             on_measured: view.on_slot_measured,
+            // A diff wide enough to scroll sideways must not stretch its comments to its width.
+            cap: (least > SLOT_CAP).then_some(SLOT_CAP),
         };
         let mut gutters = view.gutters;
         gutters.links = view
@@ -1053,6 +1108,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             .map(|(find, on)| Links { find, on });
         let list = |len, build: Box<dyn Fn(usize) -> Element<'a, M> + 'a>| {
             let mut list = VirtualRows::new(len, ROW_HEIGHT, build, r)
+                .least_width(least)
                 .offset(view.offset)
                 .viewport(view.viewport)
                 .extras(extras);
@@ -1127,6 +1183,7 @@ struct Slots<'a, M> {
     measured: BTreeMap<Anchor, f32>,
     elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
     on_measured: Option<OnMeasured<'a, M>>,
+    cap: Option<f32>,
 }
 
 impl<'a, M: 'a> Slots<'a, M> {
@@ -1141,7 +1198,10 @@ impl<'a, M: 'a> Slots<'a, M> {
             let Some(parts) = elements.remove(&(side, line)) else {
                 continue;
             };
-            let slot: Element<'a, M> = column(parts).width(Length::Fill).into();
+            let mut slot: Element<'a, M> = column(parts).width(Length::Fill).into();
+            if let Some(cap) = self.cap {
+                slot = container(slot).max_width(cap).into();
+            }
             stack = stack.push(match &self.on_measured {
                 Some(f) => {
                     let (shown, resized) = (Rc::clone(f), Rc::clone(f));
@@ -1834,6 +1894,110 @@ mod tests {
                 "{layout:?}"
             );
         }
+    }
+
+    /// A one-line diff of `text` in `layout`, and every node its view lays out in 800 x 600 px
+    /// as `(width, height)`.
+    fn nodes_of(text: &str, layout: DiffLayout) -> Vec<(f32, f32)> {
+        fn walk(node: &layout::Node, out: &mut Vec<(f32, f32)>) {
+            out.push((node.size().width, node.size().height));
+            node.children().iter().for_each(|c| walk(c, out));
+        }
+        let diff = FileDiff::Text(vec![Hunk {
+            old_start: 1,
+            old_len: 1,
+            new_start: 1,
+            new_len: 1,
+            section: String::new(),
+            lines: vec![line(LineKind::Added, None, Some(1), text)],
+            old_no_newline: false,
+            new_no_newline: false,
+        }]);
+        let mut element: Element<'_, ()> = DiffView::<()>::new(&diff, layout, LIGHT).into();
+        let renderer = super::super::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+        );
+        let mut out = Vec::new();
+        walk(&node, &mut out);
+        out
+    }
+
+    /// #1466: a line wider than the pane is laid out at its full width, to be scrolled to, and
+    /// its row (so its tint) is as wide as the text.
+    #[test]
+    fn a_line_wider_than_the_pane_is_laid_out_whole_in_both_layouts() {
+        let long = "x".repeat(400);
+        for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+            let widest = nodes_of(&long, layout)
+                .into_iter()
+                .map(|(w, _)| w)
+                .fold(0.0, f32::max);
+            let text = 400.0 * CODE_SIZE * GLYPH_EM;
+            assert!(
+                widest >= text,
+                "{layout:?}: the content is {widest} px, the text {text} px"
+            );
+            let tinted_rows = nodes_of(&long, layout)
+                .into_iter()
+                .filter(|&(w, h)| h == ROW_HEIGHT && w >= text)
+                .count();
+            assert!(tinted_rows >= 1, "{layout:?}: a row as wide as the text");
+        }
+    }
+
+    /// A diff whose lines fit keeps the pane's width: nothing scrolls sideways.
+    #[test]
+    fn a_line_that_fits_adds_no_width_in_either_layout() {
+        for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+            let widest = nodes_of("fn a() {}", layout)
+                .into_iter()
+                .map(|(w, _)| w)
+                .fold(0.0, f32::max);
+            assert!(widest <= 800.0, "{layout:?}: {widest}");
+        }
+    }
+
+    /// A long line is scrolled to, not wrapped, so no row changes its height and the rows'
+    /// arithmetic (the spacers, the measured slots, the jump to a line) stays exact.
+    #[test]
+    fn a_long_line_is_not_wrapped_and_keeps_every_row_one_row_tall() {
+        let long = "x".repeat(400);
+        let tallest_inside = nodes_of(&long, DiffLayout::Unified)
+            .into_iter()
+            .map(|(_, h)| h)
+            .filter(|&h| h < 600.0)
+            .fold(0.0, f32::max);
+        assert_eq!(
+            tallest_inside,
+            2.0 * ROW_HEIGHT,
+            "a header row and a line row"
+        );
+    }
+
+    #[test]
+    fn the_least_width_counts_wide_characters_twice_and_takes_the_widest_line() {
+        assert_eq!(cells("abc"), 3);
+        assert_eq!(cells("日本"), 4);
+        assert_eq!(
+            cells("\u{e9}\u{201c}\u{2014}\u{201d}\u{e8}"),
+            5,
+            "accents and typographic punctuation are one cell"
+        );
+        let hunk = |text: &str| Hunk {
+            old_start: 1,
+            old_len: 0,
+            new_start: 1,
+            new_len: 1,
+            section: String::new(),
+            lines: vec![line(LineKind::Added, None, Some(1), text)],
+            old_no_newline: false,
+            new_no_newline: false,
+        };
+        assert_eq!(widest_line(&[hunk("ab"), hunk("日本x"), hunk("abcde")]), 5);
     }
 
     #[test]
