@@ -38,6 +38,16 @@ is selected; BUG-1403).
 - **Copy keys**: Ctrl+C and Ctrl+Shift+C on Linux and Windows; Cmd+C on macOS, and Ctrl+C on macOS
   while a selection exists.
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: Is rendered markdown copied as the visible rendered text or as the markdown source of the
+  selected span? → A: The visible rendered text, as drawn (FR-011). _(agent-resolved:
+  specs/1550-transcript-text-selection/spec.md#functional-requirements FR-010 "the selected text as
+  shown" and SC-001 "matches the shown text character for character";
+  docs/user-guide/worktrees-and-sessions.md code-block copy "no fences, no tag" (#940 FR-011))_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Drag to select transcript text and copy it with the keyboard (Priority: P1)
@@ -247,9 +257,10 @@ highlighted; right-click and choose Copy, and check the clipboard.
   wrapping of long prose lines MUST NOT add line breaks; code and tool output keep their
   indentation; diff lines are copied without line numbers and without the added/removed markers
   in their gutter.
-- **FR-011**: Rendered markdown MUST be copied as
-  [NEEDS CLARIFICATION: the visible rendered text (no `**`, `#`, list markup or link targets), or
-  the markdown source of the selected span?].
+- **FR-011**: Rendered markdown MUST be copied as its visible rendered text: no emphasis markers
+  (`*`, `_`, `` ` ``), heading `#`s, code fences or link targets; a link copies its shown text. List
+  bullets and numbers, block-quote marks and table cells are copied as the characters the view
+  draws for them, so the pasted text matches what is shown (FR-010, SC-001).
 - **FR-012**: Releasing the pointer at the end of a drag
   [NEEDS CLARIFICATION: must also copy the selection to the clipboard automatically, as the
   terminal view does, or must leave the clipboard unchanged until a copy key, menu or control is
