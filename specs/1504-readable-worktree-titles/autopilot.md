@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | 541682421a341a1fafc3450b6b9036cdf9e549c0:828bc8e24442d9c9685869c35fe69134934bd233 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 title ticket term, orchestrator choice; F2 FR-013 amendment; F3 edge cases; F4 FR-003; F5 SC-005) |
 | Spec review | 2 | f2abbf7224da5e36c1fdee21ec8fe71ba20af4ab:45a9b105ae6d57805c765b6343f57f6e573a90c7 | CLEAN (3 MINOR folded into clarify: FR-002 wording, FR-003 rewrap, SC-005 measurable) |
 | Plan review | 1 | a6363620134ea5fad5070c1cb4dacc71154cfb1e:0716b1a0459687647d249c43c1c5168d5a7f7e19 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 facts read on list/project change + Overview opening, `facts_round`/`facts_asked` replace `listing`, main_tests for created/included; F2 alternatives in R7/R9/R10/R11; F3 interpretation D5; F4 spec read by GitHub title ticket, D2 callers corrected) |
+| Plan review | 2 | 4d7a2d63c9bec458651d6712ce7f7909685829a8:157212aa9334caef6d3266340e08ae115b0f6f8f | pending (scoped, sonnet; fix diff vs round 1 snapshot) |
 
 ## Declined review findings
 
