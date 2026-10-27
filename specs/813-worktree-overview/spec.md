@@ -6,6 +6,9 @@
 
 **Status**: Closed 2026-10-18 — shipped in PRs #927, #930, #932, #936, #951, #976, #985 and the close PR (human display passes T070b, T071b outstanding)
 
+**Bugfix**: 2026-10-27 — BUG-1488 FR-015 and the edge cases: a closed linked issue's title is the
+summary too, not the branch
+
 **Input**: User description: "Implement GitHub issue #813: feat: worktree overview with
 state-aware cards (sessions, PRs, task progress). Add a project Overview: a grid of Material cards,
 one per worktree, so the user can see at a glance what every worktree is doing, which ones need
@@ -244,6 +247,8 @@ as the summary and *2/5* as the progress; a session without hooks shows Story 4'
 - **No branch** (detached HEAD, orphan folder, project root on the default branch): the pull request
   counts are not shown for that card.
 - **Linked issue unreadable or offline**: the summary falls back to the branch name.
+- **Linked issue closed** _(BUG-1488)_: its title is still the summary; only a number that is no
+  issue (missing, or a pull request) or a failed read falls back to the branch name.
 - **Malformed or huge task list**: lines that are not checkbox items are ignored; a task list with
   no checkbox items gives no ratio; reading a task list never blocks the window.
 - **Several feature folders in one worktree**: the one named by the worktree's current spec-kit
@@ -307,7 +312,8 @@ as the summary and *2/5* as the progress; a session without hooks shows Story 4'
 - **FR-014**: Cards MUST be reachable and activatable from the keyboard (focus moves between cards;
   Enter or Space activates), and Escape MUST close the Overview.
 - **FR-015**: Each card MUST show a task summary: the linked issue's title when the app knows it,
-  else the branch name, else the location's display name.
+  else the branch name, else the location's display name. The linked issue's title counts whatever
+  the issue's state: a closed issue's title is read and shown like an open one's _(BUG-1488)_.
 - **FR-016**: Each worktree card MUST show progress from the worktree's own files when present: the
   phase (Spec, Plan, Tasks, Implement, PR, Done) and the ratio of ticked to all checkbox tasks in
   the feature's task list; an autopilot ledger's recorded phase, when present, MUST win over the

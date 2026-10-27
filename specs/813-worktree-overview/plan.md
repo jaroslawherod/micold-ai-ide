@@ -130,6 +130,10 @@ U5).
   sends `overview::Msg::Closed` on `SessionMsg::Selected`, runs the card's follow-up.
 - `shell/overview_watch.rs` (new) on the generalised `changes_watch::run`; `shell/issues.rs` (or a
   new `shell/overview.rs`) issues the one-shot title reads (R8).
+- **Bugfix**: 2026-10-27 — BUG-1488 The title read accepts an issue in any state: a new
+  `IssueLookup::read_title` in `micold-core/src/github.rs` (default through `read_issue`, `GhCli`
+  overriding it with `lookup_args` and a state-blind `parse_title`) replaces `read_issue` in
+  `shell/issues.rs` `read_title`. `read_issue` stays open-only for worktree creation (550 FR-007).
 
 ### D10 — Showcase and docs
 
