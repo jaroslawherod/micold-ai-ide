@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR not opened yet); full gate (`scripts/gate.sh`) run on the M3 tree; not pushed; review A and review B and the visual pass pending
+- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR not opened yet); full gate (`scripts/gate.sh`) green at 53ba8af40; not pushed; review A and review B and the visual pass pending
 - **Next step**: orchestrator runs M3 review A (code-review high) and review B (conformance, sonnet) on `075ac3985..HEAD` of 1504-m3 and the visual pass (quickstart §B rows A–E, G, I with source words; Refresh: close E's PR, archive G's session); M2's review B round 2 and PR still pending on 1504-m2; M3 PR text in scratchpad pr-title-m3.md / pr-body-m3.md
 
 ## Pull requests
@@ -64,6 +64,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CLEAN, 2 MINOR — both fixed, no round 2 (only MINORs): (a) `without_a_jira_summary_the_title_falls_through_to_the_branch` now asserts the summary after the t=1 read and after the first failure; (b) `StatusBoard::apply` doc names the one-read-in-flight assumption `due` ensures |
 | M2 review B (conformance, sonnet) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CHANGES: 1 MAJOR, 1 MINOR — F1 fixed (T049: `DATA_USE`, both selector notices and settings.md now disclose the title and keys named only in a branch; tests changed first, red); F2 no TDD cycle log — accepted as in M1, red runs in ledger and PR body |
 | M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
+| M3 review A (code-review high) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | pending (orchestrator; `075ac3985..HEAD`) |
+| M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | pending (orchestrator; `rubrics/conformance.md`, re-run Verify) |
+| M3 visual pass | 1 | 53ba8af40 | pending (quickstart §B rows A–E, G, I + Refresh E/G; showcase *title sources, expanded*) |
 
 ## Red runs (M3)
 
