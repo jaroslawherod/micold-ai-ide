@@ -517,19 +517,28 @@ fn a_picked_label_leaves_the_field_open_with_no_highlight() {
         &mut state,
         GithubMsg::HighlightMoved(LabelList::Include, Direction::Next),
     );
-    let highlighted = form(&state).github_selector.field(LabelList::Include).highlight;
+    let highlighted = form(&state)
+        .github_selector
+        .field(LabelList::Include)
+        .highlight;
     assert_eq!(highlighted, Some(0));
     filter(&mut state, GithubMsg::Picked(LabelList::Include, 0));
     let field = form(&state).github_selector.field(LabelList::Include);
     assert_eq!(field.query, "");
-    assert!(field.open, "the field holds the keyboard, so it is drawn open");
+    assert!(
+        field.open,
+        "the field holds the keyboard, so it is drawn open"
+    );
     assert_eq!(field.highlight, None);
     filter(
         &mut state,
         GithubMsg::QueryChanged(LabelList::Include, "u".into()),
     );
     assert_eq!(
-        form(&state).github_selector.field(LabelList::Include).highlight,
+        form(&state)
+            .github_selector
+            .field(LabelList::Include)
+            .highlight,
         None
     );
 }

@@ -74,3 +74,12 @@ Red run: `cargo test -p micold-material --lib a_press_on_a_panel_field` and `car
 | Visual F2 | `fake_gh` answers the listing before the labels; `FAKE_GH_MODE` modes | dev-only tool, no test | — |
 
 Visual F3 mutant: with the `LabelText::NotOffered(_)` arm removed from `LabelRow::summary`, `the_note_on_labels_not_offered_has_a_heading_to_wrap_under` FAILED (github_filter.rs:591); restored, it passes.
+
+## M2 review round 2 fixes (red run before the code)
+
+| Finding | Behaviour | Red (before the code) | Green |
+|---|---|---|---|
+| A F1 (MINOR) | core names a GitHub failure's cause without 034's "Couldn't read issues" opening, for every variant | `causes_leave_out_the_read_issues_opening` (micold-core `github_classify`) failed to compile: `no method named cause found for enum IssueLoadError` | `IssueLoadError::github_cause`; `github_message` and it share `github_parts`; `label_failure` calls it (no prefix stripping); `github_classify` 8 passed, `github_filter_state` 26 passed |
+| Visual F2 (MINOR) | after a pick the label field stays open (it keeps the keyboard, so it is drawn focused) | `a_picked_label_leaves_the_field_open_with_no_highlight` FAILED: "the field holds the keyboard, so it is drawn open" | `GithubSelector::choose` no longer closes the field |
+| Visual F3 (MINOR) | a pick resets the field's highlight; typing then highlights no row | same test, and the added assertion in Jira's `the_keyboard_reaches_every_row_picks_with_enter_and_escape_keeps_the_choice` FAILED (`left: Some(1) right: None`) | `choose` (GitHub) and `restore_query` (Jira) set `highlight = None`; `jira_filters_picker` 52 passed |
+| A F2 (MINOR) | doc/comment wording | prose only | — |
