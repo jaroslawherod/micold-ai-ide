@@ -154,6 +154,12 @@ ticket gives its summary (FR-004).
 - [x] T024 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a Jira ticket's
   summary is the title, read with the status request under the same switch; a key only in the
   branch gets no status chip
+- [x] T049 [US1] Amend the Jira disclosure (1101 FR-006b, FR-004 "same disclosure"): `DATA_USE` in
+  `crates/micold-client/src/ui/settings/jira.rs`, the selector notices in
+  `crates/micold-client/src/features/worktree_form.rs` and `worktree_form/jira_query.rs`, and
+  `docs/user-guide/settings.md` say the title is read too and that keys named only in a branch
+  are sent; exact-text tests in `tests/jira_query_state.rs`, `tests/jira_source_state.rs` and
+  `tests/jira_keep_or_remove_is_drawn.rs` changed first and run red
 
 **Checkpoint**: quickstart §B rows A–D.
 
@@ -338,7 +344,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M2 — Jira summaries
 
-- **Tasks**: T017–T024
+- **Tasks**: T017–T024, T049
 - **Deliverable**: a worktree with a Jira title ticket (folder or branch) shows the Jira issue's
   summary as its title; a branch-only key gets no status chip.
 - **Satisfies**: US1 acceptance scenarios 2 and 4; FR-002 (Jira), FR-004, FR-011 (board)

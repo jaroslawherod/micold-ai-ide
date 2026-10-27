@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M2 implemented on branch 1504-m2 (worktree /home/user/wt-1504-m2, stacked on M1 head ac5ada9ea; not pushed); full gate (`scripts/gate.sh`) green at aeac356e2; review A, review B and the visual pass pending
-- **Next step**: orchestrator runs review A (code-review high) and review B (conformance) on `ac5ada9ea...HEAD`; then fix findings, full gate, PR (title/body in scratchpad pr-title-m2.md / pr-body-m2.md) once M1 #1566 merges
+- **Phase**: M2 review fixes committed on branch 1504-m2 (worktree /home/user/wt-1504-m2), rebased onto origin/main after M1 #1566 merged (2104379be); full gate run on the rebased tree; not pushed
+- **Next step**: orchestrator runs a scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the T049 disclosure fix commit; then push `claude/project-thread-t2a600` and open the M2 PR from scratchpad pr-title-m2.md / pr-body-m2.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1557 | design | merged | 24a2a839f |
-| #1566 | M1 | open | pending |
+| #1566 | M1 | merged | 2104379be |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | #1566 | PR open |
-| M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | implemented, reviews pending |
+| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | #1566 | merged |
+| M2 | T017–T024, T049 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | implemented, reviews pending |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
 | M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
@@ -60,6 +60,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CLEAN (1 MINOR: no TDD cycle log; red runs named in the PR body) |
 | M1 visual pass | 1 | 7fbb9ec20 | PASS: quickstart §B rows A, B and rename, light and dark (/mnt/project-files/issue-1504/) |
 | M1 review A (code-review, scoped) | 2 | d074ecd6fb6b943300885d215029a356dea395db:104b7ed0222554ea88387a5c7dc81eec981d4073 | CLEAN (F1–F3 fixed; `issue_ref` unchanged for callers); full gate green at 104b7ed02 |
+| M2 review A (code-review high) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CLEAN, 2 MINOR — both fixed, no round 2 (only MINORs): (a) `without_a_jira_summary_the_title_falls_through_to_the_branch` now asserts the summary after the t=1 read and after the first failure; (b) `StatusBoard::apply` doc names the one-read-in-flight assumption `due` ensures |
+| M2 review B (conformance, sonnet) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CHANGES: 1 MAJOR, 1 MINOR — F1 fixed (T049: `DATA_USE`, both selector notices and settings.md now disclose the title and keys named only in a branch; tests changed first, red); F2 no TDD cycle log — accepted as in M1, red runs in ledger and PR body |
+| M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
 
 ## Red runs (M2)
 
@@ -88,7 +91,19 @@ helper, which builds the card and the row from one state) rather than `tests/fea
 T018's "switch off or no connection sends nothing" case lives in `main_tests.rs`
 `jira_status_driver` (the gate is the shell's, `State::plan` never sees the switch).
 
-Pending reviews (M2): review A (`code-review` high) and review B (`rubrics/conformance.md`,
+T049 red (disclosure, review B F1): `cargo test --no-fail-fast -p micold-client --test
+jira_query_state --test jira_source_state --test jira_keep_or_remove_is_drawn --test overview`
+exit 101 — `the_page_discloses_the_background_status_read` ("status and title" missing from the
+note), `the_notice_in_advanced_mode_names_the_query` and
+`a_project_without_a_github_remote_lists_jira_and_offers_no_source_choice` (exact text differs);
+`overview` 94 passed (review A (a) adds asserts on existing behaviour, so no red).
+The longer selector notice wraps one more line in the Jira New-worktree dialog: the full gate's
+`layout_snapshot` failed on the `add-worktree-dialog-jira-*` states only (dialog 16 px taller,
+`0/8/…` paths), accepted with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test
+layout_snapshot`.
+
+Round-1 reviews (M2, done): review A (`code-review` high) and review B (`rubrics/conformance.md`,
+sonnet) on `ac5ada9ea...HEAD` (`code-review` high) and review B (`rubrics/conformance.md`,
 sonnet) on `ac5ada9ea...HEAD`, brief `brief.py milestone specs/1504-readable-worktree-titles M2`;
 visual pass on quickstart §B rows C–D (title text only) with a loopback Jira stub. Round-1 snapshot
 for A and B: `9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7`.

@@ -895,7 +895,7 @@ impl WorktreeForm {
             return Some(jira_query::notice(site));
         }
         let notice = format!(
-            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials, and, with this dialog closed, linked tickets' keys, to show their status.",
+            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials, and, with this dialog closed, the keys of tickets linked to or named in a worktree's branch, to show their status and title.",
             site.key, site.origin
         );
         // Feature 1185 (FR-014): the values sent are named by the active line under the picker's

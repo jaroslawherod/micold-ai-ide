@@ -778,10 +778,11 @@ pause, for the project's people whose name matches (sending the project key, the
 and your credentials) (see
 [From a Jira issue](worktrees-and-sessions.md#from-a-jira-issue)).
 
-It also does so with no dialog open, to show the status of the tickets your worktrees are linked to
-(see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)): the keys of those tickets are
-sent with the project key and your credentials, in one request for up to 100 tickets. That happens
-when a project opens and when the window regains focus after the last read is more than five
+It also does so with no dialog open, to show the status and title of the tickets your worktrees are
+linked to (see [A ticket's status](worktrees-and-sessions.md#a-tickets-status)), and the title of a
+ticket whose key is named only in a worktree's branch (see [Title](overview.md#title)): the keys of
+those tickets are sent with the project key and your credentials, in one request for up to 100
+tickets. That happens when a project opens and when the window regains focus after the last read is more than five
 minutes old, and at no other time. With the switch off, or no connection for the project, nothing is
 sent.
 

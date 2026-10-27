@@ -692,7 +692,8 @@ fn the_notice_in_advanced_mode_names_the_query() {
         advanced,
         "Reads issues of project ABC matching your query from https://acme.atlassian.net. Sends \
          the project key, your query and your credentials, and, with this dialog closed, the keys \
-         of the tickets your worktrees are linked to, to show their status."
+         of the tickets your worktrees are linked to or named in their branch, to show their \
+         status and title."
     );
 }
 

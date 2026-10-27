@@ -276,7 +276,9 @@ impl StatusBoard {
 
     /// Take the answer of a read begun in `epoch` for `asked`. An answer from before a
     /// [`clear`](Self::clear) is dropped. A status is kept for a status key only; a summary for
-    /// every asked key.
+    /// every asked key. The status keys are the ones the last [`begin`](Self::begin) stored: this
+    /// relies on one read in flight at a time, which [`due`](Self::due) ensures by refusing a
+    /// trigger while `in_flight`.
     pub fn apply(
         &mut self,
         epoch: u64,

@@ -94,7 +94,7 @@ pub enum Msg {
 /// §4). It names the query, never its text.
 pub fn notice(site: &JiraSite) -> String {
     format!(
-        "Reads issues of project {} matching your query from {}. Sends the project key, your query and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
+        "Reads issues of project {} matching your query from {}. Sends the project key, your query and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to or named in their branch, to show their status and title.",
         site.key, site.origin
     )
 }

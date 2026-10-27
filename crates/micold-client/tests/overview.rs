@@ -1563,7 +1563,14 @@ fn without_a_jira_summary_the_title_falls_through_to_the_branch() {
     jira_read(&mut state, Some(&[("ABC-43", "Crash on save")]), 0);
     assert_eq!(branch(&state), expected, "an unknown key is not returned");
     jira_read(&mut state, Some(&[("ABC-42", "Login rate limit")]), 1);
-    for n in 0..3 {
+    let summary = (
+        "Login rate limit".to_string(),
+        "Login rate limit".to_string(),
+    );
+    assert_eq!(branch(&state), summary, "the summary is read");
+    jira_read(&mut state, None, 2);
+    assert_eq!(branch(&state), summary, "one failed read keeps the summary");
+    for n in 1..3 {
         jira_read(&mut state, None, 2 + n);
     }
     assert_eq!(branch(&state), expected, "failed reads retired the summary");
