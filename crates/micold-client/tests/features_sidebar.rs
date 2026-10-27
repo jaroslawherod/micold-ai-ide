@@ -1897,9 +1897,23 @@ mod two_line_rows {
     use micold_client::features::sidebar::{
         default_second_line, row_chips, row_second_line, row_title, with_title_line, RowChip,
     };
+    use micold_core::location_title::{choose, LocationTitle, TitleInputs, TitleTicket};
     use micold_core::session::SessionLifecycle;
 
     const TITLE: &str = "CI red on main";
+    const TICKET: TitleTicket = TitleTicket::Github(1117);
+
+    /// The row's location title, as `features::overview::location_title` builds it: the issue's
+    /// title when one is known, else the branch, else the display name (feature 1504, FR-001).
+    fn titled(node: &WorktreeNode, issue_title: Option<&str>) -> LocationTitle {
+        let ticket = TICKET;
+        choose(&TitleInputs {
+            ticket: Some(&ticket),
+            issue_title,
+            branch: node.worktree.branch.as_deref(),
+            ..TitleInputs::named(&node.display_name)
+        })
+    }
     const BRANCH: &str = "fix/1117_ci-red";
 
     fn node(tags: Vec<Tag>, sessions: Vec<Session>) -> WorktreeNode {
@@ -1926,7 +1940,7 @@ mod two_line_rows {
     #[test]
     fn a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions() {
         let node = node(vec![], vec![session(here())]);
-        let title = row_title(&node, Some(TITLE), None);
+        let title = row_title(&titled(&node, Some(TITLE)), None);
         assert_eq!(title, TITLE);
         assert_eq!(
             row_second_line(&node, &title),
@@ -1938,7 +1952,7 @@ mod two_line_rows {
     #[test]
     fn a_branch_only_worktree_reads_the_branch_then_the_sessions_alone() {
         let node = node(vec![], vec![idle(here())]);
-        let title = row_title(&node, None, None);
+        let title = row_title(&titled(&node, None), None);
         assert_eq!(title, BRANCH);
         assert_eq!(row_second_line(&node, &title), "1 session");
     }
@@ -1967,7 +1981,7 @@ mod two_line_rows {
         let empty_worktree = node(vec![], vec![]);
         assert!(row_second_line(
             &empty_worktree,
-            &row_title(&empty_worktree, Some(TITLE), None)
+            &row_title(&titled(&empty_worktree, Some(TITLE)), None)
         )
         .ends_with("no sessions"));
     }
@@ -2045,13 +2059,28 @@ mod two_line_rows {
     #[test]
     fn a_users_rename_wins_the_first_line_over_the_issue_title_and_the_branch() {
         let node = node(vec![], vec![session(here())]);
-        let title = row_title(&node, Some(TITLE), Some("my pet name"));
+        let title = row_title(&titled(&node, Some(TITLE)), Some("my pet name"));
         assert_eq!(title, "my pet name");
         assert_eq!(
             row_second_line(&node, &title),
             "fix/1117 \u{b7} 1 session running"
         );
-        assert_eq!(row_title(&node, Some(TITLE), Some("  ")), TITLE);
+        assert_eq!(row_title(&titled(&node, Some(TITLE)), Some("  ")), TITLE);
+    }
+
+    /// Feature 1504 (T005, FR-007): the row's first line is the location title whatever its source
+    /// (an issue, the branch, the folder), and a rename (feature 1125) still wins over each.
+    #[test]
+    fn the_row_shows_the_location_title_of_every_source_and_a_rename_wins() {
+        let mut node = node(vec![], vec![]);
+        assert_eq!(row_title(&titled(&node, Some(TITLE)), None), TITLE);
+        assert_eq!(row_title(&titled(&node, None), None), BRANCH);
+        node.worktree.branch = None;
+        let folder = titled(&node, None);
+        assert_eq!(row_title(&folder, None), "ci-red");
+        for title in [titled(&node, Some(TITLE)), folder] {
+            assert_eq!(row_title(&title, Some("my pet name")), "my pet name");
+        }
     }
 }
 

@@ -1163,6 +1163,7 @@ mod tests {
             state,
             reason: CardReason::Working,
             title: "Adds the worktree overview".into(),
+            title_source: micold_core::location_title::TitleSource::Folder,
             prs: PrDisplay::Hidden,
             progress: Default::default(),
             activity: None,

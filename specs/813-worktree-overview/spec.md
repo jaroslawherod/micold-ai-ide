@@ -315,7 +315,7 @@ as the summary and *2/5* as the progress; a session without hooks shows Story 4'
   Enter or Space activates), and Escape MUST close the Overview.
 - **FR-015**: Each card MUST show a task summary: the linked issue's title when the app knows it,
   else the branch name, else the location's display name. The linked issue's title counts whatever
-  the issue's state: a closed issue's title is read and shown like an open one's _(BUG-1488)_.
+  the issue's state: a closed issue's title is read and shown like an open one's _(BUG-1488)_. *(Amended by [1504](../1504-readable-worktree-titles/spec.md) FR-001 and FR-008: the title is the first source in 1504's order (the title ticket's issue title, read from the folder name or else the branch name, then the Jira summary, the pull request, the spec heading, the session title, the latest own commit, the branch and the display name), and its tooltip names that source.)*
 - **FR-016**: Each worktree card MUST show progress from the worktree's own files when present: the
   phase (Spec, Plan, Tasks, Implement, PR, Done) and the ratio of ticked to all checkbox tasks in
   the feature's task list; an autopilot ledger's recorded phase, when present, MUST win over the

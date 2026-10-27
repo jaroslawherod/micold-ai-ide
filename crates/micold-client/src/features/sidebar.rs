@@ -62,6 +62,7 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::location_state::{location_state, LocationState};
+use micold_core::location_title::LocationTitle;
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
@@ -1479,17 +1480,12 @@ pub fn with_title_line(node: &WorktreeNode, title: &str, tooltip: String) -> Str
 }
 
 /// A worktree row's first line (feature 1125, data-model *Row text*): the user's rename of the
-/// worktree when there is one (it wins over everything the app derives), else the known issue
-/// title, else the branch, else the display name, as the Overview's card reads it (feature 1120,
-/// FR-006).
-pub fn row_title(node: &WorktreeNode, issue_title: Option<&str>, renamed: Option<&str>) -> String {
+/// worktree when there is one (it wins over everything the app derives), else its location title,
+/// as the Overview's card reads it (feature 1504, FR-007).
+pub fn row_title(title: &LocationTitle, renamed: Option<&str>) -> String {
     match renamed.map(str::trim).filter(|name| !name.is_empty()) {
         Some(name) => name.to_string(),
-        None => micold_core::overview_text::card_title(
-            issue_title,
-            node.worktree.branch.as_deref(),
-            &node.display_name,
-        ),
+        None => title.text.clone(),
     }
 }
 

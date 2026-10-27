@@ -43,6 +43,7 @@ pub mod kube;
 pub mod link;
 pub mod local_time;
 pub mod location_state;
+pub mod location_title;
 pub mod logout_survival;
 pub mod markdown;
 pub mod markup;

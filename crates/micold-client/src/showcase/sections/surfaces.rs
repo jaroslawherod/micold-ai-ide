@@ -966,6 +966,7 @@ fn card_model(
         state,
         reason,
         title: "Worktree overview: one card per location".to_string(),
+        title_source: micold_core::location_title::TitleSource::Folder,
         prs: micold_core::overview::PrDisplay::Counts(micold_core::overview::PrCounts {
             open: 1,
             merged: 2,

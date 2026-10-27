@@ -35,17 +35,6 @@ pub struct CardText {
     pub activity: Option<String>,
 }
 
-/// The card's title: the known issue title, else the branch, else the display name (C4, FR-006).
-/// A blank issue title counts as unknown.
-pub fn card_title(issue_title: Option<&str>, branch: Option<&str>, display_name: &str) -> String {
-    issue_title
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .or(branch)
-        .unwrap_or(display_name)
-        .to_string()
-}
-
 /// `type/number` of a conventional branch, `None` for any other (C5, FR-007, research R3): a
 /// [`ConventionalType`](crate::naming::ConventionalType) token, `/` or `-`, ASCII digits, then the
 /// end, or `_` or `-` and a non-empty slug.
@@ -281,36 +270,6 @@ mod tests {
             line: line.into(),
             ratio,
         }
-    }
-
-    /// C4: the issue title wins, then the branch, then the display name.
-    #[test]
-    fn the_title_is_the_issue_title_else_the_branch_else_the_display_name() {
-        assert_eq!(
-            card_title(Some(ISSUE_TITLE), Some("feat/1120_x"), "feat-1120_x"),
-            ISSUE_TITLE,
-            "a known issue title is the title"
-        );
-        assert_eq!(
-            card_title(None, Some("fix/1115_container"), "fix-1115_container"),
-            "fix/1115_container",
-            "without a title the branch is"
-        );
-        assert_eq!(
-            card_title(None, None, "Default"),
-            "Default",
-            "with neither the display name is"
-        );
-        assert_eq!(
-            card_title(Some("   "), Some("main"), "d"),
-            "main",
-            "a blank issue title counts as unknown"
-        );
-        assert_eq!(
-            card_title(Some("  Fix the gate \n"), Some("main"), "d"),
-            "Fix the gate",
-            "an issue title is trimmed"
-        );
     }
 
     /// C5: a conventional type, `/` or `-`, a decimal number, then the end or `_`/`-` and a slug.
@@ -574,6 +533,7 @@ mod tests {
             state: CardState::Working,
             reason: CardReason::Working,
             title: ISSUE_TITLE.into(),
+            title_source: crate::location_title::TitleSource::Folder,
             prs: PrDisplay::Counts(PrCounts {
                 open: 1,
                 merged: 0,

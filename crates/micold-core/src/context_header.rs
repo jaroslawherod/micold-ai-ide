@@ -188,6 +188,7 @@ mod tests {
             state: CardState::Idle,
             reason: CardReason::Idle,
             title: title.into(),
+            title_source: crate::location_title::TitleSource::Folder,
             prs: PrDisplay::Hidden,
             pull_requests: None,
             progress: Progress {
