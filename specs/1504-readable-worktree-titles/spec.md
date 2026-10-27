@@ -18,6 +18,17 @@ title, the open PR's title, the spec title from `specs/<feature>/spec.md`, the b
 subject. The folder name stays secondary (tooltip). Owning specs: `specs/813-worktree-overview`
 (FR-015), `specs/1120-overview-card-readability` (User Story 2)."
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: Should the session title (FR-001 item 5) rank above the pull request (item 3) and spec
+  (item 4) titles? → A: No, below them, as written. The location title is the worktree's *task
+  summary* (813 FR-015), which a pull request title or spec name states; a session title names one
+  conversation, and a derived label can be the raw first prompt, such as `/speckit-autopilot #1504`,
+  the prompt this project starts its worktree sessions with. _(agent-resolved:
+  specs/813-worktree-overview/spec.md#FR-015; specs/032-untitled-session-labels/spec.md#Clarifications)_
+
 ## Terms
 
 - **Location title**: the first line of a worktree's Overview card and of its sidebar row (feature
@@ -191,18 +202,21 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
   7. the branch name;
   8. the folder name (the location's display name).
 
-  [NEEDS CLARIFICATION: should the session title (item 5) rank above the pull request (item 3)
-  and spec (item 4) titles, given that it describes the latest conversation rather than the
-  worktree's purpose? Default as written: below them.]
+  The session title ranks below the pull request and spec titles: they describe the worktree's
+  task (813 FR-015's *task summary*), while a session title describes one conversation and, when
+  derived, can be a raw command such as `/speckit-autopilot #1504` (032).
 - **FR-002**: The title ticket MUST be read from the folder name first and, when the folder name
   has no ticket, from the branch name, with the same naming convention; a ticket in the folder name
   MUST win over a different one in the branch name. The title ticket MUST be used only for the
   location title: the sidebar's issue tag, the Jira status chip and the set of keys whose status is
-  read keep using the linked ticket (folder name only), unchanged.
-- **FR-003**: A GitHub issue title read for a ticket in the branch name MUST follow the rules
-  titles from the folder name already follow: read once per issue unless the read failed (FR-009), seeded from issues the app
-  already holds, any state counts (813 FR-015, BUG-1488), none read while GitHub issues are off or
-  there is no route to the session service.
+  shown keep using the linked ticket (folder name only), unchanged; a Jira key found only in the
+  branch name is added to the Jira request for its summary only (FR-004).
+- **FR-003**: A GitHub issue title read for a ticket in the branch name MUST follow the rules that
+  titles from the folder name already follow (813 FR-015, BUG-1488):
+  - read once per issue, unless the read failed (FR-009);
+  - seeded from issues the app already holds;
+  - an issue's title counts whatever its state;
+  - none read while GitHub issues are off or there is no route to the session service.
 - **FR-004**: A Jira issue summary MUST be read only for a valid `<PROJECT>-<digits>` key of the
   project's Jira connection. For a linked ticket it MUST come with the reading the app already makes
   for that key's status (feature 1101), not from a reading of its own. A title ticket that is a
@@ -263,9 +277,8 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
 - **SC-004**: Opening the Overview with this feature starts no network reading that it did not
   start before, apart from GitHub issue title reads and Jira summary reads for title tickets found
   only in branch names, and retries of failed GitHub reads (FR-009).
-- **SC-005**: No spec, commit or issue read for titles runs on the window's UI thread; with 50
-  worktrees, choosing their titles from data already read adds no more than 2 ms to an Overview
-  refresh.
+- **SC-005**: No spec, commit or issue read for titles runs on the window's UI thread; on the UI
+  thread, titles are only chosen from data already read.
 
 ## Out of scope
 
