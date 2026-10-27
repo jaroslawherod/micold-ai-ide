@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
 - **Phase**: implement
-- **Next step**: M1 review round 2 (B scoped re-review incl. Verify, sonnet; A scoped on the fix diff, sonnet), dispatched by the orchestrator; after both CLEAN: full gate, push branch `1400-m1`, open the M1 PR. T061 (Polish, no code) left to the close unit.
+- **Next step**: open the M1 PR (orchestrator; branch `1400-m1` pushed to `claude/project-thread-5zc5qk`, title/body in the scratchpad `pr-title-m1.md`/`pr-body-m1.md`), wait for CI and merge; then M2. T061 (Polish, no code) left to the close unit.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | implemented, review round 1 fixed, round 2 pending (branch `1400-m1`, rebased on origin/main after #1558 merged) |
+| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | pending (orchestrator opens) | reviews clean, full gate green at 522f25800 (`scripts/gate.sh`, 593 test results ok, scripts 0 failures), pushed |
 | M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | planned |
 | M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
 | M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | f5fa5bfd7b7859e302bfa962e54775ef046fef9e:7f0754f2ffcf14296b214ca93ee778cbfb417a13 | CHANGES: F1 MAJOR (M4 state change never remembered) fixed: T036 asserts `Remembered(Basic)` per state change + remembered Closed reopens with one `is:closed` listing, T038 emits it, M4 depends on M3, FR-021 (state) in Satisfies; F2 MAJOR (M7 US6 choices never remembered) fixed: T057 asserts `Remembered(Basic)` + `from_remembered` round trip, T058 emits it, FR-021 (US6) in Satisfies; F3 MINOR (M7 depends) fixed: M4, M6; F4 MINOR (checklist note) fixed, prose only: resolved as provisional D1. Dependencies section updated to match |
 | Tasks review | 2 | 207cf7e50321622990b774afe49fb080ed3f61e5:f13cb90003f50fb93e8427f02f0a869de921b205 | CLEAN (scoped re-review, sonnet): round-1 F1–F4 all fixed; no new contradiction |
 | M1 Review A + B | 1 | 71cbb1a04f82954925457fedd5089a6ad915a306:a3e43dbacff6b9601ba1acfd5bd86df98c94719f | A (code-review, high): CLEAN with 3 MINOR — F1 `LabelName::parse` accepted `\`, F2 scope check missed `(a)repo:`/`"x"repo:`, F3 FORBIDDEN/INSUFFICIENT_SCOPES at `["search"]` read as `Rejected`; all fixed test-first (`\` refused, scope checked after any char but alnum/`_`/`-`, both types → `Load(graphql_error_of)`; §2/§5/§6 rows, spec FR-006/Edge, data-model, research R4/R5/R6/R7 updated). B (conformance): CHANGES — F1 MAJOR no red-before-green evidence: fixed by `tdd/cycle-log.md` (red reconstructed structurally on pre-M1 src and by one mutant per task, plus the A fixes' red/green); F2 MINOR hand-written fixtures (T018): accepted, already a Follow-up (probe before release). Verify green. Scoped gate at a3e43dbac: fmt + clippy (core, workspace, `-D warnings`) green; Verify suites green (github_filter 47, github_gh_cli 17, jira_query, github_privacy, github_search, github_load); `cargo test --workspace --no-fail-fast` red only in 6 permission tests that cannot fail a write as root (container runs as uid 0: settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers ×2, daemon sessions worktree_delete_blocked…, daemon settings …unreadable…), untouched by M1 |
-| M1 Review A + B | 2 | 696c1b64d4d29fbb930a0f8a14f7a00d55e8c9c5:e46e905c271ce9ab7b57e8b19ce28bd9e9b0c8ea | pending: B scoped (MAJOR fix) + A scoped on the fix diff. Round 1's snapshot is stale after the rebase onto origin/main (`review-snapshot.sh diff` exits 2); M1's diff is unchanged by it (same patch-id, a3e43dba→04e671637, d414072c→15174b40f), so the fix diff is `git diff 15174b40f e46e905c2`. Scoped gate: fmt, clippy core `-D warnings` green; github_filter 48, github_gh_cli 18, jira_query 36, github_privacy/search/load green |
+| M1 Review A + B | 2 | 696c1b64d4d29fbb930a0f8a14f7a00d55e8c9c5:e46e905c271ce9ab7b57e8b19ce28bd9e9b0c8ea | CLEAN (scoped, sonnet; A's three fixes and B F1 confirmed, github_filter 48, github_gh_cli 18). B scoped (MAJOR fix) + A scoped on the fix diff. Round 1's snapshot is stale after the rebase onto origin/main (`review-snapshot.sh diff` exits 2); M1's diff is unchanged by it (same patch-id, a3e43dba→04e671637, d414072c→15174b40f), so the fix diff is `git diff 15174b40f e46e905c2`. Scoped gate: fmt, clippy core `-D warnings` green; github_filter 48, github_gh_cli 18, jira_query 36, github_privacy/search/load green |
 
 ## Notes
 
