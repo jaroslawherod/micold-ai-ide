@@ -371,8 +371,11 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
         let element: Element<'a, M> = behaviour.into();
         match s.tooltip {
             // Around the whole control, not the trigger alone: the picker floats only its list, so
-            // a tooltip inside it would never be shown.
-            Some(tip) => super::Tooltip::new(element, tip, r).into(),
+            // a tooltip inside it would never be shown. Closed while the list is open, or its text
+            // is drawn over the list (#1539).
+            Some(tip) => super::Tooltip::new(element, tip, r)
+                .suppressed(s.open)
+                .into(),
             None => element,
         }
     }

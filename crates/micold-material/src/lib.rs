@@ -220,6 +220,7 @@ pub struct Tooltip<'a, M> {
     max_lines: Option<usize>,
     subject: Option<u64>,
     open_if: Option<fn(&Tree) -> bool>,
+    suppressed: bool,
 }
 
 impl<'a, M: 'a> Tooltip<'a, M> {
@@ -237,7 +238,15 @@ impl<'a, M: 'a> Tooltip<'a, M> {
             max_lines: None,
             subject: None,
             open_if: None,
+            suppressed: false,
         }
+    }
+
+    /// Keep the tooltip closed while `suppressed` holds, e.g. while the content's own list is open
+    /// (#1539). The content keeps its place in the tree, so nothing it holds is reset.
+    pub fn suppressed(mut self, suppressed: bool) -> Self {
+        self.suppressed = suppressed;
+        self
     }
 
     /// Open only while `predicate` holds of the content's widget tree; see
@@ -323,6 +332,7 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         if let Some(key) = t.subject {
             floated = floated.subject(key);
         }
+        floated = floated.suppressed(t.suppressed);
         if let Some(predicate) = t.open_if {
             floated = floated.open_if(predicate);
         }
@@ -391,5 +401,51 @@ mod tooltip_wait_tests {
             tip().show_delay(d).after_rest(d).wait,
             tooltip::Wait::Rest(d)
         );
+    }
+
+    /// #1539: a suppressed tooltip floats nothing under the pointer; the same tooltip, not
+    /// suppressed, floats its panel.
+    #[test]
+    fn a_suppressed_tooltip_floats_nothing_under_the_pointer() {
+        use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
+        use iced::{Event, Point, Rectangle, Size, Vector};
+
+        let room = Size::new(400.0, 300.0);
+        let floats = |suppressed: bool| {
+            let mut element: Element<'_, ()> = tip().suppressed(suppressed).into();
+            let renderer = crate::test_support::renderer();
+            let mut tree = Tree::new(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, room),
+            );
+            let at = Point::new(2.0, 2.0);
+            let mut messages: Vec<()> = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &Event::Mouse(mouse::Event::CursorMoved { position: at }),
+                Layout::new(&node),
+                mouse::Cursor::Available(at),
+                &renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(room),
+            );
+            let floating = element
+                .as_widget_mut()
+                .overlay(
+                    &mut tree,
+                    Layout::new(&node),
+                    &renderer,
+                    &Rectangle::with_size(room),
+                    Vector::ZERO,
+                )
+                .is_some();
+            floating
+        };
+        assert!(floats(false), "the control: hovering floats the panel");
+        assert!(!floats(true), "a suppressed tooltip floated its panel");
     }
 }
