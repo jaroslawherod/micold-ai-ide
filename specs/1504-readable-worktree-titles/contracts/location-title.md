@@ -66,13 +66,16 @@ name). The folder name stays on each (row `Name:`/`Folder:` lines; header and ca
 
 ## L7 Spec and commit facts (FR-006, SC-005, edge cases)
 
-- Read once per worktree listing (`features::worktree::State.listing` bump), per valid worktree,
-  on a blocking thread; never on the UI thread.
+- Read per valid worktree, on a blocking thread (never the UI thread), on two existing occasions:
+  the worktree list or active project changed (any path: `set_worktrees`, `created`, `included`,
+  `excluded`), and the Overview opened. No timer.
+- Spec: the feature folder of `.specify/feature.json`, else the one `specs/<n>-*` for the GitHub
+  title ticket `n` (folder or branch).
 - Commit: merge-base with the default branch (`review_base`), `log -1 --format=%s base..HEAD`;
   none without a branch, without a base, with an empty range, on error or timeout.
 - Not read without local git (`caps.shared_git()` none).
-- An answer is dropped when its project is not active, its dir is not listed, or a newer
-  `listing` is stored for its dir.
+- An answer is dropped when its project is not active, its dir is not listed, or its round is not
+  the last one asked for its dir.
 
 ## L8 No new reading (FR-005, SC-004)
 

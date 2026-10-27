@@ -37,7 +37,9 @@ header's title tooltip shows title, source words, display name; the expanded car
 shows the source line under the title. A renamed worktree shows its custom name in the sidebar.
 
 Refresh: open a PR for H's branch, wait for the PR reading; H's title becomes the PR title on the
-next refresh (FR-010). Archive G's session: G falls to the next source.
+next refresh (FR-010). Archive G's session: G falls to the next source. Create a worktree with
+the app, commit "feat: late commit" in it, close and reopen the Overview: card and row show that
+subject / *From the latest commit* without reopening the project (FR-006).
 
 Retry (US3): go offline, restart the app, open the Overview (A shows its next source's title,
 never "loading"); go online; after 5 minutes, close and reopen the Overview: A shows its

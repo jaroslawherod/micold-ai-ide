@@ -88,7 +88,9 @@ asks for the linked keys (as today) plus the Jira title tickets found only in br
 (`branch_title_keys`), validated through the same `statuses_jql`; `StatusBoard::begin` records which
 of the asked keys are status keys, and `apply` stores a status only for those (no chip for a
 branch-only key) and a summary for every asked key. Summaries follow the statuses' lifetime: kept
-(not cleared) on a failed refresh until `FAILURES_BEFORE_RETIRING`, cleared on `clear()`.
+(not cleared) on a failed refresh until `FAILURES_BEFORE_RETIRING`, cleared on `clear()`. FR-004's "a failed or absent
+reading gives no title" is read as "a failure never yields a title of its own": a summary kept from
+an earlier successful read is that read's title, not the failure's (ledger D5).
 
 **Rationale**: One request on the same two occasions under the same gate (`jira_request`), as
 FR-004 requires; `tests/jira_is_requested_only_on_named_events.rs` keeps counting the same callers.
@@ -100,32 +102,46 @@ A summary is a title: kept like a status so a refresh blip does not flip cards b
 - Storing branch-only statuses too: the chip reads `status_of` by folder tag today, so it would
   not show, but FR-002 says the status set is unchanged; storing only summaries keeps that literal.
 
-## R5 Spec and commit sources: one off-thread read per listing (FR-006, SC-005)
+## R5 Spec and commit sources: one off-thread read per occasion (FR-006, FR-010, SC-005)
 
-**Decision**: `features::worktree::State` gains `listing: u64`, bumped by
-`app::State::set_worktrees` on every listing (a refresh, changed or not). The shell
-(`main.rs` after-update, beside the fingerprint check) sees the bump and calls new
-`shell::location_titles::read_facts(app)`, which for each valid worktree starts one
-`spawn_blocking` read (bounded by the review reads' git deadline) of:
+**Decision**: Facts are read on two occasions that already exist; there is no periodic worktree
+refresh to ride, and none is added:
+1. **The worktree list or the active project changed**, seen by `main.rs`'s after-update block,
+   which already compares `issues::worktrees_fingerprint` around every message (feature 1125). This
+   covers `app::State::set_worktrees` (open, reopen, start, catalog sync) and the paths that do not
+   go through it: `features::worktree::created`/`included` (`insert_sorted`) and `excluded`.
+2. **The Overview opened** (`issues::on_overview_opened`, the occasion that already reads titles):
+   every worktree is read again, so a spec written or a commit made after the list was read is
+   picked up there, or on the next list change.
+
+New `shell::location_titles::read_facts(app, dirs)` applies `Msg::TitleFactsRequested { project,
+dirs }` (the reducer bumps `facts_round` and records it per dir in `facts_asked`), then for each
+valid worktree starts one `spawn_blocking` read (bounded by the review reads' git deadline) of:
 - **spec**: `location_title::read_spec_title(root, ticket)` — the feature folder from
-  `task_progress::feature_dir` with the folder's ticket (the same folder progress uses), then the
-  heading of its `spec.md` via `location_title::spec_title(text)`;
+  `task_progress::feature_dir` (`.specify/feature.json`, else the one `specs/<n>-*`), with `n` the
+  number of the worktree's GitHub title ticket (R2), so a ticket only in the branch finds its spec
+  folder too; then the heading of its `spec.md` via `location_title::spec_title(text)`;
 - **commit**: new `Git::own_commit_subject(dir) -> Option<String>`: `review_base(dir)`'s merge-base
   with the default branch, then `git log -1 --format=%s <base>..HEAD`; `None` when the base is
   unavailable or the range is empty (branch with no commits of its own), or on any error/timeout.
 
 Skipped (no title, nothing read) when the worktree has no branch (detached; commit only), or the
 window has no local git (`caps.shared_git()` is `None`, remote daemon placement, feature 027): the
-paths are the daemon's, not this machine's. The answer `Msg::TitleFactsRead { project, dir, listing,
-facts }` is dropped when the project is no longer active, the dir is no longer listed, or `listing`
-is older than the one stored for that dir (stale, spec edge case).
+paths are the daemon's, not this machine's. The answer `Msg::TitleFactsRead { project, dir, round,
+facts }` is dropped when the project is no longer active, the dir is no longer listed, or `round` is
+not the one in `facts_asked` for that dir (stale, spec edge case).
 
 **Rationale**: The sidebar needs these titles with the Overview closed, so the progress watch
-(which runs only while the Overview is open) cannot carry them. One read per listing is exactly
-FR-006's bound. Reusing `feature_dir`, `read_text` limits, `review_base` and the git read deadline
+(which runs only while the Overview is open) cannot carry them. Both occasions already exist
+(SC-004), and each reads a worktree at most once. FR-006's "at most once per worktree list
+refresh" is read as once per occasion that refreshes the titles, the Overview opening being one
+(spec US3 names it beside the list refresh; ledger D6). Between occasions the facts held are the
+last read's. Reusing `feature_dir`, `read_text` limits, `review_base` and the git read deadline
 keeps the rules (default branch detection, timeouts) in one place.
 
 **Alternatives rejected**:
+- A `listing` counter bumped only in `set_worktrees`: misses worktrees the app creates or
+  includes (`insert_sorted`), and a spec or commit added later, until the project is reopened.
 - Add the spec title to `FileProgress`: only read while the Overview is open.
 - A notify watch per worktree for titles: a new watcher, more than FR-006 asks.
 - `git log -1 HEAD` without a base: on a fresh branch shows the default branch's subject, which the
@@ -165,6 +181,12 @@ prefix removed (then trimmed), and `None` when what is left is empty or `[FEATUR
 
 **Rationale**: One normaliser; each edge case in the spec is one unit test.
 
+**Alternatives rejected**:
+- Normalise in each source's reader: six copies of the BOM/CRLF/first-line rule, and `choose`
+  could not guarantee FR-012 for an input it did not clean.
+- Pass the whole trimmed text and let the widget ellipsise: a multi-line PR or session title would
+  draw several lines, which FR-012 rules out.
+
 ## R8 Session source (FR-005, FR-010)
 
 **Decision**: The main session (`occupancy::main_session`, as the card and the row already use)
@@ -179,12 +201,24 @@ of the location among un-archived sessions; `SessionLabel::Named(t) | Derived(t)
 same guard as `overview::pr_signal`) and its `state` is `PrState::Open | PrState::Draft`; the title
 and number. Merged/closed give none (spec edge case).
 
+**Alternatives rejected**:
+- A merged or closed PR's title as a fallback: the spec's edge case rules it out (the branch's
+  work is done; its title no longer names the worktree's current work).
+- Reading the PR afresh for its title: a new reading, which FR-005 forbids; the PR reading already
+  holds it.
+
 ## R10 Stale and per-window behaviour
 
 **Decision**: All title state is per window (`app::State`), so two windows each read at most once
-per occasion; a `Pending` entry is never re-asked (existing). Facts carry `listing`; titles carry
-`project` (existing `Msg::read_project` drop). Project switch clears `titles`, `facts` (new) and
-the board (existing).
+per occasion; a `Pending` entry is never re-asked (existing). Facts carry `round`; titles carry
+`project` (existing `Msg::read_project` drop). Project switch clears `titles`, `facts`,
+`facts_asked` (new) and the board (existing).
+
+**Alternatives rejected**:
+- One title cache shared by all windows: each window keeps its own `app::State` today; sharing
+  would need cross-window sync for a saving of one read per window.
+- Re-asking a `Pending` entry after a timeout: a hung read would be sent again while in flight; a
+  read that ends in an error already lands in `Failed` and retries after 5 minutes.
 
 ## R11 Privacy (FR-011)
 
@@ -192,3 +226,8 @@ the board (existing).
 text (as `TitleLookup` and `PullRequestStatus` do). The facts read logs only `dir` and the outcome
 class; commit subjects and spec headings never reach `log_line`/`eprintln!`. A test asserts the
 `Debug` of each holds no title text.
+
+**Alternatives rejected**:
+- Redact at the log sink (`log_line`): it cannot tell a title from other text.
+- Derived `Debug` and care at each log call: one `{:?}` of a state leaks a title, and no test
+  would catch it.

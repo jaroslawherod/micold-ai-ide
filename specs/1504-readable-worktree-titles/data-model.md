@@ -45,7 +45,8 @@ FR-001 order whose `first_line` (R7) is `Some`; `branch` and `display_name` are 
 - `title_ticket(dir_name: &str, branch: Option<&str>) -> Option<TitleTicket>`
 - `first_line(text: &str) -> Option<&str>`
 - `spec_title(text: &str) -> Option<String>`
-- `read_spec_title(root: &Path, ticket: Option<&str>) -> Option<String>` (blocking; uses
+- `read_spec_title(root: &Path, ticket: Option<u64>) -> Option<String>` (blocking; `ticket` is the
+  GitHub title ticket's number, R5; uses
   `task_progress::feature_dir` and `task_progress::read_text`, made `pub(crate)`)
 
 ### Removed
@@ -88,14 +89,19 @@ Transitions: none → `Pending` (`TitlesRequested`); `Pending` → `Known | NoIs
 
 ### TitleFacts (new)
 
-`{ listing: u64, spec: Option<String>, commit: Option<String> }`, per worktree dir in
-`State.facts: BTreeMap<String, TitleFacts>`. `Debug` omits texts. Cleared on `ProjectSwitched`;
-entries for dirs no longer listed are pruned when facts are stored.
+`{ spec: Option<String>, commit: Option<String> }`, per worktree dir in
+`State.facts: BTreeMap<String, TitleFacts>`. `Debug` omits texts. Beside it,
+`State.facts_round: u64` (bumped per request) and `State.facts_asked: BTreeMap<String, u64>` (the
+round last asked per dir). All three cleared on `ProjectSwitched`; entries for dirs no longer listed
+are pruned when facts are stored.
 
 ### Msg (extended)
 
-- `TitleFactsRead { project, dir, listing, facts }` (new): stored unless stale (an entry with a
-  newer `listing` exists) or `dir` not listed; `read_project` returns `project`.
+- `TitleFactsRequested { project, dirs }` (new): bumps `facts_round`, sets `facts_asked[dir]` to it
+  for each dir. Applied by `shell::location_titles::read_facts` when the worktree list or active
+  project changes and when the Overview opens (R5).
+- `TitleFactsRead { project, dir, round, facts }` (new): stored only when `round ==
+  facts_asked[dir]` and `dir` is listed; `read_project` returns `project`.
 - `TitleRead.result: TitleLookup` carries the new states.
 
 ### Functions
@@ -109,7 +115,6 @@ entries for dirs no longer listed are pruned when facts are stored.
 
 ## Client (other)
 
-- `features::worktree::State.listing: u64` (new): bumped by `app::State::set_worktrees`.
 - `features::jira_status::State::plan` (extended): asks `linked_keys` as status keys plus
   `branch_title_keys(worktrees, project)` (new: Jira title tickets from branches of worktrees whose
   folder has no ticket) as summary-only keys.
