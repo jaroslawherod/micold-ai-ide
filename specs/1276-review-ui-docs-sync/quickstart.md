@@ -43,3 +43,26 @@ verdict per check, every FAIL with a fix or an issue link.
    Without: hand the list to the owner and note it in the spec status.
 4. `visual-pass/mockup-sync.md` lists board, crop, differences, action. Expected: 0 unlabelled
    differences (SC-004).
+
+## Results (close unit, 2026-10-27, `main` at 09ee4cb1)
+
+- **A1** `review_keys_doc` 3 passed; with one `Does` cell changed it fails
+  (`the_guides_table_is_the_review_key_table`), restored green.
+- **A2** the grep's remaining hits are other dialogs' **Close** buttons (the review's quick-comment
+  dialog at `reviewing-changes.md:799`, setup output, session row, daemon details) and settings'
+  "within 2 seconds" path check: none describes the pre-redesign view.
+- **A3** `terminal-panes.md:44` lists the Review tab with its badge and changed dot;
+  `worktrees-and-sessions.md:1187` says **Review changes** opens or shows it.
+- **A4** `layout-snapshot.md` names every covered state of `review_tab_fits`'s `REVIEW_STATES`
+  (the contract's names map onto the slices' state names there).
+- **A5** `review-redesign.md` status "built (epic #1277)"; checked by M5 review B.
+- **A6** `documentation-set.test.sh` passed; `documentation_is_not_read` 3 passed;
+  `site/checks/links.sh --sources` not run (no lychee here), CI's `docs check` green on #1545.
+- **A7** `layout_snapshot` 162 passed, `layout_text_overflow` 3 passed; +1 px on the review bar's
+  strip padding fails naming `path 0/0/0/1/1/2/2/0/1/0, inside review.bar`, restored green. CI
+  green on Linux, macOS and Windows for #1495.
+- **A8** the close PR's `mise run gate` (recorded in its body).
+- **B** not re-run: `visual-pass/results.md` (M3) holds 34 crops with verdicts; its FAILs are fixed
+  or filed (#1519, #1539, #1540).
+- **C** not re-run: `visual-pass/mockup-sync.md` (M4) has an action on every row; M4 review B
+  round 2 re-read canvas version 11.

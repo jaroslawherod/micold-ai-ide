@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M5 PR opening
-- **Next step**: orchestrator waits on CI for the M5 PR and merges
+- **Phase**: close — review pending
+- **Next step**: orchestrator runs the close review (correctness of the tests, truth of the docs) on the pushed branch; then the close unit runs the full gate, finishes the ledger and opens the close PR
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1520 | fix red main after M2 + #1466/BUG-1470 | merged | 2a4b372d52ab16e7165cc6f2e9c885b3b1af9656 |
 | #1541 | M3 visual pass + fixes + fixture | merged | 3054321a9cef77929487989d9cdc73097b417399 |
 | #1544 | M4 mockup canvas sync | merged | 589dec73779b6997459c81776c376618c041f5b1 |
-| #1545 | M5 redesign doc record | open | |
+| #1545 | M5 redesign doc record | merged | 09ee4cb188b5b76f59512aa8e506f88ca2d7e7b7 |
+| — | close (TDD verify, quickstart, status) | not opened: waits on the close review | |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | merged (2a4b372d); #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | #1541 | T026–T029 done; reviews A and B CLEAN (A F1 fixed test-first: cut names and PR titles read whole in a tooltip); origin/main merged at 4b76f4f8 (not rebased); fixture re-recorded after it: only M3 groups vs main (header name Ellipsized at Fill in 29 review states, PR row title one line in the three source-open overlays, draft/reply row actions line in drawer-drafts/-replies; anchors unchanged); full gate green at 74f364af (scripts/gate.sh; first run lost to a full disk, second caught `Ellipsized::content` breaking the builder-API contract, made crate-private); geometry changed (draft row actions line, header name, PR row): `review_tab_fits` declares the drafts actions rows under #1474 (passes), `the_layout_matches_the_committed_fixture` fails until the stop-(b) re-record; 34 crops + results.md; 11 PASS, 4 FAIL fixed test-first in shared components (f8c46db0: PullRequestRow, ReviewBar, ReviewPanelRow, changes::heading; checks 02, 07, 08, 11), FAIL/issue: #1519 (checks 04, 12), #1539 (02), #1540 (03); spec status names them. Release build on Xvfb at 1280×800, macOS/Windows not run |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | #1544 | merged (589dec73); T030–T032 done; canvas read as owner ("owned by you"), republished to the same url (version 10) with the Artifact tool and re-read; `visual-pass/mockup-sync.md` has an action on every row; split option labelled "follow-up, not built" on `TabStrip`; ShortcutSheet board added; Session footer note, tier chips, Overview title removed; review B round 1 fixes republished as version 11 (`1793115039-8547`), re-read: boards `SourceControl`, `Composer`, `ReviewStates` (bar idle/sending/error/empty, empty drawer), `EmptyReview`, `PrUnreadable` added; `TabStrip`, `StatusBar`, `TitleBar`, `Sidebar` matched to crops and as-built source; crop 16 recorded as not a component state; specs-only gate |
-| M5 | T033–T034 | docs | `review-redesign.md` is a record | — | T033–T034 done; PR numbers from the Blockers merged table; open questions 0–5 answered from the guide and settings.md; follow-ups without an issue say so; docs gate: `site/checks/links.sh --sources` needs lychee (not installed), `scripts/tests/*.test.sh` run by hand (no mise); review B waits on the orchestrator |
+| M5 | T033–T034 | docs | `review-redesign.md` is a record | #1545 | merged (09ee4cb1); T033–T034 done; PR numbers from the Blockers merged table; open questions 0–5 answered from the guide and settings.md; follow-ups without an issue say so; docs gate: `site/checks/links.sh --sources` needs lychee (not installed), `scripts/tests/*.test.sh` run by hand (no mise); review B waits on the orchestrator |
 
 ## Blockers merged (T001, input to T033)
 
@@ -92,6 +93,12 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 |---|---|---|---|
 | M3 | B | F1 02-header crop is two stacked frames and the PR title is not visible; optional plain header crop | Optional per the reviewer, who matched the crop to check 02's verdict; re-shooting needs a release build on Xvfb and a new capture, not a few minutes |
 | M3 | B | F2 cycle-log red run is one combined run (0 passed, 4 failed) | Reviewer: no fix needed; one filtered run over the four tests is a valid red |
+
+## Close unit
+
+- converge skipped: every milestone has a CLEAN review B in *Review rounds*.
+- `speckit-tdd-verify` run by hand (no forked skill or subagent here): `tdd/verification.md`, PASS_WITH_GAPS (all 7 behaviours LIKELY: squash merges; 5 deliberate mutants, 5 caught). F1 (HIGH, conditional bar/drawer checks in `review_tab_fits`) and F2 (MED, eager `a_long_entry_name…` test) fixed as T037–T038; F3 (path addressing) kept, reason in the report.
+- Polish: quickstart results appended to quickstart.md; T025, T035, T036 ticked; spec Status Closed 2026-10-27 with `#<close PR>` to fill when the PR opens.
 
 ## Handover
 

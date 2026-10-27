@@ -428,6 +428,15 @@ fn findings(
 
     let status = rect(assert_the_bar_holds_its_place(&what, &records, window));
     let screen = Rectangle::with_size(window);
+    // A state that anchors the bar or the drawer must lay it out, so the checks below cannot go
+    // silent when a path stops finding it (tdd/verification.md F1).
+    let anchors = |anchor: &str| covered(name).anchors.iter().any(|a| a.name == anchor);
+    for (anchor, path) in [("review.bar", REVIEW_BAR), ("review.drawer", REVIEW_DRAWER)] {
+        assert!(
+            !anchors(anchor) || at(&records, path).is_some(),
+            "{what}: premise: the state anchors {anchor}, so it is laid out at {path:?}"
+        );
+    }
     if let Some(bar) = at(&records, REVIEW_BAR) {
         let bar = rect(bar);
         check(
