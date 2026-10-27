@@ -248,8 +248,13 @@ fn gh_cli_runs_gh_as_specified() {
         let got: Vec<&str> = args.lines().collect();
         assert_eq!(got, expected, "exactly `list_args`, nothing more (FR-025)");
     } else {
+        // The Windows stub records a batch-file command line, which doubles an embedded `"`.
         for arg in expected.iter().filter(|a| !a.starts_with("query=")) {
-            assert!(args.contains(arg.as_str()), "{arg} was passed: {args}");
+            let recorded_form = arg.replace('"', "\"\"");
+            assert!(
+                args.contains(recorded_form.as_str()),
+                "{arg} was passed: {args}"
+            );
         }
     }
 }
@@ -462,8 +467,13 @@ fn assert_args(dir: &Path, expected: &[String]) {
             "exactly these arguments, nothing more (FR-024)"
         );
     } else {
+        // The Windows stub records a batch-file command line, which doubles an embedded `"`.
         for arg in expected.iter().filter(|a| !a.starts_with("query=")) {
-            assert!(args.contains(arg.as_str()), "{arg} was passed: {args}");
+            let recorded_form = arg.replace('"', "\"\"");
+            assert!(
+                args.contains(recorded_form.as_str()),
+                "{arg} was passed: {args}"
+            );
         }
     }
 }
