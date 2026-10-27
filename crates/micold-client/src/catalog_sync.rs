@@ -46,19 +46,35 @@ fn bound_daemon(core: &State, project: &Path, key: &str) -> Option<DaemonId> {
     core.workspace.bindings.get(project)?.get(key).copied()
 }
 
-/// The daemon whose sessions and worktrees `key` belongs to, in a project's binding map.
+/// The daemon that owns location `key` of `project`: the one the router sends its ops to. A remote
+/// project's locations are its host daemon's; otherwise the stored binding, and an unbound location
+/// is the legacy default's (bug 1467). Reading "unbound" as "the snapshot's own" let every daemon
+/// that lists the project drop the legacy default's unbound sessions and worktrees, which that
+/// daemon's next push brought back.
+fn location_owner(core: &State, project: &Path, key: &str) -> DaemonId {
+    if let Some(remote) = micold_core::ssh::RemoteLocation::parse(project) {
+        return remote.daemon;
+    }
+    bound_daemon(core, project, key).unwrap_or_else(|| core.settings.legacy_daemon())
+}
+
+/// Whether location `key` of `project` belongs to a daemon other than `daemon`.
 fn bound_elsewhere(core: &State, project: &Path, key: &str, daemon: DaemonId) -> bool {
-    bound_daemon(core, project, key).is_some_and(|d| d != daemon)
+    location_owner(core, project, key) != daemon
+}
+
+/// The binding key of a session's location: its worktree's `dir_name`, `""` for the Default one.
+fn location_key(session: &Session) -> &str {
+    match &session.location {
+        SessionLocation::Worktree(dir) => dir.as_str(),
+        SessionLocation::Default => "",
+    }
 }
 
 /// The daemon a session runs on, from where it is: its location's binding in its project. `None`
 /// when no binding is recorded (the legacy default's).
 pub fn session_daemon(core: &State, project: &Path, session: &Session) -> Option<DaemonId> {
-    let key = match &session.location {
-        SessionLocation::Worktree(dir) => dir.as_str(),
-        SessionLocation::Default => "",
-    };
-    bound_daemon(core, project, key)
+    bound_daemon(core, project, location_key(session))
 }
 
 /// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
@@ -92,7 +108,6 @@ pub fn note_lost_sessions(core: &mut State, daemon: DaemonId, snapshot: &Catalog
         .iter()
         .flat_map(|p| p.sessions.iter().map(|s| s.id))
         .collect();
-    let legacy = core.settings.legacy_daemon();
     let mut lost = Vec::new();
     // Only projects the catalog holds: one it omits is not yet loaded, not a restart.
     for project in snapshot.projects.iter().map(|p| &p.path) {
@@ -103,8 +118,7 @@ pub fn note_lost_sessions(core: &mut State, daemon: DaemonId, snapshot: &Catalog
                     | SessionLifecycle::Starting
                     | SessionLifecycle::Restarting { .. }
             );
-            // An unbound location is the legacy default's.
-            let on_daemon = session_daemon(core, project, s).unwrap_or(legacy) == daemon;
+            let on_daemon = location_owner(core, project, location_key(s)) == daemon;
             if live && !s.archived && on_daemon && !listed.contains(&s.id) {
                 lost.push(s.id);
             }
@@ -266,18 +280,22 @@ pub fn reconcile_catalog(
             }
         }
         // Drop sessions the daemon no longer reports (archived/removed on its side), but only its
-        // own: a session on a location bound to another daemon is that daemon's to report (R11).
-        let bindings = core.workspace.bindings.get(&project.path);
+        // own: a session on a location another daemon owns is that daemon's to report (R11), an
+        // unbound location's included (bug 1467).
+        let theirs: HashSet<SessionId> = core.workspace.sessions[&project.path]
+            .iter()
+            .filter(|s| bound_elsewhere(core, &project.path, location_key(s), daemon))
+            .map(|s| s.id)
+            .collect();
+        let list = core
+            .workspace
+            .sessions
+            .get_mut(&project.path)
+            .expect("inserted above");
         list.retain(|s| {
-            let key = match &s.location {
-                SessionLocation::Worktree(dir) => dir.as_str(),
-                SessionLocation::Default => "",
-            };
             snap_ids.contains(&s.id)
                 || (lost.contains(&s.id) && !s.archived)
-                || bindings
-                    .and_then(|b| b.get(key))
-                    .is_some_and(|d| *d != daemon)
+                || theirs.contains(&s.id)
         });
     }
     // An id no session carries any more (removed or closed) is not lost to anything.
