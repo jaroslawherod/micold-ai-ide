@@ -2820,10 +2820,15 @@ impl crate::app::State {
     /// Whether `location` takes a start action from its row (FR-004): only a `Free` one, the
     /// project root included. Another session is the explicit request of a row menu entry.
     pub fn start_offered(&self, location: &SessionLocation) -> bool {
-        matches!(
-            micold_core::occupancy::occupancy(self.active_sessions(), location),
-            micold_core::occupancy::Occupancy::Free
-        )
+        self.location_occupant(location).is_none()
+    }
+
+    /// The session this window sees holding `location`, or `None` when it reads it as free.
+    pub fn location_occupant(&self, location: &SessionLocation) -> Option<SessionId> {
+        match micold_core::occupancy::occupancy(self.active_sessions(), location) {
+            micold_core::occupancy::Occupancy::Free => None,
+            micold_core::occupancy::Occupancy::Taken(existing) => Some(existing.id),
+        }
     }
 
     /// Why starting `id` is blocked, in `occupancy::start_block_text`'s words, or `None` when

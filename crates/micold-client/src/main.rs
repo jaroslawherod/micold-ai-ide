@@ -1739,7 +1739,15 @@ fn log_line(message: &str) {
         .open(dir.join("micold-client.log"))
     {
         use std::io::Write;
-        let _ = writeln!(file, "{message}");
+        // A UTC timestamp, so a client line can be set beside the daemon log's (#1437).
+        let secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
+        let _ = writeln!(
+            file,
+            "{} {message}",
+            micold_core::local_time::rfc3339_utc(secs)
+        );
     }
 }
 
