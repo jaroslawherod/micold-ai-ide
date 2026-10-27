@@ -212,6 +212,10 @@ fn changes_button_request(state: &State) -> f32 {
 /// The title is at its minimum below this width: little more than its ellipsis (FR-002).
 const TITLE_MINIMUM: f32 = 40.0;
 
+/// The header's side padding and the gap between its title, chips and button (`session_area.rs`).
+const HEADER_PADDING: f32 = micold_core::tokens::spacing::LG;
+const HEADER_GAP: f32 = micold_core::tokens::spacing::MD;
+
 /// H10' (feature 1463): the Changes button is laid out at the width it asks for while the title
 /// has any room; once the title is gone the label is cut with an ellipsis and the button is no
 /// wider than it asks for.
@@ -219,7 +223,7 @@ fn assert_button_unsqueezed(what: &str, records: &[LayoutRecord], state: &State)
     let button = [SESSION_AREA, CHANGES_BUTTON].concat();
     let laid = at(records, &button).expect("the header draws its Changes button");
     let wanted = changes_button_request(state);
-    let title = header_line(records)[0];
+    let [title, chips, _] = header_line(records);
     if title.width >= TITLE_MINIMUM {
         assert!(
             (laid.width - wanted).abs() <= TOLERANCE,
@@ -228,9 +232,16 @@ fn assert_button_unsqueezed(what: &str, records: &[LayoutRecord], state: &State)
             laid.width
         );
     } else {
+        // The title is gone, so the button takes what the line leaves: from the chips' end plus
+        // one gap to the header's right padding. Never wider than it asks for, never clipped.
+        let header = rect(at(records, &[SESSION_AREA, &[0]].concat()).expect("the header"));
+        let line_right = header.x + header.width - HEADER_PADDING;
+        let left = (chips.x + chips.width + HEADER_GAP).min(line_right);
+        let expected = wanted.min(line_right - left);
         assert!(
-            laid.width > 0.0 && laid.width <= wanted + TOLERANCE,
-            "{what}: the cut Changes button is {} wide, it asks for {wanted} (H10')",
+            (laid.width - expected).abs() <= TOLERANCE,
+            "{what}: the cut Changes button {laid:?} is {} wide, the line leaves {expected} (it \
+             asks for {wanted}) (H10')",
             laid.width
         );
     }
@@ -252,6 +263,15 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
             let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
             let screen = Rectangle::with_size(window);
             assert_order(name, &records, &area);
+            for (what, part) in strip_parts(&records) {
+                // New session and the split buttons are never squeezed under a touch target (FR-012).
+                if what == "New session" || what == "split buttons" {
+                    assert!(
+                        part.width >= micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET - TOLERANCE,
+                        "{name} {theme:?} {window:?}: the {what} {part:?} is narrower than its natural width"
+                    );
+                }
+            }
             let mut parts = header_parts(&records);
             assert!(
                 parts.len() >= 2,
@@ -265,6 +285,8 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
             );
             parts.extend(strip);
             for (what, part) in &parts {
+                // Only the title and the strip's tab region may shrink to nothing: FR-012 lets
+                // the tab region go before restart, New session or the splits are clipped.
                 assert!(
                     (part.width > 0.0 || what == "title" || what == "strip tab region")
                         && inside(part, &area)
@@ -1272,8 +1294,7 @@ fn a_claude_terminal_session_has_two_rows_and_its_switch_in_the_strip() {
             );
             if let Some(restart) = cluster.get(2) {
                 assert!(
-                    restart.x >= switch.x + switch.width - TOLERANCE
-                        && restart.x + restart.width >= switch.x + switch.width,
+                    restart.x >= switch.x + switch.width - TOLERANCE,
                     "{what}: restart {restart:?} is the last control, after the switch {switch:?} \
                      (FR-005)"
                 );
@@ -1324,6 +1345,10 @@ fn a_session_without_a_switch_has_two_rows_and_an_empty_slot() {
     }
 }
 
+/// The held-queue caption's width ceiling (FR-012), restated here so changing the code's cap fails
+/// this gate instead of moving it along.
+const CAPTION_CAP: f32 = 120.0;
+
 /// US2 scenario 3, FR-012, SC-006: the longest held-queue caption is cut with an ellipsis before
 /// the switch control or restart is clipped, at the smallest window with the sidebar open.
 #[test]
@@ -1350,10 +1375,7 @@ fn a_long_caption_is_cut_before_the_switch_or_restart_is_clipped() {
             rect(at(&records, &path).unwrap_or_else(|| panic!("{what}: slot child {i}")))
         });
         assert!(
-            caption.width
-                <= micold_client::ui::session_area::SWITCH_CAPTION_MAX_WIDTH
-                    + micold_core::tokens::spacing::SM
-                    + TOLERANCE
+            caption.width <= CAPTION_CAP + micold_core::tokens::spacing::SM + TOLERANCE
                 && button.width > 0.0
                 && button.x + button.width <= switch.x + switch.width + TOLERANCE,
             "{what}: caption {caption:?} is capped and the button {button:?} is whole in {switch:?}"
@@ -1428,48 +1450,87 @@ fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
     }
 }
 
-/// FR-007, SC-004: a tiled pane keeps its own switch row, directly under its pane header, its size
-/// and its offset from the pane area's origin the same whatever the strip does.
+/// FR-007, SC-004: a tiled pane keeps its own switch row, directly under its pane header, at the
+/// size and the offset from the pane area's origin it had before the switch moved into the strip
+/// (recorded at 1280x800 with the sidebar open: 34.2 px pane header, then a 48 px row inset
+/// `XS`/`SM` that holds the held-queue caption and the 40 px high **Open in structured view**).
 #[test]
 fn a_tiled_pane_still_has_its_switch_row() {
     use micold_core::pane_layout::{Axis, PaneLayout};
+    use micold_core::protocol::messages::{SessionProcess, TerminalRef};
     let mut state = claude_terminal(true, 2);
     state.settings.theme_pref = ThemePreference::Light;
     state.sidebar.width = SIDEBAR;
+    let session = state.session.active.expect("a shown session");
     let mut layout = PaneLayout::single();
     let first = layout.focused();
     layout
         .split(first, Axis::Vertical, (1000.0, 600.0), (80.0, 160.0), None)
         .expect("a 1000 px pane splits in two");
+    layout
+        .show(
+            first,
+            TerminalRef {
+                session,
+                process: SessionProcess::Primary,
+            },
+        )
+        .expect("the first pane shows the Claude terminal");
     let records = records_of(StateUnderTest::new(state).panes(layout), WINDOW);
-    let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-    let panes = rect(at(&records, &[SESSION_AREA, &[2]].concat()).expect("pane area"));
-    assert!(
-        panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
-        "two rows above the tiles (FR-009)"
-    );
-    // Each tile is a column of pane header, switch row and terminal: find the tiles' switch rows
-    // by their height, the only fixed-height row between the header and the body.
-    let tiles: Vec<&LayoutRecord> = records
-        .iter()
-        .filter(|r| {
-            r.path.starts_with(SESSION_AREA)
-                && r.path.len() > SESSION_AREA.len() + 1
-                && r.path[SESSION_AREA.len()] == 2
-                && (r.height - 36.0).abs() < 12.0
-                && r.width > 100.0
-        })
-        .collect();
-    assert!(
-        !tiles.is_empty(),
-        "no tiled pane draws a switch row: the tiled path was lost (FR-007)"
-    );
-    // Each switch row sits within one row's height of the pane area's top, under its pane header,
-    // and not in the strip's rows above.
-    for row in &tiles {
+    let panes_path = [SESSION_AREA, &[2]].concat();
+    let panes = rect(at(&records, &panes_path).expect("pane area"));
+    // The pane area's tiles: [split, first tile]; a tile is the column pane header, switch row,
+    // terminal (`ui::panes`).
+    let tile = [panes_path.as_slice(), &[0, 0]].concat();
+    let row = rect(at(&records, &[tile.as_slice(), &[1]].concat()).expect("the switch row"));
+    let button = rect(at(&records, &[tile.as_slice(), &[1, 0, 2]].concat()).expect("the button"));
+    let near = |what: &str, got: f32, recorded: f32| {
         assert!(
-            row.y >= panes.y - TOLERANCE && row.y - panes.y < 80.0,
-            "a tiled switch row {row:?} sits at the top of the pane area {panes:?} (SC-004)"
+            (got - recorded).abs() <= TOLERANCE,
+            "{what} is {got}, recorded {recorded} before the switch moved into the strip (FR-007, \
+             SC-004)"
         );
-    }
+    };
+    near("the switch row's width", row.width, 487.0);
+    near("the switch row's height", row.height, 48.0);
+    near("the switch row's x offset from the pane area", row.x - panes.x, 0.0);
+    near("the switch row's y offset from the pane area", row.y - panes.y, 34.2);
+    near("the button's inset from the row's top (XS)", button.y - row.y, 4.0);
+    near(
+        "the button's inset from the row's right (SM)",
+        row.x + row.width - (button.x + button.width),
+        8.0,
+    );
+    near("the button's height", button.height, 40.0);
+}
+
+/// FR-012: when the strip is too narrow for the status words and the switch slot both, the switch
+/// slot (caption, then button label) gives way first and the words only once it is gone: the
+/// words keep their natural width while the switch is still shown cut, and are cut only when the
+/// switch has nothing left.
+#[test]
+fn the_switch_slot_gives_way_before_the_status_words() {
+    let widths = |width: f32| {
+        let records = records_for(
+            claude_terminal(true, 12_345),
+            ThemePreference::Light,
+            Size::new(width, 480.0),
+        );
+        let cluster = cluster_children(&records);
+        (cluster[0].width, cluster[1].width)
+    };
+    let (natural_words, natural_switch) = widths(1280.0);
+    // Room for the words but not the whole switch slot: only the switch is cut.
+    let (words, switch) = widths(640.0);
+    assert!(
+        (words - natural_words).abs() <= TOLERANCE && switch > 0.0 && switch < natural_switch,
+        "the switch slot is cut ({switch} of {natural_switch}) while the words keep {natural_words}: \
+         {words}"
+    );
+    // No room for even the cut switch: it is gone, and then the words are cut.
+    let (words, switch) = widths(520.0);
+    assert!(
+        switch <= TOLERANCE && words > 0.0 && words < natural_words - TOLERANCE,
+        "the switch slot is gone ({switch}) before the words are cut ({words} of {natural_words})"
+    );
 }

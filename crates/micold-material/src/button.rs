@@ -792,4 +792,26 @@ mod tests {
         assert_eq!(marked.height, bare.height, "the mark adds no height");
         assert!(marked.width > bare.width, "the mark adds width");
     }
+
+    /// 1463 FR-003: a button lays out at the density step it is given, 40dp at `STANDARD` and
+    /// three steps shorter at `DENSE`.
+    #[test]
+    fn a_button_is_as_tall_as_its_density_step() {
+        let at = |step: i8| {
+            parts(
+                Button::text("Changes", roles())
+                    .density(step)
+                    .on_press(Message::NoOp)
+                    .into(),
+            )
+            .0
+            .height
+        };
+        assert_eq!(at(density::STANDARD), density::height(density::BUTTON_BASE, 0));
+        assert_eq!(
+            at(density::DENSE),
+            density::height(density::BUTTON_BASE, density::DENSE)
+        );
+        assert!(at(density::DENSE) < at(density::STANDARD));
+    }
 }
