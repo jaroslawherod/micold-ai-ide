@@ -244,7 +244,8 @@ closes, terminal gets nothing); a permission request puts a red badge on the but
   height; `UnreadMark::icon(Icon)` draws the icon and the count, tinted by the given role
 - [X] T034 [P] [US2] Client tests in micold-client/tests/overview.rs: `overview::badge(&cards)` →
   `Some { tone: Error, count, label: "N need action" }` with any NeedsAction card, else `Warning`
-  *N need attention*, else `None`, whether or not the Overview is open (US2.4, FR-012)
+  *N need attention*, else `None`, whether or not the Overview is open (US2.4, FR-012); a count of one
+  is singular, *1 needs action* / *1 needs attention* (BUG-1493, T083-T086)
 
 ### Implementation for US2
 
