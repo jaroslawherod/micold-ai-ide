@@ -483,6 +483,24 @@ fn back_and_forward_walk_the_sessions() {
 }
 
 #[test]
+fn back_with_nothing_shown_returns_to_the_place_just_left() {
+    // Review A M1 F1: D → A → B, then nothing is shown (a stop with no session): Back shows B,
+    // where the user just was, not A.
+    let (mut state, _, a, b) = walked();
+    state.session.active = None;
+    state.observe_place();
+    assert_eq!(state.shown_place(), None, "nothing shown");
+    assert_eq!(
+        back(&mut state),
+        Step::Show(at_session(worktree("feat-b"), b))
+    );
+    assert_eq!(state.session.active, Some(b));
+    back(&mut state);
+    assert_eq!(state.session.active, Some(a), "then on as usual");
+    assert_eq!(entries(&state).len(), 3, "moving recorded nothing (FR-007)");
+}
+
+#[test]
 fn an_empty_project_has_nothing_to_go_back_to() {
     let mut state = state_with_active();
     state.observe_place();

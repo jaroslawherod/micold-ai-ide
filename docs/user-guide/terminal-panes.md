@@ -105,8 +105,8 @@ are skipped.
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
-| Back (or the mouse back button) | — | — |
-| Forward (or the mouse forward button) | — | — |
+| Back | Mouse back button | Mouse back button |
+| Forward | Mouse forward button | Mouse forward button |
 | Send the review (only in the **Review** tab, and from its comment box; not taken from a focused terminal) — see [Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard) | Ctrl+Shift+Enter | Cmd+Shift+Enter |
 
 While the **Review** tab is shown no terminal has the keyboard, so the pane chords, which act on
