@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: claude/project-thread-e4cve5
 - **Started**: 2026-10-27
-- **Phase**: tasks written; tasks review round 1 pending
-- **Next step**: tasks review round 1 (fresh reviewer, rubrics/tasks.md); then gate, push, design PR
+- **Phase**: tasks review round 1 fixed; round 2 pending
+- **Next step**: tasks review round 2 (scoped, fix diff since round 1 snapshot); then gate, push, design PR
 
 ## Pull requests
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify | Only the Review tab's sheet lists Back/Forward? | Yes; app-wide sheet out of scope | agent | spec.md Out of Scope |
 | 3 | tasks | Cut of M1 (16 tasks, over ~10)? | Kept whole: Foundational alone is never a milestone and US1 needs all of it; cross-project (R5 lookup, `runs.known`, `Reopened`) split out to M4 (US4), so M1 passes another project's places over as gone until M4 | agent | milestones.md rules 1, 3; tasks.md T010/T012/T028 |
 | 4 | tasks | Guide updates per milestone | Each feat milestone adds its own line to terminal-panes.md §Keyboard shortcuts (plan D7: the only page), so the user-guide gate passes without docs-not-needed | agent | milestones.md rule 4; tasks T016, T023, T026, T033, T036 |
-| 5 | tasks | speckit-analyze | Not available in this environment (no skill, no subagent); coverage checked by grep: every FR-001–015 and SC-001–005 named by a task or milestone | agent | tasks.md |
+| 5 | tasks | speckit-analyze | Not available in this environment (no skill, no subagent); coverage checked by grep: every FR-001–015 and SC-001–005 named by a task or milestone. Tasks review round 1 stands in for analyze (reviewer checked coverage, paths, anchors, test-first order and milestone deps: no gaps) | agent | tasks.md; tasks review r1 F3 |
 
 ## Review rounds
 
@@ -47,7 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 2 | rescan after round 1 | no critical ambiguities |
 | Plan review | 1 | 11f3d102ca7aabfb92c1199ff5ca3699e08f8622:0ae4673ae350ac1a5197583750a38820c1241a47 | CHANGES: 1 MAJOR, 2 MINOR (F1 cross-project Compare: `runs.known` per-project group lists, R5 limit narrowed, tests + B10 added; F2 availability refreshed before `exists` (U2 step 0); F3 borrow split via `mem::take` in `resolve`) — all fixed |
 | Plan review | 2 | 41ae8cd58f1600b8d9892ebc6d9c08f3694d1578:38cb3341b7aae78134abfabbd81189bd87e758cf | CLEAN, 1 MINOR (data-model runs.rs table: `known[P]` for a removed project unspecified — fixed, prose only: one row saying it is left as is and never read while P is unknown) |
-| Tasks review | 1 | 8f4a09d125d94bf6e90b271da7ab675c7845d785:fd6e8bf13a1b2d6f1913c226359527d6733732b2 | pending (also confirms the ticked checklist item: no [NEEDS CLARIFICATION] in spec.md) |
+| Tasks review | 1 | 8f4a09d125d94bf6e90b271da7ab675c7845d785:fd6e8bf13a1b2d6f1913c226359527d6733732b2 | CHANGES: 1 MAJOR, 2 MINOR (F1 `history`→`changes` allowlist entry moved from T005 (M1) to T025 (M3), T012 spells `crate::features::navigation::blocked` — dead-entry assert would fail M1; F2 T022/T023 green claims split (docs test greens in T023) — prose only; F3 ledger notes the review stands in for analyze — prose only). No [NEEDS CLARIFICATION] in spec.md confirmed |
+| Tasks review | 2 | pending | — |
 
 ## Declined review findings
 
