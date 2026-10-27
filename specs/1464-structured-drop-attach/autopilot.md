@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
 - **Phase**: tasks (design PR)
-- **Next step**: analyze, tasks review, gate, design PR
+- **Next step**: merge design PR, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | in progress | … |
+| #1553 | Design | open | … |
 
 ## Milestones
 
