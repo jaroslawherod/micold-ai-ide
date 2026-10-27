@@ -17,7 +17,7 @@ use alacritty_terminal::term::TermMode;
 use micold_core::cli_reason::{self, AttemptDir, Explanation};
 use micold_core::git::parse_remote_list;
 use micold_core::git::{Git, GitCli};
-use micold_core::github::{choose_remote, RemoteChoice};
+use micold_core::github::{choose_remote, resolve_ssh_aliases, RemoteChoice};
 use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
@@ -616,7 +616,7 @@ pub async fn prompt_facts(
     let (st, project) = (Arc::clone(state), project.to_path_buf());
     let read = tokio::task::spawn_blocking(move || {
         let raw = GitCli::new().remote_list(&project).ok()?;
-        let repo = match choose_remote(&parse_remote_list(&raw)) {
+        let repo = match choose_remote(&resolve_ssh_aliases(parse_remote_list(&raw))) {
             RemoteChoice::Github { repo, .. } => repo,
             RemoteChoice::NoGithubRemote => return None,
         };
