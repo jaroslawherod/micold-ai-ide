@@ -103,6 +103,7 @@ enum Step {
 | `State.known: BTreeMap<PathBuf, Vec<RunGroup>>` | each project's last group list this launch (research R5) |
 | `routed`, `Msg::GroupsChanged(groups)` | as today, and `known[workspace.active] = groups` |
 | `routed`, `Msg::CompareOpened { group, project }` | when `project` is active and `group` is not in `groups` but is in `known[project]`: `groups = known[project].clone()` first; then as today |
+| project removed from the workspace | `known[P]` is left as is, not pruned: `exists` rejects every place of a project that is not known and available before it reads `known`, so a removed project's list is never read; if P is re-added in the same launch, `known[P]` is its last list, the same narrowed limit as research R5, and P's first `GroupsChanged` replaces it |
 
 ## Root — the live focused field
 
