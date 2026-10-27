@@ -1899,6 +1899,15 @@ mod tests {
     /// A one-line diff of `text` in `layout`, and every node its view lays out in 800 x 600 px
     /// as `(width, height)`.
     fn nodes_of(text: &str, layout: DiffLayout) -> Vec<(f32, f32)> {
+        nodes_with(text, layout, None)
+    }
+
+    /// As [`nodes_of`], with `slot` (if any) hung under the line.
+    fn nodes_with(
+        text: &str,
+        layout: DiffLayout,
+        slot: Option<Element<'static, ()>>,
+    ) -> Vec<(f32, f32)> {
         fn walk(node: &layout::Node, out: &mut Vec<(f32, f32)>) {
             out.push((node.size().width, node.size().height));
             node.children().iter().for_each(|c| walk(c, out));
@@ -1913,7 +1922,11 @@ mod tests {
             old_no_newline: false,
             new_no_newline: false,
         }]);
-        let mut element: Element<'_, ()> = DiffView::<()>::new(&diff, layout, LIGHT).into();
+        let mut view = DiffView::<()>::new(&diff, layout, LIGHT);
+        if let Some(slot) = slot {
+            view = view.slot(Side::New, 1, slot);
+        }
+        let mut element: Element<'_, ()> = view.into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         let node = element.as_widget_mut().layout(
@@ -1958,6 +1971,43 @@ mod tests {
                 .map(|(w, _)| w)
                 .fold(0.0, f32::max);
             assert!(widest <= 800.0, "{layout:?}: {widest}");
+        }
+    }
+
+    /// #1519: a slot (a comment card, the composer) under a row of a diff that scrolls sideways is
+    /// no wider than the pane, so its actions show without scrolling, whether the diff is wider
+    /// than the pane only (100 characters) or wider than the slot cap too (400).
+    #[test]
+    fn a_slot_is_no_wider_than_the_pane_when_the_diff_scrolls_sideways() {
+        const SLOT_HEIGHT: f32 = 37.0;
+        for chars in [100, 400] {
+            let long = "x".repeat(chars);
+            for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+                let slot = Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Fixed(SLOT_HEIGHT));
+                let nodes = nodes_with(&long, layout, Some(slot.into()));
+                let widest = nodes.iter().map(|&(w, _)| w).fold(0.0, f32::max);
+                assert!(
+                    widest > 800.0,
+                    "{chars} {layout:?}: the diff scrolls ({widest} px)"
+                );
+                let slots: Vec<f32> = nodes
+                    .iter()
+                    .filter(|&&(_, h)| h == SLOT_HEIGHT)
+                    .map(|&(w, _)| w)
+                    .collect();
+                assert!(
+                    !slots.is_empty(),
+                    "{chars} {layout:?}: the slot is laid out"
+                );
+                for width in slots {
+                    assert!(
+                        width > 0.0 && width <= 800.0,
+                        "{chars} {layout:?}: the slot is {width} px in an 800 px pane"
+                    );
+                }
+            }
         }
     }
 
