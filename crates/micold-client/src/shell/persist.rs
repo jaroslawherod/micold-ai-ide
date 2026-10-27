@@ -214,6 +214,24 @@ pub fn persist_filter_open(store: Option<&(dyn SettingsStore + Send + Sync)>, co
     write_setting(store, core, &mut |settings| settings.filter_open = open);
 }
 
+/// Write the sessions the banner's dismissed offer showed for the active project (BUG-1555).
+pub fn persist_offer_dismissal(
+    store: Option<&(dyn SettingsStore + Send + Sync)>,
+    core: &mut State,
+) {
+    let Some(project) = core.workspace.active.clone() else {
+        return;
+    };
+    let Some(shown) = core.attach.offer.dismissed.get(&project).cloned() else {
+        return;
+    };
+    write_setting(store, core, &mut |settings| {
+        settings
+            .dismissed_offers
+            .insert(project.clone(), shown.clone());
+    });
+}
+
 fn write_setting(
     store: Option<&(dyn SettingsStore + Send + Sync)>,
     core: &mut State,
@@ -474,6 +492,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         folded_origins: _,
         // Written by the filter toggle in the sidebar, never by a save of the form (BUG-1470).
         filter_open: _,
+        // Written by the offer banner's Dismiss, never by a save of the form (BUG-1555).
+        dismissed_offers: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
         daemons: _,
         next_daemon_id: _,
@@ -1250,6 +1270,7 @@ mod tests {
             legacy_default_daemon: None,
             folded_origins: [micold_core::session::SessionId::new()].into(),
             filter_open: true,
+            dismissed_offers: Default::default(),
             review_single_keys: false,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
@@ -1325,6 +1346,29 @@ mod tests {
         core.sidebar.filter_open = false;
         persist_filter_open(Some(&store), &mut core);
         assert!(!store.saves()[1].filter_open);
+    }
+
+    /// BUG-1555: a dismissal writes the shown session ids for its project and keeps other projects'.
+    #[test]
+    fn a_dismissal_writes_its_projects_session_ids() {
+        let other = std::path::PathBuf::from("/other");
+        let mut stored = Settings::default();
+        stored
+            .dismissed_offers
+            .insert(other.clone(), [uuid::Uuid::from_u128(9)].into());
+        let store = FakeSettingsStore::loaded(stored);
+        let mut core = State::default();
+        let project = std::path::PathBuf::from("/p");
+        core.workspace.active = Some(project.clone());
+        let shown: std::collections::BTreeSet<_> = [uuid::Uuid::from_u128(1)].into();
+        core.attach
+            .offer
+            .dismissed
+            .insert(project.clone(), shown.clone());
+        persist_offer_dismissal(Some(&store), &mut core);
+        let saved = &store.saves()[0].dismissed_offers;
+        assert_eq!(saved.get(&project), Some(&shown));
+        assert!(saved.contains_key(&other));
     }
 
     /// Feature 551, FR-017: a toggle adds or removes its own id and keeps the folds another window
