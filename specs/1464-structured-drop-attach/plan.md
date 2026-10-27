@@ -37,7 +37,7 @@ tests: the picker is a seam (`Task` returning paths) replaced by a direct messag
 **Performance Goals**: UI responds within 100 ms while the picker is open (SC-004); cue gone by next
 frame (SC-005).
 
-**Constraints**: offline; no new daemon/wire change; spec 941 limits unchanged.
+**Constraints**: offline; no wire or protocol change (one added App command variant in core and daemon, D7); spec 941 limits unchanged.
 
 **Scale/Scope**: one composer row control, one reducer path, one App command, one shell task, one cue overlay.
 
@@ -101,7 +101,7 @@ method takes it (research R5). Unit test: the chord gives `Attach`, plain `a` an
 `PaneMsg::FilesHovering(bool)`. App holds `files_hovering: bool` (window-level; the OS gives no
 pointer position during a drag, so the cue marks every structured pane that accepts input, not one
 pane). `ui/panes.rs` wraps such a pane's body in the `micold_material::drop_cue` overlay (outline + tinted fill
-from `Roles`, in `ui/material`) while the flag is set; the flag clears on leave and on drop. Where
+from `Roles`) while the flag is set; the flag clears on leave and on drop. Where
 no hover event arrives, no cue and the drop still works. Terminal panes get no cue (feature 487).
 
 ### D6 Drop delivery per platform (FR-004, SC-003)
@@ -123,7 +123,7 @@ core like `/model`: `SHORTCUTS_COMMAND` in `crates/micold-core/src/structured/co
 (reported and fallback, `CommandKind::App`), a `DraftCommand::Shortcuts` variant and a `classify_draft`
 branch, with core tests in `crates/micold-core/tests/structured_commands.rs`. The new variant needs an
 arm in the daemon's exhaustive match (`crates/micold-daemon/src/state.rs`, beside
-`DraftCommand::Model`, as a command that is never sent; a daemon-side test). Client:
+`DraftCommand::Model`, as a command that is never sent). The daemon has two such matches: the switch-to-terminal validation (`SwitchRefusal::BadCommand`) and the user-message validation, which needs a new `UserMessageRefusal::ShortcutsIsTheApps` (`crates/micold-core/src/structured/user_message.rs`); a daemon-side test covers both). Client:
 `features/command_palette.rs::classify` maps `DraftCommand::Shortcuts` to `Classified::Shortcuts`;
 `composer.rs::send_intent` returns the new `SendIntent::ShowShortcuts`; `shell/composer.rs` (the
 `SendIntent` match) turns it into `ShortcutsToggled(true)`; nothing is sent to the CLI. A structured
@@ -186,7 +186,7 @@ shell task, cue widget). No wire change; the one core and daemon change is the `
 | SC-002 | reducer/UI test: button press -> picker requested -> `AttachPicked` is click, choose, confirm (3 interactions); no extra step exists |
 | FR-004, SC-003, SC-004 | quickstart §B manual matrix (Wayland, X11, macOS, Windows; native picker) |
 | FR-014 | showcase section + visual-pass |
-| Core | `micold-core` unit tests unchanged; add none unless refusal wording moves |
+| Core | `micold-core` attachment tests unchanged; `/shortcuts` tests in `structured_commands.rs` (D7) |
 
 ## Documentation
 
