@@ -46,7 +46,6 @@ pub fn color(c: Rgb) -> Color {
 
 /// An iced color as the token type: both are 8-bit sRGB, so this changes representation, not value
 /// (alpha is dropped). The inverse of [`color`]. Only the contrast measurements read it.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn to_rgb(c: Color) -> Rgb {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     Rgb {
@@ -521,17 +520,49 @@ pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable:
     }
 }
 
-/// A worktree tag chip: a dimmed **tonal** pill — a faint tint of `accent` behind `accent`-colored
-/// text, fully rounded (feature 008, FR-005). Softer than a solid fill so the tags read as calm
-/// metadata beneath the worktree name. The vivid `accent` as text on its own faint tint keeps
-/// high contrast in both light and dark schemes.
+/// A worktree tag chip: a dimmed **tonal** pill — a faint tint of `accent` behind text in `accent`,
+/// fully rounded (feature 008, FR-005). Softer than a solid fill so the tags read as calm metadata
+/// beneath the worktree name.
+///
+/// The ink is the accent only while the accent reads on its own tint; a mid-tone accent does not
+/// (the light scheme's `secondary` was 4.40:1, #1492), so the ink is pulled toward the theme's text
+/// colour until it clears [`CHIP_INK_TARGET`] on the tint over the theme background.
 pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(alpha(color(accent), 0.20))),
-        text_color: Some(color(accent)),
-        border: radius(shape::FULL),
-        ..container::Style::default()
+    move |theme| {
+        let palette = theme.palette();
+        container::Style {
+            background: Some(Background::Color(alpha(color(accent), CHIP_TINT))),
+            text_color: Some(color(chip_ink(
+                accent,
+                to_rgb(palette.text),
+                to_rgb(palette.background),
+            ))),
+            border: radius(shape::FULL),
+            ..container::Style::default()
+        }
     }
+}
+
+/// The chip tint's opacity over its host.
+const CHIP_TINT: f32 = 0.20;
+
+/// The contrast [`chip_ink`] aims for. A hair above the 4.5:1 AA floor, for rounding.
+const CHIP_INK_TARGET: f64 = 4.6;
+
+/// How far toward the text colour [`chip_ink`] moves the theme background to stand for the
+/// highest-contrast-demanding surface a chip sits on (`surface_container_highest` in light,
+/// `surface_bright` in dark): measuring on the background alone passes the ink on the lightest host
+/// and fails it on the others.
+const CHIP_WORST_HOST: f64 = 0.22;
+
+/// `accent`, moved toward `text` in 2% steps until it reads on its own [`CHIP_TINT`] over `base`.
+fn chip_ink(accent: Rgb, text: Rgb, base: Rgb) -> Rgb {
+    let base = tokens::over(text, CHIP_WORST_HOST, base);
+    let tint = tokens::over(accent, f64::from(CHIP_TINT), base);
+    (0..=50)
+        .map(|i| tokens::over(text, f64::from(i) * 0.02, accent))
+        .find(|ink| tokens::contrast(*ink, tint) >= CHIP_INK_TARGET)
+        .unwrap_or(text)
 }
 
 /// A dropped picture's chip in the composer (feature 941, `AttachmentChip`): a tonal
