@@ -50,6 +50,56 @@ A daemon that used to run the released daemon image moves to the basic image on 
 row says so until it has started. A container still running the released image keeps running, and
 its row says so too: restart it with no sessions running to move it to the basic image.
 
+### Building projects in the basic image
+
+The basic image carries what a project's build needs underneath its own toolchain, and nothing
+project-specific:
+
+- `mise`, at a version the image pins, in `/usr/local/bin/mise`;
+- a C and C++ compiler (`cc`, `gcc`, `c++`, `g++`), `make`, `ar` and the C library headers, so a
+  Rust build script or a native npm or Python package compiles its C code;
+- `pkg-config`, which finds the libraries the image (or an image built `FROM` it) installs;
+- `python3`, `git`, `gh`, `curl`, `wget`, `jq` and `rg` (ripgrep);
+- the X11/Wayland development libraries this repository's own tests link (`libx11-dev`,
+  `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`, `libxkbcommon-dev`, `libwayland-dev`).
+
+A project that declares its toolchain in a `mise.toml` gets it by setting the project's **Setup
+command** ([Settings › Project](settings.md#project)) to
+
+```sh
+mise trust && mise install
+```
+
+Each new worktree on the daemon then runs it before you build (see
+[Setup in a new worktree](worktrees-and-sessions.md#setup-in-a-new-worktree)). Everything it
+installs — Rust with its components, Node, uv, Go and the rest — lands in the sandbox's home, not in
+the image, and needs no root. It stays there when the container restarts, and every worktree on that
+daemon shares it: a second worktree of the same project finds the toolchain already installed and
+sets up in seconds. A project with no `mise.toml` can keep the same command; it installs nothing and
+succeeds. On a container or Kubernetes daemon one setup runs at a time, so two new worktrees never
+install into the home at once; the later one waits for the earlier
+([Running setup again, and stopping it](worktrees-and-sessions.md#running-setup-again-and-stopping-it)).
+
+The basic image does not carry any project's language toolchain (that is what `mise install` is
+for), nor system libraries beyond the ones above: a crate that links PostgreSQL's `libpq`, OpenSSL
+or SQLite through `pkg-config`, for example, does not build on it as it is. A session cannot install
+those itself either, because it does not run as root. For such a project, build an image of your
+own `FROM` the basic image with the packages it needs, and give it to a second container daemon as
+**My own image**. This one adds `libpq`'s development files:
+
+```dockerfile
+FROM ghcr.io/jaroslawherod/micold-basic:97e0b963519fe8d8
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+Save it as `Containerfile` in an empty folder, and build it there with `docker build -t
+my-project-image -f Containerfile .` or `podman build -t my-project-image -f Containerfile .`. Give
+`my-project-image` as the daemon's image. In a session there, `pkg-config --libs libpq` prints
+`-lpq`, and the setup command above works as on the basic image. Keep the `FROM` line on the tag
+this page names when you update the application, so your image has what the application expects.
+
 ## Running a host daemon and container daemons together
 
 You can have several session services at once: at most one on this computer (the host daemon) and
@@ -79,7 +129,9 @@ Add, edit, start, stop and remove daemons in **Settings, Daemons** ([the
 section](settings.md#daemons)). Names, container names and ports must be unique, and there can be
 only one host daemon; the form refuses a duplicate and names the field. A container daemon's
 container name may be left empty: it defaults to the daemon's name, made a valid container name, and
-is stored when you save (a name with no usable character asks you to enter one). Its port
+is stored when you save. A container name needs at least 2 characters, so a daemon with a
+one-character name needs a container name typed (the field shows no placeholder then), and a name with
+no usable character asks you to enter one. Its port
 may be left empty: a free one is chosen when you save, stored with the daemon and shown when you edit
 it. It never changes by itself, so the daemon keeps its address across restarts. If the stored port is
 taken when the daemon starts, the start fails naming the port; free it or choose another port.
@@ -308,8 +360,39 @@ A folder already on the image's `PATH` appears once, in the position above. A pr
 entry such as `uvx <server>` therefore finds `uv` in `~/.local/bin`. Folders an environment-include
 script puts on `PATH` keep their order after these.
 
-The host daemon and daemons on remote machines over SSH keep the `PATH` they had: none of this
-applies to them.
+A session needs no setup command to get the tools a project builds with: it can install
+user-level tools itself, as the session user, without root. mise (`mise use -g go@1.24`),
+`npm install -g`, `cargo install`, `uv tool install`, `go install`, and `pip install --user`
+under a Python that mise or uv installed all write into the sandbox's home. For the three that
+would otherwise put their binaries off the `PATH` or in a folder the session user cannot write,
+every spawn gets these defaults:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `NPM_CONFIG_PREFIX` | `~/.local` | `npm install -g` links into `~/.local/bin` instead of the image's `/usr/local` |
+| `CARGO_INSTALL_ROOT` | `~/.local` | `cargo install` puts binaries in `~/.local/bin` instead of `~/.cargo/bin` |
+| `GOBIN` | `~/.local/bin` | `go install` puts binaries in `~/.local/bin` instead of `~/go/bin` |
+
+A value your environment already sets wins: one from the environment-include script or the
+daemon's own environment is kept as it is (for npm, a lower-case `npm_config_prefix` counts too).
+
+mise checks the GitHub attestation of the Python builds it downloads, and builds older than mid-2025
+(Python 3.12.8, for example) have none, so `mise use -g python@<old version>` fails with "No GitHub
+artifact attestations found". Pick a newer patch release, or set
+`MISE_PYTHON_GITHUB_ATTESTATIONS=false` if you need that exact version.
+
+What a session installs stays for the life of the daemon: the home is the daemon's own folder on
+the host (a container daemon) or on its volume (a Kubernetes daemon), so it survives a restart, a
+container replaced for an image update or a changed setting, and a recreated pod. Removing the
+daemon removes it. A tool built against a library of the image, such as a `cargo install` that
+links OpenSSL or an npm package with a native module, may need reinstalling after an image update
+changes that library. Installs that sessions start are not serialised with each other or with a
+setup command; when two collide and one fails, run it again. System packages (`apt-get install`)
+stay out of reach: they come from the image, or from
+[an image of your own](#building-projects-in-the-basic-image).
+
+The host daemon and daemons on remote machines over SSH keep the `PATH` and the environment they
+had: none of this applies to them.
 
 ## Credentials
 

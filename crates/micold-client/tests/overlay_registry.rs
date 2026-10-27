@@ -1033,7 +1033,7 @@ mod daemon_form {
             micold_client::features::daemons::DraftRuntime::Container,
         )));
         state.update(Message::Daemons(DaemonsMsg::ContainerNameEdited(
-            "c".into(),
+            "cc".into(),
         )));
         state.update(Message::Daemons(DaemonsMsg::Saved));
         state

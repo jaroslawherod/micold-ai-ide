@@ -469,8 +469,8 @@ const SESSION_STRIP_TAB_REVIEW: [usize; 12] = strip_member(4);
 /// the pane area, which moved one level down with it.
 const SESSION_HEADER: &[usize] = &[0, 0, 1, 1, 0];
 
-/// The header's Changes button (feature 1126, H9): the title line's second child, after the title.
-pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 1];
+/// The header's Changes button (feature 1126, H9): the header line's third child, after the title and the chips (feature 1463).
+pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 2];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:

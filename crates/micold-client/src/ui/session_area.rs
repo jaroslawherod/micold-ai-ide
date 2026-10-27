@@ -153,7 +153,7 @@ pub fn over_review<'a>(
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
 /// selected while `location`'s Review tab is shown, its tooltip saying what a press does. The label
-/// is one line: where the title line cannot hold it (four-digit counts at the smallest window) it
+/// is one line: where the header line cannot hold it (four-digit counts at the smallest window) it
 /// is cut with an ellipsis and the tooltip holds it whole (FR-013, H10's bound).
 pub fn changes_button<'a>(
     state: &State,
@@ -168,6 +168,7 @@ pub fn changes_button<'a>(
     Tooltip::new(
         material::Button::with_content(text, material::ButtonVariant::Outlined, r)
             .leading(Icon::Git)
+            .density(micold_core::tokens::density::DENSE)
             .selected(button.selected)
             .on_press(press),
         tooltip,
@@ -176,8 +177,9 @@ pub fn changes_button<'a>(
     .into()
 }
 
-/// The context header (H9): the title line with the Changes button at its right, then the chips
-/// row; child lists that never vary.
+/// The context header (H9, amended by feature 1463): one line, the title taking the remaining
+/// width, then the chips row, then the Changes button, whose label is cut only
+/// after the title has given way; child lists that never vary.
 fn header<'a>(
     state: &State,
     location: &SessionLocation,
@@ -204,23 +206,23 @@ fn header<'a>(
         }
         chips.push(neutral_chip(chip, Some(indicator.into()), r));
     }
-    // Shrink beside the Fill title: laid out at the width it asks for (H10). On the title line, so
-    // the chips keep the header's whole width at the smallest window.
+    // The chips are laid out at their capped width, then the Changes button at the width it asks
+    // for or what remains (its label is cut with an ellipsis, FR-002); the Fill title gets the rest,
+    // so the title is what gives way first.
     let changes = changes_button(state, location, text.changes, r);
     container(
-        column![
-            row![container(title).width(Length::Fill), changes]
-                .spacing(spacing::MD)
-                .align_y(Alignment::Center),
-            row(chips).spacing(spacing::SM).align_y(Alignment::Center)
+        row![
+            container(title).width(Length::Fill),
+            row(chips).spacing(spacing::SM).align_y(Alignment::Center),
+            changes
         ]
-        .spacing(spacing::XS)
-        .width(Length::Fill),
+        .spacing(spacing::MD)
+        .align_y(Alignment::Center),
     )
     .width(Length::Fill)
     .padding(Padding {
-        top: spacing::SM,
-        bottom: spacing::SM,
+        top: spacing::XS,
+        bottom: spacing::XS,
         left: spacing::LG,
         right: spacing::LG,
     })

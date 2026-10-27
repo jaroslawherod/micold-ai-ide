@@ -4,7 +4,8 @@ Split the terminal area to watch several terminals at once.
 
 ## The header above the terminal
 
-While a session is shown, a header above its terminal names the worktree it runs in:
+While a session is shown, a header of one line above its terminal names the worktree it runs in.
+From left to right it holds the title, the chips and the **Changes** button:
 
 - **Title**: the worktree's issue title, else its branch, else its name; the same title its
   Overview card shows. The **Default** entry's title is *Default*.
@@ -17,7 +18,8 @@ While a session is shown, a header above its terminal names the worktree it runs
   no pull request or pull request status is off in Settings; an old reading says so in its tooltip.
 
 The header follows the session you show, and changes when the sidebar does. Text that does not fit
-ends in `…`; point at it to read it in full.
+ends in `…`; point at it to read it in full. In a narrow window the title is shortened first; the
+**Changes** label is cut only when the line has no more room.
 
 ## The tab strip above the terminal
 

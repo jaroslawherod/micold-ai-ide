@@ -742,29 +742,59 @@ pub fn seed_with_mode(
     label: &str,
     mode: TerminalMode,
 ) -> SessionId {
+    seed_projects(data_home, &[(project, false)], label, mode)
+}
+
+/// [`seed_with_mode`] for several projects, each with whether it is a git repository (one that is
+/// can have worktrees); the session is in the first.
+pub fn seed_projects(
+    data_home: &Path,
+    projects: &[(&Path, bool)],
+    label: &str,
+    mode: TerminalMode,
+) -> SessionId {
+    seed_sessions(
+        data_home,
+        projects,
+        &[(SessionLocation::Default, label)],
+        mode,
+    )[0]
+}
+
+/// [`seed_projects`] with several sessions in the first project, each at its location (a worktree
+/// one must exist by the time the session starts), in the order given.
+pub fn seed_sessions(
+    data_home: &Path,
+    projects: &[(&Path, bool)],
+    sessions: &[(SessionLocation, &str)],
+    mode: TerminalMode,
+) -> Vec<SessionId> {
     let state = data_home.join("micold-ai-ide");
     std::fs::create_dir_all(&state).expect("state dir");
+    let project = projects.first().expect("at least one project").0;
 
-    let id = SessionId::new();
+    let seeded: Vec<Session> = sessions
+        .iter()
+        .map(|(location, label)| {
+            Session::restored(
+                SessionId::new(),
+                location.clone(),
+                SessionLabel::Named((*label).into()),
+                mode,
+                // Feature 026: a session records which AI CLI it runs. The default one, because
+                // these probes are about the container boundary and never start an AI CLI at all.
+                AiCli::default(),
+            )
+        })
+        .collect();
+    let ids = seeded.iter().map(|s| s.id).collect();
     let mut by_project = BTreeMap::new();
-    by_project.insert(
-        project.to_path_buf(),
-        vec![Session::restored(
-            id,
-            SessionLocation::Default,
-            SessionLabel::Named(label.into()),
-            mode,
-            // Feature 026: a session records which AI CLI it runs. The default one, because these
-            // probes are about the container boundary and never start an AI CLI at all.
-            AiCli::default(),
-        )],
-    );
+    by_project.insert(project.to_path_buf(), seeded);
     let workspace = Workspace {
-        projects: vec![Project::new(
-            project.to_path_buf(),
-            false,
-            Availability::Available,
-        )],
+        projects: projects
+            .iter()
+            .map(|(path, git)| Project::new(path.to_path_buf(), *git, Availability::Available))
+            .collect(),
         active: Some(project.to_path_buf()),
         sessions: by_project,
         worktree_names: BTreeMap::new(),
@@ -773,7 +803,96 @@ pub fn seed_with_mode(
     micold_core::store::JsonFileStore::at(state.join("projects.json"))
         .save(&workspace)
         .expect("seed projects.json");
-    id
+    ids
+}
+
+/// Run `git args` in `dir` with a throwaway identity, failing the test when git does.
+pub fn git(dir: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args([
+            "-c",
+            "user.name=probe",
+            "-c",
+            "user.email=probe@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?} in {}: {}",
+        dir.display(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A git repository at `dir` holding the files of `from` (a README when `None`) in one commit.
+pub fn repo(dir: &Path, from: Option<&Path>) {
+    std::fs::create_dir_all(dir).unwrap();
+    if let Some(from) = from {
+        copy_tree(from, dir);
+    } else {
+        std::fs::write(dir.join("README"), "a project with no mise.toml\n").unwrap();
+    }
+    git(dir, &["init", "-q", "-b", "main"]);
+    git(dir, &["add", "-A"]);
+    git(dir, &["commit", "-qm", "fixture"]);
+}
+
+pub fn copy_tree(from: &Path, to: &Path) {
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            std::fs::create_dir_all(&target).unwrap();
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).unwrap();
+        }
+    }
+}
+
+/// The lines of `output` that carry `tag` followed by a space.
+///
+/// A long typed command wraps on the terminal, so its echo can leak into `run_within`'s output.
+/// A probe that prints a tag the command types split (`'NEWER''FILE'`, `APT"-EXIT"`) and keeps only
+/// the tagged lines reads what the command wrote, never its echo.
+pub fn tagged_lines(output: &str, tag: &str) -> Vec<String> {
+    let tag = format!("{tag} ");
+    output
+        .lines()
+        .filter(|l| l.contains(&tag))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Every file on the container's own file system newer than `marker` that lies outside the
+/// sandbox home, `projects` and the daemon's state (#1439 FR-010, FR-014), one `NEWERFILE <path>`
+/// line each. The temp folders are left out: the requirements except temp files, and `/tmp` need
+/// not be a tmpfs.
+pub async fn written_outside(
+    term: &mut Terminal<'_>,
+    sandbox_home: &str,
+    projects: &Path,
+    marker: &str,
+) -> Vec<String> {
+    let output = term
+        .run_within(
+            &format!(
+                "find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run \
+                 -o -path /tmp -o -path /var/tmp \
+                 -o -path '{sandbox_home}' -o -path '{}' -o -path '{}' \\) -prune \
+                 -o -type f -newer \"{marker}\" -printf 'NEWER''FILE %p\\n' 2>/dev/null",
+                projects.display(),
+                CONTAINER_STATE
+            ),
+            Duration::from_secs(120),
+        )
+        .await;
+    tagged_lines(&output, "NEWERFILE")
 }
 
 /// The daemon's expected next input serial for `session`, from an authoritative catalogue.

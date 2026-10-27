@@ -535,8 +535,10 @@ worktree you are looking at only: it never stops the host daemon or another cont
 **Add daemon** opens a dialog with a form for a name, what it runs in (container or host), the container name,
 port and image, and whether to connect when the application starts. Leave **Container name**
 empty to use the daemon's name with anything other than letters, digits, `_`, `.` and `-` turned into
-`-` (the field shows it); it is stored when you save, so renaming the daemon later keeps it. A form that cannot be saved
-says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container
+`-` (the field shows it); it is stored when you save, so renaming the daemon later keeps it. A container
+name needs at least 2 characters: for a one-character daemon name the field shows no placeholder and you
+type a container name yourself. A form that cannot be saved
+says why beside the field at fault: a blank or repeated name, a container name under 2 characters, a port outside 1-65535, a container
 already used by another daemon, a second host daemon. The form groups its settings in titled
 sections; a closed section shows a one-line summary of its settings, and a `*` after its title when
 a required field inside it is empty. For a Kubernetes daemon, the contexts found in the kubeconfig

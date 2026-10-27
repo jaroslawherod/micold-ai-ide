@@ -12,6 +12,15 @@ use crate::sandbox::SandboxProfile;
 /// The longest container name [`default_container_name`] returns.
 pub const DEFAULT_CONTAINER_NAME_MAX: usize = 63;
 
+/// The fewest characters a container name may have: Docker and Podman refuse a one-character name
+/// (feature 1422).
+pub const CONTAINER_NAME_MIN: usize = 2;
+
+/// Whether `name`, trimmed, has at least [`CONTAINER_NAME_MIN`] characters (characters, not bytes).
+pub fn container_name_long_enough(name: &str) -> bool {
+    name.trim().chars().count() >= CONTAINER_NAME_MIN
+}
+
 /// The container name a daemon named `name` gets when none is typed (feature 1116): the name
 /// trimmed, each run of characters outside `[A-Za-z0-9_.-]` replaced by one `-`, cut to
 /// [`DEFAULT_CONTAINER_NAME_MAX`], then stripped of leading non-alphanumerics and trailing

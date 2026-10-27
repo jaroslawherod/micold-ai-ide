@@ -1,0 +1,9 @@
+# No crates.io dependency: the build script calls the image's C compiler itself, so the build
+# needs the toolchain mise installed and the image's `cc` and `ar`, and nothing else.
+[package]
+name = "mise-c-crate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]

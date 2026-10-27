@@ -111,6 +111,9 @@ pub struct DaemonState {
     /// Where setup's records, logs and run id counter are written (feature 1289, M4); `None` for
     /// the ephemeral catalog and stores that persist nothing. Written without either lock.
     setup_store: Option<crate::setup::SetupStore>,
+    /// One setup at a time on an app-owned sandbox (#1439, contract setup-turn S2), through
+    /// [`DaemonState::setup_turn`]. Fair: runs take it in the order they asked.
+    setup_turn: Arc<tokio::sync::Mutex<()>>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -168,6 +171,10 @@ pub struct DaemonState {
     pasted_data_dir: std::sync::OnceLock<PathBuf>,
     /// Where `offered.json` lists the AI CLIs a provisioning step installed (feature 806, FR-012).
     ai_clis_dir: std::sync::OnceLock<PathBuf>,
+    /// Whether this daemon runs in an app-owned container: its data directory is the container's
+    /// state directory (`sandbox::STATE_CONTAINER_DIR`), set once at startup by `server::run`.
+    /// Gates the setup turn (#1439, contract setup-turn S1).
+    in_sandbox: std::sync::atomic::AtomicBool,
     /// Whether the warning for a missing history directory (a sandbox made before the feature,
     /// R15) has been logged in this service run.
     history_directory_warned: std::sync::atomic::AtomicBool,
@@ -1138,6 +1145,7 @@ impl DaemonState {
             presence: Mutex::new(Presence::new(micold_core::clock::now())),
             setup: Mutex::new(setup_runs),
             setup_store,
+            setup_turn: Arc::default(),
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
             hooks: std::sync::OnceLock::new(),
@@ -1154,6 +1162,7 @@ impl DaemonState {
             interrupt_overdue: Mutex::new(crate::structured::INTERRUPT_OVERDUE),
             pasted_data_dir: std::sync::OnceLock::new(),
             ai_clis_dir: std::sync::OnceLock::new(),
+            in_sandbox: std::sync::atomic::AtomicBool::new(false),
             history_directory_warned: std::sync::atomic::AtomicBool::new(false),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
@@ -1172,6 +1181,14 @@ impl DaemonState {
     /// (feature 806). A no-op if already set; with none set, or no file in it, nothing changes.
     pub fn set_ai_clis_dir(&self, dir: PathBuf) {
         let _ = self.ai_clis_dir.set(dir);
+    }
+
+    /// Record whether this daemon runs in an app-owned container (its data directory is
+    /// `sandbox::STATE_CONTAINER_DIR`). Only such a daemon has a setup turn: a host daemon sees the
+    /// container's `offered.json` through the mounted state directory, and one that lists no CLI
+    /// passes [`Self::offered_clis`]'s ownership check (#1439 review A-F1).
+    pub fn set_in_sandbox(&self, in_sandbox: bool) {
+        self.in_sandbox.store(in_sandbox, Ordering::Relaxed);
     }
 
     /// What a provisioning step recorded as installed, read afresh on each call (FR-012). Missing:
@@ -1198,9 +1215,20 @@ impl DaemonState {
     /// toolchain-path P2): the offered CLIs' `bin` directories, then the sandbox home's
     /// `.local/bin`, then mise's shims folder, then `resolved`'s own `PATH`. `HOME`,
     /// `MISE_DATA_DIR` and `XDG_DATA_HOME` are read from `resolved` first, else from this process
-    /// (FR-002). Without an `offered.json` of its own (host and remote daemons, R2), `resolved`
-    /// unchanged (FR-008).
-    fn with_sandbox_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
+    /// (FR-002). After it, the install defaults of #1439's contract sandbox-install-env I2
+    /// (`NPM_CONFIG_PREFIX`, `CARGO_INSTALL_ROOT`, `GOBIN` under that `HOME`) for each one neither
+    /// `resolved` nor this process sets (FR-015). Without an `offered.json` of its own (host and
+    /// remote daemons, R2), `resolved` unchanged (FR-008, I1).
+    fn with_sandbox_path(&self, resolved: ResolvedEnv) -> ResolvedEnv {
+        self.with_sandbox_env(resolved, |name| std::env::var_os(name))
+    }
+
+    /// [`Self::with_sandbox_path`] with `own` as this process's environment.
+    fn with_sandbox_env(
+        &self,
+        mut resolved: ResolvedEnv,
+        own: impl Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> ResolvedEnv {
         let Some(offered) = self.offered_clis() else {
             return resolved;
         };
@@ -1210,10 +1238,14 @@ impl DaemonState {
                 .iter()
                 .find(|(k, _)| k == name)
                 .map(|(_, v)| std::ffi::OsString::from(v))
-                .or_else(|| std::env::var_os(name))
+                .or_else(|| own(name))
                 .filter(|v| !v.is_empty())
                 .map(PathBuf::from)
         };
+        let install_env = micold_core::sandbox::toolchain_path::install_env_defaults(
+            var("HOME").as_deref(),
+            |name| var(name).map(PathBuf::into_os_string),
+        );
         let input = micold_core::sandbox::toolchain_path::ToolchainPathInput {
             offered_bins: offered.clis.into_iter().map(|c| c.bin).collect(),
             home: var("HOME"),
@@ -1232,6 +1264,11 @@ impl DaemonState {
             Some((_, value)) => *value = joined,
             None => resolved.vars.push(("PATH".to_string(), joined)),
         }
+        resolved.vars.extend(
+            install_env
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value.to_string_lossy().into_owned())),
+        );
         resolved
     }
 
@@ -3559,6 +3596,17 @@ impl DaemonState {
     /// Where setup's files are written; `None` when nothing persists (feature 1289, M4).
     pub(crate) fn setup_store(&self) -> Option<&crate::setup::SetupStore> {
         self.setup_store.as_ref()
+    }
+
+    /// The daemon-wide setup turn (#1439, contract setup-turn S1): `Some` only on an app-owned
+    /// sandbox (in its container, [`Self::set_in_sandbox`], with an `offered.json` of its own),
+    /// where concurrent installs into the one home break. Host and remote daemons run setups
+    /// concurrently (1289), even a host daemon that sees the container's offer through the mount.
+    pub(crate) fn setup_turn(&self) -> Option<Arc<tokio::sync::Mutex<()>>> {
+        if !self.in_sandbox.load(Ordering::Relaxed) {
+            return None;
+        }
+        self.offered_clis().map(|_| Arc::clone(&self.setup_turn))
     }
 
     /// What a client attaching to `project` is sent about its setup runs (feature 1289, FR-018).
@@ -8724,6 +8772,33 @@ mod offered_tests {
         );
     }
 
+    /// 1439 setup-turn S1: a daemon in its container with an `offered.json` of its own (an
+    /// app-owned sandbox) has one setup turn; without one (host and remote daemons) it has none.
+    #[test]
+    fn setup_turn_only_on_a_sandbox_daemon_with_an_offer_of_its_own() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        // A host daemon sees the container's offer through the mounted state directory; one
+        // listing no CLI passes the ownership check, yet the host gets no turn (review A-F1).
+        offer(&dir, &[]);
+        assert!(state.setup_turn().is_none(), "host daemon: no turn");
+        state.set_in_sandbox(true);
+        std::fs::remove_file(dir.join("offered.json")).unwrap();
+        assert!(state.setup_turn().is_none(), "no offer: no turn");
+        offer(&dir, &[]);
+        let turn = state.setup_turn().expect("a sandbox daemon has a turn");
+        assert!(
+            Arc::ptr_eq(&turn, &state.setup_turn().unwrap()),
+            "one turn per daemon"
+        );
+        let elsewhere = bin_of(store.path(), "other-bin", &[AiCli::ClaudeCode]);
+        offer(&dir, &[(AiCli::ClaudeCode, &elsewhere)]);
+        assert!(
+            state.setup_turn().is_none(),
+            "another daemon's offer is not this daemon's"
+        );
+    }
+
     /// 1289 A2 (b): an `offered.json` that lists no CLI still adds the two home folders, and
     /// `MISE_DATA_DIR` from the resolved environment names the shims folder (FR-002).
     #[cfg(unix)]
@@ -8746,6 +8821,141 @@ mod offered_tests {
             path_var(&state.env_include_vars_for(cwd.path())),
             "/home/u/.local/bin:/opt/mise/shims:/usr/bin:/bin"
         );
+    }
+
+    const INSTALL_ENV: [&str; 3] = ["NPM_CONFIG_PREFIX", "CARGO_INSTALL_ROOT", "GOBIN"];
+
+    /// The install variables among `vars`, in `INSTALL_ENV` order.
+    fn install_env_of(vars: &[(String, String)]) -> Vec<(String, String)> {
+        INSTALL_ENV
+            .iter()
+            .flat_map(|name| vars.iter().filter(move |(k, _)| k == name).cloned())
+            .collect()
+    }
+
+    fn install_env_pairs(want: &[(&str, &str)]) -> Vec<(String, String)> {
+        want.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// `own` as a daemon's own environment, for [`DaemonState::with_sandbox_env`].
+    fn own_env<'a>(
+        own: &'a [(&'a str, &'a str)],
+    ) -> impl Fn(&str) -> Option<std::ffi::OsString> + 'a {
+        move |name| {
+            own.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| std::ffi::OsString::from(v))
+        }
+    }
+
+    /// 1439 A8 (contract sandbox-install-env I1, I2, I4): every spawn of a daemon with an
+    /// `offered.json` of its own gets the three install defaults under the resolved `HOME`, unless
+    /// this process's own environment names one, and its `PATH` is ordered as before (1289 P2).
+    #[cfg(unix)]
+    #[test]
+    fn install_env_defaults_reach_a_sandbox_spawn_under_the_resolved_home() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        offer(&dir, &[]);
+        resolve_with(
+            &state,
+            store.path(),
+            &["HOME=/home/u".into(), "PATH=/usr/bin:/bin".into()],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        let vars = state.env_include_vars_for(cwd.path());
+        let defaults = [
+            ("NPM_CONFIG_PREFIX", "/home/u/.local", "npm_config_prefix"),
+            ("CARGO_INSTALL_ROOT", "/home/u/.local", "CARGO_INSTALL_ROOT"),
+            ("GOBIN", "/home/u/.local/bin", "GOBIN"),
+        ];
+        // The daemon's own value wins (I2), so one this test process happens to have is left out.
+        let unset = |name: &str| std::env::var_os(name).is_none_or(|v| v.is_empty());
+        let want: Vec<(&str, &str)> = defaults
+            .iter()
+            .filter(|(name, _, alias)| unset(name) && unset(alias))
+            .map(|(name, value, _)| (*name, *value))
+            .collect();
+        assert_eq!(install_env_of(&vars), install_env_pairs(&want));
+        assert_eq!(
+            path_var(&vars),
+            "/home/u/.local/bin:/home/u/.local/share/mise/shims:/usr/bin:/bin",
+            "the PATH is the one 1289 orders"
+        );
+        let resolved = state.with_sandbox_env(state.resolved_env_for(cwd.path()), own_env(&[]));
+        assert_eq!(
+            install_env_of(&resolved.vars),
+            install_env_pairs(&[
+                ("NPM_CONFIG_PREFIX", "/home/u/.local"),
+                ("CARGO_INSTALL_ROOT", "/home/u/.local"),
+                ("GOBIN", "/home/u/.local/bin"),
+            ])
+        );
+        assert_eq!(path_var(&resolved.vars), path_var(&vars));
+    }
+
+    /// 1439 A8 (I2): a value environment-include sets is kept unchanged and the others are added.
+    #[cfg(unix)]
+    #[test]
+    fn install_env_keeps_a_value_set_by_environment_include() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        offer(&dir, &[]);
+        resolve_with(
+            &state,
+            store.path(),
+            &["HOME=/home/u".into(), "GOBIN=/opt/go/bin".into()],
+        );
+        let cwd = tempfile::tempdir().unwrap();
+        let resolved = state.with_sandbox_env(state.resolved_env_for(cwd.path()), own_env(&[]));
+        assert_eq!(
+            install_env_of(&resolved.vars),
+            install_env_pairs(&[
+                ("NPM_CONFIG_PREFIX", "/home/u/.local"),
+                ("CARGO_INSTALL_ROOT", "/home/u/.local"),
+                ("GOBIN", "/opt/go/bin"),
+            ])
+        );
+    }
+
+    /// 1439 A8 (I2): the daemon's own environment is not overridden (lower-case
+    /// `npm_config_prefix` included), and its `HOME` serves when the resolved one has none.
+    #[cfg(unix)]
+    #[test]
+    fn install_env_does_not_override_the_daemons_own_environment() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        offer(&dir, &[]);
+        let cwd = tempfile::tempdir().unwrap();
+        let own = [
+            ("HOME", "/h"),
+            ("CARGO_INSTALL_ROOT", "/daemon/cargo"),
+            ("npm_config_prefix", "/daemon/npm"),
+        ];
+        let resolved = state.with_sandbox_env(state.resolved_env_for(cwd.path()), own_env(&own));
+        assert_eq!(
+            install_env_of(&resolved.vars),
+            install_env_pairs(&[("GOBIN", "/h/.local/bin")])
+        );
+    }
+
+    /// 1439 A8 (I1): without an `offered.json` (host and remote daemons) no install variable is
+    /// added.
+    #[cfg(unix)]
+    #[test]
+    fn install_env_none_without_an_offer() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, _dir) = daemon(store.path());
+        resolve_with(&state, store.path(), &["HOME=/home/u".into()]);
+        let cwd = tempfile::tempdir().unwrap();
+        assert_eq!(
+            install_env_of(&state.env_include_vars_for(cwd.path())),
+            install_env_pairs(&[])
+        );
+        let resolved = state.with_sandbox_env(state.resolved_env_for(cwd.path()), own_env(&[]));
+        assert_eq!(install_env_of(&resolved.vars), install_env_pairs(&[]));
     }
 
     /// 1289 A2 (c), FR-008: without an `offered.json` (host and remote daemons) the resolved

@@ -199,6 +199,10 @@ pub async fn run() -> io::Result<()> {
     if let Some(dir) = micold_core::paths::data_dir() {
         // Feature 806: what provisioning installed under the data directory is what is offered.
         state.set_ai_clis_dir(dir.join("ai-clis"));
+        // #1439: the data directory is the container's state directory only in an app-owned
+        // container; the host's is mounted there, so a host daemon reads the same `offered.json`.
+        state
+            .set_in_sandbox(dir == std::path::Path::new(micold_core::sandbox::STATE_CONTAINER_DIR));
         state.set_pasted_data_dir(dir);
     }
     let sweeping = Arc::clone(&state);

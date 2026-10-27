@@ -27,6 +27,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- M1 Q1 (user): at the smallest window, after the title the Changes label is cut with an ellipsis; chips keep capped width. FR-002, US1 scenario 3 and H10 amended.
+- M1 Q2 (user): `Button::density(DENSE)` for Changes (button 28 dp, no taller than the title line, header at most 40 px); R2, FR-003, T003, T005 amended.
+
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -41,6 +44,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- Review A F1 (chips row can starve the Changes button with three long chips at 640 px): declined for this milestone. Option A (user) puts the chips before the label's cut; a priority layout needs a give-way widget the client cannot use (Lane is crate-private to micold-material). The sidebar's Review changes reaches the same action. Recorded as a follow-up.
+- Review A F2/F3 (gates weakened for a zero-width title and a cut button): these are the amended H10' the user chose.
+- Review A F4 (28 dp button): user accepted Q2. Button rustdoc now says the 40 dp is the default.
+- Review A F7 (density range): `density` takes the scale's steps; callers pass the named constants.
+- Review A F8 (spec weakened): the amendment is the user's answer to Q1.
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
@@ -50,9 +59,14 @@ None.
 
 ## Open escalation
 
-None.
+blocked by work outside my flow (category 5). M1 is done and reviewed (A and B addressed, partial visual pass) but `mise run gate` is red on `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` ("the tree indents at the default width: cap 0"), and the push hook refuses code no green gate saw. It fails identically on `origin/main` source (session_area.rs and button.rs checked out from origin/main 308ab390a, same result), so it is not this diff; it measures text width, likely this machine's fonts. Everything else in the gate (fmt, clippy, all other tests) passed in the earlier runs. Question: how to push? Option A (Recommended): run the full gate where the test passes (CI or a machine with fonts), or let the orchestrator push the branch (6 commits, rebased on 308ab390a) and let CI decide. Option B: a separate fix of that test on main first. Nothing is pushed; no PR yet. PR body notes to write: review A and B findings in Declined section, Q1/Q2 amendments.
 
 ## Follow-ups not done
+
+- M1 visual pass was partial (dark only, 1600x1200 and 640x480 at the default sidebar; Xvfb/xdotool missing). Light scheme, 1280x800 and long-chip states unchecked; the label is cut at 640x480 as the user's Q1 answer allows. Screenshots in `visual-pass/`.
+
+- With three long chips at the smallest window the Changes button can get no room (flat row, chips before button). A priority layout would fix it.
+- `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` failed in the scoped gate (cap 0); unrelated to the header, check on main.
 
 None yet. Pre-existing failure on main: ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth.
 

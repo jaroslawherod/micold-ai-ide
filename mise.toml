@@ -1,5 +1,9 @@
 [tools]
-rust = "stable"
+# The components are the gate's formatter and linter and the rust-analyzer the `LSP` tool starts, so
+# `mise install` alone gives a container session everything the gate and the instructions use
+# (#1439, FR-008). They are here, not in rust-toolchain.toml, so a bare `cargo` in CI does not
+# download rust-analyzer too.
+rust = { version = "stable", components = "rustfmt,clippy,rust-analyzer" }
 uv = "latest"
 # The documentation site's accessibility check runs axe-core in a real browser (feature 028): the
 # rules it implements -- rendered contrast, focus visibility, reachable names -- are properties of a

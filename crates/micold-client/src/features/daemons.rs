@@ -13,9 +13,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 
 use micold_core::daemons::{
-    default_container_name, Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId,
-    DaemonName, DaemonRegistry, DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange,
-    WorktreeRef,
+    container_name_long_enough, default_container_name, Binding, ConnectionError,
+    DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry, DaemonRuntime,
+    DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef, CONTAINER_NAME_MIN,
 };
 use micold_core::kube::lifecycle::leftovers;
 use micold_core::kube::names::ResourceNames;
@@ -983,7 +983,9 @@ pub fn discard_draft(state: &mut State) {
 /// The name the container name field shows while empty: what Save would store, or nothing when
 /// the daemon name gives no usable one (feature 1116, FR-007).
 pub fn container_name_hint(draft: &Draft) -> String {
-    default_container_name(&draft.name).unwrap_or_default()
+    default_container_name(&draft.name)
+        .filter(|n| container_name_long_enough(n))
+        .unwrap_or_default()
 }
 
 fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> FormError {
@@ -1102,6 +1104,14 @@ fn runtime_of(
             let container_name = draft
                 .resolved_container_name()
                 .ok_or_else(|| invalid_field("container_name"))?;
+            if !container_name_long_enough(&container_name) {
+                return Err(FormError {
+                    field: "container_name",
+                    message: format!(
+                        "A container name needs at least {CONTAINER_NAME_MIN} characters."
+                    ),
+                });
+            }
             let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
             profile.image = image_choice(&profile.image, &draft.image_reference, &draft.image_path)

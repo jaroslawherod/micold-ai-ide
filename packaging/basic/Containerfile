@@ -70,7 +70,7 @@ RUN set -eu; \
     test -n "$version"; \
     file="mise-v${version}-linux-${arch}"; \
     cd /tmp; \
-    curl -fsSLo "$file" "https://github.com/jdx/mise/releases/download/v${version}/${file}"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 -fsSLo "$file" "https://github.com/jdx/mise/releases/download/v${version}/${file}"; \
     sha256sum -c --ignore-missing /tmp/mise.sha256; \
     test -f "$file"; \
     install -m 0755 "$file" /usr/local/bin/mise; \
