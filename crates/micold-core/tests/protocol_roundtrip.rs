@@ -310,6 +310,13 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 45,
             project: PathBuf::from("/a"),
         },
+        // #1475: the aliases of github.com the user's machine resolved, and none.
+        ClientMsg::SshHostAliases {
+            github_hosts: vec!["github-micold".into(), "gh-work".into()],
+        },
+        ClientMsg::SshHostAliases {
+            github_hosts: Vec::new(),
+        },
         // Feature 582 (T003): the attach messages, with both item kinds on the wire.
         ClientMsg::AttachDiscover {
             req: 82,
@@ -951,8 +958,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_70() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 70);
+fn the_protocol_version_is_71() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 71);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a

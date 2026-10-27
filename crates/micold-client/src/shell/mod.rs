@@ -55,6 +55,7 @@ pub mod scoped_credential;
 pub mod service_control;
 pub mod settings;
 pub mod setup;
+pub mod ssh_aliases;
 pub mod startup;
 pub mod subscriptions;
 pub mod time_zone;

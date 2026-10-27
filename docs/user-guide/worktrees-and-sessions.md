@@ -685,7 +685,9 @@ repository works when your `gh` sign-in can see it, and an anonymous read is nev
 github.com, otherwise the first github.com remote in the repository's configuration. Only
 github.com is supported. A remote whose address is rewritten by git's `url.<base>.insteadOf` setting
 is read as written in the configuration, so an alias that only becomes a github.com address after
-rewriting is not recognised. When no github.com remote is found, the chip is disabled and the line
+rewriting is not recognised. An SSH `Host` alias in your `~/.ssh/config` whose `HostName` is
+github.com or ssh.github.com (`git@github-work:owner/repo.git`) is recognised: the app resolves it
+with `ssh -G` on your machine, also when sessions run in a container. When no github.com remote is found, the chip is disabled and the line
 under the chips says why: "This repository has no GitHub remote." or "Couldn't read this
 repository's remotes: …".
 

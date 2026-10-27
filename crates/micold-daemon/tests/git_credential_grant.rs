@@ -483,3 +483,89 @@ async fn a_grant_expiring_in_300_days_is_accepted() {
     }
     panic!("{} never held the 300-day grant", file.display());
 }
+
+/// #1475: a sandboxed daemon has no `~/.ssh`, so an SSH alias of github.com is GitHub's only once
+/// the client says so. Told, it announces the target again in its GitHub form and accepts the
+/// repository's credential.
+#[tokio::test]
+async fn an_ssh_alias_the_client_reports_makes_the_push_url_github() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let creds = dir.path().join("creds");
+    let _env = root_env(&creds);
+    let a = project(dir.path(), "a", Some("git@github-micold:Acme/App.git"));
+    let state = state_with(&[&a]);
+    let mut client = connect_and_attach(&state, &a).await;
+
+    let (list, _) = targets(&mut client).await;
+    assert_eq!(
+        list[0].push_url.as_deref(),
+        Some("git@github-micold:Acme/App.git"),
+        "unresolved, the alias is given as configured"
+    );
+    assert!(list[0].repo().is_err(), "and is no GitHub repository");
+
+    send(
+        &mut client,
+        ClientMsg::SshHostAliases {
+            github_hosts: vec!["github-micold".into()],
+        },
+    )
+    .await;
+    let (list, _) = targets(&mut client).await;
+    assert_eq!(
+        list[0].push_url.as_deref(),
+        Some("ssh://git@github.com/Acme/App.git")
+    );
+    assert_eq!(list[0].repo().unwrap(), repo("https://github.com/Acme/App"));
+
+    send(
+        &mut client,
+        ClientMsg::GitCredentialGrant {
+            repo: repo("https://github.com/Acme/App"),
+            token: SecretToken::new("tok-alias"),
+            expires_at: soon(),
+        },
+    )
+    .await;
+    let file = creds.join("acme").join("app");
+    for _ in 0..200 {
+        if file.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        format!("expires_at={}\ntoken=tok-alias\n", soon())
+    );
+}
+
+/// #1475: the daemon's own resolution uses the set the client reported, and a sandboxed daemon
+/// asks no `ssh` of its own about any other host.
+#[tokio::test]
+async fn a_sandboxed_daemon_resolves_aliases_from_the_client_set_only() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let _env = root_env(&dir.path().join("creds"));
+    let state = state_with(&[]);
+    let remote = |url: &str| micold_core::git::GitRemote {
+        name: "origin".into(),
+        url: url.into(),
+    };
+    let before = state.resolve_ssh_aliases(vec![remote("git@github-micold:o/r.git")]);
+    assert_eq!(before[0].url, "git@github-micold:o/r.git");
+
+    assert!(state.remember_ssh_github_aliases(vec!["GitHub-Micold".into()]));
+    assert!(
+        !state.remember_ssh_github_aliases(vec!["github-micold".into()]),
+        "an alias it holds does not grow the set"
+    );
+    let after = state.resolve_ssh_aliases(vec![
+        remote("git@github-micold:o/r.git"),
+        // Not in the set: a container daemon has no `ssh` answer of its own to fall back on.
+        remote("git@other-alias:o/r.git"),
+    ]);
+    assert_eq!(after[0].url, "ssh://git@github.com/o/r.git");
+    assert_eq!(after[1].url, "git@other-alias:o/r.git");
+}

@@ -246,7 +246,11 @@
 /// And 69 → 70 for feature 1289's setup command (contracts C1–C2): `ClientMsg::ProjectSetupSet`,
 /// `SetupRun`, `SetupStop`, `SetupOutputWatch`, `SetupOutputUnwatch` and `DaemonMsg::SetupChanged`,
 /// `SetupOutput`.
-pub const PROTOCOL_VERSION: u32 = 70;
+///
+/// And 70 → 71 for #1475's `ClientMsg::SshHostAliases`: the client tells the daemon which SSH host
+/// aliases its machine resolves to github.com, which shifts the postcard index of every
+/// `ClientMsg` variant after it.
+pub const PROTOCOL_VERSION: u32 = 71;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -1235,6 +1235,21 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
     // `Task::none()` unconditionally for its whole life. The open-project gate is the first reply
     // that continues an interaction the user started, so one arm can hand work back.
     let mut follow_up = Task::none();
+    // #1475: an SSH host alias of github.com is resolved with this machine's `ssh -G` before the
+    // remotes it is in are read, and the daemon is told it.
+    let outbox = app.outbox_for(daemon);
+    let event =
+        match crate::shell::ssh_aliases::prepare(app.caps.ssh_hosts(), outbox.as_ref(), event) {
+            crate::shell::ssh_aliases::Prepared::Ready(event) => event,
+            crate::shell::ssh_aliases::Prepared::Resolve { hosts, event } => {
+                return crate::shell::ssh_aliases::resolve_then(
+                    app.caps.ssh_hosts().clone(),
+                    hosts,
+                    daemon,
+                    event,
+                );
+            }
+        };
     match event {
         DaemonMsg::GitCredentialTargets {
             targets,
@@ -3987,9 +4002,7 @@ fn start_kubernetes_create(
         .caps
         .git()
         .and_then(|git| git.remote_list(project).ok())
-        .map(|raw| {
-            micold_core::github::resolve_ssh_aliases(micold_core::git::parse_remote_list(&raw))
-        })
+        .map(|raw| micold_core::git::parse_remote_list(&raw))
         .unwrap_or_default();
     let project_name = project.file_name().map_or_else(
         || "this project".to_string(),

@@ -90,6 +90,9 @@ type GitTargetsSent = (
     Option<String>,
 );
 
+/// At most this many SSH aliases of github.com are held (#1475).
+const MAX_SSH_GITHUB_ALIASES: usize = 256;
+
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
@@ -120,6 +123,9 @@ pub struct DaemonState {
     /// The credential targets last sent to the clients (#1002), so a refresh that changed nothing
     /// sends nothing. Its own mutex: it is touched around git calls, never under `inner`.
     git_targets: Mutex<Option<GitTargetsSent>>,
+    /// The SSH host aliases of github.com the clients' machines resolved (#1475,
+    /// `ClientMsg::SshHostAliases`), lower-cased; empty until a client reports one.
+    ssh_github_aliases: Mutex<std::collections::BTreeSet<String>>,
     /// The loopback hook receiver (US2, T045/T046), set once at startup by `server::run`. Absent for
     /// tests and when binding fails — activity then degrades to `Unknown` (H1), never to a wrong
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
@@ -1148,6 +1154,7 @@ impl DaemonState {
             setup_turn: Arc::default(),
             diagnostics: std::sync::OnceLock::new(),
             git_targets: Mutex::new(None),
+            ssh_github_aliases: Mutex::new(std::collections::BTreeSet::new()),
             hooks: std::sync::OnceLock::new(),
             guards: Mutex::new(HashMap::new()),
             tool_server: std::sync::OnceLock::new(),
@@ -4501,6 +4508,50 @@ impl DaemonState {
             .into_iter()
             .map(|p| p.path)
             .collect()
+    }
+
+    /// Add `hosts` to the SSH aliases of github.com a client reported (#1475); `true` when the set
+    /// grew. Added to, never replaced: two windows may each have resolved only some of them.
+    pub fn remember_ssh_github_aliases(&self, hosts: Vec<String>) -> bool {
+        let mut known = self
+            .ssh_github_aliases
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let before = known.len();
+        // Bounded: a client cannot grow the daemon's memory without limit.
+        for host in hosts {
+            if known.len() >= MAX_SSH_GITHUB_ALIASES {
+                break;
+            }
+            known.insert(host.to_ascii_lowercase());
+        }
+        known.len() != before
+    }
+
+    /// The SSH aliases of github.com the clients reported (#1475).
+    pub fn ssh_github_aliases(&self) -> std::collections::BTreeSet<String> {
+        self.ssh_github_aliases
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// `remotes` with each SSH alias of github.com rewritten to its `ssh://git@github.com/…` form
+    /// (#1475): the aliases the client reported first, then, for a host-process daemon only, this
+    /// machine's own `ssh -G`. A container daemon has no `~/.ssh` and never asks its own `ssh`.
+    /// Blocking.
+    pub fn resolve_ssh_aliases(
+        &self,
+        remotes: Vec<micold_core::git::GitRemote>,
+    ) -> Vec<micold_core::git::GitRemote> {
+        let known = self.ssh_github_aliases();
+        let host_ssh: micold_core::github::HostResolver<'_> =
+            &micold_core::github::ssh_resolved_hostname;
+        let fallback = crate::git_credential::credential_root()
+            .is_none()
+            .then_some(host_ssh);
+        let resolve = micold_core::github::known_github_aliases(&known, fallback);
+        micold_core::github::resolve_ssh_aliases_with(remotes, &resolve)
     }
 
     /// Remember `targets` as the last list sent; `true` when it differs from the one before.

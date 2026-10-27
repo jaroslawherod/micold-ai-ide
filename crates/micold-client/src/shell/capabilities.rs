@@ -115,6 +115,8 @@ pub struct Capabilities {
     notifier: Arc<dyn DesktopNotifier>,
     /// Feature 686: connects to the cluster of a kubeconfig context (the live adapter).
     kube_connector: KubeConnector,
+    /// #1475: `ssh -G` on this machine, for the SSH host aliases of github.com.
+    ssh_hosts: crate::shell::ssh_aliases::SshHosts,
 }
 
 pub use micold_client::kube::KubeConnector;
@@ -208,7 +210,23 @@ impl Capabilities {
                         .map(|live| Arc::new(live) as Arc<dyn Cluster>)
                 })
             }),
+            ssh_hosts: crate::shell::ssh_aliases::SshHosts::new(Some(Arc::new(
+                micold_core::github::ssh_resolved_hostname,
+            ))),
         }
+    }
+
+    /// `ssh -G` on this machine and its answers (#1475).
+    pub fn ssh_hosts(&self) -> &crate::shell::ssh_aliases::SshHosts {
+        &self.ssh_hosts
+    }
+
+    /// The same capabilities, with `ssh_hosts` in place of this machine's `ssh` (#1475):
+    /// `base_app()` gives every test one that resolves nothing.
+    #[cfg(test)]
+    pub(crate) fn with_ssh_hosts(mut self, ssh_hosts: crate::shell::ssh_aliases::SshHosts) -> Self {
+        self.ssh_hosts = ssh_hosts;
+        self
     }
 
     /// Git side effects: worktree discovery, branch checks, repository detection — or `None` when
