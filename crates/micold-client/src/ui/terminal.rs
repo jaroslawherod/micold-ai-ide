@@ -829,8 +829,11 @@ pub(crate) fn empty_terminal_message(state: &State, id: SessionId) -> String {
         Some((reason, 0)) => reason.to_string(),
         // The recorded sentence already ends in a full stop (`on_unexpected_exit` assembles it), so
         // the pointer at the control follows it as a second sentence.
-        Some((reason, _)) => format!("{reason} Choose restart below to resume it."),
-        None => "This session is not running. Choose restart below to resume it.".to_string(),
+        Some((reason, _)) => {
+            format!("{reason} Choose restart in the tab strip above to resume it.")
+        }
+        None => "This session is not running. Choose restart in the tab strip above to resume it."
+            .to_string(),
     }
 }
 
@@ -1190,8 +1193,8 @@ mod tests {
                  said {message:?} (FR-014)"
             );
             assert!(
-                message.contains("restart"),
-                "{lifecycle:?} offers `restart` in the bar below (attached_process_restartable), \
+                message.contains("restart in the tab strip above") && !message.contains("below"),
+                "{lifecycle:?} offers `restart` in the tab strip above (attached_process_restartable), \
                  so the empty state should point at the control that resolves it — {message:?}"
             );
         }
@@ -1249,7 +1252,7 @@ mod tests {
     /// (`029` quickstart §D, finding 1).
     ///
     /// The daemon reports a refusal as `Failed { attempts: 0 }`, and every refusal's sentence
-    /// already says what to change. Appending "Choose restart below to resume it." told a user
+    /// already says what to change. Appending "Choose restart in the tab strip above to resume it." told a user
     /// whose image lacks the CLI to retry something that fails the same way until the image
     /// changes, and one whose conversation is gone to resume what cannot be resumed.
     #[test]
