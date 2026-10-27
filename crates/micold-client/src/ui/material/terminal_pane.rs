@@ -1990,10 +1990,19 @@ mod tests {
 
         /// Dispatch one event at `at` into a pane filling the window; return everything it published.
         fn dispatch(at: Point, focused: bool, event: Event) -> Vec<Message> {
+            dispatch_on(&crate::grid::GridCache::default(), at, focused, event)
+        }
+
+        /// [`dispatch`] into a pane showing `grid`.
+        fn dispatch_on(
+            grid: &crate::grid::GridCache,
+            at: Point,
+            focused: bool,
+            event: Event,
+        ) -> Vec<Message> {
             let renderer = headless();
-            let grid = crate::grid::GridCache::default();
             let mut element: Element<'_, Message> = TerminalPane::new(
-                &grid,
+                grid,
                 crate::ui::terminal::TermPalette::from_scheme(
                     micold_core::theme::ColorScheme::Dark,
                 ),
@@ -2045,6 +2054,45 @@ mod tests {
                         "a {button:?} press outside the pane (focused={focused}) produced input at \
                          the attached process (FR-003, SC-008): {published:?}"
                     );
+                }
+            }
+        }
+
+        /// Feature 1465 (FR-008, research R7): the mouse's side buttons are the app's Back and
+        /// Forward; a focused pane, with or without mouse reporting, passes neither to the program.
+        #[test]
+        fn a_side_button_press_in_a_focused_pane_never_reaches_the_process() {
+            use alacritty_terminal::term::TermMode;
+            let inside = Point::new(400.0, 300.0);
+            let plain = super::clipboard_gestures::grid(TermMode::SHOW_CURSOR.bits());
+            let reporting = super::clipboard_gestures::grid(
+                (TermMode::SHOW_CURSOR | TermMode::MOUSE_REPORT_CLICK).bits(),
+            );
+            // The harness is live: a left press in mouse-reporting mode is reported.
+            assert!(
+                dispatch_on(
+                    &reporting,
+                    inside,
+                    true,
+                    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                )
+                .iter()
+                .any(reaches_the_process),
+                "a left press is reported to a mouse-reporting program"
+            );
+            for (grid, mode) in [(&plain, "plain"), (&reporting, "mouse reporting")] {
+                for button in [mouse::Button::Back, mouse::Button::Forward] {
+                    for event in [
+                        mouse::Event::ButtonPressed(button),
+                        mouse::Event::ButtonReleased(button),
+                    ] {
+                        let published = dispatch_on(grid, inside, true, Event::Mouse(event));
+                        assert!(
+                            !published.iter().any(reaches_the_process),
+                            "{event:?} in a focused pane ({mode}) reached the process: \
+                             {published:?}"
+                        );
+                    }
                 }
             }
         }
@@ -2177,7 +2225,7 @@ mod tests {
         }
 
         /// A three-row grid whose top line reads `hello world`, with the given terminal mode bits.
-        fn grid(mode: u32) -> GridCache {
+        pub(super) fn grid(mode: u32) -> GridCache {
             grid_with_history(mode, 0)
         }
 

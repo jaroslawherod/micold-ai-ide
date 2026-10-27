@@ -73,18 +73,20 @@ pub fn exists(app: &crate::app::State, place: &Place) -> bool {
     }
     let location_exists = |location: &SessionLocation| match location {
         SessionLocation::Default => true,
-        SessionLocation::Worktree(dir) => {
-            app.worktree.worktrees.iter().any(|w| &w.dir_name == dir)
-        }
+        SessionLocation::Worktree(dir) => app.worktree.worktrees.iter().any(|w| &w.dir_name == dir),
     };
     match &place.view {
         View::Session { location, id } => {
             location_exists(location)
-                && app.workspace.sessions.get(&place.project).is_some_and(|sessions| {
-                    sessions
-                        .iter()
-                        .any(|s| s.id == *id && !s.archived && &s.location == location)
-                })
+                && app
+                    .workspace
+                    .sessions
+                    .get(&place.project)
+                    .is_some_and(|sessions| {
+                        sessions
+                            .iter()
+                            .any(|s| s.id == *id && !s.archived && &s.location == location)
+                    })
         }
         View::Review(location) => location_exists(location),
         View::Overview => true,
