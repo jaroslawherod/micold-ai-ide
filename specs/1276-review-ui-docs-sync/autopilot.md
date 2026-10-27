@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M2 fix-main PR
-- **Next step**: orchestrator waits on CI for #1520 and merges; then M3 (stash holds M3 WIP)
+- **Phase**: M3 stop (b)
+- **Next step**: orchestrator waits on the M3 PR's CI and merges; then M4 (blocked: #1269–#1275, #1128)
 
 ## Pull requests
 
@@ -19,16 +19,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1358 | design (spec, plan, tasks) | merged | 30f413256df9364b4ad89bc99be2e0f008e741e9 |
 | #1473 | M1 guide + review_keys_doc | merged | 1669ef5df6520fead74b379ed75d307d20f3d81c |
 | #1495 | M2 layout snapshot + review_tab_fits | merged | ba0482621516b364c80b63df888257b5a8efe29b |
-| #1520 | fix red main after M2 + #1466/BUG-1470 | open | — |
+| #1520 | fix red main after M2 + #1466/BUG-1470 | merged | 2a4b372d52ab16e7165cc6f2e9c885b3b1af9656 |
+| #1541 | M3 visual pass + fixes + fixture | open (CI) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | guide describes the Review tab; `review_keys_doc` holds keys = guide | #1473 | merged; T001–T013 done; full gate green at ea01a8b9 (scripts/gate.sh, debug info off for disk); review A clean, review B fixes in re-review. Links and mdBook left to CI (no lychee, mdbook here) |
-| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | T014–T024 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh). Second merge of origin/main (204cf601, for #1463's one-line header; conflict in session_area_fits.rs resolved: main's paths and wording, this branch's `pub(crate)`): `review_tab_fits` then found the header title's "…" painted past a 2–4 px clip at 640×480 in every review state (main's #1463 defect, filed as #1501, exempted narrowly as `HEADER_TITLE_TEXT`, required to fire) and the `review-source-open` overlay scroll exemption no longer firing (dropped); fixture re-recorded, same groups vs main as before (four new states, `@` lines on ten slice states, records unchanged); Third merge of origin/main (for BUG-1493, #1491; fixture conflict: took main's, re-recorded): same groups vs main (four new states, `@` lines on ten slice states, records unchanged); `review_tab_fits` passed unchanged; full gate green at c684c36f (first run hit a parallel-load flake in card_grid `a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and on rerun). T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
-| M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
-| M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | — | blocked: M2, #1269–#1275, #1128 |
+| M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | merged (ba048262); T014–T025 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh). Second merge of origin/main (204cf601, for #1463's one-line header; conflict in session_area_fits.rs resolved: main's paths and wording, this branch's `pub(crate)`): `review_tab_fits` then found the header title's "…" painted past a 2–4 px clip at 640×480 in every review state (main's #1463 defect, filed as #1501, exempted narrowly as `HEADER_TITLE_TEXT`, required to fire) and the `review-source-open` overlay scroll exemption no longer firing (dropped); fixture re-recorded, same groups vs main as before (four new states, `@` lines on ten slice states, records unchanged); Third merge of origin/main (for BUG-1493, #1491; fixture conflict: took main's, re-recorded): same groups vs main (four new states, `@` lines on ten slice states, records unchanged); `review_tab_fits` passed unchanged; full gate green at c684c36f (first run hit a parallel-load flake in card_grid `a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and on rerun). T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
+| M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | merged (2a4b372d); #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
+| M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | #1541 | T026–T029 done; reviews A and B CLEAN (A F1 fixed test-first: cut names and PR titles read whole in a tooltip); origin/main merged at 4b76f4f8 (not rebased); fixture re-recorded after it: only M3 groups vs main (header name Ellipsized at Fill in 29 review states, PR row title one line in the three source-open overlays, draft/reply row actions line in drawer-drafts/-replies; anchors unchanged); full gate green at 74f364af (scripts/gate.sh; first run lost to a full disk, second caught `Ellipsized::content` breaking the builder-API contract, made crate-private); geometry changed (draft row actions line, header name, PR row): `review_tab_fits` declares the drafts actions rows under #1474 (passes), `the_layout_matches_the_committed_fixture` fails until the stop-(b) re-record; 34 crops + results.md; 11 PASS, 4 FAIL fixed test-first in shared components (f8c46db0: PullRequestRow, ReviewBar, ReviewPanelRow, changes::heading; checks 02, 07, 08, 11), FAIL/issue: #1519 (checks 04, 12), #1539 (02), #1540 (03); spec status names them. Release build on Xvfb at 1280×800, macOS/Windows not run |
 | M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
 | M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
 
@@ -77,11 +78,15 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | M1 B (conformance) | 2 | 55c8a7de13a6327a4e09ea4d89482e75712c28f1:9938200b23e98e38be8e66626ade678b854710e5 | CLEAN, 1 MINOR (sonnet, run by orchestrator); Verify: 3+3+2 tests pass, documentation-set.test.sh pass. F1 cycle-log.md last line ended mid-sentence — fixed, prose only ("loop.") |
 | M2 A (correctness) | 1 | 0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880 | CLEAN, 3 MINOR (high, session model, run by orchestrator); all fixed: F1 `SMALLEST_WINDOW` entries keyed by (states, parent, edge, layer), the drawer's `/` subtree entry split into its seven parents, each (state, entry) pair required to fire (checked: an extra state fails naming it); F2 `describe_difference` names `inside <anchor>` for `base` lines only, test `an_unanchored_base_difference_names_the_anchor_holding_it_and_an_over_one_does_not`; F3 layout-snapshot.md "Four states are new" (prose only) |
 | M2 B (conformance) | 1 | 0af2331d2684c75cdf6f777c02b83e730ed4fb66:0029443c0338f6068dbc26f36dc792edf8252880 | CLEAN (sonnet, run by orchestrator); Verify: `layout_snapshot review_tab_fits` 2 passed, `layout_coverage_registry` 3 passed; decision 6 holds |
+| M3 A (correctness) | 1 | a787013152cc093ee0c41d8a50d3aa8d06164f45:7f6e59075f9edc1252c1f7985f74df24e7c9d63b | CLEAN, 2 MINOR (session model, run by orchestrator); both fixed: F1 a cut entry name (`changes::heading`) or PR title (`PullRequestRow`) reads whole in a tooltip, shared `Tooltip::whole_label` + `Ellipsized::is_cut` + `cdk::tooltip::open_if`, test-first (tdd/cycle-log.md); F2 `SMALLEST_WINDOW` doc comment says M3 moved the draft actions and the draft-row entries cover only the 640×480 overhang — fixed, prose only |
+| M3 B (conformance) | 1 | a787013152cc093ee0c41d8a50d3aa8d06164f45:7f6e59075f9edc1252c1f7985f74df24e7c9d63b | CLEAN, 2 MINOR (sonnet, run by orchestrator); Verify: 34 crops, no unlinked FAIL, #1519/#1539/#1540 exist, 11 crops viewed match verdicts, new unit tests and review_tab_fits pass. F1, F2 declined (see Declined review findings) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | B | F1 02-header crop is two stacked frames and the PR title is not visible; optional plain header crop | Optional per the reviewer, who matched the crop to check 02's verdict; re-shooting needs a release build on Xvfb and a new capture, not a few minutes |
+| M3 | B | F2 cycle-log red run is one combined run (0 passed, 4 failed) | Reviewer: no fix needed; one filtered run over the four tests is a valid red |
 
 ## Handover
 

@@ -208,20 +208,26 @@ impl<'a, M: Clone + 'a> From<ReviewPanelRow<'a, M>> for Element<'a, M> {
         if parts.not_in_diff {
             head = head.push(Tag::new(NOT_IN_DIFF, r.error));
         }
-        head = head.push(Space::new().width(Length::Fill));
-        if parts.actions {
-            if let Some(message) = row_.on_edit {
-                head = head.push(Button::text("Edit", r).on_press(message));
-            }
-            if let Some(message) = row_.on_delete {
-                head = head.push(Button::text("Delete", r).on_press(message));
-            }
-        }
         let mut body = column![
             head,
             LineClamped::<M>::new(row_.text.into_owned(), TypeRole::Body, 1)
         ]
         .spacing(spacing::XS);
+        // On a row of their own, under the text, as a Sent row's are: beside a path's lines and the
+        // tag they were pushed past the drawer's 360 px edge (#1276 visual pass, check 08). A
+        // draft has no reply, so the row keeps its one height.
+        if parts.actions {
+            let mut actions = row![Space::new().width(Length::Fill)]
+                .spacing(spacing::SM)
+                .align_y(Alignment::Center);
+            if let Some(message) = row_.on_edit {
+                actions = actions.push(Button::text("Edit", r).on_press(message));
+            }
+            if let Some(message) = row_.on_delete {
+                actions = actions.push(Button::text("Delete", r).on_press(message));
+            }
+            body = body.push(actions);
+        }
         match (row_.reply, parts.whole_reply) {
             (Some(reply), true) => {
                 body = body.push(Text::new(reply, TypeRole::Body, r).muted());
@@ -351,6 +357,33 @@ mod tests {
             assert!(!parts.actions, "{status:?} offers neither");
         }
         assert!(!row_of(Status::Draft).parts().actions, "without handlers");
+    }
+
+    /// #1276 visual pass, check 08: a draft row's Edit and Delete are painted inside the drawer's
+    /// 360 px and the row's one height, however long the path and lines label before the tag.
+    #[test]
+    fn a_draft_rows_actions_fit_the_drawer_width_and_the_row_height() {
+        let row = ReviewPanelRow::new(
+            "src/engine/scheduler.rs \u{b7} Lines 32\u{2013}34",
+            "Nit: add a doc comment",
+            Status::Draft,
+            LIGHT,
+        )
+        .on_edit("edit".to_owned())
+        .on_delete("delete".to_owned());
+        let painted = super::super::test_support::Mounted::new_in(row, Size::new(360.0, 2_000.0))
+            .painted_text();
+        for label in ["Edit", "Delete"] {
+            let at = painted
+                .iter()
+                .find(|p| p.content == label)
+                .unwrap_or_else(|| panic!("{label} painted: {painted:?}"));
+            assert!(
+                at.bounds.x + at.bounds.width <= 360.0 && at.bounds.y + at.bounds.height <= HEIGHT,
+                "{label} inside a 360 x {HEIGHT} row: {:?}",
+                at.bounds
+            );
+        }
     }
 
     #[test]

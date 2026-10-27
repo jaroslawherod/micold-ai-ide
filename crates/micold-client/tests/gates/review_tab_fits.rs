@@ -122,8 +122,9 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 ///
 /// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
 /// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
-/// filed as #1474 rather than fixed here (feature 1276 changes no review layout, spec § Out of
-/// Scope).
+/// filed as #1474 rather than fixed here. M3's visual-pass fixes moved a draft row's Edit and
+/// Delete onto their own line; the draft-row entries cover only that line's overhang at 640×480
+/// (it fits at 1280×800), not a new layout of the review tab.
 const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     (
         &[
@@ -257,11 +258,25 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "#1474: a draft or reply row past a narrow drawer",
     ),
     (
-        &["drawer-replies"],
+        &["drawer-drafts", "drawer-replies"],
         "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/2",
         "right",
         "base",
-        "#1474: a reply row's controls past a narrow drawer",
+        "#1474: a draft or reply row's controls past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/1/0/2",
+        "right",
+        "base",
+        "#1474: a draft row's Edit and Delete past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/2/0/2",
+        "right",
+        "base",
+        "#1474: a draft row's Edit and Delete past a narrow drawer",
     ),
     (
         &["drawer-drafts", "drawer-replies"],

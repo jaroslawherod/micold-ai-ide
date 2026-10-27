@@ -142,6 +142,22 @@ struct Shaped {
     path: bool,
 }
 
+impl<M> Ellipsized<M> {
+    /// The whole text, before any cut.
+    pub(crate) fn content(&self) -> &str {
+        &self.content
+    }
+
+    /// Whether the label laid out in `tree` was cut: it shows less than its whole text. Pass it to
+    /// `Tooltip::open_if` around the label, so the cut one reads whole on hover (#1276).
+    pub(crate) fn is_cut(tree: &Tree) -> bool {
+        let state = tree
+            .state
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, Shaped>>();
+        state.key().is_some_and(|key| key.source != state.fitted)
+    }
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Ellipsized<Message>
 where
     Renderer: text::Renderer<Font = Font>,

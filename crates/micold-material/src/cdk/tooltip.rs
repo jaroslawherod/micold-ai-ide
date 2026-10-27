@@ -91,6 +91,9 @@ pub struct Tooltip<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     /// What the trigger describes, when the same place in the tree can come to describe another
     /// thing.
     subject: Option<u64>,
+    /// Asked of the trigger's tree before the panel opens: `None` opens it whenever the wait is
+    /// over.
+    open_if: Option<fn(&Tree) -> bool>,
 }
 
 impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
@@ -107,7 +110,15 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
             gap: 0.0,
             wait: Wait::Hover,
             subject: None,
+            open_if: None,
         }
+    }
+
+    /// Open only while `predicate` holds of the trigger's widget tree: a label cut with "…" reads
+    /// whole on hover, and one shown whole has no panel (`Ellipsized::is_cut`, #1276).
+    pub fn open_if(mut self, predicate: fn(&Tree) -> bool) -> Self {
+        self.open_if = Some(predicate);
+        self
     }
 
     /// The space between the trigger and the panel.
@@ -381,6 +392,7 @@ where
             let state = tree.state.downcast_ref::<State>();
             (state.open, state.pointer)
         };
+        let open = open && self.open_if.is_none_or(|holds| holds(&tree.children[0]));
         let mut children = tree.children.iter_mut();
 
         let content = self.content.as_widget_mut().overlay(
