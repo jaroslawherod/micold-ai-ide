@@ -15836,10 +15836,10 @@ mod jira_status_driver {
             worktree.dir_name = "project-thread-t2a600".into();
             worktree.branch = Some("feat/ABC-42_login".into());
         };
-        let mut rig = rig();
-        branch_only(&mut rig.app);
-        after_update(&mut rig);
-        assert_eq!(rig.source.status_calls(), vec![vec!["ABC-42".to_string()]]);
+        let mut on = rig();
+        branch_only(&mut on.app);
+        after_update(&mut on);
+        assert_eq!(on.source.status_calls(), vec![vec!["ABC-42".to_string()]]);
         for off in [
             |app: &mut App| app.core.settings.jira_enabled = false,
             |app: &mut App| app.core.settings.jira_connections.clear(),

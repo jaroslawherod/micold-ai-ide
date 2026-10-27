@@ -409,11 +409,15 @@ fn a_row_shows_the_boards_status_and_its_stale_flag() {
     };
     let form = form(vec![jira("ABC-1", 1), jira("ABC-2", 2)], Vec::new(), "");
     let mut board = StatusBoard::default();
-    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()]).unwrap();
+    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()], Vec::new()).unwrap();
     board.apply(
         epoch,
         &keys,
-        Ok(vec![("ABC-1".to_string(), status("In Review"))]),
+        Ok(vec![micold_core::jira_status::KeyedIssue {
+            key: "ABC-1".to_string(),
+            status: status("In Review"),
+            summary: None,
+        }]),
         std::time::Duration::ZERO,
     );
     let (rows, _) = micold_client::ui::issue_rows_with(&form, &board);
@@ -421,7 +425,7 @@ fn a_row_shows_the_boards_status_and_its_stale_flag() {
     assert!(!rows[0].status_stale);
     assert_eq!(rows[1].status.as_ref().unwrap().name, "Listed");
 
-    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()]).unwrap();
+    let (epoch, keys) = board.begin(vec!["ABC-1".to_string()], Vec::new()).unwrap();
     board.apply(
         epoch,
         &keys,
