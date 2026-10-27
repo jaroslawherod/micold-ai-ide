@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
 - **Phase**: milestone M3
-- **Next step**: run M3 (test-strength remediation from tdd/verification.md), then a new close unit
+- **Next step**: M3 PR open; then a new close unit
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001, T003–T008 | full | One-line header | #1487 | merged |
 | M2 | T002, T009–T018 | full | Switch control in strip | #1505 | merged |
-| M3 | T021–T028 | full | Gates pinned against the surviving mutants of tdd/verification.md | | pending |
+| M3 | T021–T028 | full | Gates pinned against the surviving mutants of tdd/verification.md | | open |
 
 ## Decisions
 
@@ -46,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 525d2bab4d47e0f8aa2a29f66b10650bbafa6b9b:15d62e891bb1292c94c58b585a0a975869c291dd | CLEAN (3 MINOR; ordering fixed, others left) |
 | M2 A (code-review high) | 1 | 1867cfd07858d4a7c36be3d0522c69194ce1ee37:d7e4a2ae4bdc3e2f1d70308c399b237583c386dd | CHANGES: 1 MAJOR (switch slot child list varied; fixed, always two children), 2 MINOR |
 | M2 B (conformance, sonnet) | 1 | same | CHANGES: BLOCKER was a mid-edit tree (fixed: cap +SM padding); MAJOR tiled gate weak (strengthened: position check); showcase_completeness red found by scoped gate (exemption for GiveWayRow) |
+| M3 A (code-review high) | 1 | 9f4ce8128edb3d7d01c34c7ed9cf53444ece8d51:2079d3bb224be245bbfe3dca4bb95f26f30a9193 | CLEAN (2 MINOR: message wording fixed; recorded-value provenance left) |
+| M3 B (conformance, sonnet) | 1 | 992ed2d4a5b293fad342ed7d0714ac784d401d17:2079d3bb224be245bbfe3dca4bb95f26f30a9193 | CLEAN; Verify 163 + 414 passed; mutants T023, T026 fail their tests (1 MINOR left) |
 
 ## Declined review findings
 
