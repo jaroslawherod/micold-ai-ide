@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1400
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
-- **Phase**: plan
-- **Next step**: plan review round 3 (scoped, sonnet; last counted round, a BLOCKER/MAJOR there escalates, category 5); then tasks unit. D1 still provisional: plan keeps US6 separable in M4 (plan.md §US6 separability).
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (orchestrator dispatches); after CLEAN: specs-only gate, push, design PR. T061 (Polish, no code) left to the close unit.
 
 ## Pull requests
 
@@ -21,6 +21,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | planned |
+| M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | planned |
+| M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
+| M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
+| M5 | T040–T049 | full | Advanced GitHub search query with its errors (US3, US4) | | planned |
+| M6 | T050–T052 | light | Remember advanced mode and last run query (US2 AS3, AS4) | | planned |
+| M7 | T053–T060 | full | Assignee, author, milestone (US6; provisional D1) | | planned |
 
 ## Decisions
 
@@ -36,7 +43,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | ef51560eb3b59349331931d5814bbada52ed7dff:6929b5aec40be28081e16fd917d82c2cc3390bad | CLEAN (scoped re-review, sonnet): round-1 F1–F3 all fixed; F1 MINOR (Edge case 'Switching source to Jira and back': what reloads in advanced mode) fixed, re-runs the last run query, not the draft |
 | Plan review | 1 | dca80a0048327e23892aea730395cc936f33c90d:300a7b70807ff667b356bcdc9dcd3528cc1373e4 | CHANGES: F1 MAJOR (filtered search beyond appends raw typed text under ISSUE_ADVANCED, `OR`/`)`/`repo:` escape the filter) fixed: typed text enters as quoted words, `None` when no word, search-rules §4 rows for `crash OR ui`, `a)`, `repo:x` + core tests, R4/data-model updated; F2 MINOR (Closed chip vs status-board status) fixed: Closed wins, not stale, selector-ui §3 + issue_rows_show_all_text arm |
 | Plan review | 2 | 1df92c5dd1194b03f86ff53cb2d49ca2d9e61d4d:062d5a81eaec848b15a02f648cb52f8e2be7d71c | CHANGES (scoped, sonnet): round-1 F1 and F2 confirmed fixed; F1 MAJOR (typed `\` could close its own quote under ISSUE_ADVANCED, unverified) fixed: `\` dropped like `"`, §4 row `a\ OR b` + `None` rows, R4/data-model updated, backslash probe added to R7/M1 fixture probe; F2 MINOR (R4 Rejected list order a,c,b) fixed |
-| Plan review | 3 | 7ef6a6ed83e2180a6e75229f426245b7253c762a:f3a47188b3059b604added461442c2a427b087ef | pending (scoped re-review of round-2 fixes; last counted round) |
+| Plan review | 3 | 7ef6a6ed83e2180a6e75229f426245b7253c762a:f3a47188b3059b604added461442c2a427b087ef | CLEAN (scoped re-review, sonnet): round-2 F1 and F2 confirmed fixed; no new contradiction |
+
+## Notes
+
+- Tasks unit: M1 is Foundational + US1's core only (no UI), as 1186's M1: Setup + Foundational + all of US1 is ~30 tasks and over 800 lines (milestones.md rule 3); split at the core/client seam. US2 split along its scenarios: basic (M3) and advanced (M6). US3 and US4 share M5 (a Run without its refusal display would be half-wired, rule 6). The plan's 4-milestone delivery order is superseded by tasks.md §Milestones, as the plan says.
+- `speckit-analyze` is a forked skill not loadable in this cloud unit; checked inline instead: FR-001–FR-027, SC-001–SC-007 and quickstart §B B1–B18 each map to a task and a milestone; no CRITICAL or HIGH found.
+- checklists/requirements.md: ticked "No [NEEDS CLARIFICATION] markers remain" (spec has none; D1 is a recorded provisional clarification, tracked in Open escalation). For the tasks reviewer to confirm.
 
 ## Declined review findings
 
