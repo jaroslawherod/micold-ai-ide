@@ -34,5 +34,5 @@
 - The format (TOML) and the file/`--config` names appear in the spec on purpose: the user decided
   them (Clarifications) and they are the user-visible contract, not an implementation choice.
 - FR-016 names protocol messages being retired; kept because the issue split needs it traceable.
-- Open questions are not spec markers: they are recorded in research.md and the PR body for the
-  user's review (handover: skip `/speckit-clarify`).
+- The review questions were answered on 2026-10-27 and are recorded in spec.md Clarifications
+  (handover: skip `/speckit-clarify`); research.md §4 lists what the implementing issues verify.

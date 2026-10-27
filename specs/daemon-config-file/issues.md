@@ -72,8 +72,8 @@ Common footer for every body:
 - **Tasks**: T021–T024
 - **Body**:
   A pure `render(&DaemonSettings, Kind) -> String` with golden files per kind, stable output (write
-  only on change), validated with the shared type before delivery; errors shown in Settings →
-  Daemons.
+  only on change), validated with the same check as `micold-daemon config check` before delivery; an invalid file
+  is not delivered and its errors show in Settings → Daemons.
 
 ## 5. feat: deliver the configuration to host and SSH daemons
 
@@ -113,8 +113,9 @@ Common footer for every body:
 - **Tasks**: T040–T045
 - **Body**:
   The PAT store keys tokens by name (`github-pat/<name>`), not by repository, and the one-repository
-  reach refusal goes. A token has an optional `repos` filter (`owner/repo`, `owner/*`); two tokens
-  with the same pattern are refused. Settings shows each token's reach. Existing per-repository
+  reach refusal goes. A token has an optional `repos` filter (`owner/repo`, `owner/*`). Equally
+  specific tokens are not refused: the first in Settings (= file order) wins. Settings shows each
+  token's reach and, per repository, which token it uses and which are shadowed. Existing per-repository
   tokens migrate to a token with filter `owner/repo` (no behaviour change).
 
 ## 9. feat: the daemon's credential helper chooses the token from the configuration
@@ -126,7 +127,7 @@ Common footer for every body:
   `micold-daemon git-credential` becomes stateless: it reads the config, the token file and a reach
   cache at each call, so a replaced token is used by the next git command. The daemon discovers
   reach with `GET /user/repos` (paginated; new `ureq` dependency, workspace version), cached by token
-  fingerprint, refreshed at load, on change, every 15 min and on a miss. Most specific filter wins.
+  fingerprint, refreshed at load, on change, every 15 min and on a miss. Most specific filter wins; ties go to the first in the file.
   Sandboxes keep clearing inherited helpers; host/SSH fall back to the user's own helpers when no
   token matches. `GitCredentialGrant`/`Revoke`/`Targets` are retired (protocol bump).
 
@@ -149,9 +150,14 @@ Common footer for every body:
 - **Body**:
   `[[ai.cli]]` per CLI: `enabled`, `version` (overrides the build's pinned table, version only),
   `args`, `model`, `api_base_url`, `env`, `sign_in_file` + `sign_in_writable`, `api_key_file`
-  (never inline, set as the CLI's key variable at session start), `settings_file` and `place`
-  (sandbox homes only). Includes AI sign-in delivery for every kind (container writable single-file
-  mount, pod directory Secret, host/SSH the CLI's own location). Rule (research D9): deployment
+  (never inline; Claude Code reads it on each use through `apiKeyHelper`, so a replaced key reaches
+  running sessions; other CLIs read it at session start), `settings_file` and `place` (sandbox homes
+  only). Includes AI sign-in delivery for every kind: container writable single-file mount; pod
+  directory Secret, read-only — a refreshed sign-in is lost on pod restart (known limit, in the
+  Kubernetes guide); host/SSH: a configured sign-in wins over the machine's, through a per-daemon
+  config dir (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode `XDG_DATA_HOME`), and the machine's own
+  sign-in file is never overwritten. Verify per CLI: macOS Keychain for Claude Code, refresh in place
+  vs by rename (research §4). Rule (research D9): deployment
   settings move to the file; settings changed live in the UI (`default_ai_cli`, tool server, …)
   stay in `settings.json`; per-session generated files stay generated. Configured args/env add to
   the app's own, never replace them.
@@ -163,10 +169,11 @@ Common footer for every body:
 - **Tasks**: T068–T077
 - **Body**:
   `[startup]`: `script_file`, `shell`, `timeout_secs`, `on_failure` (`refuse`|`warn`), `run`
-  (`every_start`|`once`), `env_file` (secret), `export_env`. `micold-daemon` runs it before it
+  (`every_start`|`once_per_container`; on host/SSH once per data directory), `env_file` (secret,
+  visible to the script only), `export_env`. `micold-daemon` runs it before it
   listens, as its own user (never root in a sandbox), on every start path (so boot and SSH agree).
   Exports are captured with the environment-include engine (`env -0` diff) and reach the daemon and
-  its sessions; environment-include still applies per session on top. Output goes to the daemon
+  its sessions; an `env_file` value reaches them only if the script explicitly exports it; environment-include still applies per session on top. Output goes to the daemon
   log; a failure shows in the app with its output. A change needs a restart, which Settings says.
   Settings → Daemons: file picker or inline editor.
 

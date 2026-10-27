@@ -36,6 +36,25 @@ repository."
   configuration format, it allows comments, `serde_yaml` is unmaintained and JSON has no comments).
 - Q: Does a changed token need a daemon restart? → A: No (decided: keeps today's behaviour). The
   daemon notices a changed configuration or secret file and re-reads it.
+- Q: May the file pin an AI CLI version other than the build's? → A: Yes, the version only; where
+  the CLI is installed from stays the application's choice.
+- Q: How does a replaced AI API key reach a running CLI? → A: Through the CLI's own key helper where
+  one exists (Claude Code's `apiKeyHelper` reads the key file on each use); other CLIs pick the new
+  key up at the next session start.
+- Q: Two tokens match a repository equally (two unfiltered tokens, or the same filter)? → A: The
+  first in the file wins; file order is the order in Settings. The application shows which token
+  each repository uses. Nothing is refused for an overlap.
+- Q: On the host process or the user's SSH host, a configured AI sign-in and one already on that
+  machine: which wins? → A: The configured one. The machine's own sign-in file is never overwritten
+  or removed: the CLI is pointed at the configured sign-in for the daemon's sessions instead.
+- Q: Is a configuration checked before it is delivered? → A: Yes: the application runs the same
+  check as `micold-daemon config check` and shows its errors in Settings.
+- Q: Pod sign-ins? → A: They stay read-only, as today: a sign-in the CLI refreshes in a pod is lost
+  when the pod restarts. A documented limit.
+- Q: Start-script run policy name? → A: `once_per_container`. On a host or SSH daemon it means once
+  per data directory.
+- Q: Do the start script's secret file values reach sessions? → A: No. They are visible to the
+  script only; a variable reaches the daemon and its sessions only when the script exports it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -92,7 +111,10 @@ two, and run `gh pr list` in each; all four succeed with no further input.
    reaches owner/repo" (sandboxes), never with an interactive prompt.
 4. **Given** a session in a repository a token reaches, **When** `gh` runs in it, **Then** `gh` is
    authenticated with that token.
-5. **Given** a token the user replaces in Settings, **When** the next git or `gh` command runs in a
+5. **Given** two tokens that both reach `acme/a` with no filter, **When** a session in `acme/a`
+   pushes, **Then** the token listed first in Settings is used, and Settings shows that `acme/a`
+   uses it.
+6. **Given** a token the user replaces in Settings, **When** the next git or `gh` command runs in a
    running session, **Then** it uses the new token; no daemon or session restart is needed.
 
 ---
@@ -116,7 +138,10 @@ push.
    exactly those three, cloning the ones that are absent when a clone root is configured.
 2. **Given** a configuration naming the Claude Code sign-in file, **When** a Claude Code session
    starts, **Then** it is signed in and a refreshed sign-in is written back to that file.
-3. **Given** a project the user adds in the application while a daemon runs, **When** it is added,
+3. **Given** a host or SSH daemon whose machine already has its own Claude Code sign-in and a
+   configuration naming a different one, **When** a session starts, **Then** it uses the configured
+   sign-in, and the machine's own sign-in file is unchanged afterwards.
+4. **Given** a project the user adds in the application while a daemon runs, **When** it is added,
    **Then** the daemon serves it at once and the next generated configuration file includes it.
 
 ---
@@ -145,7 +170,9 @@ that version and model, uses the key, and applies the settings.
    version is installed; with no version configured, the build's pinned version is installed.
 3. **Given** a CLI with an API key file and no sign-in file, **When** a session of it starts,
    **Then** the CLI is authenticated with that key, and the key never appears in the configuration,
-   a log line or the session's command line.
+   a log line or the session's command line. **When** the key file is replaced, **Then** a running
+   Claude Code session uses the new key on its next request; other CLIs use it from their next
+   session.
 4. **Given** a CLI with extra launch arguments, a model and environment variables, **When** a
    session of it starts, **Then** it is launched with them, after the arguments the application
    itself needs (session id, tool server, hooks) and never in place of them.
@@ -181,7 +208,7 @@ script's output.
 3. **Given** a script that fails or times out and `on_failure = "refuse"`, **When** the daemon
    starts, **Then** it does not start, and the application shows the exit status and the script's
    output; with `on_failure = "warn"` it starts and shows the same as a warning.
-4. **Given** `run = "once"`, **When** the daemon restarts and the script is unchanged, **Then** the
+4. **Given** `run = "once_per_container"`, **When** the daemon restarts and the script is unchanged, **Then** the
    script does not run again; when the script or its secret file changed, it runs again.
 5. **Given** a changed start script, **When** the application delivers it to a running daemon,
    **Then** it does not re-run; Settings says a restart is needed to apply it.
@@ -207,8 +234,14 @@ appears anywhere in it.
   reports that credential as unavailable, and uses it as soon as the file appears.
 - A Kubernetes Secret is updated: the pod sees the new file without a restart (directory mounts, not
   single-file mounts, which Kubernetes never updates).
-- Two tokens match a repository equally (same filter specificity): the configuration is refused at
-  load, naming both.
+- Two tokens match a repository equally (same filter, or both unfiltered): the first in the file
+  (the Settings order) wins; Settings shows which token each repository uses and that the other is
+  shadowed there.
+- A host daemon is given a sign-in while the user is signed in to the same CLI on that machine: the
+  daemon's sessions use the configured sign-in; the user's own CLI, run outside the application,
+  keeps its own.
+- The start script's secret env file defines `NPM_TOKEN` and the script does not export it: no
+  session sees it.
 - A token expires: it is no longer handed to git or `gh` from its expiry on, and the application
   shows the expiry as today.
 - The user's own SSH host already has `gh` signed in and a git credential helper: with no token in
@@ -219,7 +252,7 @@ appears anywhere in it.
   shows the last 200 lines.
 - A start script tries to reach host credentials from inside a sandbox: there are none to reach;
   it sees only the files the configuration names and its own secret env file.
-- A start script `run = "once"` fails: no marker is written, so the next start runs it again.
+- A start script `run = "once_per_container"` fails: no marker is written, so the next start runs it again.
 - A start script and the environment-include setting both set a variable: the environment-include
   value wins for the session (it is resolved later and per directory).
 - A daemon from an older build reads a configuration from a newer application: the schema version
@@ -246,8 +279,9 @@ appears anywhere in it.
 - **FR-007**: The configuration MUST be able to list any number of GitHub tokens, each with an
   optional repository filter (`owner/repo`, `owner/*`), and no repository is required.
 - **FR-008**: The daemon MUST learn which repositories each token reaches from GitHub, keep the last
-  answer, and choose for a repository the matching token with the most specific filter; equal
-  specificity MUST be refused at load.
+  answer, and choose for a repository the matching token with the most specific filter; among equally
+  specific matches the first in the file (the Settings order) MUST win, and the application MUST
+  show which token each repository uses.
 - **FR-009**: The one-repository refusal of #1002 MUST be removed; the application MUST instead show
   which repositories each token reaches.
 - **FR-010**: Git in every session MUST use the chosen token through the daemon's credential helper;
@@ -264,7 +298,14 @@ appears anywhere in it.
   own settings files to place. The offered list replaces today's per-kind selections.
 - **FR-013a**: The configuration MUST NOT hold an API key, sign-in or other secret value for an AI
   CLI; each is named by file (FR-004). A CLI MUST NOT be given both a sign-in file and an API key
-  file unless the CLI documents which of the two wins.
+  file unless the CLI documents which of the two wins. A replaced API key file MUST reach a running
+  session through the CLI's key helper where it has one (Claude Code `apiKeyHelper`), else the next
+  session.
+- **FR-013e**: On every kind a configured sign-in MUST win over a sign-in already on that machine,
+  and the daemon MUST NOT overwrite, move or remove the machine's own sign-in file: it points the
+  CLI's sessions at the configured sign-in instead.
+- **FR-013f**: The application MUST run the same validation as `micold-daemon config check` before
+  it delivers a configuration, and show any error in Settings without delivering.
 - **FR-013b**: Configured launch arguments, model and environment MUST add to what the application
   passes a session (session id, tool server binding, hook settings), never replace or remove it.
 - **FR-013c**: The CLI's own settings files MUST be placed only in a sandbox's home (container,
@@ -284,14 +325,16 @@ appears anywhere in it.
 - **FR-018**: The user guide MUST document the file, every key, and the per-kind locations in the
   same change that ships each part.
 - **FR-019**: The configuration MAY name a start script by file, with its shell, a timeout, a
-  failure policy (`refuse` or `warn`), a run policy (every start, or once until the script or its
-  secret file changes) and a secret `KEY=VALUE` file the script sees. No script content and no
+  failure policy (`refuse` or `warn`), a run policy (`every_start`, or `once_per_container`: once until the
+  script or its secret file changes — once per container, and on a host or SSH daemon once per data
+  directory) and a secret `KEY=VALUE` file only the script sees. No script content and no
   secret value is inline.
 - **FR-020**: The daemon MUST run the start script before it serves any client, the same way on
   every start path of a kind (container boot and SSH bridge alike), as the daemon's own user —
   never root in a sandbox.
 - **FR-021**: When `export_env` is on, the variables the script exports MUST reach the daemon and
-  every session it starts; the environment-include setting is still applied per session on top.
+  every session it starts; a value from the secret env file MUST reach them only if the script
+  explicitly exports it; the environment-include setting is still applied per session on top.
 - **FR-022**: The script's output MUST go to the daemon log; on failure or timeout the application
   MUST show the exit status and the end of the output, and with `refuse` the daemon MUST NOT start.
 - **FR-023**: A changed start script MUST NOT re-run in a running daemon; the application MUST say

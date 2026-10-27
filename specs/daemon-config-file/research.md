@@ -144,10 +144,11 @@ client. No new crate is needed.
   holds no secret). Refreshed at load, when the token file changes, every 15 min, and on a miss
   (a repository not in the cache) at most once a minute per token.
 - **Choice for a repository**: candidates are tokens whose filter matches (or that have none) and
-  whose reach includes it. Rank: exact `owner/repo` filter > `owner/*` filter > no filter. Two
-  tokens with the **same pattern** are refused at load (FR-008). Two unfiltered tokens that both
-  reach a repository cannot be detected at load: the first in file order wins and the diagnostic
-  names the shadowed one (open question Q3).
+  whose reach includes it. Rank: exact `owner/repo` filter > `owner/*` filter > no filter. Among
+  equally specific candidates (the same pattern on two tokens, or two unfiltered tokens) **the first
+  in the file wins**; the file's order is the Settings order (user answer, replaces the handover's
+  "equal specificity → refuse"). Nothing is refused at load for an overlap. Settings and the
+  diagnostic show, per repository in a token's reach, which token is used and which are shadowed.
 - **Who calls GitHub** (verified: the daemon has no outbound HTTPS client — `ureq` 3.4 with
   `rustls` is a workspace dependency used only by `micold-client`, `Cargo.toml:28`,
   `micold-client/Cargo.toml:43`; `micold-daemon/src/http.rs` is a loopback *server*): the daemon
@@ -209,24 +210,41 @@ session, because they carry per-session secrets.
 | Setting | Goes to | Notes |
 |---|---|---|
 | Offered CLIs | file `ai.cli[].enabled` | replaces `AiCliSelection`, `KubeDraft.providers` and the provisioning selection; `offered.json` becomes derived (the daemon offers `enabled` CLIs that are installed or on `PATH`) |
-| Version | file `ai.cli[].version` | optional; absent = `AiCliTable::pinned()`. The package name and the registry stay fixed by the table: the file can choose a version, never a package or a source (keeps 806 FR-013's "no user text reaches a script" except a version that must match `^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$`). Open question Q1 |
+| Version | file `ai.cli[].version` | optional; absent = `AiCliTable::pinned()`. The package name and the registry stay fixed by the table: the file can choose a version, never a package or a source (keeps 806 FR-013's "no user text reaches a script" except a version that must match `^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$`). Decided: allowed (user answer 1) |
 | Default CLI | stays `settings.json` `default_ai_cli` | live UI setting; the file's `ai.default` is only the initial value a fresh daemon writes into `settings.json` when it has none |
 | Launch args | file `ai.cli[].args` | appended after the provider's own args and before the tool-server binding's (FR-013b); the daemon refuses args it owns (`--session-id`, `--resume`, `--settings`, `--mcp-config`, structured-mode args) at load |
 | Model | file `ai.cli[].model` | the default when a session's `ModelChoice` is `Default`; the per-session choice still wins; refused at load for a CLI without model args (only Claude Code today) |
 | API base URL | file `ai.cli[].api_base_url` | set as the provider's documented variable (Claude `ANTHROPIC_BASE_URL`, Codex `OPENAI_BASE_URL`); refused for a CLI with none |
 | CLI env | file `ai.cli[].env` | merged after `launch_env`, before the session's own variables |
 | Sign-in | file `ai.cli[].sign_in_file`, `sign_in_writable` | replaces `CredentialLayout.ai_cli_auth` and the kube `SignIn` Secret; refused for Copilot and Pi (no shareable file) |
-| API key | file `ai.cli[].api_key_file` | read at session start into the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never on the command line; rotation reaches the next session (Q2) |
+| API key | file `ai.cli[].api_key_file` | read at session start into the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never on the command line. **Rotation** (user answer): through the CLI's own key helper where one exists — Claude Code: the daemon's per-session `--settings` (`micold-daemon/src/hooks.rs:663 settings_json`, typed `SettingsDoc`) gains `"apiKeyHelper": "<daemon> ai-key claude_code"`, which prints the key file's content on each use, and `ANTHROPIC_API_KEY` is then not set. Codex and OpenCode have no per-use helper we can rely on: the key is read at session start, so a replaced key reaches the next session. Issue 11 confirms each against the pinned CLI version |
 | CLI settings files | file `ai.cli[].settings_file`, `[[ai.cli.place]]` | sandbox kinds only (FR-013c): copied into the CLI's config dir in the sandbox home at session start if changed; host/SSH refuse at load, the user's own files are the configuration there |
 | Tool server switch, cross-session access, Pi activity component | stay `settings.json` | live UI settings |
 | Hook settings, MCP binding | stay per-session, generated | carry per-session tokens |
 
-**Sign-in placement**: `sign_in_file` names where the daemon finds the sign-in. If it is not the
-CLI's own location (`sandbox_auth_file(home)`), the daemon links the CLI's location to it in a
-sandbox home. For a writable sign-in in a container the delivery keeps today's single-file bind
+**Sign-in placement (sandboxes)**: `sign_in_file` names where the daemon finds the sign-in. If it is
+not the CLI's own location (`sandbox_auth_file(home)`), the daemon links the CLI's location to it in
+the sandbox home. For a writable sign-in in a container the delivery keeps today's single-file bind
 mount of the host's file at the CLI's own location (so a refreshed sign-in reaches the host), and
-the file names that location. On host/SSH the configured file is honoured only when the CLI's own
-file is absent; otherwise the host's sign-in is used and the diagnostic says so (Q4).
+the file names that location. Pods keep read-only Secrets (user answer): a sign-in the CLI refreshes
+in a pod is lost when the pod restarts — a known limit, documented in the Kubernetes guide.
+
+**Sign-in on host and SSH (user answer: the configured sign-in wins)**. The machine's own sign-in
+file must never be overwritten, moved or removed (FR-013e), so the daemon does not touch the CLI's
+default location. It gives the daemon's sessions of that CLI their **own config directory**
+`<data_dir>/ai/<id>/` that holds the configured sign-in, and points the CLI at it through the
+CLI's config-dir variable in that session's launch env only. Per CLI (verified in `provider.rs`):
+
+| CLI | Where the sign-in is read (code) | How the session is pointed elsewhere | Consequence |
+|---|---|---|---|
+| Claude Code | `~/.claude/.credentials.json` (`sandbox_auth_file`, `provider.rs:779`); dir from `CLAUDE_CONFIG_DIR` (`:612`, `config_dir` `:776`) | `CLAUDE_CONFIG_DIR=<data_dir>/ai/claude_code` with `.credentials.json` → the configured file | That dir is the whole Claude config: history, projects, `settings.json`. The daemon links the user's `~/.claude/settings.json`, `CLAUDE.md`, `agents/`, `commands/` into it (read-through links, never copies back), so only the sign-in differs. Sessions started before the switch keep resuming from `~/.claude` (their transcripts stay there; the daemon records which dir each session used). On macOS Claude Code keeps its sign-in in the Keychain, not this file (`docs/user-guide/sandboxed-daemon.md:462`) — issue 11 must verify whether `CLAUDE_CONFIG_DIR` changes that and, if not, refuse `sign_in_file` for a macOS host with a clear message. |
+| Codex | `$CODEX_HOME/auth.json`, else `~/.codex/auth.json` (`codex_sign_in`, `provider.rs:1669-1675`); a `CODEX_HOME` outside the home is not shared (feature 488) | `CODEX_HOME=<data_dir>/ai/codex` with `auth.json` → the configured file; the user's `config.toml`, `AGENTS.md` linked in | Same as Claude: history in the per-daemon dir. `<data_dir>` must be under the home for the existing sharing rule; on Linux/macOS it is (`~/.local/share/…`, `~/Library/…`), on Windows `%APPDATA%` is too. |
+| OpenCode | `$XDG_DATA_HOME/opencode/auth.json`, else `~/.local/share/opencode/auth.json` (`provider.rs:2234-2251`) | `XDG_DATA_HOME=<data_dir>/ai/opencode/data` on the OpenCode process | `XDG_DATA_HOME` is not OpenCode-specific: tools OpenCode runs inherit it. The daemon sets it on the CLI process only and restores the user's value for commands the CLI runs where OpenCode allows it (issue 11 verifies; if not, documented). |
+| Copilot, Pi | no shareable sign-in file (`sandbox_auth_file` → `None`, `:1124`, `:1527`) | — | `sign_in_file` refused (V7), as before. |
+
+A writable configured sign-in is linked, not copied, so a refresh writes through to the configured
+file; a CLI that replaces the file by rename would break the link, so issue 11 tests a refresh per
+CLI and falls back to copying the refreshed file back after the session when it does.
 
 **Placement over the daemon's per-session files**: Claude's per-session `--settings` (hooks) is a
 separate layer from `~/.claude/settings.json`, so a placed user `settings.json` and the hook layer
@@ -282,27 +300,33 @@ shims (`entrypoint.sh:55-62`).
   `std::env::set_var` before any thread is spawned (`main` builds the tokio runtime itself,
   `micold-daemon/src/main.rs:23,68`, so the script runs in `main` before that, single-threaded;
   `run_bounded` in `micold-core/src/process.rs:240` gives the timeout), and recorded in `<data_dir>/startup-env.json` (`0600`)
-  for the diagnostic (names only are shown, values never — they may hold secrets from `env_file`).
+  for the diagnostic (names only are shown, values never — a script may export a secret).
 - **Relation to environment-include — rule: keep both, layered.** The start script is
   *deployment*: once per daemon start, daemon-wide, may install and load secrets, lives in the
   config file. Environment-include is a *live UI setting*: per session, per directory (version
   managers), re-resolved on terminal restart, stays in `settings.json` (D9's rule). Session env
   order: daemon env (incl. start-script exports) → environment-include diff → `ai.cli[].env` →
   `session.env`/`secret_env` → the session's own variables. Later wins.
-- **`env_file`**: `KEY=VALUE` lines (no shell evaluation), loaded into the script's environment
-  only; they reach sessions only if the script exports them (they are in the attempt's dump, and
-  the baseline does not have them, so the diff carries them — documented, since that is the usual
-  intent of "load secrets").
+- **`env_file`** (user answer: visible to the script only): `KEY=VALUE` lines (names must be shell
+  identifiers; no shell evaluation). A value reaches the daemon and sessions **only if the script
+  explicitly exports it**. Mechanism: the values are passed into the attempt shell's environment and
+  the wrapper turns each into a plain, *unexported* shell variable before sourcing the script
+  (`v=$NAME; unset NAME; NAME=$v` for each name, POSIX sh); the `env -0` dump after the script then
+  lists a name only when the script ran `export NAME` (or `export NAME=…`). The baseline never sees
+  them, so the diff carries exactly the explicit exports. PowerShell: values are set as script
+  variables (`$NAME`), and the script exports with `$env:NAME = $NAME`.
 - **User**: the daemon's own user. In a sandbox that is the non-root uid the container or pod runs
   as; a script that needs root fails like any other command (no `sudo` in the image). Installs go
   to `$HOME/.local` and the mise shims, which the entrypoint already puts on `PATH`.
 - **What it can reach**: inside a sandbox, only what the sandbox has: the configured files under
   `/run/micold/…`, its `env_file`, the network the profile allows. No host credential is mounted
   for it.
-- **Run policy**: `every_start`, or `once`: marker `<data_dir>/startup.done` holding the SHA-256 of
+- **Run policy** (user answer: the name is `once_per_container`): `every_start`, or
+  `once_per_container`: marker `<data_dir>/startup.done` holding the SHA-256 of
   the script, the shell and the `env_file` contents; re-run when it differs; written only after a
-  success. (The user's sketch called it `once_per_container`; `once` is the same thing and also
-  fits host/SSH, where it means once per data directory. Q7.)
+  success. In a container or pod the marker lives in the container's data dir, so a new container
+  (or a pod with a fresh volume) runs it again. On a host or SSH daemon the same marker means **once
+  per data directory**.
 - **Failure**: non-zero exit, timeout (the script's whole process group is killed, as `run_bounded`
   does today) or spawn failure. Output (stdout+stderr) goes to the daemon log, line by line, under a
   `startup` target. With `refuse` the daemon writes `<data_dir>/startup-failure.json` (exit status,
@@ -318,24 +342,30 @@ shims (`entrypoint.sh:55-62`).
   "Edit" action opening an inline multi-line editor (the shared text-editor component; Principle
   VIII) whose text the app stores as `<data_dir>/daemons/<id>/startup.sh`.
 
-## 3. Open questions (for the PR review, not asked)
+## 3. Answered questions (user, 2026-10-27)
 
-- **Q1** May the file pin a CLI version different from the build's table (the user's sketch says
-  yes; 806 deliberately forbade it)? Proposed: yes, version only, registry and package fixed.
-- **Q2** API key rotation reaches only new sessions (a running CLI's env is fixed). Acceptable, or
-  use Claude Code's `apiKeyHelper` setting (reads per call) where a CLI offers one?
-- **Q3** Two unfiltered tokens reaching one repository: first in file order wins, or refuse once
-  reach shows the overlap?
-- **Q4** On the user's own host/SSH host, a configured sign-in vs the CLI's existing one: proposed
-  "existing wins, diagnostic says so". Or should the configured one win (via the CLI's config-dir
-  variable, which also moves the CLI's history)?
-- **Q5** `config check` on the client side: should Settings → Daemons run it before delivering (so
-  a bad hand edit never reaches a daemon), or only the daemon? Proposed (and in the contract):
-  both, through the shared type.
-- **Q6** Pod sign-ins stay read-only (a Secret cannot be written back), so a refreshed Claude
-  sign-in in a pod is lost on restart, as today. Keep, or copy into the pod volume at start?
-- **Q7** Start script run policy name: `once` (proposed; also fits host/SSH) or the sketch's
-  `once_per_container`?
-- **Q8** Start-script exports carry `env_file` secrets into every session (and so to the AI CLI).
-  Intended for "load secrets", but should `export_env` exclude variables that came from `env_file`
-  unless the script re-exports them under another name?
+Recorded in spec.md Clarifications; the decisions above already apply them.
+
+1. **AI CLI version**: the file may pin a version (version only; the install source stays the
+   application's). D9.
+2. **API key rotation**: the CLI's own helper where one exists (Claude Code `apiKeyHelper` reads the
+   key file on each use); other CLIs pick a new key up at the next session start. D9.
+3. **Two equally specific tokens**: the first in the file wins (file order = Settings order); the
+   application shows which token each repository uses. Replaces "equal specificity → refuse". D6.
+4. **Host/SSH sign-in conflict**: the configured sign-in wins; the machine's own sign-in file is never
+   overwritten — the CLI is pointed at the configured one per session. D9 (per-CLI table).
+5. **Validate before delivery**: the application runs the same check as `micold-daemon config
+   check` and shows errors in Settings.
+6. **Pod sign-ins**: stay read-only Secrets; a refreshed sign-in is lost on restart — documented as a
+   known limit.
+7. **Run policy name**: `once_per_container`; on host and SSH daemons it means once per data
+   directory. D12.
+8. **Start-script env**: `env_file` values are visible to the script only; a variable reaches the
+   daemon and sessions only when the script exports it. D12.
+
+## 4. Questions left for the implementing issues
+
+- Claude Code on macOS keeps its sign-in in the Keychain: does `CLAUDE_CONFIG_DIR` move it? (Issue 11;
+  if not, `sign_in_file` is refused on a macOS host.)
+- Does each CLI refresh its sign-in in place or by rename (decides link vs copy-back)? (Issue 11.)
+- Can OpenCode's `XDG_DATA_HOME` be kept from the commands it runs? (Issue 11.)

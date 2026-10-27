@@ -96,9 +96,11 @@ Projects added at runtime through `ProjectAdd` are served at once and appear in 
 |---|---|---|---|---|
 | `name` | string | required | all | Unique label; the Settings name; the PAT store file name. |
 | `token_file` | path (secret) | required | all | The token, optionally followed by an `expires_at=<unix>` line. |
-| `repos` | array of `"owner/repo"` \| `"owner/*"` | absent = every repo the token reaches | all | Narrows the token. Two tokens with the same pattern are refused (R1-style error naming both). |
+| `repos` | array of `"owner/repo"` \| `"owner/*"` | absent = every repo the token reaches | all | Narrows the token. |
 
-Choice for a repository: exact > `owner/*` > unfiltered; among unfiltered, file order (research D6).
+Choice for a repository: exact > `owner/*` > unfiltered; among equally specific tokens (same pattern,
+or both unfiltered) the first in the file wins — file order is the Settings order (research D6).
+Nothing is refused for an overlap; Settings and the diagnostic show which token each repository uses.
 The reach GitHub reports is cached in `<data_dir>/github-reach.json` by token fingerprint.
 
 ### `[ai]`
@@ -115,14 +117,14 @@ CLI ids: `claude_code`, `copilot`, `pi`, `codex`, `opencode`. A CLI with no entr
 |---|---|---|---|---|
 | `id` | CLI id | required | all | Unique. |
 | `enabled` | bool | `true` | all | Offered for new sessions (`AiCliSelection`, `KubeDraft.providers`, provisioning selection). Installed when the daemon is provisioned (S, C, K); on H, offered when on `PATH`. |
-| `version` | semver string | the build's pinned table | S, C, K | Version installed from the pinned package's registry; never a package name or source (research D9, Q1). Ignored on H with a warning. |
+| `version` | semver string | the build's pinned table | S, C, K | Version installed from the pinned package's registry; never a package name or source (research D9). Ignored on H with a warning. |
 | `args` | array of strings | `[]` | all | Appended after the CLI's own launch args, before the tool-server binding. Args the daemon owns (`--session-id`, `--resume`, `--settings`, `--mcp-config`, structured-mode args) are refused. |
 | `model` | string | absent | all | Default model when the session's choice is "default". Only for CLIs with a model argument (Claude Code); refused otherwise. |
 | `api_base_url` | URL | absent | all | Set as the CLI's endpoint variable (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`); refused for a CLI without one. |
 | `env` | table string→string | `{}` | all | Added to the CLI's launch environment (after `launch_env`). Must not hold secrets (use `api_key_file` or `[session.secret_env]`). |
-| `sign_in_file` | path (secret) | the CLI's own location under `home` | all | The sign-in (`CredentialLayout.ai_cli_auth`, kube `SignIn` Secret). Refused for `copilot` and `pi`. |
-| `sign_in_writable` | bool | `false` | all (K: must be `false`) | The CLI may refresh it in place. |
-| `api_key_file` | path (secret) | absent | all | Read at each session start into the CLI's key variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never on the command line. With `sign_in_file` also set, refused unless the CLI documents precedence. |
+| `sign_in_file` | path (secret) | the CLI's own location under `home` | all | The sign-in (`CredentialLayout.ai_cli_auth`, kube `SignIn` Secret). Refused for `copilot` and `pi`. Wins over a sign-in already on the machine; on H and S the daemon points its sessions at it with the CLI's config-dir variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_DATA_HOME` for OpenCode) and never touches the machine's own file (research D9). |
+| `sign_in_writable` | bool | `false` | all (K: must be `false`) | The CLI may refresh it in place. Pods: a Secret is read-only, so a refreshed sign-in is lost on pod restart (known limit). |
+| `api_key_file` | path (secret) | absent | all | Claude Code: read on each use through `apiKeyHelper` in the per-session settings, so a replaced key reaches running sessions. Others: read at each session start into the key variable (`OPENAI_API_KEY`), so a replaced key reaches the next session. Never on the command line. With `sign_in_file` also set, refused unless the CLI documents precedence. |
 | `settings_file` | path | absent | C, K | Placed as the CLI's user settings in the sandbox home (Claude `~/.claude/settings.json`, Codex `$CODEX_HOME/config.toml`, OpenCode `~/.config/opencode/opencode.json`). Refused on H and S (FR-013c). |
 | `place` | array of `{ file = path, as = relative path }` | `[]` | C, K | More files placed under the CLI's config dir (an MCP config, agents, commands). `as` must stay inside the dir; never a file the daemon writes per session. |
 
@@ -141,9 +143,9 @@ CLI ids: `claude_code`, `copilot`, `pi`, `codex`, `opencode`. A CLI with no entr
 | `shell` | path | unix `"/bin/sh"`; Windows `"powershell.exe"` | all | Runs `shell -c '. "$script"'` (sourced, so `export` works); PowerShell dot-sources. |
 | `timeout_secs` | integer 1–3600 | `300` | all | Then the process group is killed and the run counts as failed. |
 | `on_failure` | `"refuse"` \| `"warn"` | `"refuse"` | all | `refuse`: the daemon does not start; the app shows exit status and the last 200 lines. `warn`: starts, shows a warning. |
-| `run` | `"every_start"` \| `"once"` | `"every_start"` | all | `once`: skipped while `<data_dir>/startup.done` matches the hash of script, shell and `env_file`. |
-| `env_file` | path (secret) | absent | all | `KEY=VALUE` lines (no evaluation) in the script's environment only. |
-| `export_env` | bool | `true` | all | Variables the script exported reach the daemon and its sessions (before environment-include, research D12). |
+| `run` | `"every_start"` \| `"once_per_container"` | `"every_start"` | all | `once_per_container`: skipped while `<data_dir>/startup.done` matches the hash of script, shell and `env_file` — once per container; on H and S once per data directory. |
+| `env_file` | path (secret) | absent | all | `KEY=VALUE` lines (no evaluation), visible to the script only, as unexported shell variables. A value reaches the daemon and sessions only if the script runs `export NAME`. |
+| `export_env` | bool | `true` | all | Variables the script explicitly exported reach the daemon and its sessions (before environment-include, research D12). |
 
 Runs inside `micold-daemon` before it listens, as its own user (never root in a sandbox), on every
 start path. Output goes to the daemon log (`startup` target). Never re-run by a reload.
@@ -184,7 +186,7 @@ default = "claude_code"
 id = "claude_code"
 args = ["--permission-mode", "acceptEdits"]
 model = "claude-opus-5-5"
-# sign_in_file absent: ~/.claude/.credentials.json, the CLI's own
+# sign_in_file absent: the machine's own ~/.claude sign-in is used
 
 [[ai.cli]]
 id = "codex"
@@ -230,7 +232,7 @@ RUST_LOG = "info"
 
 [startup]
 script_file = "/home/jaro/.micold/remote/config/startup.sh"
-run = "once"
+run = "once_per_container"
 timeout_secs = 600
 ```
 
@@ -307,7 +309,7 @@ script_file = "/run/micold/config/startup.sh"
 shell = "/bin/sh"
 timeout_secs = 300
 on_failure = "refuse"
-run = "once"
+run = "once_per_container"
 env_file = "/run/micold/secrets/startup.env"
 export_env = true
 ```
@@ -351,7 +353,7 @@ repos = ["acme/*"]
 [[ai.cli]]
 id = "claude_code"
 sign_in_file = "/run/micold/secrets/ai/claude_code/.credentials.json"
-sign_in_writable = false           # a Secret cannot be written back (research Q6)
+sign_in_writable = false           # a Secret is read-only: a refreshed sign-in is lost on pod restart
 settings_file = "/run/micold/config/ai/claude_code/settings.json"
 
 [[ai.cli]]
@@ -368,7 +370,8 @@ on_failure = "refuse"
 
 Exit 0 and print the resolved configuration (defaults filled in, each secret as `path (readable,
 0600)` or `path (missing)`), or exit 2 with `file:line:column: message` for each error. Never prints
-a secret's content. The client runs the same validation (shared type) before it delivers a file.
+a secret's content. The application runs the same validation (shared type) before it delivers a
+file and shows the errors in Settings; an invalid file is not delivered.
 
 ## 5. Diagnostic
 
