@@ -9,7 +9,11 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use micold_core::github::{
-    list_args, search_args, GhCli, GithubRepo, Issue, IssueLoadError, IssueSource,
+    labels_args, list_args, search_args, GhCli, GithubRepo, Issue, IssueLoadError, IssueSource,
+};
+use micold_core::github_filter::{
+    search_filtered_args, search_page_args, BasicFilters, FilterFailure, GithubFilter, LabelName,
+    ScopedSearch,
 };
 
 fn fixture(name: &str) -> PathBuf {
@@ -44,6 +48,12 @@ enum Then {
     OddAnswer,
     /// Print an unknown failure to stderr, nothing on stdout, and exit 1.
     FailWithoutJson,
+    /// Print a filtered search page and exit 0 (feature 1400).
+    SearchPage,
+    /// Print GitHub's refusal of a search, nothing on stderr, and exit 1, as `gh` does.
+    SearchRejected,
+    /// Print a page of labels and exit 0.
+    LabelsPage,
 }
 
 /// The files the stub prints, next to it.
@@ -66,6 +76,9 @@ fn copy_fixtures(dir: &Path) {
         ("list_not_found.json", "not_found.json"),
         ("list_rate_limited.json", "rate_limited.json"),
         ("unknown.stderr", "unknown.stderr"),
+        ("search_filtered_page.json", "search.json"),
+        ("search_rejected.json", "rejected.json"),
+        ("labels_page.json", "labels.json"),
     ] {
         std::fs::copy(fixture(from), dir.join(to)).unwrap();
     }
@@ -86,6 +99,9 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::RateLimitedAnswer => "cat \"$dir/rate_limited.json\"; exit 1",
         Then::OddAnswer => "cat \"$dir/odd.json\"; exit 1",
         Then::FailWithoutJson => "cat \"$dir/unknown.stderr\" >&2; exit 1",
+        Then::SearchPage => "cat \"$dir/search.json\"",
+        Then::SearchRejected => "cat \"$dir/rejected.json\"; exit 1",
+        Then::LabelsPage => "cat \"$dir/labels.json\"",
     };
     let script = format!(
         "#!/bin/sh\n\
@@ -149,6 +165,9 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
             "type \"%~dp0saml.json\"\r\ntype \"%~dp0saml.stderr\" 1>&2\r\nexit /b 1"
         }
         Then::FailWithoutJson => "type \"%~dp0unknown.stderr\" 1>&2\r\nexit /b 1",
+        Then::SearchPage => "type \"%~dp0search.json\"",
+        Then::SearchRejected => "type \"%~dp0rejected.json\"\r\nexit /b 1",
+        Then::LabelsPage => "type \"%~dp0labels.json\"",
     };
     let script = format!(
         "@echo off\r\n\
@@ -423,4 +442,148 @@ fn read_details_past_its_deadline_runs_no_gh() {
         IssueLoadError::TimedOut,
         "no run starts after the deadline"
     );
+}
+
+// Feature 1400: the filtered requests (contracts/source-and-storage.md §1, §2).
+
+fn blocked_search() -> ScopedSearch {
+    let mut filters = BasicFilters::default();
+    filters.exclude_label(LabelName::parse("blocked").unwrap());
+    ScopedSearch::listing(&repo(), &GithubFilter::Basic(filters))
+}
+
+/// The recorded arguments are exactly `expected`; on Windows, by containment.
+fn assert_args(dir: &Path, expected: &[String]) {
+    let args = recorded(dir, "args.txt");
+    if cfg!(unix) {
+        let got: Vec<&str> = args.lines().collect();
+        assert_eq!(
+            got, expected,
+            "exactly these arguments, nothing more (FR-024)"
+        );
+    } else {
+        for arg in expected.iter().filter(|a| !a.starts_with("query=")) {
+            assert!(args.contains(arg.as_str()), "{arg} was passed: {args}");
+        }
+    }
+}
+
+/// Every variable after the query is one raw string (`-f`), never typed (`-F`).
+fn assert_raw_variables(args: &[String]) {
+    assert_eq!(
+        &args[..4],
+        ["api", "graphql", "--hostname", "github.com"],
+        "github.com's GraphQL"
+    );
+    assert!(args[4..].chunks(2).all(|pair| pair[0] == "-f"), "{args:?}");
+}
+
+#[test]
+fn a_filtered_page_sends_the_scoped_text_and_the_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let page = GhCli::new(stub(dir.path(), Then::SearchPage))
+        .search_page(&repo(), &blocked_search(), Some("CUR"))
+        .expect("the stub's page parses");
+    assert_eq!(
+        page.issues.iter().map(Issue::number).collect::<Vec<_>>(),
+        [12, 9]
+    );
+    assert!(page.issues[1].is_closed());
+    let expected = search_page_args(&blocked_search(), Some("CUR"));
+    assert_raw_variables(&expected);
+    assert_eq!(
+        expected[6..],
+        [
+            "-f".to_string(),
+            format!("q={}", blocked_search().as_str()),
+            "-f".to_string(),
+            "cursor=CUR".to_string()
+        ]
+    );
+    assert_args(dir.path(), &expected);
+    assert!(
+        !search_page_args(&blocked_search(), None)
+            .iter()
+            .any(|arg| arg.starts_with("cursor=")),
+        "no cursor on the first page"
+    );
+}
+
+#[test]
+fn a_filtered_search_sends_only_the_scoped_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let typed = ScopedSearch::beyond(
+        &repo(),
+        &GithubFilter::Basic(BasicFilters::default()),
+        "crash",
+    )
+    .expect("a word");
+    let found = GhCli::new(stub(dir.path(), Then::SearchPage))
+        .search_filtered(&repo(), &typed)
+        .expect("the stub's page parses");
+    assert_eq!(found.len(), 2);
+    let expected = search_filtered_args(&typed);
+    assert_raw_variables(&expected);
+    assert_eq!(
+        expected[6..],
+        ["-f".to_string(), format!("q={}", typed.as_str())]
+    );
+    assert_args(dir.path(), &expected);
+}
+
+#[test]
+fn a_label_page_sends_only_the_repository_and_the_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let page = GhCli::new(stub(dir.path(), Then::LabelsPage))
+        .labels_page(&repo(), Some("CUR"))
+        .expect("the stub's page parses");
+    assert_eq!(page.names, ["bug", "good first issue"]);
+    assert_eq!(page.next_cursor.as_deref(), Some("TkVYVA=="));
+    let expected = labels_args(&repo(), Some("CUR"));
+    assert_raw_variables(&expected);
+    assert_eq!(
+        expected[6..],
+        ["-f", "owner=o", "-f", "name=r", "-f", "cursor=CUR"].map(str::to_string)
+    );
+    assert_args(dir.path(), &expected);
+}
+
+#[test]
+fn githubs_refusal_stands_although_gh_exits_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let refused = GhCli::new(stub(dir.path(), Then::SearchRejected)).search_page(
+        &repo(),
+        &blocked_search(),
+        None,
+    );
+    assert_eq!(
+        refused.unwrap_err(),
+        FilterFailure::Rejected(vec!["Invalid search query: unbalanced parentheses.".into()])
+    );
+}
+
+#[test]
+fn a_filtered_failure_without_json_is_classified_from_stderr() {
+    let dir = tempfile::tempdir().unwrap();
+    let failed = GhCli::new(stub(dir.path(), Then::FailWithoutJson))
+        .search_filtered(&repo(), &blocked_search());
+    assert_eq!(
+        failed.unwrap_err(),
+        FilterFailure::Load(IssueLoadError::Other(
+            "something unexpected happened".into()
+        ))
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let signed_out = GhCli::new(stub(dir.path(), Then::NotLoggedIn)).search_page(
+        &repo(),
+        &blocked_search(),
+        None,
+    );
+    assert_eq!(
+        signed_out.unwrap_err(),
+        FilterFailure::Load(IssueLoadError::NotSignedIn)
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let labels = GhCli::new(stub(dir.path(), Then::SamlRefused)).labels_page(&repo(), None);
+    assert_eq!(labels.unwrap_err(), IssueLoadError::NoAccess);
 }

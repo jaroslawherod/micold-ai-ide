@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage};
 use crate::jira::{ApiToken, JiraConnection, JiraSource, ProjectKey};
+use crate::query_text::{clean, cut_message};
 
 /// Characters a user query holds at most, counted after cleaning (FR-007).
 pub const MAX_QUERY_CHARS: usize = 2_000;
@@ -82,20 +83,6 @@ impl UserQuery {
     pub fn as_str(&self) -> &str {
         &self.text
     }
-}
-
-/// `\n`, `\r` and `\t` become a space, every other control character goes, and the ends are
-/// trimmed (research R3).
-fn clean(raw: &str) -> String {
-    raw.chars()
-        .filter_map(|c| match c {
-            '\n' | '\r' | '\t' => Some(' '),
-            c if c.is_control() => None,
-            c => Some(c),
-        })
-        .collect::<String>()
-        .trim()
-        .to_string()
 }
 
 /// The one left-to-right pass of research R2: the byte offset of the first sort clause outside
@@ -202,9 +189,6 @@ pub enum QueryFailure {
     Load(IssueLoadError),
 }
 
-/// Characters of one of Jira's messages kept before it is cut (contracts/jql-rules.md §4).
-const MAX_MESSAGE_CHARS: usize = 300;
-
 /// Jira's messages kept at most.
 const MAX_MESSAGES: usize = 10;
 
@@ -239,22 +223,15 @@ pub fn rejection_messages(body: &[u8]) -> Vec<String> {
         .collect()
 }
 
-/// `message` cut at [`MAX_MESSAGE_CHARS`] characters, with `…` when it was longer.
-fn cut_message(message: String) -> String {
-    match message.char_indices().nth(MAX_MESSAGE_CHARS) {
-        Some((at, _)) => format!("{}…", &message[..at]),
-        None => message,
-    }
-}
-
-/// Which way the selector lists Jira issues (FR-001).
+/// Which way an issue selector lists issues: basic filters, or a query the user types (Jira
+/// feature 1186 FR-001, GitHub feature 1400 FR-001).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryMode {
-    /// Search text over the open issues.
+    /// The provider's basic filters and search text.
     #[default]
     Basic,
-    /// A JQL query.
+    /// A query in the provider's own language (JQL, GitHub search syntax).
     Advanced,
 }
 
