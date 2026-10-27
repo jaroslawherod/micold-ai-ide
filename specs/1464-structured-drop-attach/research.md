@@ -21,9 +21,9 @@
 - **Rejected**: cue on the pane under the last pointer (often stale, wrong pane); no cue (US2 unmet where hover is reported).
 
 ## R5 Shortcut
-- **Decision**: `Ctrl+Shift+U` / `Cmd+Shift+U` ("upload"), composer-scoped via `KeyIntent::Attach`.
-- **Rationale**: not among the reserved chords (D H W O T E F P) nor composer keys; U is the familiar upload mnemonic.
-- **Rejected**: plain `Ctrl+O` (clashes with terminal/readline semantics, spec 941 composer keys), `Alt+` chords (non-uniform on macOS).
+- **Decision**: `Ctrl+Shift+A` / `Cmd+Shift+A`, composer-scoped via `KeyIntent::Attach`, checked in `composer_key` before its non-plain guard.
+- **Rationale**: not among the reserved chords (D H W O T E F P) nor composer keys; no Linux input method binds it; A = attach.
+- **Rejected**: `Ctrl+Shift+U` (GTK/IBus Unicode-entry chord on Linux, would break FR-004 there); plain `Ctrl+O` (terminal/readline semantics); `Alt+` chords (non-uniform on macOS).
 
 ## R6 Disabled vs hidden
 - **Decision**: disabled with the standard disabled look, tooltip unchanged.
