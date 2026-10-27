@@ -118,12 +118,15 @@ a per-Review-view `sheet_open`; `ShortcutSheet::open_in` (`features/changes.rs`)
 groups (`Vec<(title, rows)>`): "Review" (unchanged rows, shown only when a Review view is shown) and
 "Composer" (`COMPOSER_KEYS`: the attach chord); (b) new app-level `State.shortcuts_open: bool` with
 `app::Message::ShortcutsToggled(bool)`; `ShortcutSheet::open_in` is true when either flag is set, and
-closing clears both; (c) a new App-kind slash command `/shortcuts` ("Keyboard shortcuts") beside `/model`: a
-`SHORTCUTS_COMMAND` constant in `micold-core/src/structured/commands/mod.rs` added to both list
-builders (reported and fallback, `CommandKind::App`), core tests in `tests/structured_commands.rs`; in
-`composer.rs::send_intent` a `Classified::Shortcuts` -> new `SendIntent::ShowShortcuts` (in
-`features/command_palette.rs`, which only classifies/renders), which the shell turns into
-`ShortcutsToggled(true)`; nothing is sent to the CLI. This is the one core change. A structured
+closing clears both; (c) a new App-kind slash command `/shortcuts` ("Keyboard shortcuts") beside `/model`, classified in
+core like `/model`: `SHORTCUTS_COMMAND` in `crates/micold-core/src/structured/commands/mod.rs`, added to both list builders
+(reported and fallback, `CommandKind::App`), a `DraftCommand::Shortcuts` variant and a `classify_draft`
+branch, with core tests in `crates/micold-core/tests/structured_commands.rs`. The new variant needs an
+arm in the daemon's exhaustive match (`crates/micold-daemon/src/state.rs`, beside
+`DraftCommand::Model`, as a command that is never sent; a daemon-side test). Client:
+`features/command_palette.rs::classify` maps `DraftCommand::Shortcuts` to `Classified::Shortcuts`;
+`composer.rs::send_intent` returns the new `SendIntent::ShowShortcuts`; `shell/composer.rs` (the
+`SendIntent` match) turns it into `ShortcutsToggled(true)`; nothing is sent to the CLI. A structured
 session thus reaches the sheet by typing `/shortcuts`; the button tooltip carries the chord too.
 (d) `ui/shortcut_sheet.rs`
 renders the groups; showcase poses both. New messages are listed in data-model.md.
@@ -136,7 +139,8 @@ specs/1464-structured-drop-attach/
 ├── contracts/admission.md        # drop/picker admission + messages
 └── tasks.md                      # tasks unit
 crates/micold-core/src/structured/attachment.rs     # unchanged API; tests for refusal text
-crates/micold-core/src/structured/commands/mod.rs # SHORTCUTS_COMMAND (+ tests/structured_commands.rs)
+crates/micold-core/src/structured/commands/mod.rs # SHORTCUTS_COMMAND, DraftCommand::Shortcuts (+ tests/structured_commands.rs)
+crates/micold-daemon/src/state.rs        # DraftCommand::Shortcuts arm
 crates/micold-material/src/icons.rs      # Icon::Attach (new variant)
 crates/micold-material/src/drop_cue.rs   # NEW: shared presentational drop cue (theme Roles), reused by any pane
 crates/micold-client/
@@ -154,7 +158,7 @@ docs/user-guide/ (structured input page; icons.md)
 ```
 
 **Structure Decision**: extend the existing composer/drops modules; two new small files (picker
-shell task, cue widget). No daemon or wire change; the one core change is the `/shortcuts` App command (D7).
+shell task, cue widget). No wire change; the one core and daemon change is the `/shortcuts` App command (D7), a variant plus its match arms.
 
 ## Requirement map
 
@@ -178,7 +182,7 @@ shell task, cue widget). No daemon or wire change; the one core change is the `/
 | FR-007/009/012/015 | reducer tests: `AttachRequested` twice opens one; `AttachPickerClosed` silent; `AttachPicked` after session ended refused; result keyed to requester |
 | FR-001 routing, multi-pane | `tests/pane_drop_target.rs` / `features_session.rs` |
 | FR-005, SC-005 | reducer test for the hover flag set/clear; showcase for the look |
-| FR-006, 010 | `layout_snapshot` geometry gate (row fits, button size), key-intent unit test for the chord, sheet-groups tests, `/shortcuts` command in core `structured_commands.rs` and `SendIntent` in `features_composer.rs`, and a test in `ui/app_chord_tests.rs` that the app-level chord handler leaves Ctrl/Cmd+Shift+A to the focused composer |
+| FR-006, 010 | `layout_snapshot` geometry gate (row fits, button size), key-intent unit test for the chord, sheet-groups tests, `/shortcuts` command in core `structured_commands.rs` and the daemon `DraftCommand` arm and `SendIntent` in `features_composer.rs`, and a test in `ui/app_chord_tests.rs` that the app-level chord handler leaves Ctrl/Cmd+Shift+A to the focused composer |
 | SC-002 | reducer/UI test: button press -> picker requested -> `AttachPicked` is click, choose, confirm (3 interactions); no extra step exists |
 | FR-004, SC-003, SC-004 | quickstart §B manual matrix (Wayland, X11, macOS, Windows; native picker) |
 | FR-014 | showcase section + visual-pass |
