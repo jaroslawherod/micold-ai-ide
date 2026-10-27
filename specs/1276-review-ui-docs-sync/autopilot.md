@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1520 | fix red main after M2 + #1466/BUG-1470 | merged | 2a4b372d52ab16e7165cc6f2e9c885b3b1af9656 |
 | #1541 | M3 visual pass + fixes + fixture | merged | 3054321a9cef77929487989d9cdc73097b417399 |
 | #1544 | M4 mockup canvas sync | merged | 589dec73779b6997459c81776c376618c041f5b1 |
+| #1545 | M5 redesign doc record | open | |
 
 ## Milestones
 

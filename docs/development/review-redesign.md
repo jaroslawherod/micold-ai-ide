@@ -208,7 +208,7 @@ visual pass at 1280×800 in both themes.
 | #1271 (R4) | **Reviewed marks and progress.** `reviewed` set per entry and head, stored by the session service with the comments (protocol field, all windows agree); *n of m reviewed*; a changed file drops back to unseen. | R0 | #1360, #1374, #1390, #1411, #1417, #1419 |
 | #1274 (R5) | **Keyboard map.** `j`/`k` file, `n`/`p` hunk, `]`/`[` comment, `v` reviewed, `g` next unreviewed, `c` comment, `Ctrl+Shift+Enter` send, `?` sheet; jump-to field searches files and comments (#1127). | R3, R4, #1127 | #1366, #1404, #1415, #1451, #1458, #1460, #1468 |
 | #1275 (R6) | **Stale-awareness and quick comment.** "n files changed since you looked" without reflowing the open diff; drag over line numbers opens the composer; optional suggestion chips. | R4 | #1370, #1380, #1413, #1424, #1443, #1447, #1450 |
-| #1276 (R7) | **Docs, snapshot, visual pass, mockup sync.** `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`, layout snapshot, visual pass; update the canvas to the as-built state. | R0–R6, #1128 | #1358, #1473, #1495, #1520, #1541, #1544, and the M5 PR (this page) |
+| #1276 (R7) | **Docs, snapshot, visual pass, mockup sync.** `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`, layout snapshot, visual pass; update the canvas to the as-built state. | R0–R6, #1128 | #1358, #1473, #1495, #1520, #1541, #1544, and #1545 (this page) |
 | R8 | **Diff font** (take #1260 first so the polish is judged on the final font). | #1260 | #1316, #1323, #1329, #1332 (#1260) |
 
 Built in this order: #1124–#1127 → #1126 → R0 → R1 / R4 (parallel) → R2 → R3 → R5, R6 → R7. Epic: #1277.
