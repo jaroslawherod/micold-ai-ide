@@ -27,6 +27,7 @@ pub mod format;
 pub mod frame_probe;
 pub mod fs_scan;
 pub mod git;
+pub mod history;
 pub mod github;
 pub mod github_filter;
 pub mod hook_activity;
