@@ -964,3 +964,60 @@ fn the_jump_fields_words_and_edges_are_legible_on_the_title_bar() {
         violations.join("\n  ")
     );
 }
+
+/// Issue #1492: `style::chip` draws an accent's 20% tint with the accent itself as the ink, which
+/// left the sidebar's *no daemon* chip at 4.40:1 in the light scheme. Every accent a chip is drawn
+/// in (the role accents, the warning role, every worktree type tag and the issue tag) must read at
+/// 4.5:1 on its own tint over every surface a chip sits on, in both schemes.
+#[test]
+fn a_chips_ink_is_legible_on_its_tint_for_every_accent_on_every_surface() {
+    use micold_core::naming::ConventionalType;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let mut accents = vec![
+            ("primary".to_string(), r.primary),
+            ("secondary".to_string(), r.secondary),
+            ("tertiary".to_string(), r.tertiary),
+            ("error".to_string(), r.error),
+            ("warning".to_string(), r.warning),
+            ("issue tag".to_string(), r.issue_tag().0),
+        ];
+        for &t in ConventionalType::ALL {
+            accents.push((format!("{t:?} tag"), r.tag_fill(t)));
+        }
+        let hosts = [
+            ("background", r.background),
+            ("surface", r.surface),
+            ("surface_dim", r.surface_dim),
+            ("surface_bright", r.surface_bright),
+            ("container_lowest", r.surface_container_lowest),
+            ("container_low", r.surface_container_low),
+            ("container", r.surface_container),
+            ("container_high", r.surface_container_high),
+            ("container_highest", r.surface_container_highest),
+        ];
+        for (name, accent) in accents {
+            let s = style::chip(accent)(&theme);
+            let Some(Background::Color(tint)) = s.background else {
+                panic!("{scheme:?}: the {name} chip paints a colour tint");
+            };
+            let ink = style::to_rgb(s.text_color.expect("a chip's ink"));
+            for (host, fill) in hosts {
+                let ground = style::to_rgb(style::over(tint, style::color(fill)));
+                let ratio = contrast(ink, ground);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {name} on {host}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "chip ink below contrast:\n  {}",
+        violations.join("\n  ")
+    );
+}
