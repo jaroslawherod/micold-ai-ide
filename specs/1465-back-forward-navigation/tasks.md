@@ -119,7 +119,7 @@ tab; Back again shows the previous place (quickstart B6).
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] In `crates/micold-client/src/features/history.rs` `resolve`, before the `step` row: `Dir::Back`, the shown place a Review tab and `changes::can_go_back` on its view → `Step::ReviewBack` (list untouched, `moving` unset); in `crates/micold-client/src/app.rs` `apply_history`: `ReviewBack` → `[Message::Changes(BrowseBack)]`; add the `ALLOWED_CROSS_FEATURE_NAMES` entry `history` → `changes` (`can_go_back`) in `crates/micold-client/tests/feature_registration_cost.rs`, calling it as `crate::features::changes::can_go_back` so the entry counts as live. T024 green
+- [ ] T025 [US3] In `crates/micold-client/src/features/history.rs` `resolve`, before the `step` row: `Dir::Back`, the shown place a Review tab and `crate::features::changes::can_go_back` on its view → `Step::ReviewBack` (list untouched, `moving` unset); in `crates/micold-client/src/app.rs` `apply_history`: `ReviewBack` → `[Message::Changes(BrowseBack)]`; add the `ALLOWED_CROSS_FEATURE_NAMES` entry `history` → `changes` (`can_go_back`) in `crates/micold-client/tests/feature_registration_cost.rs`, calling it as `crate::features::changes::can_go_back` so the entry counts as live. T024 green
 - [ ] T026 [US3] In `docs/user-guide/terminal-panes.md` §Keyboard shortcuts, add one sentence: in the Review tab, Back first does the tab's own **Back** (from a browsed file to what was being read) and leaves the tab only when that has nothing left; Forward always uses the app's history
 
 **Checkpoint**: quickstart B6 passes.
