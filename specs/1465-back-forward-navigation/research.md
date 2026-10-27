@@ -69,24 +69,42 @@ with the code it was checked against.
 
 - **Decision**: `features::history::exists(state, place, lookup)` decides with what the window
   knows, plus one injected lookup for the worktrees of a project that is not active:
-  - project: known and available (`switcher_entries`' `available`, or the active one);
+  - project: known and available (`switcher_entries`' `available`, or the active one). The shell
+    runs `workspace.refresh_availability(scanner)` before the press resolves, the same scan
+    `on_known_project_reopened` runs before `switch_active` (`shell/workspace.rs` 234–238), so a
+    project `exists` accepts is one the switch accepts and `Project(Reopened)` is never refused
+    under a target that `list.pos` already points at;
   - location: `Default` always; `Worktree(dir)` listed in `worktree.worktrees` for the active
     project, or in `lookup(project)` for another;
   - session: a non-archived record in `workspace.sessions[project]` at that location ("stopped" is
     `CloseRequested`, which archives: `features/session.rs` 1468, 1982);
-  - Review: its location exists; Overview: its project; Compare: its project, and for the active
-    project its group in `runs.groups`.
+  - Review: its location exists; Overview: its project; Compare: its group in that project's last
+    group list: `runs.groups` for the active project, `runs.known[project]` for another (below).
   The shell passes `|project| discover_worktrees(git, project)` (`shell/workspace.rs` 91), the same
   synchronous local read a project switch runs; tests pass a map.
 - **Rationale**: FR-006 says Back lands on an entry whose target exists. Checking after a project
   switch would leave the window in the other project when the target turned out gone, which is a
   move the user did not ask for. The worktree list of a non-active project is not in `State`
   (`worktree.worktrees` is the active project's), so it is read, not guessed.
-- **Known limit**: run groups are read from the service per active project, so a Compare entry of
-  another project is checked by its project only. If its group was dismissed meanwhile, the Compare
-  view's own `RunGroupsChanged` rule closes it when the groups arrive (existing behaviour) and the
-  place then shown is recorded (R1). Recorded here rather than solved: dismissing a group is an
-  explicit user action in that project, and the gap is one view for one press.
+- **Group lists per project**: the service pushes only the attached (active) project's
+  `RunGroupsChanged` (`shell/daemon_sync.rs` 2283), `runs.groups` holds that one list and is not
+  swapped on a project switch, and `compare_opened` refuses a group not in `runs.groups`
+  (`features/runs.rs` 890). So a cross-project Compare target needs its project's list at hand
+  when `Runs(CompareOpened)` runs right after `Project(Reopened)`, before the new list arrives.
+  `runs::State` gains `known: BTreeMap<PathBuf, Vec<RunGroup>>`, each project's last list this
+  launch. `runs::routed` (which holds the root `State`) copies every `GroupsChanged` list into
+  `known[active]`. On `CompareOpened { group, project }` with `project` active, `group` not in
+  `runs.groups` and in `known[project]`, it first sets `runs.groups = known[project].clone()` (it
+  is that project's last list, and the project is now active), so `compare_opened` opens and
+  `request_missing` reads its runs. A Compare place is only recorded while its group is in
+  `runs.groups`, so every Compare entry's project has a `known` list.
+- **Known limit (narrowed)**: `known[P]` is stale only when another window dismissed the group
+  while this window was in another project (this window dismisses only in the active project, and
+  that list reaches `known` at once). Then Compare opens from the cached list, P's own list arrives
+  after the attachment moves, and the Compare view's existing `GroupsChanged` rule closes it
+  (`compare_groups_changed`); that is an app move, recorded like any other (R1). Recorded rather
+  than solved: it needs a second window acting on a project this window left, and costs one view
+  for one press.
 - **Alternatives considered**: switching first and re-checking (the problem above); a request /
   answer round trip for the worktree read (one more message pair for a read the switch already does
   synchronously).

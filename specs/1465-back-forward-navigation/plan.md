@@ -103,7 +103,9 @@ register a feature are updated with it: `tests/feature_registration_cost.rs` (th
 `Message::History` to the new `shell/history.rs` (shape B: `pub fn update(&mut App,
 history::Msg) -> Task<Message>`), which calls `app.core.press_history` with
 `lookup = |p| discover_worktrees(git, p)` mapped to paths, dispatches `apply_history`'s messages
-through `crate::update`, then `finish_history_move` (U2). `State::update` declines
+through `crate::update`, then `finish_history_move` (U2); it refreshes availability first (U2 step
+0, R5). `features/runs.rs`: `State.known`, filled in `routed` on `GroupsChanged` and read on
+`CompareOpened` for a project just switched to (R5). `State::update` declines
 `Message::History` (shape B, as `Navigation`).
 
 ### D6 — Review sheet — R11
@@ -137,7 +139,7 @@ Scope*).
 | FR-014 | D6 | R11 |
 | FR-015 | test strategy below | R4 |
 | SC-001 | `main_tests.rs`; quickstart B1, C1–C3 | R7, R8 |
-| Edge: cross-project | D5 `Reopened` first; R2 suppression | R2, R5 |
+| Edge: cross-project | D5 `Reopened` first, availability refreshed before `exists`; R2 suppression; `runs.known` for a Compare target | R2, R5 |
 | Edge: closed Review tab | U4 `ReviewChangesRequested` reopens it | R6 |
 | Edge: app moves | D5 observe after every message | R1 |
 
@@ -151,7 +153,7 @@ Scope*).
 | Terminal | `ui/material/terminal_pane.rs` widget tests | Back/Forward presses publish nothing reaching the process | 008 |
 | Client state | `tests/history.rs` (new) | U7 client list: observe per mover, gate rows, Review back, gone targets (injected lookup), apply messages, `moving`, two `State`s independent | 001–011 |
 | Client state | `tests/review_keys.rs`, `tests/features_navigation.rs`, existing review-holder tests | sheet rows on/off; still green after the `blocked` and `live_focused_field` extractions | 014 |
-| Binary | `main_tests.rs` | end to end through `update`: US1 AS3, cross-project Back without an intermediate entry, Overview/Compare/Review targets | 002, 004, 006, 007, SC-001 |
+| Binary | `main_tests.rs` | end to end through `update`: US1 AS3, cross-project Back without an intermediate entry, Overview/Compare/Review targets, cross-project Compare | 002, 004, 006, 007, SC-001 |
 | Meta | `tests/features_history.rs` (new), `feature_registration_cost.rs`, `feature_write_isolation.rs`, `features_are_render_free.rs` | the feature's types construct alone; it is registered, root-driven and render-free | — |
 | Visual pass | quickstart §B (visual-pass skill) | B1–B13 | all |
 | Platforms | CI on three; quickstart §C | side buttons and keys per platform | VI |
