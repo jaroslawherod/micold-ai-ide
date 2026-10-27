@@ -801,4 +801,31 @@ mod tests {
             vec![Some(100.0), Some(50.0), None]
         );
     }
+
+    /// 1463 FR-012: `GiveWayRow` records `keep` as a child that never yields and `shorten(rank)` as
+    /// one that gives way at that rank, in the order the children were added.
+    #[test]
+    fn a_row_records_keep_and_shorten_ranks_in_order() {
+        use crate::test_support::Message;
+        use iced::widget::Space;
+        let row: GiveWayRow<'_, Message> = GiveWayRow::new(4.0)
+            .shorten(1, Space::new())
+            .keep(Space::new())
+            .shorten(0, Space::new());
+        let ways: Vec<GiveWay> = row.0.slots.iter().map(|slot| slot.give_way).collect();
+        assert_eq!(
+            ways,
+            vec![GiveWay::Shorten(1), GiveWay::Keep, GiveWay::Shorten(0)]
+        );
+        // Planned as such, the rank-0 child yields before the rank-1 child, and the kept one never.
+        let items: Vec<Widths> = ways.iter().map(|way| w(*way, 100.0, 20.0)).collect();
+        assert_eq!(
+            plan(&items, 0.0, 250.0),
+            vec![Some(100.0), Some(100.0), Some(50.0)]
+        );
+        assert_eq!(
+            plan(&items, 0.0, 180.0),
+            vec![Some(60.0), Some(100.0), Some(20.0)]
+        );
+    }
 }

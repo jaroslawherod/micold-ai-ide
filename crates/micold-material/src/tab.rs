@@ -640,6 +640,15 @@ mod tests {
         );
     }
 
+    /// Feature 1463 FR-011: the session tab keeps the width it had before the header was
+    /// compacted (two 48dp slots, two `XS` gaps and the 120dp label ceiling), so the strip moves
+    /// nothing else; guarded here by its number, not only by the tab snapshots.
+    #[test]
+    fn the_session_tab_width_is_its_recorded_value() {
+        assert_eq!(SESSION_WIDTH, 2.0 * 48.0 + 2.0 * 4.0 + 120.0);
+        assert_eq!(SESSION_WIDTH, 224.0);
+    }
+
     /// Feature 1126 R8: a session tab's width is derived like [`WIDTH`], with the label ceiling as
     /// its label share — restated term by term, so a literal or a dropped term fails here.
     #[test]

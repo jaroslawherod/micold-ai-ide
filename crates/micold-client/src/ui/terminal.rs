@@ -886,6 +886,34 @@ mod tests {
         state
     }
 
+    /// Feature 1463 FR-004, FR-012, T025: the offer carries the held-queue line when messages
+    /// wait for the structured view, and none when nothing does.
+    #[test]
+    fn the_offer_carries_the_held_queue_caption_only_while_messages_wait() {
+        use crate::features::composer::InputState;
+        use micold_core::protocol::messages::{QueueEntryId, QueuedSummary, TurnPhase};
+        let mut state = shown_session(micold_core::session::SessionKind::Terminal);
+        let id = state.session.active.expect("a shown session");
+        let offer = |state: &State| strip_switch_offer(state, false, false).expect("an offer");
+        assert_eq!(offer(&state).caption, None, "nothing waits");
+        state.composers.input_reported(
+            id,
+            InputState {
+                phase: TurnPhase::Idle,
+                hold: true,
+                queue: (0..2u64)
+                    .map(|n| QueuedSummary {
+                        id: QueueEntryId(n),
+                        text: "a message".into(),
+                        attachments: Vec::new(),
+                    })
+                    .collect(),
+            },
+        );
+        let line = state.held_queue_line(id).expect("two messages wait");
+        assert_eq!(offer(&state).caption, Some(line));
+    }
+
     /// Feature 1463 FR-004, FR-006, T009: the strip carries a switch only for a Claude terminal
     /// session's AI tab in a single pane with the Review tab not shown.
     #[test]
