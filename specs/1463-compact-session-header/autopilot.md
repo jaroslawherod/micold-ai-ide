@@ -10,20 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
 - **Phase**: tasks
-- **Next step**: merge design PR #1469, then M1
+- **Next step**: wait on CI for the M2 PR, merge, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1469 | Design | open | |
+| #1469 | Design | merged | |
 | #1487 | M1 | merged | 304bfb4ffa97076810692dcbe28c9a135eb63cbf |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001, T003–T008 | full | One-line header | | pending |
+| M1 | T001, T003–T008 | full | One-line header | #1487 | merged |
 | M2 | T002, T009–T018 | full | Switch control in strip | | in review |
 
 ## Decisions
@@ -62,7 +62,7 @@ None.
 
 ## Open escalation
 
-M2 is gated (full gate green) and committed locally, 5 commits ahead of origin/main. `git push --force-with-lease -u origin HEAD` was rejected (stale info: the remote branch of the same name has commits not in the local ref) and a retry with `git fetch` + force-with-lease was denied by the permission classifier. Needs the user to push (or approve the force-with-lease), then `gh pr create --base main --title "feat(1463): switch control in the tab strip (#1463)" --body-file <scratchpad>/pr-body.md` (body ends `Refs #1463`).
+None. (The M2 push block was stale: the remote branch was deleted after #1487 merged; M2 rebased cleanly onto origin/main and the full gate is green.)
 
 ## Follow-ups not done
 
