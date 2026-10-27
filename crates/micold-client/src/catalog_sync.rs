@@ -63,10 +63,11 @@ fn bound_elsewhere(core: &State, project: &Path, key: &str, daemon: DaemonId) ->
     location_owner(core, project, key) != daemon
 }
 
-/// Whether session `id` at location `key` of `project` is `daemon`'s to keep and to drop: the daemon
-/// whose latest snapshot listed it, or, when no daemon lists it, its location's owner (bug 1538). By
-/// owner alone, a session another daemon reported at an unbound location was the legacy default's:
-/// that daemon's snapshots dropped it and its own daemon's next push brought it back.
+/// Whether session `id` at location `key` of `project` is `daemon`'s to keep and to drop: not while
+/// another daemon's latest snapshot lists it; otherwise when `daemon`'s listed it, or its location
+/// is `daemon`'s (bug 1538). By owner alone, a session another daemon reported at an unbound
+/// location was the legacy default's: that daemon's snapshots dropped it and its own daemon's next
+/// push brought it back.
 fn answers_for(core: &State, project: &Path, key: &str, id: SessionId, daemon: DaemonId) -> bool {
     let listed = &core.settings.listed_sessions;
     let lists = |d: &DaemonId| {
@@ -75,10 +76,10 @@ fn answers_for(core: &State, project: &Path, key: &str, id: SessionId, daemon: D
             .and_then(|projects| projects.get(project))
             .is_some_and(|ids| ids.contains(&id))
     };
-    if lists(&daemon) {
-        return true;
+    if listed.keys().any(|d| *d != daemon && lists(d)) {
+        return false;
     }
-    !listed.keys().any(lists) && location_owner(core, project, key) == daemon
+    lists(&daemon) || location_owner(core, project, key) == daemon
 }
 
 /// The binding key of a session's location: its worktree's `dir_name`, `""` for the Default one.
