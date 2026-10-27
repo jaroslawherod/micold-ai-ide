@@ -35,7 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Tasks 1523 | 1 | 71774ca9:09ee4cb1 | CHANGES: 1 BLOCKER, 3 MAJOR, all fixed (single milestone; T087 un-[P]'d and made implementation too); no round 2 (structure merge, self-checked) |
+| Tasks 1523 | 1 | 71774ca9:09ee4cb1 | CHANGES: 1 BLOCKER, 3 MAJOR, all fixed (single milestone; T087 un-[P]'d and made implementation too); round 2 below |
+| Tasks 1523 | 2 | 18c87a47:982c1a9d | CHANGES: 1 MAJOR (T087 position, moved before T010 so types/rules precede T012), 1 MINOR (ledger row, fixed); prose-only reorder, no round 3 |
 
 ## Declined review findings
 
