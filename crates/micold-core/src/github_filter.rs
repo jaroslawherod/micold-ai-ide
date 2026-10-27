@@ -47,8 +47,9 @@ pub const LABEL_PAGE_CAP: usize = 10;
 // §5 Values
 
 /// A label name that can be sent as `label:"<name>"` (data-model §1, research R6). Constructed
-/// only by [`LabelName::parse`]: non-empty, no `"` (GitHub's search has no escape inside quotes)
-/// and no control character.
+/// only by [`LabelName::parse`]: non-empty, no `"` (GitHub's search has no escape inside quotes),
+/// no `\` (in case GitHub reads `\"` as an escape, which would leave the quote open, as typed
+/// words drop it) and no control character.
 #[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct LabelName(String);
@@ -56,7 +57,10 @@ pub struct LabelName(String);
 impl LabelName {
     /// `name` as a label, kept exactly as given; `None` when it cannot be quoted.
     pub fn parse(name: &str) -> Option<LabelName> {
-        let quotable = !name.is_empty() && !name.chars().any(|c| c == '"' || c.is_control());
+        let quotable = !name.is_empty()
+            && !name
+                .chars()
+                .any(|c| matches!(c, '"' | '\\') || c.is_control());
         quotable.then(|| LabelName(name.to_string()))
     }
 
@@ -325,9 +329,10 @@ impl fmt::Debug for UserQuery {
 
 /// The one left-to-right pass of research R5: the `sort:` tokens outside quoted strings, or why the
 /// query is refused. GitHub's search has no escape inside quotes, so the next `"` closes. At each
-/// token start outside a string (the start, or after whitespace or `(`) it looks for a scope
-/// qualifier, with or without `-`, and for a `sort:` token, which ends before whitespace, a
-/// parenthesis or a quote. Refusals rank `UnclosedQuote` > `ScopeQualifier` >
+/// position outside a string after any character but a letter, digit, `_` or `-` (so `(a)repo:x`
+/// and `"x"repo:x` are caught, `myrepo:x` is not) it looks for a scope qualifier, with or without
+/// `-`. At each token start (the start, or after whitespace or `(`) it looks for a `sort:` token,
+/// which ends before whitespace, a parenthesis or a quote. Refusals rank `UnclosedQuote` > `ScopeQualifier` >
 /// `UnbalancedParentheses`.
 fn scan(text: &str) -> Result<Vec<Range<usize>>, QueryRefusal> {
     let mut quoted = false;
@@ -342,18 +347,20 @@ fn scan(text: &str) -> Result<Vec<Range<usize>>, QueryRefusal> {
             previous = Some(c);
             continue;
         }
-        if previous.is_none_or(|p| p.is_whitespace() || p == '(') {
-            let rest = &text[at..];
+        let rest = &text[at..];
+        if previous.is_none_or(|p| !(p.is_alphanumeric() || matches!(p, '_' | '-'))) {
             let unsigned = rest.strip_prefix('-').unwrap_or(rest);
             scope |= SCOPE_QUALIFIERS
                 .iter()
                 .any(|qualifier| starts_with_ignoring_case(unsigned, qualifier));
-            if starts_with_ignoring_case(rest, "sort:") {
-                let len = rest
-                    .find(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | '"'))
-                    .unwrap_or(rest.len());
-                sorts.push(at..at + len);
-            }
+        }
+        if previous.is_none_or(|p| p.is_whitespace() || p == '(')
+            && starts_with_ignoring_case(rest, "sort:")
+        {
+            let len = rest
+                .find(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | '"'))
+                .unwrap_or(rest.len());
+            sorts.push(at..at + len);
         }
         match c {
             '"' => quoted = true,
@@ -582,7 +589,8 @@ pub fn search_filtered_args(search: &ScopedSearch) -> Vec<String> {
 /// Parse `gh api graphql` stdout for [`SEARCH_PAGE_QUERY`] or [`SEARCH_FILTERED_QUERY`]
 /// (search-rules §6, research R7).
 ///
-/// `RATE_LIMITED` is a load failure. Every other error at `["search"]`, or without a path when
+/// `RATE_LIMITED`, `FORBIDDEN` and `INSUFFICIENT_SCOPES` are load failures, classified as the
+/// default listing classifies them (034's SAML and scope notices). Every other error at `["search"]`, or without a path when
 /// there is no `data.search`, is GitHub refusing the query: their messages, in order, become
 /// [`FilterFailure::Rejected`]. Any other error is classified as the default listing classifies
 /// it. Nodes of another repository (compared ASCII case-insensitively) and empty nodes (pull
@@ -595,8 +603,13 @@ pub fn parse_search_page(stdout: &[u8], repo: &GithubRepo) -> Result<IssuePage, 
         .as_array()
         .filter(|errors| !errors.is_empty())
     {
-        if errors.iter().any(|error| error["type"] == "RATE_LIMITED") {
-            return Err(IssueLoadError::RateLimited.into());
+        if let Some(error) = errors.iter().find(|error| {
+            matches!(
+                error["type"].as_str(),
+                Some("RATE_LIMITED" | "FORBIDDEN" | "INSUFFICIENT_SCOPES")
+            )
+        }) {
+            return Err(graphql_error_of(error).into());
         }
         let refuses = |error: &&serde_json::Value| match &error["path"] {
             serde_json::Value::Null => search.is_null(),

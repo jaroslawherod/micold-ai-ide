@@ -587,3 +587,18 @@ fn a_filtered_failure_without_json_is_classified_from_stderr() {
     let labels = GhCli::new(stub(dir.path(), Then::SamlRefused)).labels_page(&repo(), None);
     assert_eq!(labels.unwrap_err(), IssueLoadError::NoAccess);
 }
+
+/// Review A F3: a FORBIDDEN search is 034's SAML refusal, not GitHub refusing the query.
+#[test]
+fn a_saml_refused_search_is_no_access_not_a_rejection() {
+    let dir = tempfile::tempdir().unwrap();
+    let refused = GhCli::new(stub(dir.path(), Then::SamlRefused)).search_page(
+        &repo(),
+        &blocked_search(),
+        None,
+    );
+    assert_eq!(
+        refused.unwrap_err(),
+        FilterFailure::Load(IssueLoadError::NoAccess)
+    );
+}
