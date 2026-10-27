@@ -46,6 +46,9 @@ with the code it was checked against.
   order the main area draws: none while Settings is open or no project is active; else the Overview when open; else Compare when open; else the shown Review
   tab (`review_shown()`); else the current session (`session.active` with its catalog location);
   else none (a navigation stop with nothing shown, the welcome screen).
+  When none is shown, Back's first candidate is the history's current entry (the place the user
+  was on just before), not the entry before it; Forward still goes to the entry after the current
+  one (`History::step`, review A M1 F1).
 - **Rationale**: this is the order `view_facts` and `terminal_focused` already use for "what takes
   the main area" (`app.rs` 618–663). The Overview and Compare are project-wide views; the location
   under them is not what is shown, so they carry none (spec *Key Entities*: two places are equal

@@ -99,6 +99,9 @@ impl<P: Clone + PartialEq> History<P> {
     /// removed; an entry equal to `shown` is passed over and kept. The first other entry becomes
     /// current and is returned. None found: the position stays on its entry and `None` is
     /// returned. Removals merge neighbouring equal entries. Never records.
+    ///
+    /// With nothing shown, Back's first candidate is the current entry itself: it is where the
+    /// user just was (research R3).
     pub fn step(
         &mut self,
         dir: Dir,
@@ -108,7 +111,12 @@ impl<P: Clone + PartialEq> History<P> {
         if self.entries.is_empty() {
             return None;
         }
-        let mut at = self.pos;
+        // Back with nothing shown starts one past the position, so the current entry is tried.
+        let mut at = if dir == Dir::Back && shown.is_none() {
+            self.pos + 1
+        } else {
+            self.pos
+        };
         let mut removed = false;
         let mut found = None;
         loop {
@@ -139,6 +147,8 @@ impl<P: Clone + PartialEq> History<P> {
         if let Some(index) = found {
             self.pos = index;
         }
+        // A removed current entry that was the last one leaves the position one past the end.
+        self.pos = self.pos.min(self.entries.len().saturating_sub(1));
         if removed {
             self.merge_neighbours();
         }
@@ -308,6 +318,54 @@ mod tests {
         assert_eq!(h.step(Dir::Back, Some(&2), all), Some(1), "US4 AS4");
         assert_eq!(h.entries(), &[1, 2, 1], "the shown entry kept");
         assert_eq!(h.position(), 0);
+    }
+
+    #[test]
+    fn back_with_nothing_shown_returns_to_the_current_entry() {
+        // Review A M1 F1: nothing shown (a stop with no session, a removed session nothing
+        // replaced) — the current entry is where the user just was, so Back lands on it.
+        let mut h = filled(&[1, 2]);
+        assert_eq!(
+            h.step(Dir::Back, None, all),
+            Some(2),
+            "back to the current entry"
+        );
+        assert_eq!(h.position(), 1, "the position stays on it");
+        assert_eq!(
+            h.step(Dir::Back, Some(&2), all),
+            Some(1),
+            "then on as usual"
+        );
+        // A gone current entry is removed and Back goes on to the one before it.
+        let mut h = filled(&[1, 2]);
+        assert_eq!(h.step(Dir::Back, None, |p| *p != 2), Some(1));
+        assert_eq!(h.entries(), &[1]);
+        assert_eq!(h.position(), 0);
+        // Forward with nothing shown still goes to the entry after the current one.
+        let mut h = filled(&[1, 2]);
+        h.step(Dir::Back, Some(&2), all);
+        assert_eq!(h.step(Dir::Forward, None, all), Some(2));
+        // Every subset of gone entries, every position: an existing entry or nothing.
+        for gone_mask in 0u32..32 {
+            for start in 0..5usize {
+                let mut h = filled(&[0, 1, 2, 3, 4]);
+                for _ in start..4 {
+                    let shown = *h.current().unwrap();
+                    h.step(Dir::Back, Some(&shown), all);
+                }
+                let exists = |p: &u32| gone_mask & (1 << p) == 0;
+                let current = *h.current().unwrap();
+                let got = h.step(Dir::Back, None, exists);
+                if exists(&current) {
+                    assert_eq!(got, Some(current), "the existing current entry");
+                }
+                if let Some(p) = got {
+                    assert!(exists(&p), "lands on an existing entry");
+                    assert_eq!(h.current(), Some(&p), "the position is on it");
+                }
+                assert_invariants(&h);
+            }
+        }
     }
 
     #[test]
