@@ -37,7 +37,7 @@ Project P (active) with Default (session A), worktree `feat-1` (sessions B and B
 | B7 | Type in the review's comment box; press Alt+← / Alt+→. | The caret moves by word; the history does not move. Mouse back: the history moves (FR-008). |
 | B8 | Show A, B, C; close session B. From C, Back. Then show C, then B2, remove worktree `fix-2` from its menu, and from B2 press Back. | First: A, with no notification (US4 AS1). Then: the entry before C is shown, C's entry passed over and gone (AS2). |
 | B9 | Open the Overview, Back. Open Compare of G, Back. | The previous session, Overview closed; the place before Compare. |
-| B10 | Show Q1 (project switcher), Back. | P with the place shown before, without an intermediate P place recorded: Forward returns to Q1. |
+| B10 | Show Q1 (project switcher), Back. Then in P open Compare of G, show Q1, Back, Forward. | P with the place shown before, without an intermediate P place recorded: Forward returns to Q1. Then P with Compare of G open (its runs' counts read), and Forward returns to Q1. |
 | B11 | Open the quick switcher (Ctrl+Shift+P); mouse back and Alt+←. Same with Settings open and with the Review sheet (`?`) open. | Nothing moves (FR-010). |
 | B12 | Open the Review sheet with single-key shortcuts on, then off. | Both list *Back* (Alt+←) and *Forward* (Alt+→) (FR-014). |
 | B13 | Read `docs/user-guide/terminal-panes.md` §Keyboard shortcuts. | Back and Forward rows with mouse buttons, Alt+←/→ and Cmd+[ / Cmd+], and the focused-field/terminal rule (FR-013). |

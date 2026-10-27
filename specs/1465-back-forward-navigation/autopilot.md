@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: claude/project-thread-e4cve5
 - **Started**: 2026-10-27
-- **Phase**: plan written (review round 1 pending)
-- **Next step**: plan review round 1, then tasks unit
+- **Phase**: plan written; review round 1 fixed (round 2 pending)
+- **Next step**: plan review round 2 (scoped re-review of the round-1 fix diff), then tasks unit
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | 8dd4e55cf8901b03c0b2a3a594c57e3780e9ea71:90b186cd61c01d98ee42519bfcddf69b8bd79acf | CLEAN, 1 MINOR (FR-014/US5: Back/Forward app-wide but only the Review tab's sheet lists them; scoped explicitly, no fix required; noted in Clarifications) |
 | Clarify | 1 | 2 questions, both agent-resolved | macOS chord → Cmd+[ / Cmd+]; Review-tab-only sheet confirmed |
 | Clarify | 2 | rescan after round 1 | no critical ambiguities |
-| Plan review | 1 | 11f3d102ca7aabfb92c1199ff5ca3699e08f8622:0ae4673ae350ac1a5197583750a38820c1241a47 | pending |
+| Plan review | 1 | 11f3d102ca7aabfb92c1199ff5ca3699e08f8622:0ae4673ae350ac1a5197583750a38820c1241a47 | CHANGES: 1 MAJOR, 2 MINOR (F1 cross-project Compare: `runs.known` per-project group lists, R5 limit narrowed, tests + B10 added; F2 availability refreshed before `exists` (U2 step 0); F3 borrow split via `mem::take` in `resolve`) — all fixed |
 
 ## Declined review findings
 
@@ -46,12 +46,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit over the context cap after writing the plan. Done: plan.md, research.md (R1–R11),
-data-model.md, contracts/keys.md, contracts/ui.md, quickstart.md, committed at 0ae4673ae; plan
-review round 1 snapshot recorded (11f3d102…:0ae4673ae), reviewer not yet run. Next: run plan review
-round 1 (rubric `.claude/skills/speckit-autopilot/rubrics/plan.md`) on
-specs/1465-back-forward-navigation/{plan,research,data-model,quickstart}.md and contracts/; act on
-findings per review-rounds.md; then set Next step to `tasks unit`. Open findings: none yet.
+Plan review round 1 returned CHANGES (F1 MAJOR, F2/F3 MINOR); all fixed in research R5,
+data-model, contracts/ui U2/U4/U7, plan D5/requirement map/tests, quickstart B10. Next: plan
+review round 2, scoped to the fix diff from the round-1 snapshot (11f3d102…:0ae4673ae), on a
+cheaper model; if CLEAN or only MINORs, set Next step to `tasks unit`.
 
 ## Open escalation
 

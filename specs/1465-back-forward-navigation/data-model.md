@@ -81,8 +81,8 @@ enum Step {
 
 | Function | Rule | FR |
 |---|---|---|
-| `resolve(app: &mut crate::app::State, msg, lookup: &dyn Fn(&Path) -> Option<Vec<PathBuf>>) -> Step` | `navigation::blocked(app)` → `None`. `Source::Key` and (`app.terminal_focused()` or `app.live_focused_field().is_some()`) → `None`. `Back`, shown place a Review tab, `changes::can_go_back` on its view → `ReviewBack`. Else `list.step(dir, app.shown_place().as_ref(), \|p\| exists(app, p, lookup))` → `Show(p)` with `moving = true`, or `None`. | 006, 008–012 |
-| `exists(app, place, lookup) -> bool` | research R5. `lookup(project)` gives the worktree directories of a non-active project (`None` = unreadable → its worktree locations count as gone). | 006, edge *Gone targets* |
+| `resolve(app: &mut crate::app::State, msg, lookup: &dyn Fn(&Path) -> Option<Vec<PathBuf>>) -> Step` | `navigation::blocked(app)` → `None`. `Source::Key` and (`app.terminal_focused()` or `app.live_focused_field().is_some()`) → `None`. `Back`, shown place a Review tab, `changes::can_go_back` on its view → `ReviewBack`. Else, with the borrows split — `let shown = app.shown_place(); let mut list = std::mem::take(&mut app.history.list); let found = list.step(dir, shown.as_ref(), \|p\| exists(app, p, lookup)); app.history.list = list;` (`exists` takes `&State` and reads nothing of `history`) — `Show(p)` with `moving = true`, or `None`. | 006, 008–012 |
+| `exists(app: &crate::app::State, place, lookup) -> bool` | research R5; the shell refreshes availability before `resolve` (U2). `lookup(project)` gives the worktree directories of a non-active project (`None` = unreadable → its worktree locations count as gone). | 006, edge *Gone targets* |
 | `observe(state, shown: Option<Place>)` | `moving` → nothing. `Some(p)` → `list.record(p)`. `None` → nothing. | 002, 003 |
 | `finish(state, shown)` | `moving = false`, then `observe(state, shown)`. | 007, research R2 |
 
@@ -95,6 +95,14 @@ enum Step {
 | `State::observe_place()` | `history::observe(&mut self.history, self.shown_place())`; called by the binary after every message. |
 | `State::finish_history_move()` | `history::finish(&mut self.history, self.shown_place())`. |
 | `State::apply_history(step) -> Vec<Message>` | research R6: `ReviewBack` → `[Changes(BrowseBack)]`; `Show(place)` → `[Project(Reopened(project))]` when `project` is not active, then the covers' closes and the view's message; `None` → `[]`. |
+
+## Client — `micold-client/src/features/runs.rs` (changed)
+
+| Item | Rule |
+|---|---|
+| `State.known: BTreeMap<PathBuf, Vec<RunGroup>>` | each project's last group list this launch (research R5) |
+| `routed`, `Msg::GroupsChanged(groups)` | as today, and `known[workspace.active] = groups` |
+| `routed`, `Msg::CompareOpened { group, project }` | when `project` is active and `group` is not in `groups` but is in `known[project]`: `groups = known[project].clone()` first; then as today |
 
 ## Root — the live focused field
 

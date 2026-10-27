@@ -15,6 +15,8 @@ the Overview, Compare or a Review tab, and the app's own moves (a shown session 
 
 `shell/history.rs::update(app, Msg::Pressed { dir, source })`:
 
+0. `app.core.workspace.refresh_availability(app.caps.scanner())`, so `exists` and the switch read
+   the same availability (research R5).
 1. `step = app.core.press_history(msg, &lookup)` (the root drives the feature) with
    `lookup = |project| Some(discover_worktrees(git, project) paths)`.
 2. `follow_ups = app.core.apply_history(step)`; each runs through the root `update`.
@@ -39,7 +41,7 @@ No decision of its own: which messages, and whether to switch project, is `apply
 | `Session { id, .. }` | `Session(Selected(id))` |
 | `Review(location)` | `Overview(Closed)` if open, `Runs(CompareClosed)` if open, `Sidebar(ReviewChangesRequested(location))` |
 | `Overview` | `Runs(CompareClosed)` if open, `Overview(Opened { settings_open: false })` |
-| `Compare(group)` | `Overview(Closed)` if open, `Runs(CompareOpened { group, project })` |
+| `Compare(group)` | `Overview(Closed)` if open, `Runs(CompareOpened { group, project })`; in another project the group is found in `runs.known[project]` (research R5) |
 
 `ReviewBack` → `Changes(BrowseBack)`. The keyboard lands as a click on that place leaves it (spec
 *Assumptions*); no `finish_navigation`.
@@ -82,6 +84,9 @@ are unchanged code.
 - U5: a session archived, a worktree removed from `worktree.worktrees`, a worktree missing from the
   injected `lookup` of another project, a project turned unavailable → skipped and removed.
 - U4: `apply_history` messages for each target view, same and other project.
+- Cross-project Compare: in P record Compare(G), switch to Q, Back → P active, Compare of G open,
+  the forward entries kept (FR-006, FR-007); a Compare entry whose group is gone from
+  `known[P]` is skipped and removed; `known` keeps each project's last `GroupsChanged` list.
 - `observe_place` while `moving` records nothing; `finish_history_move` records only a place
   different from the target.
 - Two `State`s keep independent histories.
@@ -91,6 +96,7 @@ are unchanged code.
 - Cross-project Back: the project switches, the target session is shown, the entries and position
   are as before the press except the position (R2: no intermediate place recorded).
 - Overview → Back → the previous session, Overview closed; Back from Compare to a Review tab.
+- Cross-project Compare: Compare of G in P, show Q1, Back → P with Compare of G open, Forward → Q1.
 
 `crates/micold-client/tests/review_keys.rs`: `sheet_model(true)` and `sheet_model(false)` end with
 the two U6 rows.
