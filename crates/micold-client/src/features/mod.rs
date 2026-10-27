@@ -77,7 +77,8 @@ pub enum Outcome {
     /// root hides the shown Review tab, kept. `session` owns the selection, `changes` the tabs.
     ReviewHidden,
     /// A project was forgotten (feature 1269, U9): the root drops its Review tabs, which are
-    /// `changes`'s; `project` owns the catalog.
+    /// `changes`'s, and each daemon's listing there (bug 1538), which is `settings`'s; `project`
+    /// owns the catalog.
     ProjectForgotten(std::path::PathBuf),
     /// The current session went (closed, removed, ended, or gone from the catalog), its records
     /// already updated (feature 1269, U8, R8): when it was the last live session of its location
