@@ -242,6 +242,20 @@ onto the no-outbound posture, run offline.
 - `crates/micold-daemon/src/server.rs`: called once at startup, off the async runtime, right after
   `set_ai_clis_dir`/`set_in_sandbox` (provisioning wrote `offered.json` in its `InstallAiClis` step,
   before `Start`), so every daemon start refreshes it.
+- Limit: the daemon reads `CLAUDE_CONFIG_DIR` and `CODEX_HOME` from its own environment. A session
+  whose launch environment sets another `CLAUDE_CONFIG_DIR` (`session_dir_var`, `state.rs:860`)
+  reads a `CLAUDE.md` that gets no block; accepted and documented (spec edge case), not written at
+  session start.
+- `crates/micold-core/src/kube/manifest.rs` `pod`: a Kubernetes credential mount is a Secret
+  `subPath` inside the home volume (`kube/credentials.rs`, Claude's at
+  `/data/home/.claude/.credentials.json`); the runtime creates a missing mount-point folder as root,
+  so the daemon could not write `~/.claude/CLAUDE.md`. When any allowed credential mounts under
+  `POD_HOME`, the pod gets an init container `home-dirs` on the same image, with the main
+  container's security context and resources and the `data` volume, running `mkdir -p` (no shell)
+  on each such mount's parent folder. Init containers finish before the main container's mounts
+  are made, so the folders are the image user's (`runAsUser` of the pod). Not in the pod stamp, so
+  no running pod drifts; a pod recreated later gets it. A `~/.claude` that an older pod already made
+  root-owned stays so (the init container is not root) and the write is logged (spec edge case).
 - Real-runtime: `sandbox_real_toolchain_path` also checks that `~/.micold/AGENTS.md` exists and
   `~/.claude/CLAUDE.md` holds the begin marker (tagged output, the wrapped-echo pitfall).
 - Docs: one paragraph in the sandbox page's "Tools installed in the sandbox's home" (D6).
@@ -281,7 +295,8 @@ pin; before it, quickstart B1 runs on `micold-basic:dev` built from the branch, 
 | FR-017 | D1 step 1 | real-runtime A5 (`xz`, `unzip` in `PRESENT`) |
 | FR-018 | D6 (M5 paragraph) | real-runtime A10 (`apt-get install` fails); docs CI |
 | FR-019 | D10 | core unit tests (`agent_guide`: merge, idempotence, user text kept, targets); daemon unit test (sandbox writes, host writes nothing, failure not fatal); real-runtime A6 (`sandbox_real_toolchain_path`: marker present) |
-| Edge: instruction files hold the user's text; a file cannot be written | D10 | core and daemon unit tests of FR-019 |
+| Edge: instruction files hold the user's text; a file cannot be written | D10 | core and daemon unit tests of FR-019; kube manifest unit test (`home-dirs` init container) |
+| Edge: a session with its own `CLAUDE_CONFIG_DIR` | D10 (limit) | none; documented |
 | Edge: a session installs while setup or another session installs | not serialised; rerun | user guide (D6 M5 paragraph) |
 | Edge: the environment already names an install location | contract I2 | unit tests A8 |
 | Edge: an image update changes a system library | documented (R12) | user guide (D6 M5 paragraph: reinstall such a tool) |
