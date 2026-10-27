@@ -4320,8 +4320,9 @@ pub const REVIEW_STALE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
 /// The shortcut sheet's dialog surface, over its scrim at the root.
 pub const REVIEW_SHEET: &[usize] = &[10, 0];
 /// The new comment's composer a line-number drag opened: the diff pane's padding → the diff's
-/// column → its lines → the dragged range's last line, whose slot hangs the composer under it.
-pub const REVIEW_COMPOSER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0, 0, 1, 0, 3, 1];
+/// column → its lines (led by #1466's zero-height ruler) → the dragged range's last line, whose
+/// slot hangs the composer under it.
+pub const REVIEW_COMPOSER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0, 0, 1, 0, 4, 1];
 
 /// The mixed review of `feat-short`'s working tree the feature 1270 states show: 3 drafts, 2 sent,
 /// 1 applied with a one-line reply and 1 answered with a reply that wraps over several lines.

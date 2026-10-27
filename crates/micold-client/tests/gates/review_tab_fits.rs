@@ -120,7 +120,7 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 /// is allowed. Each entry must keep firing in each of its states, or it is widening the gate
 /// silently: drop a state once its node fits there, and the entry once no state is left.
 ///
-/// The first two are scrolling, not defects: content taller than the `Scrollable` that shows it,
+/// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
 /// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
 /// filed as #1474 rather than fixed here (feature 1276 changes no review layout, spec § Out of
 /// Scope).
@@ -152,6 +152,18 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "bottom",
         "base",
         "the diff's Scrollable: lines past its viewport",
+    ),
+    (
+        &[
+            "changes-review-held",
+            "changes-review-marks",
+            "review-shortcut-sheet",
+            "review-source-open",
+        ],
+        "0/0/0/1/1/2/1/1/0/0/1",
+        "right",
+        "base",
+        "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
     ),
     (
         &[
