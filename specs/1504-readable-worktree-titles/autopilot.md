@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A (code-review high) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CHANGES: 1 MAJOR, 2 MINOR — all fixed (F1 a folder ticket of neither kind no longer stops the branch being read; F2 a non-conventional namespace segment (`jh/`, `user/`) is skipped before the branch ticket is read; F3 Jira key rule reused from `issue_link::ticket_ref` (digits after the first letter); L2 rows and tests added) |
 | M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CLEAN (1 MINOR: no TDD cycle log; red runs named in the PR body) |
 | M1 visual pass | 1 | 7fbb9ec20 | PASS: quickstart §B rows A, B and rename, light and dark (/mnt/project-files/issue-1504/) |
+| M1 review A (code-review, scoped) | 2 | d074ecd6fb6b943300885d215029a356dea395db:104b7ed0222554ea88387a5c7dc81eec981d4073 | pending (orchestrator; fix diff from 832dfdb47…:7fbb9ec20…); full gate green at 104b7ed02 |
 
 ## Declined review findings
 
