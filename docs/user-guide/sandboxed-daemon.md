@@ -394,8 +394,8 @@ stay out of reach: they come from the image, or from
 The AI agent is told all this too. Each time a container or Kubernetes daemon starts, it writes a
 short guide for the agent to `~/.micold/AGENTS.md` in the sandbox's home: that it runs without root
 or `sudo`, that only the home and the project folders persist, and which of the commands above
-install a tool so it stays on the `PATH`. It also adds a block that sums the guide up and points at
-it to Claude Code's `~/.claude/CLAUDE.md` (`$CLAUDE_CONFIG_DIR/CLAUDE.md` when the daemon's
+install a tool so it stays on the `PATH`. For each of these CLIs it offers, it also adds a block that sums
+the guide up and points at it to Claude Code's `~/.claude/CLAUDE.md` (`$CLAUDE_CONFIG_DIR/CLAUDE.md` when the daemon's
 environment sets it) and Codex's `~/.codex/AGENTS.md` (`$CODEX_HOME/AGENTS.md`). The block sits
 between `<!-- micold:sandbox-guide begin -->` and `<!-- micold:sandbox-guide end -->`; anything you
 write outside it is kept, and a newer daemon replaces only the block. The guide file itself is
