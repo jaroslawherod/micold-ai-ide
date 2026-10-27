@@ -594,7 +594,11 @@ pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
         CardState::NeedsAction => (Tone::Error, "action"),
         _ => (Tone::Warning, "attention"),
     };
-    let verb = if attention.count == 1 { "needs" } else { "need" };
+    let verb = if attention.count == 1 {
+        "needs"
+    } else {
+        "need"
+    };
     Some(Badge {
         tone,
         count: attention.count,
