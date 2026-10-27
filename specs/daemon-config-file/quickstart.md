@@ -42,8 +42,9 @@ times.
    `B`'s user.
 4. Replace `A`'s file with a new token; within 5 s a `git fetch` uses it (watch the forge log, or
    revoke the old token first).
-5. Two tokens with `repos = ["acme/*"]` → Settings refuses to save; a hand-written file is refused at
-   load, naming both.
+5. Two tokens with `repos = ["acme/*"]` → the first in Settings is used for `acme/` repositories;
+   Settings shows it per repository and marks the second as shadowed. Move the second up → it is used
+   by the next `git fetch`.
 6. Host daemon, no tokens: `git push` uses the user's own helper exactly as before.
 
 ## 4. AI CLIs from the file (Story 4, SC-006)
@@ -52,20 +53,28 @@ times.
    session runs Claude Code with that model and `~/.claude/settings.json` equals the file.
 2. `enabled = false` for `opencode` → the new-session menu does not offer it.
 3. Codex with `api_key_file` → `OPENAI_API_KEY` is set in the session; `ps`/`/proc/*/cmdline` show no
-   key.
+   key. Claude Code with `api_key_file`: replace the key file → the running session's next request
+   uses the new key (`apiKeyHelper`).
+3a. Host daemon, user signed in to Claude Code on the machine, `sign_in_file` naming another account
+   → sessions use the configured account; `sha256sum ~/.claude/.credentials.json` is unchanged
+   before and after.
 4. `settings_file` on a host daemon → `config check` refuses (V10).
 5. Change `default_ai_cli` in the UI → stays in `settings.json`, other windows follow live.
 
 ## 5. Start script (Story 5, SC-007)
 
-1. Container daemon, script installs a tool to `~/.local/bin` and `export FOO=bar`, `run = "once"`.
+1. Container daemon, script installs a tool to `~/.local/bin` and `export FOO=bar`, `run = "once_per_container"`.
    Start → a new session finds the tool and `echo $FOO` prints `bar`. `id -u` in the script's log ≠ 0.
 2. Restart the daemon → the log shows the script skipped (marker matches). Edit the script → Settings
    shows "Restart to apply"; the script did not run. Restart → it runs.
 3. `exit 1`, `on_failure = "refuse"` → the daemon does not start; the app shows the exit status and
    the script's last lines. Same with `on_failure = "warn"` → it starts with a warning.
 4. `sleep 999`, `timeout_secs = 2` → treated as failed after 2 s; no orphan `sleep` remains.
-5. Set `env_include` in Settings too, both defining `FOO` → the session sees the env-include value.
+5. `env_file` with `SECRET=x`, script without `export SECRET` → a session's `env` has no `SECRET`;
+   add `export SECRET` → it does.
+6. Set `env_include` in Settings too, both defining `FOO` → the session sees the env-include value.
+
+Pod with a Claude sign-in: a refreshed sign-in is lost when the pod restarts (known limit, documented).
 
 ## 6. Projects (FR-014)
 

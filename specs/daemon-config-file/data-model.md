@@ -51,7 +51,8 @@ the reach. Output: one token name, or none.
 
 1. Candidates: tokens whose filter matches (or has none) and that are not expired, and — for an
    unfiltered token — whose reach contains the repository.
-2. Rank: `Exact` > `Owner` > unfiltered; ties among unfiltered by file order (Q3).
+2. Rank: `Exact` > `Owner` > unfiltered; ties (same pattern, or both unfiltered) go to the first in
+   the file (= Settings order). The losers are reported as shadowed for that repository.
 3. None → host/SSH: fallback helpers; sandbox: no credential (git asks, fails non-interactively).
 
 ### AiCli
@@ -59,7 +60,9 @@ the reach. Output: one token name, or none.
 `id: CliId { ClaudeCode, Copilot, Pi, Codex, Opencode }` (unique), `enabled`, `version?: Semver`,
 `args: Vec<String>`, `model?`, `api_base_url?: Url`, `env: Map`, `sign_in_file?: SecretPath`,
 `sign_in_writable`, `api_key_file?: SecretPath`, `settings_file?: Path`, `place: [Place {file, as}]`.
-Each field is checked against the CLI's capabilities from `provider.rs` (model argument, base-URL
+On host and SSH a `sign_in_file` gives the CLI's sessions a per-daemon config dir
+`<data_dir>/ai/<id>/` (sign-in linked in, the user's own settings files linked read-through); the
+machine's own sign-in is never written. Each field is checked against the CLI's capabilities from `provider.rs` (model argument, base-URL
 variable, key variable, sign-in support, config dir).
 
 ### Session
@@ -69,7 +72,7 @@ variable, key variable, sign-in support, config dir).
 ### Startup
 
 `script_file`, `shell`, `timeout: 1..=3600 s`, `on_failure: Refuse | Warn`,
-`run: EveryStart | Once`, `env_file?: SecretPath`, `export_env`.
+`run: EveryStart | OncePerContainer` (host/SSH: once per data directory), `env_file?: SecretPath` (values visible to the script only, as unexported shell variables), `export_env` (explicit exports only).
 
 ### StartupRun (state, `<data_dir>`)
 
@@ -97,7 +100,7 @@ startup: StartupRun summary, restart_needed: bool, changed_restart_keys: [key pa
 | V3 | `[listen]` has zero or two keys; `tcp` without `client_token_file` | the table |
 | V4 | Relative path anywhere | the key |
 | V5 | Duplicate `github.tokens.name`, `ai.cli.id` or `projects.path` | both entries |
-| V6 | Two tokens with the same `repos` pattern | the pattern, both tokens |
+| V6 | (retired: equal specificity is resolved by file order, not refused) | — |
 | V7 | `ai.cli` field the CLI does not support (`model`, `api_base_url`, `sign_in_file` for copilot/pi) | CLI id, key |
 | V8 | `ai.cli.args` containing a daemon-owned argument | the argument |
 | V9 | `sign_in_file` and `api_key_file` both set, CLI with no documented precedence | CLI id |
@@ -128,8 +131,8 @@ unavailable, diagnostic says so) → Available`.
 ### Start script (per daemon start)
 
 ```text
-Skipped (no [startup], or run=once and marker matches)
-Running --exit 0--> Succeeded (exports applied; marker written if once) --> Serving
+Skipped (no [startup], or run=once_per_container and marker matches)
+Running --exit 0--> Succeeded (exports applied; marker written if once_per_container) --> Serving
 Running --exit≠0 / timeout / spawn error--> Failed
    on_failure=refuse → failure file written, daemon exits non-zero → app shows the output
    on_failure=warn   → warning in diagnostic → Serving

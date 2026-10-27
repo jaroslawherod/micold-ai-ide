@@ -22,7 +22,7 @@ Technical approach (research.md):
   one type for the client renderer, the daemon loader and `micold-daemon config check` (D1–D3);
 - the daemon's credential helper becomes a stateless `micold-daemon git-credential` that reads the
   config, the token file and a reach cache (`GET /user/repos`) at each call — multi-repository PATs
-  with an optional `repos` filter, most-specific wins (D6, D7);
+  with an optional `repos` filter, most-specific wins, ties by file order (D6, D7);
 - a `gh` shim on the session `PATH` sets `GH_TOKEN` per repository (D8);
 - `[[ai.cli]]` holds deployment settings per CLI (enabled, version, args, model, base URL, sign-in,
   API key file, settings files); live UI settings stay in `settings.json` (D9);
@@ -107,7 +107,7 @@ specs/daemon-config-file/
 ├── handover.md          # Brief and verified-later findings
 ├── spec.md              # What and why
 ├── plan.md              # This file
-├── research.md          # Verified code facts, decisions D1–D12, open questions
+├── research.md          # Verified code facts, decisions D1–D12, answered questions
 ├── data-model.md        # Entities and rules
 ├── contracts/
 │   └── daemon-config.md # The TOML schema, every key, an example per kind

@@ -52,7 +52,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 - [ ] T005 [US1] Add `toml` (workspace version, already in `Cargo.lock`) as a direct dependency of `crates/micold-core/Cargo.toml` and the workspace `Cargo.toml`
 - [ ] T006 [P] [US1] Failing tests in `crates/micold-core/src/daemon_config/tests.rs`: parse each of the four contract §3 examples (fixtures under `crates/micold-core/tests/fixtures/daemon_config/{host,ssh,container,kubernetes}.toml`), defaults per kind as in contract §2
-- [ ] T007 [P] [US1] Failing tests for validation rules V1–V15 of `data-model.md`, one test per rule, each asserting the error names `file:line:col` and the key (V1 "Unknown key in any table"; V2 "`schema` missing, or larger than supported"; V3 "`[listen]` has zero or two keys; `tcp` without `client_token_file`"; V4 "Relative path anywhere"; V5 duplicates; V6 "Two tokens with the same `repos` pattern"; V7–V11 AI CLI rules; V12 projects; V13 "`startup.timeout_secs` out of range" 1–3600; V14 secret mode; V15 missing required files)
+- [ ] T007 [P] [US1] Failing tests for validation rules V1–V15 of `data-model.md`, one test per rule, each asserting the error names `file:line:col` and the key (V1 "Unknown key in any table"; V2 "`schema` missing, or larger than supported"; V3 "`[listen]` has zero or two keys; `tcp` without `client_token_file`"; V4 "Relative path anywhere"; V5 duplicates; V6 retired (equal specificity resolved by file order, so a test asserts two tokens with the same `repos` pattern are accepted); V7–V11 AI CLI rules; V12 projects; V13 "`startup.timeout_secs` out of range" 1–3600; V14 secret mode; V15 missing required files)
 - [ ] T008 [P] [US1] Failing test: `Debug`/`Display` of a parsed config and of `SecretPath` never contain a secret file's content (SC-005)
 - [ ] T009 [US1] Implement the types in `crates/micold-core/src/daemon_config/mod.rs` (`DaemonConfig`, `Daemon`, `Kind`, `Listen` enum, `IdleStop`, `SecretPath`, `GithubToken`, `RepoPattern`, `AiCli`, `CliId`, `Session`, `Startup`, `Project`) with `#[serde(deny_unknown_fields)]` on every table
 - [ ] T010 [US1] Implement `parse(&str, origin) -> Result<DaemonConfig, Vec<ConfigError>>` and `validate` in `crates/micold-core/src/daemon_config/validate.rs`; schema version acceptance per research D2 (own and previous; newer refused naming both)
@@ -79,7 +79,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T021 [P] [US1] Failing golden tests in `crates/micold-client/tests/daemon_config_render.rs`: one Settings fixture per kind renders byte-for-byte to `crates/micold-client/tests/golden/daemon_config/{host,ssh,container,kubernetes}.toml`; `parse(render(x))` round-trips; the output passes `validate`
 - [ ] T022 [P] [US1] Failing test: rendering twice gives identical bytes (stable key order), so delivery writes only on change (research D10)
 - [ ] T023 [US1] Implement `render(&DaemonSettings, Kind) -> String` with the header comment in `crates/micold-client/src/daemon_config_render.rs`, reading the daemon entry from `crates/micold-core/src/daemons.rs`
-- [ ] T024 [US1] Run `validate` on the rendered file before delivery and show errors in Settings → Daemons (`crates/micold-client/src/ui/settings/daemons.rs`) (research Q5 proposal)
+- [ ] T024 [US1] Run `validate` on the rendered file before delivery and show errors in Settings → Daemons (`crates/micold-client/src/ui/settings/daemons.rs`) — the same check as `micold-daemon config check`; an invalid file is not delivered
 
 ---
 
@@ -109,7 +109,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T036 [P] [US1] Failing golden tests in `crates/micold-core/src/kube/manifest.rs` tests: a ConfigMap `<name>-config` mounted at `/run/micold/config`; one Secret per credential mounted as a **directory** (no `subPath`) under `/run/micold/secrets/…`; pod env only `HOME`, `TMPDIR`
 - [ ] T037 [P] [US1] Failing test in `crates/micold-core/src/kube/credentials.rs`: `daemon_env` is empty of `MICOLD_*`
 - [ ] T038 [US1] Implement ConfigMap and directory Secret manifests in `crates/micold-core/src/kube/manifest.rs` and `crates/micold-core/src/kube/credentials.rs`; apply/update them from `crates/micold-client/src/kube/`
-- [ ] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`
+- [ ] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`, including the known limit: a pod sign-in is a read-only Secret, so a sign-in the CLI refreshes is lost when the pod restarts
 
 ---
 
@@ -117,7 +117,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 - [ ] T040 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat_store.rs`: store keyed `github-pat/<name>`; migration of each `github-pat/<owner>/<repo>` to a token named `<owner>-<repo>` with `repos = ["owner/repo"]`
 - [ ] T041 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat.rs`: the one-repository reach refusal (`parse_reach`, `:191-219`) is gone; a token reaching N repositories is accepted and its reach list returned
-- [ ] T042 [P] [US2] Failing test: Settings refuses two tokens with the same `repos` pattern, naming both (V6)
+- [ ] T042 [P] [US2] Failing test: Settings lists tokens in file order and shows, per repository in a token's reach, which token it uses and which are shadowed (two tokens with `repos = ["acme/*"]`: the first wins; reordering changes the winner)
 - [ ] T043 [US2] Implement the store and migration in `crates/micold-core/src/scoped_credential/pat_store.rs`; remove the reach refusal in `pat.rs`
 - [ ] T044 [US2] Settings → GitHub (`crates/micold-client/src/ui/settings/github.rs`): name, token, optional repos filter, the reach list per token; render into `[[github.tokens]]`
 - [ ] T045 [US2] Update `docs/user-guide/settings.md` (GitHub tokens section)
@@ -126,7 +126,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 ## Issue 9 — feat: the daemon's credential helper chooses the token from the configuration (needs 3, 8)
 
-- [ ] T046 [P] [US2] Failing tests in `crates/micold-core/src/daemon_config/matching.rs` for `TokenChoice` (data-model): exact > `owner/*` > unfiltered; unfiltered ties by file order; expired skipped; offline uses cached reach; no cache → filtered token only for its filter
+- [ ] T046 [P] [US2] Failing tests in `crates/micold-core/src/daemon_config/matching.rs` for `TokenChoice` (data-model): exact > `owner/*` > unfiltered; equally specific ties (same pattern, or both unfiltered) by file order, losers reported as shadowed; expired skipped; offline uses cached reach; no cache → filtered token only for its filter
 - [ ] T047 [P] [US2] Failing daemon test in `crates/micold-daemon/tests/git_credential_config.rs` with a fake forge (`MICOLD_GIT_CREDENTIAL_BASE`): `micold-daemon git-credential get` answers from the token file; a replaced token file is used by the next call (SC-004, ≤ 5 s); reach cached in `<data_dir>/github-reach.json` by fingerprint (first 16 hex of SHA-256) and refreshed at load, on token change, every 15 min, on a miss at most once a minute
 - [ ] T048 [P] [US3] Failing test (host/SSH, `isolate_host_helpers = false`): with no matching token the helper runs the captured fallback helpers (`MICOLD_GIT_FALLBACK_HELPERS`); with no token configured at all the session's git config is untouched
 - [ ] T049 [P] [US3] Failing test (sandbox): inherited helpers are cleared (#1002 FR-004 regression)
@@ -151,13 +151,13 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 Includes AI sign-in delivery (replaces the `[[ai.sign_in]]` draft): research D9.
 
-- [ ] T059 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/ai_cli.rs` mapping each `[[ai.cli]]` field to the CLI's capabilities in `crates/micold-core/src/provider.rs` (V7–V11): `model` only for Claude Code; `api_base_url` → `ANTHROPIC_BASE_URL`/`OPENAI_BASE_URL`; `api_key_file` → `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`; `sign_in_file` refused for copilot and pi; daemon-owned args refused
+- [ ] T059 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/ai_cli.rs` mapping each `[[ai.cli]]` field to the CLI's capabilities in `crates/micold-core/src/provider.rs` (V7–V11): `model` only for Claude Code; `api_base_url` → `ANTHROPIC_BASE_URL`/`OPENAI_BASE_URL`; `api_key_file` → Claude Code: `apiKeyHelper` in the per-session settings and no `ANTHROPIC_API_KEY`; Codex: `OPENAI_API_KEY` at session start; `sign_in_file` refused for copilot and pi; daemon-owned args refused
 - [ ] T060 [P] [US4] Failing daemon test in `crates/micold-daemon/tests/ai_cli_config.rs`: configured `args`/`model`/`env` are appended to the app's launch args and env, never replacing them; the API key is in the env and not on the command line; `enabled = false` hides the CLI from availability (`crates/micold-daemon/tests/ai_cli_availability.rs`)
-- [ ] T061 [P] [US4] Failing test in `crates/micold-core/src/provision/ai_cli.rs`: `version` overrides the pinned table for that CLI only, accepted only as semver; package and registry stay fixed (Q1)
+- [ ] T061 [P] [US4] Failing test in `crates/micold-core/src/provision/ai_cli.rs`: `version` overrides the pinned table for that CLI only, accepted only as semver; package and registry stay fixed
 - [ ] T062 [P] [US4] Failing tests for placement (container, pod): `settings_file` and `place` land under the CLI's config dir in the sandbox home; `place.as` cannot escape it; a sign-in file is mounted writable only when `sign_in_writable`
-- [ ] T063 [US4] Implement the launch mapping in `crates/micold-daemon/src/state.rs` and `crates/micold-core/src/provider.rs`
+- [ ] T063 [US4] Implement the launch mapping in `crates/micold-daemon/src/state.rs` and `crates/micold-core/src/provider.rs`; for Claude Code add `apiKeyHelper` (`<daemon> ai-key claude_code`, prints the key file on each use) to the per-session `SettingsDoc` in `crates/micold-daemon/src/hooks.rs`, with a test that a replaced key file is printed on the next call
 - [ ] T064 [US4] Implement version and selection in `crates/micold-core/src/provision/ai_cli.rs` and `crates/micold-core/src/provision/mod.rs`
-- [ ] T065 [US4] Sign-in delivery: container single-file writable mount (`crates/micold-core/src/sandbox/mod.rs:700-735`) from `sign_in_file`; pod directory Secret (`crates/micold-core/src/kube/credentials.rs:73-79`, drop `subPath`); host/SSH use the CLI's own location (Q4)
+- [ ] T065 [US4] Sign-in delivery: container single-file writable mount (`crates/micold-core/src/sandbox/mod.rs:700-735`) from `sign_in_file`; pod directory Secret (`crates/micold-core/src/kube/credentials.rs:73-79`, drop `subPath`); host/SSH: a configured sign-in wins — the session gets `<data_dir>/ai/<id>/` as its config dir (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode `XDG_DATA_HOME`) with the sign-in linked in and the user's own settings files linked read-through (research D9 table); test that the machine's own sign-in file is byte-identical and its mtime unchanged after a session; verify macOS Keychain behaviour and refresh-by-rename per CLI (research §4)
 - [ ] T066 [US4] Settings → Daemons per CLI (`crates/micold-client/src/ui/settings/daemons.rs`): enabled, version, args, model, base URL, sign-in, API key, settings file; render into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json` (FR-013d)
 - [ ] T067 [US4] Document in `docs/user-guide/settings.md` and `daemon-configuration.md`, including the file-vs-settings.json rule
 
@@ -167,8 +167,8 @@ Includes AI sign-in delivery (replaces the `[[ai.sign_in]]` draft): research D9.
 
 Research D12.
 
-- [ ] T068 [P] [US5] Failing tests in `crates/micold-core/src/env_include.rs` for the generalised `run_and_diff(script, shell, cwd, timeout, extra_env)`: exports captured via the `env -0` diff; `env_file` lines (`KEY=VALUE`, no evaluation) in the script's env; `resolve` still passes its existing tests
-- [ ] T069 [P] [US5] Failing daemon tests in `crates/micold-daemon/tests/startup_script.rs`: runs before the listener binds; `every_start` vs `once` with `<data_dir>/startup.done` = SHA-256 of script, shell and env_file, written only after success; `timeout_secs` kills the process group; `refuse` → exit non-zero and `startup-failure.json` with the last 200 lines; `warn` → serves with a warning; output in the log under target `startup`
+- [ ] T068 [P] [US5] Failing tests in `crates/micold-core/src/env_include.rs` for the generalised `run_and_diff(script, shell, cwd, timeout, extra_env)`: exports captured via the `env -0` diff; `env_file` lines (`KEY=VALUE`, no evaluation) visible to the script as unexported variables and absent from the diff unless the script runs `export NAME` (sh) / sets `$env:NAME` (PowerShell); `resolve` still passes its existing tests
+- [ ] T069 [P] [US5] Failing daemon tests in `crates/micold-daemon/tests/startup_script.rs`: runs before the listener binds; `every_start` vs `once_per_container` with `<data_dir>/startup.done` = SHA-256 of script, shell and env_file, written only after success; `timeout_secs` kills the process group; `refuse` → exit non-zero and `startup-failure.json` with the last 200 lines; `warn` → serves with a warning; output in the log under target `startup`
 - [ ] T070 [P] [US5] Failing test: session env order is daemon env (incl. exports) → environment-include → `ai.cli[].env` → `session.env`/`secret_env` → session vars (env-include wins over the start script for the same name)
 - [ ] T071 [P] [US5] Failing test: a changed script or `[startup]` table on a running daemon does not re-run it and sets `restart_needed`
 - [ ] T072 [US5] Implement `run_and_diff` in `crates/micold-core/src/env_include.rs` (reusing `run_bounded`, `crates/micold-core/src/process.rs:240`)
