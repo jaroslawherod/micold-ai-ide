@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: close — review pending
-- **Next step**: orchestrator runs the close review (correctness of the tests, truth of the docs) on the pushed branch; then the close unit runs the full gate, finishes the ledger and opens the close PR
+- **Phase**: done
+- **Next step**: handoff — the run ends when the close PR merges
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1541 | M3 visual pass + fixes + fixture | merged | 3054321a9cef77929487989d9cdc73097b417399 |
 | #1544 | M4 mockup canvas sync | merged | 589dec73779b6997459c81776c376618c041f5b1 |
 | #1545 | M5 redesign doc record | merged | 09ee4cb188b5b76f59512aa8e506f88ca2d7e7b7 |
-| — | close (TDD verify, quickstart, status) | not opened: waits on the close review | |
+| #<close PR> | close (TDD verify, quickstart, status) | open | |
 
 ## Milestones
 
@@ -86,6 +86,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | M4 B (conformance) | 1 | 3e78c973427cfd5f9b9b2c0f032051389f75ecff:6094e9e4774d7c726fc97492ea6e6cd180b2a6c6 | CHANGES, 1 MAJOR 3 MINOR (sonnet, run by orchestrator); all fixed in canvas version 11: F1 boards for source control (02), bar error/empty (07/13), empty drawer (14), composer (12), empty review (13), PR unreadable (15); crop 16 recorded as not a component state (TabStrip `session=false` covers its strip); F2 TabStrip boxed + after the session tab, + and two split icons at the right; F3 status bar hints two spans, left items reworded to the build; F4 TitleBar and Sidebar compared with ui/toolbar.rs, ui/sidebar.rs and the guide, each element kept or removed in mockup-sync.md (none is a doc follow-up). Re-review in round 2 |
 | M5 B (conformance) | 1 | f5dd5052930e61ab20260be07e82f6e0c07c3ab7:b35bf62325de0c965b46d7e64cf14481b2f0286a | CLEAN, 1 MINOR (sonnet, run by orchestrator): 26 PR/issue numbers correct, scope exactly M5. MINOR: review-redesign.md § Open questions 0 "kept in memory only" checked against the code and kept: the tabs live in `ReviewTabs<OpenView>` (`pub tabs` of `State`, crates/micold-client/src/features/changes.rs:1445), a window-local struct deriving no serde; `ReviewTabs` (crates/micold-core/src/review_tabs.rs:74) has no Serialize/Deserialize and nothing writes it out |
 | M4 B (conformance) | 2 | f389648488619de6df1577ef1fb69bb5edae9a0f:5eeb4d7d741d3aa26d1c6c990286f7f0d8bf84b4 | CLEAN (sonnet): all four round-1 fixes hold; canvas version 11 (1793115039-8547) carries the new boards (SourceControl, ReviewStates, Composer, EmptyReview, PrUnreadable), TabStrip/StatusBar fixes, Sidebar/TitleBar cleanup; mockup-sync.md has an action on every row |
+| Close (correctness of tests, truth of docs) | 1 | 8b8716f42ce629fe97c602b4c57d92dc3312c84e:8870b14558fc63e19a49616c9dfd8dfab5970636 | CLEAN, 3 MINOR (session model, run by orchestrator); all fixed, prose only: F1 tdd/verification.md frontmatter `likely: 6`, `not_applicable: 1`, Verdict and this ledger's Close line say the six code behaviours are LIKELY (B2 a refactor); F2 quickstart A2 names `reviewing-changes.md:799` as the **Show all** reply dialog's **Close**; F3 verification.md names the client lib filter for the 37-test suite run and the 13-test mutant re-run |
 
 ## Declined review findings
 
@@ -97,8 +98,9 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 ## Close unit
 
 - converge skipped: every milestone has a CLEAN review B in *Review rounds*.
-- `speckit-tdd-verify` run by hand (no forked skill or subagent here): `tdd/verification.md`, PASS_WITH_GAPS (all 7 behaviours LIKELY: squash merges; 5 deliberate mutants, 5 caught). F1 (HIGH, conditional bar/drawer checks in `review_tab_fits`) and F2 (MED, eager `a_long_entry_name…` test) fixed as T037–T038; F3 (path addressing) kept, reason in the report.
+- `speckit-tdd-verify` run by hand (no forked skill or subagent here): `tdd/verification.md`, PASS_WITH_GAPS (the six code behaviours LIKELY: squash merges; B2 is a refactor, NOT_APPLICABLE; 5 deliberate mutants, 5 caught). F1 (HIGH, conditional bar/drawer checks in `review_tab_fits`) and F2 (MED, eager `a_long_entry_name…` test) fixed as T037–T038; F3 (path addressing) kept, reason in the report.
 - Polish: quickstart results appended to quickstart.md; T025, T035, T036 ticked; spec Status Closed 2026-10-27 with `#<close PR>` to fill when the PR opens.
+- Close review CLEAN (3 MINOR, fixed prose only); origin/main merged (already up to date); full gate green (scripts/gate.sh, debug info off, target-shared wiped for disk; first run lost `capture-harness` "display.sh starts a private X display" to two gates running at once, passes alone and on rerun).
 
 ## Handover
 

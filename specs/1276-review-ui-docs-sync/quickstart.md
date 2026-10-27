@@ -48,8 +48,8 @@ verdict per check, every FAIL with a fix or an issue link.
 
 - **A1** `review_keys_doc` 3 passed; with one `Does` cell changed it fails
   (`the_guides_table_is_the_review_key_table`), restored green.
-- **A2** the grep's remaining hits are other dialogs' **Close** buttons (the review's quick-comment
-  dialog at `reviewing-changes.md:799`, setup output, session row, daemon details) and settings'
+- **A2** the grep's remaining hits are other dialogs' **Close** buttons (the review's **Show all**
+  reply dialog at `reviewing-changes.md:799`, setup output, session row, daemon details) and settings'
   "within 2 seconds" path check: none describes the pre-redesign view.
 - **A3** `terminal-panes.md:44` lists the Review tab with its badge and changed dot;
   `worktrees-and-sessions.md:1187` says **Review changes** opens or shows it.

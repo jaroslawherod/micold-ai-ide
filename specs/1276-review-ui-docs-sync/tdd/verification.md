@@ -5,7 +5,8 @@ standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
 verified_at: 09ee4cb1
 behaviors: 7
 proven: 0
-likely: 7
+likely: 6
+not_applicable: 1
 test_after: 0
 no_test: 0
 high_smells: 0
@@ -13,14 +14,15 @@ criteria_total: 14
 criteria_covered: 14
 mutation_score: null # no cargo-mutants; 5 deliberate mutants, 5 caught
 mutants_survived: 0
-suite: "feature tests: core 3+3+2, client layout_snapshot 162 + layout_text_overflow 3 + layout_coverage_registry 3, client lib 37 (filtered); 0 failed"
+suite: "feature tests: core 3+3+2, client layout_snapshot 162 + layout_text_overflow 3 + layout_coverage_registry 3, client lib 37 (filter `features::changes:: ui::changes:: pull_request_row:: review_bar:: review_panel_row::`); 0 failed"
 ---
 
 # TDD Verification: Review UI — docs, layout snapshot, visual pass and mockup sync
 
 **Verdict: PASS_WITH_GAPS.** Every code behaviour has a recorded red and a test that fails on a
 deliberate mutant, but no red can be ordered in git history (M2 and M3 were squash-merged, M1's red
-was reconstructed after review), so all seven are `LIKELY`; mutation is sampled by hand, not measured.
+was reconstructed after review), so the six code behaviours are `LIKELY` (B2 is a refactor,
+`NOT_APPLICABLE`); mutation is sampled by hand, not measured.
 
 Not independent: run by hand by the close unit (the forked skill and subagents were not available
 to it), from the files and history as they stand, not by a fresh-context auditor. No
@@ -59,7 +61,8 @@ Properties: the feature's client tests are deterministic (headless renderer, no 
 ## Mutation results
 
 No mutation tool (profile: `mutation: null`). Deliberate mutants, one at a time, each restored with
-`git checkout` and the suite re-run green (`layout_snapshot` 162 passed; client lib 13 passed):
+`git checkout` and the suite re-run green (`layout_snapshot` 162 passed; client lib 13 passed, filter
+`pull_request_row:: review_bar:: changes::a_long_entry_name`):
 
 | Mutant | Behavior | Survived | Judgment |
 | --- | --- | --- | --- |
