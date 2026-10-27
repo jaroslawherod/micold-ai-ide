@@ -387,14 +387,16 @@ scene_form_x=720
 scene_form_type_x=598
 #
 # The dialog is centred, so every field it gains moves the others by half its height (feature 491's
-# Daemon picker, the first-prompt field, the mode pills). Create is not clicked at all: the Name field submits on Return, which does
-# not depend on how tall the dialog is below the field the scene is typing in.
+# Daemon picker, the first-prompt field, the mode pills).
+# Create is not clicked at all: the Name field submits on Return, which does not depend on how tall
+# the dialog is below the field the scene is typing in.
 scene_form_type_y=334
 scene_form_type_feat_y=393
 scene_form_ticket_y=406
 scene_form_name_y=498
-# The session's tab strip, under the session header: the AI tab, then "open a new instance" -- which
-# a numbered tab each instance adds pushes right, so the AI tab is the one to return to by its x.
+# The session's tab strip, under the session header: the AI tab, then "open a new instance". Each
+# instance adds a numbered tab that pushes "+" right, so a scene returns by the AI tab's x, which
+# does not move.
 scene_tab_y=110
 scene_tab_ai_x=426
 scene_tab_new_x=570
