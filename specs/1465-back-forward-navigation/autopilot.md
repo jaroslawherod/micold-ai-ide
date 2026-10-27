@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1465
-- **Worktree branch**: 1465-m1 (M1, stacked on the design commits; design on claude/project-thread-e4cve5)
+- **Worktree branch**: 1465-m2 (M2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M1 review round 1 fixes committed at 231f98fba (TDD cycle log, Back-with-nothing-shown fix, guide key cells), full gate green there (scratchpad gate-m1-4.log); scoped round 2 of A and B pending (orchestrator)
-- **Next step**: review A round 2 and review B round 2 (Verify re-run) on the fix diff from snapshot 4742c44666bc7576334aedf07d226cb001a6afdb:4573c0ab874ab208ce66d974a57beb15087369e9; then the orchestrator rebases and opens the M1 PR (pr-title-m1.md / pr-body-m1.md in the scratchpad)
+- **Phase**: M1 reviews done (A and B round 2 CLEAN); M1 PR being opened by the orchestrator. M2 implementing on 1465-m2
+- **Next step**: M2 tasks T017–T023 test-first, then scoped gate and review A/B
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | — | in progress |
+| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | (opening) | reviews clean |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | — | planned |
 | M3 | T024–T026 | light | The Review tab's own Back first | — | planned |
 | M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | planned |
@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 | 5265a22b329483958f659f75aa46b16ae46aeb60:382b7ce61dbd18769aa157d47987bb3797120edb | CLEAN, 1 MINOR (T025 prose named `changes::can_go_back`; fixed, prose only: full `crate::features::changes::can_go_back` path) |
 | Review A M1 (code-review high) | 1 | 4742c44666bc7576334aedf07d226cb001a6afdb:4573c0ab874ab208ce66d974a57beb15087369e9 | CLEAN, 2 MINOR (F1 Back with nothing shown skipped the current entry — fixed test-first, `History::step` tries the current entry first, research R3, cycle 9; F2 guide rows' key cells "—" — fixed, cells read "Mouse back/forward button", tasks T016/T017/T023 reworded) |
 | Review B M1 (conformance) | 1 | 4742c44666bc7576334aedf07d226cb001a6afdb:4573c0ab874ab208ce66d974a57beb15087369e9 | CHANGES: 1 MAJOR, 1 MINOR (F1 no tdd/cycle-log.md — fixed: red recovered per behaviour by env-gated stubs, cycles 1–8 in tdd/cycle-log.md; F2 = A F2, fixed) |
+| Review A M1 (code-review, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (Forward with nothing shown correctly does not offer the current entry; no fix needed) |
+| Review B M1 (conformance, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (cycle-log red runs for cycles 1–8 not reproducible from committed code since the stubs were not committed; the log states it honestly; no fix needed) |
 
 ## Declined review findings
 

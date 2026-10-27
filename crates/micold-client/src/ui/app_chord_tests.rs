@@ -184,3 +184,115 @@ fn the_card_menu_keys_step_and_activate_and_a_modified_key_is_not_theirs() {
         );
     }
 }
+
+// ---- Back/Forward keys (feature 1465, contracts/keys.md H3) ----
+
+/// A press of `key` with `modifiers`, on the physical key `code` (`None`: the platform gave none).
+fn press(key: Key, code: Option<Code>, modifiers: Modifiers, repeat: bool) -> keyboard::Event {
+    keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: code.map_or(
+            Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
+            Physical::Code,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat,
+    }
+}
+
+/// The running platform's Back and Forward presses (H1), each with its direction.
+pub(super) fn history_presses(repeat: bool) -> Vec<(keyboard::Event, micold_core::history::Dir)> {
+    use keyboard::key::Named;
+    use micold_core::history::Dir;
+    if cfg!(target_os = "macos") {
+        vec![
+            (
+                press(
+                    Key::Character("[".into()),
+                    Some(Code::BracketLeft),
+                    Modifiers::LOGO,
+                    repeat,
+                ),
+                Dir::Back,
+            ),
+            (
+                press(
+                    Key::Character("]".into()),
+                    Some(Code::BracketRight),
+                    Modifiers::LOGO,
+                    repeat,
+                ),
+                Dir::Forward,
+            ),
+            (
+                press(Key::Character("[".into()), None, Modifiers::LOGO, repeat),
+                Dir::Back,
+            ),
+        ]
+    } else {
+        vec![
+            (
+                press(Key::Named(Named::ArrowLeft), None, Modifiers::ALT, repeat),
+                Dir::Back,
+            ),
+            (
+                press(Key::Named(Named::ArrowRight), None, Modifiers::ALT, repeat),
+                Dir::Forward,
+            ),
+        ]
+    }
+}
+
+#[test]
+fn the_back_and_forward_keys_press_the_history_from_the_keyboard() {
+    use crate::features::history::{Msg, Source};
+    for repeat in [false, true] {
+        for (event, dir) in history_presses(repeat) {
+            assert_eq!(
+                app_chord(event.clone()),
+                Some(Message::History(Msg::Pressed {
+                    dir,
+                    source: Source::Key
+                })),
+                "{event:?} (FR-012: a repeat is a press too)"
+            );
+        }
+    }
+}
+
+#[test]
+fn near_misses_of_the_back_and_forward_keys_are_not_app_chords() {
+    use keyboard::key::Named;
+    let left = || Key::Named(Named::ArrowLeft);
+    let bracket = || Key::Character("[".into());
+    for event in [
+        press(left(), None, Modifiers::empty(), false),
+        press(left(), None, Modifiers::ALT | Modifiers::SHIFT, false),
+        press(left(), None, Modifiers::ALT | Modifiers::CTRL, false),
+        press(Key::Named(Named::ArrowUp), None, Modifiers::ALT, false),
+        press(
+            bracket(),
+            Some(Code::BracketLeft),
+            Modifiers::LOGO | Modifiers::ALT,
+            false,
+        ),
+        press(
+            bracket(),
+            Some(Code::BracketLeft),
+            Modifiers::empty(),
+            false,
+        ),
+    ] {
+        assert_eq!(app_chord(event.clone()), None, "{event:?}");
+    }
+    // The other platform's form.
+    let other = if cfg!(target_os = "macos") {
+        press(left(), None, Modifiers::ALT, false)
+    } else {
+        press(bracket(), Some(Code::BracketLeft), Modifiers::LOGO, false)
+    };
+    assert_eq!(app_chord(other.clone()), None, "{other:?}");
+}

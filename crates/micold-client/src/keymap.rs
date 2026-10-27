@@ -390,6 +390,21 @@ fn is_primary_shift(mods: Mods) -> bool {
     }
 }
 
+/// The Back or Forward key the press is, if any (feature 1465, contracts/keys.md H1). TDD stub.
+pub fn history_key(_input: &KeyInput) -> Option<micold_core::history::Dir> {
+    None
+}
+
+/// Back's or Forward's key as Linux/Windows and macOS write it (contracts/keys.md H1). TDD stub.
+pub fn history_key_labels(_dir: micold_core::history::Dir) -> (String, String) {
+    (String::new(), String::new())
+}
+
+/// Back's or Forward's key as the running platform writes it. TDD stub.
+pub fn history_key_label(_dir: micold_core::history::Dir) -> String {
+    String::new()
+}
+
 /// Whether the press is the reserved focus-out chord (macOS `Cmd+Shift+E`, else `Ctrl+Shift+E`).
 fn is_release_chord(key: &Key, mods: Mods) -> bool {
     is_primary_shift_chord(key, mods, 'e')

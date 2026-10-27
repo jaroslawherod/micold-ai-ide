@@ -29,3 +29,23 @@ fn the_overview_arrows_step_between_cards() {
     }
     assert_eq!(arrow(Named::Enter), None);
 }
+
+/// Feature 1465 (contracts/keys.md H3): in the Overview, Alt+← is Back only, not also a card step.
+#[test]
+fn a_back_or_forward_key_is_not_a_card_step() {
+    for (event, dir) in super::app_chord_tests::history_presses(false) {
+        assert_eq!(overview_arrow(event), None, "{dir:?}");
+    }
+    // A plain arrow still steps.
+    let iced::Event::Keyboard(event) =
+        crate::ui::material::test_support::named_key(iced::keyboard::key::Named::ArrowLeft)
+    else {
+        unreachable!("a key press is a keyboard event")
+    };
+    assert_eq!(
+        overview_arrow(event),
+        Some(Message::Overview(
+            crate::features::overview::Msg::CardStepped { forward: false }
+        ))
+    );
+}
