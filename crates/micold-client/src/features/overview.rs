@@ -590,16 +590,15 @@ pub fn overview_tooltip(badge: Option<&Badge>) -> String {
 pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
     use micold_core::overview::{attention, CardState};
     let attention = attention(cards)?;
-    let (tone, words) = match (attention.state, attention.count) {
-        (CardState::NeedsAction, 1) => (Tone::Error, "needs action"),
-        (CardState::NeedsAction, _) => (Tone::Error, "need action"),
-        (_, 1) => (Tone::Warning, "needs attention"),
-        _ => (Tone::Warning, "need attention"),
+    let (tone, noun) = match attention.state {
+        CardState::NeedsAction => (Tone::Error, "action"),
+        _ => (Tone::Warning, "attention"),
     };
+    let verb = if attention.count == 1 { "needs" } else { "need" };
     Some(Badge {
         tone,
         count: attention.count,
-        label: format!("{} {words}", attention.count),
+        label: format!("{} {verb} {noun}", attention.count),
     })
 }
 
@@ -794,7 +793,7 @@ mod tests {
         let plain = format!("Overview ({chord})");
         assert_eq!(overview_tooltip(None), plain);
         for (tone, label) in [
-            (Tone::Warning, "1 need attention"),
+            (Tone::Warning, "1 needs attention"),
             (Tone::Error, "2 need action"),
         ] {
             let badge = Badge {
