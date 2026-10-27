@@ -479,6 +479,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let titles_were_readable = shell::issues::titles_readable(app);
     let worktrees_before = shell::issues::worktrees_fingerprint(app);
     let task = update_inner(app, message);
+    // Feature 1465 (U1): the history records the place shown after every message, the app's own
+    // moves included.
+    app.core.observe_place();
     // Feature 1126, R3/R6: the header follows the shown location after any message, including one
     // the shell applied itself, and a newly followed worktree's issue title is read — or read once
     // titles become readable (the switch arrives, a daemon route opens) while it is shown.
@@ -1325,6 +1328,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Feature 803 (contracts/ui.md U3).
         Message::Navigation(msg) => shell::navigation::update(app, msg),
+        Message::History(msg) => shell::history::update(app, msg),
         // Wired by the quick switcher's update (feature 968, T017).
         Message::QuickSwitch(msg) => shell::quick_switch::update(app, msg),
         Message::Session(SessionMsg::Selected(id)) => {
