@@ -212,6 +212,41 @@ fn container(settings: &KubeSettings, names: &ResourceNames, image: &str) -> Val
     out
 }
 
+/// The init container that makes, as the image user, the home folders the allowed credential files
+/// are mounted into (#1439 FR-019, BUG-1500): a `subPath` mount point the runtime has to create, it
+/// creates as root, which leaves the daemon unable to write beside it (`~/.claude/CLAUDE.md`). Same
+/// image, security context and resources as `main`; `mkdir` without a shell. `None` when no
+/// credential mounts under [`POD_HOME`].
+fn home_dirs(settings: &KubeSettings, main: &Value) -> Option<Value> {
+    let dirs: std::collections::BTreeSet<String> = settings
+        .allowed
+        .iter()
+        .filter_map(KubeCredential::mount)
+        .filter_map(|mount| {
+            let parent = std::path::Path::new(&mount.path).parent()?;
+            parent
+                .starts_with(POD_HOME)
+                .then(|| parent.to_string_lossy().into_owned())
+        })
+        .collect();
+    if dirs.is_empty() {
+        return None;
+    }
+    let mut command = vec!["mkdir".to_string(), "-p".to_string()];
+    command.extend(dirs);
+    let mut out = json!({
+        "name": "home-dirs",
+        "image": main["image"],
+        "command": command,
+        "securityContext": main["securityContext"],
+        "volumeMounts": [{ "name": "data", "mountPath": DATA_MOUNT }],
+    });
+    if let Some(r) = main.get("resources") {
+        out["resources"] = r.clone();
+    }
+    Some(out)
+}
+
 /// The access reviews the start asks before it creates anything (contract §3): verb and resource.
 pub fn access_reviews() -> [(&'static str, &'static str); 6] {
     [
@@ -265,6 +300,9 @@ pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &
             "name": GIT_CREDENTIAL_VOLUME,
             "emptyDir": { "medium": "Memory", "sizeLimit": "64Ki" },
         }));
+    if let Some(init) = home_dirs(settings, &spec["containers"][0]) {
+        spec["initContainers"] = json!([init]);
+    }
     if !settings.node_selector.is_empty() {
         spec["nodeSelector"] = json!(settings.node_selector);
     }
@@ -647,6 +685,43 @@ mod tests {
         let mut s = settings();
         s.allowed = allowed.iter().cloned().collect();
         pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE))
+    }
+
+    /// #1439 FR-019 (BUG-1500): the folders credential files are mounted into are made by the image
+    /// user in an init container, so the runtime does not make them root-owned and the daemon can
+    /// write `~/.claude/CLAUDE.md`. Not part of the pod stamp, so no running pod drifts.
+    #[test]
+    fn agent_guide_home_dirs_init_container_makes_the_credential_mount_folders() {
+        let signin = KubeCredential::SignIn {
+            cli: crate::session::AiCli::ClaudeCode,
+        };
+        let p = with_allowed(&[signin.clone(), KubeCredential::GitConfig]);
+        let inits = p["spec"]["initContainers"]
+            .as_array()
+            .expect("init containers");
+        assert_eq!(inits.len(), 1);
+        let init = &inits[0];
+        assert_eq!(init["name"], "home-dirs");
+        assert_eq!(init["image"], IMAGE);
+        assert_eq!(
+            init["command"],
+            json!(["mkdir", "-p", "/data/home", "/data/home/.claude"])
+        );
+        let main = &p["spec"]["containers"][0];
+        assert_eq!(init["securityContext"], main["securityContext"]);
+        assert_eq!(init.get("resources"), main.get("resources"));
+        assert_eq!(
+            init["volumeMounts"],
+            json!([{ "name": "data", "mountPath": DATA_MOUNT }])
+        );
+
+        let p = with_allowed(&[KubeCredential::RegistryPull { auths: "/a".into() }]);
+        assert!(p["spec"].get("initContainers").is_none());
+        assert!(with_allowed(&[])["spec"].get("initContainers").is_none());
+
+        let mut s = settings();
+        s.allowed = [signin].into_iter().collect();
+        assert!(!PodStamp::of(&s, IMAGE).as_str().contains("home-dirs"));
     }
 
     #[test]

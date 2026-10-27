@@ -21,6 +21,7 @@
 //! enforce ([`runtime::RuntimeCapabilities`]), because the two fail differently — an out-of-range
 //! budget is the user's mistake, an unenforceable one is the environment's limitation.
 
+pub mod agent_guide;
 pub mod argv;
 pub mod basic_image;
 pub mod cli;
