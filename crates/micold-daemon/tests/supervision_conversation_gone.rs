@@ -1,3 +1,5 @@
+#![cfg(unix)] // the test writes a `#!/bin/sh` stub and chmods it: Unix-only
+
 //! #1459 — a crash restart of a session whose conversation is gone must say so, not crash-loop.
 //!
 //! `start_session` refuses a resume whose transcript is missing, but the supervisor's respawn
