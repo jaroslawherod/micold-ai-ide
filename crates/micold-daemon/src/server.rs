@@ -2226,9 +2226,11 @@ where
                     continue;
                 };
                 let listed = tokio::task::spawn_blocking(move || {
-                    GitCli::new()
-                        .remote_list(&repo)
-                        .map(|raw| micold_core::git::parse_remote_list(&raw))
+                    GitCli::new().remote_list(&repo).map(|raw| {
+                        micold_core::github::resolve_ssh_aliases(
+                            micold_core::git::parse_remote_list(&raw),
+                        )
+                    })
                 })
                 .await;
                 let reply = match listed {

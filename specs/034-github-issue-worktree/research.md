@@ -201,7 +201,7 @@ client.
   settings deciding the issue list, which the spec's Edge Cases forbid. `git config --local` reads
   only the repository's own `.git/config`, which is in the mounted project on either placement, so
   the answer is identical. **Consequence, documented in the user guide:** a remote whose URL is an
-  alias (`gh:owner/repo` rewritten by a global `insteadOf`) is not recognised as GitHub.
+  alias (`gh:owner/repo` rewritten by a global `insteadOf`) is not recognised as GitHub. **Bugfix**: 2026-10-27 — BUG-1475: an *SSH host alias* is resolved with `ssh -G <host>` (`hostname github.com`/`ssh.github.com`) where the remote list is read; `from_remote_url` stays pure and `insteadOf` aliases stay unrecognised.
 
 **Protocol cost.** One `ClientMsg` variant and one `OperationResult` variant are a wire-visible
 change: `PROTOCOL_VERSION` goes **15 → 16** in `micold_core::protocol::version` with its doc line,

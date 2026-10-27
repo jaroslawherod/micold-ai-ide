@@ -113,7 +113,8 @@ fn too_old(text: &str) -> Option<String> {
 }
 
 /// What each of `projects` pushes to: `git remote get-url --push origin`, verbatim, `None` when
-/// there is no `origin` or the folder is no repository. Blocking.
+/// there is no `origin` or the folder is no repository (an SSH alias of github.com is rewritten
+/// to its `ssh://git@github.com/…` form). Blocking.
 pub fn collect_targets(projects: &[PathBuf]) -> Vec<CredentialTarget> {
     projects
         .iter()
@@ -127,7 +128,9 @@ pub fn collect_targets(projects: &[PathBuf]) -> Vec<CredentialTarget> {
                 .ok()
                 .filter(|o| o.status.success())
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                .filter(|u| !u.is_empty());
+                .filter(|u| !u.is_empty())
+                // An SSH host alias for github.com counts as GitHub (#1475).
+                .map(|u| micold_core::github::resolve_ssh_alias_url(&u));
             CredentialTarget {
                 project: project.clone(),
                 push_url,

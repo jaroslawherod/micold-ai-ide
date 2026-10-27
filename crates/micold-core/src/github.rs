@@ -32,35 +32,10 @@ impl GithubRepo {
     /// `ssh://[user@]github.com[:port]/o/r`, `ssh://git@ssh.github.com:443/o/r` and the scp form
     /// `[user@]github.com:o/r`, each with an optional `.git` and trailing `/`; the host is compared
     /// ignoring case. Userinfo is discarded. Anything else — another host, a local path, an alias
-    /// a global `insteadOf` would expand — is not a GitHub remote.
+    /// a global `insteadOf` would expand — is not a GitHub remote. An SSH host alias is resolved
+    /// before this runs, by [`resolve_ssh_aliases`] (#1475); this parser stays pure.
     pub fn from_remote_url(url: &str) -> Option<GithubRepo> {
-        let url = url.trim();
-        let (host, path, over_ssh) = match url.split_once("://") {
-            Some((scheme, rest)) => {
-                let over_ssh = match scheme.to_ascii_lowercase().as_str() {
-                    "https" | "http" | "git" => false,
-                    "ssh" => true,
-                    _ => return None,
-                };
-                let (authority, path) = rest.split_once('/')?;
-                let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-                let host = match host_port.split_once(':') {
-                    Some((host, port)) if port.bytes().all(|b| b.is_ascii_digit()) => host,
-                    Some(_) => return None,
-                    None => host_port,
-                };
-                (host, path, over_ssh)
-            }
-            None => {
-                // scp form: `[user@]host:path`, with no `/` before the colon.
-                let (user_host, path) = url.split_once(':')?;
-                if user_host.contains('/') {
-                    return None;
-                }
-                let host = user_host.rsplit_once('@').map_or(user_host, |(_, h)| h);
-                (host, path, true)
-            }
-        };
+        let (host, path, over_ssh) = split_remote(url)?;
         let on_github = host.eq_ignore_ascii_case("github.com")
             || (over_ssh && host.eq_ignore_ascii_case("ssh.github.com"));
         if !on_github {
@@ -89,7 +64,6 @@ impl GithubRepo {
             name: name.to_string(),
         })
     }
-
     /// The same repository with lower-case names: GitHub ignores case, so this is the key to
     /// share one credential (and one file) between `Foo/Bar` and `foo/bar`.
     pub fn lowercased(&self) -> GithubRepo {
@@ -131,6 +105,120 @@ impl fmt::Display for GithubRepo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.owner, self.name)
     }
+}
+
+/// The `(host, path, over_ssh)` of a remote URL in a form git accepts (`http(s)`, `git`, `ssh`
+/// or scp), `None` for anything else — a local path, another scheme, a non-numeric port.
+fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
+    let url = url.trim();
+    let (host, path, over_ssh) = match url.split_once("://") {
+        Some((scheme, rest)) => {
+            let over_ssh = match scheme.to_ascii_lowercase().as_str() {
+                "https" | "http" | "git" => false,
+                "ssh" => true,
+                _ => return None,
+            };
+            let (authority, path) = rest.split_once('/')?;
+            let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+            let host = match host_port.split_once(':') {
+                Some((host, port)) if port.bytes().all(|b| b.is_ascii_digit()) => host,
+                Some(_) => return None,
+                None => host_port,
+            };
+            (host, path, over_ssh)
+        }
+        None => {
+            // scp form: `[user@]host:path`, with no `/` before the colon.
+            let (user_host, path) = url.split_once(':')?;
+            if user_host.contains('/') {
+                return None;
+            }
+            let host = user_host.rsplit_once('@').map_or(user_host, |(_, h)| h);
+            (host, path, true)
+        }
+    };
+    Some((host, path, over_ssh))
+}
+
+/// How long `ssh -G` may take; it only reads configuration, so a hang is a broken `ssh`.
+const SSH_G_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The `HostName` line of `ssh -G` output (`hostname <name>`), lower-cased.
+pub fn hostname_from_ssh_g(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let (key, value) = line.split_once(' ')?;
+        key.eq_ignore_ascii_case("hostname")
+            .then(|| value.trim().to_ascii_lowercase())
+            .filter(|v| !v.is_empty())
+    })
+}
+
+/// The real host behind SSH alias `host`, as `ssh -G <host>` reports it; `None` when `ssh` is
+/// missing, fails or times out. Reads configuration only: no connection is made.
+pub fn ssh_resolved_hostname(host: &str) -> Option<String> {
+    let mut cmd = std::process::Command::new("ssh");
+    crate::process::no_window(&mut cmd)
+        .arg("-G")
+        .arg("--")
+        .arg(host);
+    match crate::process::run_bounded(cmd, SSH_G_TIMEOUT) {
+        crate::process::RunOutcome::Exited {
+            code: 0, stdout, ..
+        } => hostname_from_ssh_g(&String::from_utf8_lossy(&stdout)),
+        _ => None,
+    }
+}
+
+/// `remotes` with each SSH host alias that `resolve` maps to github.com rewritten to the
+/// equivalent `ssh://git@github.com/<path>` URL, so the pure parser and every consumer of the
+/// remote list recognise it (#1475). `resolve` runs only for an SSH remote whose host is not
+/// GitHub's and looks like a plain host name; any other remote is untouched, and so is one whose
+/// alias resolves elsewhere or not at all.
+pub fn resolve_ssh_aliases_with(
+    remotes: Vec<GitRemote>,
+    resolve: &dyn Fn(&str) -> Option<String>,
+) -> Vec<GitRemote> {
+    remotes
+        .into_iter()
+        .map(|mut r| {
+            if let Some(url) = alias_to_github(&r.url, resolve) {
+                r.url = url;
+            }
+            r
+        })
+        .collect()
+}
+
+/// [`resolve_ssh_aliases_with`] using `ssh -G`.
+pub fn resolve_ssh_aliases(remotes: Vec<GitRemote>) -> Vec<GitRemote> {
+    resolve_ssh_aliases_with(remotes, &ssh_resolved_hostname)
+}
+
+/// [`resolve_ssh_aliases`] for one URL (`git remote get-url`): the URL itself when it is no alias.
+pub fn resolve_ssh_alias_url(url: &str) -> String {
+    alias_to_github(url, &ssh_resolved_hostname).unwrap_or_else(|| url.to_string())
+}
+
+fn alias_to_github(url: &str, resolve: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    let (host, path, over_ssh) = split_remote(url)?;
+    let plain = !host.is_empty()
+        && !host.starts_with('-')
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    if !over_ssh
+        || !plain
+        || host.eq_ignore_ascii_case("github.com")
+        || host.eq_ignore_ascii_case("ssh.github.com")
+    {
+        return None;
+    }
+    let real = resolve(host)?;
+    if real != "github.com" && real != "ssh.github.com" {
+        return None;
+    }
+    let rewritten = format!("ssh://git@github.com/{}", path.trim_start_matches('/'));
+    GithubRepo::from_remote_url(&rewritten).map(|_| rewritten)
 }
 
 /// Which remote the issue source reads (contracts/remote-list-rpc.md §4).

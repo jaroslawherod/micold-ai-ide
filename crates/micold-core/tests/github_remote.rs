@@ -160,3 +160,80 @@ fn managed_user_owner_with_underscore() {
         "an underscore in the owner is kept"
     );
 }
+
+fn stub_ssh_g(host: &str) -> Option<String> {
+    match host {
+        "github-micold" => Some("github.com".into()),
+        "gh-443" => Some("ssh.github.com".into()),
+        "gitlab-alias" => Some("gitlab.com".into()),
+        _ => None,
+    }
+}
+
+fn resolved_repo(url: &str) -> Option<String> {
+    let remotes = vec![remote("origin", url)];
+    let resolved = micold_core::github::resolve_ssh_aliases_with(remotes, &stub_ssh_g);
+    match choose_remote(&resolved) {
+        RemoteChoice::Github { repo, .. } => Some(repo.to_string()),
+        RemoteChoice::NoGithubRemote => None,
+    }
+}
+
+#[test]
+fn ssh_alias_resolving_to_github_is_a_github_remote() {
+    for url in [
+        "git@github-micold:o/r.git",
+        "github-micold:o/r",
+        "ssh://git@github-micold/o/r.git",
+        "ssh://git@github-micold:22/o/r.git",
+        "git@gh-443:o/r.git",
+    ] {
+        assert_eq!(resolved_repo(url).as_deref(), Some("o/r"), "`{url}`");
+    }
+}
+
+#[test]
+fn ssh_alias_elsewhere_or_unresolved_is_not_github() {
+    for url in [
+        "git@gitlab-alias:o/r.git",
+        "git@unknown-alias:o/r.git",
+        // Only SSH remotes are resolved: an https host is never run through `ssh -G`.
+        "https://github-micold/o/r.git",
+        "git@-oProxyCommand=x:o/r.git",
+    ] {
+        assert_eq!(resolved_repo(url), None, "`{url}`");
+    }
+}
+
+#[test]
+fn resolver_runs_only_for_non_github_ssh_hosts() {
+    let calls = std::cell::RefCell::new(Vec::new());
+    let spy = |h: &str| {
+        calls.borrow_mut().push(h.to_string());
+        None
+    };
+    let remotes = [
+        "git@github.com:o/r",
+        "https://x.example/o/r",
+        "git@alias:o/r",
+        "/tmp/repo",
+    ]
+    .iter()
+    .map(|u| remote("origin", u))
+    .collect();
+    let out = micold_core::github::resolve_ssh_aliases_with(remotes, &spy);
+    assert_eq!(*calls.borrow(), vec!["alias".to_string()]);
+    assert_eq!(
+        out[2].url, "git@alias:o/r",
+        "an unresolved alias keeps its URL"
+    );
+}
+
+#[test]
+fn hostname_is_read_from_ssh_g_output() {
+    use micold_core::github::hostname_from_ssh_g;
+    let out = "user git\nhostname GitHub.com\nport 22\n";
+    assert_eq!(hostname_from_ssh_g(out).as_deref(), Some("github.com"));
+    assert_eq!(hostname_from_ssh_g("port 22\n"), None);
+    assert_eq!(hostname_from_ssh_g(""), None);
+}

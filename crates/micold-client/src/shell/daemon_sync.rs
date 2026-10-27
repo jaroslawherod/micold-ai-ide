@@ -3987,7 +3987,9 @@ fn start_kubernetes_create(
         .caps
         .git()
         .and_then(|git| git.remote_list(project).ok())
-        .map(|raw| micold_core::git::parse_remote_list(&raw))
+        .map(|raw| {
+            micold_core::github::resolve_ssh_aliases(micold_core::git::parse_remote_list(&raw))
+        })
         .unwrap_or_default();
     let project_name = project.file_name().map_or_else(
         || "this project".to_string(),

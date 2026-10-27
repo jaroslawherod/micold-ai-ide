@@ -427,3 +427,12 @@ a strengthened test must show it failing against the mutant or stub named.
 - [x] T104 [P] [F12] [F13] Reduce brittle and real-time tests: add the behavior pin for FR-003 (opening the form and viewing the listing issue no load) to `main_tests.rs` and make the source scan `expect` on read errors (`issues_are_requested_only_on_named_events.rs:83-116`); replace the fixed 4 s sleep at `process_run_bounded.rs:96` with a polled deadline. Proof: `scripts/build-lock.sh cargo test -p micold-client --test issues_are_requested_only_on_named_events` and `-p micold-core --test process_run_bounded`
 - [x] T105 [P] [F14] [F15] [F16] [F17] Conformance sweep, no behavior change: add a rule message to each bare assertion named in F14, split the eager tests listed there, delete `icons_font.rs:70-80` and the source grep at `material_builder_api.rs:124-133`, use `FakeEnvIncludeResolver` in place of `PathResolver` (`main_tests.rs:5246-5270`), and close F17's weak negatives (U34 exact text, U31 auth text at exit 1, U29 `total_open`, U20 case-insensitive, U102 on the Windows stub). Proof: `mise run test-core` and `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state --bin micold-ai-ide issue` green
 - [x] T106 [P] [F18] Bookkeeping: add a row for `github_locate_desktop_launch.rs` (T095) to `tdd/test-list.md`, update U43 to say the pin moved to 17, drop the duplicate version pin in `protocol_auth.rs:176-179` or `schema_hash.rs:181-191`, round-trip an empty `remotes` in `protocol_roundtrip.rs`, and refresh `updated_at`. Proof: `scripts/build-lock.sh cargo test -p micold-core --test protocol_roundtrip --test schema_hash --test protocol_auth`
+
+---
+
+## Phase 10: Bugfix BUG-1475 (SSH host aliases)
+
+**Bugfix**: 2026-10-27 — BUG-1475 Updated from bugfix patch
+
+- [x] T107 [US1] [BUG-1475] Regression tests with `ssh -G` stubbed: an alias resolving to `github.com`/`ssh.github.com` is a GitHub remote for `o/r`; another host, an unresolved alias and a non-SSH URL are not; the resolver runs only for non-GitHub SSH hosts; `hostname` is parsed from `ssh -G` output. Proof: `scripts/build-lock.sh cargo test -p micold-core --test github_remote`
+- [x] T108 [US1] [BUG-1475] Add `resolve_ssh_aliases` (`crates/micold-core/src/github.rs`) and apply it where the remote list or push URL is read: `server.rs` RemoteList, `ops.rs`, `mcp/tools.rs`, `daemon_sync.rs`, `git_credential::collect_targets`. Proof: T107 green; `scripts/gate.sh`
