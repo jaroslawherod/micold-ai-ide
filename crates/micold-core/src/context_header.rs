@@ -82,7 +82,8 @@ pub enum CountsReading {
 pub struct HeaderText {
     /// The card's title (FR-002).
     pub title: String,
-    /// The title, then the display name on a second line when it differs.
+    /// The title, then its source in words (feature 1504, FR-008), then the display name when it
+    /// differs.
     pub title_tooltip: String,
     /// The card's state; its word is [`CardState::label`] (FR-003).
     pub state: CardState,
@@ -101,11 +102,16 @@ impl HeaderText {
     /// is known of its change counts.
     pub fn of(model: &CardModel, pr: Option<&PrChipInput>, counts: CountsReading) -> Self {
         let title = model.title.clone();
-        let title_tooltip = if model.display_name == title {
-            title.clone()
-        } else {
-            format!("{title}\n{}", model.display_name)
-        };
+        // Feature 1504 (FR-008, L3): the title, its source in words, then the display name.
+        let title_tooltip = std::iter::once(title.clone())
+            .chain(model.title_source.words())
+            .chain(
+                Some(&model.display_name)
+                    .filter(|name| **name != title)
+                    .cloned(),
+            )
+            .collect::<Vec<_>>()
+            .join("\n");
         Self {
             title,
             title_tooltip,
@@ -261,6 +267,40 @@ mod tests {
                 "H1 tooltip of {:?}",
                 m.location
             );
+        }
+    }
+
+    /// Feature 1504 (FR-008, US2.6, L3): the title's tooltip names its source on the line after
+    /// the title, before the display name; a title from the folder keeps today's tooltip.
+    #[test]
+    fn the_title_tooltip_names_the_titles_source() {
+        use crate::location_title::TitleSource;
+        let sourced = |title: &str, source: TitleSource| CardModel {
+            title_source: source,
+            ..model(title, Some("feat/x"), "x")
+        };
+        let rows = [
+            (
+                sourced("Add readable titles", TitleSource::PullRequest(1520)),
+                "Add readable titles\nFrom pull request #1520\nx",
+            ),
+            (
+                sourced(ISSUE_TITLE, TitleSource::GithubIssue(1117)),
+                "CI red on main: daemon tests\nFrom GitHub issue #1117\nx",
+            ),
+            (
+                sourced("Fix the flaky resize test", TitleSource::Session),
+                "Fix the flaky resize test\nFrom the session title\nx",
+            ),
+            (
+                sourced("feat/x", TitleSource::Branch),
+                "feat/x\nBranch name\nx",
+            ),
+            (sourced("x", TitleSource::Folder), "x"),
+        ];
+        for (m, tooltip) in rows {
+            let text = HeaderText::of(&m, None, CountsReading::Unknown);
+            assert_eq!(text.title_tooltip, tooltip, "{:?}", m.title_source);
         }
     }
 

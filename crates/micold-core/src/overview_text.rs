@@ -198,6 +198,9 @@ pub struct ExpandedText {
     pub title: String,
     /// The location's display name, when it differs from the title.
     pub display_name: Option<String>,
+    /// The title's source in words (feature 1504, FR-008, L3), drawn beside the display name;
+    /// `None` for a title that is the folder name.
+    pub source: Option<String>,
     /// The full branch, when there is one and the title is not the branch.
     pub branch: Option<String>,
     /// The worktree directory, home folder as `~` ([`worktree_dir`]).
@@ -215,6 +218,7 @@ impl ExpandedText {
             display_name: Some(&model.display_name)
                 .filter(|name| *name != title)
                 .cloned(),
+            source: model.title_source.words(),
             branch: model.branch.clone().filter(|branch| branch != title),
             dir: worktree_dir(&model.dir, home),
             activity: activity_line(model.activity.as_ref()),
@@ -676,12 +680,32 @@ mod tests {
             ExpandedText {
                 title: ISSUE_TITLE.into(),
                 display_name: Some("feat-1120_x".into()),
+                source: None,
                 branch: Some("feat/1120_x".into()),
                 dir: format!("~{sep}code{sep}app{sep}.worktrees{sep}feat-1120_x"),
                 activity: Some(format!("{long_activity} \u{b7} 2/5")),
             },
             "ExpandedText: every text in full, the branch not shortened"
         );
+    }
+
+    /// Feature 1504 (FR-008, US2.6, L3): the expanded card names the title's source beside the
+    /// display name; a title that is the folder name has no source line.
+    #[test]
+    fn the_expanded_text_names_the_titles_source() {
+        use crate::location_title::TitleSource;
+        let sourced = |source: TitleSource| CardModel {
+            title_source: source,
+            ..model()
+        };
+        let pr = expanded(&sourced(TitleSource::PullRequest(1520)));
+        assert_eq!(pr.source.as_deref(), Some("From pull request #1520"));
+        assert_eq!(pr.display_name.as_deref(), Some("feat-1120_x"));
+        assert_eq!(
+            expanded(&sourced(TitleSource::Commit)).source.as_deref(),
+            Some("From the latest commit")
+        );
+        assert_eq!(expanded(&sourced(TitleSource::Folder)).source, None);
     }
 
     /// K5: the display name and the branch are left out when the title already is them; no

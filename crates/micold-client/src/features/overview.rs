@@ -13,7 +13,7 @@ use micold_core::jira_status::StatusBoard;
 use micold_core::location_title::{choose, title_ticket, LocationTitle, TitleInputs, TitleTicket};
 use micold_core::overview::Activation;
 use micold_core::overview_expansion::{Event, Expansion};
-use micold_core::session::SessionLocation;
+use micold_core::session::{SessionLabel, SessionLocation};
 use micold_core::task_progress::FileProgress;
 use micold_core::tokens::motion::duration;
 use micold_core::worktree::Worktree;
@@ -499,7 +499,9 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
 }
 
 /// A worktree's location title (feature 1504, FR-001, FR-007): the Overview card, the sidebar row
-/// and the session-area header all read it here, so they cannot disagree.
+/// and the session-area header all read it here, so they cannot disagree. The pull request and the
+/// main session's title come from what the window holds at render (R8, R9, L8): no new reading,
+/// and a reading or an archive changes the title with no message of its own (FR-010).
 pub fn location_title(
     app: &crate::app::State,
     worktree: &Worktree,
@@ -509,12 +511,39 @@ pub fn location_title(
     let issue_title = ticket
         .as_ref()
         .and_then(|ticket| app.overview.issue_title(ticket, &app.jira_status.board));
+    let location = SessionLocation::Worktree(worktree.dir_name.clone());
+    let sessions = app.active_sessions();
+    let session = micold_core::occupancy::main_session(sessions, &location)
+        .and_then(|id| sessions.iter().find(|s| s.id == id))
+        .and_then(|s| match &s.label {
+            SessionLabel::Named(text) | SessionLabel::Derived(text) => Some(text.as_str()),
+            SessionLabel::Pending => None,
+        });
     choose(&TitleInputs {
         ticket: ticket.as_ref(),
         issue_title,
+        pull_request: open_pull_request(&app.pr_status, worktree.branch.as_deref()),
+        session,
         branch: worktree.branch.as_deref(),
         ..TitleInputs::named(display_name)
     })
+}
+
+/// The branch's open or draft pull request, number and title, from the reading the window already
+/// holds (feature 1504, research R9, FR-005): none while the reading is off or holds nothing, as
+/// [`pr_signal`] reads it, and none for a merged or closed one.
+fn open_pull_request<'a>(
+    pr: &'a crate::features::pr_status::State,
+    branch: Option<&str>,
+) -> Option<(u64, &'a str)> {
+    let branch = branch.filter(|_| pr.enabled && pr.read_at.is_some())?;
+    let status = pr.statuses.get(branch)?;
+    matches!(
+        status.state,
+        micold_core::pull_request::PrState::Open { .. }
+            | micold_core::pull_request::PrState::Draft { .. }
+    )
+    .then_some((status.number, status.title.as_str()))
 }
 
 /// A location's card state and why (feature 1125, research R2): from its un-archived sessions, the

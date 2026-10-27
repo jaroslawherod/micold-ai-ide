@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M2 review fixes committed (ef2d329bc) on branch 1504-m2 (worktree /home/user/wt-1504-m2), rebased onto origin/main after M1 #1566 merged (2104379be); full gate (`scripts/gate.sh`) green at ef2d329bc; not pushed; review B round 2 pending
-- **Next step**: orchestrator runs a scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the T049 disclosure fix commit; then push `claude/project-thread-t2a600` and open the M2 PR from scratchpad pr-title-m2.md / pr-body-m2.md
+- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR not opened yet); full gate (`scripts/gate.sh`) run on the M3 tree; not pushed; review A and review B and the visual pass pending
+- **Next step**: orchestrator runs M3 review A (code-review high) and review B (conformance, sonnet) on `075ac3985..HEAD` of 1504-m3 and the visual pass (quickstart §B rows A–E, G, I with source words; Refresh: close E's PR, archive G's session); M2's review B round 2 and PR still pending on 1504-m2; M3 PR text in scratchpad pr-title-m3.md / pr-body-m3.md
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1557 | design | merged | 24a2a839f |
 | #1566 | M1 | merged | 2104379be |
+| — | M2 | pending (not opened; branch 1504-m2 at 075ac3985) | — |
 
 ## Milestones
 
@@ -25,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | #1566 | merged |
 | M2 | T017–T024, T049 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | implemented, reviews pending |
-| M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
+| M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | implemented on 1504-m3, reviews pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
 | M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
 
@@ -63,6 +64,32 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CLEAN, 2 MINOR — both fixed, no round 2 (only MINORs): (a) `without_a_jira_summary_the_title_falls_through_to_the_branch` now asserts the summary after the t=1 read and after the first failure; (b) `StatusBoard::apply` doc names the one-read-in-flight assumption `due` ensures |
 | M2 review B (conformance, sonnet) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CHANGES: 1 MAJOR, 1 MINOR — F1 fixed (T049: `DATA_USE`, both selector notices and settings.md now disclose the title and keys named only in a branch; tests changed first, red); F2 no TDD cycle log — accepted as in M1, red runs in ledger and PR body |
 | M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
+
+## Red runs (M3)
+
+Each new test was written before the code and run red against a stub (`TitleSource::words`
+returning `None`, `with_title_line` taking the `LocationTitle` but adding no source line,
+`ExpandedText.source` always `None`, `location_title` still ignoring the pull request and session),
+so every red is a failing assertion, not a compile error:
+
+- `cargo test -p micold-core --lib -- location_title context_header overview_text` (T025, T027):
+  exit 101, 3 failed — `each_source_has_its_l3_words_and_the_folder_none` left `None`, right
+  `Some("From GitHub issue #1504")`; `the_title_tooltip_names_the_titles_source` left
+  `"Add readable titles\nx"`, right `"Add readable titles\nFrom pull request #1520\nx"`;
+  `the_expanded_text_names_the_titles_source` left `None`, right `Some("From pull request #1520")`.
+- `cargo test -p micold-client --test features_overview` (T026): exit 101, 4 failed —
+  `an_open_or_draft_pull_request_of_the_branch_titles_the_card` left
+  `("claude/project-thread-7041o6", Branch)`, right `("Add readable titles", PullRequest(1520))`;
+  `the_main_sessions_title_titles_the_card` left `(…, Branch)`, right
+  `("Fix the flaky resize test", Session)`; `the_pull_request_wins_over_the_session` and
+  `a_reading_or_an_archive_changes_the_title_with_no_other_message` left `Branch`.
+  `nothing_gives_the_branch_then_the_folder` passed (today's behaviour, kept).
+- `cargo test -p micold-client --test features_sidebar two_line` (T027): exit 101, 2 failed —
+  `the_tooltip_begins_with_the_full_title_and_names_the_full_branch` left `Some("Name: ci-red")`,
+  right `Some("From GitHub issue #1117")`; `the_tooltip_names_the_titles_source_after_the_title`
+  left the tooltip without the `From pull request #1520` line.
+
+Green after T028–T030: the same commands, all passed (core 40, features_overview 13).
 
 ## Red runs (M2)
 

@@ -1054,7 +1054,8 @@ fn home() -> Option<&'static std::path::Path> {
 /// inner scrollable, so it stays in view (FR-008), and every other line inside it. The inner lines
 /// are the collapsed card's, whole (BUG-1298 FR-028): the meta line, the activity after "NOW", the
 /// progress block and the rows, then its own lines, wrapped: the display name when it differs
-/// from the title, the full branch when the title is not the branch, and the directory.
+/// from the title, the title's source (feature 1504), the full branch when the title is not the
+/// branch, and the directory.
 fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> Element<'a, M> {
     let roles = card.roles;
     let full = ExpandedText::of(&card.model, home());
@@ -1083,6 +1084,10 @@ fn expanded_body<'a, M: Clone + 'a>(card: &OverviewCard<'a, M>, p: Palette) -> E
     }
     if let Some(name) = full.display_name {
         rest = rest.push(body_line(name));
+    }
+    // Feature 1504 (FR-008, research R6): the title's source, beside the display name.
+    if let Some(source) = full.source {
+        rest = rest.push(body_line(source));
     }
     // The full branch, unless the meta line already shows it whole (a branch with no short form).
     if let Some(branch) = full

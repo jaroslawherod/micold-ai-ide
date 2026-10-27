@@ -1470,12 +1470,16 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
 /// `tooltip` with the row's full title as its first line (feature 1125, FR-012): the first line of
 /// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full. A title that
 /// is the row's name or its branch is already on the tooltip's `Name` or `Branch` line, so it is not
-/// added a second time.
-pub fn with_title_line(node: &WorktreeNode, title: &str, tooltip: String) -> String {
-    if title == node.display_name || node.worktree.branch.as_deref() == Some(title) {
-        tooltip
-    } else {
-        format!("{title}\n{tooltip}")
+/// added a second time. Feature 1504 (FR-008, L3): the line after the title names its source
+/// (*From pull request #1520*); a title from the folder or the branch keeps today's tooltip.
+pub fn with_title_line(node: &WorktreeNode, title: &LocationTitle, tooltip: String) -> String {
+    let text = title.text.as_str();
+    if text == node.display_name || node.worktree.branch.as_deref() == Some(text) {
+        return tooltip;
+    }
+    match title.source.words() {
+        Some(words) => format!("{text}\n{words}\n{tooltip}"),
+        None => format!("{text}\n{tooltip}"),
     }
 }
 
