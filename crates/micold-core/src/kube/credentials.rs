@@ -162,7 +162,10 @@ pub fn daemon_env() -> BTreeMap<String, String> {
         // The daemon holds credential files only when it knows it is sandboxed, which it reads
         // from this variable (#1522). The pod's image is not known here: the daemon only names it
         // in messages, so the place stands for it.
-        ("MICOLD_IMAGE_REFERENCE".to_string(), POD_IMAGE_MARKER.to_string()),
+        (
+            "MICOLD_IMAGE_REFERENCE".to_string(),
+            POD_IMAGE_MARKER.to_string(),
+        ),
     ]);
     // The pod's daemon is not on `PATH`: name it by the build directory the client installs it in
     // (quoted so the shell git runs the helper through expands `$HOME`).
