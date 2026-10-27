@@ -2,7 +2,7 @@
 //!
 //! `offer_visible = !report.is_empty() && !dismissed && readable`: the offer fires on stored
 //! provider sessions the catalog lacks. Nothing is attached without a user action; a dismissal is
-//! per project, held in memory only, and does not survive a restart.
+//! per project and covers the sessions it was shown for, and the shell persists it (BUG-1555).
 
 use micold_client::app::State;
 use micold_client::features::attach::{self, offer_visible, Msg};
@@ -313,6 +313,21 @@ mod bug_1164 {
         );
         attach::update(&mut state, Msg::OfferAttachAll);
         assert!(state.attach.offer.in_flight.is_empty());
+    }
+
+    /// BUG-1555: a session hidden by its worktree's open session at dismissal stays dismissed
+    /// once that session is gone.
+    #[test]
+    fn a_dismissal_covers_sessions_of_occupied_worktrees() {
+        let mut state = state_with(report(vec![at(1, "w1", 5), at(2, "w2", 4)]));
+        catalogued(&mut state, &["w1"]);
+        attach::update(&mut state, Msg::OfferDismissed);
+        assert!(!offer_visible(&state));
+        state.workspace.sessions.remove(&project());
+        assert!(
+            !offer_visible(&state),
+            "the freed worktree's session was dismissed too"
+        );
     }
 
     #[test]
