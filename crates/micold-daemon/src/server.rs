@@ -183,7 +183,10 @@ pub async fn run() -> io::Result<()> {
     // launcher's to make, so a sandbox created before this feature saves nothing rather than
     // writing into the state mount (R15).
     if let Some(dir) = micold_core::terminal_history::history_dir() {
-        let in_container = !crate::state::image_reference().is_empty();
+        // A pod's daemon owns its volume (#1522: it is marked as sandboxed by the pod marker).
+        let image = crate::state::image_reference();
+        let in_container =
+            !image.is_empty() && image != micold_core::kube::credentials::POD_IMAGE_MARKER;
         state.set_history_store(micold_core::terminal_history::HistoryStore::new(
             dir,
             !in_container,
