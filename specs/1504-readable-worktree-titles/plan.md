@@ -86,7 +86,7 @@ branch change re-asks.
 `TitleLookup` gains `NoIssue` and `Failed { at }` (R3). `request_titles(app, worktrees)` takes the
 worktrees' GitHub title tickets; seeds from the form's held issues as today; `titles_to_fetch(...,
 now)` adds due retries. `on_title_remotes` and `read_title` map answers per the R3 table, stamping
-`Failed` with `features::jira_status::now()`'s seconds (the shared Unix clock). No new occasion.
+`Failed` with `micold_core::unix_time::unix_secs()` (the shared Unix clock, as `pr_status` uses). No new occasion.
 
 ### D4 Jira summaries (FR-004)
 `jira_http::read_chunk` asks `["status", "summary"]`; `parse_statuses` → `KeyedIssue`;
