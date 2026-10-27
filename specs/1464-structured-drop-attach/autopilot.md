@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: clarify
-- **Next step**: plan unit (clarify round 1 done, 1 question agent-resolved, no escalation)
+- **Phase**: plan
+- **Next step**: escalation open (plan review round limit); then tasks unit
 
 ## Pull requests
 
@@ -36,6 +36,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 7b24c45ecc84cc6e0d37f9bc349d6d0d966a47f8:09ee4cb188b5b76f59512aa8e506f88ca2d7e7b7 | CHANGES: 2 MAJOR; fixed (cross-platform FR-004/SC-003, FR-013 reworded, MINORs) |
 | Spec | 2 | 6c8d0ab0996c5e611c97981c32a28cc98d1c2972:bdcd5311f56230d1579f97ae160b184d9a5a0b96 | CLEAN; 3 MINOR (FR order, SC-006 wording fixed, prose only; hover-cue marker left for clarify) |
+| Plan | 1 | 06c9c86a8c1e230677faf25909ca929a1e109ada:bd622f47c7ae0fd825129ea73a4def1463388ab4 | CHANGES: 3 MAJOR (sheet entry point, chord Ctrl+Shift+U, material crate); fixed |
+| Plan | 2 | 501be13e873638cb758696fdb28a1dd58ccc655d:47c2152bd2e64ac1b79b75ab1ebc9df9d55ccbef | CHANGES: 1 MAJOR (/shortcuts needs core change); fixed |
+| Plan | 3 | 9f004f84f170c66c25c63dbacdd40c8643a97d4b:875a8a2c104e69d83fcbdf940e6cc0e2083b92b7 | CHANGES: 1 MAJOR (DraftCommand::Shortcuts + daemon arm missing from plan); plan amended, NOT re-reviewed (round limit) |
 
 ## Declined review findings
 
@@ -49,7 +52,7 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+Plan review hit the 3-round limit with a MAJOR still found in round 3 (category 5). The round-3 finding was fixed in plan.md D7 (DraftCommand::Shortcuts, classify_draft branch, daemon state.rs arm, crates/ paths) but not re-reviewed. Question: accept the amended plan as is (Recommended: the fix is mechanical and was specified by the reviewer), or run one more review round, or replace the /shortcuts App command with a simpler sheet entry point (no core/daemon change).
 
 ## Follow-ups not done
 
