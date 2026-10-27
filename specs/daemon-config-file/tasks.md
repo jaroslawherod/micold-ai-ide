@@ -58,7 +58,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T010 [US1] Implement `parse(&str, origin) -> Result<DaemonConfig, Vec<ConfigError>>` and `validate` in `crates/micold-core/src/daemon_config/validate.rs`; schema version acceptance per research D2 (own and previous; newer refused naming both)
 - [ ] T011 [US1] Implement `resolved_view(&DaemonConfig) -> ResolvedView` (defaults filled, each secret as path + readable + mode) in `crates/micold-core/src/daemon_config/resolved.rs`
 - [ ] T012 [US1] Add the `config check <file> [--kind]` subcommand in `crates/micold-daemon/src/main.rs`: exit 0 printing the resolved view, exit 2 printing every error (contract §4); test in `crates/micold-daemon/tests/config_check.rs`
-- [ ] T087 [P] [US1] Failing tests and types for the gap-review keys (research D15): `[git] config_file`/`ssh_key_file`/`known_hosts_file`/`signing_key_file`, token `host` (default `"github.com"`, replaces `[git] base`), `[[ai.cli]] use_machine_sign_in`, `[[session.files]]`, `[network] ca_file`, and rules V16 (reserved names), V17 (placed MCP config defining `micold`, via `mcp::binding::name_taken`), V18 (`session.files.as` escape/collision; `ssh_key_file` without `known_hosts_file`), V19 (`use_machine_sign_in` kind/exclusivity) in `crates/micold-core/src/daemon_config/`
+- [ ] T087 [US1] Failing tests first (extend T006/T007's test files), then types, rules and resolved view for the gap-review keys (research D15): `[git] config_file`/`ssh_key_file`/`known_hosts_file`/`signing_key_file`, token `host` (default `"github.com"`, replaces `[git] base`), `[[ai.cli]] use_machine_sign_in`, `[[session.files]]`, `[network] ca_file`, and rules V16 (reserved names), V17 (placed MCP config defining `micold`, via `mcp::binding::name_taken`), V18 (`session.files.as` escape/collision; `ssh_key_file` without `known_hosts_file`), V19 (`use_machine_sign_in` kind/exclusivity) in `crates/micold-core/src/daemon_config/` (the contract §3.1 host example uses `use_machine_sign_in`, so these keys must land with the four-example parse test; implement V16–V19 in `validate.rs` and the resolved view in `resolved.rs`)
 - [ ] T013 [US1] Write `docs/user-guide/daemon-configuration.md` from `contracts/daemon-config.md` (every key, per-kind locations, examples) and link it from `docs/user-guide/settings.md`
 
 ---
@@ -290,3 +290,21 @@ Each group above is one GitHub issue (epic #1521):
 MVP = issues 2 + 3 + 4 + 6 (the container kind from one file, Story 1) — the kind with the most
 variables today and the boot-vs-SSH drift. Then the other kinds, then tokens (Story 2, the user's
 largest pain), then AI CLIs and the start script, then the view and the cleanup.
+
+## Milestones
+
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
+the milestones of **Issue 2 (#1523)**; the sub-issue that owns another group adds its own
+milestones under its own heading. Milestone IDs are local to a heading.
+
+### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
+
+One milestone: the contract §3.1 host example uses a T087 key, so the four examples parse only
+with T087 in place, and no acceptance scenario separates the keys cleanly.
+
+- **Tasks**: T005–T013, T087
+- **Deliverable**: `micold-core::daemon_config` parses the four contract §3 examples, refuses unknown keys, enforces V1–V19 with `file:line:col` errors and never prints a secret; `micold-daemon config check <file>` prints the resolved view (exit 0) or every error (exit 2); `docs/user-guide/daemon-configuration.md` documents every key.
+- **Satisfies**: US1; FR-001, FR-003, FR-004, FR-017, FR-018, FR-032, FR-042, SC-005
+- **Verify**: `cargo test -p micold-core daemon_config` and `cargo test -p micold-daemon --test config_check`; `micold-daemon config check crates/micold-core/tests/fixtures/daemon_config/host.toml` exits 0
+- **Depends on**: —
+- **Tier**: full
