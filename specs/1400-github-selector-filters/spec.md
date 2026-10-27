@@ -45,7 +45,7 @@ A developer opens the New worktree form with the GitHub source showing. Their re
 3. **Given** the user included `bug`, **When** the list reloads, **Then** every listed issue carries `bug`; **When** they also include `ui`, **Then** every listed issue carries both `bug` and `ui`.
 4. **Given** a filter is active, **When** the user types search text, **Then** the results are the filtered issues that match the text by the selector's existing rule (number, title, label name; 034 FR-005).
 5. **Given** filters are chosen, **When** the user removes one value, **Then** the list reloads without that restriction and keeps the others; **When** the user activates **Clear filters**, **Then** the default filter applies and the list is today's open-issue listing again.
-6. **Given** any filter other than the default is active, **When** the list shows, **Then** a line under the search names the active filter ("Excluding labels in-progress, blocked").
+6. **Given** basic mode and any filter other than the default is active, **When** the list shows, **Then** a line under the search names the active filter ("Excluding labels in-progress, blocked").
 
 ---
 
@@ -162,7 +162,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **A result outside the scope**: an issue of another repository, or a pull request, in GitHub's answer is dropped from the list whatever the query.
 - **Running a new query or changing a filter while a request is in flight**: the earlier result is discarded; only the latest filter's result or error is shown. Switching mode, switching source to Jira, closing the form or turning GitHub issues off discards an in-flight result (034 FR-007a).
 - **Rapid filter changes**: several changes in a row produce a correct final list for the last combination; no intermediate result is shown after a later one.
-- **Switching source to Jira and back**: the GitHub mode and basic filters are kept; the draft resets to the last run query, and the search text clears (034 behaviour); the list reloads with the active filter.
+- **Switching source to Jira and back**: the GitHub mode, basic filters and draft (with any unrun edits, FR-002) are kept, and the search text clears (034 behaviour); the list reloads with the active filter.
 - **GitHub issues switched off (1102)**: no filter control is shown and no request is made; the remembered state is kept, not deleted.
 - **Two windows on the same project**: each window's form keeps its own filters, query and list while open; the remembered state is the latest written by either (last write wins). A window whose form is open does not change when the other window writes.
 - **Remembered state unreadable or missing**: the form opens in basic mode with the default filter; nothing else is affected.
@@ -183,7 +183,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **FR-004**: The listed issues MUST be the issues of the repository that satisfy every chosen filter (AND): each carries every included label, carries no excluded label, is in the chosen state, and matches the chosen assignee, author and milestone.
 - **FR-005**: Label choices MUST be the repository's labels, alphabetically, up to 1,000, with the incomplete-list notice of the Edge Cases; milestone choices the repository's open milestones; assignee and author people the repository's assignable users matching the typed text. A choice list MUST be requested only when the user first opens the control that needs it in a form showing the GitHub source, and held only in the open form (034 FR-023).
 - **FR-006**: Each basic filter value MUST be sent so that it matches exactly that value and can never change the structure of the query; a label whose name holds a `"` or a control character MUST NOT be offered; an author login typed by hand MUST be a valid GitHub login (letters, digits and single hyphens, at most 39 characters) before it is used.
-- **FR-007**: While any filter other than the default is active, the selector MUST name it on one line under the search, and MUST offer **Clear filters**, which restores the default filter.
+- **FR-007**: In basic mode, while any filter other than the default is active, the selector MUST name it on one line under the search, and MUST offer **Clear filters**, which restores the default filter. In advanced mode the query input shows the query, and the active-filter line and **Clear filters** are not shown.
 - **FR-008**: Choosing, changing or clearing a basic filter MUST reload the list with the new filter and MUST discard the result of any earlier request.
 - **FR-009**: With the default filter active, the selector MUST behave and send exactly as it does today (034 FR-003 to FR-008).
 
@@ -192,7 +192,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **FR-010**: In advanced mode the user MUST be able to type a GitHub issue search query in the syntax github.com's issue search accepts; a query MUST run when the user presses Enter in the query input or activates the run control, and MUST NOT run on each keystroke.
 - **FR-011**: The app MUST run the user query within the scope: the request MUST restrict results to the repository's issues whatever the query holds, and MUST honour the user query's terms, including state terms, negations, `no:` and `linked:` qualifiers, boolean operators and parentheses where GitHub's issue search supports them. Without a sort qualifier the list MUST be most recently updated first; with one, it MUST be in GitHub's order for it.
 - **FR-012**: Before sending, the app MUST refuse a user query that holds a scope qualifier, has an unclosed quoted string, has parentheses that do not balance outside quoted strings, or is longer than 1,000 characters after cleaning, and MUST show the reason in place of the list. A refused query MUST NOT be sent.
-- **FR-013**: When the form opens in advanced mode with a non-empty last run query, the selector MUST run it once as soon as the GitHub source is showing; with no or an empty last run query it MUST show the empty input with a prompt to type and run a query, and send nothing.
+- **FR-013**: When the form opens in advanced mode and a last run query is remembered for the project (including an empty one that was run), the selector MUST run it once as soon as the GitHub source is showing; when no query was ever run on the project it MUST show the empty input with a prompt to type and run a query, and send nothing.
 
 ### Listing and search
 
