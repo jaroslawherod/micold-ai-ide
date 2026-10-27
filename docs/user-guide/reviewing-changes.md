@@ -72,7 +72,8 @@ comments of all its entries.
 
 ## Choosing what to review
 
-The Review tab's header names the entry over its base line, and beside them holds the **source
+The Review tab's header names the entry over its base line, each on one line that ends in `…`
+when it does not fit, and beside them holds the **source
 control**: a button that reads what the tab shows, **Working tree** when it opens. Press it (or
 focus it and press `Enter` or `Space`) to open its list: **Working tree**, with its **Committed**
 and **Uncommitted** chips (see [Committed and uncommitted](#committed-and-uncommitted)), then the
@@ -87,8 +88,8 @@ only the diff. In a narrow window the control keeps its width: the entry's colum
 Whatever you choose, the diff of the selected file is beside the tree: **Whole file** shows all its
 lines (see [Showing the whole file](#showing-the-whole-file)), and in **Files**, **Back** returns to
 what you were reading and **Open diff** switches from a browsed file to its diff. When a pull
-request's diff cannot be read, the diff area says *The pull request's diff could not be read; select
-it again to retry*: pick it again in the source control to read it again (see [Reading a pull
+request's diff cannot be read, the file list's column says *The pull request's diff could not be read;
+select it again to retry*: pick it again in the source control to read it again (see [Reading a pull
 request's diff](#reading-a-pull-requests-diff)).
 
 ### Committed and uncommitted
@@ -111,8 +112,8 @@ With **Show pull request status on worktrees** checked in [Settings →
 GitHub](settings.md#show-pull-request-status-on-worktrees), the source control's list holds, under
 a **Pull requests** heading, every pull request this worktree produced, open, draft, merged and closed,
 newest first across all of them. Each row has the pull request's state mark, its check mark, its
-`#number` and its title. The marks are the ones the
-sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
+`#number` and its title, on one line that ends in `…` when the title is too long. The marks are the
+ones the sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
 draft, merged and closed each have their own shape, so a merged pull request is never mistaken for
 a closed one. The check mark shows the result of the pull request's last commit: passing, failing
 or still running. A pull request with no checks has no check mark. Merged and closed pull requests
@@ -609,7 +610,7 @@ become **sent** (they stay on their lines, but can no longer be edited or delete
 counts move them from draft to sent. When it is not delivered — for example the session's terminal
 cannot take a pasted text — an error reads "Couldn't send the review: *why*", the comments stay
 drafts, and the bar keeps showing the error after the counts until you dismiss it with its **×** or
-start the next send.
+start the next send. An error too long for the bar ends in `…`: hover it to read it whole.
 
 ### When no session is running
 
@@ -821,8 +822,8 @@ does not open it.
   base version), its status and the start of the comment. Rows are ordered by file, then by line. A
   row whose file is no longer among the changes is marked *Not in the current diff* and keeps its
   status.
-- **Drafts.** A draft row has **Edit** and **Delete**. **Edit** jumps to the comment, as
-  pressing the row does, and opens its text in the row.
+- **Drafts.** A draft row has **Edit** and **Delete**, on a line of their own under its text.
+  **Edit** jumps to the comment, as pressing the row does, and opens its text in the row.
   Closing the drawer (or switching its tab) keeps what you wrote: meanwhile it is shown under the
   comment's card in the diff, and it is back in the row when you reopen the drawer. No row offers
   them while a send is under way.

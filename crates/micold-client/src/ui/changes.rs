@@ -131,14 +131,7 @@ pub fn view<'a>(
     // review** moved to the bar; feature 1269 (FR-007, U13): the Review tab's × closes the review.
     // Feature 1272 (Edge "Narrow window"): the base line gives way with an ellipsis before the
     // source control does; the control's tooltip holds it whole (FR-009).
-    let mut heading = column![Text::new(title, TypeRole::Title, r)].spacing(spacing::XS);
-    if let Some(line) = base_line(view) {
-        heading = heading.push(Ellipsized::<Message>::at_role_spaced(
-            line,
-            TypeRole::Body,
-            r.on_surface_variant,
-        ));
-    }
+    let heading = heading(title, base_line(view), r);
     // Feature 1271: the rows' review states, judged once for the list and the header, whose
     // *n of m reviewed* slot sits beside the heading (FR-008, FR-009).
     let reviews = file_reviews(&state.changes, view, connected);
@@ -196,6 +189,25 @@ pub fn view<'a>(
         tab = tab.push(bar_of(bar, state.settings.review_single_keys, r));
     }
     tab.into()
+}
+
+/// The entry's name over its base line, each one line that ends in "…" when it does not fit: a
+/// name that wrapped grew the header by a line, and moved the diff down, when the *changed since
+/// you looked* notice took its room (#1276 visual pass, check 11).
+fn heading<'a, M: 'a>(title: String, base: Option<String>, r: Roles) -> Element<'a, M> {
+    let mut heading =
+        column![
+            Ellipsized::<M>::at_role_spaced(title, TypeRole::Title, r.on_surface).inherit_color()
+        ]
+        .spacing(spacing::XS);
+    if let Some(line) = base {
+        heading = heading.push(Ellipsized::<M>::at_role_spaced(
+            line,
+            TypeRole::Body,
+            r.on_surface_variant,
+        ));
+    }
+    heading.into()
 }
 
 /// The review's source control (feature 1272, FR-001, R8): the shown source as its label, the
@@ -1608,6 +1620,40 @@ mod tests {
                 "depth {depth}: {room} px of room for a {name} px name"
             );
         }
+    }
+
+    /// #1276 visual pass, check 11: a name longer than the header's room is one line ending in
+    /// "…", so the header keeps its height whatever stands beside it.
+    #[test]
+    fn a_long_entry_name_is_one_ellipsized_line() {
+        use crate::ui::material::test_support::Mounted;
+        let r = micold_core::tokens::LIGHT;
+        let name = "Scheduler priorities for operators running mixed pools of workers";
+        let base = Some("Compared with main at fbcef51".to_owned());
+        let one_line = Mounted::new_in(
+            heading("Idle".into(), base.clone(), r),
+            iced::Size::new(600.0, 400.0),
+        )
+        .painted_text();
+        let mut narrow = Mounted::new_in(
+            container(heading(name.into(), base, r)).width(Length::Fixed(200.0)),
+            iced::Size::new(600.0, 400.0),
+        );
+        let painted = narrow.painted_text();
+        let title = painted
+            .iter()
+            .find(|p| p.content.starts_with("Scheduler"))
+            .unwrap_or_else(|| panic!("the name is painted: {painted:?}"));
+        let short = one_line
+            .iter()
+            .find(|p| p.content == "Idle")
+            .unwrap_or_else(|| panic!("the short name is painted: {one_line:?}"));
+        assert!(title.content.ends_with('\u{2026}'), "{title:?}");
+        assert_eq!(
+            title.bounds.height, short.bounds.height,
+            "one line: {title:?}"
+        );
+        assert!(title.bounds.x + title.bounds.width <= 200.0, "{title:?}");
     }
 
     fn changed(kind: ChangeKind, content: Content) -> ChangedFile {

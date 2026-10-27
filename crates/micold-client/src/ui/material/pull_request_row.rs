@@ -4,7 +4,7 @@
 //! title on one fixed-height line; `selected` outlines it, `stale` draws the mark and the text in
 //! their quieter form. The row is informational until a press is wired (M2).
 
-use crate::ui::material::{CheckMark, PrMark, PullRequestIndicator, Text, TypeRole};
+use crate::ui::material::{CheckMark, Ellipsized, PrMark, PullRequestIndicator, Text, TypeRole};
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
@@ -75,10 +75,22 @@ impl<'a, M: 'a> From<PullRequestRow<'a, M>> for Element<'a, M> {
         if let Some(checks) = r.checks {
             mark = mark.checks(checks);
         }
+        let title = Ellipsized::<M>::at_role_spaced(
+            r.title.into_owned(),
+            TypeRole::Body,
+            roles.on_surface_variant,
+        );
+        let title = if r.stale {
+            title
+        } else {
+            title.inherit_color()
+        };
         let line = row![
             Element::from(mark),
             text(Cow::Owned(format!("#{}", r.number))),
-            container(text(r.title)).width(Length::Fill),
+            // One line ending in "…": wrapped, a long title's second line was cut by the fixed
+            // height (#1276 visual pass, check 02).
+            container(title).width(Length::Fill),
         ]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
@@ -131,6 +143,31 @@ mod tests {
         .map(|e: Element<'_, ()>| size_of(e).height)
         .collect();
         assert!(heights.iter().all(|h| *h == HEIGHT), "{heights:?}");
+    }
+
+    /// #1276 visual pass (check 02): a title longer than the row is one line ending in "…",
+    /// inside the row, never a second line cut off by the row's fixed height.
+    #[test]
+    fn a_long_title_is_one_ellipsized_line_inside_the_row() {
+        let r = tokens::roles(ColorScheme::Light);
+        let long = "Scheduler priorities: let heavy jobs jump the queue, keep FIFO among equal \
+                    weights, and document the cutoff for operators running mixed pools";
+        for stale in [false, true] {
+            let row = PullRequestRow::<String>::new(57, long, PrMark::Open, &r).stale(stale);
+            let painted = super::super::test_support::Mounted::new_in(row, Size::new(360.0, 100.0))
+                .painted_text();
+            let title = painted
+                .iter()
+                .find(|p| p.content.starts_with("Scheduler"))
+                .unwrap_or_else(|| panic!("the title is painted: {painted:?}"));
+            assert!(title.content.ends_with('\u{2026}'), "{title:?}");
+            assert!(
+                title.bounds.height < 2.0 * TypeRole::Body.size()
+                    && title.bounds.y + title.bounds.height <= HEIGHT
+                    && title.bounds.x + title.bounds.width <= 360.0,
+                "one line inside the row: {title:?}"
+            );
+        }
     }
 
     /// FR-003: a check mark widens the mark but never the row's height, and it is drawn.

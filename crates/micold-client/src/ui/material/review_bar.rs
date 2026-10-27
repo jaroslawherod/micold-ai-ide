@@ -144,7 +144,18 @@ impl<'a, M: Clone + 'a> From<ReviewBar<'a, M>> for Element<'a, M> {
                 part = part.push(Text::new(text, ROLE, r).muted());
             }
             if let Some(message) = error.clone() {
-                part = part.push(Ellipsized::<M>::at_role(message, ROLE, r.error));
+                // Ellipsized once the counts are gone: hovering it reads it whole (#1276 visual
+                // pass, check 07), as the snackbar that showed it first does not stay.
+                let whole = width_of(&message, ROLE) <= size.width - spacing::SM - dismiss_width();
+                let label: Element<'a, M> =
+                    Ellipsized::<M>::at_role(message.clone(), ROLE, r.error).into();
+                part = part.push(if whole {
+                    label
+                } else {
+                    Tooltip::new(label, message, r)
+                        .position(TooltipPosition::Top)
+                        .into()
+                });
                 part = part.push(
                     IconButton::new(Icon::Close, r)
                         .compact()
@@ -460,6 +471,29 @@ mod tests {
             click(bar(mixed()).error(message), WIDE, &close_glyph()),
             ["dismiss"]
         );
+    }
+
+    /// #1276 visual pass, check 07: an error too long for the bar ends in "…", and hovering it
+    /// reads it whole; one that fits whole has no tooltip.
+    #[test]
+    fn an_ellipsized_error_reads_whole_in_its_tooltip() {
+        let long = "Couldn't send the review: Claude Code would first ask whether to trust this \
+                    folder, so the prompt was not typed; trust the project in Claude Code first";
+        let short = "Couldn't send the review: no session";
+        for (message, tooltip) in [(long, vec![long.to_owned()]), (short, vec![])] {
+            let mut mounted = Mounted::new_in(bar(mixed()).error(message), room(WIDE));
+            let at = mounted
+                .painted_text()
+                .into_iter()
+                .find(|p| p.content.starts_with("Couldn't"))
+                .unwrap_or_else(|| panic!("the error is painted: {message:?}"));
+            assert_eq!(at.content.ends_with('\u{2026}'), message == long, "{at:?}");
+            assert_eq!(
+                mounted.floated_text(at.bounds.center()),
+                tooltip,
+                "{message:?}"
+            );
+        }
     }
 
     /// B4, B8: Send, ⋮ and Comments emit their messages; a disabled Send emits nothing.
