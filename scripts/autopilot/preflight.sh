@@ -21,7 +21,15 @@ for t in "${tools[@]}"; do command -v "$t" >/dev/null 2>&1 || missing+=("$t"); d
 have() { command -v "$1" >/dev/null 2>&1; }
 
 if have mise; then
-  mise trust --show 2>&1 | grep -qi 'untrusted' && add "mise config is untrusted: run 'mise trust'"
+  # `mise trust --show` also lists ancestor configs: judge only this repo's own line.
+  root="$(git rev-parse --show-toplevel 2>/dev/null)"; [ -n "$root" ] || root="$PWD"
+  shown="${root/#$HOME/\~}"
+  while IFS= read -r line; do
+    case "$line" in
+      "$root: "* | "$shown: "*)
+        case "$line" in *untrusted*) add "mise config is untrusted: run 'mise trust'" ;; esac ;;
+    esac
+  done < <(mise trust --show 2>&1)
 fi
 
 if have git; then
