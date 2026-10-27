@@ -1921,7 +1921,7 @@ mod tests {
             .insert(TagFilter::Type(ConventionalType::Feat));
         assert_eq!(
             label(&app),
-            Some((Tone::Warning, "1 need attention".to_string()))
+            Some((Tone::Warning, "1 needs attention".to_string()))
         );
     }
 }

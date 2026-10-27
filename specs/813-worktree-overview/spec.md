@@ -299,7 +299,9 @@ as the summary and *2/5* as the progress; a session without hooks shows Story 4'
   NOT send any input to the terminal's program.
 - **FR-012**: The Overview button MUST show a red attention badge when any card is Needs action,
   else a yellow one when any card is Needs attention, else none, whether or not the Overview is
-  open; the badge MUST carry an icon or count, not colour alone, and an accessible label.
+  open; the badge MUST carry an icon or count, not colour alone, and an accessible label. The
+  label agrees with the count: *1 needs action* / *N need action*, *1 needs attention* /
+  *N need attention* (BUG-1493).
 - **FR-013**: Activating a card (pointer or keyboard) MUST close the Overview and select and show
   the location's main session; with no un-archived session it MUST select the location and offer to
   start one, and MUST NOT start one without the user's confirmation; for a location where a session

@@ -571,7 +571,7 @@ pub struct Badge {
     pub tone: Tone,
     /// How many cards are in the worst state.
     pub count: usize,
-    /// The words for the tooltip: *N need action* or *N need attention*.
+    /// The words for the tooltip: *1 needs action* / *N need action*, or *1 needs attention* / *N need attention*.
     pub label: String,
 }
 
@@ -590,8 +590,10 @@ pub fn overview_tooltip(badge: Option<&Badge>) -> String {
 pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
     use micold_core::overview::{attention, CardState};
     let attention = attention(cards)?;
-    let (tone, words) = match attention.state {
-        CardState::NeedsAction => (Tone::Error, "need action"),
+    let (tone, words) = match (attention.state, attention.count) {
+        (CardState::NeedsAction, 1) => (Tone::Error, "needs action"),
+        (CardState::NeedsAction, _) => (Tone::Error, "need action"),
+        (_, 1) => (Tone::Warning, "needs attention"),
         _ => (Tone::Warning, "need attention"),
     };
     Some(Badge {

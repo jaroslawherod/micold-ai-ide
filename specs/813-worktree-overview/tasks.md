@@ -604,3 +604,15 @@ HIGH findings and the loosened gate) are cleared and `tdd-verify` is re-run.
   compare `main_content_key` against the Changes and Compare keys (ui/overview.rs:~246); S7 skipped: `on_disconnected` needs the binary crate's `App`
 - [x] T082 [TDD] B2, B4, B5: a test for the connection banner that carries the stale-data strip (the root view placing it above the Overview is not asserted), a state-change-then-`cards` test (US1.6), and a note
   in quickstart B8 naming the OfferStart chain as visual-pass only
+
+## Phase 10: Bugfix BUG-1493 — Singular Overview badge label
+
+**Bugfix**: 2026-10-27 — BUG-1493 Added Phase 10 (T083–T086): the badge label said "1 need action" /
+"1 need attention". FR-012, `contracts/ui.md` U2 and the user guide now name the singular form.
+
+- [x] T083 [TDD] [BUG-1493] Update the pinned labels to the singular form: `tests/overview.rs` (`1 needs action`) and
+  `ui/overview.rs` (`1 needs attention`); proof: `scripts/build-lock.sh cargo test -p micold-client --test overview badge`
+  fails before T084
+- [x] T084 [BUG-1493] `features/overview.rs` `badge()`: choose the verb by count (`needs` for 1, `need` otherwise)
+- [x] T085 [BUG-1493] Contract and guide: FR-012 (spec.md), `contracts/ui.md` U2, `docs/user-guide/overview.md`
+- [x] T086 [BUG-1493] Verify: `scripts/build-lock.sh cargo test -p micold-client` badge tests green
