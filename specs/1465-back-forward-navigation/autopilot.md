@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: claude/project-thread-e4cve5
 - **Started**: 2026-10-27
-- **Phase**: clarify done
-- **Next step**: plan
+- **Phase**: plan written (review round 1 pending)
+- **Next step**: plan review round 1, then tasks unit
 
 ## Pull requests
 
