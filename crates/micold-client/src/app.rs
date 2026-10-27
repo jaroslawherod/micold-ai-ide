@@ -1152,7 +1152,8 @@ impl State {
     }
 
     /// Apply a form message and hand back what it asks the project to remember (feature 1186,
-    /// FR-013): the shell owns that file, so it performs `JiraQueryRemembered` itself. Every other
+    /// FR-013; feature 1400, FR-021): the shell owns those files, so it performs
+    /// `JiraQueryRemembered` and `GithubSelectorRemembered` itself. Every other
     /// outcome is drained exactly as [`Self::update`] drains it.
     pub fn update_worktree_form_for_effects(
         &mut self,
@@ -1162,7 +1163,13 @@ impl State {
         let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
             crate::features::worktree_form::update(self, msg)
                 .into_iter()
-                .partition(|o| matches!(o, Outcome::JiraQueryRemembered { .. }));
+                .partition(|o| {
+                    matches!(
+                        o,
+                        Outcome::JiraQueryRemembered { .. }
+                            | Outcome::GithubSelectorRemembered { .. }
+                    )
+                });
         drain(rest, |outcome| interpret(self, outcome));
         effects
     }
@@ -1862,6 +1869,10 @@ pub fn interpret(
         // The shell's: it writes the project's remembered file (`shell::jira_query::remember`),
         // reached through `State::update_worktree_form_for_effects`.
         Outcome::JiraQueryRemembered { .. } => {}
+        // The shell's: it writes the project's remembered selector file
+        // (`shell::github_filter::remember_github_selector`), reached through
+        // `State::update_worktree_form_for_effects`.
+        Outcome::GithubSelectorRemembered { .. } => {}
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // Feature 940: the transcript's, handed to the shell in its `Effect`, never drained here.
         Outcome::ClipboardWriteChecked { .. } | Outcome::CopyConfirmTimer { .. } => {}

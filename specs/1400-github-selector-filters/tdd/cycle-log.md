@@ -83,3 +83,21 @@ Visual F3 mutant: with the `LabelText::NotOffered(_)` arm removed from `LabelRow
 | Visual F2 (MINOR) | after a pick the label field stays open (it keeps the keyboard, so it is drawn focused) | `a_picked_label_leaves_the_field_open_with_no_highlight` FAILED: "the field holds the keyboard, so it is drawn open" | `GithubSelector::choose` no longer closes the field |
 | Visual F3 (MINOR) | a pick resets the field's highlight; typing then highlights no row | same test, and the added assertion in Jira's `the_keyboard_reaches_every_row_picks_with_enter_and_escape_keeps_the_choice` FAILED (`left: Some(1) right: None`) | `choose` (GitHub) and `restore_query` (Jira) set `highlight = None`; `jira_filters_picker` 52 passed |
 | A F2 (MINOR) | doc/comment wording | prose only | — |
+
+## M3 — remember the basic filters per project (T031–T035; red run before the code)
+
+Every test was written first and run against a no-behaviour seam (so it compiles and fails on
+behaviour, not on a missing name): `shell/remembered.rs` with `read` answering the default and
+`remember`/`remove` answering `Ok(())` without touching the disk; `Outcome::GithubSelectorRemembered`
+declared but never emitted; `github_filter::Msg::Restored` accepted and ignored;
+`GithubSelector::chip_text` answering the name alone; `Capabilities::github_selector_dir` held but
+read nowhere. Then the code.
+
+| Task | Behaviour | Red (seam, before the code) | Green |
+|---|---|---|---|
+| T031 (`tests/github_selector_shell.rs`) | lenient read; one-field read-modify-write keeps another window's fields; per-project file; removal, missing = success, failure = error; owner-only; failed write names no value | `cargo test -p micold-client --test github_selector_shell`: 6 FAILED (`a_missing_or_unreadable_file_reads_as_the_default`, `each_change_rewrites_one_field_and_keeps_the_others`, `removing_deletes_the_file_and_a_missing_file_is_success`, `a_removal_that_fails_is_an_error`, `the_file_is_owner_only`, `a_failed_write_is_an_error_naming_no_value`); 1 passed (`each_project_has_its_own_file`, a guard: the default reads as the default) | 7 passed |
+| T031 (`main_tests.rs::github_selector_remembered`) | open reads the active project's file whatever GitHub availability; a change is written and restored at the next open, Clear filters remembered; two windows: last write wins, an open form stays; failed write notifies "Couldn't remember the GitHub issue filter: <OS error>" without the value; forget deletes the file (missing = success, failure notified) | `cargo test -p micold-client --bin micold-ai-ide github_selector_remembered`: 5 FAILED (`opening_restores_…` left default, right exclude×2; `a_change_is_written_…`; `with_two_windows_…`; `a_failed_write_…`; `forgetting_the_project_…`); 1 passed (`another_project_or_an_unreadable_file_opens_on_the_default`, a guard) | 6 passed; bin 757 passed |
+| T032 (`tests/github_filter_state.rs`) | restored F → one filtered listing with F, active line (AS1); B's own or default (AS2); `Remembered(Basic)` at each basic change incl. Clear filters (AS5) and never otherwise; restoring remembers nothing; a remembered label the repository lacks applies and its chip says "· not in this repository" | 5 FAILED (`reopening_applies_…`, `another_project_opens_…`, `each_basic_change_is_remembered_…` left `[]`, `restoring_remembers_nothing`, `a_remembered_label_the_repository_lacks_…`); `a_label_in_another_case_or_beyond_a_partial_list_is_not_called_missing` passed on the seam (a guard against over-flagging) | 32 passed |
+| T033 | `shell/remembered.rs` extracted; `jira.rs` `read_query`/`remember_query`/`remove_query` (and `remove_token`) call into it | refactor: `jira_connection_shell` 13 passed before, unchanged file | 13 passed |
+| T034 | outcome, partition, reducer emits, `from_remembered`, shell read/write/delete | covered by the T031/T032 reds above | above |
+| T035 | chip text drawn; user guide paragraph | `chip_text` red above; docs | — |

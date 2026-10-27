@@ -16755,3 +16755,228 @@ mod history_tests {
         );
     }
 }
+
+// ---- Feature 1400, US2: the remembered GitHub selector's shell paths (T031) ----
+
+mod github_selector_remembered {
+    use super::*;
+    use micold_client::features::worktree_form::github_filter::Msg as GithubMsg;
+    use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
+    use micold_core::git::GitRemote;
+    use micold_core::github_filter::{BasicFilters, LabelName, RememberedSelector, SelectorChange};
+    use micold_core::store::github_selector_path;
+
+    const PROJECT: &str = "/repo/demo";
+
+    fn label(name: &str) -> LabelName {
+        LabelName::parse(name).unwrap()
+    }
+
+    fn excluding(names: &[&str]) -> BasicFilters {
+        let mut basic = BasicFilters::default();
+        for name in names {
+            basic.exclude_label(label(name));
+        }
+        basic
+    }
+
+    fn file(dir: &std::path::Path, project: &str) -> PathBuf {
+        github_selector_path(dir, std::path::Path::new(project))
+    }
+
+    fn write(dir: &std::path::Path, project: &str, basic: BasicFilters) {
+        std::fs::create_dir_all(dir).unwrap();
+        let held = RememberedSelector::default().with_change(&SelectorChange::Basic(basic));
+        std::fs::write(file(dir, project), held.to_json()).unwrap();
+    }
+
+    fn held(dir: &std::path::Path) -> BasicFilters {
+        let bytes = std::fs::read(file(dir, PROJECT)).unwrap_or_default();
+        RememberedSelector::from_json(&bytes).basic
+    }
+
+    /// An app on `PROJECT` whose selector files live in `dir`.
+    fn app_in(dir: &std::path::Path) -> App {
+        let mut app = base_app();
+        app.caps = app.caps.clone().with_github_selector_dir(dir.to_path_buf());
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        app
+    }
+
+    fn send(app: &mut App, msg: Message) {
+        let work = update_inner(app, msg);
+        settle(app, work);
+    }
+
+    fn form(app: &mut App, msg: FormMsg) {
+        send(app, Message::WorktreeForm(msg));
+    }
+
+    fn filter(app: &mut App, msg: GithubMsg) {
+        form(app, FormMsg::GithubFilter(msg));
+    }
+
+    /// Open the form with an `o/r` remote and the GitHub source showing.
+    fn open(app: &mut App) {
+        form(app, FormMsg::Opened);
+        form(
+            app,
+            FormMsg::RemotesListed(Ok(vec![GitRemote {
+                name: "origin".into(),
+                url: "git@github.com:o/r.git".into(),
+            }])),
+        );
+        form(app, FormMsg::SourceChanged(BranchSource::Issue));
+    }
+
+    fn shown(app: &App) -> BasicFilters {
+        app.core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("the form is open")
+            .github_selector
+            .basic
+            .clone()
+    }
+
+    fn notifications(app: &mut App) -> Vec<String> {
+        std::iter::from_fn(|| {
+            let visible = app.core.notifications.queue.visible().cloned()?;
+            app.core.notifications.queue.dismiss();
+            Some(visible.message)
+        })
+        .collect()
+    }
+
+    /// Whether any notification raised speaks of the remembered filter.
+    fn about_the_filter(app: &mut App) -> bool {
+        notifications(app)
+            .iter()
+            .any(|m| m.contains("GitHub issue filter"))
+    }
+
+    /// FR-021, FR-022: the form opens with the project's remembered filters, whether GitHub issues
+    /// are on or off and whatever source the project last chose.
+    #[test]
+    fn opening_restores_the_projects_filters_whatever_the_availability() {
+        for github_on in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+            let mut app = app_in(dir.path());
+            app.core.settings.github_issues_enabled = github_on;
+            form(&mut app, FormMsg::Opened);
+            assert_eq!(
+                shown(&app),
+                excluding(&["in-progress", "blocked"]),
+                "GitHub issues on: {github_on}"
+            );
+        }
+    }
+
+    /// US2 AS2, SC-005: another project's file is never read; a missing or unreadable file is the
+    /// default.
+    #[test]
+    fn another_project_or_an_unreadable_file_opens_on_the_default() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "/repo/other", excluding(&["blocked"]));
+        let mut app = app_in(dir.path());
+        form(&mut app, FormMsg::Opened);
+        assert!(shown(&app).is_default());
+        form(&mut app, FormMsg::Cancelled);
+        std::fs::write(file(dir.path(), PROJECT), b"{ not json").unwrap();
+        form(&mut app, FormMsg::Opened);
+        assert!(shown(&app).is_default());
+    }
+
+    /// FR-021: a change is written as it is made, and the next open restores it.
+    #[test]
+    fn a_change_is_written_and_restored_at_the_next_open() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+        let mut app = app_in(dir.path());
+        open(&mut app);
+        filter(&mut app, GithubMsg::Removed(label("blocked")));
+        assert_eq!(held(dir.path()), excluding(&["in-progress"]));
+        form(&mut app, FormMsg::Cancelled);
+        form(&mut app, FormMsg::Opened);
+        assert_eq!(shown(&app), excluding(&["in-progress"]));
+        // US2 AS5: Clear filters is remembered as the default.
+        open(&mut app);
+        filter(&mut app, GithubMsg::ClearedAll);
+        assert!(held(dir.path()).is_default());
+        assert!(!about_the_filter(&mut app));
+    }
+
+    /// FR-021 "with two windows the latest write wins", and an open form is not changed by the
+    /// other's write.
+    #[test]
+    fn with_two_windows_the_last_write_wins_and_an_open_form_stays() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+        let mut one = app_in(dir.path());
+        let mut two = app_in(dir.path());
+        open(&mut one);
+        open(&mut two);
+        filter(&mut one, GithubMsg::Removed(label("blocked")));
+        assert_eq!(held(dir.path()), excluding(&["in-progress"]));
+        assert_eq!(shown(&two), excluding(&["in-progress", "blocked"]));
+        filter(&mut two, GithubMsg::Removed(label("in-progress")));
+        assert_eq!(held(dir.path()), excluding(&["blocked"]));
+        assert_eq!(shown(&one), excluding(&["in-progress"]));
+    }
+
+    /// FR-024: a failed write is a notification naming the OS error, never a filter value.
+    #[test]
+    fn a_failed_write_is_reported_without_the_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["secret-label", "blocked"]));
+        let mut app = app_in(dir.path());
+        open(&mut app);
+        // A non-empty directory where the file goes: the rename onto it fails.
+        let blocker = file(dir.path(), PROJECT);
+        std::fs::remove_file(&blocker).unwrap();
+        std::fs::create_dir_all(blocker.join("in-the-way")).unwrap();
+        filter(&mut app, GithubMsg::Removed(label("blocked")));
+        let shown = notifications(&mut app);
+        assert!(
+            shown
+                .iter()
+                .any(|m| m.starts_with("Couldn't remember the GitHub issue filter: ")),
+            "{shown:?}"
+        );
+        assert!(
+            shown.iter().all(|m| !m.contains("secret-label")),
+            "{shown:?}"
+        );
+    }
+
+    /// FR-022, quickstart B15: forgetting the project deletes its file and no other; a missing
+    /// file is success, a failure a notification.
+    #[test]
+    fn forgetting_the_project_deletes_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["blocked"]));
+        write(dir.path(), "/repo/other", excluding(&["blocked"]));
+        let mut app = app_in(dir.path());
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        assert!(!file(dir.path(), PROJECT).exists());
+        assert!(file(dir.path(), "/repo/other").exists());
+
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        assert!(!about_the_filter(&mut app), "a missing file is success");
+
+        std::fs::create_dir_all(file(dir.path(), PROJECT).join("in-the-way")).unwrap();
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        let shown = notifications(&mut app);
+        assert!(
+            shown
+                .iter()
+                .any(|m| m.starts_with("Couldn't delete the remembered GitHub issue filter: ")),
+            "{shown:?}"
+        );
+    }
+}

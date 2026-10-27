@@ -102,6 +102,9 @@ pub struct Capabilities {
     /// Feature 533: where the Jira token files live (`<data_dir>/jira`), when a data directory
     /// resolved.
     jira_token_dir: Option<PathBuf>,
+    /// Feature 1400: where the remembered GitHub selector files live (`<data_dir>/github`), when a
+    /// data directory resolved.
+    github_selector_dir: Option<PathBuf>,
     scanner: Arc<dyn FolderScanner + Send + Sync>,
     browser: Arc<dyn FolderBrowser + Send + Sync>,
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
@@ -185,6 +188,7 @@ impl Capabilities {
             settings: JsonFileSettingsStore::default_location()
                 .map(|store| Arc::new(store) as Arc<dyn SettingsStore + Send + Sync>),
             jira_token_dir: micold_core::store::jira_token_dir(),
+            github_selector_dir: micold_core::store::github_selector_dir(),
             scanner: Arc::new(folders),
             browser: Arc::new(folders),
             env_include: Arc::new(SubprocessResolver),
@@ -269,6 +273,7 @@ impl Capabilities {
     pub(crate) fn without_settings(mut self) -> Self {
         self.settings = None;
         self.jira_token_dir = None;
+        self.github_selector_dir = None;
         self
     }
 
@@ -363,6 +368,14 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities with a remembered GitHub selector directory of the test's own, so no
+    /// test reads or writes the developer's own files (feature 1400).
+    #[cfg(test)]
+    pub(crate) fn with_github_selector_dir(mut self, dir: PathBuf) -> Self {
+        self.github_selector_dir = Some(dir);
+        self
+    }
+
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()
@@ -371,6 +384,12 @@ impl Capabilities {
     /// The directory of the Jira token files, or `None` when no data directory resolved.
     pub fn jira_token_dir(&self) -> Option<&std::path::Path> {
         self.jira_token_dir.as_deref()
+    }
+
+    /// The directory of the remembered GitHub selector files, or `None` when no data directory
+    /// resolved (feature 1400).
+    pub fn github_selector_dir(&self) -> Option<&std::path::Path> {
+        self.github_selector_dir.as_deref()
     }
 
     /// The Jira Cloud source, only in the real capabilities (feature 533).

@@ -64,3 +64,6 @@ pub mod time_zone;
 pub mod transcript;
 pub mod window_raise;
 pub mod workspace;
+
+/// Declared by `jira`, which its path-including shell test needs (`remembered.rs`'s header).
+pub use jira::remembered;

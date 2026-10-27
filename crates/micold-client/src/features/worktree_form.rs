@@ -2465,7 +2465,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         } => issue_details_loaded(state, seq, number, result),
         Msg::JiraQuery(msg) => return jira_query_changed(state, msg),
         Msg::JiraFilter(msg) => crate::features::worktree_form::jira_filters::update(state, msg),
-        Msg::GithubFilter(msg) => github_filter::update(state, msg),
+        Msg::GithubFilter(msg) => return github_filter::update(state, msg),
     }
     Vec::new()
 }

@@ -1,4 +1,4 @@
-//! The GitHub filters of the issue picker, as state transitions (feature 1400, US1,
+//! The GitHub filters of the issue picker, as state transitions (feature 1400, US1, US2,
 //! data-model §10, contracts/selector-ui.md, contracts/source-and-storage.md §3).
 //!
 //! The reducer decides everything; the shell only runs what the form newly awaits. So these tests
@@ -17,10 +17,12 @@ use micold_client::features::worktree_form::github_filter::{
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, Msg, SearchState, WorktreeForm,
 };
+use micold_client::features::Outcome;
 use micold_core::git::GitRemote;
 use micold_core::github::{FakeIssueSource, Issue, IssueLoadError, IssuePage, NamePage};
 use micold_core::github_filter::{
-    load_filtered, load_label_choices, FilterFailure, LabelName, NOT_ACCEPTED,
+    load_filtered, load_label_choices, BasicFilters, FilterFailure, LabelName, RememberedSelector,
+    SelectorChange, NOT_ACCEPTED,
 };
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
 use micold_core::typeahead::Direction;
@@ -945,4 +947,212 @@ fn the_selector_debug_prints_no_value() {
     let printed = format!("{:?}", form(&state).github_selector);
     assert!(!printed.contains("in-progress"), "{printed}");
     assert!(!printed.contains("secret-typed"), "{printed}");
+}
+
+// --- T032: the remembered basic filters (US2) -----------------------------------------------
+
+fn remembering(basic: BasicFilters) -> RememberedSelector {
+    RememberedSelector::default().with_change(&SelectorChange::Basic(basic))
+}
+
+fn excluding_labels(names: &[&str]) -> BasicFilters {
+    let mut basic = BasicFilters::default();
+    for name in names {
+        basic.exclude_label(label(name));
+    }
+    basic
+}
+
+/// A form opened on `project()` with `remembered` restored, as the shell restores it, then the
+/// remotes answered and the GitHub source shown.
+fn reopened(remembered: RememberedSelector) -> State {
+    let mut state = State::default();
+    state.workspace.active = Some(project());
+    send(&mut state, Msg::Opened);
+    filter(&mut state, GithubMsg::Restored(remembered));
+    send(
+        &mut state,
+        Msg::RemotesListed(Ok(vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }])),
+    );
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    state
+}
+
+/// A filter message, handing back what it asked the project to remember.
+fn remembered_by(state: &mut State, msg: GithubMsg) -> Vec<Outcome> {
+    state.update_worktree_form_for_effects(Msg::GithubFilter(msg))
+}
+
+fn remembers(basic: BasicFilters) -> Vec<Outcome> {
+    vec![Outcome::GithubSelectorRemembered {
+        project: project(),
+        change: SelectorChange::Basic(basic),
+    }]
+}
+
+/// US2 AS1, SC-006: the remembered filters apply as the source shows, with one listing and the
+/// active line naming them, with no filter interaction.
+#[test]
+fn reopening_applies_the_remembered_filters_with_one_listing() {
+    let before = State::default().worktree_form.issue_request_seq;
+    let state = reopened(remembering(excluding_labels(&["in-progress", "blocked"])));
+    let (seq, _, search) = state
+        .worktree_form
+        .github_filtered_load()
+        .expect("one filtered listing");
+    assert_eq!(search.as_str(), EXCLUDE_BOTH);
+    assert_eq!(seq, before + 1, "one listing, no other request");
+    assert_eq!(
+        form(&state).github_selector.active_line().as_deref(),
+        Some("Excluding labels in-progress, blocked")
+    );
+}
+
+/// US2 AS2: another project opens with its own filters, or the default (034's listing).
+#[test]
+fn another_project_opens_with_its_own_filters_or_the_default() {
+    let mut include = BasicFilters::default();
+    include.include_label(label("bug"));
+    let own = reopened(remembering(include));
+    let (_, _, search) = own.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), INCLUDE_BUG);
+
+    let none = reopened(RememberedSelector::default());
+    assert_eq!(none.worktree_form.github_filtered_load(), None);
+    assert!(none.worktree_form.awaited_issue_load().is_some());
+    assert!(form(&none).github_selector.basic.is_default());
+    assert_eq!(form(&none).github_selector.active_line(), None);
+}
+
+/// FR-021: each basic change is remembered as it is made (US2 AS5: **Clear filters** remembers
+/// the default); nothing else is.
+#[test]
+fn each_basic_change_is_remembered_and_nothing_else_is() {
+    let mut state = shown(default_issues());
+    assert!(remembered_by(&mut state, GithubMsg::PanelToggled).is_empty());
+    assert!(remembered_by(&mut state, GithubMsg::Focused(LabelList::Exclude)).is_empty());
+    let fake = FakeIssueSource::new().with_labels(vec![Ok(names(
+        &["ui", "in-progress", "bug", "blocked"],
+        None,
+    ))]);
+    let seq = state.worktree_form.awaited_label_choices().unwrap();
+    let repo = form(&state).github_repo().cloned().unwrap();
+    let result = load_label_choices(&fake, &repo);
+    assert!(remembered_by(&mut state, GithubMsg::LabelsLoaded { seq, result }).is_empty());
+    assert!(remembered_by(
+        &mut state,
+        GithubMsg::QueryChanged(LabelList::Exclude, "in".into())
+    )
+    .is_empty());
+    assert!(remembered_by(
+        &mut state,
+        GithubMsg::HighlightMoved(LabelList::Exclude, Direction::Next)
+    )
+    .is_empty());
+
+    let index = offered_index(&state, LabelList::Exclude, "in-progress");
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::Picked(LabelList::Exclude, index)),
+        remembers(excluding_labels(&["in-progress"]))
+    );
+    let index = offered_index(&state, LabelList::Exclude, "blocked");
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::Picked(LabelList::Exclude, index)),
+        remembers(excluding_labels(&["in-progress", "blocked"]))
+    );
+    // The answer of the listing it started is not a change.
+    let fake = FakeIssueSource::new().with_search_pages(vec![Ok(page(Vec::new(), 0, None))]);
+    let (seq, repo, search) = state.worktree_form.github_filtered_load().unwrap();
+    let result = load_filtered(&fake, &repo, &search).map(|listing| (listing, gh()));
+    assert!(remembered_by(
+        &mut state,
+        GithubMsg::Loaded {
+            seq,
+            result,
+            resolved_env: None
+        }
+    )
+    .is_empty());
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::Removed(label("in-progress"))),
+        remembers(excluding_labels(&["blocked"]))
+    );
+    // Removing what is not chosen changes nothing, so remembers nothing.
+    assert!(remembered_by(&mut state, GithubMsg::Removed(label("in-progress"))).is_empty());
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::ClearedAll),
+        remembers(BasicFilters::default())
+    );
+    assert!(remembered_by(&mut state, GithubMsg::ClearedAll).is_empty());
+    assert!(remembered_by(&mut state, GithubMsg::PanelDismissed).is_empty());
+}
+
+fn offered_index(state: &State, list: LabelList, name: &str) -> usize {
+    form(state)
+        .github_selector
+        .rows(list)
+        .iter()
+        .position(|row| row.action == LabelAction::Choice(label(name)))
+        .unwrap_or_else(|| panic!("{name} is offered in {list:?}"))
+}
+
+/// Restoring at form open is not a change: nothing is written back.
+#[test]
+fn restoring_remembers_nothing() {
+    let mut state = State::default();
+    state.workspace.active = Some(project());
+    send(&mut state, Msg::Opened);
+    assert!(remembered_by(
+        &mut state,
+        GithubMsg::Restored(remembering(excluding_labels(&["blocked"])))
+    )
+    .is_empty());
+    assert_eq!(
+        form(&state).github_selector.basic,
+        excluding_labels(&["blocked"])
+    );
+}
+
+/// Spec Edge "Remembered value no longer in the repository": the label still applies, and its
+/// chip says it is not in this repository once the labels loaded without it.
+#[test]
+fn a_remembered_label_the_repository_lacks_still_applies_and_says_so() {
+    let mut state = reopened(remembering(excluding_labels(&["in-progress", "retired"])));
+    let (_, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert!(search.as_str().contains("-label:\"retired\""), "{search:?}");
+    let selector = &form(&state).github_selector;
+    // Before the labels load, nothing is known about it.
+    assert_eq!(selector.chip_text(&label("retired")), "retired");
+    with_labels(&mut state);
+    let selector = &form(&state).github_selector;
+    assert_eq!(
+        selector.chip_text(&label("retired")),
+        "retired · not in this repository"
+    );
+    assert_eq!(selector.chip_text(&label("in-progress")), "in-progress");
+    assert_eq!(
+        selector.chosen(LabelList::Exclude),
+        &[label("in-progress"), label("retired")]
+    );
+}
+
+/// GitHub labels match case-insensitively, so a case change is not a missing label; and with only
+/// the first labels read, an absent one may be further on, so nothing is said.
+#[test]
+fn a_label_in_another_case_or_beyond_a_partial_list_is_not_called_missing() {
+    let mut state = reopened(remembering(excluding_labels(&["UI", "zzz"])));
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::Focused(LabelList::Exclude));
+    let fake = FakeIssueSource::new().with_labels(
+        (0..10)
+            .map(|i| Ok(names(&["ui"], Some(&format!("c{i}")))))
+            .collect(),
+    );
+    serve_labels(&mut state, &fake);
+    let selector = &form(&state).github_selector;
+    assert_eq!(selector.chip_text(&label("UI")), "UI");
+    assert_eq!(selector.chip_text(&label("zzz")), "zzz");
 }

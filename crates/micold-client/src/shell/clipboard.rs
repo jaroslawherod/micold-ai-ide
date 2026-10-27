@@ -86,6 +86,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::DaemonBound { .. }
         | Outcome::IssueSourceChosen { .. }
         | Outcome::JiraQueryRemembered { .. }
+        | Outcome::GithubSelectorRemembered { .. }
         | Outcome::RemoteReplaceRequested { .. }
         | Outcome::ContainerStopRequested { .. }
         | Outcome::RemoteRepositoryRequested { .. }

@@ -275,6 +275,16 @@ pub enum Outcome {
         /// The one field to change.
         change: micold_core::jira_query::RememberChange,
     },
+    /// The add-worktree form's GitHub selector has something for `project` to remember (feature
+    /// 1400, FR-021): the basic filters at each change. The shell reads the project's remembered
+    /// file, applies the change and writes it back (`shell::github_filter::remember_github_selector`);
+    /// the root does nothing with it.
+    GithubSelectorRemembered {
+        /// The project the dialog is open in.
+        project: std::path::PathBuf,
+        /// The one field to change.
+        change: micold_core::github_filter::SelectorChange,
+    },
     /// A repository on a remote daemon's host was named (feature 489, FR-012): the shell asks that
     /// daemon whether it is one and opens it as a project when it is.
     RemoteRepositoryRequested {

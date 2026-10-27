@@ -42,6 +42,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
+use micold_client::features::worktree_form::github_filter::Msg as GithubMsg;
 use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::{
     BranchSource, DescriptionRequest, DetailsRequest, JiraAvailability, Msg as FormMsg,
@@ -51,12 +52,13 @@ use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
+use micold_core::github_filter::RememberedSelector;
 use micold_core::issue_details::DETAILS_BOUND;
 use micold_core::jira::{connection_key, ApiToken, IssueProvider};
 use micold_core::jira_query::RememberedQuery;
 use micold_core::location_title::{title_ticket, TitleTicket};
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::store::jira_token_path;
+use micold_core::store::{github_selector_file_name, github_selector_path, jira_token_path};
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -75,6 +77,11 @@ pub(crate) const NOT_CONNECTED: &str = "not connected to the session service";
 /// modal's scrim, unseen, and would call a read "a request that may not have taken effect".
 pub fn on_form_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    if let Some(remembered) = remembered_selector(app) {
+        app.core.update(Message::WorktreeForm(FormMsg::GithubFilter(
+            GithubMsg::Restored(remembered),
+        )));
+    }
     if let Some(remembered) = remembered_query(app) {
         app.core.update(Message::WorktreeForm(FormMsg::JiraQuery(
             QueryMsg::Restored(remembered),
@@ -131,6 +138,57 @@ pub(crate) fn remember_jira_query(app: &mut App, outcomes: Vec<Outcome>) {
                     .notify_error(crate::shell::jira::remember_failed(&error));
             }
         }
+    }
+}
+
+/// The active project's remembered selector, read as the form opens (FR-021): missing or
+/// unreadable, it is the default. Read whatever the GitHub availability (FR-022), so turning
+/// GitHub issues back on finds it; `None` without a project or a data directory.
+pub(crate) fn remembered_selector(app: &App) -> Option<RememberedSelector> {
+    let project = app.core.workspace.active.as_deref()?;
+    let dir = app.caps.github_selector_dir()?;
+    Some(crate::shell::remembered::read(&github_selector_path(
+        dir, project,
+    )))
+}
+
+/// Write what the GitHub selector asked its project to remember (FR-021), each change a
+/// read-modify-write of one field. A failure is a notification naming the OS error, never a filter
+/// value (FR-024). Without a data directory there is nowhere to keep it, and nothing to say.
+pub(crate) fn remember_github_selector(app: &mut App, outcomes: Vec<Outcome>) {
+    let Some(dir) = app
+        .caps
+        .github_selector_dir()
+        .map(std::path::Path::to_path_buf)
+    else {
+        return;
+    };
+    for outcome in outcomes {
+        if let Outcome::GithubSelectorRemembered { project, change } = outcome {
+            let written = crate::shell::remembered::remember(
+                &dir,
+                &github_selector_file_name(&project),
+                |held: RememberedSelector| held.with_change(&change),
+            );
+            if let Err(error) = written {
+                app.core.notify_error(format!(
+                    "Couldn't remember the GitHub issue filter: {error}"
+                ));
+            }
+        }
+    }
+}
+
+/// Delete what `project` remembers of its selector, as the project is forgotten (FR-022). A
+/// missing file is success; a failure is a notification naming the OS error.
+pub(crate) fn forget_github_selector(app: &mut App, project: &std::path::Path) {
+    let Some(dir) = app.caps.github_selector_dir() else {
+        return;
+    };
+    if let Err(error) = crate::shell::remembered::remove(&github_selector_path(dir, project)) {
+        app.core.notify_error(format!(
+            "Couldn't delete the remembered GitHub issue filter: {error}"
+        ));
     }
 }
 
