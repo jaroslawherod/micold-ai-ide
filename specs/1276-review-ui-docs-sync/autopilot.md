@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M5 review B pending
-- **Next step**: orchestrator runs review B on the M5 diff, then the unit opens the M5 PR
+- **Phase**: M5 PR opening
+- **Next step**: orchestrator waits on CI for the M5 PR and merges
 
 ## Pull requests
 
@@ -82,6 +82,7 @@ All closed on GitHub when M1 started (orchestrator, 2026-10-26); their PRs, from
 | M3 A (correctness) | 1 | a787013152cc093ee0c41d8a50d3aa8d06164f45:7f6e59075f9edc1252c1f7985f74df24e7c9d63b | CLEAN, 2 MINOR (session model, run by orchestrator); both fixed: F1 a cut entry name (`changes::heading`) or PR title (`PullRequestRow`) reads whole in a tooltip, shared `Tooltip::whole_label` + `Ellipsized::is_cut` + `cdk::tooltip::open_if`, test-first (tdd/cycle-log.md); F2 `SMALLEST_WINDOW` doc comment says M3 moved the draft actions and the draft-row entries cover only the 640×480 overhang — fixed, prose only |
 | M3 B (conformance) | 1 | a787013152cc093ee0c41d8a50d3aa8d06164f45:7f6e59075f9edc1252c1f7985f74df24e7c9d63b | CLEAN, 2 MINOR (sonnet, run by orchestrator); Verify: 34 crops, no unlinked FAIL, #1519/#1539/#1540 exist, 11 crops viewed match verdicts, new unit tests and review_tab_fits pass. F1, F2 declined (see Declined review findings) |
 | M4 B (conformance) | 1 | 3e78c973427cfd5f9b9b2c0f032051389f75ecff:6094e9e4774d7c726fc97492ea6e6cd180b2a6c6 | CHANGES, 1 MAJOR 3 MINOR (sonnet, run by orchestrator); all fixed in canvas version 11: F1 boards for source control (02), bar error/empty (07/13), empty drawer (14), composer (12), empty review (13), PR unreadable (15); crop 16 recorded as not a component state (TabStrip `session=false` covers its strip); F2 TabStrip boxed + after the session tab, + and two split icons at the right; F3 status bar hints two spans, left items reworded to the build; F4 TitleBar and Sidebar compared with ui/toolbar.rs, ui/sidebar.rs and the guide, each element kept or removed in mockup-sync.md (none is a doc follow-up). Re-review in round 2 |
+| M5 B (conformance) | 1 | f5dd5052930e61ab20260be07e82f6e0c07c3ab7:b35bf62325de0c965b46d7e64cf14481b2f0286a | CLEAN, 1 MINOR (sonnet, run by orchestrator): 26 PR/issue numbers correct, scope exactly M5. MINOR: review-redesign.md § Open questions 0 "kept in memory only" checked against the code and kept: the tabs live in `ReviewTabs<OpenView>` (`pub tabs` of `State`, crates/micold-client/src/features/changes.rs:1445), a window-local struct deriving no serde; `ReviewTabs` (crates/micold-core/src/review_tabs.rs:74) has no Serialize/Deserialize and nothing writes it out |
 | M4 B (conformance) | 2 | f389648488619de6df1577ef1fb69bb5edae9a0f:5eeb4d7d741d3aa26d1c6c990286f7f0d8bf84b4 | CLEAN (sonnet): all four round-1 fixes hold; canvas version 11 (1793115039-8547) carries the new boards (SourceControl, ReviewStates, Composer, EmptyReview, PrUnreadable), TabStrip/StatusBar fixes, Sidebar/TitleBar cleanup; mockup-sync.md has an action on every row |
 
 ## Declined review findings
