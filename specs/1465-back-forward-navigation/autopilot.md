@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: claude/project-thread-e4cve5
 - **Started**: 2026-10-27
-- **Phase**: tasks review round 1 fixed; round 2 pending
-- **Next step**: tasks review round 2 (scoped, fix diff since round 1 snapshot); then gate, push, design PR
+- **Phase**: design done; tasks review clean; design PR pending
+- **Next step**: orchestrator opens the design PR (branch pushed; pr-title.md / pr-body.md in scratchpad); then M1
 
 ## Pull requests
 
@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | 11f3d102ca7aabfb92c1199ff5ca3699e08f8622:0ae4673ae350ac1a5197583750a38820c1241a47 | CHANGES: 1 MAJOR, 2 MINOR (F1 cross-project Compare: `runs.known` per-project group lists, R5 limit narrowed, tests + B10 added; F2 availability refreshed before `exists` (U2 step 0); F3 borrow split via `mem::take` in `resolve`) — all fixed |
 | Plan review | 2 | 41ae8cd58f1600b8d9892ebc6d9c08f3694d1578:38cb3341b7aae78134abfabbd81189bd87e758cf | CLEAN, 1 MINOR (data-model runs.rs table: `known[P]` for a removed project unspecified — fixed, prose only: one row saying it is left as is and never read while P is unknown) |
 | Tasks review | 1 | 8f4a09d125d94bf6e90b271da7ab675c7845d785:fd6e8bf13a1b2d6f1913c226359527d6733732b2 | CHANGES: 1 MAJOR, 2 MINOR (F1 `history`→`changes` allowlist entry moved from T005 (M1) to T025 (M3), T012 spells `crate::features::navigation::blocked` — dead-entry assert would fail M1; F2 T022/T023 green claims split (docs test greens in T023) — prose only; F3 ledger notes the review stands in for analyze — prose only). No [NEEDS CLARIFICATION] in spec.md confirmed |
-| Tasks review | 2 | pending | — |
+| Tasks review | 2 | 5265a22b329483958f659f75aa46b16ae46aeb60:382b7ce61dbd18769aa157d47987bb3797120edb | CLEAN, 1 MINOR (T025 prose named `changes::can_go_back`; fixed, prose only: full `crate::features::changes::can_go_back` path) |
 
 ## Declined review findings
 
