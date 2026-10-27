@@ -43,11 +43,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
             let editor = editor(app, session);
             let (caret, lines) = (editor.caret(), editor.line_count());
+            let selecting = editor.has_selection();
             let phase = app.core.composers.phase(session);
             run(
                 app,
                 session,
-                composer_key(&press, caret, lines, composing, phase),
+                composer_key(&press, caret, lines, composing, selecting, phase),
             );
         }
         Msg::TranscriptKey { session, press } => {
