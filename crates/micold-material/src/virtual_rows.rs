@@ -13,6 +13,7 @@
 //! .on_scroll(|o, v| Msg::Scrolled(o, v)).into()`.
 
 use std::ops::Range;
+use std::rc::Rc;
 
 use iced::widget::{column, Space};
 use iced::{Element, Length};
@@ -126,6 +127,7 @@ pub struct VirtualRows<'a, M> {
     extras: Vec<(usize, f32)>,
     id: Option<iced::advanced::widget::Id>,
     least_width: Option<f32>,
+    pane: PaneWidth,
 }
 
 impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
@@ -147,6 +149,7 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
             extras: Vec::new(),
             id: None,
             least_width: None,
+            pane: PaneWidth::default(),
         }
     }
 
@@ -181,6 +184,14 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
     /// does not stop short (#1466). Rows must fill their width.
     pub fn least_width(mut self, width: f32) -> Self {
         self.least_width = Some(width);
+        self
+    }
+
+    /// Record the pane's width in `pane` as the list is laid out, so a row's content can be held to
+    /// it with [`within_pane`](crate::within_pane) while the list scrolls sideways (#1519). Only
+    /// a list with a [`Self::least_width`] records it.
+    pub fn pane(mut self, pane: &PaneWidth) -> Self {
+        self.pane = Rc::clone(pane);
         self
     }
 
@@ -219,7 +230,7 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
     fn from(list: VirtualRows<'a, M>) -> Self {
         let rows = list.rows();
         let (above, below) = spacers_with(&rows, list.row_height, list.len, &list.extras);
-        let pane = PaneWidth::default();
+        let pane = list.pane;
         let top: Element<'a, M> = match list.least_width {
             Some(least) => Ruler::new(&pane, least, above).into(),
             None => Space::new().height(Length::Fixed(above)).into(),

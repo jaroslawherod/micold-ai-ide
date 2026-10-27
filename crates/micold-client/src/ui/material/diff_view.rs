@@ -55,7 +55,7 @@ use micold_core::review::{LineRange, RelPath, Side};
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
-use super::{Button, Text, TypeRole, VirtualRows};
+use super::{within_pane, Button, PaneWidth, Text, TypeRole, VirtualRows};
 
 /// One row's height, hunk header or line: fixed, which is what lets `VirtualRows` build only the
 /// visible rows.
@@ -1093,6 +1093,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             ),
             _ => 0.0,
         };
+        let pane = PaneWidth::default();
         let slots = Slots {
             rows: hung,
             measured: view.slot_heights,
@@ -1100,6 +1101,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             on_measured: view.on_slot_measured,
             // A diff wide enough to scroll sideways must not stretch its comments to its width.
             cap: (least > SLOT_CAP).then_some(SLOT_CAP),
+            pane: pane.clone(),
         };
         let mut gutters = view.gutters;
         gutters.links = view
@@ -1109,6 +1111,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
         let list = |len, build: Box<dyn Fn(usize) -> Element<'a, M> + 'a>| {
             let mut list = VirtualRows::new(len, ROW_HEIGHT, build, r)
                 .least_width(least)
+                .pane(&pane)
                 .offset(view.offset)
                 .viewport(view.viewport)
                 .extras(extras);
@@ -1184,6 +1187,9 @@ struct Slots<'a, M> {
     elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
     on_measured: Option<OnMeasured<'a, M>>,
     cap: Option<f32>,
+    /// The width of the pane the rows scroll in: a slot is no wider, so its actions are in view
+    /// while the rows are wider than the pane (#1519).
+    pane: PaneWidth,
 }
 
 impl<'a, M: 'a> Slots<'a, M> {
@@ -1202,6 +1208,7 @@ impl<'a, M: 'a> Slots<'a, M> {
             if let Some(cap) = self.cap {
                 slot = container(slot).max_width(cap).into();
             }
+            slot = within_pane(&self.pane, slot);
             stack = stack.push(match &self.on_measured {
                 Some(f) => {
                     let (shown, resized) = (Rc::clone(f), Rc::clone(f));

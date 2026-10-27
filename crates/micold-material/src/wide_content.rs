@@ -6,6 +6,10 @@
 //! to the [`Ruler`] inside: a zero-height leaf that is `max(pane, least)` wide. Rows that fill their
 //! column stretch to the widest sibling, which is the ruler, so every row is as wide as the pane
 //! when its text fits and as wide as its text when it does not.
+//!
+//! Content that must stay in view however far the rows scroll sideways — a comment card hung under
+//! a row, with its actions at its right end — goes through [`within_pane`], which lays it out no
+//! wider than the same pane (#1519).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -15,8 +19,9 @@ use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
-/// The width of the [`Pane`] that was laid out last, shared with the [`Ruler`] inside it.
-pub(crate) type PaneWidth = Rc<Cell<f32>>;
+/// The width of the [`Pane`] that was laid out last, shared with the [`Ruler`] and the
+/// [`within_pane`] content inside it; 0 until the pane is laid out.
+pub type PaneWidth = Rc<Cell<f32>>;
 
 /// A leaf `height` tall and `max(pane width, least)` wide, drawing nothing.
 pub(crate) struct Ruler {
@@ -70,15 +75,43 @@ impl<'a, M: 'a> From<Ruler> for Element<'a, M> {
     }
 }
 
-/// Wraps a scrollable and tells its [`Ruler`] how wide the pane is before laying the scrollable out.
+/// `content` laid out no wider than `pane`, the [`PaneWidth`] of the scrolling list it is inside
+/// (#1519). Before that pane is laid out it is laid out as it would be without this.
+pub fn within_pane<'a, M: 'a>(
+    pane: &PaneWidth,
+    content: impl Into<Element<'a, M>>,
+) -> Element<'a, M> {
+    Pane {
+        pane: Rc::clone(pane),
+        content: content.into(),
+        role: Role::Fit,
+    }
+    .into()
+}
+
+/// What a [`Pane`] does with its width as it is laid out.
+enum Role {
+    /// Record the width it is given, for the [`Ruler`] inside (the scrollable's wrapper).
+    Measure,
+    /// Hold the content to the width recorded (content inside the scrollable).
+    Fit,
+}
+
+/// Wraps a scrollable and tells its [`Ruler`] how wide the pane is before laying the scrollable out;
+/// or, as [`within_pane`], holds content inside the scrollable to that width.
 pub(crate) struct Pane<'a, M> {
     pane: PaneWidth,
     content: Element<'a, M>,
+    role: Role,
 }
 
 impl<'a, M> Pane<'a, M> {
     pub(crate) fn new(pane: PaneWidth, content: Element<'a, M>) -> Self {
-        Self { pane, content }
+        Self {
+            pane,
+            content,
+            role: Role::Measure,
+        }
     }
 }
 
@@ -101,11 +134,27 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Pane<'_, M> {
         renderer: &iced::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let width = limits.max().width;
-        self.pane.set(if width.is_finite() { width } else { 0.0 });
+        let limits = match self.role {
+            Role::Measure => {
+                let width = limits.max().width;
+                self.pane.set(if width.is_finite() { width } else { 0.0 });
+                *limits
+            }
+            Role::Fit => match self.pane.get() {
+                pane if pane > 0.0 => {
+                    let (min, max) = (limits.min(), limits.max());
+                    layout::Limits::with_compression(
+                        Size::new(min.width.min(pane), min.height),
+                        Size::new(max.width.min(pane), max.height),
+                        limits.compression(),
+                    )
+                }
+                _ => *limits,
+            },
+        };
         self.content
             .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+            .layout(&mut tree.children[0], renderer, &limits)
     }
 
     fn operate(
