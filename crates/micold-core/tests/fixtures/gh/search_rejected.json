@@ -1,0 +1,1 @@
+{"data":null,"errors":[{"type":"INVALID","path":["search"],"locations":[{"line":1,"column":46}],"message":"Invalid search query: unbalanced parentheses."}]}

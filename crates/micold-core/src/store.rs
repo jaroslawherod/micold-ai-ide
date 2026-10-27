@@ -755,6 +755,23 @@ pub fn jira_query_file_name(project: &Path) -> String {
     format!("{}.query.json", project_id(project))
 }
 
+/// The directory the remembered GitHub selector files live in: `<data_dir>/github` (feature 1400,
+/// contracts/source-and-storage.md §5).
+pub fn github_selector_dir() -> Option<PathBuf> {
+    crate::paths::data_subdir("github")
+}
+
+/// The file `project`'s GitHub selector is remembered in: `<dir>/<project_id_of(project)>.selector.json`
+/// (feature 1400, FR-021).
+pub fn github_selector_path(dir: &Path, project: &Path) -> PathBuf {
+    dir.join(github_selector_file_name(project))
+}
+
+/// The remembered selector file's name alone, for `owner_only::write`.
+pub fn github_selector_file_name(project: &Path) -> String {
+    format!("{}.selector.json", project_id(project))
+}
+
 /// Path of the temporary file used for an atomic write to `path`.
 ///
 /// Unique per call, not derived from `path` alone (T153, BUG-025). A staging path that only the

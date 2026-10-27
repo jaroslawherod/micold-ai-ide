@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1400
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
-- **Phase**: tasks
-- **Next step**: design PR pending (orchestrator opens; gh unauthenticated). Specs-only gate green after rebase on origin/main. Then M1. Earlier plan: after CLEAN: specs-only gate, push, design PR. T061 (Polish, no code) left to the close unit.
+- **Phase**: implement
+- **Next step**: M1 review round 1 (A and B), dispatched by the orchestrator (no Agent tool in the unit); after both CLEAN: full gate, then wait for #1558 to merge before pushing branch `1400-m1` and opening the M1 PR. T061 (Polish, no code) left to the close unit.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | Design (spec, plan, tasks) | pushed, PR text in scratchpad; orchestrator opens | |
+| #1558 | Design (spec, plan, tasks) | open, CI running | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | planned |
+| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | implemented, in review (stacked on #1558, branch `1400-m1`) |
 | M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | planned |
 | M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
 | M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Notes
 
+- M1: `UserQuery::condition()` collapses whitespace runs only outside quoted strings (data-model §3 says "spaces collapsed"; inside a quoted phrase the spacing is the user's search text). A `sort:` token ends before whitespace, `(`, `)` or `"`, so cutting it never removes a parenthesis (research R5 leaves the token end open). `ScopedSearch::listing` is built for any filter; the default basic filter is kept off it by `GithubFilter::is_default` at the caller (search-rules §4 "not constructible"). `FilterFailure`'s `Debug` counts GitHub's messages instead of printing them (they can quote the query, FR-024).
 - Tasks unit: M1 is Foundational + US1's core only (no UI), as 1186's M1: Setup + Foundational + all of US1 is ~30 tasks and over 800 lines (milestones.md rule 3); split at the core/client seam. US2 split along its scenarios: basic (M3) and advanced (M6). US3 and US4 share M5 (a Run without its refusal display would be half-wired, rule 6). The plan's 4-milestone delivery order is superseded by tasks.md §Milestones, as the plan says.
 - `speckit-analyze` is a forked skill not loadable in this cloud unit; checked inline instead: FR-001–FR-027, SC-001–SC-007 and quickstart §B B1–B18 each map to a task and a milestone; no CRITICAL or HIGH found.
 - checklists/requirements.md: ticked "No [NEEDS CLARIFICATION] markers remain" (spec has none; D1 is a recorded provisional clarification, tracked in Open escalation). For the tasks reviewer to confirm.
@@ -73,6 +74,9 @@ Clarify round 1, category 1 (product or scope decision the repo does not settle)
   - Evidence checked: issue #1400 body (only "optionally"), issue comments (none), specs/1185-jira-selector-filters, specs/1186-jira-advanced-jql, specs/034-github-issue-worktree — none settles it.
 
 ## Follow-ups not done
+
+- M1 (T018, deviation): `ISSUE_ADVANCED` (R3) and a refused search's error shape (R7, incl. `\` inside a quoted term) **not probed** live: no signed-in `gh` in the cloud container. `parse_search_page` tests use hand-written answers (search-rules §6), and `tests/fixtures/gh/search_filtered_page.json`, `search_rejected.json`, `labels_page.json` are hand-written, not recorded. Probe with a signed-in `gh` before release; if GitHub refuses the type, only `github_filter::search_type!` changes.
+- M1 unit: LSP tool not available here either (ToolSearch found no `LSP`); symbols checked with grep.
 
 - Plan unit: LSP tool not available in this session (ToolSearch found no `LSP`); symbols checked with grep. ISSUE_ADVANCED and the refused-search error shape not probed live (no signed-in `gh`): research R3/R7, M1 fixture probe.
 - Cloud session: `gh` unauthenticated, so `branch-start.sh` and `issue.sh` were skipped (orchestrator set labels/assignee via GitHub MCP; branch already at origin/main 828bc8e24). Not pushed: the orchestrator pushes with the design PR.

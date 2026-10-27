@@ -1,0 +1,31 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 2,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjI=" },
+      "nodes": [
+        {
+          "number": 12,
+          "title": "Crash on start",
+          "updatedAt": "2026-10-20T10:00:00Z",
+          "labels": { "nodes": [{ "name": "bug" }] },
+          "author": { "login": "octocat" },
+          "bodyText": "It crashes.",
+          "state": "OPEN",
+          "repository": { "nameWithOwner": "o/r" }
+        },
+        {
+          "number": 9,
+          "title": "Old crash",
+          "updatedAt": "2026-10-01T10:00:00Z",
+          "labels": { "nodes": [] },
+          "author": null,
+          "bodyText": "",
+          "state": "CLOSED",
+          "repository": { "nameWithOwner": "o/r" }
+        },
+        {}
+      ]
+    }
+  }
+}
