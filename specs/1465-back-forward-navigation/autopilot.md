@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec review | 1 | 122d576a4ef8abf602bba7274943871a5a80802e:b4c2abed5e49a26d0925bc7011e0fabdc7c4eaa6 | CHANGES: 1 MAJOR, 3 MINOR (all fixed; F2–F4 prose only) |
+| Spec review | 2 | 8dd4e55cf8901b03c0b2a3a594c57e3780e9ea71:90b186cd61c01d98ee42519bfcddf69b8bd79acf | pending |
 
 ## Declined review findings
 
