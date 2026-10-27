@@ -138,34 +138,44 @@ pub fn choose(inputs: &TitleInputs) -> LocationTitle {
     }
 }
 
-/// The title ticket of a worktree (FR-002, research R2, L2): the folder name's ticket; else the
-/// branch's, read as the app names branches (`<type>/<ticket>_<name>`), else as the card's short
-/// branch reads it (`<type>/<digits>` then the end, `_` or `-`). A ticket that is neither a number
-/// nor a `<LETTERS>-<digits>` key is no title ticket.
+/// The title ticket of a worktree (FR-002, research R2, L2): the folder name's ticket when it is
+/// one; else the branch's, read as the app names branches (`<type>/<ticket>_<name>`, past any
+/// namespace segment that is no conventional type, such as `jh/`), else as the card's short branch
+/// reads it (`<type>/<digits>` then the end, `_` or `-`). A ticket that is neither a number nor a
+/// Jira key ([`issue_link::ticket_ref`](crate::issue_link::ticket_ref)) is no title ticket.
 pub fn title_ticket(dir_name: &str, branch: Option<&str>) -> Option<TitleTicket> {
-    if let Some(ticket) = naming::ticket(dir_name) {
-        return classify(&ticket);
+    if let Some(ticket) = naming::ticket(dir_name).as_deref().and_then(classify) {
+        return Some(ticket);
     }
     let branch = branch?;
-    naming::ticket(&naming::dir_name_from_branch(branch))
-        .and_then(|ticket| classify(&ticket))
+    naming::ticket(&naming::dir_name_from_branch(unnamespaced(branch)))
+        .as_deref()
+        .and_then(classify)
         .or_else(|| {
             let short = crate::overview_text::short_branch(branch)?;
             classify(short.rsplit('/').next()?)
         })
 }
 
-/// A ticket as a tracker writes it: digits are a GitHub issue, `<LETTERS>-<digits>` a Jira key.
-fn classify(ticket: &str) -> Option<TitleTicket> {
-    if !ticket.is_empty() && ticket.bytes().all(|b| b.is_ascii_digit()) {
-        return ticket.parse().ok().map(TitleTicket::Github);
+/// The branch from its first conventional type segment on, or its last segment when it has none:
+/// a leading `jh/` or `user/` names a person, not a Jira project (review A M1, F2).
+fn unnamespaced(branch: &str) -> &str {
+    let mut rest = branch;
+    while let Some((head, tail)) = rest.split_once('/') {
+        if naming::ConventionalType::from_token(head).is_some() {
+            break;
+        }
+        rest = tail;
     }
-    let (project, number) = ticket.split_once('-')?;
-    let is_key = !project.is_empty()
-        && project.bytes().all(|b| b.is_ascii_alphabetic())
-        && !number.is_empty()
-        && number.bytes().all(|b| b.is_ascii_digit());
-    is_key.then(|| TitleTicket::Jira(ticket.to_ascii_uppercase()))
+    rest
+}
+
+/// A ticket as a tracker writes it, through the one rule the issue link uses.
+fn classify(ticket: &str) -> Option<TitleTicket> {
+    match crate::issue_link::ticket_ref(ticket)? {
+        crate::issue_link::IssueRef::Github(number) => Some(TitleTicket::Github(number)),
+        crate::issue_link::IssueRef::Jira(key) => Some(TitleTicket::Jira(key)),
+    }
 }
 
 #[cfg(test)]
@@ -375,6 +385,15 @@ mod tests {
             ),
             ("wt", None, None),
             ("wt", Some("feat/1504_überblick"), github(1504)),
+            // Review A M1: a folder ticket that is neither kind leaves the branch to answer (F1);
+            // a branch namespace that is no conventional type is not a Jira project (F2); a Jira
+            // project key may hold digits after its first letter (F3).
+            ("login_fix", Some("feat/1504_x"), github(1504)),
+            ("wt", Some("jh/1504_x"), github(1504)),
+            ("wt", Some("user/42_fix"), github(42)),
+            ("wt", Some("jh/ABC-42_login"), jira("ABC-42")),
+            ("feat-R2D2-5_x", None, jira("R2D2-5")),
+            ("wt", Some("feat/ab1-42_x"), jira("AB1-42")),
         ] {
             assert_eq!(title_ticket(dir, branch), expected, "{dir} {branch:?}");
         }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M1 implemented in worktree /home/user/wt-1504-m1 (branch 1504-m1, stacked on design PR #1557 head c91788da9); full gate (scripts/gate.sh) green at 7fbb9ec20; reviews A, B and visual pass pending
-- **Next step**: M1 review A (code-review high) and review B (conformance, sonnet) on c91788da9...HEAD; then full gate, PR files (pr-title-m1.md / pr-body-m1.md); not pushed until #1557 merges.
+- **Phase**: M1 in review (worktree /home/user/wt-1504-m1, branch 1504-m1, stacked on design PR #1557 head c91788da9); review A round 1 fixes committed; review B CLEAN; visual pass PASS
+- **Next step**: review A round 2 (scoped, sonnet) on the fix diff; then PR files (pr-title-m1.md / pr-body-m1.md); not pushed until #1557 merges.
 
 ## Pull requests
 
@@ -55,8 +55,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 Verify commands: one filter per `cargo test --lib`, `mise run test-core` alt, `--bin micold-ai-ide` with named test prefixes `worktrees_fingerprint`/`title_facts`/`title_answer`; F2 M1/M2 Verify title text only, source words in M3; F3 [P] dropped from T003/T004, parallel line fixed; F4 M3 Refresh uses E (close PR) and G; F5 stamp with `micold_core::unix_time::unix_secs()`). speckit-analyze (0 CRIT/HIGH, 4 MED, 8 LOW): MED fixed — F1 git-missing split (D9), I1 `numeric_ticket` removal moved to T015, C1 T018 Jira-off case, C2 T005 Default/orphan case; LOW fixed — F2 lowercase key edge case + L2 folder-key-vs-branch-number row, F3 FR-008 names the three surfaces, F4 T048 in M1 (D10), F5 neutral clock, C4 non-ASCII path in T033, C6 stale edge case narrowed to spec/commit; LOW not fixed — C3 timeout test, C5/C7 per-occasion retry tests (covered by L5 table tests in T042) |
 | Tasks review | 2 | 98e1d4227be086796612c25694acc9ade9a02eb6:b89c96749619ccbd77e44926bd9633d14d02213e | CHANGES: 1 MAJOR, 1 MINOR — all fixed (F1 T014 now also moves `request_titles` (issues.rs ~785–810) and the existing tests/overview.rs ~1352 call, and removes `numeric_ticket`, so it builds alone; T015 keeps only the fingerprint; F2 [P] dropped from T002) |
 | Tasks review | 3 | 05ac0485267c46324864564487a846e51b5da779:5cb42ed07b4d2000c3169efa63d0e0228df28d38 | CLEAN (cosmetic note: T014 could cite both calls at tests/overview.rs:1352–1353; not needed) |
-| M1 review A (code-review high) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | pending (orchestrator; diff c91788da9...HEAD) |
-| M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | pending (orchestrator) |
+| M1 review A (code-review high) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CHANGES: 1 MAJOR, 2 MINOR — all fixed (F1 a folder ticket of neither kind no longer stops the branch being read; F2 a non-conventional namespace segment (`jh/`, `user/`) is skipped before the branch ticket is read; F3 Jira key rule reused from `issue_link::ticket_ref` (digits after the first letter); L2 rows and tests added) |
+| M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CLEAN (1 MINOR: no TDD cycle log; red runs named in the PR body) |
+| M1 visual pass | 1 | 7fbb9ec20 | PASS: quickstart §B rows A, B and rename, light and dark (/mnt/project-files/issue-1504/) |
 
 ## Declined review findings
 
