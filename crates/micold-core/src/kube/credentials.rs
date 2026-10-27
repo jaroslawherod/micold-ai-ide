@@ -147,6 +147,9 @@ pub fn every_kind() -> Vec<KubeCredential> {
     all
 }
 
+/// What the pod's daemon reads as its image reference: it only marks the daemon as sandboxed.
+pub const POD_IMAGE_MARKER: &str = "kubernetes-pod";
+
 /// The environment the daemon runs with (the pod's own env does not reach it: sshd starts sessions
 /// clean). No allowed credential adds to it.
 pub fn daemon_env() -> BTreeMap<String, String> {
@@ -156,6 +159,10 @@ pub fn daemon_env() -> BTreeMap<String, String> {
     let mut env = BTreeMap::from([
         ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
         ("MICOLD_REPOS_ROOT".to_string(), REPOS_ROOT.to_string()),
+        // The daemon holds credential files only when it knows it is sandboxed, which it reads
+        // from this variable (#1522). The pod's image is not known here: the daemon only names it
+        // in messages, so the place stands for it.
+        ("MICOLD_IMAGE_REFERENCE".to_string(), POD_IMAGE_MARKER.to_string()),
     ]);
     // The pod's daemon is not on `PATH`: name it by the build directory the client installs it in
     // (quoted so the shell git runs the helper through expands `$HOME`).
@@ -306,6 +313,8 @@ mod tests {
         let env = daemon_env();
         assert_eq!(env["MICOLD_IDLE_STOP"], "off");
         assert_eq!(env["MICOLD_REPOS_ROOT"], "/data/repos");
+        // #1522: without it the pod's daemon refuses every GitHub token grant.
+        assert_eq!(env["MICOLD_IMAGE_REFERENCE"], POD_IMAGE_MARKER);
         for (key, value) in crate::scoped_credential::git_env("https://github.com") {
             if key == "GIT_CONFIG_VALUE_1" {
                 // The pod's daemon is named by its build directory, not found on PATH.
