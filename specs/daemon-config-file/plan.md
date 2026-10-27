@@ -154,7 +154,8 @@ client (render, check before delivery) and the daemon (load) need the same type.
 
 Bug (issue 1) any time. Then: schema (2) → loader + reload (3) and renderer (4) → delivery per
 kind (5 host/SSH, 6 container, 7 pod) → tokens (8) → helper (9) → `gh` (10); AI CLIs (11), start
-script (12), projects (13) and the config view (14) in parallel after delivery → retire variables
+script (12), projects (13), the config view (14) and the sandbox extras (16, research D15) in parallel
+after delivery → retire variables
 (15, last). Each delivery issue removes that kind's env list in
 the same change, so no kind is fed by both at once (research D10, D11).
 

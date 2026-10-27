@@ -23,7 +23,9 @@ application does not manage), read by `micold-daemon` at start and on change. De
   `[session.*]`, `[[projects]]`. **Restart needed** — `[daemon]`, `[listen]`, `[auth]`, `[ssh]`,
   `[storage]`, `[startup]` and the start script file. An invalid new file is logged and ignored.
 - **R8** Location: `--config <path>`, else host `<data_dir>/daemon.toml`, SSH
-  `~/.micold/remote/daemon.toml`, container and pod `/run/micold/config/daemon.toml`.
+  `~/.micold/remote/daemon.toml`, container and pod `/run/micold/config/daemon.toml`. A daemon whose
+  environment holds `MICOLD_DAEMON_CONFIG` was started from inside a session: it refuses the default
+  location and requires `--config` (research D15 row 16).
 - **R9** Read-only (research D13): the daemon and its sessions only read this file and every secret
   file; only the application writes them, by writing a temporary file and renaming it. Containers
   mount `/run/micold/config` and `/run/micold/secrets` read-only as directories (never single files);
@@ -94,8 +96,14 @@ Projects added at runtime through `ProjectAdd` are served at once and appear in 
 | Key | Type | Default | Kinds | Meaning |
 |---|---|---|---|---|
 | `isolate_host_helpers` | bool | C/K: `true`; H/S: `false` | all | `true`: clear every inherited credential helper (#1002 FR-004). `false`: our helper first, the session's own helpers as fallback (research D7). |
-| `ssh_to_https` | bool | `true` | all | Rewrite `git@github.com:` and `ssh://git@github.com/` to HTTPS so a token applies. Only when at least one token is configured. |
-| `base` | URL | `"https://github.com"` | all | The forge the tokens are for (tests point it at a loopback server). |
+| `ssh_to_https` | bool | `true` | all | Rewrite `git@<host>:` and `ssh://git@<host>/` to HTTPS for each token's `host`, so a token applies. Only when at least one token is configured. |
+| `config_file` | path (read-only) | absent | all | The user's git configuration, **sanitized** by the app (`sanitize_gitconfig`: no helpers, tokens, headers, includes). The daemon sets `GIT_CONFIG_GLOBAL` to it in container and pod sessions; on H/S the user's own `~/.gitconfig` is used. Without `signing_key_file`, `commit.gpgsign` and `tag.gpgsign` are stripped. Replaces `CredentialShare::GitConfig` and the kube `gitconfig` Secret. |
+| `ssh_key_file` | path (secret) | absent | C, K | A private key for non-GitHub SSH remotes, used through `GIT_SSH_COMMAND`. |
+| `known_hosts_file` | path | absent | C, K | `UserKnownHostsFile` for that key; required with `ssh_key_file`. |
+| `signing_key_file` | path (secret) | absent | C, K | The commit-signing key (`user.signingkey` points at it; `gpg.format` as the user set it). |
+
+Sessions in container and pod daemons get the helper, the rewrite and `GIT_CONFIG_GLOBAL` because of
+`daemon.kind`, on every start path — never because of a start-up variable (research D15 row 2).
 
 ### `[[github.tokens]]`
 
@@ -104,6 +112,7 @@ Projects added at runtime through `ProjectAdd` are served at once and appear in 
 | `name` | string | required | all | Unique label; the Settings name; the PAT store file name. |
 | `token_file` | path (secret) | required | all | The token, optionally followed by an `expires_at=<unix>` line. |
 | `repos` | array of `"owner/repo"` \| `"owner/*"` | absent = every repo the token reaches | all | Narrows the token. |
+| `host` | host name, or a full `https://`/`http://` base URL | `"github.com"` | all | The forge the token is for; the `gh` shim sets `GH_HOST`. Only GitHub and GitHub Enterprise are implemented; tests point it at a loopback base URL (replaces `[git] base`). |
 
 Choice for a repository: exact > `owner/*` > unfiltered; among equally specific tokens (same pattern,
 or both unfiltered) the first in the file wins — file order is the Settings order (research D6).
@@ -133,7 +142,18 @@ CLI ids: `claude_code`, `copilot`, `pi`, `codex`, `opencode`. A CLI with no entr
 | `token_file` | path (secret) | absent | all | A long-lived token, read at session start: Claude Code → `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), Copilot → `COPILOT_GITHUB_TOKEN` (fine-grained PAT with Copilot Requests). Refused for other CLIs. Recommended: nothing to refresh. |
 | `api_key_file` | path (secret) | absent | all | Claude Code: read on each use through `apiKeyHelper` in the per-session settings, so a replaced key reaches running sessions. Others: read at each session start into the key variable (`OPENAI_API_KEY`), so a replaced key reaches the next session. Never on the command line. At most one of `sign_in_file`, `token_file`, `api_key_file` per CLI. |
 | `settings_file` | path | absent | C, K | Placed as the CLI's user settings in the sandbox home (Claude `~/.claude/settings.json`, Codex `$CODEX_HOME/config.toml`, OpenCode `~/.config/opencode/opencode.json`). Refused on H and S (FR-013c). |
-| `place` | array of `{ file = path, as = relative path }` | `[]` | C, K | More files placed under the CLI's config dir (an MCP config, agents, commands). `as` must stay inside the dir; never a file the daemon writes per session. |
+| `place` | array of `{ file = path, as = relative path }` | `[]` | C, K | More files placed under the CLI's config dir (an MCP config, agents, commands). `as` must stay inside the dir; never a file the daemon writes per session. A placed MCP config defining a server `micold` is refused (V17). |
+| `use_machine_sign_in` | bool | `false` | H, S | Use the machine's own sign-in, which the CLI manages and refreshes itself; the read-only rule (R9) does not apply to it. Excludes `sign_in_file`, `token_file`, `api_key_file`. |
+
+`settings_file` and `place` are **seeded**: copied into the config dir at session start when the
+delivered source changed since the last copy, otherwise left alone, so a CLI's own edits (Codex's
+folder trust in `config.toml`) survive. They are never mounted read-only. For `claude_code`:
+- in container and pod, `hasCompletedOnboarding` is set in the sandbox `.claude.json` whenever a
+  `sign_in_file`, `token_file` or `api_key_file` is configured;
+- on H and S with a delivered sign-in, `<data_dir>/ai/claude_code/.claude.json` is seeded once from
+  the user's `~/.claude.json` (`primaryApiKey` dropped) and never copied back.
+
+The diagnostic shows each delivered sign-in's expiry (`expiresAt`).
 
 ### `[session]`
 
@@ -141,6 +161,27 @@ CLI ids: `claude_code`, `copilot`, `pi`, `codex`, `opencode`. A CLI with no entr
 |---|---|---|---|---|
 | `[session.env]` | table string→string | `{}` | all | Added to every session's environment. |
 | `[session.secret_env]` | table string→path (secret) | `{}` | all | Each variable set to the content of the file (trailing newline stripped) at session start. |
+| `[[session.files]]` | array of `{ file = path, as = relative path, mode = "0600" }` | `[]` | all | Copied into the session home at session start (`.npmrc`, `.pypirc`); the source is read-only. `as` outside the home or inside a CLI config dir is refused (V18). |
+
+Container and pod sessions get `LANG=C.UTF-8` and `TZ` from `daemon.time_zone` (pods too) unless
+`session.env` sets them.
+
+**Reserved names** (V16): `[session.env]`, `[session.secret_env]` and `ai.cli[].env` refuse `PATH`,
+`HOME`, `TERM`, `COLORTERM`, `GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `GH_TOKEN`, `GH_HOST`,
+`GITHUB_TOKEN`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `PI_CODING_AGENT_DIR`,
+`XDG_DATA_HOME` (OpenCode), `MICOLD_*`, and a CLI's key variable (`ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`) when that CLI has an
+`api_key_file` or `token_file`.
+
+**Precedence** (later wins): daemon env (incl. start-script exports) → environment-include →
+`ai.cli[].env` → `[session.env]` / `[session.secret_env]` → the variables the daemon sets per session
+(always last, never overridden).
+
+### `[network]` — optional 
+
+| Key | Type | Default | Kinds | Meaning |
+|---|---|---|---|---|
+| `ca_file` | path | absent | all | Extra CA bundle: exported to sessions as `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE`, and trusted by the daemon's own HTTPS (reach check). Proxies go in `[session.env]`/`[session.secret_env]` (`HTTPS_PROXY`, `NO_PROXY`) and are honoured by the daemon too. |
 
 ### `[startup]` — optional; absent = no start script (research D12)
 
@@ -193,7 +234,7 @@ default = "claude_code"
 id = "claude_code"
 args = ["--permission-mode", "acceptEdits"]
 model = "claude-opus-5-5"
-# sign_in_file absent: the machine's own ~/.claude sign-in is used
+use_machine_sign_in = true   # the machine's own ~/.claude sign-in, managed by the CLI
 
 [[ai.cli]]
 id = "codex"

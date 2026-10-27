@@ -9,7 +9,12 @@ over time. Rust names are proposals for the implementing issues.
 ### DaemonConfig (one file, `daemon.toml`)
 
 `schema`, `Daemon`, `Listen`, `Auth?`, `Ssh?`, `Storage?`, `[Project]`, `Git`, `[GithubToken]`,
-`Ai { default?, [AiCli] }`, `Session`, `Startup?`.
+`Ai { default?, [AiCli] }`, `Session`, `Network?`, `Startup?`.
+
+### Git
+
+`isolate_host_helpers`, `ssh_to_https`, `config_file?: Path` (sanitized, read-only),
+`ssh_key_file?: SecretPath`, `known_hosts_file?: Path`, `signing_key_file?: SecretPath`.
 
 - Owned by: the application (rendered from the daemon's Settings entry) or the user (hand-written).
 - Read by: `micold-daemon` at start and on change; `micold-daemon config check`; the client before
@@ -36,7 +41,8 @@ path. `read()` returns the content with the trailing newline stripped (wrapped s
 
 ### GithubToken
 
-`name` (unique), `token_file: SecretPath`, `repos: Option<Vec<RepoPattern>>`.
+`name` (unique), `token_file: SecretPath`, `repos: Option<Vec<RepoPattern>>`, `host: ForgeHost`
+(default `github.com`; a base URL in tests).
 `RepoPattern { Exact(owner, repo) | Owner(owner) }`, case-insensitive.
 
 ### Reach (cache, `<data_dir>/github-reach.json`, `0600`)
@@ -59,7 +65,8 @@ the reach. Output: one token name, or none.
 
 `id: CliId { ClaudeCode, Copilot, Pi, Codex, Opencode }` (unique), `enabled`, `version?: Semver`,
 `args: Vec<String>`, `model?`, `api_base_url?: Url`, `env: Map`, at most one of
-`sign_in_file?: SecretPath` / `token_file?: SecretPath` / `api_key_file?: SecretPath`, `settings_file?: Path`, `place: [Place {file, as}]`.
+`sign_in_file?: SecretPath` / `token_file?: SecretPath` / `api_key_file?: SecretPath` /
+`use_machine_sign_in` (H, S), `settings_file?: Path`, `place: [Place {file, as}]`.
 On host and SSH a `sign_in_file` gives the CLI's sessions a per-daemon config dir
 `<data_dir>/ai/<id>/` (sign-in linked in, the user's own settings files linked read-through); the
 machine's own sign-in is never written. Every `SecretPath` is opened read-only; nothing in the daemon
@@ -68,7 +75,11 @@ variable, key variable, sign-in support, config dir).
 
 ### Session
 
-`env: Map<String,String>`, `secret_env: Map<String, SecretPath>`.
+`env: Map<String,String>`, `secret_env: Map<String, SecretPath>`, `files: [SessionFile {file, as, mode}]`.
+
+### Network
+
+`ca_file?: Path`.
 
 ### Startup
 
@@ -109,8 +120,12 @@ startup: StartupRun summary, restart_needed: bool, changed_restart_keys: [key pa
 | V11 | (retired with `sign_in_writable`: every secret is read-only) | — |
 | V12 | `remote` without `clone_root`, or `path` outside it | the project |
 | V13 | `startup.timeout_secs` out of range | the value |
-| V14 | Secret file mode wider than `0600` (unix) | warning on host/ssh, error on container/kubernetes |
+| V14 | Secret file mode wider than `0600` (unix) | warning on host/ssh, error on container/kubernetes; Windows: diagnostic says "ACL not checked" |
 | V15 | A required non-secret file missing (`client_token_file`, `script_file`, `settings_file`, `place.file`) | the path |
+| V16 | A reserved variable name in `session.env`, `session.secret_env` or `ai.cli.env` (contract §2 `[session]`) | the name, the table |
+| V17 | A placed file (`place`) that is an MCP config defining a server `micold` (`mcp::binding::name_taken`) | the file, the server name |
+| V18 | `session.files.as` absolute, escaping the home, or inside a CLI config dir; `ssh_key_file` without `known_hosts_file` | the key |
+| V19 | `use_machine_sign_in` on container/kubernetes, or with `sign_in_file`/`token_file`/`api_key_file` | CLI id |
 
 ## State transitions
 
