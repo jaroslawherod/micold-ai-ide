@@ -1238,7 +1238,9 @@ mod connect {
         let commands = host.commands.lock().unwrap().clone();
         let bridge = commands.last().unwrap().last().unwrap();
         assert!(
-            bridge.contains("MICOLD_IDLE_STOP='off' MICOLD_IMAGE_REFERENCE='kubernetes-pod' MICOLD_REPOS_ROOT='/data/repos' ")
+            bridge.contains(
+                "MICOLD_IDLE_STOP='off' MICOLD_KUBERNETES_POD='1' MICOLD_REPOS_ROOT='/data/repos' "
+            ) && !bridge.contains("MICOLD_IMAGE_REFERENCE")
                 && bridge.contains("GIT_CONFIG_KEY_0='credential.helper'")
                 && bridge.contains("GIT_CONFIG_VALUE_0=''"),
             "the daemon keeps its clones on the volume: {bridge}"
