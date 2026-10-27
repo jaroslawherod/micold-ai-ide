@@ -419,6 +419,7 @@ fn input_row<'a>(
     let composers = &state.composers;
     let editor = composers.editor(session);
     let (caret, lines) = (editor.caret(), editor.line_count());
+    let selecting = editor.has_selection();
     let palette = composers.palette.palette(session);
     let area = TextArea::new(editor.content(), roles)
         .placeholder(PLACEHOLDER)
@@ -430,7 +431,9 @@ fn input_row<'a>(
                 action: EditorAction(action),
             })
         })
-        .key_binding(move |press| key_binding(session, press, caret, lines, phase, palette))
+        .key_binding(move |press| {
+            key_binding(session, press, caret, lines, selecting, phase, palette)
+        })
         .track_focus(FieldId::Composer(session), None);
     let mut controls = row![container(area).width(Length::Fill)]
         .spacing(spacing::SM)
@@ -495,6 +498,7 @@ pub fn key_binding(
     press: KeyPress,
     caret: (usize, usize),
     lines: usize,
+    selecting: bool,
     phase: TurnPhase,
     palette: Option<&PaletteState>,
 ) -> Option<Binding<Message>> {
@@ -510,7 +514,7 @@ pub fn key_binding(
         return Binding::from_key_press(press);
     };
     let to_palette = palette_key(palette, &input).is_some();
-    match composer_key(&input, caret, lines, false, phase) {
+    match composer_key(&input, caret, lines, false, selecting, phase) {
         KeyIntent::Edit if !to_palette => Binding::from_key_press(press),
         _ => Some(Binding::Custom(send(Msg::Key {
             session,

@@ -1516,8 +1516,9 @@ above it. A terminal session's pane has no composer and works as before.
   are there, not just a colour. Before the session's Claude Code runs, it says **Not running**,
   **Send** is unavailable and your draft stays.
 - **Interrupting a turn.** While the session is working, **Stop** stands beside **Send**, and
-  Escape in the composer (or with the transcript focused) does the same: Claude Code is asked to
-  end the turn, the turn closes with **You interrupted this turn**, and the session is ready for
+  Escape in the composer (or with the transcript focused) does the same, and so does Ctrl+C
+  while no text is selected (with text selected, Ctrl+C copies it; Cmd+C on macOS always copies):
+  Claude Code is asked to end the turn, the turn closes with **You interrupted this turn**, and the session is ready for
   your next message — the process keeps running. If the interrupt has not taken effect after ten
   seconds, the composer says so and offers **Stop session**; nothing is stopped unless you press
   it.

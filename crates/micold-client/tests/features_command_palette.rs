@@ -254,7 +254,7 @@ fn palette_key_is_none_while_closed_so_composer_key_runs() {
     assert_eq!(palette_key(None, &enter), None);
     assert_eq!(palette_key(None, &escape), None);
     assert_eq!(
-        composer_key(&enter, (0, 0), 1, false, TurnPhase::Idle),
+        composer_key(&enter, (0, 0), 1, false, false, TurnPhase::Idle),
         KeyIntent::Send
     );
     let (mut w, s) = window(Some(started(vec![])));
