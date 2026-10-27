@@ -49,6 +49,12 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "A filename created inside a temporary git repository the test builds, not this \
          repository's README.",
     ),
+    (
+        "crates/micold-core/src/sandbox/agent_guide.rs",
+        "CLAUDE.md",
+        "Claude Code's user-level instruction file in a sandbox home (`~/.claude/CLAUDE.md`), joined \
+         to a home path the daemon is given; never this repository's CLAUDE.md (#1439 FR-019).",
+    ),
 ];
 
 /// This file, which is exempt from its own scan.
