@@ -405,11 +405,16 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::OfferDismissed => {
             if let Some(project) = state.workspace.active.clone() {
+                // Every resumable session of the report, also those hidden now because their
+                // worktree has a session: they must not bring the offer back once it closes.
                 let shown = state
                     .attach
                     .offer
-                    .offerable(state.active_sessions())
+                    .report
                     .iter()
+                    .filter(|(asked, _)| *asked == project)
+                    .flat_map(|(_, r)| r.sessions.iter())
+                    .filter(|s| can_resume(s))
                     .map(|s| s.id)
                     .collect();
                 state.attach.offer.dismissed.insert(project, shown);
