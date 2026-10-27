@@ -197,6 +197,7 @@ tests against the stand-in; **client** = `micold-client` reducer tests; **gate**
 | FR-010 | `BusyIndicator` label + indicator | gate (label present in busy and idle states); §B 1, 12 |
 | FR-011 | R5 `TurnBegan`/`TurnEnded` activity; hooks ignored for structured | daemon (summary activity Working on deliver, AwaitingInput on result, ≤ 1 s; CLI Stop hook mid-turn does not flip it; #942 Notification still wins) |
 | FR-012 | `offers_stop`; Escape in `composer_key` only when composer/transcript focused | client (Escape → Interrupt only when Busy); §B 5 |
+| FR-012a | `composer_key` / `transcript_key`: Ctrl+C (no other modifier) → `Interrupt` when Busy and the composer editor has no selection; the editor's `selection()` is read where the key binding is built | client (Ctrl+C → Interrupt only when Busy, no selection; Shift/Alt/Cmd+C and Idle stay `Edit`) |
 | FR-013 | R4 control request, no signal | core (`encode_interrupt` equals P-4's line); daemon (stand-in records the line; same pid before and after) |
 | FR-014 | R4 `Interrupted` entry | core (fixture `interrupt-turn.jsonl` → Interrupted, no footer, no user entry for the CLI's text; `InterruptAsked` alone also marks); §B 5 |
 | FR-015 | R4 overdue timer | daemon (`ignore-interrupt`: Overdue after 10 s with a paused clock, session still running; second interrupt writes again; turn end clears) ; client (notice + Stop session offered) |
@@ -254,3 +255,5 @@ the user before M6 (the daemon queues instead of refusing, but no window sends u
 ## Complexity Tracking
 
 None.
+
+**Bugfix**: 2026-10-27 — BUG-1403 Updated from bugfix patch: FR-012a row in Requirement Coverage. The transcript has no text selection today, so `transcript_key` needs no selection input; Ctrl+C there interrupts a busy session.

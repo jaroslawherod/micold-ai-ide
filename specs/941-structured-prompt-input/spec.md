@@ -369,9 +369,16 @@ picture and the text with the path.
 
 **Interrupt**
 
-- **FR-012**: While a session is busy, its pane MUST offer a stop control and an interrupt key
-  (Escape while the composer or the transcript has focus); while it is idle or not running, MUST
-  NOT offer them.
+- **FR-012**: While a session is busy, its pane MUST offer a stop control and interrupt keys
+  (Escape or Ctrl+C while the composer or the transcript has focus); while it is idle or not
+  running, MUST NOT offer them.
+- **FR-012a**: Ctrl+C is an interrupt key only while the session is busy, and only when no text is
+  selected: with a selection in the composer, Ctrl+C copies it and does not interrupt. Ctrl+C with
+  Shift, Alt or Cmd (macOS) held is never an interrupt, so Cmd+C stays copy; while the session is
+  idle or not running Ctrl+C keeps what it does without this requirement (the editor's copy).
+  (BUG-1403)
+
+  **Bugfix**: 2026-10-27 — BUG-1403 added FR-012a: Ctrl+C interrupts a busy session.
 - **FR-013**: An interrupt MUST make the CLI cancel the turn in progress and end it; the session's
   CLI process MUST be the same running process before and after (it is not ended, killed or
   restarted).

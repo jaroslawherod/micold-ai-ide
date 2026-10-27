@@ -552,3 +552,18 @@ The TDD verdict is FAIL (`tdd/verification.md`). The close unit cleared T064, T0
 - [x] T070 (done as the new `a_restored_queue_is_held_before_any_process_starts`: the restart test cannot pin it, a process start re-holds a non-empty queue) Finding 10: assert the hold in `structured_input_saved.rs` `a_saved_queue_survives_a_restart_on_hold`
   against the mutant `input.hold = false` in `input.rs:134`. `cargo test -p micold-daemon --test structured_input_saved`
 
+## Phase 10: Bugfix BUG-1403 — Ctrl+C interrupts a busy session
+
+- [ ] T071 [US3] Failing tests in `crates/micold-client/tests/features_composer.rs` (FR-012a): Ctrl+C
+  gives `Interrupt` from `composer_key` and `transcript_key` while `Busy` (and overdue) with no
+  selection; `Edit` with a selection (composer), when Idle or NotRunning, with Shift, Alt or Logo
+  held, and while composing. Red on `origin/main` for the Busy cases. `cargo test -p micold-client --test features_composer`
+- [ ] T072 [US3] Fix: `Editor::has_selection` (`app.rs`, from `Content::selection()`); `composer_key`
+  gains the selection flag (callers: `shell/composer.rs`, `ui/composer.rs` `key_binding`, tests);
+  `composer_key` and `transcript_key` map Ctrl+C (`Key::Char('c')`, `Mods::is_ctrl_only`) to
+  `Interrupt` when busy and not selecting. Depends on T071. `cargo test -p micold-client --test features_composer`
+- [ ] T073 [US3] Document Ctrl+C beside Escape wherever the user guide names the interrupt key
+  (`grep -rn "Escape" docs/user-guide*`). Depends on T072.
+
+**Bugfix**: 2026-10-27 — BUG-1403 Updated from bugfix patch.
+
