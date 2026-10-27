@@ -22,7 +22,7 @@
 
 ## R5 Shortcut
 - **Decision**: `Ctrl+Shift+U` / `Cmd+Shift+U` ("upload"), composer-scoped via `KeyIntent::Attach`.
-- **Rationale**: not among reserved chords (D H W O T E F P) nor composer keys; Ctrl+Shift+A is commonly bound by shells/IMEs less often but A suggests "select all" users; U is the familiar upload mnemonic. Verify against `keymap.rs` in the first test.
+- **Rationale**: not among the reserved chords (D H W O T E F P) nor composer keys; U is the familiar upload mnemonic.
 - **Rejected**: plain `Ctrl+O` (clashes with terminal/readline semantics, spec 941 composer keys), `Alt+` chords (non-uniform on macOS).
 
 ## R6 Disabled vs hidden
