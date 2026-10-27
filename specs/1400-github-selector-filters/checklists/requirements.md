@@ -31,5 +31,5 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` question remains, marked in two places (User Story 6 and FR-003): whether assignee, author and milestone filters are in this feature's scope ("optionally" in the issue). Left for the clarify unit.
+- The one `[NEEDS CLARIFICATION]` question (User Story 6 and FR-003: whether assignee, author and milestone filters are in scope, "optionally" in the issue) was resolved by the clarify unit as provisional decision D1: US6 is in scope, built in the separable last milestone M7. The user's answer is pending in the ledger's Open escalation; if they leave US6 out, M7 is dropped.
 - GitHub search qualifiers (`repo:`, `is:issue`, `sort:`, `linked:`) are named because the issue makes them the user-facing syntax and the scope rule; they are user vocabulary, not implementation.
