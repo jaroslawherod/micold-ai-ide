@@ -7,21 +7,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1465
-- **Worktree branch**: claude/project-thread-e4cve5
+- **Worktree branch**: 1465-m1 (M1, stacked on the design commits; design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: design done; tasks review clean; design PR pending
-- **Next step**: orchestrator opens the design PR (branch pushed; pr-title.md / pr-body.md in scratchpad); then M1
+- **Phase**: M1 implementing
+- **Next step**: M1 T001–T016, then verify
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1559 | design | merged | ed945a97b54efe6e58c68c39a91c29f019c3741d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | — | planned |
+| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | — | in progress |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | — | planned |
 | M3 | T024–T026 | light | The Review tab's own Back first | — | planned |
 | M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | planned |
