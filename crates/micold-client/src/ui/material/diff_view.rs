@@ -1208,18 +1208,17 @@ impl<'a, M: 'a> Slots<'a, M> {
             if let Some(cap) = self.cap {
                 slot = container(slot).max_width(cap).into();
             }
-            slot = within_pane(&self.pane, slot);
-            stack = stack.push(match &self.on_measured {
-                Some(f) => {
-                    let (shown, resized) = (Rc::clone(f), Rc::clone(f));
-                    Sensor::new(slot)
-                        .key(sensor_key((side, line), &self.measured))
-                        .on_show(move |size| shown(side, line, size.height))
-                        .on_resize(move |size| resized(side, line, size.height))
-                        .into()
-                }
-                None => slot,
-            });
+            // The sensor inside the pane, not around it: the pane's wrapper spans the rows, so
+            // its width changes as wider rows are built, which is no change to the slot's height.
+            if let Some(f) = &self.on_measured {
+                let (shown, resized) = (Rc::clone(f), Rc::clone(f));
+                slot = Sensor::new(slot)
+                    .key(sensor_key((side, line), &self.measured))
+                    .on_show(move |size| shown(side, line, size.height))
+                    .on_resize(move |size| resized(side, line, size.height))
+                    .into();
+            }
+            stack = stack.push(within_pane(&self.pane, slot));
         }
         stack.into()
     }
@@ -2022,6 +2021,55 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// #1519 review: a slot reports its height once, not again each time a wider row is built and
+    /// widens what holds it (each report is a rebuild of the view).
+    #[test]
+    fn a_slot_is_not_measured_again_when_the_rows_get_wider() {
+        let renderer = super::super::test_support::renderer();
+        let mut tree: Option<Tree> = None;
+        let mut reports = Vec::new();
+        for chars in [100, 400] {
+            let diff = FileDiff::Text(vec![Hunk {
+                old_start: 1,
+                old_len: 1,
+                new_start: 1,
+                new_len: 1,
+                section: String::new(),
+                lines: vec![line(LineKind::Added, None, Some(1), &"x".repeat(chars))],
+                old_no_newline: false,
+                new_no_newline: false,
+            }]);
+            let slot = Space::new().width(Length::Fill).height(Length::Fixed(37.0));
+            let mut element: Element<'_, f32> =
+                DiffView::<f32>::new(&diff, DiffLayout::Unified, LIGHT)
+                    .slot(Side::New, 1, slot)
+                    .on_slot_measured(|_, _, height| height)
+                    .into();
+            let tree = tree.get_or_insert_with(|| Tree::new(element.as_widget()));
+            tree.diff(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+            );
+            let mut messages = Vec::new();
+            element.as_widget_mut().update(
+                tree,
+                &Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now(),
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut Shell::new(&mut messages),
+                &Rectangle::new(iced::Point::ORIGIN, Size::new(800.0, 600.0)),
+            );
+            reports.push(messages);
+        }
+        assert_eq!(reports, vec![vec![37.0], vec![]]);
     }
 
     /// A long line is scrolled to, not wrapped, so no row changes its height and the rows'

@@ -11,12 +11,15 @@
 //! a row, with its actions at its right end — goes through [`within_pane`], which lays it out no
 //! wider than the same pane, clear of the vertical scrollbar, and draws it (and takes its input)
 //! shifted right by as far as the rows have scrolled, so it stays at the pane's left edge (#1519).
+//! The shift is the viewport's offset from the wrapper, which assumes no ancestor between the
+//! scrollable and the wrapper clips the viewport on the left.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::InputMethod;
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Renderer as _, Shell, Widget};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
@@ -232,6 +235,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Pane<'_, M> {
     ) {
         let shift = self.shift(layout, viewport, Vector::ZERO);
         let layout = self.content_layout(layout);
+        let had_input_method = shell.input_method().is_enabled();
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -242,6 +246,13 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Pane<'_, M> {
             shell,
             &(*viewport - shift),
         );
+        // A focused text field asks for the input method at its caret in layout coordinates; it is
+        // drawn `shift` further right, so the IME window goes there too (as a scrollable does).
+        if !had_input_method {
+            if let InputMethod::Enabled { cursor, .. } = shell.input_method_mut() {
+                *cursor = *cursor + shift;
+            }
+        }
     }
 
     fn mouse_interaction(
@@ -371,5 +382,89 @@ mod tests {
         let end = ROWS - PANE;
         assert!(clicked(end, end + right_end), "scrolled to the end");
         assert!(!clicked(ROWS, ROWS + 1.0), "past the rows' right edge");
+    }
+
+    /// A pane-wide text field stand-in: asks for the input method at its left edge, in layout
+    /// coordinates, as iced's text input does at its caret.
+    struct Caret;
+
+    impl<M> Widget<M, iced::Theme, iced::Renderer> for Caret {
+        fn size(&self) -> Size<Length> {
+            Size::new(Length::Fill, Length::Fixed(20.0))
+        }
+
+        fn layout(
+            &mut self,
+            _tree: &mut Tree,
+            _renderer: &iced::Renderer,
+            limits: &layout::Limits,
+        ) -> layout::Node {
+            layout::Node::new(limits.resolve(Length::Fill, 20.0, Size::ZERO))
+        }
+
+        fn update(
+            &mut self,
+            _tree: &mut Tree,
+            _event: &Event,
+            layout: Layout<'_>,
+            _cursor: mouse::Cursor,
+            _renderer: &iced::Renderer,
+            _clipboard: &mut dyn Clipboard,
+            shell: &mut Shell<'_, M>,
+            _viewport: &Rectangle,
+        ) {
+            let at = layout.bounds();
+            shell.request_input_method(&InputMethod::<&str>::Enabled {
+                cursor: Rectangle::new(at.position(), Size::new(1.0, at.height)),
+                purpose: iced::advanced::input_method::Purpose::Normal,
+                preedit: None,
+            });
+        }
+
+        fn draw(
+            &self,
+            _tree: &Tree,
+            _renderer: &mut iced::Renderer,
+            _theme: &iced::Theme,
+            _style: &renderer::Style,
+            _layout: Layout<'_>,
+            _cursor: mouse::Cursor,
+            _viewport: &Rectangle,
+        ) {
+        }
+    }
+
+    /// #1519 review: a focused field in content held to the pane, with the rows scrolled 700 px
+    /// sideways, puts the IME window where the field is drawn (700 px right of where it was laid
+    /// out), not 700 px left of it.
+    #[test]
+    fn the_input_method_follows_content_within_the_pane_as_the_rows_scroll() {
+        let pane: PaneWidth = Rc::new(Cell::new(PANE));
+        let mut element: Element<'_, ()> = within_pane(&pane, Element::new(Caret));
+        let renderer = test_support::renderer();
+        let mut tree = Tree::new(&element);
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, Size::new(ROWS, 600.0)),
+        );
+        let mut messages = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            &mut tree,
+            &Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut shell,
+            &Rectangle::new(Point::new(700.0, 0.0), Size::new(PANE, 600.0)),
+        );
+        match shell.input_method() {
+            InputMethod::Enabled { cursor, .. } => assert_eq!(cursor.x, 700.0),
+            InputMethod::Disabled => panic!("the field asked for the input method"),
+        }
     }
 }
