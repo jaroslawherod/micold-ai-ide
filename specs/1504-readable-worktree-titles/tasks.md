@@ -36,7 +36,7 @@ all read, before any new source is fed in.
 
 ### Tests
 
-- [ ] T002 [P] Write failing unit tests for `first_line` in `crates/micold-core/src/location_title.rs`
+- [ ] T002 Write failing unit tests for `first_line` in `crates/micold-core/src/location_title.rs`
   (L4): BOM stripped, first line only, trailing `\r` stripped, trimmed, empty or whitespace-only →
   `None`
 - [ ] T003 Write failing unit tests for `choose` in `crates/micold-core/src/location_title.rs`
@@ -107,11 +107,13 @@ ticket gives its summary (FR-004).
 - [ ] T014 [US1] In `crates/micold-client/src/features/overview.rs`: replace `known_title` with
   `State::issue_title(&TitleTicket, &StatusBoard)` (GitHub arm only here), make `titles_to_fetch`
   take title tickets, and switch the two `numeric_ticket` callers here to `title_ticket`; feed
-  the title ticket into `location_title` (`numeric_ticket` stays until T015)
-- [ ] T015 [US1] In `crates/micold-client/src/shell/issues.rs`: `request_titles` takes the
-  worktrees' GitHub title tickets from `(dir_name, branch)` (~line 785), and
-  `worktrees_fingerprint` (~line 756) hashes `(dir_name, branch)`; then remove
+  the title ticket into `location_title`. In the same task, so it builds alone: `request_titles`
+  in `crates/micold-client/src/shell/issues.rs` (~lines 785–810) passes the worktrees' GitHub
+  title tickets from `(dir_name, branch)`, and the existing `titles_to_fetch` call in
+  `crates/micold-client/tests/overview.rs` (~line 1352) takes the new signature; then remove
   `features::overview::numeric_ticket`, which has no caller left
+- [ ] T015 [US1] In `crates/micold-client/src/shell/issues.rs`: `worktrees_fingerprint`
+  (~line 756) hashes `(dir_name, branch)`
 - [ ] T016 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a ticket in the branch
   name gives the issue's title when the folder name has none; the folder's ticket wins
 
@@ -298,12 +300,13 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 - US2 and US3 depend only on Foundational and T013–T015 (the title ticket); US3 does not depend on
   US2.
 - Within each block, tests first (red), then implementation, then the user-guide task.
-- T014 before T015 (T015 removes `numeric_ticket` once both moved its callers); T021 before T023
+- T014 before T015; T021 before T023
   (board API); T037 and T038 before T040; T039 before T040.
 
 ## Parallel examples
 
-- Foundational: T002 then T003 then T004 (one file), alongside T005.
+- Foundational: T002 then T003 then T004 (one file, not parallel with each other), alongside
+  T005.
 - US1: T009–T012 together; T017–T020 together.
 - US2: T025–T027 together; T033–T036 together.
 - US3: T042, T043 together.

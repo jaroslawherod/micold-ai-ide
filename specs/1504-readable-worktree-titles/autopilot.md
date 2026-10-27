@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: tasks review round 1 and speckit-analyze fixed; tasks review round 2 pending
-- **Next step**: tasks review round 2 (scoped, sonnet; rubric .claude/skills/speckit-autopilot/rubrics/tasks.md; fix diff `scripts/autopilot/review-snapshot.sh diff ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1`); then specs-only gate, push, design PR title/body to scratchpad.
+- **Phase**: tasks review rounds 1–2 and speckit-analyze fixed; tasks review round 3 pending
+- **Next step**: tasks review round 3 (scoped, sonnet; rubric .claude/skills/speckit-autopilot/rubrics/tasks.md; fix diff `scripts/autopilot/review-snapshot.sh diff 98e1d4227be086796612c25694acc9ade9a02eb6:b89c96749619ccbd77e44926bd9633d14d02213e`); then specs-only gate, push, design PR title/body to scratchpad.
 
 ## Pull requests
 
@@ -51,7 +51,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | a6363620134ea5fad5070c1cb4dacc71154cfb1e:0716b1a0459687647d249c43c1c5168d5a7f7e19 | CHANGES: 1 MAJOR, 3 MINOR — all fixed (F1 facts read on list/project change + Overview opening, `facts_round`/`facts_asked` replace `listing`, main_tests for created/included; F2 alternatives in R7/R9/R10/R11; F3 interpretation D5; F4 spec read by GitHub title ticket, D2 callers corrected) |
 | Plan review | 2 | 4d7a2d63c9bec458651d6712ce7f7909685829a8:157212aa9334caef6d3266340e08ae115b0f6f8f | CLEAN (1 MINOR fixed, prose only: FR-006 now reads facts on each worktree list change and each Overview opening, spec Amendments note) |
 | Tasks review | 1 | ce45dfee3920e1244eda9ffc375b938c4debd12a:8e83f798b46c61f3251596ce88fb9ca69c3f94e1 | CHANGES: 3 MAJOR, 2 MINOR — all fixed (F1 Verify commands: one filter per `cargo test --lib`, `mise run test-core` alt, `--bin micold-ai-ide` with named test prefixes `worktrees_fingerprint`/`title_facts`/`title_answer`; F2 M1/M2 Verify title text only, source words in M3; F3 [P] dropped from T003/T004, parallel line fixed; F4 M3 Refresh uses E (close PR) and G; F5 stamp with `micold_core::unix_time::unix_secs()`). speckit-analyze (0 CRIT/HIGH, 4 MED, 8 LOW): MED fixed — F1 git-missing split (D9), I1 `numeric_ticket` removal moved to T015, C1 T018 Jira-off case, C2 T005 Default/orphan case; LOW fixed — F2 lowercase key edge case + L2 folder-key-vs-branch-number row, F3 FR-008 names the three surfaces, F4 T048 in M1 (D10), F5 neutral clock, C4 non-ASCII path in T033, C6 stale edge case narrowed to spec/commit; LOW not fixed — C3 timeout test, C5/C7 per-occasion retry tests (covered by L5 table tests in T042) |
-| Tasks review | 2 | 98e1d4227be086796612c25694acc9ade9a02eb6:b89c96749619ccbd77e44926bd9633d14d02213e | pending (scoped, sonnet) |
+| Tasks review | 2 | 98e1d4227be086796612c25694acc9ade9a02eb6:b89c96749619ccbd77e44926bd9633d14d02213e | CHANGES: 1 MAJOR, 1 MINOR — all fixed (F1 T014 now also moves `request_titles` (issues.rs ~785–810) and the existing tests/overview.rs ~1352 call, and removes `numeric_ticket`, so it builds alone; T015 keeps only the fingerprint; F2 [P] dropped from T002) |
+| Tasks review | 3 | SNAP3 | pending (scoped, sonnet; last allowed counted round) |
 
 ## Declined review findings
 
