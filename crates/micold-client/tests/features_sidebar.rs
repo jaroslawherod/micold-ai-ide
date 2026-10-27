@@ -1897,7 +1897,9 @@ mod two_line_rows {
     use micold_client::features::sidebar::{
         default_second_line, row_chips, row_second_line, row_title, with_title_line, RowChip,
     };
-    use micold_core::location_title::{choose, LocationTitle, TitleInputs, TitleTicket};
+    use micold_core::location_title::{
+        choose, LocationTitle, TitleInputs, TitleSource, TitleTicket,
+    };
     use micold_core::session::SessionLifecycle;
 
     const TITLE: &str = "CI red on main";
@@ -2038,11 +2040,52 @@ mod two_line_rows {
             &node.display_name,
             None,
         );
-        let tip = with_title_line(&node, TITLE, today.clone());
+        let tip = with_title_line(&node, &titled(&node, Some(TITLE)), today.clone());
         let mut lines = tip.lines();
         assert_eq!(lines.next(), Some(TITLE));
+        assert_eq!(lines.next(), Some("From GitHub issue #1117"));
         assert_eq!(line(&tip, "Branch").as_deref(), Some(BRANCH));
         assert_eq!(lines.collect::<Vec<_>>().join("\n"), today);
+    }
+
+    /// Feature 1504 (T027, FR-008, US2.6, L3): the line after the title names its source, for
+    /// each source but the folder; a title from the folder or the branch keeps today's tooltip
+    /// (the `Name:` and `Branch:` lines already say it).
+    #[test]
+    fn the_tooltip_names_the_titles_source_after_the_title() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
+        let rows = [
+            (TitleSource::PullRequest(1520), "From pull request #1520"),
+            (TitleSource::JiraIssue("ABC-42".into()), "From Jira ABC-42"),
+            (TitleSource::Spec, "From the feature spec"),
+            (TitleSource::Session, "From the session title"),
+            (TitleSource::Commit, "From the latest commit"),
+        ];
+        for (source, words) in rows {
+            let title = LocationTitle {
+                text: "Add readable titles".into(),
+                source,
+            };
+            assert_eq!(
+                with_title_line(&node, &title, today.clone()),
+                format!("Add readable titles\n{words}\n{today}"),
+                "{:?}",
+                title.source
+            );
+        }
+        for title in [titled(&node, None), {
+            let mut folder = node.clone();
+            folder.worktree.branch = None;
+            titled(&folder, None)
+        }] {
+            assert_eq!(
+                with_title_line(&node, &title, today.clone()),
+                today,
+                "{:?}",
+                title.source
+            );
+        }
     }
 
     /// A title the tooltip already names (the row's name or its branch) is not repeated above it.
@@ -2050,8 +2093,16 @@ mod two_line_rows {
     fn the_tooltip_does_not_repeat_a_title_that_is_the_name_or_the_branch() {
         let node = node(vec![], vec![]);
         let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
-        assert_eq!(with_title_line(&node, BRANCH, today.clone()), today);
-        assert_eq!(with_title_line(&node, "ci-red", today.clone()), today);
+        assert_eq!(
+            with_title_line(&node, &titled(&node, None), today.clone()),
+            today
+        );
+        let mut folder = node.clone();
+        folder.worktree.branch = None;
+        assert_eq!(
+            with_title_line(&node, &titled(&folder, None), today.clone()),
+            today
+        );
     }
 
     /// A user's rename of the worktree (feature 008, FR-014) wins the first line over the issue

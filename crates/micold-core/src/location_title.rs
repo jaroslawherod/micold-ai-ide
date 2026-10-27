@@ -40,6 +40,23 @@ pub enum TitleSource {
     Folder,
 }
 
+impl TitleSource {
+    /// The source in words for a title's tooltip (FR-008, L3); `None` for [`TitleSource::Folder`],
+    /// whose title keeps today's tooltip.
+    pub fn words(&self) -> Option<String> {
+        Some(match self {
+            TitleSource::GithubIssue(number) => format!("From GitHub issue #{number}"),
+            TitleSource::JiraIssue(key) => format!("From Jira {key}"),
+            TitleSource::PullRequest(number) => format!("From pull request #{number}"),
+            TitleSource::Spec => "From the feature spec".into(),
+            TitleSource::Session => "From the session title".into(),
+            TitleSource::Commit => "From the latest commit".into(),
+            TitleSource::Branch => "Branch name".into(),
+            TitleSource::Folder => return None,
+        })
+    }
+}
+
 /// What [`choose`] picks from (data-model *TitleInputs*). A field that is `None` gives no title.
 #[derive(Debug, Clone, Copy)]
 pub struct TitleInputs<'a> {
@@ -396,6 +413,35 @@ mod tests {
             ("wt", Some("feat/ab1-42_x"), jira("AB1-42")),
         ] {
             assert_eq!(title_ticket(dir, branch), expected, "{dir} {branch:?}");
+        }
+    }
+
+    // ---- L3: tooltip words ----
+
+    /// One row per L3 line: each source in words, and none for the folder (FR-008).
+    #[test]
+    fn each_source_has_its_l3_words_and_the_folder_none() {
+        let rows = [
+            (
+                TitleSource::GithubIssue(1504),
+                Some("From GitHub issue #1504"),
+            ),
+            (
+                TitleSource::JiraIssue("ABC-42".into()),
+                Some("From Jira ABC-42"),
+            ),
+            (
+                TitleSource::PullRequest(1520),
+                Some("From pull request #1520"),
+            ),
+            (TitleSource::Spec, Some("From the feature spec")),
+            (TitleSource::Session, Some("From the session title")),
+            (TitleSource::Commit, Some("From the latest commit")),
+            (TitleSource::Branch, Some("Branch name")),
+            (TitleSource::Folder, None),
+        ];
+        for (source, words) in rows {
+            assert_eq!(source.words().as_deref(), words, "{source:?}");
         }
     }
 }

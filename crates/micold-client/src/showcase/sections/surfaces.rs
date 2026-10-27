@@ -1213,6 +1213,29 @@ pub fn overview_card<'a>(
         .unscrolled(),
     ))
     .width(Length::Fill);
+    // Feature 1504 (FR-008, quickstart B): an expanded card per title source, the source named
+    // beside the display name; the folder's title names none.
+    let sourced: Vec<_> = samples::title_sources()
+        .into_iter()
+        .map(|(title, source)| {
+            let mut m = card_model("project-thread-7041o6", T::Other, S::Idle, R::Idle);
+            m.branch = Some("claude/project-thread-7041o6".to_string());
+            m.title = title.to_string();
+            m.title_source = source;
+            m
+        })
+        .collect();
+    let title_sources = iced::widget::row(sourced.iter().map(|m| {
+        iced::widget::container(Element::from(
+            material::OverviewCard::<Message>::new(m, roles)
+                .on_press(Message::NoOp)
+                .expanded(true),
+        ))
+        .width(Length::Fixed(320.0))
+        .into()
+    }))
+    .spacing(spacing::MD)
+    .wrap();
     let pr_rows = pull_request_rows_pose(roles);
     let mut done = card_model("done", T::Other, S::Done, R::Merged);
     done.prs = micold_core::overview::PrDisplay::Hidden;
@@ -1287,6 +1310,7 @@ pub fn overview_card<'a>(
             posed("expanded", expanded, roles),
             posed("issue link", issue_links, roles),
             posed("issue link, expanded", issue_expanded, roles),
+            posed("title sources, expanded", title_sources, roles),
             posed("pull request rows", pr_rows, roles),
             posed("expand and collapse — press it", lift, roles),
         ],

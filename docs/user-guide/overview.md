@@ -93,7 +93,18 @@ A row with nothing to say is not shown.
 
 ### Title
 
-For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. When the folder name has no ticket, a ticket in the **branch name** counts the same way: a worktree in folder `project-thread-t2a600` on branch `feat/1504-readable-titles` shows issue #1504's title. When both name a ticket, the folder's wins. A Jira key (such as `feat-ABC-42_login`) works the same way: the title is the **Jira issue's summary**, read with the [ticket's status](worktrees-and-sessions.md#a-tickets-status), in the same request, under the same Jira switch and connection. A Jira key found only in the branch name has its summary read, but the worktree shows no status chip. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. To read it in full, see [Reading a card in full](#reading-a-card-in-full).
+For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. When the folder name has no ticket, a ticket in the **branch name** counts the same way: a worktree in folder `project-thread-t2a600` on branch `feat/1504-readable-titles` shows issue #1504's title. When both name a ticket, the folder's wins. A Jira key (such as `feat-ABC-42_login`) works the same way: the title is the **Jira issue's summary**, read with the [ticket's status](worktrees-and-sessions.md#a-tickets-status), in the same request, under the same Jira switch and connection. A Jira key found only in the branch name has its summary read, but the worktree shows no status chip.
+
+A worktree with no ticket, or whose issue cannot be read, is titled from its own work, the first of these that has a title:
+
+1. the title of the branch's **open pull request** (a draft counts; a merged or closed one does not), as the [pull request reading](worktrees-and-sessions.md#pull-request-status) last found it;
+2. the title of the location's **main session**, the one its AI CLI recorded or the one derived from your first prompt;
+3. the **branch** name;
+4. the location's **name**, when there is no branch: Default's title is *Default*.
+
+The title follows these as they change, with nothing for you to do: once the pull request reading finds a new pull request for the branch its title takes over, and when that pull request is merged or closed, or the session is archived, the card falls back to the next one in the list. Nothing extra is read for these titles: they come from what the app already shows.
+
+Where the title came from is shown wherever the title is: on a [card read in full](#reading-a-card-in-full), in the [sidebar row's](worktrees-and-sessions.md#reading-a-worktree-name--tags) tooltip and in the tooltip of the title above the session area, as *From GitHub issue #1504*, *From Jira ABC-42*, *From pull request #1520*, *From the session title* or *Branch name*. A title that is the location's name says nothing more. A long title wraps onto up to **three lines**, and a title longer than that ends in an ellipsis (…) on the third. To read it in full, see [Reading a card in full](#reading-a-card-in-full).
 
 Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. An offline machine, a closed issue or a missing `gh` leave the branch as the title; so do the Jira integration switched off, no connection for the project, a key of another Jira project, a key Jira does not return, or a Jira read that failed three times in a row. Each title is read once while the app runs, and is never written to a log.
 
@@ -117,6 +128,7 @@ A worktree named after a Jira key, such as `feat-mic-87_add-login`, shows the li
 Rest the pointer on a card for a moment, or move the keyboard to it, and it **expands in place**: its top-left corner and width stay where they are, and it grows downward, drawn over the cards below it with a shadow that sets it apart. The shadow eases in over 150 ms as the card expands and out as it collapses, while the card's height changes at once; with [Reduce motion](settings.md#reduce-motion) on the shadow appears and goes at once. No other card moves. The expanded card shows, wrapped and with no ellipsis:
 
 - the full **title**, and the location's name when it differs from the title;
+- where the title came from, such as *From pull request #1520* (see [Title](#title)), unless the title is the location's name;
 - the full **branch** name, when the title is not the branch;
 - the **worktree directory**, with your home folder written as `~` (`~/code/repo/.claude/worktrees/feat-813_worktree-overview`);
 - the full **activity line**;

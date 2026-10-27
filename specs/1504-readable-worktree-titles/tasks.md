@@ -174,15 +174,15 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ### Tests — held sources and tooltips (US2.1, US2.3, US2.5–2.7)
 
-- [ ] T025 [P] [US2] Write a failing table test for `TitleSource::words` in
+- [x] T025 [P] [US2] Write a failing table test for `TitleSource::words` in
   `crates/micold-core/src/location_title.rs`, one row per L3 line (`None` for `Folder`)
-- [ ] T026 [P] [US2] Write failing client tests in `crates/micold-client/tests/features_overview.rs`
+- [x] T026 [P] [US2] Write failing client tests in `crates/micold-client/tests/features_overview.rs`
   for `location_title`: an open or draft pull request of the branch titles the card, a merged or
   closed one does not, pull request status off gives none (R9, US2.1); the main session's
   `Named`/`Derived` label titles it, a pending or placeholder label or a non-main session does not
   (R8, US2.3); nothing gives branch, then folder (US2.5); after a PR-opened reading or a session
   archive the derived title changes with no other message (FR-010, US2.7)
-- [ ] T027 [P] [US2] Write failing tooltip tests: `features::sidebar::with_title_line` puts the
+- [x] T027 [P] [US2] Write failing tooltip tests: `features::sidebar::with_title_line` puts the
   words line after the title and keeps today's tooltip for `Folder`
   (`crates/micold-client/tests/features_sidebar.rs`); `HeaderText::of` title tooltip has the words
   line (`crates/micold-core/src/context_header.rs` tests); `ExpandedText::of` has `source`
@@ -190,19 +190,19 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ### Implementation — held sources and tooltips
 
-- [ ] T028 [US2] Implement `TitleSource::words` in `crates/micold-core/src/location_title.rs`
-- [ ] T029 [US2] Feed the pull request (open/draft `PullRequestStatus` of the branch, R9) and main
+- [x] T028 [US2] Implement `TitleSource::words` in `crates/micold-core/src/location_title.rs`
+- [x] T029 [US2] Feed the pull request (open/draft `PullRequestStatus` of the branch, R9) and main
   session (`Named`/`Derived` label, R8) inputs into `location_title` in
   `crates/micold-client/src/features/overview.rs` (no new reading, L8)
-- [ ] T030 [US2] Add the source line: `with_title_line(node, &LocationTitle, tooltip)` in
+- [x] T030 [US2] Add the source line: `with_title_line(node, &LocationTitle, tooltip)` in
   `crates/micold-client/src/features/sidebar.rs`; `HeaderText::of` in
   `crates/micold-core/src/context_header.rs`; `ExpandedText.source` in
   `crates/micold-core/src/overview_text.rs`, drawn beside the display-name line in
   `crates/micold-client/src/ui/material/overview_card.rs` (research R6)
-- [ ] T031 [US2] Pose an Overview card per source in the showcase
+- [x] T031 [US2] Pose an Overview card per source in the showcase
   (`crates/micold-client/src/showcase/samples.rs`, `sections/surfaces.rs`); regenerate
   `crates/micold-client/tests/layout_snapshot.rs` only if the expanded card's height changes
-- [ ] T032 [US2] Update `docs/user-guide/overview.md` *Title* (source order; PR and session
+- [x] T032 [US2] Update `docs/user-guide/overview.md` *Title* (source order; PR and session
   sources; where the source is shown) and `docs/user-guide/worktrees-and-sessions.md` (row first
   line and tooltip)
 
