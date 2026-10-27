@@ -46,6 +46,7 @@ pub fn color(c: Rgb) -> Color {
 
 /// An iced color as the token type: both are 8-bit sRGB, so this changes representation, not value
 /// (alpha is dropped). The inverse of [`color`]. Only the contrast measurements read it.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn to_rgb(c: Color) -> Rgb {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     Rgb {
@@ -526,17 +527,17 @@ pub fn scrollbar(r: Roles) -> impl Fn(&Theme, scrollable::Status) -> scrollable:
 ///
 /// The ink is the accent only while the accent reads on its own tint; a mid-tone accent does not
 /// (the light scheme's `secondary` was 4.40:1, #1492), so the ink is pulled toward the theme's text
-/// colour until it clears [`CHIP_INK_TARGET`] on the tint over the theme background.
+/// colour until it clears [`CHIP_INK_TARGET`] on the tint over every surface a chip sits on.
 pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     move |theme| {
-        let palette = theme.palette();
+        let scheme = if theme.extended_palette().is_dark {
+            ColorScheme::Dark
+        } else {
+            ColorScheme::Light
+        };
         container::Style {
             background: Some(Background::Color(alpha(color(accent), CHIP_TINT))),
-            text_color: Some(color(chip_ink(
-                accent,
-                to_rgb(palette.text),
-                to_rgb(palette.background),
-            ))),
+            text_color: Some(color(chip_ink(accent, tokens::roles(scheme)))),
             border: radius(shape::FULL),
             ..container::Style::default()
         }
@@ -546,23 +547,38 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
 /// The chip tint's opacity over its host.
 const CHIP_TINT: f32 = 0.20;
 
-/// The contrast [`chip_ink`] aims for. A hair above the 4.5:1 AA floor, for rounding.
-const CHIP_INK_TARGET: f64 = 4.6;
+/// The contrast [`chip_ink`] aims for: a hair above the 4.5:1 AA floor, for the 8-bit rounding of
+/// the composited tint.
+const CHIP_INK_TARGET: f64 = 4.55;
 
-/// How far toward the text colour [`chip_ink`] moves the theme background to stand for the
-/// highest-contrast-demanding surface a chip sits on (`surface_container_highest` in light,
-/// `surface_bright` in dark): measuring on the background alone passes the ink on the lightest host
-/// and fails it on the others.
-const CHIP_WORST_HOST: f64 = 0.22;
-
-/// `accent`, moved toward `text` in 2% steps until it reads on its own [`CHIP_TINT`] over `base`.
-fn chip_ink(accent: Rgb, text: Rgb, base: Rgb) -> Rgb {
-    let base = tokens::over(text, CHIP_WORST_HOST, base);
-    let tint = tokens::over(accent, f64::from(CHIP_TINT), base);
-    (0..=50)
-        .map(|i| tokens::over(text, f64::from(i) * 0.02, accent))
-        .find(|ink| tokens::contrast(*ink, tint) >= CHIP_INK_TARGET)
-        .unwrap_or(text)
+/// `accent`, moved toward the scheme's text colour in 2% steps until it reads on its own
+/// [`CHIP_TINT`] over each of the scheme's surfaces.
+fn chip_ink(accent: Rgb, r: Roles) -> Rgb {
+    let hosts = [
+        r.background,
+        r.surface,
+        r.surface_dim,
+        r.surface_bright,
+        r.surface_container_lowest,
+        r.surface_container_low,
+        r.surface_container,
+        r.surface_container_high,
+        r.surface_container_highest,
+    ];
+    let reads = |ink: Rgb| {
+        hosts.iter().all(|&host| {
+            let tint = tokens::over(accent, f64::from(CHIP_TINT), host);
+            tokens::contrast(ink, tint) >= CHIP_INK_TARGET
+        })
+    };
+    let ink = (0..=50)
+        .map(|i| tokens::over(r.on_surface, f64::from(i) * 0.02, accent))
+        .find(|&ink| reads(ink));
+    debug_assert!(
+        ink.is_some(),
+        "even the text colour does not read on the {accent:?} chip's tint"
+    );
+    ink.unwrap_or(r.on_surface)
 }
 
 /// A dropped picture's chip in the composer (feature 941, `AttachmentChip`): a tonal

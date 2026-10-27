@@ -969,6 +969,10 @@ fn the_jump_fields_words_and_edges_are_legible_on_the_title_bar() {
 /// left the sidebar's *no daemon* chip at 4.40:1 in the light scheme. Every accent a chip is drawn
 /// in (the role accents, the warning role, every worktree type tag and the issue tag) must read at
 /// 4.5:1 on its own tint over every surface a chip sits on, in both schemes.
+///
+/// The ink is read from what [`super::Tag`] **paints**, on each of its label paths (natural,
+/// `truncate_to`, `max_width`): reading the container's style let the ellipsized paths through,
+/// which drew the raw accent over it (the sidebar's setup tag, a long Jira status).
 #[test]
 fn a_chips_ink_is_legible_on_its_tint_for_every_accent_on_every_surface() {
     use micold_core::naming::ConventionalType;
@@ -983,7 +987,21 @@ fn a_chips_ink_is_legible_on_its_tint_for_every_accent_on_every_surface() {
             ("error".to_string(), r.error),
             ("warning".to_string(), r.warning),
             ("issue tag".to_string(), r.issue_tag().0),
+            ("outline".to_string(), r.outline),
+            ("on_surface_variant".to_string(), r.on_surface_variant),
         ];
+        // A stale Jira status chip dims its category's accent toward the surface.
+        for (name, accent) in [
+            ("secondary", r.secondary),
+            ("primary", r.primary),
+            ("tertiary", r.tertiary),
+            ("on_surface_variant", r.on_surface_variant),
+        ] {
+            accents.push((
+                format!("stale {name}"),
+                tokens::over(accent, 0.55, r.surface),
+            ));
+        }
         for &t in ConventionalType::ALL {
             accents.push((format!("{t:?} tag"), r.tag_fill(t)));
         }
@@ -1003,14 +1021,31 @@ fn a_chips_ink_is_legible_on_its_tint_for_every_accent_on_every_surface() {
             let Some(Background::Color(tint)) = s.background else {
                 panic!("{scheme:?}: the {name} chip paints a colour tint");
             };
-            let ink = style::to_rgb(s.text_color.expect("a chip's ink"));
-            for (host, fill) in hosts {
-                let ground = style::to_rgb(style::over(tint, style::color(fill)));
-                let ratio = contrast(ink, ground);
-                if ratio < AA_TEXT {
-                    violations.push(format!(
-                        "{scheme:?} / {name} on {host}: {ratio:.2}:1 (needs {AA_TEXT})"
-                    ));
+            let long = "a status name long enough to be cut";
+            let paths: [(&str, super::Tag<'static, String>); 3] = [
+                ("natural", super::Tag::new("Label", accent)),
+                (
+                    "truncate_to",
+                    super::Tag::new(long, accent).truncate_to(60.0),
+                ),
+                ("max_width", super::Tag::new(long, accent).max_width(60.0)),
+            ];
+            for (path, tag) in paths {
+                let painted = super::test_support::Mounted::new(tag)
+                    .in_scheme(scheme)
+                    .painted_text();
+                let [label] = painted.as_slice() else {
+                    panic!("{scheme:?}: the {name} {path} tag paints one label: {painted:?}");
+                };
+                let ink = style::to_rgb(label.color);
+                for (host, fill) in hosts {
+                    let ground = style::to_rgb(style::over(tint, style::color(fill)));
+                    let ratio = contrast(ink, ground);
+                    if ratio < AA_TEXT {
+                        violations.push(format!(
+                            "{scheme:?} / {name} ({path}) on {host}: {ratio:.2}:1 (needs {AA_TEXT})"
+                        ));
+                    }
                 }
             }
         }
