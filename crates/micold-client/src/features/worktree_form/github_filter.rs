@@ -3,8 +3,8 @@
 //!
 //! While the GitHub source shows, a **Filters** button beside the issue search opens a panel with
 //! an Include labels and an Exclude labels field (contracts/selector-ui.md §2). Each field is a
-//! typeahead over the repository's labels, less those already chosen in either list; a pick adds
-//! the label to its list and clears the field, and each chosen label is a chip that removes it.
+//! typeahead over the repository's labels, less those already in its own list; a pick adds the
+//! label to its list (moving it out of the other) and clears the field, and each chosen label is a chip that removes it.
 //! The labels are asked for once, when a label field first opens ([`ChoiceLoad`], FR-005), under a
 //! filter seq of their own, so a late answer for an earlier request is dropped.
 //!
@@ -19,7 +19,9 @@
 use std::path::PathBuf;
 
 use crate::features::worktree_form::jira_filters::{ChoiceLoad, FilterField};
-use crate::features::worktree_form::{BranchSource, IssueList, WorktreeForm, WorktreeFormStatus};
+use crate::features::worktree_form::{
+    BranchSource, IssueList, SearchState, WorktreeForm, WorktreeFormStatus,
+};
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::github_filter::{
@@ -148,7 +150,7 @@ impl LabelRow {
     pub fn label(&self, source: NoticeSource<'_>) -> String {
         match &self.text {
             LabelText::Loading => "Loading labels…".to_string(),
-            LabelText::Failed(error) => error.message(source),
+            LabelText::Failed(error) => label_failure(error, source),
             LabelText::Retry => "Retry".to_string(),
             LabelText::NoLabels => "This repository has no labels".to_string(),
             LabelText::NoMatch => "No label matches".to_string(),
@@ -163,9 +165,33 @@ impl LabelRow {
         }
     }
 
-    /// A failure row's heading, above its cause: the cause wraps in full under it.
+    /// A heading above the row's words, for a row whose words wrap in full under it: a failure's
+    /// cause, and why labels are not offered (visual pass M2 F3: cut, it said nothing).
     pub fn summary(&self) -> Option<&'static str> {
-        matches!(self.text, LabelText::Failed(_)).then_some("Couldn't load the labels.")
+        match self.text {
+            LabelText::Failed(_) => Some("Couldn't load the labels."),
+            LabelText::NotOffered(_) => Some("Labels not offered"),
+            _ => None,
+        }
+    }
+}
+
+/// A labels load's failure in words for the labels: 034's notice for `source` without its
+/// "Couldn't read issues" opening, which would name the wrong thing under "Couldn't load the
+/// labels." (visual pass M2 F5).
+fn label_failure(error: &IssueLoadError, source: NoticeSource<'_>) -> String {
+    let notice = error.message(source);
+    let cause = notice
+        .strip_prefix("Couldn't read issues: ")
+        .or_else(|| notice.strip_prefix("Couldn't read issues. "));
+    match cause {
+        Some(cause) => {
+            let mut chars = cause.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        }
+        None => notice,
     }
 }
 
@@ -235,14 +261,19 @@ impl GithubSelector {
         self.labels.awaited()
     }
 
-    /// The labels a field offers: the repository's, alphabetically, less those chosen in either
-    /// list (US1 AS1, spec Edge "Same label included and excluded").
-    fn offered(&self) -> Vec<LabelName> {
-        let chosen = |label: &LabelName| {
-            self.basic.include().contains(label) || self.basic.exclude().contains(label)
-        };
+    /// The labels `list`'s field offers: the repository's, alphabetically, less those already in
+    /// `list` (US1 AS1). One the other list holds is offered, and picking it moves it (spec Edge
+    /// "Same label included and excluded", quickstart B4).
+    fn offered(&self, list: LabelList) -> Vec<LabelName> {
+        let own = self.chosen(list);
         self.choices()
-            .map(|c| c.labels.iter().filter(|l| !chosen(l)).cloned().collect())
+            .map(|c| {
+                c.labels
+                    .iter()
+                    .filter(|l| !own.contains(l))
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -264,7 +295,7 @@ impl GithubSelector {
         if choices.labels.is_empty() {
             rows.push(LabelRow::state(LabelText::NoLabels, LabelAction::Inert));
         } else {
-            let offered = self.offered();
+            let offered = self.offered(list);
             let field = self.field(list);
             if field.matches.is_empty() {
                 rows.push(LabelRow::state(LabelText::NoMatch, LabelAction::Inert));
@@ -293,7 +324,7 @@ impl GithubSelector {
 
     /// Re-rank the offered labels against `list`'s text and re-seat its highlight.
     fn rematch(&mut self, list: LabelList) {
-        let offered = self.offered();
+        let offered = self.offered(list);
         let field = self.field(list);
         let matches = rank(&offered, |l| l.as_str(), &Query::new(&field.query));
         self.field_mut(list).matches = matches;
@@ -406,6 +437,18 @@ pub enum Msg {
     },
 }
 
+/// A refused search beyond the list, as one status line: GitHub's messages after the heading, or
+/// [`NOT_ACCEPTED`] alone when it gave none (contracts/selector-ui.md §3).
+pub fn refusal_line(messages: &[String]) -> String {
+    if messages.is_empty() {
+        return NOT_ACCEPTED.to_string();
+    }
+    format!(
+        "GitHub did not accept the search query: {}",
+        messages.join(" ")
+    )
+}
+
 /// The filters' reducer.
 pub fn update(state: &mut crate::app::State, msg: Msg) {
     let next_issue_seq = state.worktree_form.issue_request_seq + 1;
@@ -432,13 +475,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) {
         }
         Msg::Searched { seq, result } => {
             let result = result.map_err(|failure| match failure {
-                FilterFailure::Load(error) => error,
-                FilterFailure::Rejected(messages) => {
-                    IssueLoadError::Other(match messages.first() {
-                        Some(_) => format!("{NOT_ACCEPTED} {}", messages.join(" ")),
-                        None => NOT_ACCEPTED.to_string(),
-                    })
-                }
+                FilterFailure::Load(error) => SearchState::Failed { error },
+                FilterFailure::Rejected(messages) => SearchState::Rejected(messages),
             });
             form.take_search_answer(seq, result);
         }
@@ -554,6 +592,18 @@ mod tests {
         let bug = LabelName::parse("bug").unwrap();
         assert!(selector.choose(LabelList::Include, bug.clone()));
         assert!(!selector.choose(LabelList::Include, bug));
+    }
+
+    /// Visual pass M2 F3: the note on labels not offered wraps under a heading, not cut.
+    #[test]
+    fn the_note_on_labels_not_offered_has_a_heading_to_wrap_under() {
+        let row = LabelRow::state(LabelText::NotOffered(1), LabelAction::Inert);
+        assert_eq!(row.summary(), Some("Labels not offered"));
+        let label = LabelRow::state(
+            LabelText::Choice(LabelName::parse("bug").unwrap()),
+            LabelAction::Inert,
+        );
+        assert_eq!(label.summary(), None);
     }
 
     #[test]

@@ -701,7 +701,11 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             if let (Some(status), IssueList::Loaded { search, .. }) =
                 (form.issue_search_status(), &form.issues)
             {
-                col = if matches!(search, SearchState::Failed { .. }) {
+                col = if matches!(search, SearchState::Rejected(_)) {
+                    // Feature 1400: GitHub refused the search; the same search would be refused
+                    // again, so it says so and offers no Retry.
+                    col.push(Text::new(status, TypeRole::Caption, r).tint(r.error))
+                } else if form.issue_search_retries() {
                     // One row: the legend (feature 937) took a line of the dialog's height, which
                     // the panel-placement gate measures, so the failure and its Retry share one.
                     col.push(

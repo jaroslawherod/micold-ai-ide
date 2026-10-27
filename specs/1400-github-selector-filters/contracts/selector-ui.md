@@ -9,9 +9,9 @@ gates and quickstart §B. Research R8, R13, R14.
 
 ```text
 Basic mode                                        Advanced mode
-[Basic|Advanced]                  [Clear filters]  [Basic|Advanced]
+[Basic|Advanced]   [Clear filters] [Filters · 2 v] [Basic|Advanced]
 Reads issues of acme/app from GitHub, sending …   Reads issues of acme/app from GitHub, sending …
-[Search issues ............] [Filters · 2  v]     [Query ........................] [Run]
+[Search issues ...............................]   [Query ........................] [Run]
 Excluding labels in-progress, blocked             [Search issues .......................]
 <rows | loading | notice+Retry | GitHub's messages | refusal | empty text>
 ```
@@ -21,7 +21,9 @@ Excluding labels in-progress, blocked             [Search issues ...............
   the Jira layout is unchanged.
 - **Clear filters** trails the switch row in basic mode while `!basic.is_default()` (1185 D12;
   FR-007); hidden in advanced mode.
-- The **Filters** button: `material::MenuSelect`, width 160 px, label `filters_label(chosen_count)`
+- The **Filters** button trails the row above the search (after **Clear filters**), not the search's
+  row: beside the search it narrowed the issue list by 168 px and long titles no longer fit it (M2,
+  deviation accepted). `material::MenuSelect`, width 160 px, label `filters_label(chosen_count)`
   ("Filters" / "Filters · 2"), panel 360 px; the panel frame is the function extracted from
   `jira_filters_control` (research R13).
 - The active line: `BasicFilters::described()` under the search row, one line, ellipsized with the
@@ -35,8 +37,9 @@ Excluding labels in-progress, blocked             [Search issues ...............
 
 Rows, in order:
 
-1. **Include labels** — `Typeahead` over `LabelChoices` minus labels already chosen in either list;
-   picking adds to `include` (removing from `exclude`), clears the field. Under it, each chosen label
+1. **Include labels** — `Typeahead` over `LabelChoices` minus labels already in `include`; a label
+   held by `exclude` is offered too, and picking it moves it (spec Edge "Same label included and
+   excluded"). Picking adds to `include` (removing from `exclude`), clears the field. Under it, each chosen label
    as `ToggleChip::new(name).active(true).trailing_icon(Icon::Close)`; press removes. A remembered
    label absent from loaded choices shows "<name> · not in this repository" (Edge).
 2. **Exclude labels** — the same over `exclude`.
@@ -81,7 +84,7 @@ with a highlighted row adds that label. Every chip is a `ToggleChip` with `takes
 
 ## 5. Geometry
 
-- `tests/gates/github_filters_fit.rs` (new): the Filters button fits beside the search; the panel
+- `tests/gates/github_filters_fit.rs` (new): the Filters button fits the row above the search; the panel
   stacks its rows under the button inside the window; a chip row with 6 labels wraps inside the
   panel; the active line and the query row each fit one line.
 - `tests/gates/panel_placement.rs`: a GitHub scenario in each mode with the active line / query row

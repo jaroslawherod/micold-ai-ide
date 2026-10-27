@@ -57,3 +57,20 @@ command, 22 and 4 passed; `jira_filters_picker` 52 passed unchanged (T019, T026)
 | T027 (red), T028 | Filters button, Clear filters, active line, six chips wrapping, footer reachable | first run on the first layout (button beside the search, as selector-ui §1): `issue_rows_show_all_text` ×2, `picker_row_tooltip_clears_its_row` ×10 and `containment` FAILED, the search's list narrowed by the button wrapped long titles past the eight-row list; and `github_filters_fit` FAILED (search placeholder not painted). Moved the button to the row heading the picker (ledger M2 note) | `layout_snapshot` 166 passed after re-recording `layout_snapshot.txt` (GitHub issue states + 2 new) |
 | T029 | `examples/fake_gh.rs` | dev-only tool, no test; built by `clippy --all-targets` | — |
 | T030 | user guide "Filtering GitHub issues" | docs | — |
+
+## M2 review round 1 fixes (red run before the code: each test written and run first)
+
+Red run: `cargo test -p micold-material --lib a_press_on_a_panel_field` and `cargo test -p micold-client --test github_filter_state` on the tree with the tests and no fix (only the no-behaviour seam `WorktreeForm::issue_search_retries`, so the tests compile).
+
+| Finding | Behaviour | Red (before the code) | Green |
+|---|---|---|---|
+| A F1 | an edit to quotes alone drops a pending search | `an_edit_to_quotes_alone_drops_the_pending_search` FAILED (`left: Some(4) right: None`: the pending search stayed) | `!typed \|\| !searchable` → `Idle`, `searched` cleared |
+| A F2 | Clear filters with text typed and 034's listing capped searches beyond it | `clear_filters_with_text_typed_searches_beyond_a_capped_default_list` FAILED (`left: None right: Some(5)`) | `take_listing` drops the provider/filter gate; `on_issues_loaded` already batches `search_after_pause` |
+| A F3 | a refused search beyond says "GitHub did not accept the search query: …", no Retry | `a_refused_filtered_search_says_so_without_retry` FAILED (`Search beyond the loaded issues failed — Couldn't read issues: GitHub did not accept the search query. Bad query`) | `SearchState::Rejected(messages)`, `refusal_line`, error caption without Retry |
+| Visual F1 (B4) | each field offers every label not in its own list; picking one the other holds moves it | `a_label_chosen_in_one_list_moves_when_chosen_in_the_other` FAILED (`blocked` not offered in Include); `the_choices_are_alphabetical_less_the_chosen` FAILED (`["blocked", "in-progress"]` vs `["blocked", "bug", "in-progress"]`) | `offered(list)` filters the field's own list only |
+| Visual F5 | a labels failure is named for the labels | `a_choice_failure_shows_retry_on_that_field_only` FAILED (`"Couldn't read issues: HTTP 502: Bad Gateway"`) | `label_failure` drops 034's "Couldn't read issues" opening |
+| Visual F4 (B13) | a press on a panel field takes the keyboard from the trigger (one focus ring; Enter no longer presses Filters) | `a_press_on_a_panel_field_takes_the_keyboard_from_the_trigger` FAILED (`left: [true, true, false] right: [false, true, false]`) | `cdk::picker` Menu: after a press, a focused panel control unfocuses the trigger |
+| Visual F3 | the "labels not offered" note wraps under a heading | test written with the code; red by mutant (the `NotOffered` arm removed): see below | `LabelRow::summary` gives `NotOffered` "Labels not offered" |
+| Visual F2 | `fake_gh` answers the listing before the labels; `FAKE_GH_MODE` modes | dev-only tool, no test | — |
+
+Visual F3 mutant: with the `LabelText::NotOffered(_)` arm removed from `LabelRow::summary`, `the_note_on_labels_not_offered_has_a_heading_to_wrap_under` FAILED (github_filter.rs:591); restored, it passes.

@@ -519,6 +519,9 @@ pub enum SearchState {
     Searching { seq: u64 },
     /// The search failed; the loaded matches stay shown and Retry searches again.
     Failed { error: IssueLoadError },
+    /// GitHub refused the filtered search beyond the list (feature 1400): its messages, in its
+    /// order. The loaded matches stay shown; no Retry, the same search would be refused again.
+    Rejected(Vec<String>),
 }
 
 /// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
@@ -1022,8 +1025,23 @@ impl WorktreeForm {
                 "Search beyond the loaded issues failed — {}",
                 error.message(self.notice_source()?)
             )),
+            IssueList::Loaded {
+                search: SearchState::Rejected(messages),
+                ..
+            } => Some(github_filter::refusal_line(messages)),
             _ => None,
         }
+    }
+
+    /// Whether the search beyond the loaded issues failed in a way Retry can mend (FR-005a).
+    pub fn issue_search_retries(&self) -> bool {
+        matches!(
+            self.issues,
+            IssueList::Loaded {
+                search: SearchState::Failed { .. },
+                ..
+            }
+        )
     }
 
     /// What the provider is called in a status line.
@@ -1066,8 +1084,9 @@ impl WorktreeForm {
 
     /// Take the awaited listing `seq` as the list (feature 034; 1185 and 1400 add the reload rules).
     ///
-    /// A Jira list, or a filtered GitHub list (feature 1400, FR-016), reloaded with text typed and
-    /// the list capped searches beyond it again, after the usual pause. The descriptions of 034's
+    /// A list reloaded with text typed and capped searches beyond it again, after the usual pause:
+    /// Jira's (1185), a filtered GitHub list's (1400, FR-016), and 034's after **Clear filters**.
+    /// The descriptions of 034's
     /// GitHub listing follow under this load's seq, so a later load's pass can never take this
     /// one's pages (038 FR-024); a filtered listing carries them already (research R9).
     fn take_listing(&mut self, seq: u64, listing: IssueListing, gh: PathBuf) {
@@ -1079,10 +1098,7 @@ impl WorktreeForm {
             }
             _ => !self.issue_query.trim().is_empty(),
         };
-        let search = if (self.provider == IssueProvider::Jira || filtered.is_some())
-            && !listing.complete
-            && searchable
-        {
+        let search = if !listing.complete && searchable {
             SearchState::Pending { seq }
         } else {
             SearchState::Idle
@@ -1115,8 +1131,8 @@ impl WorktreeForm {
     /// The search beyond the loaded issues answered. Only the awaited answer applies (FR-007a); its
     /// issues replace the previous search's, less any already loaded (invariant 4), and are ranked
     /// with the loaded ones, so one that does not match the query is not shown (invariant 5). A
-    /// failure leaves the loaded matches in place.
-    fn take_search_answer(&mut self, seq: u64, result: Result<Vec<Issue>, IssueLoadError>) {
+    /// failure, the `SearchState` it leaves, keeps the loaded matches in place.
+    fn take_search_answer(&mut self, seq: u64, result: Result<Vec<Issue>, SearchState>) {
         let IssueList::Loaded {
             listing,
             searched,
@@ -1134,7 +1150,7 @@ impl WorktreeForm {
                 *searched = merge_searched(&listing.issues, found);
                 *search = SearchState::Idle;
             }
-            Err(error) => *search = SearchState::Failed { error },
+            Err(failed) => *search = failed,
         }
         // The answer re-ranks the list under the keyboard: keep the highlight on its issue, so
         // Enter picks what the user is looking at (review A #1).
@@ -1850,11 +1866,12 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
             ..
         } = &mut form.issues
         {
-            if !typed {
-                // Nothing typed: the list is the loaded issues alone again.
+            if !typed || !searchable {
+                // Nothing typed, or nothing GitHub could be asked (quotes alone): the list is the
+                // loaded issues alone again, and a search left pending could never start.
                 searched.clear();
                 *search = SearchState::Idle;
-            } else if !listing.complete && !same_search && searchable {
+            } else if !listing.complete && !same_search {
                 started = true;
                 *search = SearchState::Pending { seq: next_seq };
             }
@@ -1888,7 +1905,9 @@ pub fn issue_searched(
     seq: u64,
     result: Result<Vec<Issue>, IssueLoadError>,
 ) {
-    with_form(state, |form| form.take_search_answer(seq, result));
+    with_form(state, |form| {
+        form.take_search_answer(seq, result.map_err(|error| SearchState::Failed { error }));
+    });
 }
 
 /// The issue search field took focus.

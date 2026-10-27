@@ -22,6 +22,14 @@
 //!
 //! Each search's `q` is written to stderr, so a step can check what a filtered request sent.
 //! Anything else is answered with a GraphQL error.
+//!
+//! `FAKE_GH_MODE`, a comma-separated list, sets up the states a pass needs without a wrapper:
+//!
+//! - `slow`: every answer waits 3 seconds first (the loading states).
+//! - `labels-fail`: the labels fail as `gh` does on `HTTP 502` (exit 1, the reason on stderr).
+//! - `no-labels`: the repository has no labels.
+//! - `labels-cap`: every labels page is full and has a next one, so only the first 1,000 load.
+//! - `search-refused`: every search is refused with a GraphQL error at `search`.
 
 use std::collections::BTreeMap;
 
@@ -197,13 +205,25 @@ fn listing(repo: &str) -> serde_json::Value {
     } } } })
 }
 
-fn labels() -> serde_json::Value {
-    let nodes: Vec<_> = LABELS
+fn labels(modes: &[&str], after: Option<&str>) -> serde_json::Value {
+    let (names, next): (Vec<String>, Option<String>) = if modes.contains(&"no-labels") {
+        (Vec::new(), None)
+    } else if modes.contains(&"labels-cap") {
+        // A full page and a next one, each page's names its own, for as long as it is asked.
+        let page: u32 = after.and_then(|c| c.parse().ok()).unwrap_or(0);
+        let names = (0..100)
+            .map(|i| format!("label-{page:02}-{i:02}"))
+            .collect();
+        (names, Some((page + 1).to_string()))
+    } else {
+        (LABELS.iter().map(|l| (*l).to_string()).collect(), None)
+    };
+    let nodes: Vec<_> = names
         .iter()
         .map(|l| serde_json::json!({ "name": l }))
         .collect();
     serde_json::json!({ "data": { "repository": { "labels": {
-        "pageInfo": { "hasNextPage": false, "endCursor": null },
+        "pageInfo": { "hasNextPage": next.is_some(), "endCursor": next },
         "nodes": nodes,
     } } } })
 }
@@ -228,12 +248,29 @@ fn main() {
         (Some(owner), Some(name)) => format!("{owner}/{name}"),
         _ => String::new(),
     };
+    let mode = std::env::var("FAKE_GH_MODE").unwrap_or_default();
+    let modes: Vec<&str> = mode.split(',').map(str::trim).collect();
+    if modes.contains(&"slow") {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+    // The listing asks for each issue's `labels(first: 20)` too, so it is told apart first.
     let answer = if query.contains("search(") {
-        search(fields.get("q").map(String::as_str).unwrap_or_default())
-    } else if query.contains("labels(") {
-        labels()
+        if modes.contains(&"search-refused") {
+            eprintln!("fake_gh: q={}", fields.get("q").map_or("", String::as_str));
+            serde_json::json!({ "data": { "search": null }, "errors": [{ "type": "INVALID",
+                "path": ["search"],
+                "message": "The search query is not valid (fake_gh search-refused)" }] })
+        } else {
+            search(fields.get("q").map(String::as_str).unwrap_or_default())
+        }
     } else if query.contains("issues(states: OPEN") {
         listing(&repo)
+    } else if query.contains("labels(") {
+        if modes.contains(&"labels-fail") {
+            eprintln!("HTTP 502: Bad Gateway (https://api.github.com/graphql)");
+            std::process::exit(1);
+        }
+        labels(&modes, fields.get("cursor").map(String::as_str))
     } else {
         serde_json::json!({ "errors": [{ "type": "NOT_SUPPORTED", "message": "fake_gh does not answer this query" }] })
     };
