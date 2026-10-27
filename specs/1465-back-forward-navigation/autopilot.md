@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m2 (M2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M1 reviews done (A and B round 2 CLEAN); M1 PR being opened by the orchestrator. M2 implementing on 1465-m2
-- **Next step**: scoped gate, then review A (high) + review B on M2
+- **Phase**: M2 implemented (T017–T023 ticked) at ac1817bca; full gate green there (scratchpad gate-m2-3.log; gate-m2-1 red on a guard test, fixed; gate-m2-2 red on a vanished daemon test binary in the shared target, passed on rerun). macOS cross-check not possible here (`ring` needs the macOS SDK); CI covers it
+- **Next step**: review A (code-review high) and review B (conformance) on M2, range c359a7871..HEAD, snapshot 637f832282d1952c56e904236b76cf62167ffc9e:ac1817bca4303fa68d3693bbf688cf878c2ae420; then pr-title-m2.md / pr-body-m2.md
 
 ## Pull requests
 
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 (conformance) | 1 | 4742c44666bc7576334aedf07d226cb001a6afdb:4573c0ab874ab208ce66d974a57beb15087369e9 | CHANGES: 1 MAJOR, 1 MINOR (F1 no tdd/cycle-log.md — fixed: red recovered per behaviour by env-gated stubs, cycles 1–8 in tdd/cycle-log.md; F2 = A F2, fixed) |
 | Review A M1 (code-review, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (Forward with nothing shown correctly does not offer the current entry; no fix needed) |
 | Review B M1 (conformance, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (cycle-log red runs for cycles 1–8 not reproducible from committed code since the stubs were not committed; the log states it honestly; no fix needed) |
+| Review A M2 (code-review high) + Review B M2 (conformance) | 1 | 637f832282d1952c56e904236b76cf62167ffc9e:ac1817bca4303fa68d3693bbf688cf878c2ae420 | pending (orchestrator) |
 
 ## Declined review findings
 
