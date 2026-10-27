@@ -27,6 +27,7 @@ pub mod daemons;
 pub mod desktop_notify;
 pub mod drops;
 pub mod env_include;
+pub mod github_filter;
 pub mod issues;
 pub mod jira;
 pub mod jira_filters;

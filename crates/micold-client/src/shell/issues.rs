@@ -237,7 +237,7 @@ pub fn on_issue_query_changed(app: &mut App, text: String) -> Task<Message> {
 }
 
 /// Wait out the debounce, then say the search pending under `seq` is due.
-fn search_after_pause(seq: u64) -> Task<Message> {
+pub(crate) fn search_after_pause(seq: u64) -> Task<Message> {
     // Built inside the future: the timer needs the runtime the task runs on.
     Task::perform(
         async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
@@ -562,7 +562,10 @@ fn start_jira_search(
 }
 
 /// Locate `gh` and read the open issues on a blocking thread, answering `IssuesLoaded { seq }`.
-fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
+///
+/// Feature 1400 (contracts/source-and-storage.md §4): while the form's GitHub filter is not the
+/// default, the listing is the filtered one, through the same `gh` lookup ([`GhJob`]).
+pub(crate) fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     if app
         .core
         .worktree_form
@@ -571,6 +574,9 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
         .is_some_and(|form| form.jira_site().is_some())
     {
         return start_jira_load(app, seq);
+    }
+    if let Some((seq, repo, search)) = app.core.worktree_form.github_filtered_load() {
+        return crate::shell::github_filter::start_filtered_load(app, seq, repo, search);
     }
     let Some(repo) = app
         .core
@@ -581,43 +587,11 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     else {
         return Task::none();
     };
-    let tooling = app.caps.issue_tooling();
-    // The project root: the directory the include script is resolved in for this project.
-    let cwd = app
-        .core
-        .workspace
-        .active
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("."));
-    let cached = app.env_include_cache.get(&cwd).cloned();
-    let resolver = app.caps.env_include_shared();
-    let enabled = app.env_include_enabled;
-    let script = app.env_include_script_path.clone();
-    let timeout_secs = app.env_include_timeout_secs;
     Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let resolved = match cached {
-                    Some(_) => None,
-                    None => {
-                        let snapshot =
-                            resolve_env_include(&*resolver, enabled, &script, timeout_secs, &cwd);
-                        Some((cwd, snapshot))
-                    }
-                };
-                let snapshot = cached.as_ref().or(resolved.as_ref().map(|(_, s)| s));
-                let include_path = snapshot.and_then(|s| env_include_path(&s.vars));
-                let result = match (tooling.locate_gh)(include_path) {
-                    None => Err(IssueLoadError::ToolMissing),
-                    Some(gh) => {
-                        let source = (tooling.source)(gh.clone());
-                        load_listing(&*source, &repo).map(|listing| (listing, gh))
-                    }
-                };
-                (result, resolved)
-            })
-            .await
-        },
+        GhJob::of(app).run(move |located| match located {
+            None => Err(IssueLoadError::ToolMissing),
+            Some((source, gh)) => load_listing(&*source, &repo).map(|listing| (listing, gh)),
+        }),
         move |joined| {
             let (result, resolved_env) = joined.unwrap_or_else(|stopped| {
                 (
@@ -636,12 +610,93 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     )
 }
 
+/// What locating `gh` needs, taken on the update thread: the tooling, the project root the
+/// environment include is resolved in, and the include's cached snapshot or what resolving it takes
+/// (research R3). Every request that has to find `gh` itself goes through [`GhJob::run`], so the
+/// lookup is written once (feature 1400, contracts/source-and-storage.md §4).
+pub(crate) struct GhJob {
+    tooling: crate::shell::capabilities::IssueTooling,
+    cwd: PathBuf,
+    cached: Option<EnvIncludeSnapshot>,
+    resolver: std::sync::Arc<dyn micold_core::env_include::EnvIncludeResolver + Send + Sync>,
+    enabled: bool,
+    script: String,
+    timeout_secs: u64,
+}
+
+/// The issue source running a located `gh`, and that `gh`'s path.
+pub(crate) type LocatedGh = (
+    std::sync::Arc<dyn micold_core::github::IssueSource + Send + Sync>,
+    PathBuf,
+);
+
+impl GhJob {
+    /// Take what the lookup needs from `app`.
+    pub(crate) fn of(app: &App) -> GhJob {
+        let tooling = app.caps.issue_tooling();
+        // The project root: the directory the include script is resolved in for this project.
+        let cwd = app
+            .core
+            .workspace
+            .active
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+        GhJob {
+            tooling,
+            cached: app.env_include_cache.get(&cwd).cloned(),
+            cwd,
+            resolver: app.caps.env_include_shared(),
+            enabled: app.env_include_enabled,
+            script: app.env_include_script_path.clone(),
+            timeout_secs: app.env_include_timeout_secs,
+        }
+    }
+
+    /// On a blocking thread: resolve the include on a cache miss, locate `gh`, and run `ask` with
+    /// its source (`None` when `gh` is not found). Hands back what `ask` answered and the snapshot
+    /// resolved here, for the shell to cache.
+    pub(crate) async fn run<T: Send + 'static>(
+        self,
+        ask: impl FnOnce(Option<LocatedGh>) -> T + Send + 'static,
+    ) -> Result<(T, Option<(PathBuf, EnvIncludeSnapshot)>), tokio::task::JoinError> {
+        tokio::task::spawn_blocking(move || {
+            let GhJob {
+                tooling,
+                cwd,
+                cached,
+                resolver,
+                enabled,
+                script,
+                timeout_secs,
+            } = self;
+            let resolved = match cached {
+                Some(_) => None,
+                None => {
+                    let snapshot =
+                        resolve_env_include(&*resolver, enabled, &script, timeout_secs, &cwd);
+                    Some((cwd, snapshot))
+                }
+            };
+            let snapshot = cached.as_ref().or(resolved.as_ref().map(|(_, s)| s));
+            let include_path = snapshot.and_then(|s| env_include_path(&s.vars));
+            let located =
+                (tooling.locate_gh)(include_path).map(|gh| ((tooling.source)(gh.clone()), gh));
+            (ask(located), resolved)
+        })
+        .await
+    }
+}
+
 /// Search GitHub beyond the loaded issues on a blocking thread, answering `IssueSearched { seq }`.
 ///
 /// The source runs the `gh` the load located: a search never looks for `gh` again (research R3).
 fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
     if let Some((text, filters)) = app.core.worktree_form.jira_search_request() {
         return start_jira_search(app, seq, text, filters);
+    }
+    // Feature 1400 (FR-016): with a GitHub filter active, the search beyond carries it.
+    if let Some((seq, repo, search, gh)) = app.core.worktree_form.github_filtered_search() {
+        return crate::shell::github_filter::start_filtered_search(app, seq, repo, search, gh);
     }
     let Some((repo, text, gh)) = app.core.worktree_form.issue_search_request() else {
         return Task::none();

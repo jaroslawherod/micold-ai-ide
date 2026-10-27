@@ -554,6 +554,14 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         (false, Some(clear)) => col = col.push(clear),
         (false, None) => {}
     }
+    // Feature 1400 (research R13): the GitHub filters' row heads the picker, trailing: Clear
+    // filters while one is chosen, then the Filters button. Not beside the search, as the Jira one
+    // is: the search's open list is as wide as the field, and a narrower list wraps a long issue
+    // title into rows the eight-row list cannot show whole (`gates/issue_rows_show_all_text.rs`).
+    // Feature 1400's switch (US3) takes this row's leading side.
+    if let Some(row) = super::github_filter::controls_row(form, r) {
+        col = col.push(row);
+    }
     if form.shows_advanced() {
         return super::jira_query::picker(col, form, board, r);
     }
@@ -583,6 +591,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         form.jira_filters
             .active_line()
             .filter(|_| shows_filters(form))
+            .or_else(|| super::github_filter::active_line(form))
             .map(|line| active_filters_line(line, caption, r))
     };
     let jira = form.jira_site();
@@ -620,6 +629,21 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                     .into(),
                 )),
             };
+        }
+        // Feature 1400 (FR-018): GitHub refused the filter; its messages stand in place of the list,
+        // the filter in place to fix beside them.
+        IssueList::Rejected(messages) => {
+            let lines = super::github_filter::rejection_lines(messages);
+            let mut lines = lines.into_iter();
+            if let Some(first) = lines.next() {
+                col = col.push(seat(
+                    Text::new(first, TypeRole::Caption, r).tint(r.error).into(),
+                ));
+            }
+            for line in lines {
+                col = col.push(Text::new(line, TypeRole::Caption, r).tint(r.error));
+            }
+            col = col.extend(active(None));
         }
         // Feature 1185 (FR-011): the filters chose nothing; the active line above clears them.
         IssueList::Loaded { listing, .. }
@@ -717,17 +741,32 @@ fn jira_filters_control<'a>(
         .into_iter()
         .map(|kind| material::MenuSelectRow::controls(jira_filter_field(form, kind, source, r)))
         .collect();
-    material::MenuSelect::new(
-        filters_label(filters.chosen.active().len()),
+    filters_panel(
+        filters.chosen.active().len(),
         fields,
         filters.panel_open,
         filter(FilterMsg::PanelToggled),
         filter(FilterMsg::PanelDismissed),
         r,
     )
-    .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
-    .panel_width(FILTERS_PANEL_WIDTH)
-    .into()
+}
+
+/// The **Filters** button and the floating panel it opens, shared by the Jira (feature 1185) and
+/// the GitHub (feature 1400, research R13) filters: a [`material::MenuSelect`] [`FILTERS_BUTTON_WIDTH`]
+/// wide naming how many filters are chosen, whose list is a [`FILTERS_PANEL_WIDTH`] panel of
+/// `rows`, its trailing edge on the button's.
+pub(super) fn filters_panel<'a>(
+    chosen: usize,
+    rows: Vec<material::MenuSelectRow<'a, Message>>,
+    open: bool,
+    on_toggle: Message,
+    on_dismiss: Message,
+    r: Roles,
+) -> Element<'a, Message> {
+    material::MenuSelect::new(filters_label(chosen), rows, open, on_toggle, on_dismiss, r)
+        .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
+        .panel_width(FILTERS_PANEL_WIDTH)
+        .into()
 }
 
 /// The Filters button's words: "Filters", or "Filters · 2" while two are chosen.
@@ -795,7 +834,7 @@ fn jira_filter_field<'a>(
 /// one the tallest dialog lacks (`gates/panel_placement.rs`), so a line too long for the dialog (three
 /// filters and the cap, a long name) ends in an ellipsis, whole in its tooltip and the values whole
 /// in the Filters panel's fields (ledger D15).
-fn active_filters_line<'a>(
+pub(super) fn active_filters_line<'a>(
     line: String,
     caption: Option<String>,
     r: Roles,

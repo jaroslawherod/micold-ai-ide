@@ -823,6 +823,42 @@ loaded issues failed —" followed by one of the reasons above, with a **Retry**
 same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
 retry.
 
+### Filtering GitHub issues
+
+With the GitHub source showing, a **Filters** button sits beside **Issue**. It opens a panel with
+two fields:
+
+- **Include labels**: only issues carrying every label you add are listed.
+- **Exclude labels**: no issue carrying any label you add is listed. Add `in-progress` and
+  `blocked`, for example, to see only the issues nobody has taken.
+
+The labels are the repository's, alphabetically, read from GitHub the first time you open one of
+the fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It
+then shows as a chip under its field; pressing the chip removes it. A label already added to either
+list is not offered again: remove it from one list to add it to the other. Up to 1,000 labels are
+offered; a repository with more says "Only the first 1,000 labels are offered". A label whose name
+holds a quote (`"`) can't be sent as a filter, so it is not offered, and the field says how many
+were left out. If the labels can't be read, the field says why and offers **Retry**; the list and
+the search keep working.
+
+The button names how many filters you chose ("Filters · 2"). Each change reloads the list from
+GitHub with the filters, most recently updated first, and a line under the search names them, for
+example "Excluding labels in-progress, blocked". The statement under the source then reads "Reads
+issues of <repository> from GitHub, sending the filter and the search text." **Clear filters**,
+above the statement, removes every filter and brings back the usual list of open issues. With no
+filter chosen, the picker reads and sends exactly what it did before. Switching the source to Jira
+(or to a branch) and back keeps the filters and clears the search text. With GitHub issues turned
+off in Settings, there is no Filters button and nothing is sent.
+
+What you type in **Issue** narrows the filtered list the usual way. When more issues match the
+filters than the list holds, your words are also sent to GitHub's search together with the filters,
+each as a plain word, so they can only narrow the list, never widen it. If nothing matches the
+filters, the list says "No issue matches these filters."; if GitHub refuses the filter, its
+messages are shown in place of the list.
+
+GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
+still show under its old labels. Change a filter, or clear them, to ask again.
+
 ### A ticket's status
 
 With the Jira integration on and the project connected, a worktree named for one of its tickets
