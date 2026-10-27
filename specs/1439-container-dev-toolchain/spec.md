@@ -219,8 +219,9 @@ downloaded again.
 7. **Given** a container or Kubernetes daemon (BUG-1500), **When** a Claude Code or Codex session
    starts on it, **Then** the agent's user-level instructions in the sandbox home name a guide that
    says it runs as a non-root user without `sudo`, what persists (the home and the project folders)
-   and what is not (`/tmp` and everything else), and which
-   install commands keep a tool on `PATH`, and any text the user had in those files is unchanged.
+   and what is not (`/tmp` and everything else), and which install commands keep a tool on
+   `PATH`, and any text the user had in those files is unchanged. This holds on a Kubernetes daemon
+   that shares the Claude Code sign-in too, whose pod mounts that file inside `~/.claude`.
 
 ---
 
@@ -273,9 +274,15 @@ downloaded again.
 - **The agent's instruction files already hold the user's own text** (BUG-1500): it is kept as it
   is; only the marked block of FR-019 is added (at the end) or replaced in place. A file whose block
   is already current is not rewritten.
-- **An instruction file cannot be written** (for example a folder a runtime created as root to
-  mount a sign-in file into, or a read-only file): the daemon logs it and starts as usual; the other
-  files are still written.
+- **An instruction file cannot be written** (for example a read-only file, or a `~/.claude` that a
+  runtime already created as root to mount a sign-in file into, on a Kubernetes volume made before
+  this fix): the daemon logs it and starts as usual; the other files are still written. A new
+  Kubernetes pod creates the folders its credential files are mounted into (`~/.claude`) as the
+  image user before the daemon's container starts, so the runtime never makes them root-owned.
+- **A session started with its own `CLAUDE_CONFIG_DIR`** (an environment-include script or the
+  project's environment sets it for sessions but not for the daemon): that session reads
+  `$CLAUDE_CONFIG_DIR/CLAUDE.md`, which gets no block. The daemon writes only where its own
+  environment points.
 - **Hosts whose container runtime shares folders through a VM** (macOS, Windows): the sandbox home
   is a host folder shared into the container; mise's shims and rustup's proxies (links and
   executables) work there as on Linux.
@@ -373,7 +380,9 @@ downloaded again.
   (`$CLAUDE_CONFIG_DIR/CLAUDE.md`, else `~/.claude/CLAUDE.md`) and Codex's (`$CODEX_HOME/AGENTS.md`,
   else `~/.codex/AGENTS.md`), keeping everything outside the block; a newer daemon replaces an
   older block. A write that fails MUST be logged and MUST NOT stop the daemon. The sandbox page
-  MUST say that the daemon writes these files.
+  MUST say that the daemon writes these files. So that `~/.claude` is the image user's on a
+  Kubernetes daemon that shares the Claude Code sign-in, the pod MUST create the home folders its
+  credential files are mounted into, as the image user, before the daemon's container starts.
 
 **Documentation (Story 4)**
 
