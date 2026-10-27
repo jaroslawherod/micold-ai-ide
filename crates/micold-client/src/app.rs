@@ -252,6 +252,10 @@ pub enum Message {
     /// `features::navigation::update` and applied by [`State::apply_navigation`] in the binary,
     /// which dispatches the follow-ups. See [`crate::features::navigation::Msg`].
     Navigation(crate::features::navigation::Msg),
+    /// Back/Forward (feature 1465): a side button or key was pressed, resolved by
+    /// [`State::press_history`] and applied by [`State::apply_history`] in the binary, which
+    /// dispatches the follow-ups. See [`crate::features::history::Msg`].
+    History(crate::features::history::Msg),
     /// The quick switcher (feature 968): handled by `features::quick_switch::update` in the
     /// binary, which applies a choice through the navigation apply path. See
     /// [`crate::features::quick_switch::Msg`].
@@ -479,6 +483,9 @@ pub struct State {
     pub overview: crate::features::overview::State,
     /// What the quick switcher holds (feature 968) -- see [`crate::features::quick_switch::State`].
     pub quick_switch: crate::features::quick_switch::State,
+    /// The window's Back/Forward history (feature 1465) -- see
+    /// [`crate::features::history::State`].
+    pub history: crate::features::history::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -1347,6 +1354,8 @@ impl State {
             // The binary resolves and applies a navigation press, dispatching its follow-ups
             // through its own `update` (feature 803, contracts/ui.md U3).
             | Message::Navigation(_)
+            // So does a Back/Forward press (feature 1465, contracts/ui.md U2).
+            | Message::History(_)
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
@@ -1483,6 +1492,25 @@ impl State {
         let covered = self.review_covered();
         let effect = crate::features::changes::show_if_present(&mut self.changes, &key, covered);
         self.queue_changes_effect(effect);
+    }
+
+    /// The field that holds the keyboard (feature 1465, research R8): `window.focused_field`,
+    /// except a review comment box that is closed, and a session's composer or queued message
+    /// while the Review tab replaces them on screen. Their text areas never report losing the
+    /// keyboard as they go, so the focus they left behind is stale.
+    pub fn live_focused_field(&self) -> Option<crate::features::window::FieldId> {
+        use crate::features::window::FieldId;
+        let field = self.window.focused_field?;
+        let stale = match field {
+            FieldId::ReviewComposer => !self
+                .changes
+                .tabs
+                .shown_view()
+                .is_some_and(|view| view.composer.is_some()),
+            FieldId::Composer(_) | FieldId::QueuedMessage(_) => self.review_shown().is_some(),
+            _ => false,
+        };
+        (!stale).then_some(field)
     }
 
     /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
@@ -2018,6 +2046,95 @@ pub enum KeyRouting {
 }
 
 impl State {
+    /// The place the main area shows (feature 1465, research R3), in the order it draws: none
+    /// while Settings is open or no project is active; else the Overview, Compare, the shown
+    /// Review tab, the current session; else none.
+    pub fn shown_place(&self) -> Option<micold_core::history::Place> {
+        use micold_core::history::{Place, View};
+        if self.settings.settings_draft.is_some() {
+            return None;
+        }
+        let project = self.workspace.active.clone()?;
+        let view = if self.overview.open {
+            View::Overview
+        } else if let Some(compare) = &self.runs.compare {
+            View::Compare(compare.group)
+        } else if let Some((_, location)) = self.review_shown() {
+            View::Review(location.clone())
+        } else {
+            View::Session {
+                id: self.session.active?,
+                location: self.current_session_location()?,
+            }
+        };
+        Some(Place { project, view })
+    }
+
+    /// Records the shown place in the history after a message (feature 1465, U1); the binary
+    /// calls it after every message.
+    pub fn observe_place(&mut self) {
+        let shown = self.shown_place();
+        crate::features::history::observe(&mut self.history, shown);
+    }
+
+    /// What a Back/Forward press resolves to (feature 1465, U3); a move turns observation off
+    /// until [`Self::finish_history_move`].
+    pub fn press_history(
+        &mut self,
+        msg: crate::features::history::Msg,
+    ) -> crate::features::history::Step {
+        crate::features::history::resolve(self, msg)
+    }
+
+    /// A move's follow-ups have run (feature 1465, research R2): observation is back on.
+    pub fn finish_history_move(&mut self) {
+        let shown = self.shown_place();
+        crate::features::history::finish(&mut self.history, shown);
+    }
+
+    /// The messages that show a resolved press's target (feature 1465, U4, research R6), for the
+    /// caller to dispatch through the root `update`, as a click on that place would.
+    pub fn apply_history(&self, step: crate::features::history::Step) -> Vec<Message> {
+        use crate::features::history::Step;
+        use crate::features::{overview, runs, session, sidebar};
+        use micold_core::history::View;
+        let Step::Show(place) = step else {
+            return Vec::new();
+        };
+        let close_overview = self
+            .overview
+            .open
+            .then_some(Message::Overview(overview::Msg::Closed));
+        let close_compare = self
+            .runs
+            .compare
+            .is_some()
+            .then_some(Message::Runs(runs::Msg::CompareClosed));
+        match place.view {
+            View::Session { id, .. } => vec![Message::Session(session::Msg::Selected(id))],
+            View::Review(location) => close_overview
+                .into_iter()
+                .chain(close_compare)
+                .chain([Message::Sidebar(sidebar::Msg::ReviewChangesRequested(
+                    location,
+                ))])
+                .collect(),
+            View::Overview => close_compare
+                .into_iter()
+                .chain([Message::Overview(overview::Msg::Opened {
+                    settings_open: false,
+                })])
+                .collect(),
+            View::Compare(group) => close_overview
+                .into_iter()
+                .chain([Message::Runs(runs::Msg::CompareOpened {
+                    group,
+                    project: place.project,
+                })])
+                .collect(),
+        }
+    }
+
     /// Apply a resolved navigation press (feature 803, contracts/ui.md U3) and return the
     /// follow-up messages the caller dispatches, so a `Selected` runs its full path.
     ///

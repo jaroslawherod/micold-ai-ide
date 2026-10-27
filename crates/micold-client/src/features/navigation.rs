@@ -75,14 +75,20 @@ pub(crate) fn location_nodes(state: &State) -> Vec<(SessionLocation, LocationNod
     nodes
 }
 
+/// Whether a press of the app's navigation (the chords, and Back/Forward, feature 1465 FR-010) is
+/// refused: the settings panel or any registered surface (a dialog, a menu, the quick switcher, a
+/// shortcut sheet) is open.
+pub fn blocked(state: &State) -> bool {
+    state.settings.settings_draft.is_some() || crate::overlay::registry::topmost(state).is_some()
+}
+
 /// What `action` lands on in `state` (contracts/ui.md U1, U2).
 ///
 /// Nothing while the settings panel or any overlay surface is open (U1). At the location level
 /// the current location is the navigation stop when it is still drawn, else the current
 /// session's; the target's main session is shown, or the target becomes a stop when it has none.
 pub fn update(state: &State, action: NavAction) -> Step {
-    if state.settings.settings_draft.is_some() || crate::overlay::registry::topmost(state).is_some()
-    {
+    if blocked(state) {
         return Step::None;
     }
     match action.level {
