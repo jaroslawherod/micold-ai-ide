@@ -8,6 +8,13 @@
 
 **Input**: GitHub issue #1465 "Back/forward navigation with mouse side buttons and Alt+←/→". Today the only "go back" is local to the Review tab (the **Back** above a browsed file), and the mouse's back/forward side buttons do nothing.
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: macOS chord — keep Option+←/→ on macOS as the issue says, or use macOS's browser convention Cmd+[ / Cmd+] there? → A: macOS uses Cmd+[ (Back) and Cmd+] (Forward); Linux and Windows use Alt+← / Alt+→. Option+←/→ on macOS is left to text fields and terminals (word movement) and is not a Back/Forward key. The focus rule of FR-009 is the same on every platform. _(agent-resolved: docs/user-guide/terminal-panes.md#keyboard-shortcuts — every app chord's macOS form uses Cmd, none uses Option; crates/micold-client/src/keymap.rs `is_primary_shift` — Cmd is the macOS app modifier; Cmd+Shift+[ / ] is already previous/next session, so Cmd+[ / ] pairs with it as in macOS browsers; constitution Principle VI)_
+- Q: Is the Review tab's shortcut sheet the only in-app sheet that lists Back/Forward, although they work app-wide? → A: Yes. Back/Forward are listed in the Review tab's sheet (FR-014) and the user guide's app-chord table (FR-013); an app-wide shortcut sheet is out of scope. _(agent-resolved: specs/1465-back-forward-navigation/spec.md#out-of-scope)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Mouse back/forward between places (Priority: P1)
@@ -31,7 +38,7 @@ A user moves around the app — selects session A, then session B, opens another
 
 ### User Story 2 - Alt+← / Alt+→ from the keyboard (Priority: P1)
 
-A keyboard user presses **Alt+←** to go back and **Alt+→** to go forward through the same history, without the shortcut stealing the keys from a text field or a terminal that uses them for editing.
+A keyboard user presses **Alt+←** to go back and **Alt+→** to go forward (on macOS **Cmd+[** and **Cmd+]**; see FR-009) through the same history, without the shortcut stealing the keys from a text field or a terminal that uses them for editing.
 
 **Why this priority**: It is the only way to walk the history without a mouse that has side buttons, and the issue's second acceptance criterion.
 
@@ -106,7 +113,7 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - **Surfaces open**: while a dialog, menu, the quick switcher, the Settings panel or the shortcut sheet is open, back and forward (mouse and keys) do nothing, as the navigation chords do today.
 - **Review tab entries**: going back to a Review tab entry whose tab was closed shows that location's Review tab again (it is reopened, not skipped) as long as the location exists.
 - **Mouse without side buttons / trackpads**: the keys are the path; trackpad swipe gestures are out of scope.
-- **Cross-platform (Principle VI)**: each platform reports the mouse's back/forward side buttons in its own way; on Linux (X11 and Wayland), Windows and macOS they mean back and forward. On macOS Alt is the Option key, which macOS text fields use for word movement — those fields keep it under FR-009. [NEEDS CLARIFICATION: macOS chord — keep Option+←/→ on macOS as the issue says, or use macOS's browser convention Cmd+[ / Cmd+] there?]
+- **Cross-platform (Principle VI)**: each platform reports the mouse's back/forward side buttons in its own way; on Linux (X11 and Wayland), Windows and macOS they mean back and forward. On macOS the keys are Cmd+[ / Cmd+] (FR-009); Option+←/→ stays word movement in text fields and terminals and is not a Back/Forward key there.
 - **Terminal mouse reporting**: a terminal program that asked for mouse events never receives the side buttons; the app always takes them.
 
 ## Requirements *(mandatory)*
@@ -121,7 +128,7 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - **FR-006**: **Back** MUST move the position to the nearest earlier entry whose target still exists and is not the place shown, and show it, restoring its project, location and session or view. **Forward** MUST do the same towards later entries. With no such entry, the press MUST change nothing and show no error.
 - **FR-007**: Moving through the history MUST NOT record entries. Entries skipped because their target is gone MUST be removed from the history.
 - **FR-008**: Pressing the mouse's back side button MUST perform Back, and its forward side button Forward, wherever the pointer is in the window, including over terminal panes, text fields and the Review tab. The side buttons MUST NOT be passed to a terminal program.
-- **FR-009**: Alt+← MUST perform Back and Alt+→ Forward, except while a text field or a terminal pane has the keyboard: then the keys MUST reach that field or terminal unchanged, as today.
+- **FR-009**: Alt+← MUST perform Back and Alt+→ Forward on Linux and Windows, and Cmd+[ Back and Cmd+] Forward on macOS (Option+←/→ is not a Back/Forward key on macOS), except while a text field or a terminal pane has the keyboard: then the keys MUST reach that field or terminal unchanged, as today.
 - **FR-010**: While a dialog, menu, the quick switcher, the Settings panel or a shortcut sheet is open, Back and Forward (buttons and keys) MUST do nothing.
 - **FR-011**: When the shown place is a Review tab whose own **Back** is available, Back MUST perform that tab's **Back** and leave the global history unchanged. Forward MUST always use the global history.
 - **FR-012**: Back and Forward MUST act once per key press and once per key repeat, and once per side-button press.
@@ -140,7 +147,7 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 
 - **SC-001**: After selecting A then B, one back press shows A and one forward press shows B, by mouse button and by the platform's Back/Forward keys, on Linux, Windows and macOS.
 - **SC-002**: In 100% of the reducer test cases where entries' targets are gone, back and forward land on an existing place or change nothing, and none shows an error.
-- **SC-003**: With a text field or terminal holding the keyboard, Alt+←/→ produce exactly the same text or terminal input as before this feature (no regression in the existing input tests).
+- **SC-003**: With a text field or terminal holding the keyboard, the platform's Back/Forward keys (and, on macOS, Option+←/→) produce exactly the same text or terminal input as before this feature (no regression in the existing input tests).
 - **SC-004**: The history never holds more than 50 entries, whatever the number of moves.
 - **SC-005**: Back from a browsed file in the Review tab returns to the tab's previous reading in one press, and leaves the tab only on the next press when nothing is left to go back to.
 
@@ -150,12 +157,12 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - The issue's "Changes: diff → file list" is the Review tab's own **Back** (browsed file → what was being read): in the Review tab the file list and the diff are side by side, so there is no separate diff → list step today.
 - Every change of the shown place is recorded, whether the user or the app made it (FR-002), so the history always ends at what is shown; back over a place the app moved away from because it ended skips it as gone.
 - The Settings panel is not a place: it is a panel the user closes, and back/forward do nothing while it is open (FR-010), as the navigation chords do today.
-- A focused terminal always keeps Alt+←/→ (shells use them for word movement); there is no per-program exception.
+- A focused terminal always keeps Alt+←/→ (Cmd+[ / Cmd+] on macOS) (shells use them for word movement); there is no per-program exception.
 - Pane layout, scroll positions and selections inside a place are not part of the history; showing a place restores it as a sidebar click would.
 
 ## Out of Scope
 
-- Trackpad swipe gestures and other back/forward input than the side buttons and Alt+←/→.
+- Trackpad swipe gestures and other back/forward input than the side buttons and the FR-009 keys.
 - History persisted across restarts, or a visible history list or back/forward toolbar buttons.
 - In-view back for views other than the Review tab.
 - Rebinding the Back/Forward keys.
