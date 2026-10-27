@@ -125,11 +125,20 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
     // #1439 FR-019 (BUG-1500): the daemon wrote the agent's guide at startup and pointed Claude
     // Code's user-level instructions at it. The tag is split so the wrapped echo of the typed
     // command never carries it joined.
+    // The block goes only into an offered CLI's file.
     let begin = micold_core::sandbox::agent_guide::BEGIN;
+    let claude = offered
+        .clis
+        .iter()
+        .any(|c| c.cli == micold_core::session::AiCli::ClaudeCode);
+    let block_check = if claude {
+        format!("grep -qF '{begin}' '{sandbox_home}/.claude/CLAUDE.md' && ")
+    } else {
+        String::new()
+    };
     let guide = term
         .run(&format!(
-            "test -s '{sandbox_home}/.micold/AGENTS.md' && \
-             grep -qF '{begin}' '{sandbox_home}/.claude/CLAUDE.md' && echo GUIDE\"-WRITTEN\""
+            "test -s '{sandbox_home}/.micold/AGENTS.md' && {block_check}echo GUIDE\"-WRITTEN\""
         ))
         .await;
     assert!(

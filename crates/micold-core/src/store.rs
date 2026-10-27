@@ -822,7 +822,7 @@ fn write_project_state(path: &Path, state: &StoredProjectState) -> io::Result<()
 /// Write `json` to a fresh staging file beside `target`, then rename it over `target`. On either
 /// failure the staging file is removed rather than left behind: staging paths are unique per write
 /// now (T153), so a leaked one is a file nobody will ever reuse or clean up.
-pub(crate) fn write_atomic(target: &Path, json: &str) -> io::Result<()> {
+pub fn write_atomic(target: &Path, json: &str) -> io::Result<()> {
     let temp = &temp_path_for(target);
     if let Err(err) = std::fs::write(temp, json) {
         let _ = std::fs::remove_file(temp);

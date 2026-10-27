@@ -376,7 +376,8 @@ downloaded again.
   the defaults of FR-015; that a tool linked against an image library may need reinstalling after
   an image update; that an old mise Python needs a newer patch release; and that a system library
   needs the image or an own image, so it asks the user. The daemon MUST also put a marked block
-  that summarises the guide and names its path into Claude Code's user-level instructions
+  that summarises the guide and names its path into the user-level instructions of each of
+  these CLIs it offers (a daemon offering no CLI writes nothing): Claude Code's
   (`$CLAUDE_CONFIG_DIR/CLAUDE.md`, else `~/.claude/CLAUDE.md`) and Codex's (`$CODEX_HOME/AGENTS.md`,
   else `~/.codex/AGENTS.md`), keeping everything outside the block; a newer daemon replaces an
   older block. A write that fails MUST be logged and MUST NOT stop the daemon. The sandbox page

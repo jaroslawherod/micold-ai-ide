@@ -5,6 +5,8 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use crate::session::AiCli;
+
 /// The line that opens the block this module owns in an instruction file.
 pub const BEGIN: &str = "<!-- micold:sandbox-guide begin -->";
 /// The line that closes it.
@@ -74,17 +76,30 @@ pub fn pointer_block(guide: &Path) -> String {
     )
 }
 
-/// `existing` with `block` in it: the first marked block (a [`BEGIN`] line and the next [`END`]
-/// after it) replaced in place, else `block` appended after one blank line. Text outside the block
-/// is kept byte for byte, and merging the same block again changes nothing. A [`BEGIN`] with no
-/// [`END`] after it is no block.
+/// `existing` with `block` in it: the marked block replaced in place, else `block` appended after
+/// one blank line. Text outside the block is kept byte for byte, and merging the same block again
+/// changes nothing.
+///
+/// The marked block runs from the **last** line that is exactly [`BEGIN`] to the first line after
+/// it that is exactly [`END`]. A marker quoted inside a line is not one, and a [`BEGIN`] line with
+/// no [`END`] line after it is no block; taking the last one keeps such a dangling line, and the
+/// user's text after it, out of the block a first merge appended.
 pub fn merge_block(existing: &str, block: &str) -> String {
-    if let Some(begin) = existing.find(BEGIN) {
-        if let Some(end) = existing[begin..].find(END).map(|at| begin + at + END.len()) {
-            let rest = &existing[end..];
-            let rest = rest.strip_prefix('\n').unwrap_or(rest);
-            return format!("{}{block}{rest}", &existing[..begin]);
+    let mut begin = None;
+    let mut span = None;
+    let mut at = 0;
+    for line in existing.split_inclusive('\n') {
+        let bare = line.strip_suffix('\n').unwrap_or(line);
+        if bare == BEGIN {
+            begin = Some(at);
+            span = None;
+        } else if bare == END && span.is_none() {
+            span = begin.map(|b| (b, at + line.len()));
         }
+        at += line.len();
+    }
+    if let Some((begin, end)) = span {
+        return format!("{}{block}{}", &existing[..begin], &existing[end..]);
     }
     match existing {
         "" => block.to_string(),
@@ -99,8 +114,8 @@ pub fn merge_block(existing: &str, block: &str) -> String {
 pub struct GuideFiles {
     /// `home/.micold/AGENTS.md`.
     pub guide: PathBuf,
-    /// Claude Code's `CLAUDE.md`, then Codex's `AGENTS.md`.
-    pub instructions: Vec<PathBuf>,
+    /// Claude Code's `CLAUDE.md`, then Codex's `AGENTS.md`, each with its CLI.
+    pub instructions: Vec<(AiCli, PathBuf)>,
 }
 
 /// The files for the sandbox home `home`: Claude Code reads `$CLAUDE_CONFIG_DIR/CLAUDE.md`, else
@@ -116,8 +131,11 @@ pub fn guide_files(home: &Path, var: impl Fn(&str) -> Option<OsString>) -> Guide
     GuideFiles {
         guide: home.join(".micold").join("AGENTS.md"),
         instructions: vec![
-            dir("CLAUDE_CONFIG_DIR", ".claude").join("CLAUDE.md"),
-            dir("CODEX_HOME", ".codex").join("AGENTS.md"),
+            (
+                AiCli::ClaudeCode,
+                dir("CLAUDE_CONFIG_DIR", ".claude").join("CLAUDE.md"),
+            ),
+            (AiCli::Codex, dir("CODEX_HOME", ".codex").join("AGENTS.md")),
         ],
     }
 }
@@ -172,7 +190,18 @@ mod tests {
     #[test]
     fn agent_guide_begin_without_end_is_no_block() {
         let file = format!("mine\n{BEGIN}\ndangling\n");
-        assert_eq!(merge_block(&file, &block()), format!("{file}\n{}", block()));
+        let once = merge_block(&file, &block());
+        assert_eq!(once, format!("{file}\n{}", block()));
+        // The second merge must not pair the dangling line with the appended block's end.
+        assert_eq!(merge_block(&once, &block()), once);
+    }
+
+    #[test]
+    fn agent_guide_a_marker_quoted_inside_a_line_is_no_marker() {
+        let file = format!("see `{BEGIN}` and `{END}` in the guide\n");
+        let once = merge_block(&file, &block());
+        assert_eq!(once, format!("{file}\n{}", block()));
+        assert_eq!(merge_block(&once, &block()), once);
     }
 
     #[test]
@@ -183,8 +212,11 @@ mod tests {
         assert_eq!(
             none.instructions,
             vec![
-                PathBuf::from("/home/u/.claude/CLAUDE.md"),
-                PathBuf::from("/home/u/.codex/AGENTS.md"),
+                (
+                    AiCli::ClaudeCode,
+                    PathBuf::from("/home/u/.claude/CLAUDE.md")
+                ),
+                (AiCli::Codex, PathBuf::from("/home/u/.codex/AGENTS.md")),
             ]
         );
         let empty = guide_files(home, |_| Some(OsString::new()));
@@ -197,8 +229,8 @@ mod tests {
         assert_eq!(
             set.instructions,
             vec![
-                PathBuf::from("/cfg/claude/CLAUDE.md"),
-                PathBuf::from("/cfg/codex/AGENTS.md"),
+                (AiCli::ClaudeCode, PathBuf::from("/cfg/claude/CLAUDE.md")),
+                (AiCli::Codex, PathBuf::from("/cfg/codex/AGENTS.md")),
             ]
         );
     }
