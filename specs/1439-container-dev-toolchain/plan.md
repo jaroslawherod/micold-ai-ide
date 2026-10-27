@@ -237,7 +237,8 @@ onto the no-outbound posture, run offline.
   predicate as `with_sandbox_env` (container and Kubernetes; not `in_sandbox`, which is false on
   Kubernetes), narrowed to an offer listing at least one CLI (an empty offer has no agent, and is
   what a host daemon can see through the mounted state directory); only an offered CLI's file gets
-  the block; writes are atomic (staging file renamed, through a link) and skipped when unchanged; `HOME` and the two variables from `own` (the daemon's environment, which is the
+  the block, and none when the guide could not be written; files are written in place (mode,
+  owner and links kept) and not at all when unchanged; `HOME` and the two variables from `own` (the daemon's environment, which is the
   sandbox's). It writes the guide, then merges the block into each instruction file, creating
   missing folders; a file whose content would not change is not written. Each failure is a
   `tracing::warn!` and the next file is still tried. Host and remote daemons write nothing.

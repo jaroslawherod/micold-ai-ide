@@ -80,21 +80,24 @@ pub fn pointer_block(guide: &Path) -> String {
 /// one blank line. Text outside the block is kept byte for byte, and merging the same block again
 /// changes nothing.
 ///
-/// The marked block runs from the **last** line that is exactly [`BEGIN`] to the first line after
-/// it that is exactly [`END`]. A marker quoted inside a line is not one, and a [`BEGIN`] line with
-/// no [`END`] line after it is no block; taking the last one keeps such a dangling line, and the
-/// user's text after it, out of the block a first merge appended.
+/// The marked block is the last complete one: a line that is [`BEGIN`] (trailing whitespace and a
+/// `\r` ignored) through the next line that is [`END`]. A marker quoted inside a line is not one;
+/// a [`BEGIN`] line with no [`END`] line after it starts no block, and a later [`BEGIN`] line
+/// restarts the search, so neither a dangling marker nor the user's text after it is ever taken
+/// into the block.
 pub fn merge_block(existing: &str, block: &str) -> String {
     let mut begin = None;
     let mut span = None;
     let mut at = 0;
     for line in existing.split_inclusive('\n') {
-        let bare = line.strip_suffix('\n').unwrap_or(line);
-        if bare == BEGIN {
-            begin = Some(at);
-            span = None;
-        } else if bare == END && span.is_none() {
-            span = begin.map(|b| (b, at + line.len()));
+        match line.trim_end() {
+            bare if bare == BEGIN => begin = Some(at),
+            bare if bare == END => {
+                if let Some(b) = begin.take() {
+                    span = Some((b, at + line.len()));
+                }
+            }
+            _ => {}
         }
         at += line.len();
     }
@@ -194,6 +197,20 @@ mod tests {
         assert_eq!(once, format!("{file}\n{}", block()));
         // The second merge must not pair the dangling line with the appended block's end.
         assert_eq!(merge_block(&once, &block()), once);
+    }
+
+    #[test]
+    fn agent_guide_a_stray_begin_after_a_block_and_crlf_markers_keep_one_block() {
+        let file = format!("{BEGIN}\nold\n{END}\nnotes\n{BEGIN}\n");
+        assert_eq!(
+            merge_block(&file, &block()),
+            format!("{}notes\n{BEGIN}\n", block())
+        );
+        let crlf = format!("mine\r\n{BEGIN}\r\nold\r\n{END}\r\ntail\r\n");
+        assert_eq!(
+            merge_block(&crlf, &block()),
+            format!("mine\r\n{}tail\r\n", block())
+        );
     }
 
     #[test]
