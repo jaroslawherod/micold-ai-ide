@@ -133,7 +133,7 @@ fn body<'a>(diff: &'a FileDiff, shaped: Option<&'a Shaped>, layout: DiffLayout) 
 
 /// The width of a glyph of [`Font::MONOSPACE`] at [`CODE_SIZE`], as a share of the size: the
 /// widest of the usual monospace faces, so a long line is never cut short of its last character.
-const GLYPH_EM: f32 = 0.62;
+const GLYPH_EM: f32 = 0.605;
 
 /// The width a slot (a review comment) is held to in a diff that scrolls sideways.
 const SLOT_CAP: f32 = 1200.0;
