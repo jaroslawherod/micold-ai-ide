@@ -834,8 +834,9 @@ two fields:
 
 The labels are the repository's, alphabetically, read from GitHub the first time you open one of
 the fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It
-then shows as a chip under its field; pressing the chip removes it. A label already added to either
-list is not offered again: remove it from one list to add it to the other. Up to 1,000 labels are
+then shows as a chip under its field; pressing the chip removes it. A label already in a list is not
+offered in that list again; picking one the other list holds moves it, since a label can't be both
+included and excluded. Up to 1,000 labels are
 offered; a repository with more says "Only the first 1,000 labels are offered". A label whose name
 holds a quote (`"`) can't be sent as a filter, so it is not offered, and the field says how many
 were left out. If the labels can't be read, the field says why and offers **Retry**; the list and
@@ -854,7 +855,8 @@ What you type in **Issue** narrows the filtered list the usual way. When more is
 filters than the list holds, your words are also sent to GitHub's search together with the filters,
 each as a plain word, so they can only narrow the list, never widen it. If nothing matches the
 filters, the list says "No issue matches these filters."; if GitHub refuses the filter, its
-messages are shown in place of the list.
+messages are shown in place of the list. If GitHub refuses the search beyond the list, the line
+under the list says so with its messages, and the issues already listed stay.
 
 GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
 still show under its old labels. Change a filter, or clear them, to ask again.

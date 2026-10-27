@@ -70,8 +70,8 @@ fn label_field<'a>(
         .map(|row| {
             let label = row.label(source);
             let built = match row.summary() {
-                // A failure's cause is the row's second line, wrapped in full: a cut reason says
-                // nothing (as 1185's fields).
+                // A failure's cause, or why labels are not offered, is the row's second line,
+                // wrapped in full: a cut reason says nothing (as 1185's fields).
                 Some(summary) => TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new()),
                 None => TypeaheadRow::new(label.clone(), row.spans.clone())
                     .single_line()

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree_form::github_filter::{
-    LabelAction, LabelList, Msg as GithubMsg,
+    LabelAction, LabelList, LabelRow, LabelText, Msg as GithubMsg,
 };
 use micold_client::features::worktree_form::{
     BranchSource, IssueList, Msg, SearchState, WorktreeForm,
@@ -314,21 +314,28 @@ fn including_labels_reloads_with_each() {
     assert_eq!(search.as_str(), INCLUDE_BUG_UI);
 }
 
-/// Edge "Same label included and excluded": a chosen label is offered in neither field, and
-/// removed from one it can be chosen in the other.
+/// Edge "Same label included and excluded": each field offers every label not in its own list, and
+/// choosing one the other list holds moves it there (quickstart B4).
 #[test]
-fn a_label_chosen_in_one_list_is_offered_in_neither() {
+fn a_label_chosen_in_one_list_moves_when_chosen_in_the_other() {
     let mut state = shown(default_issues());
     with_labels(&mut state);
     pick(&mut state, LabelList::Exclude, "blocked");
-    // A chosen label is offered in neither list.
-    assert!(!offered(&state, LabelList::Include).contains(&"blocked".to_string()));
-    // The field's list is the user's way to move it: removing it from Exclude offers it again.
-    filter(&mut state, GithubMsg::Removed(label("blocked")));
+    assert!(offered(&state, LabelList::Include).contains(&"blocked".to_string()));
+    assert!(!offered(&state, LabelList::Exclude).contains(&"blocked".to_string()));
+    let before = state.worktree_form.issue_request_seq;
     pick(&mut state, LabelList::Include, "blocked");
     let basic = &form(&state).github_selector.basic;
     assert_eq!(basic.include(), &[label("blocked")]);
     assert!(basic.exclude().is_empty());
+    let (seq, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert!(seq > before, "the move reloads the list");
+    assert_eq!(
+        search.as_str(),
+        "repo:o/r is:issue is:open label:\"blocked\" sort:updated-desc"
+    );
+    assert!(offered(&state, LabelList::Exclude).contains(&"blocked".to_string()));
+    assert!(!offered(&state, LabelList::Include).contains(&"blocked".to_string()));
 }
 
 /// US1 AS5: removing one value keeps the others; Clear filters is 034's listing again.
@@ -497,7 +504,7 @@ fn the_first_focus_of_a_label_field_loads_the_labels_once() {
     assert_eq!(state.worktree_form.filter_request_seq, seq);
 }
 
-/// US1 AS1: the labels alphabetically, less those chosen in either list.
+/// US1 AS1: the labels alphabetically, less those chosen in the field's own list.
 #[test]
 fn the_choices_are_alphabetical_less_the_chosen() {
     let mut state = shown(default_issues());
@@ -510,11 +517,11 @@ fn the_choices_are_alphabetical_less_the_chosen() {
     pick(&mut state, LabelList::Include, "ui");
     assert_eq!(
         offered(&state, LabelList::Include),
-        vec!["blocked", "in-progress"]
+        vec!["blocked", "bug", "in-progress"]
     );
     assert_eq!(
         offered(&state, LabelList::Exclude),
-        vec!["blocked", "in-progress"]
+        vec!["blocked", "in-progress", "ui"]
     );
     // Typed text narrows the field's list.
     filter(
@@ -591,6 +598,20 @@ fn a_choice_failure_shows_retry_on_that_field_only() {
     assert!(rows
         .iter()
         .any(|row| row.label(source) == IssueLoadError::TimedOut.message(source)));
+    // Visual pass M2 F5: a cause is named for the labels, not as "Couldn't read issues".
+    let failed = |error: IssueLoadError| LabelRow {
+        text: LabelText::Failed(error),
+        action: LabelAction::Inert,
+        spans: Vec::new(),
+    };
+    assert_eq!(
+        failed(IssueLoadError::Other("HTTP 502: Bad Gateway".into())).label(source),
+        "HTTP 502: Bad Gateway"
+    );
+    assert_eq!(
+        failed(IssueLoadError::NotSignedIn).label(source),
+        "You're not signed in to GitHub. Run `gh auth login` in a terminal, then retry."
+    );
     // The list and the search are untouched.
     assert!(matches!(form(&state).issues, IssueList::Loaded { .. }));
     send(&mut state, Msg::IssueQueryChanged("crash".into()));
@@ -663,6 +684,88 @@ fn an_incomplete_filtered_list_searches_beyond_it_with_the_filter() {
         None,
         "034's unfiltered search is never built while a filter is active"
     );
+}
+
+/// Review A M2 F1: an edit to text with no word to search for (quotes alone) drops the search a
+/// keystroke left pending, so it never becomes a search that cannot start.
+#[test]
+fn an_edit_to_quotes_alone_drops_the_pending_search() {
+    let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], false);
+    send(&mut state, Msg::IssueQueryChanged("\"c".into()));
+    let seq = state
+        .worktree_form
+        .pending_issue_search()
+        .expect("a word typed: the search waits out the debounce");
+    send(&mut state, Msg::IssueQueryChanged("\"".into()));
+    assert_eq!(state.worktree_form.pending_issue_search(), None);
+    send(&mut state, Msg::IssueSearchDue { seq });
+    assert_eq!(
+        state.worktree_form.awaited_issue_search(),
+        None,
+        "no search spins with nothing to send"
+    );
+    assert_eq!(form(&state).issue_search_status(), None);
+}
+
+/// Review A M2 F2: Clear filters with text typed reloads 034's listing; capped, it searches beyond
+/// it again after the pause, as a filtered reload does.
+#[test]
+fn clear_filters_with_text_typed_searches_beyond_a_capped_default_list() {
+    let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], false);
+    send(&mut state, Msg::IssueQueryChanged("crash".into()));
+    filter(&mut state, GithubMsg::ClearedAll);
+    let seq = state
+        .worktree_form
+        .awaited_issue_load()
+        .expect("034's listing reloads");
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: default_issues(),
+                    total_open: 2_000,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    assert_eq!(state.worktree_form.pending_issue_search(), Some(seq));
+    send(&mut state, Msg::IssueSearchDue { seq });
+    let (_, text, _) = state
+        .worktree_form
+        .issue_search_request()
+        .expect("034's search beyond runs");
+    assert_eq!(text, "crash");
+}
+
+/// Review A M2 F3: GitHub refusing the search beyond says so plainly, with no Retry: the same
+/// search would be refused again.
+#[test]
+fn a_refused_filtered_search_says_so_without_retry() {
+    let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], false);
+    send(&mut state, Msg::IssueQueryChanged("crash".into()));
+    let seq = state.worktree_form.pending_issue_search().unwrap();
+    send(&mut state, Msg::IssueSearchDue { seq });
+    filter(
+        &mut state,
+        GithubMsg::Searched {
+            seq,
+            result: Err(FilterFailure::Rejected(vec!["Bad query".into()])),
+        },
+    );
+    assert_eq!(
+        form(&state).issue_search_status().as_deref(),
+        Some("GitHub did not accept the search query: Bad query")
+    );
+    assert!(!form(&state).issue_search_retries());
+    send(&mut state, Msg::IssueRetry);
+    assert_eq!(state.worktree_form.github_filtered_search(), None);
+    // The loaded matches stay.
+    assert_eq!(form(&state).issue_matches.len(), 1);
 }
 
 /// A failed or refused search beyond keeps the loaded matches and offers Retry of the same search.

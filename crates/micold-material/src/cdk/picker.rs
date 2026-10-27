@@ -856,6 +856,23 @@ where
             &layout.bounds(),
         );
 
+        // A press that put the keyboard in one of a panel's controls takes it from the trigger
+        // that opened the panel: the rendering stack's text input focuses itself on a press and
+        // tells no one, so the trigger went on drawing its ring and answering Enter (feature 1400,
+        // visual pass M2).
+        if self.trigger.is_some()
+            && matches!(
+                event,
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            )
+        {
+            let mut census = Census::default();
+            self.walk(layout, renderer, &mut census);
+            if let Some(target) = census.focused.filter(|at| *at > 0) {
+                self.walk(layout, renderer, &mut FocusAt { target, seen: 0 });
+            }
+        }
+
         // A press that landed *on* the list belongs to the list, whatever the row under it decided
         // to do with it. Rows that do something claim it themselves; a row that deliberately does
         // nothing declines it, and an unclaimed press carries on to whatever sits behind — which
@@ -1061,7 +1078,37 @@ mod tests {
         /// A key as the runtime sends it: the overlay first, the tree only if it was let past.
         /// What was published, and whether it was captured.
         fn press(&mut self, named: Named, modifiers: Modifiers) -> (Vec<String>, bool) {
-            let event = key_with(named, modifiers);
+            self.send(&key_with(named, modifiers), mouse::Cursor::Unavailable)
+        }
+
+        /// A left press on the middle of the panel's `index`th field, as the runtime sends it.
+        fn click_field(&mut self, index: usize) -> (Vec<String>, bool) {
+            let mut overlay = self
+                .element
+                .as_widget_mut()
+                .overlay(
+                    &mut self.tree,
+                    Layout::new(&self.node),
+                    &self.renderer,
+                    &Rectangle::with_size(WINDOW),
+                    Vector::ZERO,
+                )
+                .expect("the panel is open");
+            let node = overlay.as_overlay_mut().layout(&self.renderer, WINDOW);
+            let mut bounds = Bounds::default();
+            overlay
+                .as_overlay_mut()
+                .operate(Layout::new(&node), &self.renderer, &mut bounds);
+            drop(overlay);
+            let at = bounds.0[index].center();
+            self.send(
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                mouse::Cursor::Available(at),
+            )
+        }
+
+        fn send(&mut self, event: &Event, cursor: mouse::Cursor) -> (Vec<String>, bool) {
+            let event = event.clone();
             let viewport = Rectangle::with_size(WINDOW);
             let mut messages = Vec::new();
             let mut shell = Shell::new(&mut messages);
@@ -1076,7 +1123,7 @@ mod tests {
                 overlay.as_overlay_mut().update(
                     &event,
                     Layout::new(&node),
-                    mouse::Cursor::Unavailable,
+                    cursor,
                     &self.renderer,
                     &mut clipboard::Null,
                     &mut shell,
@@ -1087,7 +1134,7 @@ mod tests {
                     &mut self.tree,
                     &event,
                     Layout::new(&self.node),
-                    mouse::Cursor::Unavailable,
+                    cursor,
                     &self.renderer,
                     &mut clipboard::Null,
                     &mut shell,
@@ -1096,6 +1143,25 @@ mod tests {
             }
             let captured = shell.is_event_captured();
             (messages, captured)
+        }
+    }
+
+    /// The bounds of each focusable a walk meets, in order.
+    #[derive(Default)]
+    struct Bounds(Vec<Rectangle>);
+
+    impl Operation for Bounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            bounds: Rectangle,
+            _state: &mut dyn Focusable,
+        ) {
+            self.0.push(bounds);
         }
     }
 
@@ -1191,6 +1257,27 @@ mod tests {
             open.held(),
             [true, false, false],
             "the trigger has the keyboard again"
+        );
+    }
+
+    /// Visual pass M2 (feature 1400): the trigger opened the panel and kept the keyboard while a
+    /// press put it in a field, so both drew a focus ring and Enter in the field, with no row
+    /// highlighted, pressed the trigger and closed the panel. A press on a panel's field takes the
+    /// keyboard from the trigger.
+    #[test]
+    fn a_press_on_a_panel_field_takes_the_keyboard_from_the_trigger() {
+        let mut open = Open::new();
+        open.focus_trigger();
+        open.click_field(0);
+        assert_eq!(
+            open.held(),
+            [false, true, false],
+            "only the pressed field holds the keyboard"
+        );
+        let (messages, _) = open.press(Named::Enter, Modifiers::empty());
+        assert!(
+            messages.is_empty(),
+            "Enter in the field reached the trigger: {messages:?}"
         );
     }
 
