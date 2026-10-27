@@ -241,20 +241,24 @@ fn source_control<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element
 fn progress_slot<'a>(ratio: Option<Ratio>, r: Roles) -> Element<'a, Message> {
     let content: Element<'a, Message> = match ratio {
         Some(ratio) => row![
-            Ellipsized::<Message>::at_role_spaced(
+            // The gap is the words' right padding, not the row's spacing: spacing is laid out
+            // even when the slot has no room left, and put the bar 8 px past the slot (#1474).
+            container(Ellipsized::<Message>::at_role_spaced(
                 progress_label(ratio),
                 TypeRole::Body,
                 r.on_surface_variant
-            )
-            .shrink(),
-            // Fixed, not Fill: this row is Shrink, where a Fill bar is laid out at zero width
-            // (1271 visual re-pass V2). Laid out after the words, a fixed length still gives way
-            // to them: it is clamped to what they leave.
+            ))
+            .padding(Padding {
+                right: spacing::SM,
+                ..Padding::ZERO
+            })
+            .width(Length::Fill),
+            // Fixed, not Fill: a Fill bar is laid out at zero width (1271 visual re-pass V2).
+            // The words fill what the bar leaves, so a narrow slot cuts the words, not the bar.
             container(ProgressBar::new(ratio, r).width(Length::Fill))
                 .width(Length::Fixed(PROGRESS_BAR_WIDTH)),
         ]
-        .width(Length::Shrink)
-        .spacing(spacing::SM)
+        .width(Length::Fill)
         .align_y(Alignment::Center)
         .into(),
         None => Space::new().into(),

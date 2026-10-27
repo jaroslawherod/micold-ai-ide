@@ -167,32 +167,13 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
     ),
     (
-        &[
-            "changes-review-marks",
-            "changes-tree-filter",
-            "review-drag-composer",
-            "review-shortcut-sheet",
-            "review-source-open",
-            "review-two-worktrees",
-        ],
-        "0/0/0/1/1/2/0/0/2/0/0",
-        "right",
-        "base",
-        "#1474: the progress bar past its slot",
-    ),
-    (
         &["changes-review-held"],
         "0/0/0/1/1/2/0/0/2/0/0/0",
         "right",
         "base",
-        "#1474: the progress words past their box",
-    ),
-    (
-        &["changes-review-held"],
-        "0/0/0/1/1/2/0/0/3/0/0",
-        "right",
-        "base",
-        "#1474: the progress bar past its slot, beside the stale notice",
+        // Beside the stale notice the header's third child is the source control, not the progress
+        // slot: its label and chevron run past it. Not the progress slot; remains for #1474.
+        "#1474: the source control's label and chevron past it, beside the stale notice",
     ),
     (
         &[
