@@ -245,3 +245,113 @@ fn a_dropped_daemons_sessions_stay_unfinished_and_read_as_lost() {
     assert_eq!(state.daemon_row_label("feat-a"), "disconnected");
     assert_eq!(state.daemon_row_label("feat-b"), "Beta", "B is unaffected");
 }
+
+/// Bug 1467: a location with no stored binding is the legacy default's (A here), which is where the
+/// router sends its sessions. B lists the project too (it has `feat-b`, and since #1423 a create
+/// registers the project there), so B's snapshots, which never hold A's unbound sessions and may
+/// discover fewer worktrees, must not drop them. Each of B's pushes did, and A's next one put them
+/// back: the sidebar's rows disappeared and reappeared while the sessions ran.
+#[test]
+fn unbound_locations_survive_another_daemons_snapshots_and_reconnects() {
+    use micold_client::catalog_sync::note_lost_sessions;
+    let (s_default, s_c, sa, sb) = (
+        SessionId::new(),
+        SessionId::new(),
+        SessionId::new(),
+        SessionId::new(),
+    );
+    let mut state = state();
+    let project = PathBuf::from(PROJECT);
+    let a_snapshot = || {
+        snapshot(
+            vec![
+                SessionSummary {
+                    worktree_dir: None,
+                    ..session(s_default, "")
+                },
+                session(s_c, "feat-c"),
+                session(sa, "feat-a"),
+            ],
+            vec![
+                worktree("feat-a", Wire::Clean, "feat-a"),
+                worktree("feat-b", Wire::Clean, "feat-b"),
+                worktree("feat-c", Wire::Clean, "feat-c"),
+            ],
+        )
+    };
+    // B holds only its own session, and its discovery found only its own worktree.
+    let b_snapshot = || {
+        snapshot(
+            vec![session(sb, "feat-b")],
+            vec![worktree("feat-b", Wire::Clean, "feat-b")],
+        )
+    };
+    let assert_full = |state: &State, step: &str| {
+        let ids = session_ids(state);
+        for (id, what) in [
+            (s_default, "the Default location's"),
+            (s_c, "unbound feat-c's"),
+            (sa, "feat-a's"),
+            (sb, "feat-b's"),
+        ] {
+            assert!(ids.contains(&id), "{step}: {what} session left the list");
+        }
+        let mut dirs: Vec<&str> = state
+            .worktree
+            .worktrees
+            .iter()
+            .map(|w| w.dir_name.as_str())
+            .collect();
+        dirs.sort_unstable();
+        assert_eq!(dirs, ["feat-a", "feat-b", "feat-c"], "{step}: worktrees");
+    };
+
+    // Welcome from A, then A's first push (the welcome does not sync worktrees).
+    note_lost_sessions(&mut state, A, &a_snapshot());
+    reconcile_catalog(&mut state, A, &a_snapshot(), false);
+    reconcile_catalog(&mut state, A, &a_snapshot(), true);
+    // B's welcome, B's pushes interleaved with A's, and B reconnecting.
+    note_lost_sessions(&mut state, B, &b_snapshot());
+    reconcile_catalog(&mut state, B, &b_snapshot(), false);
+    assert_full(&state, "after B's welcome");
+    for round in 0..3 {
+        reconcile_catalog(&mut state, B, &b_snapshot(), true);
+        assert_full(&state, &format!("after B's push {round}"));
+        reconcile_catalog(&mut state, A, &a_snapshot(), true);
+        assert_full(&state, &format!("after A's push {round}"));
+    }
+    note_lost_sessions(&mut state, B, &b_snapshot());
+    reconcile_catalog(&mut state, B, &b_snapshot(), false);
+    reconcile_catalog(&mut state, B, &b_snapshot(), true);
+    assert_full(&state, "after B reconnected");
+    assert!(
+        state.settings.lost_sessions.is_empty(),
+        "nothing is lost: every session is still listed by its own daemon"
+    );
+
+    // A's own omission still removes A's unbound session and worktree.
+    let mut fewer = a_snapshot();
+    fewer.projects[0]
+        .sessions
+        .retain(|s| s.id != s_default && s.id != s_c);
+    fewer.projects[0]
+        .worktrees
+        .retain(|w| w.dir_name != "feat-c");
+    reconcile_catalog(&mut state, A, &fewer, true);
+    let ids = session_ids(&state);
+    assert!(
+        !ids.contains(&s_default) && !ids.contains(&s_c),
+        "A archived them"
+    );
+    assert!(
+        !state
+            .worktree
+            .worktrees
+            .iter()
+            .any(|w| w.dir_name == "feat-c"),
+        "A removed feat-c"
+    );
+    assert!(state.workspace.sessions[&project]
+        .iter()
+        .any(|s| s.id == sb));
+}

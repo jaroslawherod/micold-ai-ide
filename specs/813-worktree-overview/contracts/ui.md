@@ -15,7 +15,8 @@ Sidebar and top bar stay. Sidebar `SessionMsg::Selected` closes it (FR-023).
 .selected(open).tooltip("Overview (Ctrl+Shift+O)")` (`Cmd+Shift+O` on macOS, from one
 `keymap::overview_chord_label()`), `.mark(..)` when `attention(cards)` is `Some`: an `UnreadMark`
 tinted `error` (NeedsAction) or `warning` (NeedsAttention), with the state's icon and the count,
-accessible label / tooltip line *N need action* / *N need attention*. Disabled while Settings is
+accessible label / tooltip line *1 needs action* / *N need action* / *1 needs attention* /
+*N need attention* (singular for a count of one, BUG-1493). Disabled while Settings is
 open (R2). Shown whether or not the Overview is open (FR-012).
 
 ## U3 — Shared components (`ui/material/`, builder API, showcase)

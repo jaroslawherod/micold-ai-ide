@@ -444,10 +444,10 @@ pub const SESSION_STRIP_ROW: &[usize] = &[0, 0, 1, 1, 1, 0];
 /// The keyed row of members inside the scrolling region: `EdgeFade` → stack → layer → viewport →
 /// row. No padding container since feature 027's trailing slack went (R9, R14).
 pub const SESSION_STRIP_TABS: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0];
-/// **New session**, the strip row's third child.
-pub const SESSION_STRIP_NEW_SESSION: &[usize] = &[0, 0, 1, 1, 1, 0, 2];
-/// The split buttons, the strip row's last child.
-pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
+/// **New session**, the strip row's controls group's second child (feature 1463).
+pub const SESSION_STRIP_NEW_SESSION: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 1];
+/// The split buttons, the controls group's last child.
+pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 2];
 
 /// The width the strip hands its scrolling region at the fixture's 1280dp window, as recorded: the
 /// running application learns it from `Scrollable::on_viewport_resize`, a hand-built state does not,
@@ -3706,7 +3706,7 @@ fn with_active_session() -> State {
 }
 
 /// `state` with `entry`'s Review tab made and shown, the header following it with its counts read.
-fn with_review_of(mut state: State, entry: SessionLocation) -> State {
+pub fn with_review_of(mut state: State, entry: SessionLocation) -> State {
     use micold_client::features::changes::{self, Load, Msg};
     changes::update(
         &mut state.changes,

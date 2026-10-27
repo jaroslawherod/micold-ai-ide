@@ -161,15 +161,10 @@ scene_hold_project() {
 }
 
 scene_start() {
-  local scheme="light" preference="" project=()
+  local scheme="light" project=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --scheme) scheme="$2"; shift 2 ;;
-      # The stored theme *preference*, when it has to differ from the scheme the frame is taken in.
-      # `auto` is the application's default and the one a reader starts from, and it renders light on
-      # a display that reports no preference of its own -- so a scene showing the theme control
-      # starts at `auto` in the light scheme, and the two are not the same statement.
-      --preference) preference="$2"; shift 2 ;;
       # Open the application on no project at all -- the empty state, which is the first thing a
       # reader ever sees and the one state the application will not return to on its own.
       --no-project) project=(--no-active); shift ;;
@@ -177,12 +172,6 @@ scene_start() {
     esac
   done
   case "$scheme" in light | dark) ;; *) scene_die "unknown scheme: $scheme" ;; esac
-  [ -n "$preference" ] || preference="$scheme"
-  case "$preference" in
-    auto) preference="follow_system" ;;
-    light | dark) ;;
-    *) scene_die "unknown theme preference: $preference" ;;
-  esac
 
   [ -n "${DISPLAY:-}" ] || scene_die "no DISPLAY -- source the file display.sh start prints"
   [ -n "${XDG_DATA_HOME:-}" ] || scene_die "no XDG_DATA_HOME -- source the display's env file"
@@ -223,11 +212,9 @@ scene_start() {
   # The scheme is forced rather than followed: `FollowSystem` on a bare X display with no desktop
   # portal is whatever the toolkit guesses, which is not a decision the published images should be
   # left to. A page in one scheme shows a screenshot taken in that scheme (FR-032), so the scheme is
-  # an input to the capture, not an observation of it. `--preference auto` is the exception, and a
-  # narrow one: the application resolves an unknown system preference to light, so the scheme is
-  # still decided here rather than guessed.
+  # an input to the capture, not an observation of it.
   mkdir -p "$XDG_DATA_HOME/micold-ai-ide"
-  printf '{\n  "settings_version": 4,\n  "theme": "%s"\n}\n' "$preference" \
+  printf '{\n  "settings_version": 4,\n  "theme": "%s"\n}\n' "$scheme" \
     >"$XDG_DATA_HOME/micold-ai-ide/settings.json"
 
   # The service answers "which AI CLIs can I run" at `debug`, and `scene_wait_providers` below has
@@ -367,55 +354,65 @@ scene_click() {
 # that lands on nothing produces a *plausible* frame rather than an error, the helpers that use them
 # check afterwards that the thing they asked for actually happened.
 #
+# Every y below is measured in a real capture of the 1440x900 window, under the 44 px title bar
+# (#1127, `anatomy::app_bar::HEIGHT` + its divider) -- `capture-harness.test.sh` checks the ones that
+# hang from the bar. Re-measure them when the layout moves: a click that lands on nothing makes a
+# plausible frame.
+#
 # The sidebar's rows, top to bottom: the project's own checkout, then the three worktrees
-# `demo-project.sh` creates, in the order the application lists them.
-scene_row_default=137
-scene_row_docs=183
-scene_row_feat=247
-scene_row_fix=311
+# `demo-project.sh` creates, in the order the application lists them. Each y is the row's name line,
+# which is also the line its actions are drawn on.
+scene_row_default=214
+scene_row_docs=277
+scene_row_feat=341
+scene_row_fix=405
 # Where the worktree `create-worktree.sh` makes lands. The list is ordered by the worktree's name,
 # not by when it was made, so "Route replay" arrives *between* the route planner and the telemetry
-# drift -- on the row `fix` was on, with `fix` pushed down to 375. A scene that assumed the new row
+# drift -- with `fix` pushed down to 505. The new worktree's `issue` chip wraps the filter row, which
+# moves every row down 36 from where it is before the form. A scene that assumed the new row
 # was appended at the bottom would start a session in the wrong worktree and photograph it.
-scene_row_new=311
+scene_row_new=441
 # A row draws its actions right-aligned while it is the pointer's or the selection's row. A named
 # worktree carries three (start a session, more, remove) and the default checkout carries two, so
 # "start a session" sits further left on the named ones -- which is the only one a scene wants.
 scene_action_start=234
-# The sidebar header's own controls, right to left from the edge: hide the sidebar (285), Run in
-# parallel (259, feature 483), add a worktree (233), attach an existing one (207) and refresh (181).
+# The sidebar header's own controls, on the line under the filter chips: the first of the three
+# (x=233) opens the New worktree form.
 scene_add_worktree_x=233
-scene_add_worktree_y=86
+scene_add_worktree_y=119
 # The New worktree form, which opens centred over the window. The type list overlays the form when
 # it is open, so its first row -- `feat` -- is below the closed control rather than beside it.
 scene_form_x=720
+# Type shares its line with the AI CLI picker, so it is the left half of the form, not the width.
+scene_form_type_x=598
 #
-# The dialog is centred, so every field it gains moves the others by half its height. The Daemon
-# picker (feature 491) sits below the name and adds one field and one gap (72), which lifts the three
-# fields above it by 36. Create is not clicked at all: the Name field submits on Return, which does
-# not depend on how tall the dialog is below the field the scene is typing in.
-scene_form_type_y=338
-scene_form_type_feat_y=397
-scene_form_ticket_y=410
-scene_form_name_y=502
-# The terminal's bottom bar, right to left: the AI tab, "open a new instance", and the numbered tab
-# each instance adds to the left of it.
-scene_tab_y=868
-scene_tab_ai_x=1355
-scene_tab_new_x=1244
+# The dialog is centred, so every field it gains moves the others by half its height (feature 491's
+# Daemon picker, the first-prompt field, the mode pills).
+# Create is not clicked at all: the Name field submits on Return, which does not depend on how tall
+# the dialog is below the field the scene is typing in.
+scene_form_type_y=334
+scene_form_type_feat_y=393
+scene_form_ticket_y=406
+scene_form_name_y=498
+# The session's tab strip, under the session header: the AI tab, then "open a new instance". Each
+# instance adds a numbered tab that pushes "+" right, so a scene returns by the AI tab's x, which
+# does not move.
+scene_tab_y=110
+scene_tab_ai_x=426
+scene_tab_new_x=570
 # The overflow menu in the title bar, and the item inside it a scene uses.
-scene_menu_x=1400
-scene_menu_y=32
+scene_menu_x=1407
+scene_menu_y=22
 scene_menu_settings_x=1262
-scene_menu_settings_y=145
+scene_menu_settings_y=76
 # The settings sections, down the left of the settings view.
 scene_settings_x=144
-scene_settings_appearance_y=93
+scene_settings_appearance_y=72
 # The first row of the known-projects list, and its "Open" -- the only way into a project that does
 # not go through the in-app folder browser, which would put the capture machine's own home directory
 # in a published frame (FR-013) and a different set of folders in each publication's (FR-011b).
 scene_project_open_x=1100
-scene_project_open_y=361
+scene_project_open_y=340
 
 # Take the pointer off every control before a frame.
 #

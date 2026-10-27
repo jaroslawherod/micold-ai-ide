@@ -127,7 +127,7 @@ pub use field_group::FieldGroup;
 pub use filter_panel::FilterTrigger;
 pub use form_field::beneath;
 pub use form_field::{FormField, Layer as FieldLayer};
-pub use give_way::GiveWay;
+pub use give_way::{GiveWay, GiveWayRow};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;

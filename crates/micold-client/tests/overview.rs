@@ -978,7 +978,7 @@ fn any_card_needing_action_gives_an_error_badge_counting_those_cards() {
             Some(Badge {
                 tone: Tone::Error,
                 count: 1,
-                label: "1 need action".to_string(),
+                label: "1 needs action".to_string(),
             }),
             "overview open: {open}; attention cards do not count beside action ones"
         );

@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
 - **Phase**: tasks
-- **Next step**: merge design PR #1469, then M1
+- **Next step**: wait on CI for the M2 PR, merge, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1469 | Design | open | |
+| #1469 | Design | merged | |
+| #1487 | M1 | merged | 304bfb4ffa97076810692dcbe28c9a135eb63cbf |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001, T003–T008 | full | One-line header | | pending |
-| M2 | T002, T009–T018 | full | Switch control in strip | | pending |
+| M1 | T001, T003–T008 | full | One-line header | #1487 | merged |
+| M2 | T002, T009–T018 | full | Switch control in strip | | in review |
 
 ## Decisions
 
@@ -41,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 451151bbdbb1400f41c955e69f57147b6becfb8f:134dd94f7895067bdc00f383b68a5f86cb23fac3 | CHANGES: 1 MAJOR, 3 MINOR (fixed) |
 | Plan | 2 | 40d70c4e315358c4e6e7ec4cbaa89d4fd3767ab7:134dd94f7895067bdc00f383b68a5f86cb23fac3 | CLEAN (1 MINOR fixed, prose only) |
 | Spec | 2 | 525d2bab4d47e0f8aa2a29f66b10650bbafa6b9b:15d62e891bb1292c94c58b585a0a975869c291dd | CLEAN (3 MINOR; ordering fixed, others left) |
+| M2 A (code-review high) | 1 | 1867cfd07858d4a7c36be3d0522c69194ce1ee37:d7e4a2ae4bdc3e2f1d70308c399b237583c386dd | CHANGES: 1 MAJOR (switch slot child list varied; fixed, always two children), 2 MINOR |
+| M2 B (conformance, sonnet) | 1 | same | CHANGES: BLOCKER was a mid-edit tree (fixed: cap +SM padding); MAJOR tiled gate weak (strengthened: position check); showcase_completeness red found by scoped gate (exemption for GiveWayRow) |
 
 ## Declined review findings
 
@@ -59,9 +62,11 @@ None.
 
 ## Open escalation
 
-blocked by work outside my flow (category 5). M1 is done and reviewed (A and B addressed, partial visual pass) but `mise run gate` is red on `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` ("the tree indents at the default width: cap 0"), and the push hook refuses code no green gate saw. It fails identically on `origin/main` source (session_area.rs and button.rs checked out from origin/main 308ab390a, same result), so it is not this diff; it measures text width, likely this machine's fonts. Everything else in the gate (fmt, clippy, all other tests) passed in the earlier runs. Question: how to push? Option A (Recommended): run the full gate where the test passes (CI or a machine with fonts), or let the orchestrator push the branch (6 commits, rebased on 308ab390a) and let CI decide. Option B: a separate fix of that test on main first. Nothing is pushed; no PR yet. PR body notes to write: review A and B findings in Declined section, Q1/Q2 amendments.
+None. (The M2 push block was stale: the remote branch was deleted after #1487 merged; M2 rebased cleanly onto origin/main and the full gate is green.)
 
 ## Follow-ups not done
+
+- M2 visual pass (m2-notes.md): at 640 the header title shrinks to ~3 px and Changes is cut; tiled panes' switch label wraps onto two lines at 640 and the second pane header clips; held-queue caption and PR chip not shown (no fixture); Review-tab close x clipped at 640. None blocks the criteria.
 
 - M1 visual pass was partial (dark only, 1600x1200 and 640x480 at the default sidebar; Xvfb/xdotool missing). Light scheme, 1280x800 and long-chip states unchecked; the label is cut at 640x480 as the user's Q1 answer allows. Screenshots in `visual-pass/`.
 

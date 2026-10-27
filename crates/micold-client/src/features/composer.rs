@@ -72,17 +72,34 @@ fn plain(press: &KeyInput) -> bool {
     !press.mods.ctrl && !press.mods.alt && !press.mods.logo
 }
 
+/// Ctrl+C alone, the terminal's interrupt (FR-012a). Shift, Alt or Logo with it is another key.
+fn is_ctrl_c(press: &KeyInput) -> bool {
+    press.mods.is_ctrl_only() && matches!(press.key, Key::Char('c' | 'C'))
+}
+
 /// What `press` means in a composer whose caret is at `caret` in a draft of `lines` lines, while
-/// an IME composition is open (`composing`) or not, for a session in `phase` (FR-002, FR-012,
+/// an IME composition is open (`composing`) or not, with text selected in the editor (`selecting`) or not,
+/// for a session in `phase` (FR-002, FR-012,
 /// FR-023). No key needs a platform modifier (R12).
 pub fn composer_key(
     press: &KeyInput,
     caret: (usize, usize),
     lines: usize,
     composing: bool,
+    selecting: bool,
     phase: TurnPhase,
 ) -> KeyIntent {
-    if composing || !plain(press) {
+    if composing {
+        return KeyIntent::Edit;
+    }
+    if is_ctrl_c(press) {
+        return if is_busy(phase) && !selecting {
+            KeyIntent::Interrupt
+        } else {
+            KeyIntent::Edit
+        };
+    }
+    if !plain(press) {
         return KeyIntent::Edit;
     }
     let Key::Named(named) = press.key else {
@@ -100,8 +117,12 @@ pub fn composer_key(
     }
 }
 
-/// What `press` means on a focused transcript: Escape interrupts a busy session (FR-012).
+/// What `press` means on a focused transcript: Escape and Ctrl+C interrupt a busy session
+/// (FR-012, FR-012a). The transcript selects no text, so Ctrl+C has nothing to copy there.
 pub fn transcript_key(press: &KeyInput, phase: TurnPhase) -> KeyIntent {
+    if is_ctrl_c(press) && is_busy(phase) {
+        return KeyIntent::Interrupt;
+    }
     match press.key {
         Key::Named(NamedKey::Escape) if plain(press) && !press.mods.shift && is_busy(phase) => {
             KeyIntent::Interrupt
