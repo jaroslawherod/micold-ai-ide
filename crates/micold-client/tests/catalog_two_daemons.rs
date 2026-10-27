@@ -396,6 +396,14 @@ fn another_daemons_session_at_an_unbound_location_stays_while_it_lists_it() {
     reconcile_catalog(&mut state, B, &b_snapshot(), false);
     listed(&state, "after B reconnected");
 
+    // B restarts without it: the live row stays, lost to B rather than dropped (FR-019).
+    note_lost_sessions(&mut state, B, &snapshot(vec![], vec![]));
+    reconcile_catalog(&mut state, B, &snapshot(vec![], vec![]), false);
+    assert!(session_ids(&state).contains(&s_u), "kept while lost");
+    assert!(state.settings.lost_sessions.contains(&s_u), "lost to B");
+    reconcile_catalog(&mut state, B, &b_snapshot(), true);
+    listed(&state, "after B listed it again");
+
     // B stops listing it (archived there): the row leaves, and A's next push keeps it gone.
     reconcile_catalog(&mut state, B, &snapshot(vec![], vec![]), true);
     assert!(!session_ids(&state).contains(&s_u), "B archived it");

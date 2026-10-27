@@ -209,6 +209,7 @@ pub fn reconcile_catalog(
         }
     }
     let lost = core.settings.lost_sessions.clone();
+    let mut listed = std::collections::HashMap::new();
     for project in &snapshot.projects {
         let list = core
             .workspace
@@ -317,12 +318,10 @@ pub fn reconcile_catalog(
                 || (lost.contains(&s.id) && !s.archived)
                 || theirs.contains(&s.id)
         });
-        core.settings
-            .listed_sessions
-            .entry(daemon)
-            .or_default()
-            .insert(project.path.clone(), snap_ids);
+        listed.insert(project.path.clone(), snap_ids);
     }
+    // Replaced whole: a project this daemon no longer lists holds none of its sessions.
+    core.settings.listed_sessions.insert(daemon, listed);
     // An id no session carries any more (removed or closed) is not lost to anything.
     let held: HashSet<SessionId> = core
         .workspace
