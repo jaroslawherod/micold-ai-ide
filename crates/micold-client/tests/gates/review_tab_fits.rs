@@ -4,11 +4,11 @@
 //! Every review state the contract lists, by the name its slice registered it under, in light and
 //! in dark, at `MIN_WINDOW_SIZE` and at the fixture's window: no text is painted wider than its
 //! clip; no node escapes its parent beyond the overhangs `gates/containment.rs` declares (and, at
-//! the smallest window, those [`SMALLEST_WINDOW`] declares, filed as #1474); the review
-//! bar ends at or above the status bar and both lie inside the window; an open drawer lies inside
-//! the diff pane, which is as wide as with the drawer closed (an overlay, not a push); the status
-//! bar keeps its invariants (`status_bar_fits.rs`); and the session area's header and strip fit
-//! (`session_area_fits.rs`).
+//! the smallest window, those [`SMALLEST_WINDOW`] declares, filed as #1474, and the cut header
+//! title of #1501); the review bar ends at or above the status bar and both lie inside the
+//! window; an open drawer lies inside the diff pane, which is as wide as with the drawer closed (an
+//! overlay, not a push); the status bar keeps its invariants (`status_bar_fits.rs`); and the
+//! session area's header and strip fit (`session_area_fits.rs`).
 //!
 //! **Compiled into the `layout_snapshot` binary** beside the gates whose checks it calls.
 
@@ -120,7 +120,7 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 /// is allowed. Each entry must keep firing in each of its states, or it is widening the gate
 /// silently: drop a state once its node fits there, and the entry once no state is left.
 ///
-/// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
+/// The first two are scrolling, not defects: content taller than the `Scrollable` that shows it,
 /// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
 /// filed as #1474 rather than fixed here (feature 1276 changes no review layout, spec § Out of
 /// Scope).
@@ -152,13 +152,6 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "bottom",
         "base",
         "the diff's Scrollable: lines past its viewport",
-    ),
-    (
-        &["review-source-open"],
-        "0/0/0/0/0/0/0/0/0/0",
-        "bottom",
-        "over",
-        "the source control's open list: rows past its viewport",
     ),
     (
         &[
@@ -274,6 +267,16 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     ),
 ];
 
+/// The session header's title text (`session.header`'s first line, feature 1463), whose ellipsis
+/// is painted past a title squeezed to a few pixels at the smallest window: filed as #1501, not a
+/// review layout. Allowed only there, only for the ellipsis, and it must keep firing.
+const HEADER_TITLE_TEXT: &str = "0/0/0/1/1/0/0/0/0";
+
+/// Whether `overflow`, in a review state at `window`, is the cut header title of #1501.
+fn header_title_cut(window: Size, overflow: &lay::Overflow) -> bool {
+    window == MIN_WINDOW_SIZE && overflow.content == "…" && overflow.node_path == HEADER_TITLE_TEXT
+}
+
 /// The [`SMALLEST_WINDOW`] entry `escape` falls under, in the state `name` at `window`.
 fn known_at(name: &str, window: Size, escape: &lay::Escape) -> Option<&'static str> {
     if window != MIN_WINDOW_SIZE {
@@ -343,7 +346,12 @@ fn findings(
 ) -> Vec<String> {
     let what = format!("{name} {theme:?} {window:?}");
     let build = covered(name).build;
-    let (overflows, records) = laid_out(build(), theme, window);
+    let (mut overflows, records) = laid_out(build(), theme, window);
+    let before = overflows.len();
+    overflows.retain(|o| !header_title_cut(window, o));
+    if overflows.len() < before {
+        fired.insert((name.to_string(), "#1501"));
+    }
     let mut found = Vec::new();
     let mut check = |holds: bool, finding: String| {
         if !holds {
@@ -456,6 +464,11 @@ fn every_review_state_fits_at_both_windows_in_both_themes() {
         silent.is_empty(),
         "these smallest-window exemptions, as (state, parent), no longer fire; drop them: \
          {silent:?}"
+    );
+    assert!(
+        fired.iter().any(|(_, entry)| *entry == "#1501"),
+        "the cut header title of #1501 no longer overflows at the smallest window; drop \
+         HEADER_TITLE_TEXT"
     );
     for (_, name, _) in REVIEW_STATES {
         assert_fits_under(name, covered(name).build);
