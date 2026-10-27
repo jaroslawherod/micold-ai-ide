@@ -46,7 +46,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit over the context cap after writing the plan. Done: plan.md, research.md (R1–R11),
+data-model.md, contracts/keys.md, contracts/ui.md, quickstart.md, committed at 0ae4673ae; plan
+review round 1 snapshot recorded (11f3d102…:0ae4673ae), reviewer not yet run. Next: run plan review
+round 1 (rubric `.claude/skills/speckit-autopilot/rubrics/plan.md`) on
+specs/1465-back-forward-navigation/{plan,research,data-model,quickstart}.md and contracts/; act on
+findings per review-rounds.md; then set Next step to `tasks unit`. Open findings: none yet.
 
 ## Open escalation
 
