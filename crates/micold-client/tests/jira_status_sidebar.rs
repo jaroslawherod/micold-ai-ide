@@ -12,11 +12,13 @@ use std::time::Duration;
 use iced::Element;
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::jira_status::linked_keys;
 use micold_client::features::sandbox::Sandbox;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection, ProjectKey};
-use micold_core::jira_status::{read_statuses, KeyedStatus, TicketStatus, Trigger};
+use micold_core::jira_status::{read_statuses, KeyedIssue, TicketStatus, Trigger};
+use micold_core::worktree::Worktree;
 use support::layout as lay;
 use support::sidebar_fixture::{deliver, listed, state_with_active};
 
@@ -36,8 +38,12 @@ fn status(name: &str, category: &str) -> Option<TicketStatus> {
     TicketStatus::from_jira(Some(name), Some(category))
 }
 
-fn read(key: &str, name: &str, category: &str) -> KeyedStatus {
-    (key.to_string(), status(name, category))
+fn read(key: &str, name: &str, category: &str) -> KeyedIssue {
+    KeyedIssue {
+        key: key.to_string(),
+        status: status(name, category),
+        summary: None,
+    }
 }
 
 fn secs(n: u64) -> Duration {
@@ -105,7 +111,11 @@ fn the_chip_stands_on_the_rows_second_line() {
 #[test]
 fn a_worktree_without_a_ticket_or_a_status_has_no_chip() {
     let mut state = state_with(&["fix-ABC-1_login", "chore-plain"]);
-    let source = FakeJiraSource::new().with_statuses(Ok(vec![("ABC-1".into(), None)]));
+    let source = FakeJiraSource::new().with_statuses(Ok(vec![KeyedIssue {
+        key: "ABC-1".into(),
+        status: None,
+        summary: None,
+    }]));
     let before = painted(&state);
     refresh(&mut state, &source, Trigger::Open, secs(0));
     assert!(state.jira_status.board.status_of("ABC-1").is_none());
@@ -245,4 +255,46 @@ fn a_changed_connection_drops_the_old_statuses_and_reads_again() {
     state.jira_status.connected(&other);
     assert!(state.jira_status.board.status_of("ABC-1").is_none());
     assert!(state.jira_status.open_pending);
+}
+
+// ---- Feature 1504 (T018): a Jira key only in the branch is read for its summary, not a chip ----
+
+/// A worktree whose folder names no ticket and whose branch names `ABC-42` (FR-002, FR-004).
+fn branch_only() -> Worktree {
+    let mut worktree = listed("project-thread-t2a600");
+    worktree.branch = Some("feat/ABC-42_login".into());
+    worktree
+}
+
+#[test]
+fn a_key_only_in_the_branch_gets_its_summary_but_no_chip_and_is_not_linked() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![branch_only(), listed("fix-ABC-1_login")]);
+    assert_eq!(
+        linked_keys(&state.worktree.worktrees, &project()),
+        vec!["ABC-1"]
+    );
+    let source = FakeJiraSource::new().with_statuses(Ok(vec![
+        KeyedIssue {
+            summary: Some("Linked summary".into()),
+            ..read("ABC-1", "To Do", "new")
+        },
+        KeyedIssue {
+            summary: Some("Branch summary".into()),
+            ..read("ABC-42", "In Progress", "indeterminate")
+        },
+    ]));
+    assert!(refresh(&mut state, &source, Trigger::Open, secs(0)));
+    assert_eq!(
+        source.status_calls(),
+        vec![vec!["ABC-1".to_string(), "ABC-42".to_string()]]
+    );
+    let board = &state.jira_status.board;
+    assert!(
+        board.status_of("ABC-42").is_none(),
+        "no status for a branch key"
+    );
+    assert_eq!(board.summary_of("ABC-42"), Some("Branch summary"));
+    assert!(shows(&state, "To Do"));
+    assert!(!shows(&state, "In Progress"), "no chip for the branch key");
 }

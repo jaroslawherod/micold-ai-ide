@@ -116,15 +116,20 @@ impl State {
         }
     }
 
-    /// The known issue title of a title ticket (feature 1504, FR-003): a GitHub issue's title,
-    /// once read. Every location title reads it here, through [`location_title`].
-    pub fn issue_title(&self, ticket: &TitleTicket, _board: &StatusBoard) -> Option<&str> {
+    /// The known issue title of a title ticket (feature 1504, FR-003, FR-004): a GitHub issue's
+    /// title, once read, or a Jira issue's summary, read with the statuses. Every location title
+    /// reads it here, through [`location_title`].
+    pub fn issue_title<'a>(
+        &'a self,
+        ticket: &TitleTicket,
+        board: &'a StatusBoard,
+    ) -> Option<&'a str> {
         match ticket {
             TitleTicket::Github(number) => match self.titles.get(number) {
                 Some(TitleLookup::Known(text)) => Some(text.as_str()),
                 _ => None,
             },
-            TitleTicket::Jira(_) => None,
+            TitleTicket::Jira(key) => board.summary_of(key),
         }
     }
 

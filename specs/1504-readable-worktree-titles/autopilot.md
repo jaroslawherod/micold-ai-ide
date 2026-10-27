@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M1 rebased on main, full gate green at 454b29a1d, pushed to claude/project-thread-t2a600; PR pending (orchestrator opens it from pr-title-m1.md / pr-body-m1.md)
-- **Next step**: orchestrator opens the M1 PR, records its number, waits on CI and merges; then M2.
+- **Phase**: M2 implemented on branch 1504-m2 (worktree /home/user/wt-1504-m2, stacked on M1 head ac5ada9ea; not pushed); review A and review B pending
+- **Next step**: orchestrator runs review A (code-review high) and review B (conformance) on `ac5ada9ea...HEAD`; then fix findings, full gate, PR (title/body in scratchpad pr-title-m2.md / pr-body-m2.md) once M1 #1566 merges
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1557 | design | merged | 24a2a839f |
+| #1566 | M1 | open | pending |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | pending | PR pending |
-| M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | pending |
+| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | #1566 | PR open |
+| M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | implemented, reviews pending |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
 | M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
@@ -59,6 +60,33 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CLEAN (1 MINOR: no TDD cycle log; red runs named in the PR body) |
 | M1 visual pass | 1 | 7fbb9ec20 | PASS: quickstart §B rows A, B and rename, light and dark (/mnt/project-files/issue-1504/) |
 | M1 review A (code-review, scoped) | 2 | d074ecd6fb6b943300885d215029a356dea395db:104b7ed0222554ea88387a5c7dc81eec981d4073 | CLEAN (F1–F3 fixed; `issue_ref` unchanged for callers); full gate green at 104b7ed02 |
+
+## Red runs (M2)
+
+Each new test was written before the code and run red; the red was a compile failure in every case,
+since the tests name the new `KeyedIssue`, `StatusBoard::begin(status, summary)`, `summary_of` and
+`branch_title_keys`:
+
+- `cargo test -p micold-core --lib jira_status` (T017): exit 101, 35 errors — 11× E0061 `begin`
+  takes 1 argument but 2 were supplied, 11× E0599 no method `summary_of` on `StatusBoard`, 5× E0422/
+  E0425 no `KeyedIssue`, 8× E0609 no field `key`/`status`/`summary` on the `(String,
+  Option<TicketStatus>)` tuple.
+- `cargo test -p micold-core --test jira_parse` (T017): exit 101, E0609 no field `key` / `summary`
+  on `(String, Option<TicketStatus>)` at `tests/jira_parse.rs:174`.
+- `cargo test -p micold-client --test features_jira_status --test jira_status_sidebar --test
+  jira_http_adapter --test overview --no-run` (T018–T020): exit 101 — E0432 unresolved import
+  `micold_core::jira_status::KeyedIssue`, E0061 `begin` arity (`tests/overview.rs:1502`), E0609 no
+  field `key`/`status` (`tests/jira_http_adapter.rs:349,350,375,603`). The T019 `fields` assertion
+  and the T018 `main_tests` gate test could not reach an assertion red behind the type change.
+
+Green: core lib `jira_status` 26 passed, `jira_parse` 12 passed; client `features_jira_status` 6,
+`jira_status_sidebar` 13, `jira_http_adapter` 35, `overview` 94, `features_sidebar` 105,
+`jira_status_overview` 5 passed.
+
+Placement notes: T020's card-and-row tests live in `tests/overview.rs` (beside M1's `card_and_row`
+helper, which builds the card and the row from one state) rather than `tests/features_sidebar.rs`;
+T018's "switch off or no connection sends nothing" case lives in `main_tests.rs`
+`jira_status_driver` (the gate is the shell's, `State::plan` never sees the switch).
 
 ## Declined review findings
 

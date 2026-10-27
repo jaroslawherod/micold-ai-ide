@@ -119,39 +119,39 @@ ticket gives its summary (FR-004).
 
 ### Tests — Jira summary (US1.2, US1.4)
 
-- [ ] T017 [P] [US1] Write failing core tests in `crates/micold-core/src/jira_status.rs` (and
+- [x] T017 [P] [US1] Write failing core tests in `crates/micold-core/src/jira_status.rs` (and
   `crates/micold-core/tests/jira_parse.rs` for the parser): `parse_statuses` reads
   `fields.summary` into `KeyedIssue { key, status, summary }`; `StatusBoard::begin(status_keys,
   summary_keys)` asks the union; on `Ok` statuses are stored for status keys only and summaries for
   every asked key; on `Err` summaries are kept like statuses until retired, then cleared; `clear()`
   drops both; `summary_of`; `Debug` of the board and of `KeyedIssue` omit summaries (L6, L9)
-- [ ] T018 [P] [US1] Write failing client tests: in `crates/micold-client/tests/features_jira_status.rs`
+- [x] T018 [P] [US1] Write failing client tests: in `crates/micold-client/tests/features_jira_status.rs`
   `State::plan` asks a branch-only Jira title ticket (folder without ticket, valid key of the
   connection's project) as a summary-only key, skips a key of another project, and asks it not
   at all (nothing sent to Jira) with the Jira switch off or no connection (FR-004, L6); in
   `crates/micold-client/tests/jira_status_sidebar.rs` that worktree shows no status chip and is
   not in `linked_keys` (FR-002, FR-004)
-- [ ] T019 [P] [US1] Write a failing assertion in `crates/micold-client/tests/jira_http_adapter.rs`
+- [x] T019 [P] [US1] Write a failing assertion in `crates/micold-client/tests/jira_http_adapter.rs`
   that the request body's `fields` contains `summary` beside `status` (L6)
-- [ ] T020 [P] [US1] Write failing tests in `crates/micold-client/tests/features_sidebar.rs`: a
+- [x] T020 [P] [US1] Write failing tests in `crates/micold-client/tests/features_sidebar.rs`: a
   folder Jira key with a summary on the board titles card and row with the summary (US1.2); with no
   summary (no connection, unknown key, failed read) the title falls through to the next source
   (US1.4)
 
 ### Implementation — Jira summary
 
-- [ ] T021 [US1] In `crates/micold-core/src/jira_status.rs`: `KeyedIssue` replaces `KeyedStatus`;
+- [x] T021 [US1] In `crates/micold-core/src/jira_status.rs`: `KeyedIssue` replaces `KeyedStatus`;
   `parse_statuses` reads `summary`; `StatusBoard` gains `summaries`, `status_keys`,
   `begin(status_keys, summary_keys)`, `summary_of`, hand-written `Debug` (data-model "jira_status");
   follow through `crates/micold-core/src/jira.rs` (`JiraSource::statuses` ~line 636/963, the fake's
   `with_statuses`/`script_statuses` ~lines 799–843)
-- [ ] T022 [US1] Ask `["status", "summary"]` in `read_chunk` of
+- [x] T022 [US1] Ask `["status", "summary"]` in `read_chunk` of
   `crates/micold-client/src/shell/jira_http.rs`
-- [ ] T023 [US1] Add `branch_title_keys(worktrees, project)` and pass it to `begin` from
+- [x] T023 [US1] Add `branch_title_keys(worktrees, project)` and pass it to `begin` from
   `State::plan` in `crates/micold-client/src/features/jira_status.rs`; give
   `State::issue_title` its Jira arm (`StatusBoard::summary_of`) in
   `crates/micold-client/src/features/overview.rs`
-- [ ] T024 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a Jira ticket's
+- [x] T024 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a Jira ticket's
   summary is the title, read with the status request under the same switch; a key only in the
   branch gets no status chip
 

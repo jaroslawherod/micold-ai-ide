@@ -339,21 +339,22 @@ fn keys_of(body: &str) -> Vec<String> {
 }
 
 #[test]
-fn a_status_request_asks_for_the_keys_and_only_the_status_field() {
+fn a_status_request_asks_for_the_keys_and_only_the_status_and_summary_fields() {
     let (origin, rx) = serve_each(vec![ok(&status_body(&[("ABC-1", "Done")]))]);
     let keys = vec!["ABC-1".to_string(), "abc-2".to_string()];
     let got = JiraCloud::new()
         .statuses(&connection(&origin), &token(), &keys)
         .expect("statuses");
     assert_eq!(got.len(), 1);
-    assert_eq!(got[0].0, "ABC-1");
-    assert_eq!(got[0].1.as_ref().unwrap().name, "Done");
+    assert_eq!(got[0].key, "ABC-1");
+    assert_eq!(got[0].status.as_ref().unwrap().name, "Done");
     let body: serde_json::Value = serde_json::from_str(&rx.recv().unwrap()).unwrap();
     assert_eq!(
         body["jql"],
         r#"project = "ABC" AND key in ("ABC-1","ABC-2") ORDER BY key ASC"#
     );
-    assert_eq!(body["fields"], serde_json::json!(["status"]));
+    // Feature 1504 (T019, L6): the summary is read with the status, in the same request.
+    assert_eq!(body["fields"], serde_json::json!(["status", "summary"]));
     assert_eq!(body["maxResults"], 2);
 }
 
@@ -371,7 +372,7 @@ fn a_400_bisects_the_chunk_and_a_key_alone_in_a_400_is_absent() {
     let got = JiraCloud::new()
         .statuses(&connection(&origin), &token(), &keys)
         .expect("statuses");
-    let names: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
+    let names: Vec<&str> = got.iter().map(|issue| issue.key.as_str()).collect();
     assert_eq!(names, ["ABC-1", "ABC-3", "ABC-4"]);
     let asked: Vec<Vec<String>> = (0..5).map(|_| keys_of(&rx.recv().unwrap())).collect();
     assert_eq!(asked[1], ["ABC-1", "ABC-2"]);
@@ -599,7 +600,7 @@ fn a_400_with_a_body_still_bisects_a_status_chunk() {
     let got = JiraCloud::new()
         .statuses(&connection(&origin), &token(), &keys)
         .expect("statuses");
-    let names: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
+    let names: Vec<&str> = got.iter().map(|issue| issue.key.as_str()).collect();
     assert_eq!(names, ["ABC-1"]);
 }
 
