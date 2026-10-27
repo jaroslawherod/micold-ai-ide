@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
 - **Phase**: plan
-- **Next step**: escalation open (plan review round limit); then tasks unit
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -29,6 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+
+- Plan review round limit (3 rounds, MAJOR in round 3: /shortcuts needs DraftCommand::Shortcuts and a daemon arm): accept the amended plan D7 without re-review. decided by user.
 
 ## Review rounds
 
@@ -52,7 +54,7 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-Plan review hit the 3-round limit with a MAJOR still found in round 3 (category 5). The round-3 finding was fixed in plan.md D7 (DraftCommand::Shortcuts, classify_draft branch, daemon state.rs arm, crates/ paths) but not re-reviewed. Question: accept the amended plan as is (Recommended: the fix is mechanical and was specified by the reviewer), or run one more review round, or replace the /shortcuts App command with a simpler sheet entry point (no core/daemon change).
+None.
 
 ## Follow-ups not done
 
