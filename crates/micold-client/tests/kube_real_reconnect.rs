@@ -45,18 +45,7 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
         wait_for(&mut conn, &mut seen, "TICK-2", 60).await,
         "the session runs: {seen}"
     );
-    let pod_before = kubectl(
-        &[
-            "-n",
-            &ns.0,
-            "get",
-            "pods",
-            "-o",
-            "jsonpath={.items[*].metadata.uid}",
-        ],
-        None,
-    )
-    .unwrap();
+    let pod_before = pod_uids(&ns.0);
     // The tunnel drops and the client goes away.
     drop(conn);
     drop(relay);
@@ -72,18 +61,7 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
     let micold_core::connect::Connected::Ready(mut conn, _welcome) = connected else {
         panic!("refused")
     };
-    let pod_after = kubectl(
-        &[
-            "-n",
-            &ns.0,
-            "get",
-            "pods",
-            "-o",
-            "jsonpath={.items[*].metadata.uid}",
-        ],
-        None,
-    )
-    .unwrap();
+    let pod_after = pod_uids(&ns.0);
     assert_eq!(pod_before, pod_after, "no new pod");
     let mut after = String::new();
     view(&mut conn, &work.project, work.session).await;

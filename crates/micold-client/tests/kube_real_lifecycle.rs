@@ -9,17 +9,9 @@ use std::collections::BTreeSet;
 use kube_real_support::*;
 use micold_core::kube::lifecycle;
 use micold_core::kube::names::ResourceNames;
-use micold_core::kube::Cluster;
 use micold_core::session::AiCli;
 
 const NAME: &str = "Lifecycle box";
-
-async fn cluster() -> std::sync::Arc<dyn Cluster> {
-    let connect = &client().env.connect;
-    connect(CONTEXT.to_string())
-        .await
-        .expect("connect to the cluster")
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn kube_real_stop_keeps_the_worktree_and_remove_leaves_nothing() {
@@ -39,7 +31,7 @@ async fn kube_real_stop_keeps_the_worktree_and_remove_leaves_nothing() {
     let _work = work(&mut conn, suite, &mut seen).await;
     drop(conn);
     drop(relay);
-    let live = cluster().await;
+    let live = connect_cluster().await;
     lifecycle::stop(&*live, &ns.0, &names).await.expect("stop");
     let pods = kubectl(&["-n", &ns.0, "get", "pods", "-o", "name"], None).unwrap();
     assert!(pods.trim().is_empty(), "the pod is gone: {pods}");

@@ -148,6 +148,8 @@ daemon code (M3) is platform-neutral and tested on all three CI platforms.
 - [ ] T033 Quickstart B2 (two concurrent setups of this repository, the waiting line, `rustup component list --installed` lists all three components, `cargo build` in both sessions at once succeeds (edge case "Several sessions on one daemon"), Stop setup on a waiting run) and B6 (Kubernetes pod), recorded in the ledger.
 
 _T032 and T033 are carried past the M4 PR (ledger D14): they run after T042 publishes and pins the image, by the owner locally (B6 on his cluster), and stay open until then._
+
+_B6 (T033's Kubernetes part, T041's first half) is automated in CI's kind job (`kube-cluster`) as `crates/micold-client/tests/kube_real_toolchain.rs`, per the owner's "for kubernetes setup use kind" (ledger D19, 2026-10-27); pending CI: ticked only once that job has run it green._
 ---
 
 ## Phase 10: User Story 5 — an AI session installs the build tools it needs itself, and they stay (Priority: P1; amendment 2026-10-26)
@@ -168,7 +170,7 @@ _T032 and T033 are carried past the M4 PR (ledger D14): they run after T042 publ
 - [x] T038 [US5] `crates/micold-core/src/sandbox/toolchain_path.rs`: pure `install_env_defaults(home, is_set)` per plan D8 / contract I2 (no filesystem access, like `toolchain_path`).
 - [x] T039 [US5] `crates/micold-daemon/src/state.rs` `with_sandbox_path`: after ordering `PATH`, append `install_env_defaults` to `resolved.vars`, using the function's existing `var` closure for `HOME` and for `is_set` (plan D8). No protocol change; host and remote daemons unchanged.
 - [x] T040 [US5] `docs/user-guide/sandboxed-daemon.md` "Tools installed in the sandbox's home": the paragraph of plan D6 (M5): a session installs user-level tools itself, the three defaults and that the environment's own value wins, installs persist across restarts, image updates and pod recreation for the life of the daemon, a tool built against an image library (a `cargo install` linking OpenSSL, an npm native module) may need reinstalling after an image update, session installs are not serialised (rerun a failed one), system packages come from the image or an own image (FR-018).
-- [ ] T041 Quickstart B6 second half (AS5.5: a session's installs survive the pod's recreation) and B7 (macOS and Windows hosts), recorded in the ledger.
+- [ ] T041 Quickstart B6 second half (AS5.5: a session's installs survive the pod's recreation) and B7 (macOS and Windows hosts), recorded in the ledger. B6 second half: `kube_real_toolchain` in the kind job (D19), pending CI.
 
 ---
 

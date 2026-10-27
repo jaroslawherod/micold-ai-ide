@@ -722,3 +722,27 @@ pub fn labelled(namespace: &str, kinds: &str) -> Vec<String> {
     .map(str::to_string)
     .collect()
 }
+
+/// The live cluster, connected as a client connects.
+pub async fn connect_cluster() -> Arc<dyn Cluster> {
+    let connect = &client().env.connect;
+    connect(CONTEXT.to_string())
+        .await
+        .expect("connect to the cluster")
+}
+
+/// The uids of the pods in `namespace`, space separated: a recreated pod has a new one.
+pub fn pod_uids(namespace: &str) -> String {
+    kubectl(
+        &[
+            "-n",
+            namespace,
+            "get",
+            "pods",
+            "-o",
+            "jsonpath={.items[*].metadata.uid}",
+        ],
+        None,
+    )
+    .expect("list the pods")
+}
