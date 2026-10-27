@@ -2761,6 +2761,6 @@ mod setup_wire_tests {
     #[test]
     fn the_setup_messages_bump_the_protocol_to_70() {
         // #1475 took 71 after it.
-        assert!(PROTOCOL_VERSION >= 70);
+        const { assert!(PROTOCOL_VERSION >= 70) };
     }
 }
