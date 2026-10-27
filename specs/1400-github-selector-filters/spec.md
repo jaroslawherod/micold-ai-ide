@@ -162,7 +162,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **A result outside the scope**: an issue of another repository, or a pull request, in GitHub's answer is dropped from the list whatever the query.
 - **Running a new query or changing a filter while a request is in flight**: the earlier result is discarded; only the latest filter's result or error is shown. Switching mode, switching source to Jira, closing the form or turning GitHub issues off discards an in-flight result (034 FR-007a).
 - **Rapid filter changes**: several changes in a row produce a correct final list for the last combination; no intermediate result is shown after a later one.
-- **Switching source to Jira and back**: the GitHub mode, basic filters and draft (with any unrun edits, FR-002) are kept, and the search text clears (034 behaviour); the list reloads with the active filter.
+- **Switching source to Jira and back**: the GitHub mode, basic filters and draft (with any unrun edits, FR-002) are kept, and the search text clears (034 behaviour); the list reloads with the active filter (in advanced mode, re-run the last run query, not the draft).
 - **GitHub issues switched off (1102)**: no filter control is shown and no request is made; the remembered state is kept, not deleted.
 - **Two windows on the same project**: each window's form keeps its own filters, query and list while open; the remembered state is the latest written by either (last write wins). A window whose form is open does not change when the other window writes.
 - **Remembered state unreadable or missing**: the form opens in basic mode with the default filter; nothing else is affected.
