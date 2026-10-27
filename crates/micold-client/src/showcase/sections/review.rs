@@ -191,6 +191,15 @@ static UNIFIED: LazyLock<FileDiff> = LazyLock::new(|| {
     )
 });
 
+/// A diff with a line far wider than any pane: a long markdown paragraph, added (#1466).
+static LONG_LINE: LazyLock<FileDiff> = LazyLock::new(|| {
+    let paragraph: String = (1..=60)
+        .map(|n| format!("sentence{n:02} runs on and on"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    parse_unified(format!("@@ -1,2 +1,3 @@\n # Notes\n+{paragraph}, THE END\n \n").as_bytes())
+});
+
 /// The file before and after [`UNIFIED`], so the coloured poses highlight real versions: the nine
 /// lines in front of the hunk put the highlighter inside `fn render` by line 10, as in a real file.
 const BEFORE: &str = "use crate::view::View;\n\n/// Draws `view` and marks it finished.\n#[inline]\n\
@@ -319,6 +328,17 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
             posed(
                 "hidden lines, side by side",
                 hidden(DiffLayout::SideBySide),
+                roles,
+            ),
+            posed(
+                "long line, unified — scroll it sideways",
+                pose(&LONG_LINE),
+                roles,
+            ),
+            posed(
+                "long line, side by side",
+                container(DiffView::new(&LONG_LINE, DiffLayout::SideBySide, roles))
+                    .height(Length::Fixed(DIFF_HEIGHT)),
                 roles,
             ),
             posed("binary message", pose(&BINARY), roles),
