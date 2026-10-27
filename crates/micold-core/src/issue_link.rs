@@ -50,11 +50,16 @@ impl std::fmt::Debug for IssueLink {
 /// The issue a worktree directory's name names: its ticket (`naming::ticket`) when it is all
 /// digits (GitHub) or a Jira key; `None` otherwise.
 pub fn issue_ref(dir_name: &str) -> Option<IssueRef> {
-    let ticket = crate::naming::ticket(dir_name)?;
-    if ticket.chars().all(|c| c.is_ascii_digit()) {
+    ticket_ref(&crate::naming::ticket(dir_name)?)
+}
+
+/// A ticket as written, classified: all digits is a GitHub issue, the Jira key form a Jira issue
+/// (upper-cased), anything else `None`.
+pub fn ticket_ref(ticket: &str) -> Option<IssueRef> {
+    if !ticket.is_empty() && ticket.chars().all(|c| c.is_ascii_digit()) {
         return ticket.parse().ok().map(IssueRef::Github);
     }
-    is_jira_key(&ticket).then(|| IssueRef::Jira(ticket.to_ascii_uppercase()))
+    is_jira_key(ticket).then(|| IssueRef::Jira(ticket.to_ascii_uppercase()))
 }
 
 /// The Jira key form, ignoring case: a letter, then letters, digits or `_`, then `-` and a

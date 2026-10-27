@@ -22,6 +22,10 @@ skipped. Only one issue source can apply: the title ticket is either a number or
 | `wt` | `fix/some_bug` | none (`some` is neither) |
 | `claude-project-thread-7041o6` | `claude/project-thread-7041o6` | none |
 | `wt` | none (detached) | none |
+| `login_fix` | `feat/1504_x` | `Github(1504)` (a folder ticket of neither kind leaves the branch) |
+| `wt` | `jh/1504_x` | `Github(1504)` (a namespace that is no conventional type is skipped) |
+| `wt` | `jh/ABC-42_login` | `Jira("ABC-42")` |
+| `feat-R2D2-5_x` | any | `Jira("R2D2-5")` (Jira key rule of `issue_link`: a letter, then letters, digits or `_`) |
 
 The linked ticket (sidebar issue tag, Jira chip, Jira status keys) is unchanged: folder only.
 
