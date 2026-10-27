@@ -15750,15 +15750,16 @@ mod jira_status_driver {
 
     /// Switch on, connected, token stored, a worktree linked to `ABC-1`, the project just opened.
     fn rig() -> Rig {
-        rig_answering(Ok(vec![(
-            "ABC-1".to_string(),
-            TicketStatus::from_jira(Some("In Progress"), Some("indeterminate")),
-        )]))
+        rig_answering(Ok(vec![micold_core::jira_status::KeyedIssue {
+            key: "ABC-1".to_string(),
+            status: TicketStatus::from_jira(Some("In Progress"), Some("indeterminate")),
+            summary: None,
+        }]))
     }
 
     fn rig_answering(
         answer: Result<
-            Vec<micold_core::jira_status::KeyedStatus>,
+            Vec<micold_core::jira_status::KeyedIssue>,
             micold_core::github::IssueLoadError,
         >,
     ) -> Rig {
@@ -15823,6 +15824,32 @@ mod jira_status_driver {
             on_focus(&mut rig);
             assert!(rig.source.status_calls().is_empty());
             assert!(!chip(&rig));
+        }
+    }
+
+    /// Feature 1504 (T018, FR-004, L6): a Jira key only in a branch is asked under the same gate
+    /// as the statuses; with the switch off or no connection nothing goes to Jira.
+    #[test]
+    fn a_branch_only_jira_key_is_asked_only_through_the_gate() {
+        let branch_only = |app: &mut App| {
+            let worktree = &mut app.core.worktree.worktrees[0];
+            worktree.dir_name = "project-thread-t2a600".into();
+            worktree.branch = Some("feat/ABC-42_login".into());
+        };
+        let mut rig = rig();
+        branch_only(&mut rig.app);
+        after_update(&mut rig);
+        assert_eq!(rig.source.status_calls(), vec![vec!["ABC-42".to_string()]]);
+        for off in [
+            |app: &mut App| app.core.settings.jira_enabled = false,
+            |app: &mut App| app.core.settings.jira_connections.clear(),
+        ] {
+            let mut rig = rig();
+            branch_only(&mut rig.app);
+            off(&mut rig.app);
+            after_update(&mut rig);
+            on_focus(&mut rig);
+            assert!(rig.source.status_calls().is_empty());
         }
     }
 

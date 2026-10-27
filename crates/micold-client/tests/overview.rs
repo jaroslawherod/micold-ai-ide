@@ -1474,6 +1474,101 @@ fn the_card_and_the_row_agree_and_a_rename_wins_in_the_row() {
     assert_eq!(root.title_source, TitleSource::Folder);
 }
 
+// ---- Feature 1504 (US1.2, US1.4, T020): a Jira title ticket's summary titles the worktree ----
+
+const JIRA_FOLDER: &str = "feat-ABC-42_login";
+const JIRA_BRANCH_ONLY: &str = "jira-thread-t2a600";
+
+fn jira_ticketed() -> State {
+    project_with(vec![
+        worktree(
+            JIRA_FOLDER,
+            Some("feat/ABC-42_login"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+        worktree(
+            JIRA_BRANCH_ONLY,
+            Some("fix/ABC-43_crash"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+    ])
+}
+
+/// Answer one Jira read of `summaries` the way the status driver applies it, at `now` seconds;
+/// `None` answers with a failure.
+fn jira_read(state: &mut State, summaries: Option<&[(&str, &str)]>, now: u64) {
+    use micold_core::jira_status::KeyedIssue;
+    let (epoch, asked) = state
+        .jira_status
+        .board
+        .begin(vec!["ABC-42".into()], vec!["ABC-43".into()])
+        .expect("keys to read");
+    let result = summaries
+        .map(|pairs| {
+            pairs
+                .iter()
+                .map(|(key, summary)| KeyedIssue {
+                    key: key.to_string(),
+                    status: None,
+                    summary: Some(summary.to_string()),
+                })
+                .collect()
+        })
+        .ok_or(micold_core::github::IssueLoadError::RateLimited);
+    state
+        .jira_status
+        .board
+        .apply(epoch, &asked, result, std::time::Duration::from_secs(now));
+}
+
+/// US1.2, FR-004: a folder's Jira key and a branch's (folder without a ticket) are titled by
+/// their summaries, on the card and the row alike.
+#[test]
+fn a_jira_summary_titles_the_card_and_the_row() {
+    let mut state = jira_ticketed();
+    jira_read(
+        &mut state,
+        Some(&[("ABC-42", "Login rate limit"), ("ABC-43", "Crash on save")]),
+        0,
+    );
+    let ticket = title_ticket(JIRA_FOLDER, Some("feat/ABC-42_login")).unwrap();
+    assert_eq!(
+        state
+            .overview
+            .issue_title(&ticket, &state.jira_status.board),
+        Some("Login rate limit")
+    );
+    for (dir, want) in [
+        (JIRA_FOLDER, "Login rate limit"),
+        (JIRA_BRANCH_ONLY, "Crash on save"),
+    ] {
+        let (card_title, row) = card_and_row(&state, dir, None);
+        assert_eq!((card_title.as_str(), row.as_str()), (want, want), "{dir}");
+    }
+}
+
+/// US1.4, FR-001: with no summary (nothing read, a key Jira does not return, a failed read the
+/// board retired) the title falls through to the branch.
+#[test]
+fn without_a_jira_summary_the_title_falls_through_to_the_branch() {
+    let mut state = jira_ticketed();
+    let branch = |state: &State| card_and_row(state, JIRA_FOLDER, None);
+    let expected = (
+        "feat/ABC-42_login".to_string(),
+        "feat/ABC-42_login".to_string(),
+    );
+    assert_eq!(branch(&state), expected, "no connection: nothing read");
+    jira_read(&mut state, Some(&[("ABC-43", "Crash on save")]), 0);
+    assert_eq!(branch(&state), expected, "an unknown key is not returned");
+    jira_read(&mut state, Some(&[("ABC-42", "Login rate limit")]), 1);
+    for n in 0..3 {
+        jira_read(&mut state, None, 2 + n);
+    }
+    assert_eq!(branch(&state), expected, "failed reads retired the summary");
+}
+
 /// US4.2, US4.3: the phase and ratio come from the files, the card state and the pull request;
 /// the ledger wins.
 #[test]

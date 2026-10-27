@@ -162,3 +162,20 @@ fn the_status_name_and_category_are_read_and_a_missing_status_is_none() {
     assert_eq!(done.category, Some(StatusCategory::Done));
     assert_eq!(by_key(&page.issues, "ABC-126").status(), None);
 }
+
+/// Feature 1504 (T017, L6): a status read carries each issue's summary beside its status.
+#[test]
+fn a_status_read_carries_the_summary_beside_the_status() {
+    use micold_core::jira_status::parse_statuses;
+    let body = br#"{"issues":[
+        {"key":"ABC-42","fields":{"summary":"Add login rate limit","status":{"name":"In Review","statusCategory":{"key":"indeterminate"}}}},
+        {"key":"ABC-43","fields":{"status":{"name":"To Do","statusCategory":{"key":"new"}}}}]}"#;
+    let read = parse_statuses(body).expect("a status read");
+    assert_eq!(read[0].key, "ABC-42");
+    assert_eq!(read[0].summary.as_deref(), Some("Add login rate limit"));
+    assert_eq!(
+        read[0].status.as_ref().map(|s| s.name.as_str()),
+        Some("In Review")
+    );
+    assert_eq!(read[1].summary, None);
+}

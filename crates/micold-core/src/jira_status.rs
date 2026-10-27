@@ -59,7 +59,7 @@ impl TicketStatus {
     }
 }
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use crate::github::IssueLoadError;
@@ -120,12 +120,31 @@ pub fn statuses_jql(project: &ProjectKey, keys: &[String]) -> Vec<StatusQuery> {
         .collect()
 }
 
-/// One ticket's key and its usable status.
-pub type KeyedStatus = (String, Option<TicketStatus>);
+/// One ticket as a status read returns it: its key, its usable status and its summary (feature
+/// 1504, data-model "jira_status"). `Debug` leaves the summary out: it is the issue's text (L9).
+#[derive(Clone, PartialEq, Eq)]
+pub struct KeyedIssue {
+    /// The issue key, as Jira returns it.
+    pub key: String,
+    /// The usable status, if any.
+    pub status: Option<TicketStatus>,
+    /// The issue's summary, trimmed; `None` when blank or absent.
+    pub summary: Option<String>,
+}
+
+impl std::fmt::Debug for KeyedIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyedIssue")
+            .field("key", &self.key)
+            .field("status", &self.status)
+            .field("has_summary", &self.summary.is_some())
+            .finish()
+    }
+}
 
 /// Parse the body of a status search (contracts/jira-status-source.md §4). Non-JSON, or no `issues`
 /// array, is [`IssueLoadError::NotJiraCloud`].
-pub fn parse_statuses(body: &[u8]) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+pub fn parse_statuses(body: &[u8]) -> Result<Vec<KeyedIssue>, IssueLoadError> {
     let json: serde_json::Value =
         serde_json::from_slice(body).map_err(|_| IssueLoadError::NotJiraCloud)?;
     let nodes = json["issues"]
@@ -135,14 +154,20 @@ pub fn parse_statuses(body: &[u8]) -> Result<Vec<KeyedStatus>, IssueLoadError> {
         .iter()
         .filter_map(|node| {
             let key = node["key"].as_str()?.to_string();
-            let status = &node["fields"]["status"];
-            Some((
+            let fields = &node["fields"];
+            let status = &fields["status"];
+            Some(KeyedIssue {
                 key,
-                TicketStatus::from_jira(
+                status: TicketStatus::from_jira(
                     status["name"].as_str(),
                     status["statusCategory"]["key"].as_str(),
                 ),
-            ))
+                summary: fields["summary"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|summary| !summary.is_empty())
+                    .map(str::to_string),
+            })
         })
         .collect())
 }
@@ -154,7 +179,7 @@ pub fn read_statuses(
     conn: &JiraConnection,
     token: &ApiToken,
     keys: &[String],
-) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+) -> Result<Vec<KeyedIssue>, IssueLoadError> {
     let mut out = Vec::new();
     for query in statuses_jql(&conn.project_key, keys) {
         out.extend(source.statuses(conn, token, &query.keys)?);
@@ -180,10 +205,16 @@ pub struct StatusEntry {
     pub stale: bool,
 }
 
-/// The statuses of the open project's linked tickets, read by every surface (FR-010).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// The statuses of the open project's linked tickets, read by every surface (FR-010), and the
+/// summaries of every ticket asked, linked or a title ticket found only in a branch (feature 1504,
+/// FR-004). `Debug` leaves the summaries out (L9).
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct StatusBoard {
     entries: BTreeMap<String, StatusEntry>,
+    summaries: BTreeMap<String, String>,
+    /// The keys of the read in flight whose status is shown; the others are asked for their
+    /// summary only.
+    status_keys: BTreeSet<String>,
     /// Time since the Unix epoch of the last `Ok` read.
     pub last_read: Option<Duration>,
     /// Consecutive failed refreshes.
@@ -191,6 +222,20 @@ pub struct StatusBoard {
     /// A request is out.
     pub in_flight: bool,
     epoch: u64,
+}
+
+impl std::fmt::Debug for StatusBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StatusBoard")
+            .field("entries", &self.entries)
+            .field("summaries", &self.summaries.len())
+            .field("status_keys", &self.status_keys)
+            .field("last_read", &self.last_read)
+            .field("failures", &self.failures)
+            .field("in_flight", &self.in_flight)
+            .field("epoch", &self.epoch)
+            .finish()
+    }
 }
 
 impl StatusBoard {
@@ -207,22 +252,36 @@ impl StatusBoard {
         }
     }
 
-    /// Start a read of `keys`: the epoch to answer with and the keys, or `None` when there are none.
-    pub fn begin(&mut self, keys: Vec<String>) -> Option<(u64, Vec<String>)> {
+    /// Start a read of `status_keys` (their status is shown) and `summary_keys` (asked for their
+    /// summary only): the epoch to answer with and the union of both, each once, or `None` when
+    /// there are none.
+    pub fn begin(
+        &mut self,
+        status_keys: Vec<String>,
+        summary_keys: Vec<String>,
+    ) -> Option<(u64, Vec<String>)> {
+        let mut keys = status_keys.clone();
+        for key in summary_keys {
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
         if keys.is_empty() {
             return None;
         }
+        self.status_keys = status_keys.into_iter().collect();
         self.in_flight = true;
         Some((self.epoch, keys))
     }
 
     /// Take the answer of a read begun in `epoch` for `asked`. An answer from before a
-    /// [`clear`](Self::clear) is dropped.
+    /// [`clear`](Self::clear) is dropped. A status is kept for a status key only; a summary for
+    /// every asked key.
     pub fn apply(
         &mut self,
         epoch: u64,
         asked: &[String],
-        result: Result<Vec<KeyedStatus>, IssueLoadError>,
+        result: Result<Vec<KeyedIssue>, IssueLoadError>,
         now: Duration,
     ) {
         if epoch != self.epoch {
@@ -233,11 +292,17 @@ impl StatusBoard {
             Ok(read) => {
                 for key in asked {
                     self.entries.remove(key);
+                    self.summaries.remove(key);
                 }
-                for (key, status) in read {
-                    if let (true, Some(status)) = (asked.contains(&key), status) {
+                for issue in read.into_iter().filter(|issue| asked.contains(&issue.key)) {
+                    if let Some(summary) = issue.summary {
+                        self.summaries.insert(issue.key.clone(), summary);
+                    }
+                    if let (true, Some(status)) =
+                        (self.status_keys.contains(&issue.key), issue.status)
+                    {
                         self.entries.insert(
-                            key,
+                            issue.key,
                             StatusEntry {
                                 status,
                                 stale: false,
@@ -252,6 +317,7 @@ impl StatusBoard {
                 self.failures = self.failures.saturating_add(1);
                 if self.failures >= FAILURES_BEFORE_RETIRING {
                     self.entries.clear();
+                    self.summaries.clear();
                 } else {
                     for entry in self.entries.values_mut() {
                         entry.stale = true;
@@ -265,6 +331,8 @@ impl StatusBoard {
     /// way is dropped.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.summaries.clear();
+        self.status_keys.clear();
         self.last_read = None;
         self.failures = 0;
         self.in_flight = false;
@@ -273,12 +341,18 @@ impl StatusBoard {
 
     /// Nothing held and nothing out: a [`clear`](Self::clear) would change nothing.
     pub fn is_idle(&self) -> bool {
-        self.entries.is_empty() && !self.in_flight
+        self.entries.is_empty() && self.summaries.is_empty() && !self.in_flight
     }
 
     /// The status of `key`: the one read path of every surface (FR-010).
     pub fn status_of(&self, key: &str) -> Option<&StatusEntry> {
         self.entries.get(key)
+    }
+
+    /// The summary of `key`, read with the statuses (feature 1504, FR-004): the one read path of
+    /// a Jira title ticket's title.
+    pub fn summary_of(&self, key: &str) -> Option<&str> {
+        self.summaries.get(key).map(String::as_str)
     }
 }
 
@@ -400,18 +474,22 @@ mod tests {
             {"key":"ABC-3","fields":{}}]}"#;
         let parsed = parse_statuses(body).unwrap();
         assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[0].key, "ABC-1");
         assert_eq!(
-            parsed[0],
-            (
-                "ABC-1".to_string(),
-                Some(TicketStatus {
-                    name: "In Review".into(),
-                    category: Some(StatusCategory::InProgress)
-                })
-            )
+            parsed[0].status,
+            Some(TicketStatus {
+                name: "In Review".into(),
+                category: Some(StatusCategory::InProgress)
+            })
         );
-        assert_eq!(parsed[1], ("ABC-2".to_string(), None));
-        assert_eq!(parsed[2], ("ABC-3".to_string(), None));
+        assert_eq!(
+            (parsed[1].key.as_str(), &parsed[1].status),
+            ("ABC-2", &None)
+        );
+        assert_eq!(
+            (parsed[2].key.as_str(), &parsed[2].status),
+            ("ABC-3", &None)
+        );
     }
 
     #[test]
@@ -428,18 +506,34 @@ mod tests {
 
     const MIN: Duration = Duration::from_secs(60);
 
-    fn begun(board: &mut StatusBoard, asked: &[&str]) -> (u64, Vec<String>) {
-        board
-            .begin(asked.iter().map(|k| k.to_string()).collect())
-            .expect("begin")
+    fn owned(keys: &[&str]) -> Vec<String> {
+        keys.iter().map(|k| k.to_string()).collect()
     }
 
-    fn ok(
-        items: &[(&str, Option<&str>)],
-    ) -> Result<Vec<(String, Option<TicketStatus>)>, IssueLoadError> {
+    fn begun(board: &mut StatusBoard, asked: &[&str]) -> (u64, Vec<String>) {
+        board.begin(owned(asked), Vec::new()).expect("begin")
+    }
+
+    fn ok(items: &[(&str, Option<&str>)]) -> Result<Vec<KeyedIssue>, IssueLoadError> {
         Ok(items
             .iter()
-            .map(|(k, s)| (k.to_string(), s.map(st)))
+            .map(|(k, s)| KeyedIssue {
+                key: k.to_string(),
+                status: s.map(st),
+                summary: None,
+            })
+            .collect())
+    }
+
+    /// An answer with a status and a summary for each key.
+    fn ok_with_summaries(items: &[(&str, &str, &str)]) -> Result<Vec<KeyedIssue>, IssueLoadError> {
+        Ok(items
+            .iter()
+            .map(|(k, s, summary)| KeyedIssue {
+                key: k.to_string(),
+                status: Some(st(s)),
+                summary: Some(summary.to_string()),
+            })
             .collect())
     }
 
@@ -469,7 +563,7 @@ mod tests {
     #[test]
     fn begin_with_no_keys_asks_nothing() {
         let mut board = StatusBoard::default();
-        assert_eq!(board.begin(Vec::new()), None);
+        assert_eq!(board.begin(Vec::new(), Vec::new()), None);
         assert!(board.due(MIN, Trigger::Open), "nothing in flight");
     }
 
@@ -555,5 +649,125 @@ mod tests {
         assert!(board.status_of("ABC-1").is_none());
         assert_eq!(board.last_read, None);
         assert_eq!(board.failures, 0);
+    }
+
+    // --- Feature 1504 (T017): summaries, and keys asked for their summary only ------------
+
+    #[test]
+    fn statuses_parse_the_summary_trimmed_and_a_blank_or_missing_one_is_none() {
+        let body = br#"{"issues":[
+            {"key":"ABC-1","fields":{"summary":"  Login rate limit ","status":{"name":"To Do"}}},
+            {"key":"ABC-2","fields":{"summary":" \t"}},
+            {"key":"ABC-3","fields":{"summary":7}},
+            {"key":"ABC-4","fields":{}}]}"#;
+        let parsed = parse_statuses(body).unwrap();
+        let summaries: Vec<Option<&str>> = parsed.iter().map(|i| i.summary.as_deref()).collect();
+        assert_eq!(summaries, [Some("Login rate limit"), None, None, None]);
+        assert_eq!(parsed[0].status.as_ref().unwrap().name, "To Do");
+    }
+
+    #[test]
+    fn begin_asks_the_union_of_status_and_summary_keys_each_once() {
+        let mut board = StatusBoard::default();
+        let (_, asked) = board
+            .begin(owned(&["ABC-1", "ABC-2"]), owned(&["ABC-3", "ABC-1"]))
+            .expect("begin");
+        assert_eq!(asked, owned(&["ABC-1", "ABC-2", "ABC-3"]));
+        let mut board = StatusBoard::default();
+        let (_, asked) = board
+            .begin(Vec::new(), owned(&["ABC-9"]))
+            .expect("a summary-only key is still a read");
+        assert_eq!(asked, owned(&["ABC-9"]));
+        assert!(board.in_flight);
+    }
+
+    #[test]
+    fn an_ok_read_keeps_statuses_of_status_keys_and_summaries_of_every_key() {
+        let mut board = StatusBoard::default();
+        let (epoch, asked) = board.begin(owned(&["ABC-1"]), owned(&["ABC-2"])).unwrap();
+        board.apply(
+            epoch,
+            &asked,
+            ok_with_summaries(&[
+                ("ABC-1", "To Do", "Linked"),
+                ("ABC-2", "Done", "Branch only"),
+            ]),
+            MIN,
+        );
+        assert_eq!(board.status_of("ABC-1").unwrap().status.name, "To Do");
+        assert!(
+            board.status_of("ABC-2").is_none(),
+            "a summary-only key has no chip"
+        );
+        assert_eq!(board.summary_of("ABC-1"), Some("Linked"));
+        assert_eq!(board.summary_of("ABC-2"), Some("Branch only"));
+        assert_eq!(board.summary_of("ABC-3"), None);
+        // A later read that no longer returns ABC-2 drops its summary.
+        let (epoch, asked) = board.begin(owned(&["ABC-1"]), owned(&["ABC-2"])).unwrap();
+        board.apply(epoch, &asked, ok(&[("ABC-1", Some("To Do"))]), 2 * MIN);
+        assert_eq!(board.summary_of("ABC-1"), None, "no summary in the answer");
+        assert_eq!(board.summary_of("ABC-2"), None);
+    }
+
+    #[test]
+    fn a_failure_keeps_summaries_until_the_board_retires_its_entries() {
+        let mut board = StatusBoard::default();
+        let (epoch, asked) = board.begin(owned(&["ABC-1"]), owned(&["ABC-2"])).unwrap();
+        board.apply(
+            epoch,
+            &asked,
+            ok_with_summaries(&[
+                ("ABC-1", "To Do", "Linked"),
+                ("ABC-2", "Done", "Branch only"),
+            ]),
+            MIN,
+        );
+        for _ in 1..FAILURES_BEFORE_RETIRING {
+            let (epoch, asked) = board.begin(owned(&["ABC-1"]), owned(&["ABC-2"])).unwrap();
+            board.apply(epoch, &asked, Err(IssueLoadError::RateLimited), 2 * MIN);
+            assert_eq!(board.summary_of("ABC-1"), Some("Linked"));
+            assert_eq!(board.summary_of("ABC-2"), Some("Branch only"));
+        }
+        let (epoch, asked) = board.begin(owned(&["ABC-1"]), owned(&["ABC-2"])).unwrap();
+        board.apply(epoch, &asked, Err(IssueLoadError::TimedOut), 3 * MIN);
+        assert_eq!(board.summary_of("ABC-1"), None);
+        assert_eq!(board.summary_of("ABC-2"), None);
+    }
+
+    #[test]
+    fn clear_drops_the_summaries_too() {
+        let mut board = StatusBoard::default();
+        let (epoch, asked) = board.begin(Vec::new(), owned(&["ABC-2"])).unwrap();
+        board.apply(
+            epoch,
+            &asked,
+            ok_with_summaries(&[("ABC-2", "Done", "Branch only")]),
+            MIN,
+        );
+        assert!(!board.is_idle(), "a held summary is something to clear");
+        board.clear();
+        assert_eq!(board.summary_of("ABC-2"), None);
+        assert!(board.is_idle());
+    }
+
+    /// L9, FR-011: a summary is the issue's text, so no `Debug` dump shows it.
+    #[test]
+    fn no_debug_dump_shows_a_summary() {
+        let issue = KeyedIssue {
+            key: "ABC-1".into(),
+            status: Some(st("To Do")),
+            summary: Some("Secret summary".into()),
+        };
+        let shown = format!("{issue:?}");
+        assert!(
+            shown.contains("ABC-1") && !shown.contains("Secret"),
+            "{shown}"
+        );
+        let mut board = StatusBoard::default();
+        let (epoch, asked) = board.begin(owned(&["ABC-1"]), Vec::new()).unwrap();
+        board.apply(epoch, &asked, Ok(vec![issue]), MIN);
+        assert_eq!(board.summary_of("ABC-1"), Some("Secret summary"));
+        let shown = format!("{board:?}");
+        assert!(!shown.contains("Secret"), "{shown}");
     }
 }

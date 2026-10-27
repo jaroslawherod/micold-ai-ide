@@ -29,7 +29,7 @@ use micold_core::jira_filter::{
     VersionChoice,
 };
 use micold_core::jira_query::{rejection_messages, QueryFailure, ScopedQuery};
-use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedStatus};
+use micold_core::jira_status::{parse_statuses, status_jql, statuses_jql, KeyedIssue};
 
 /// How many times a refused status request is halved to find the key Jira refuses: 2^7 covers a
 /// chunk of 100 (contracts/jira-status-source.md §3).
@@ -198,7 +198,8 @@ impl JiraCloud {
             .map_err(|error| load(outcome_of(&error, token)))
     }
 
-    /// Read the statuses of `keys` (one chunk): a `400` halves the keys until the one Jira refuses
+    /// Read the statuses and summaries of `keys` (one chunk; the summary titles a worktree, feature
+    /// 1504, L6): a `400` halves the keys until the one Jira refuses
     /// stands alone, and that key is absent from the answer.
     fn read_chunk(
         &self,
@@ -206,10 +207,10 @@ impl JiraCloud {
         token: &ApiToken,
         keys: &[String],
         depth: u8,
-    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+    ) -> Result<Vec<KeyedIssue>, IssueLoadError> {
         let body = serde_json::json!({
             "jql": status_jql(&conn.project_key, keys),
-            "fields": ["status"],
+            "fields": ["status", "summary"],
             "maxResults": keys.len(),
         });
         match self.send(conn, token, &body) {
@@ -291,7 +292,7 @@ impl JiraSource for JiraCloud {
         conn: &JiraConnection,
         token: &ApiToken,
         keys: &[String],
-    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+    ) -> Result<Vec<KeyedIssue>, IssueLoadError> {
         let mut read = Vec::new();
         for query in statuses_jql(&conn.project_key, keys) {
             read.extend(self.read_chunk(conn, token, &query.keys, 0)?);
