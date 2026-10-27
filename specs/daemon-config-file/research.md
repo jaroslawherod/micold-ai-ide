@@ -276,11 +276,13 @@ session's launch env only. Per CLI (verified in `provider.rs`):
 | Copilot | no shareable sign-in file (`sandbox_auth_file` → `None`, `:1124`) | `token_file` → `COPILOT_GITHUB_TOKEN` (D14) | `sign_in_file` refused (V7). |
 | Pi | none (`:1527`) | API keys only (`[session.secret_env]`) | `sign_in_file` and `token_file` refused (V7); D14 explains why. |
 
-With no sign-in configured on host and SSH, nothing is delivered and the CLI uses the machine's own
-sign-in exactly as the user's own CLI does — including refreshing it, because that file is the
-user's, not one the daemon was given. This is the one place the "only the application refreshes"
-rule does not reach; Settings labels the choice ("Use this machine's own sign-in — the CLI manages
-it") and recommends a delivered sign-in.
+**Machine's own sign-in (user decision, D15)**: `use_machine_sign_in = true` on a CLI (host and SSH
+only, off by default) makes its sessions use the machine's own sign-in exactly as the user's own CLI
+does — including refreshing it, because that file is the user's, not one the daemon was given. In
+this mode the read-only rule (D13) does not apply, and Settings says so ("Use this machine's own
+sign-in — the CLI manages it"). With it off and no sign-in delivered, the CLI's sessions start in the
+per-daemon config dir with no sign-in, and Settings offers to deliver one (D14). Existing host
+daemons migrate with the switch off, so after the upgrade Settings asks once which sign-in to use.
 
 **Placement over the daemon's per-session files**: Claude's per-session `--settings` (hooks) is a
 separate layer from `~/.claude/settings.json`, so a placed user `settings.json` and the hook layer
@@ -472,6 +474,39 @@ the CLI refresh at all, and the application must keep it fresh.
 
 No CLI is confirmed to refuse to run with a read-only credential file. Pi is the one at risk.
 
+### D15. Gap review against main (2026-10-27)
+
+A review of the schema against `origin/main` (ba0482621). Each cite was checked with `git grep` /
+`git show origin/main:<file>`; the result is in the "Cite" column. Rows 7–11 and the last row were
+open questions; the user answered each (spec Clarifications) and every answer matches the proposal.
+
+| # | Gap | Cite on main | Decision |
+|---|---|---|---|
+| 1 | Git identity is shared today and absent from the schema, so commits would lose `user.name`/`user.email` | holds: `CredentialShare::GitConfig` (`sandbox/mod.rs:279-284`); `GIT_CONFIG_GLOBAL` → sanitized `<data_dir>/gitconfig` (`supervisor.rs:341-345`); pod `gitconfig` Secret with `subPath` (`kube/credentials.rs:85,88,109-121`) | `[git] config_file`: the app delivers the **sanitized** copy (`sanitize_gitconfig`) as a read-only file; the daemon sets `GIT_CONFIG_GLOBAL` to it. Directory mount, no `subPath`. |
+| 2 | `container_git_edits` is gated on `MICOLD_DATA_DIR == /var/lib/micold-ai-ide`; retiring the variable silently drops the helper, the HTTPS rewrite and the identity | holds: `supervisor.rs:278` reads it, `:325` gates on it (`CONTAINER_DATA_DIR`, `ssh/argv.rs:293`) | Gate on `daemon.kind` ∈ {container, kubernetes} (or `isolate_host_helpers`); issue 9 changes the gate, issue 15 carries a regression test that a container session started over SSH still gets the helper, rewrite and identity with no `MICOLD_DATA_DIR`. |
+| 3 | `session.env`, `secret_env`, `ai.cli.env` can override names the daemon owns | holds (no refuse list in the plan); the CLI dir variables exist: `CLAUDE_CONFIG_DIR` `provider.rs:612`, `COPILOT_HOME` `:960`, `PI_CODING_AGENT_DIR` `:1278`, `CODEX_HOME` `:1990` | V16 refuses daemon-owned names; the precedence order is written in the contract (§2 `[session]`). |
+| 4 | `CLAUDE_CONFIG_DIR` on H/S also moves `.claude.json` (onboarding, per-project `hasTrustDialogAccepted`, user-scope MCP servers); the daemon's trust check reads it there | holds: `cli_would_ask_trust` reads `CLAUDE_CONFIG_DIR` from the launch env (`state.rs:1914-1935`; the cite said 1911-1929, a few lines off); `FolderTrust::ClaudeProjects` (`provider.rs:163`) | Seed `<data_dir>/ai/claude_code/.claude.json` from the user's `~/.claude.json` on first use (copy, `primaryApiKey` dropped). Sync rule: seeded once, never copied back; afterwards it is the daemon's own (trust given in a daemon session stays there). Settings → the CLI offers "Seed again from this computer". |
+| 5 | Onboarding skip is written only when a writable sign-in share is mounted | holds: `onboarding_done` (`sandbox/mod.rs:507-530`), `onboarding_record` keyed on `AiCliAuth` (`:930-939`) | Mark `hasCompletedOnboarding` whenever `claude_code` has `sign_in_file`, `token_file` or `api_key_file`, on container and pod. |
+| 6 | Codex stores folder trust in its `config.toml`, so a read-only placed settings file breaks trust | holds: `FolderTrust::CodexProjects` (`provider.rs:166`) | `settings_file` and `place` are **seeded** (copied), never mounted read-only: copied at session start when the delivered source changed since the last copy, otherwise the CLI's own edits stay. |
+| 7 | Non-GitHub forges: the git env hard-codes `github.com` | holds: `git_env.rs:27-32` (`crates/micold-core/src/scoped_credential/git_env.rs`) | **User decision**: schema-ready only. Each token gets `host` (default `"github.com"`; replaces `[git] base`, which tests used); `ssh_to_https` rewrites per host; the `gh` shim sets `GH_HOST`. Only GitHub and GitHub Enterprise are implemented in this epic. |
+| 8 | SSH remotes in sandboxes have no key | plan gap (no cite) | **User decision**: optional `[git] ssh_key_file`, `known_hosts_file` (read-only secrets) for non-GitHub SSH remotes, used through `GIT_SSH_COMMAND` (`-i … -o UserKnownHostsFile=… -o IdentitiesOnly=yes`). |
+| 9 | The sanitized gitconfig keeps `commit.gpgsign` but no key reaches a sandbox, so commits fail | holds: the removal list in `sanitize_gitconfig` (`scoped_credential/gitconfig.rs:88-91`) does not include signing keys | **User decision**: optional `[git] signing_key_file`; without it, `commit.gpgsign` and `tag.gpgsign` are stripped from the shared copy. |
+| 10 | Corporate proxy / custom CA | plan gap | **User decision**: `[network] ca_file`, exported as `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE`, and used by the daemon's own HTTPS (reach check). Proxies through `session.env`/`secret_env` (`HTTPS_PROXY`, `NO_PROXY`), also honoured by the daemon. |
+| 11 | Package-registry credential files (`.npmrc`, `.pypirc`, …) | plan gap | **User decision**: `[[session.files]] { file, as, mode }`; `as` relative to the home; the read-only source is copied into the session home; `as` outside the home or inside a CLI config dir is refused (V18). |
+| 12 | No locale in sandboxes | holds: no `LANG`/`LC_ALL` in `sandbox/` or `kube/` | `LANG=C.UTF-8` by default on container and pod; `session.env` may override. |
+| 13 | No `TZ` in pods | holds: `TZ` is set for containers (`sandbox/argv.rs:176`), nothing in `kube/` | The kube renderer fills `daemon.time_zone` from the host, as the container path does. |
+| 14 | Sign-in expiry is invisible | plan gap | The diagnostic shows each delivered AI sign-in's `expiresAt` (a timestamp, not a secret); the app re-delivers the pod Secret when the host sign-in changes (D14 relay). |
+| 15 | Windows/macOS: rename-replace and ACLs | plan gap | Watch parent directories (already D5); on Windows the diagnostic says "ACL not checked" where V14 checks the unix mode. |
+| 16 | A daemon started inside a session (dev builds) would load the default config location of the daemon it runs under | `supervisor.rs:293` strips `MICOLD_DATA_DIR`: holds. **`MICOLD_DAEMON_CONFIG` does not exist on main**: it is this plan's session variable (D7). The rule holds for the planned design. | With `MICOLD_DAEMON_CONFIG` in the environment (= started from inside a session), the daemon refuses the default location and requires `--config`. |
+| 17 | A placed MCP config that already defines `micold` makes the tool server silently skip binding | holds: `binding::name_taken` (`mcp/binding.rs:152`) | V17 refuses such a placed file at validation. |
+| — | "Use this machine's own sign-in" on H/S (open question) | — | **User decision**: `use_machine_sign_in` per AI CLI, H and S only, **off by default**; in that mode the read-only rule (D13) does not apply and the spec says so. |
+
+Correctly **not** in the file (confirmed by the review): hook URL/token and tool-server
+port/bearer/`--mcp-config` (per session), `MICOLD_STATUS_RELAY`, `MICOLD_PI_ACTIVITY_LOG`,
+`MICOLD_DAEMON_CONFIG` plumbing, `TERM`/`COLORTERM` and toolchain `PATH`, container network
+posture/ports/limits, kube `RegistryPull`, the Jira token (client only), plan usage,
+environment-include (`settings.json`), CLI folder-trust records, dropped-file paths.
+
 ## 3. Answered questions (user, 2026-10-27)
 
 Recorded in spec.md Clarifications; the decisions above already apply them.
@@ -498,6 +533,10 @@ Recorded in spec.md Clarifications; the decisions above already apply them.
 9. **Who refreshes credentials** (rule, overrides 4 and 6): only the application, on the user's
    machine. The daemon, its sessions and the AI CLIs never refresh, rotate or write a credential; a
    new one arrives as an updated file and the daemon reloads within 5 s. D5, D13, D14.
+10. **Gap review** (2026-10-27): rows 1–6 and 12–17 adopted. The user decided rows 7–11 and the
+   machine sign-in: forges schema-ready with GitHub now; optional `signing_key_file` (gpgsign stripped
+   without it); `ca_file`, `[[session.files]]`, `ssh_key_file` + `known_hosts_file`; "use this
+   machine's own sign-in" an opt-in per CLI, off by default. D15.
 
 ## 4. Questions left for the implementing issues
 

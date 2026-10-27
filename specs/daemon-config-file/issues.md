@@ -23,7 +23,7 @@ Common footer for every body:
   replaces about a dozen `MICOLD_*` start-up variables, three per-kind env lists and the
   `GitCredentialGrant` push. Secrets are referenced by file path only, so the file is safe to print.
   One GitHub token serves every repository it reaches; `gh` works in every session; AI CLIs and an
-  optional start script are configured in the same file. Checklist: issues 1–15.
+  optional start script are configured in the same file. Checklist: issues 1–16.
 
 ## 1. bug: the pod daemon refuses GitHub token grants
 
@@ -44,10 +44,10 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: —
-- **Tasks**: T005–T013
+- **Tasks**: T005–T013, T087
 - **Body**:
   Add `micold-core::daemon_config`: the typed schema of `contracts/daemon-config.md` (serde +
-  `toml`, unknown keys refused, `schema` version), validation rules V1–V15 (data-model.md), a
+  `toml`, unknown keys refused, `schema` version), validation rules V1–V19 (data-model.md), a
   resolved view that never shows a secret, and `micold-daemon config check <file>`. Ship
   `docs/user-guide/daemon-configuration.md`. Acceptance: the four contract examples parse; each rule
   has a test naming file:line:col; no secret content in any `Debug`/`Display`.
@@ -56,7 +56,7 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 2
-- **Tasks**: T014–T020 (incl. T019a, T019b)
+- **Tasks**: T014–T020 (incl. T019a, T019b), T088, T089
 - **Body**:
   `micold-daemon --config <path>`, else the kind's default location (host `<data_dir>/daemon.toml`,
   SSH `~/.micold/remote/daemon.toml`, container/pod `/run/micold/config/daemon.toml`). Every start-up
@@ -71,6 +71,8 @@ Common footer for every body:
   new file and check its secrets, else keep the old one and report the error to the app; in use within
   5 s of the file changing (SC-004; for pods, after the kubelet updates the volume). The daemon never
   opens the config or a secret for writing (test with `0400` files).
+  A daemon started from inside a session (`MICOLD_DAEMON_CONFIG` set) requires `--config`. Parent
+  directories are watched on every OS; on Windows the diagnostic says "ACL not checked".
 
 ## 4. feat: the app renders each daemon's configuration from Settings
 
@@ -96,22 +98,23 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 3, 4
-- **Tasks**: T030–T035
+- **Tasks**: T030–T035, T090
 - **Body**:
   Bind-mount the rendered config read-only at `/run/micold/config` and the secrets at
   `/run/micold/secrets`; drop the `podman create -e` list and the SSH-bridge `container_env`, so a
   container started at boot and over SSH reads the same file. The entrypoint reads `[ssh] dir` from
-  the file. Real-runtime tests for both start paths.
+  the file. Real-runtime tests for both start paths. Sessions get `LANG=C.UTF-8` by default.
 
 ## 7. feat: deliver the configuration to Kubernetes daemons
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 3, 4
-- **Tasks**: T036–T039
+- **Tasks**: T036–T039, T091
 - **Body**:
   A ConfigMap `<name>-config` at `/run/micold/config`; one Secret per credential mounted as a
   directory (not `subPath`, which never updates) under `/run/micold/secrets/…`; the bridge's
-  `daemon_env` goes. Manifest goldens and a kind-cluster check.
+  `daemon_env` goes. Manifest goldens and a kind-cluster check. Pods get `TZ` from
+  `daemon.time_zone` and `LANG=C.UTF-8`.
 
 ## 8. feat: one GitHub token for many repositories
 
@@ -129,7 +132,7 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 3, 8
-- **Tasks**: T046–T054
+- **Tasks**: T046–T054, T092–T094
 - **Body**:
   `micold-daemon git-credential` becomes stateless: it reads the config, the token file and a reach
   cache at each call, so a replaced token is used by the next git command. The daemon discovers
@@ -137,23 +140,28 @@ Common footer for every body:
   fingerprint, refreshed at load, on change, every 15 min and on a miss. Most specific filter wins; ties go to the first in the file.
   Sandboxes keep clearing inherited helpers; host/SSH fall back to the user's own helpers when no
   token matches. `GitCredentialGrant`/`Revoke`/`Targets` are retired (protocol bump).
+  Container and pod sessions get the helper, rewrite and identity because of `daemon.kind`, not
+  `MICOLD_DATA_DIR` (`supervisor.rs:325`). Each token names its `host` (default `github.com`; only
+  GitHub/GHE implemented) and `ssh_to_https` rewrites per host. `[git] config_file` delivers the
+  sanitized gitconfig read-only (`GIT_CONFIG_GLOBAL`), with `commit.gpgsign`/`tag.gpgsign` stripped
+  unless a signing key is configured.
 
 ## 10. feat: `GH_TOKEN` for `gh` in sessions of every kind
 
 - **Labels**: `flow:feature`, `effort:low`
 - **Depends on**: 9
-- **Tasks**: T055–T058
+- **Tasks**: T055–T058, T095
 - **Body**:
   `gh` has no credential-helper mode, so the daemon puts a `gh` shim first on the session `PATH`
   that sets `GH_TOKEN` from `micold-daemon gh-token --cwd .` (the token chosen for the cwd's
   repository, resolved at the moment `gh` runs) and execs the real `gh`. An existing `GH_TOKEN` is
-  left alone.
+  left alone. The shim sets `GH_HOST` from the token's `host`.
 
 ## 11. feat: AI CLI configuration from the file for every kind
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 5, 6, 7
-- **Tasks**: T059–T067 (incl. T065a–T065c)
+- **Tasks**: T059–T067 (incl. T065a–T065c), T096–T100
 - **Body**:
   `[[ai.cli]]` per CLI: `enabled`, `version` (overrides the build's pinned table, version only),
   `args`, `model`, `api_base_url`, `env`, `sign_in_file` (read-only), `token_file`, `api_key_file`
@@ -176,6 +184,11 @@ Common footer for every body:
   settings move to the file; settings changed live in the UI (`default_ai_cli`, tool server, …)
   stay in `settings.json`; per-session generated files stay generated. Configured args/env add to
   the app's own, never replace them.
+  Gap review (D15): on H/S with a delivered Claude sign-in, `.claude.json` is seeded once from the
+  user's (trust, onboarding, MCP servers); container/pod mark onboarding done whenever a Claude
+  sign-in, token or key is configured; `settings_file`/`place` are seeded copies, never read-only
+  mounts (Codex records trust in `config.toml`); `use_machine_sign_in` (H/S, off by default) is the
+  explicit opt-in to the machine's own CLI-managed sign-in; the diagnostic shows sign-in expiry.
 
 ## 12. feat: an optional start script prepares each daemon
 
@@ -211,14 +224,28 @@ Common footer for every body:
   start script's last run (exported variable names only), and "Restart to apply" when needed. No
   secret value is ever shown.
 
+## 16. feat: SSH key, signing key, CA file and session files for sandboxes
+
+- **Labels**: `flow:feature`, `effort:low`
+- **Depends on**: 3, 6, 7
+- **Tasks**: T101–T106
+- **Body**:
+  The extras the user decided in the gap review (research D15 rows 8–11): `[git] ssh_key_file` +
+  `known_hosts_file` for SSH remotes (`GIT_SSH_COMMAND`); `[git] signing_key_file` for signed
+  commits; `[network] ca_file` exported to sessions and trusted by the daemon's own HTTPS, with
+  proxies from the session env honoured by the daemon; `[[session.files]]` copied into the session
+  home (`.npmrc`, `.pypirc`), refused outside the home or inside a CLI config dir. All read-only
+  files referenced by path.
+
 ## 15. chore: retire the old `MICOLD_*` start-up variables
 
 - **Labels**: `flow:chore`, `effort:low`
-- **Depends on**: 1–14
-- **Tasks**: T084–T086
+- **Depends on**: 1–14, 16
+- **Tasks**: T084–T086 (incl. T086a)
 - **Body**:
   Remove the start-up env reads (`MICOLD_DATA_DIR`, `MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`,
   `MICOLD_TOKEN_PATH`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_REPOS_ROOT`, `MICOLD_SSH_DIR`,
   `MICOLD_LOG`); keep them only as test overrides. Session plumbing (`MICOLD_STATUS_RELAY`,
   `MICOLD_PI_ACTIVITY_LOG`, `MICOLD_DAEMON_CONFIG`) stays. Update the user guide and run
-  quickstart.md end to end.
+  quickstart.md end to end. Includes the regression test that a container session started over SSH
+  keeps the git helper, rewrite and identity with no `MICOLD_DATA_DIR`.

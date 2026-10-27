@@ -30,7 +30,7 @@ mode checks reuse `crates/micold-core/src/owner_only.rs` (unix only, as today).
 
 ## Issue 0 — Epic: one configuration file for every daemon
 
-No tasks of its own: links issues 1–15, holds spec/plan/research links, closes when issue 15 merges.
+No tasks of its own: links issues 1–16, holds spec/plan/research links, closes when issue 15 merges.
 
 ---
 
@@ -58,6 +58,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T010 [US1] Implement `parse(&str, origin) -> Result<DaemonConfig, Vec<ConfigError>>` and `validate` in `crates/micold-core/src/daemon_config/validate.rs`; schema version acceptance per research D2 (own and previous; newer refused naming both)
 - [ ] T011 [US1] Implement `resolved_view(&DaemonConfig) -> ResolvedView` (defaults filled, each secret as path + readable + mode) in `crates/micold-core/src/daemon_config/resolved.rs`
 - [ ] T012 [US1] Add the `config check <file> [--kind]` subcommand in `crates/micold-daemon/src/main.rs`: exit 0 printing the resolved view, exit 2 printing every error (contract §4); test in `crates/micold-daemon/tests/config_check.rs`
+- [ ] T087 [P] [US1] Failing tests and types for the gap-review keys (research D15): `[git] config_file`/`ssh_key_file`/`known_hosts_file`/`signing_key_file`, token `host` (default `"github.com"`, replaces `[git] base`), `[[ai.cli]] use_machine_sign_in`, `[[session.files]]`, `[network] ca_file`, and rules V16 (reserved names), V17 (placed MCP config defining `micold`, via `mcp::binding::name_taken`), V18 (`session.files.as` escape/collision; `ssh_key_file` without `known_hosts_file`), V19 (`use_machine_sign_in` kind/exclusivity) in `crates/micold-core/src/daemon_config/`
 - [ ] T013 [US1] Write `docs/user-guide/daemon-configuration.md` from `contracts/daemon-config.md` (every key, per-kind locations, examples) and link it from `docs/user-guide/settings.md`
 
 ---
@@ -72,6 +73,8 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T019 [US1] Add `crates/micold-daemon/src/config_watch.rs`: a `notify` watcher on the **directory** of the file and of every named secret file (never the file itself, so renames and the ConfigMap/Secret `..data` symlink swap are seen), debounce 250 ms, apply live keys (contract R7), diff restart keys (research D5)
 - [ ] T019a [US1] In `crates/micold-daemon/src/config_watch.rs`: a 2 s content-hash poll (SHA-256 of the config and every named secret) as the always-on fallback for bind mounts from a VM, network filesystems and a failed watcher; one change source deduplicated by the hash; atomic swap of the whole configuration (`Arc`) only after parse + validate + secrets readable; `ConfigStatus.applied_hash` and `last_error` pushed in the daemon's status so Settings shows a rejected file without a refresh
 - [ ] T019b [US1] Test in `crates/micold-daemon/tests/config_reload.rs` that the daemon never opens the config or a secret for writing (all secret files `0400` in the test; every reload and every git/`gh` credential call succeeds; bytes and mtimes unchanged) — FR-025, SC-008
+- [ ] T088 [US1] Nested daemon (D15 row 16): with `MICOLD_DAEMON_CONFIG` in its environment the daemon refuses the default location and exits naming `--config`; test in `crates/micold-daemon/tests/config_load.rs`
+- [ ] T089 [US1] Windows/macOS (D15 row 15): the watcher in `crates/micold-daemon/src/config_watch.rs` watches parent directories on every OS; the diagnostic reports "ACL not checked" on Windows instead of the V14 mode check
 - [ ] T020 [US1] Add a `config` section to the daemon diagnostic (contract §5) in `crates/micold-daemon/src/runtime_status.rs` and its protocol type in `crates/micold-core/src/protocol/messages.rs`; protocol version bump in `crates/micold-core/src/protocol/version.rs`
 
 ---
@@ -102,6 +105,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T032 [P] [US1] Failing shell test `scripts/tests/entrypoint-config.test.sh`: `packaging/basic/entrypoint.sh` reads `[ssh] dir` from `/run/micold/config/daemon.toml` (default `/run/micold/ssh`) instead of `MICOLD_SSH_DIR`
 - [ ] T033 [US1] Implement the mounts in `crates/micold-core/src/sandbox/argv.rs` and `crates/micold-core/src/sandbox/mod.rs`; remove the `-e` list and `container_env`
 - [ ] T034 [US1] Change `packaging/basic/entrypoint.sh` per T032
+- [ ] T090 [US1] `LANG=C.UTF-8` in container sessions unless `session.env` sets it (D15 row 12), in `crates/micold-core/src/sandbox/argv.rs` with a test
 - [ ] T035 [US1] Run `mise run test-sandbox` real-runtime cases for boot and SSH start; update `docs/user-guide/sandboxed-daemon.md`
 
 ---
@@ -111,6 +115,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T036 [P] [US1] Failing golden tests in `crates/micold-core/src/kube/manifest.rs` tests: a ConfigMap `<name>-config` mounted at `/run/micold/config`; one Secret per credential mounted as a **directory** (no `subPath`) under `/run/micold/secrets/…`, every config and secret volume `readOnly: true`; pod env only `HOME`, `TMPDIR`
 - [ ] T037 [P] [US1] Failing test in `crates/micold-core/src/kube/credentials.rs`: `daemon_env` is empty of `MICOLD_*`
 - [ ] T038 [US1] Implement ConfigMap and directory Secret manifests in `crates/micold-core/src/kube/manifest.rs` and `crates/micold-core/src/kube/credentials.rs`; apply/update them from `crates/micold-client/src/kube/`
+- [ ] T091 [US1] Pods get `TZ` from `daemon.time_zone` and `LANG=C.UTF-8` (D15 rows 12, 13), in `crates/micold-core/src/kube/manifest.rs` with a golden test, matching `sandbox/argv.rs:176`
 - [ ] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`, including how a refreshed credential reaches a pod (the application updates the Secret; the kubelet's own propagation delay, measured on kind, comes before the daemon's 5 s)
 
 ---
@@ -136,6 +141,9 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T051 [US2] Make `git-credential` stateless in `crates/micold-daemon/src/git_credential.rs`: config path from `MICOLD_DAEMON_CONFIG` in the session env; `ssh_to_https` rewrite only with ≥1 token
 - [ ] T052 [US3] Session git env per kind in `crates/micold-core/src/scoped_credential/git_env.rs` (reset + ours + fallback capture)
 - [ ] T053 [US2] Retire `GitCredentialGrant`/`Revoke`/`Targets` in `crates/micold-core/src/protocol/messages.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-client/src/shell/scoped_credential.rs`, `crates/micold-core/src/scoped_credential/schedule.rs`, `crates/micold-client/src/shell/daemon_sync.rs`; protocol version bump; update `crates/micold-core/tests/protocol_roundtrip.rs` and `schema_hash.rs`
+- [ ] T092 [US3] Gate `container_git_edits` (`crates/micold-daemon/src/supervisor.rs:325`) on `daemon.kind` ∈ {container, kubernetes} instead of `MICOLD_DATA_DIR == /var/lib/micold-ai-ide` (D15 row 2), test for both start paths
+- [ ] T093 [US2] Per-host `ssh_to_https` rewrites and token `host` (D15 row 7) in `crates/micold-core/src/scoped_credential/git_env.rs` (today hard-coded `github.com`, `:27-32`); the fake-forge tests use a loopback `host` base URL instead of `[git] base`
+- [ ] T094 [US3] `[git] config_file` (D15 rows 1, 9): the app delivers the `sanitize_gitconfig` output as a read-only secret file; the daemon sets `GIT_CONFIG_GLOBAL` to it in container and pod sessions; without `signing_key_file`, `commit.gpgsign` and `tag.gpgsign` are stripped (`crates/micold-core/src/scoped_credential/gitconfig.rs`); replaces `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount
 - [ ] T054 [US2] Update `docs/user-guide/sandboxed-daemon.md` and `settings.md` (tokens work on every kind)
 
 ---
@@ -145,6 +153,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T055 [P] [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs`: `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin`; exits 1 silently with none
 - [ ] T056 [P] [US2] Failing test: the shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set, and leaves an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH`
 - [ ] T057 [US2] Implement `crates/micold-daemon/src/gh_shim.rs` and the PATH entry at session spawn in `crates/micold-daemon/src/state.rs`
+- [ ] T095 [US2] The `gh` shim sets `GH_HOST` from the chosen token's `host` (D15 row 7), test in `crates/micold-daemon/tests/gh_shim.rs`
 - [ ] T058 [US2] Document `gh` support in `docs/user-guide/settings.md`
 
 ---
@@ -163,6 +172,11 @@ Includes AI sign-in delivery (replaces the `[[ai.sign_in]]` draft): research D9.
 - [ ] T065a [US4] `token_file` (research D14 mode 1): Claude Code → `CLAUDE_CODE_OAUTH_TOKEN`, Copilot → `COPILOT_GITHUB_TOKEN`, read at session start, never in argv; V9 rules; Settings runs `claude setup-token` or takes a pasted token and warns 14 days before expiry
 - [ ] T065b [US4] Sign-in relay in the client (research D14 mode 3), `crates/micold-client/src/`: watch the host's own sign-in file (Claude, Codex, OpenCode), derive the copy without its refresh token (Codex: `last_refresh` = delivery time), re-deliver it (D5 write order) when it differs; schedule a host-side refresh by the user's own CLI at 75 % of the access token's life, else warn at < 1 h left; tests with fake sign-in files that the derived copy has no refresh token and that the host file is never written
 - [ ] T065c [US4] Per-CLI measurement (research §4), recorded in `docs/user-guide/sandboxed-daemon.md`: each CLI with a read-only sign-in (starts? fails only at refresh?), which host command refreshes without a model request, and whether a running CLI re-reads its file on expiry; Pi with a read-only `auth.json` directory
+- [ ] T096 [US4] Seed `<data_dir>/ai/claude_code/.claude.json` on H/S from the user's `~/.claude.json` on first use when a sign-in is delivered (copy once, `primaryApiKey` dropped, never copied back; Settings "Seed again from this computer"), so `cli_would_ask_trust` (`crates/micold-daemon/src/state.rs:1914-1935`) and user MCP servers keep working (D15 row 4)
+- [ ] T097 [US4] Mark `hasCompletedOnboarding` on container and pod whenever `claude_code` has `sign_in_file`, `token_file` or `api_key_file` (D15 row 5; today only with a writable share, `crates/micold-core/src/sandbox/mod.rs:507-530,930-939`)
+- [ ] T098 [US4] Seed `settings_file` and `place` (copy when the source changed since the last copy, never a read-only mount) so Codex can record folder trust in `config.toml` (D15 row 6), test in `crates/micold-core/src/provision/ai_cli.rs`
+- [ ] T099 [US4] `use_machine_sign_in` (H/S, off by default): the CLI uses the machine's own sign-in and config dir; the read-only rule does not apply; existing host daemons migrate with it off and Settings asks once (D15, user decision)
+- [ ] T100 [US4] The diagnostic shows each delivered AI sign-in's `expiresAt`; the client re-delivers the pod Secret when the host sign-in changes (D15 row 14)
 - [ ] T066 [US4] Settings → Daemons per CLI (`crates/micold-client/src/ui/settings/daemons.rs`): enabled, version, args, model, base URL, sign-in, API key, settings file; render into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json` (FR-013d)
 - [ ] T067 [US4] Document in `docs/user-guide/settings.md` and `daemon-configuration.md`, including the file-vs-settings.json rule
 
@@ -201,10 +215,26 @@ Research D12.
 
 ---
 
+## Issue 16 — feat: SSH key, signing key, CA file and session files for sandboxes (needs 3, 6, 7)
+
+**Goal**: the remaining gap-review extras the user decided (research D15 rows 8–11).
+**Independent test**: a container session pushes to an SSH remote with the configured key, signs a
+commit, reaches an HTTPS host behind a custom CA, and finds the configured `.npmrc` in its home.
+
+- [ ] T101 [P] [US1] `[git] ssh_key_file` + `known_hosts_file` → `GIT_SSH_COMMAND` (`-i … -o UserKnownHostsFile=… -o IdentitiesOnly=yes`) in container and pod sessions, in `crates/micold-daemon/src/state.rs` with a test
+- [ ] T102 [P] [US1] `[git] signing_key_file`: `user.signingkey` points at the delivered key, `gpg.format` kept from the user's config; test that a signed commit succeeds and that without it signing is off (T094)
+- [ ] T103 [P] [US1] `[network] ca_file`: export `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE` to sessions and trust it in the daemon's own HTTPS (reach discovery, `ureq`); the daemon honours `HTTPS_PROXY`/`NO_PROXY` from `session.env`/`secret_env`
+- [ ] T104 [P] [US1] `[[session.files]]`: copy each read-only source to `as` under the session home with `mode` at session start; V18 refusals tested
+- [ ] T105 [US1] Render the four extras from Settings (`crates/micold-client/src/daemon_config_render.rs`, Settings → Daemons) and deliver them with the secrets per kind
+- [ ] T106 [US1] Document in `docs/user-guide/daemon-configuration.md` (SSH remotes, signing, corporate CA and proxy, registry files)
+
+---
+
 ## Issue 15 — chore: retire the old `MICOLD_*` start-up variables (needs all)
 
 - [ ] T084 Failing test: setting any retired variable in a release build has no effect and logs one warning naming the config key that replaces it
 - [ ] T085 Remove the env reads (keep test overrides behind `#[cfg(any(test, feature = "test-env"))]`, research D11) in `crates/micold-core/src/paths.rs`, `crates/micold-core/src/spawn.rs`, `crates/micold-core/src/protocol/auth.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-daemon/src/state.rs`; `MICOLD_STATUS_RELAY` and `MICOLD_PI_ACTIVITY_LOG` stay
+- [ ] T086a Regression test (D15 row 2): with no `MICOLD_DATA_DIR`, a container session started over SSH still gets the credential helper, the HTTPS rewrite and `GIT_CONFIG_GLOBAL`, in `crates/micold-daemon/tests/`
 - [ ] T086 Remove `[[ai.sign_in]]`-era and env-era docs from `docs/user-guide/sandboxed-daemon.md`, `kubernetes-daemons.md`, `remote-daemons.md`; run quickstart.md end to end
 
 ---
@@ -218,7 +248,8 @@ Research D12.
    │     ├─ 7 ─┘
    │     ├─ 13, 14
    └─ 4 ─┴─ 8 ─ 9 ─ 10
-15 after all
+3 + 6 + 7 ─ 16
+15 after all (1–14, 16)
 ```
 
 ## Parallel opportunities
@@ -226,7 +257,7 @@ Research D12.
 - Issue 1 alongside everything.
 - After 2: issues 3 and 4 in parallel.
 - After 3 + 4: issues 5, 6, 7, 8, 13, 14 in parallel.
-- After delivery: 11 and 12 in parallel with 9 → 10.
+- After delivery: 11, 12 and 16 in parallel with 9 → 10.
 - Inside each group, the `[P]` failing tests are independent files.
 
 ## Implementation strategy

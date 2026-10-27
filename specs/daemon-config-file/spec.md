@@ -66,6 +66,17 @@ repository."
 - Q: How does an AI CLI sign-in stay valid if the CLI may not refresh it? → A: The application keeps
   it fresh: preferably with a long-lived token (nothing to refresh), else by relaying the user's own
   sign-in without its refresh token and re-delivering it whenever the user's own sign-in changes.
+- Q: The gap review (research D15) left five choices open; what did the user decide? → A (user, 2026-10-27):
+  - Other forges: each token names its forge host (default GitHub); only GitHub and GitHub
+    Enterprise are implemented in this feature.
+  - SSH remotes in sandboxes: optional SSH key and known-hosts files.
+  - Commit signing: an optional signing key file; without it, signing is switched off in the shared
+    git configuration.
+  - Custom CA and proxies: an optional CA file, used by sessions and the daemon; proxies through the
+    session environment.
+  - Package-registry files (`.npmrc` and similar): optional files copied into the session home.
+  - "Use this machine's own sign-in" on host and SSH: an explicit choice per AI CLI, off by
+    default; in that mode the read-only credential rule does not apply.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -255,6 +266,16 @@ appears anywhere in it.
   restart.
 - The user removes a credential in Settings: the application removes the file; the credential is
   unavailable from the next use.
+- The configuration sets a variable the daemon owns (`PATH`, `HOME`, `GH_TOKEN`, a CLI's config-dir
+  variable, …): the file is refused, naming the variable.
+- A sandbox session commits: it uses the user's name and email from the shared git configuration;
+  if the user signs commits but no signing key is delivered, signing is off rather than failing.
+- A daemon is started from inside a session (a development build): it refuses to load the default
+  configuration location and needs an explicit `--config`.
+- A placed tool configuration already defines a server named `micold`: the file is refused, because
+  the application's tool server would otherwise be silently skipped.
+- A host daemon whose user has "use this machine's own sign-in" off and no delivered sign-in: the
+  CLI's sessions start signed out and Settings offers to deliver a sign-in.
 
 - The daemon starts offline and cannot ask GitHub which repositories a token reaches: it uses the
   last answer it saved; with none saved, a token with a repository filter is used for the
@@ -388,6 +409,33 @@ appears anywhere in it.
   writable by the session's user, so an agent in a session cannot change what the daemon uses. On the
   host and SSH kinds sessions run as the same OS user and this cannot be enforced; the application
   MUST show when a daemon's file differs from what it delivered.
+- **FR-030**: The configuration MUST deliver the user's git identity as a sanitized, read-only git
+  configuration file, so commits in every kind carry the user's name and email.
+- **FR-031**: Sessions in a container or pod MUST get the git credential helper, the HTTPS rewrite
+  and the identity from the configuration's kind, never from a start-up variable, on every start path.
+- **FR-032**: The configuration MUST NOT set an environment variable the daemon owns; the order in
+  which configured variables apply MUST be stated and fixed.
+- **FR-033**: When a Claude Code sign-in is delivered on host or SSH, the CLI's per-daemon state
+  (onboarding, folder trust, user tool servers) MUST start from a copy of the user's own, made once.
+  In a container or pod with any Claude Code sign-in or key, first-run setup MUST be marked done.
+- **FR-034**: CLI settings files MUST be copied into place, not mounted read-only, so the CLI can
+  record folder trust; a changed source replaces the copy at the next session start.
+- **FR-035**: Each token MUST name its forge host (default GitHub); only GitHub and
+  GitHub Enterprise are implemented.
+- **FR-036**: The configuration MAY name an SSH key and known-hosts file for SSH
+  remotes, and a commit-signing key; without a signing key, signing MUST be switched off in the shared
+  git configuration.
+- **FR-037**: The configuration MAY name a CA file used by sessions and by the daemon's
+  own HTTPS; proxy variables in the session environment MUST be honoured by the daemon too.
+- **FR-038**: The configuration MAY list files copied into the session home (such as
+  `.npmrc`); a target outside the home or inside a CLI's config dir MUST be refused.
+- **FR-039**: Container and pod sessions MUST get a UTF-8 locale by default and the configured time
+  zone (pods included).
+- **FR-040**: The application MUST show when each delivered AI sign-in expires.
+- **FR-041**: A daemon started from inside a session MUST require an explicit configuration path.
+- **FR-042**: A placed tool configuration that defines a server named `micold` MUST be refused.
+- **FR-043**: On host and SSH, the user MAY choose per AI CLI to use the machine's own
+  sign-in (off by default); in that mode the CLI manages that sign-in and FR-025 does not apply to it.
 
 ### Key Entities
 
