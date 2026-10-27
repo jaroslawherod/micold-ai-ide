@@ -257,11 +257,25 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "#1474: a draft or reply row past a narrow drawer",
     ),
     (
-        &["drawer-replies"],
+        &["drawer-drafts", "drawer-replies"],
         "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/2",
         "right",
         "base",
-        "#1474: a reply row's controls past a narrow drawer",
+        "#1474: a draft or reply row's controls past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/1/0/2",
+        "right",
+        "base",
+        "#1474: a draft row's Edit and Delete past a narrow drawer",
+    ),
+    (
+        &["drawer-drafts"],
+        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/2/0/2",
+        "right",
+        "base",
+        "#1474: a draft row's Edit and Delete past a narrow drawer",
     ),
     (
         &["drawer-drafts", "drawer-replies"],
