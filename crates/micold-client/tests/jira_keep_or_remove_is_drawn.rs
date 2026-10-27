@@ -126,7 +126,8 @@ fn the_credential_fields_are_painted_only_with_the_switch_on() {
 }
 
 /// FR-006b / T025: the page tells the user, in the open, that Micold also contacts Jira with no
-/// dialog open, which data goes with it and on which events.
+/// dialog open, which data goes with it and on which events; 1504 FR-004 adds the title and the
+/// keys named only in a branch.
 #[test]
 fn the_page_discloses_the_background_status_read() {
     let painted = painted(&jira_page());
@@ -136,6 +137,8 @@ fn the_page_discloses_the_background_status_read() {
         .unwrap_or_else(|| panic!("disclosure not painted: {painted:?}"));
     for needle in [
         "tickets' keys",
+        "status and title",
+        "named only in a worktree's branch",
         "project key",
         "your credentials",
         "when a project opens",
