@@ -107,7 +107,7 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - **FR-007**: Activating the button MUST open the system file picker, allowing multiple selection, without blocking the interface.
 - **FR-008**: Files chosen in the picker MUST go through the same admission path as a drop, so a given set of files gives identical chips, path references and notifications by either route.
 - **FR-009**: Cancelling the picker MUST leave the composer unchanged and show no notification.
-- **FR-010**: The button MUST be reachable and operable by keyboard, with a visible focus state, and MUST have a shortcut listed in the shortcut sheet.
+- **FR-010**: The button MUST be reachable and operable by keyboard, with a visible focus state, and MUST have a shortcut listed in the shortcut sheet, which a structured session MUST be able to open (by the `/shortcuts` command).
 - **FR-011**: The button MUST be disabled or hidden, and a drop MUST NOT be admitted, when the session cannot accept input; a refused drop MUST tell the user why.
 - **FR-012**: A picker result MUST be applied only to the session that requested it; if that session can no longer accept input, the result MUST NOT be applied and the user MUST be told.
 - **FR-015**: While a picker is open for a session, activating the button again MUST NOT open a second picker.

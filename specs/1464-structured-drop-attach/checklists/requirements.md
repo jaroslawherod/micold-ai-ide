@@ -6,7 +6,7 @@
 - [x] No implementation details
 - [x] Focused on user value
 - [x] All mandatory sections completed
-- [ ] No [NEEDS CLARIFICATION] markers remain (1 left, for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements testable and unambiguous
 - [x] Success criteria measurable and technology-agnostic
 - [x] Acceptance scenarios and edge cases defined
@@ -15,4 +15,4 @@
 
 ## Notes
 
-- One marker is deliberately left for the clarify unit.
+- The clarify unit resolved the one open question (spec Clarifications).
