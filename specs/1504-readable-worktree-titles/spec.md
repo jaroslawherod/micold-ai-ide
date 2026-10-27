@@ -29,6 +29,13 @@ subject. The folder name stays secondary (tooltip). Owning specs: `specs/813-wor
   the prompt this project starts its worktree sessions with. _(agent-resolved:
   specs/813-worktree-overview/spec.md#FR-015; specs/032-untitled-session-labels/spec.md#Clarifications)_
 
+### Amendments
+
+- 2026-10-27, plan review round 2: FR-006 read "at most once per worktree list refresh"; it now
+  reads facts "on each worktree list change and each Overview opening", matching plan D5 and
+  ledger decision D6 (a spec written or commit made after the list was read shows on the next
+  Overview opening).
+
 ## Terms
 
 - **Location title**: the first line of a worktree's Overview card and of its sidebar row (feature
@@ -227,8 +234,8 @@ retry interval, close and reopen the Overview; the card shows the issue's title.
   (the pull request reading, the session list, the worktree list); building titles MUST NOT start
   any new network reading or polling (813 FR-019).
 - **FR-006**: The spec and commit sources MUST be read from the worktree's own files and repository
-  on the machine, at most once per worktree list refresh, and MUST NOT block the window while they
-  are read.
+  on the machine, on each worktree list change and each Overview opening (no timer), and MUST NOT
+  block the window while they are read.
 - **FR-007**: The Overview card and the sidebar row of a worktree MUST show the same location
   title (feature 1125), except where the sidebar shows the user's custom name.
 - **FR-008**: The title's tooltip MUST show the folder name and the title source, worded for a
