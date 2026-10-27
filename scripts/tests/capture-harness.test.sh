@@ -231,15 +231,19 @@ fi
 
 # 6. **The scenes click where the layout is.** A click that lands on nothing produces a plausible
 # frame, so the coordinates in `lib.sh` are checked against the title bar they hang from (#1491).
-# The bar is `anatomy::app_bar::HEIGHT` plus its 1 px divider; the overflow trigger is centred in
-# it, the menu's first item opens just under it, and the tab strip is the first thing under the
-# session header -- not a bottom bar. Re-measure with a real capture when the layout moves.
-bar_height="$(sed -n '/^pub mod app_bar {/,/^}/s/.*pub const HEIGHT: f32 = \([0-9]*\).*/\1/p' \
-  crates/micold-core/src/tokens/anatomy.rs | head -1)"
-if [ -z "$bar_height" ]; then
-  skip "the scene coordinates sit where the title bar leaves room" "could not read app_bar::HEIGHT"
+# The bar is `anatomy::app_bar::HEIGHT` plus its `DIVIDER` (`BOTTOM_EDGE`); the overflow trigger is
+# centred in it, the menu's first item opens just under it, and the tab strip is the first thing
+# under the session header -- not a bottom bar. Re-measure with a real capture when the layout moves.
+app_bar_const() {
+  sed -n "/^pub mod app_bar {/,/^}/s/.*pub const $1: f32 = \([0-9]*\).*/\1/p" \
+    crates/micold-core/src/tokens/anatomy.rs | head -1
+}
+bar_height="$(app_bar_const HEIGHT)"
+bar_divider="$(app_bar_const DIVIDER)"
+if [ -z "$bar_height" ] || [ -z "$bar_divider" ]; then
+  skip "the scene coordinates sit where the title bar leaves room" "could not read app_bar::HEIGHT or DIVIDER"
 else
-  bar=$((bar_height + 1))
+  bar=$((bar_height + bar_divider))
   coord() { sed -n "s/^$1=\([0-9]*\)\$/\1/p" site/capture/scenes/lib.sh | head -1; }
   menu_y="$(coord scene_menu_y)"
   item_y="$(coord scene_menu_settings_y)"
@@ -258,8 +262,8 @@ else
   fi
 fi
 
-# 7. **No option nobody uses.** `scene_start --preference` served the theme-follow scene, which the
-# layout redesign (#1127) replaced; a dead option is a way to publish the wrong thing later.
+# 7. **No option nobody uses.** `scene_start --preference` has no caller left (#1491); a dead option
+# is a way to publish the wrong thing later.
 if grep -rq -e '--preference' site/capture/scenes/; then
   fail "scene_start has no unused --preference option" \
     "$(grep -rn -e '--preference' site/capture/scenes/ | head -3 | tr '\n' ' ')"
