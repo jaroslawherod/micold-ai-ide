@@ -31,7 +31,7 @@ sent.
 |---|---|
 | Default listing, description pass, default search beyond | exactly 034's arguments (FR-009; `tests/github_privacy.rs` unchanged and green) |
 | Filtered listing | `q` = scoped listing text (repository, filter) |
-| Filtered search beyond | `q` = scoped beyond text (repository, filter, typed text) |
+| Filtered search beyond | `q` = scoped beyond text (repository, filter, typed text as quoted words; search-rules §4); not sent when `beyond` is `None` |
 | Labels, US6 milestones | owner, name |
 | US6 people | owner, name, typed text |
 

@@ -66,7 +66,11 @@ because their names hold a quote".
 | `Loaded`, cap reached | 034's cap caption ("Showing the 1,000 most recently updated of N…"; with a sort qualifier "Showing the first 1,000 of N…") (FR-014) |
 | No search match with a filter active | "No issue matches; a filter is active." / incomplete list: "No loaded issue matches. The issue may be outside the filter." (Edge "Typed issue number with a filter") |
 
-Rows: `issue_row` unchanged except the closed status chip (data-model §8).
+Rows: `issue_row` unchanged except the closed status chip (data-model §8). On a closed issue the
+Closed chip takes precedence over a status the project's status board holds for it (1101 FR-010):
+FR-014 requires a closed issue to be marked closed, and a board status on a closed issue is
+behind GitHub's state. The chip is then not stale. An open issue keeps today's order (board
+status, else the listing's).
 
 ## 4. Keyboard (FR-026)
 
@@ -82,4 +86,6 @@ with a highlighted row adds that label. Every chip is a `ToggleChip` with `takes
   panel; the active line and the query row each fit one line.
 - `tests/gates/panel_placement.rs`: a GitHub scenario in each mode with the active line / query row
   and the cap caption shown — the footer stays reachable (the tallest dialog).
-- `tests/gates/issue_rows_show_all_text.rs`: an arm with a closed issue row (status chip fits).
+- `tests/gates/issue_rows_show_all_text.rs`: an arm with a closed issue row (status chip fits),
+  and an arm with a closed issue the status board holds as "In Progress" (stale): the row shows
+  "Closed", not stale (§3).

@@ -178,7 +178,7 @@ mode switch, the panel frame, `ChoiceLoad`) are shared rather than copied.
 | FR-013 | Source-shown event in advanced: run `last_run` (`ran`), else prompt | data-model §7, §10 |
 | FR-014 | `load_filtered` cap 1,000; cap caption; Closed chip | search-rules §6; data-model §8; selector-ui §3 |
 | FR-015 | `parse_search_page` drops other repositories and pull requests | search-rules §6 |
-| FR-016 | Local rematch unchanged; `ScopedSearch::beyond` + `search_filtered` when incomplete | search-rules §4; source-and-storage §1 |
+| FR-016 | Local rematch unchanged; `ScopedSearch::beyond` (typed text as quoted words, cannot escape the filter) + `search_filtered` when incomplete | search-rules §4; source-and-storage §1 |
 | FR-017 | Pick path unchanged (`apply_pick`) | §Project Structure (no change) |
 | FR-018 | `FilterFailure::Rejected` from errors at `search`; messages cleaned, cut, ordered; `NOT_ACCEPTED` | search-rules §6; research R7 |
 | FR-019 | `FilterFailure::Load` → `IssueList::Failed` + Retry same filter | data-model §10 |
