@@ -239,6 +239,31 @@ commit, reaches an HTTPS host behind a custom CA, and finds the configured `.npm
 
 ---
 
+## Issues
+
+Each group above is one GitHub issue (epic #1521):
+
+| Entry | Issue | Title |
+|---|---|---|
+| 0 | #1521 | Epic: one configuration file for every daemon |
+| 1 | #1522 | bug: the pod daemon refuses GitHub token grants |
+| 2 | #1523 | feat: daemon configuration schema and `micold-daemon config check` |
+| 3 | #1524 | feat: the daemon loads its configuration file and reloads it live |
+| 4 | #1525 | feat: the app renders each daemon's configuration from Settings |
+| 5 | #1526 | feat: deliver the configuration to host and SSH daemons |
+| 6 | #1527 | feat: deliver the configuration to container daemons |
+| 7 | #1528 | feat: deliver the configuration to Kubernetes daemons |
+| 8 | #1529 | feat: one GitHub token for many repositories |
+| 9 | #1530 | feat: the daemon's credential helper chooses the token from the configuration |
+| 10 | #1531 | feat: `GH_TOKEN` for `gh` in sessions of every kind |
+| 11 | #1532 | feat: AI CLI configuration from the file for every kind |
+| 12 | #1533 | feat: an optional start script prepares each daemon |
+| 13 | #1534 | feat: projects and clone root from the configuration |
+| 14 | #1535 | feat: read what a daemon was given |
+| 16 | #1536 | feat: SSH key, signing key, CA file and session files for sandboxes |
+| 15 | #1537 | chore: retire the old `MICOLD_*` start-up variables |
+| — | #1438 | (duplicate of the handover's container-over-SSH bug; closed, fixed by #1448) |
+
 ## Dependencies
 
 ```text

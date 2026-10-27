@@ -177,7 +177,7 @@ Container and pod sessions get `LANG=C.UTF-8` and `TZ` from `daemon.time_zone` (
 `ai.cli[].env` → `[session.env]` / `[session.secret_env]` → the variables the daemon sets per session
 (always last, never overridden).
 
-### `[network]` — optional 
+### `[network]` — optional
 
 | Key | Type | Default | Kinds | Meaning |
 |---|---|---|---|---|
