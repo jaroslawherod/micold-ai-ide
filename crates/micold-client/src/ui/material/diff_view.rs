@@ -1906,19 +1906,22 @@ mod tests {
     /// A one-line diff of `text` in `layout`, and every node its view lays out in 800 x 600 px
     /// as `(width, height)`.
     fn nodes_of(text: &str, layout: DiffLayout) -> Vec<(f32, f32)> {
-        nodes_with(text, layout, None)
-    }
-
-    /// As [`nodes_of`], with `slot` (if any) hung under the line.
-    fn nodes_with(
-        text: &str,
-        layout: DiffLayout,
-        slot: Option<Element<'static, ()>>,
-    ) -> Vec<(f32, f32)> {
         fn walk(node: &layout::Node, out: &mut Vec<(f32, f32)>) {
             out.push((node.size().width, node.size().height));
             node.children().iter().for_each(|c| walk(c, out));
         }
+        let mut out = Vec::new();
+        walk(&laid_out_with(text, layout, None), &mut out);
+        out
+    }
+
+    /// A one-line diff of `text` in `layout`, with `slot` (if any) hung under the line, laid out
+    /// in 800 x 600 px.
+    fn laid_out_with(
+        text: &str,
+        layout: DiffLayout,
+        slot: Option<Element<'static, ()>>,
+    ) -> layout::Node {
         let diff = FileDiff::Text(vec![Hunk {
             old_start: 1,
             old_len: 1,
@@ -1936,14 +1939,11 @@ mod tests {
         let mut element: Element<'_, ()> = view.into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
+        element.as_widget_mut().layout(
             &mut tree,
             &renderer,
             &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
-        );
-        let mut out = Vec::new();
-        walk(&node, &mut out);
-        out
+        )
     }
 
     /// #1466: a line wider than the pane is laid out at its full width, to be scrolled to, and
@@ -1981,9 +1981,9 @@ mod tests {
         }
     }
 
-    /// #1519: a slot (a comment card, the composer) under a row of a diff that scrolls sideways is
-    /// no wider than the pane, so its actions show without scrolling, whether the diff is wider
-    /// than the pane only (100 characters) or wider than the slot cap too (400).
+    /// #1519: a slot (a comment card, the composer) under a row of a diff that scrolls sideways
+    /// ends inside the pane, so its actions show without scrolling, whether the diff is wider than
+    /// the pane only (100 characters) or wider than the slot cap too (400).
     #[test]
     fn a_slot_is_no_wider_than_the_pane_when_the_diff_scrolls_sideways() {
         const SLOT_HEIGHT: f32 = 37.0;
@@ -1993,25 +1993,31 @@ mod tests {
                 let slot = Space::new()
                     .width(Length::Fill)
                     .height(Length::Fixed(SLOT_HEIGHT));
-                let nodes = nodes_with(&long, layout, Some(slot.into()));
-                let widest = nodes.iter().map(|&(w, _)| w).fold(0.0, f32::max);
+                let node = laid_out_with(&long, layout, Some(slot.into()));
+                let leaves = super::super::test_support::leaves(&node);
+                let widest = leaves.iter().map(|b| b.x + b.width).fold(0.0, f32::max);
                 assert!(
                     widest > 800.0,
                     "{chars} {layout:?}: the diff scrolls ({widest} px)"
                 );
-                let slots: Vec<f32> = nodes
-                    .iter()
-                    .filter(|&&(_, h)| h == SLOT_HEIGHT)
-                    .map(|&(w, _)| w)
-                    .collect();
-                assert!(
-                    !slots.is_empty(),
-                    "{chars} {layout:?}: the slot is laid out"
+                let slots: Vec<_> = leaves.iter().filter(|b| b.height == SLOT_HEIGHT).collect();
+                assert_eq!(slots.len(), 1, "{chars} {layout:?}: the slot is laid out");
+                // What holds it spans the rows, so a column drawing only what is in view still
+                // draws the slot once it is shifted along with the scroll.
+                let holder = super::super::test_support::all_bounds(&node)
+                    .into_iter()
+                    .find(|b| b.height == SLOT_HEIGHT)
+                    .expect("the slot's holder");
+                assert_eq!(
+                    holder.width, widest,
+                    "{chars} {layout:?}: the holder spans the rows"
                 );
-                for width in slots {
+                for b in slots {
                     assert!(
-                        width > 0.0 && width <= 800.0,
-                        "{chars} {layout:?}: the slot is {width} px in an 800 px pane"
+                        b.width > 0.0 && b.x >= 0.0 && b.x + b.width <= 800.0,
+                        "{chars} {layout:?}: the slot spans {}..{} px of an 800 px pane",
+                        b.x,
+                        b.x + b.width
                     );
                 }
             }
