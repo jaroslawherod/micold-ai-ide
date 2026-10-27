@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: claude/project-thread-e4cve5
 - **Started**: 2026-10-27
-- **Phase**: plan written; review round 1 fixed (round 2 pending)
-- **Next step**: plan review round 2 (scoped re-review of the round-1 fix diff), then tasks unit
+- **Phase**: tasks written; tasks review round 1 pending
+- **Next step**: tasks review round 1 (fresh reviewer, rubrics/tasks.md); then gate, push, design PR
 
 ## Pull requests
 
@@ -21,6 +21,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | — | planned |
+| M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | — | planned |
+| M3 | T024–T026 | light | The Review tab's own Back first | — | planned |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | planned |
+| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | planned |
 
 ## Decisions
 
@@ -28,6 +33,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | clarify | macOS chord: Option+←/→ or Cmd+[ / Cmd+]? | Cmd+[ / Cmd+] on macOS; Alt+←/→ on Linux/Windows; same focus rule everywhere | agent | terminal-panes.md app-chord table (all macOS forms use Cmd, none Option); keymap.rs `is_primary_shift`; Cmd+Shift+[ / ] already prev/next session |
 | 2 | clarify | Only the Review tab's sheet lists Back/Forward? | Yes; app-wide sheet out of scope | agent | spec.md Out of Scope |
+| 3 | tasks | Cut of M1 (16 tasks, over ~10)? | Kept whole: Foundational alone is never a milestone and US1 needs all of it; cross-project (R5 lookup, `runs.known`, `Reopened`) split out to M4 (US4), so M1 passes another project's places over as gone until M4 | agent | milestones.md rules 1, 3; tasks.md T010/T012/T028 |
+| 4 | tasks | Guide updates per milestone | Each feat milestone adds its own line to terminal-panes.md §Keyboard shortcuts (plan D7: the only page), so the user-guide gate passes without docs-not-needed | agent | milestones.md rule 4; tasks T016, T023, T026, T033, T036 |
+| 5 | tasks | speckit-analyze | Not available in this environment (no skill, no subagent); coverage checked by grep: every FR-001–015 and SC-001–005 named by a task or milestone | agent | tasks.md |
 
 ## Review rounds
 
@@ -38,7 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1 | 2 questions, both agent-resolved | macOS chord → Cmd+[ / Cmd+]; Review-tab-only sheet confirmed |
 | Clarify | 2 | rescan after round 1 | no critical ambiguities |
 | Plan review | 1 | 11f3d102ca7aabfb92c1199ff5ca3699e08f8622:0ae4673ae350ac1a5197583750a38820c1241a47 | CHANGES: 1 MAJOR, 2 MINOR (F1 cross-project Compare: `runs.known` per-project group lists, R5 limit narrowed, tests + B10 added; F2 availability refreshed before `exists` (U2 step 0); F3 borrow split via `mem::take` in `resolve`) — all fixed |
-| Plan review | 2 | 41ae8cd58f1600b8d9892ebc6d9c08f3694d1578:38cb3341b7aae78134abfabbd81189bd87e758cf | pending (scoped: fix diff since round 1 snapshot) |
+| Plan review | 2 | 41ae8cd58f1600b8d9892ebc6d9c08f3694d1578:38cb3341b7aae78134abfabbd81189bd87e758cf | CLEAN, 1 MINOR (data-model runs.rs table: `known[P]` for a removed project unspecified — fixed, prose only: one row saying it is left as is and never read while P is unknown) |
+| Tasks review | 1 | 8f4a09d125d94bf6e90b271da7ab675c7845d785:fd6e8bf13a1b2d6f1913c226359527d6733732b2 | pending (also confirms the ticked checklist item: no [NEEDS CLARIFICATION] in spec.md) |
 
 ## Declined review findings
 
@@ -47,10 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan review round 1 returned CHANGES (F1 MAJOR, F2/F3 MINOR); all fixed in research R5,
-data-model, contracts/ui U2/U4/U7, plan D5/requirement map/tests, quickstart B10. Next: plan
-review round 2, scoped to the fix diff from the round-1 snapshot (11f3d102…:0ae4673ae), on a
-cheaper model; if CLEAN or only MINORs, set Next step to `tasks unit`.
+None.
 
 ## Open escalation
 
