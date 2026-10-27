@@ -191,15 +191,15 @@ pub fn view<'a>(
     tab.into()
 }
 
-/// The entry's name over its base line, each one line that ends in "…" when it does not fit: a
+/// The entry's name over its base line, each one line that ends in "…" when it does not fit (the
+/// cut name whole in its tooltip): a
 /// name that wrapped grew the header by a line, and moved the diff down, when the *changed since
 /// you looked* notice took its room (#1276 visual pass, check 11).
 fn heading<'a, M: 'a>(title: String, base: Option<String>, r: Roles) -> Element<'a, M> {
-    let mut heading =
-        column![
-            Ellipsized::<M>::at_role_spaced(title, TypeRole::Title, r.on_surface).inherit_color()
-        ]
-        .spacing(spacing::XS);
+    let name =
+        Ellipsized::<M>::at_role_spaced(title, TypeRole::Title, r.on_surface).inherit_color();
+    // Cut, the name reads whole on hover (#1276 review A).
+    let mut heading = column![Tooltip::whole_label(name, r)].spacing(spacing::XS);
     if let Some(line) = base {
         heading = heading.push(Ellipsized::<M>::at_role_spaced(
             line,
@@ -1623,7 +1623,8 @@ mod tests {
     }
 
     /// #1276 visual pass, check 11: a name longer than the header's room is one line ending in
-    /// "…", so the header keeps its height whatever stands beside it.
+    /// "…", so the header keeps its height whatever stands beside it, and hovering it reads it
+    /// whole.
     #[test]
     fn a_long_entry_name_is_one_ellipsized_line() {
         use crate::ui::material::test_support::Mounted;
@@ -1654,6 +1655,22 @@ mod tests {
             "one line: {title:?}"
         );
         assert!(title.bounds.x + title.bounds.width <= 200.0, "{title:?}");
+        // Cut, it reads whole on hover; whole, it has no tooltip.
+        let at = title.bounds.center();
+        assert_eq!(narrow.floated_text(at), [name.to_owned()], "{title:?}");
+        let mut wide = Mounted::new_in(
+            heading("Idle".into(), None, r),
+            iced::Size::new(600.0, 400.0),
+        );
+        let idle = wide
+            .painted_text()
+            .into_iter()
+            .find(|p| p.content == "Idle")
+            .expect("the short name is painted");
+        assert_eq!(
+            wide.floated_text(idle.bounds.center()),
+            Vec::<String>::new()
+        );
     }
 
     fn changed(kind: ChangeKind, content: Content) -> ChangedFile {

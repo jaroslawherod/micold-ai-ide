@@ -122,8 +122,9 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 ///
 /// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
 /// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
-/// filed as #1474 rather than fixed here (feature 1276 changes no review layout, spec § Out of
-/// Scope).
+/// filed as #1474 rather than fixed here. M3's visual-pass fixes moved a draft row's Edit and
+/// Delete onto their own line; the draft-row entries cover only that line's overhang at 640×480
+/// (it fits at 1280×800), not a new layout of the review tab.
 const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     (
         &[

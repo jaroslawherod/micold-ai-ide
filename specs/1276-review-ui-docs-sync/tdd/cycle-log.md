@@ -69,3 +69,12 @@ failed before the implementation.
 - not fixed here (behaviour or review-layout geometry, out of scope): #1519 (card width, checks 04
   and 12), #1539 (source-control tooltip over its list, check 02), #1540 (rows under the list's
   scrollbar, check 03).
+
+## M3 — review A F1: a cut name or title reads whole on hover
+
+- red: `pull_request_row::a_cut_title_reads_whole_in_its_tooltip` added and
+  `changes::a_long_entry_name_is_one_ellipsized_line` extended to hover the cut name -> 0 passed,
+  2 failed (no tooltip: `left: []`).
+- green: `Tooltip::whole_label` (micold-material) wraps an `Ellipsized` in a tooltip that opens only
+  while `Ellipsized::is_cut` holds of its tree (`cdk::tooltip::Tooltip::open_if`); `PullRequestRow`
+  and `changes::heading` use it -> both tests pass, and a label shown whole has no tooltip.

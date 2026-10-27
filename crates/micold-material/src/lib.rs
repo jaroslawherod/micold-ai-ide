@@ -181,6 +181,7 @@ pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
 }
 
 use crate::cdk::tooltip;
+use iced::advanced::widget::Tree;
 use iced::widget::container;
 use iced::Element;
 use micold_core::tokens::{spacing, Roles};
@@ -218,6 +219,7 @@ pub struct Tooltip<'a, M> {
     wait: tooltip::Wait,
     max_lines: Option<usize>,
     subject: Option<u64>,
+    open_if: Option<fn(&Tree) -> bool>,
 }
 
 impl<'a, M: 'a> Tooltip<'a, M> {
@@ -234,7 +236,22 @@ impl<'a, M: 'a> Tooltip<'a, M> {
             wait: tooltip::Wait::Hover,
             max_lines: None,
             subject: None,
+            open_if: None,
         }
+    }
+
+    /// Open only while `predicate` holds of the content's widget tree; see
+    /// [`Tooltip::whole_label`] for the use it was made for.
+    pub fn open_if(mut self, predicate: fn(&Tree) -> bool) -> Self {
+        self.open_if = Some(predicate);
+        self
+    }
+
+    /// `label` as one line ending in "…" when it does not fit, whose tooltip reads it whole only
+    /// while it is cut (#1276: a cut name, title or error must stay readable).
+    pub fn whole_label(label: Ellipsized<M>, roles: Roles) -> Self {
+        let whole = label.content().to_owned();
+        Self::new(label, whole, roles).open_if(Ellipsized::<M>::is_cut)
     }
 
     /// Open only after the cursor has rested on the content for `delay`, and never while it moves
@@ -305,6 +322,9 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         }
         if let Some(key) = t.subject {
             floated = floated.subject(key);
+        }
+        if let Some(predicate) = t.open_if {
+            floated = floated.open_if(predicate);
         }
         floated.into()
     }

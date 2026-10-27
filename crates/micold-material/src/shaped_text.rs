@@ -36,6 +36,11 @@ impl<P, K: PartialEq> State<P, K> {
         self.key.as_ref() == Some(key)
     }
 
+    /// What the cached paragraph was shaped for, if anything was shaped yet.
+    pub(super) fn key(&self) -> Option<&K> {
+        self.key.as_ref()
+    }
+
     /// Cache `paragraph`, holding `fitted`, as shaped for `key`.
     pub(super) fn store(&mut self, paragraph: P, fitted: String, key: K) {
         self.paragraph = paragraph;
