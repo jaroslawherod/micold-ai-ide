@@ -57,10 +57,12 @@ process, Linux containers and pods.
 
 **Project Type**: desktop app (iced) + daemon + shared core library.
 
-**Performance Goals**: a changed token is in use within 5 s (SC-004); the credential helper answers
+**Performance Goals**: a changed token or config file is in use within 5 s of changing on the daemon's
+filesystem on every kind — directory watch plus a 2 s hash poll (SC-004, research D5); the credential helper answers
 from cache without a network call on a hit; config load < 10 ms.
 
-**Constraints**: no secret value in any file, log or diagnostic (SC-005); offline: with a reach
+**Constraints**: only the application refreshes or writes a credential; the daemon and sessions only
+read them, and sandboxes mount them read-only (FR-025–FR-029, research D13); no secret value in any file, log or diagnostic (SC-005); offline: with a reach
 cache and no network, helper keeps answering for known repositories; the app and
 its provisioned daemons run the same build (spec Assumptions), so no compatibility period for the
 retired messages; the schema version guards hand-written files.
@@ -130,7 +132,7 @@ crates/micold-core/src/
 
 crates/micold-daemon/src/
 ├── main.rs                 # --config, start script before the runtime (issues 3, 12)
-├── config_watch.rs         # NEW: notify watcher, live apply (issue 3)
+├── config_watch.rs         # NEW: directory watch + hash poll, atomic live apply (issue 3)
 ├── git_credential.rs       # stateless helper subcommand, reach cache (issue 9)
 ├── gh_shim.rs              # NEW: gh-token subcommand + shim (issue 10)
 ├── state.rs                # session env layering (issues 11, 12)

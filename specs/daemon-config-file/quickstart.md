@@ -41,7 +41,14 @@ times.
 3. Add PAT `B` with `repos = ["me/*"]`. In a clone of a `me/` repository, `gh api user` answers as
    `B`'s user.
 4. Replace `A`'s file with a new token; within 5 s a `git fetch` uses it (watch the forge log, or
-   revoke the old token first).
+   revoke the old token first). Do it once per kind: host (rename in place), SSH (copy again),
+   container (host side of the bind-mounted directory; also on a podman machine, where only the poll
+   sees it), pod (`kubectl apply` the Secret; the 5 s starts when the volume shows the new file).
+4a. Deliver a broken config (`schema = 99`) → the daemon keeps the previous one; Settings shows the
+   error within 5 s; fix it → applied.
+4b. In a container or pod session: `echo x > /run/micold/secrets/…` and `> /run/micold/config/daemon.toml`
+   → both fail (read-only). On a host daemon the same write succeeds, and Settings → the daemon shows
+   "changed outside the app" (drift).
 5. Two tokens with `repos = ["acme/*"]` → the first in Settings is used for `acme/` repositories;
    Settings shows it per repository and marks the second as shadowed. Move the second up → it is used
    by the next `git fetch`.
@@ -58,6 +65,10 @@ times.
 3a. Host daemon, user signed in to Claude Code on the machine, `sign_in_file` naming another account
    → sessions use the configured account; `sha256sum ~/.claude/.credentials.json` is unchanged
    before and after.
+3b. Claude Code with `token_file` from `claude setup-token`, on every kind → a session is signed in;
+   the token file and every secret are byte-identical after the session (SC-008).
+3c. Relay mode on a Linux host: the delivered copy has no `refreshToken`; sign in again on the host →
+   the delivered copy changes within 5 s and the next session uses it.
 4. `settings_file` on a host daemon → `config check` refuses (V10).
 5. Change `default_ai_cli` in the UI → stays in `settings.json`, other windows follow live.
 
@@ -74,7 +85,8 @@ times.
    add `export SECRET` → it does.
 6. Set `env_include` in Settings too, both defining `FOO` → the session sees the env-include value.
 
-Pod with a Claude sign-in: a refreshed sign-in is lost when the pod restarts (known limit, documented).
+Pod with a Claude sign-in: the delivered sign-in is read-only and the CLI never refreshes it; after a
+pod restart the sign-in is the one the application last delivered.
 
 ## 6. Projects (FR-014)
 

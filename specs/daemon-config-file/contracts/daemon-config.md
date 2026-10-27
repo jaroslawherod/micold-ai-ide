@@ -24,6 +24,13 @@ application does not manage), read by `micold-daemon` at start and on change. De
   `[storage]`, `[startup]` and the start script file. An invalid new file is logged and ignored.
 - **R8** Location: `--config <path>`, else host `<data_dir>/daemon.toml`, SSH
   `~/.micold/remote/daemon.toml`, container and pod `/run/micold/config/daemon.toml`.
+- **R9** Read-only (research D13): the daemon and its sessions only read this file and every secret
+  file; only the application writes them, by writing a temporary file and renaming it. Containers
+  mount `/run/micold/config` and `/run/micold/secrets` read-only as directories (never single files);
+  pods mount ConfigMap/Secret volumes `readOnly: true`, never with `subPath`.
+- **R10** Change detection (research D5): a directory watch (sees renames and the Kubernetes `..data`
+  symlink swap) plus a 2 s content-hash poll; a change is in use within 5 s; an invalid new file
+  leaves the previous configuration in force and is reported.
 
 Kinds column: **H** host, **S** SSH host, **C** container, **K** Kubernetes pod.
 
@@ -122,9 +129,9 @@ CLI ids: `claude_code`, `copilot`, `pi`, `codex`, `opencode`. A CLI with no entr
 | `model` | string | absent | all | Default model when the session's choice is "default". Only for CLIs with a model argument (Claude Code); refused otherwise. |
 | `api_base_url` | URL | absent | all | Set as the CLI's endpoint variable (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`); refused for a CLI without one. |
 | `env` | table string→string | `{}` | all | Added to the CLI's launch environment (after `launch_env`). Must not hold secrets (use `api_key_file` or `[session.secret_env]`). |
-| `sign_in_file` | path (secret) | the CLI's own location under `home` | all | The sign-in (`CredentialLayout.ai_cli_auth`, kube `SignIn` Secret). Refused for `copilot` and `pi`. Wins over a sign-in already on the machine; on H and S the daemon points its sessions at it with the CLI's config-dir variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_DATA_HOME` for OpenCode) and never touches the machine's own file (research D9). |
-| `sign_in_writable` | bool | `false` | all (K: must be `false`) | The CLI may refresh it in place. Pods: a Secret is read-only, so a refreshed sign-in is lost on pod restart (known limit). |
-| `api_key_file` | path (secret) | absent | all | Claude Code: read on each use through `apiKeyHelper` in the per-session settings, so a replaced key reaches running sessions. Others: read at each session start into the key variable (`OPENAI_API_KEY`), so a replaced key reaches the next session. Never on the command line. With `sign_in_file` also set, refused unless the CLI documents precedence. |
+| `sign_in_file` | path (secret, read-only) | absent | all | The sign-in, delivered by the application without its refresh token so the CLI cannot refresh it; the application re-delivers it fresh (research D14). The daemon links the CLI's sign-in location to it in the session's config dir. Refused for `copilot` and `pi`. Wins over a sign-in already on the machine; on H and S the daemon points its sessions at it with the CLI's config-dir variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_DATA_HOME` for OpenCode) and never touches the machine's own file (research D9). |
+| `token_file` | path (secret) | absent | all | A long-lived token, read at session start: Claude Code → `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), Copilot → `COPILOT_GITHUB_TOKEN` (fine-grained PAT with Copilot Requests). Refused for other CLIs. Recommended: nothing to refresh. |
+| `api_key_file` | path (secret) | absent | all | Claude Code: read on each use through `apiKeyHelper` in the per-session settings, so a replaced key reaches running sessions. Others: read at each session start into the key variable (`OPENAI_API_KEY`), so a replaced key reaches the next session. Never on the command line. At most one of `sign_in_file`, `token_file`, `api_key_file` per CLI. |
 | `settings_file` | path | absent | C, K | Placed as the CLI's user settings in the sandbox home (Claude `~/.claude/settings.json`, Codex `$CODEX_HOME/config.toml`, OpenCode `~/.config/opencode/opencode.json`). Refused on H and S (FR-013c). |
 | `place` | array of `{ file = path, as = relative path }` | `[]` | C, K | More files placed under the CLI's config dir (an MCP config, agents, commands). `as` must stay inside the dir; never a file the daemon writes per session. |
 
@@ -287,8 +294,7 @@ enabled = true
 version = "2.1.247"
 args = ["--permission-mode", "acceptEdits"]
 model = "claude-opus-5-5"
-sign_in_file = "/home/micold/.claude/.credentials.json"   # the host's file, bind-mounted here
-sign_in_writable = true                                    # the CLI refreshes it
+sign_in_file = "/run/micold/secrets/ai/claude_code/.credentials.json"   # relayed by the app, read-only
 settings_file = "/run/micold/config/ai/claude_code/settings.json"
 env = { CLAUDE_CODE_DISABLE_TELEMETRY = "1" }
 
@@ -352,8 +358,7 @@ repos = ["acme/*"]
 
 [[ai.cli]]
 id = "claude_code"
-sign_in_file = "/run/micold/secrets/ai/claude_code/.credentials.json"
-sign_in_writable = false           # a Secret is read-only: a refreshed sign-in is lost on pod restart
+token_file = "/run/micold/secrets/ai/claude_code/token"   # `claude setup-token`; nothing to refresh
 settings_file = "/run/micold/config/ai/claude_code/settings.json"
 
 [[ai.cli]]

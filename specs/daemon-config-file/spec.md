@@ -47,14 +47,25 @@ repository."
 - Q: On the host process or the user's SSH host, a configured AI sign-in and one already on that
   machine: which wins? → A: The configured one. The machine's own sign-in file is never overwritten
   or removed: the CLI is pointed at the configured sign-in for the daemon's sessions instead.
+  (Revised by the credential rule below: the configured sign-in is read-only and kept fresh by the
+  application.)
 - Q: Is a configuration checked before it is delivered? → A: Yes: the application runs the same
   check as `micold-daemon config check` and shows its errors in Settings.
-- Q: Pod sign-ins? → A: They stay read-only, as today: a sign-in the CLI refreshes in a pod is lost
-  when the pod restarts. A documented limit.
+- Q: Pod sign-ins? → A: They stay read-only, as today. (Revised by the credential rule below:
+  read-only now holds for every kind, and the application re-delivers a fresh sign-in, so nothing is
+  lost on restart.)
 - Q: Start-script run policy name? → A: `once_per_container`. On a host or SSH daemon it means once
   per data directory.
 - Q: Do the start script's secret file values reach sessions? → A: No. They are visible to the
   script only; a variable reaches the daemon and its sessions only when the script exports it.
+- Rule (overrides the earlier answers on sign-ins): only the external party — the user, through the
+  application on their own machine — refreshes or rotates a credential or token. The daemon and any
+  agent or AI CLI under it never refresh, rotate or write one back. A new credential reaches a daemon
+  only as an updated file (rewritten on the host, copied again over SSH, a changed bind-mounted
+  file, an updated Kubernetes Secret); the daemon notices and reloads.
+- Q: How does an AI CLI sign-in stay valid if the CLI may not refresh it? → A: The application keeps
+  it fresh: preferably with a long-lived token (nothing to refresh), else by relaying the user's own
+  sign-in without its refresh token and re-delivering it whenever the user's own sign-in changes.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -137,7 +148,9 @@ push.
 1. **Given** a configuration naming three projects, **When** the daemon starts, **Then** it serves
    exactly those three, cloning the ones that are absent when a clone root is configured.
 2. **Given** a configuration naming the Claude Code sign-in file, **When** a Claude Code session
-   starts, **Then** it is signed in and a refreshed sign-in is written back to that file.
+   starts, **Then** it is signed in, and the sign-in file is unchanged after the session.
+2a. **Given** a delivered sign-in, **When** the application delivers a newer one, **Then** the next
+   session uses the newer one, with no restart of the daemon.
 3. **Given** a host or SSH daemon whose machine already has its own Claude Code sign-in and a
    configuration naming a different one, **When** a session starts, **Then** it uses the configured
    sign-in, and the machine's own sign-in file is unchanged afterwards.
@@ -227,6 +240,22 @@ appears anywhere in it.
 
 ### Edge Cases
 
+- The application delivers a new config or secret that is invalid (bad TOML, a failing rule, an
+  unreadable secret): the daemon keeps the previous configuration in force and Settings shows why.
+- A pod's config names a secret that the cluster has not mounted yet: the daemon keeps the previous
+  configuration and retries; it reports an error only if the secret is still missing two minutes
+  later.
+- An agent in a container or pod session tries to rewrite a secret or the config: the write fails
+  (read-only); what the daemon uses does not change.
+- An agent in a host or SSH session rewrites a secret or the config: it can (same OS user); the
+  daemon applies it, and Settings shows that the daemon's file differs from what the application
+  delivered.
+- An AI CLI's delivered access token expires before the application has delivered a newer one: new
+  sessions of that CLI start signed out with a message naming the fix; running sessions may need a
+  restart.
+- The user removes a credential in Settings: the application removes the file; the credential is
+  unavailable from the next use.
+
 - The daemon starts offline and cannot ask GitHub which repositories a token reaches: it uses the
   last answer it saved; with none saved, a token with a repository filter is used for the
   repositories that filter names, and a token without one is not used until GitHub answers.
@@ -294,7 +323,7 @@ appears anywhere in it.
   each environment variable that carries one of these today MUST be retired.
 - **FR-013**: The configuration MUST list, per AI CLI, whether the daemon offers it, its version
   (absent = the build's pinned version), extra launch arguments, a default model, an API base URL,
-  environment variables, a sign-in file and whether it is writable, an API key file, and the CLI's
+  environment variables, a sign-in file or long-lived token file, an API key file, and the CLI's
   own settings files to place. The offered list replaces today's per-kind selections.
 - **FR-013a**: The configuration MUST NOT hold an API key, sign-in or other secret value for an AI
   CLI; each is named by file (FR-004). A CLI MUST NOT be given both a sign-in file and an API key
@@ -303,7 +332,11 @@ appears anywhere in it.
   session.
 - **FR-013e**: On every kind a configured sign-in MUST win over a sign-in already on that machine,
   and the daemon MUST NOT overwrite, move or remove the machine's own sign-in file: it points the
-  CLI's sessions at the configured sign-in instead.
+  CLI's sessions at the configured sign-in instead. With no sign-in configured on the host or SSH
+  kind, the CLI uses the machine's own sign-in as the user's own CLI would, and Settings says so.
+- **FR-013g**: The application MUST keep a delivered AI CLI sign-in valid without the CLI refreshing
+  it: by a long-lived token where the CLI supports one, or by re-delivering the user's own sign-in,
+  without its refresh token, whenever that sign-in changes and before the delivered one expires.
 - **FR-013f**: The application MUST run the same validation as `micold-daemon config check` before
   it delivers a configuration, and show any error in Settings without delivering.
 - **FR-013b**: Configured launch arguments, model and environment MUST add to what the application
@@ -340,6 +373,21 @@ appears anywhere in it.
 - **FR-023**: A changed start script MUST NOT re-run in a running daemon; the application MUST say
   that a restart is needed.
 - **FR-024**: Settings → Daemons MUST let the user write or pick the start script per daemon.
+- **FR-025**: The daemon, its sessions and the AI CLIs MUST NOT refresh, rotate or write any
+  credential or token. Only the application does, on the user's machine.
+- **FR-026**: A refreshed or rotated credential MUST reach the daemon only by updating files: the file
+  on the host, a new copy over SSH, the host side of a bind-mounted directory, or an updated
+  Kubernetes Secret.
+- **FR-027**: The daemon MUST notice a changed configuration or secret file on every kind — including
+  bind mounts and network filesystems that report no change events, and a Kubernetes Secret update —
+  and use it within 5 seconds of the file changing on its filesystem.
+- **FR-028**: A reload MUST be atomic: the new configuration is parsed and validated in full first;
+  if it is invalid the previous one stays in force and the daemon reports the error to the
+  application.
+- **FR-029**: In container and pod daemons the configuration and every secret file MUST NOT be
+  writable by the session's user, so an agent in a session cannot change what the daemon uses. On the
+  host and SSH kinds sessions run as the same OS user and this cannot be enforced; the application
+  MUST show when a daemon's file differs from what it delivered.
 
 ### Key Entities
 
@@ -361,9 +409,12 @@ appears anywhere in it.
   `MICOLD_*` start-up variable remains outside test overrides.
 - **SC-002**: A user with access to N repositories in one organisation pastes 1 token, not N.
 - **SC-003**: `gh` works in a session of every daemon kind with no step beyond pasting the token.
-- **SC-004**: A replaced token is in use by the next git or `gh` command within 5 seconds, with no
-  restart.
+- **SC-004**: A replaced token or configuration is in use within 5 seconds of the file changing on
+  the daemon's filesystem (next git or `gh` command, next session), with no restart. For a pod, the
+  cluster's own delay in updating a Secret volume comes before that and is shown in Settings.
 - **SC-005**: No secret value appears in any configuration file, log line or diagnostic view.
+- **SC-008**: After a session of any kind, every delivered credential file is byte-identical to what
+  the application delivered.
 - **SC-006**: A user configures which AI CLIs a daemon offers, and their version, sign-in and
   settings, in one place in Settings for all four kinds, not three.
 - **SC-007**: A start script's failure is visible in the application with its output in 100% of

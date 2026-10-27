@@ -56,7 +56,7 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 2
-- **Tasks**: T014–T020
+- **Tasks**: T014–T020 (incl. T019a, T019b)
 - **Body**:
   `micold-daemon --config <path>`, else the kind's default location (host `<data_dir>/daemon.toml`,
   SSH `~/.micold/remote/daemon.toml`, container/pod `/run/micold/config/daemon.toml`). Every start-up
@@ -64,6 +64,13 @@ Common footer for every body:
   `notify` watcher on the file and its secret files applies tokens, AI CLI entries, session env and
   projects live, and marks listener/auth/storage/start-script changes "restart needed". An invalid
   edit keeps the last good configuration. The diagnostic gains a `config` section.
+  **Change detection** (research D5), since the application delivers every refreshed credential by
+  updating a file and the daemon never fetches or refreshes one (D13): watch the **directories**
+  (renames; the Kubernetes `..data` symlink swap), plus a 2 s content-hash poll for bind mounts from a
+  VM (podman/Docker machine) and network filesystems; atomic reload — parse and validate the whole
+  new file and check its secrets, else keep the old one and report the error to the app; in use within
+  5 s of the file changing (SC-004; for pods, after the kubelet updates the volume). The daemon never
+  opens the config or a secret for writing (test with `0400` files).
 
 ## 4. feat: the app renders each daemon's configuration from Settings
 
@@ -146,18 +153,26 @@ Common footer for every body:
 
 - **Labels**: `flow:feature`, `effort:high`
 - **Depends on**: 5, 6, 7
-- **Tasks**: T059–T067
+- **Tasks**: T059–T067 (incl. T065a–T065c)
 - **Body**:
   `[[ai.cli]]` per CLI: `enabled`, `version` (overrides the build's pinned table, version only),
-  `args`, `model`, `api_base_url`, `env`, `sign_in_file` + `sign_in_writable`, `api_key_file`
+  `args`, `model`, `api_base_url`, `env`, `sign_in_file` (read-only), `token_file`, `api_key_file`
   (never inline; Claude Code reads it on each use through `apiKeyHelper`, so a replaced key reaches
   running sessions; other CLIs read it at session start), `settings_file` and `place` (sandbox homes
-  only). Includes AI sign-in delivery for every kind: container writable single-file mount; pod
-  directory Secret, read-only — a refreshed sign-in is lost on pod restart (known limit, in the
-  Kubernetes guide); host/SSH: a configured sign-in wins over the machine's, through a per-daemon
+  only). Includes AI sign-in delivery for every kind, **read-only everywhere** (research D13):
+  `sign_in_writable` and the container's writable single-file sign-in mount
+  (`CredentialShare::writable`) are removed; container and pod deliver the sign-in in the read-only
+  secrets directory; host/SSH: a configured sign-in wins over the machine's, through a per-daemon
   config dir (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode `XDG_DATA_HOME`), and the machine's own
-  sign-in file is never overwritten. Verify per CLI: macOS Keychain for Claude Code, refresh in place
-  vs by rename (research §4). Rule (research D9): deployment
+  sign-in file is never overwritten.
+  **OAuth refresh** (research D14): no CLI may refresh its delivered sign-in, so the application keeps
+  it fresh — (1) recommended `token_file`, a long-lived token with nothing to refresh (Claude Code
+  `claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`; Copilot fine-grained PAT →
+  `COPILOT_GITHUB_TOKEN`); (2) API keys; (3) relay of the user's own sign-in: the app watches the
+  host's sign-in file, delivers a copy **without the refresh token**, re-delivers on every change and
+  triggers a host-side refresh by the user's own CLI before expiry. Measure per CLI (research §4):
+  behaviour with a read-only sign-in, which host command refreshes, whether a running CLI re-reads
+  its file; Pi with a read-only `auth.json` (at risk); macOS Keychain for Claude Code. Rule (research D9): deployment
   settings move to the file; settings changed live in the UI (`default_ai_cli`, tool server, …)
   stay in `settings.json`; per-session generated files stay generated. Configured args/env add to
   the app's own, never replace them.
