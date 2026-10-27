@@ -692,10 +692,12 @@ fn the_keyboard_subscription_names_no_surface() {
     // the arrows there: like it, it names a direction, not a surface a key dismisses.
     // So is the Review tab's key press (feature 1274, K6): it names the press, and the root decides
     // it against who has the keyboard, which asks the registry for the topmost surface.
+    // So is Back/Forward's key (feature 1465, H3): it names a direction, and the resolver asks the
+    // registry whether a surface is open (`navigation::blocked`).
     // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
     // Each name runs to the first character a path cannot hold (`,`, `{`, `;`, `=`), and is compared
     // whole, so a longer message sharing a prefix with an exempt one is still found.
-    const EXEMPT: [&str; 10] = [
+    const EXEMPT: [&str; 11] = [
         "Message::EscapePressed",
         "Message::EscapePressed)",
         "Message::FocusMoved",
@@ -708,6 +710,7 @@ fn the_keyboard_subscription_names_no_surface() {
         // carry are pinned below.
         "Message::Overview(msg))",
         "Message::Changes(crate::features::changes::Msg::KeyPressed(press",
+        "Message::History(crate::features::history::Msg::Pressed",
     ];
     let named: Vec<String> = body
         .match_indices("Message::")

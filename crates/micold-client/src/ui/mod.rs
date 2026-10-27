@@ -1644,18 +1644,17 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
             },
         ));
     }
-    if let Some(action) = crate::keymap::nav_chord(&input) {
-        return Some(Message::Navigation(
-            crate::features::navigation::Msg::Pressed(action),
-        ));
-    }
-    // Feature 1465 (contracts/keys.md H3): after every other chord; each repeat is a press too.
-    crate::keymap::history_key(&input).map(|dir| {
-        Message::History(crate::features::history::Msg::Pressed {
-            dir,
-            source: crate::features::history::Source::Key,
+    crate::keymap::nav_chord(&input)
+        .map(|action| Message::Navigation(crate::features::navigation::Msg::Pressed(action)))
+        // Feature 1465 (contracts/keys.md H3): after every other chord; each repeat is a press too.
+        .or_else(|| {
+            crate::keymap::history_key(&input).map(|dir| {
+                Message::History(crate::features::history::Msg::Pressed {
+                    dir,
+                    source: crate::features::history::Source::Key,
+                })
+            })
         })
-    })
 }
 
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.
