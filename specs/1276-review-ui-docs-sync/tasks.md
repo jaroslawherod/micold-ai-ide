@@ -271,10 +271,10 @@ against its crop with 0 unlabelled differences (quickstart §C, SC-004).
 
 **Independent Test**: quickstart §A5.
 
-- [ ] T033 [US5] Gather from each R0–R6 slice's merged spec and PR (T001's list): the PR number, the
+- [x] T033 [US5] Gather from each R0–R6 slice's merged spec and PR (T001's list): the PR number, the
   answer the build took for open questions 0–5, and each difference from the proposal (renames, keys
   bound differently, parts cut); note them in the scratchpad.
-- [ ] T034 [US5] Rewrite `docs/development/review-redesign.md` per plan §6: title and status *Review UI
+- [x] T034 [US5] Rewrite `docs/development/review-redesign.md` per plan §6: title and status *Review UI
   redesign: record* / built (epic #1277); the Tasks table gains a PR column (R0–R6 merged PRs, R7 this
   feature's PRs); each open question 0–5 answered; a *Differences from the proposal* list; a
   *Follow-ups not built* list (split view, section 0, and every element M4 labelled "follow-up, not

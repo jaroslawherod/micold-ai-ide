@@ -1,10 +1,18 @@
-# Review UI redesign: proposal
+# Review UI redesign: record
 
-Status: proposal. Goal: make the Changes view answer "what did the agent do, is it right, what do I
-tell it next" with less hunting. Builds on 482 (review), 946 (replies). Code: `ui/changes.rs`,
-`features/changes.rs`.
+Status: built (epic #1277). Slices R0–R6 and the docs, snapshot, visual-pass and mockup sync (R7)
+are merged; the PRs are in the [Tasks](#tasks) table. This page began as the proposal and is kept as
+the record of what was built: the sections from "What the view did before the redesign" to "Phasing"
+are the proposal, unchanged; [Open questions](#open-questions),
+[Differences from the proposal](#differences-from-the-proposal) and
+[Follow-ups not built](#follow-ups-not-built) say what the build chose. Goal: make the Review tab
+answer "what did the agent do, is it right, what do I tell it next" with less hunting. Builds on 482
+(review), 946 (replies). Code: `ui/changes.rs`, `features/changes.rs`. The user-facing description
+is [Reviewing changes](../user-guide/reviewing-changes.md).
 
-## What the view does today
+## What the view did before the redesign
+
+The next three sections describe the pre-redesign **Changes** view.
 
 Header (entry name, base line, **Review (n)**, **Close**) over three columns, 2 : 3 : 2:
 
@@ -47,7 +55,7 @@ session view"). The review work must sit inside it, not beside it:
 
 | Issue | What it sets | Consequence for review |
 |---|---|---|
-| #1126 worktree context header + session tab strip above the terminal; header has a **Changes** button (files, +/−) that opens the Changes view | The tab strip is the natural home of the Review tab. | The **Changes** button stops opening a modal view and opens/focuses the **Review** tab in that strip. Header chips (state, branch, PR) stay; the PR chip can open the PR source in the Review tab. Pane chords and focus unchanged. |
+| #1126 worktree context header + session tab strip above the terminal; header has a **Changes** button (files, +/−) that opens the modal Changes view (before the redesign) | The tab strip is the natural home of the Review tab. | The **Changes** button stops opening a modal view and opens/focuses the **Review** tab in that strip. Header chips (state, branch, PR) stay; the PR chip can open the PR source in the Review tab. Pane chords and focus unchanged. |
 | #1124 28 px bottom status bar (daemon, sandbox, CLI, hints) in every body branch, incl. Changes | The window already gets a bottom bar. | The review bar (counts, **Send review**) is scoped to the Review tab and sits *above* the status bar; it is not window chrome. Keep it one row of 44 px. |
 | #1125 sidebar grouped Needs action / Working / Idle, Overview first, two-line rows | Sidebar row is the entry point. | **Review changes** stays in the row's menu and opens the tab; the row shows *Review · n drafts* as a third line only when drafts exist. |
 | #1127 single 44 px title bar, breadcrumb, jump-to field | Quick switcher lives in the title bar. | Jump-to field gains files of the open review (`g f`) and comments; no review UI in the title bar. |
@@ -162,19 +170,25 @@ large run tractable and is the one to prioritise if only one is built.
 - `micold-core` + daemon: `reviewed` set per entry and head (slice 4).
 - `ui/material`: bottom bar and drawer components (check the component library first).
 - `docs/user-guide/reviewing-changes.md`, layout snapshot, showcase `sections/review.rs`, visual
-  pass at 900 / 1280 / 1920 px wide.
+  pass at 1280×800 in both themes (other widths are held by the layout gates, 640×480 included).
 
 ## Open questions
 
-0. Tab strip: does the Review tab sit with the sessions of its worktree, or in a separate row? Kept
-   in memory only (lost on restart), or persisted (selected file, source) with the comments?
-1. Reviewed marks stored in the daemon (shared across windows, survives restart) or per window only?
-   Proposed: daemon.
-2. Drawer over the diff, or push the diff narrower when open? Proposed: over, since the diff
-   needs its width, and it closes on Esc.
-3. Should unreviewed-first be the default sort once any file is marked?
-4. Keep **Files** (repo browser) inside the source dropdown, or as its own header button?
-5. Is a vim-style key map acceptable as default, or should it sit behind a setting?
+Answered by the build:
+
+0. **Tab strip placement and persistence.** The Review tab sits in the worktree's own tab strip,
+   after its session and shell tabs and before **New session**. It is kept in memory only: it is lost
+   on restart. What outlives a restart is the comments, the reviewed marks (daemon) and the
+   unified / side-by-side choice.
+1. **Reviewed marks.** Stored in the daemon beside the comments: shared across windows and kept
+   across restarts (#1271).
+2. **Drawer.** Over the diff, not pushing it narrower: 360 px, `Esc` and **×** close it (#1270).
+3. **Default sort.** **Path** stays the default whatever is marked; **Unreviewed first** is a chip,
+   offered once the marks are known (#1273).
+4. **Files.** Inside the source dropdown with Working tree and Pull requests, not a header button
+   (#1272).
+5. **Vim-style keys.** On by default, behind the Settings switch *Single-key shortcuts in the Review
+   tab*; with it off only the two Ctrl/Cmd chords act (#1274).
 
 ## Tasks
 
@@ -185,19 +199,53 @@ canvas (shared components and `tokens.css`; keep it in step with each task). Eac
 repo's acceptance habit: pure logic in `micold-core` with unit tests, docs, layout snapshot and
 visual pass at 1280×800 in both themes.
 
-| ID | Task | Blocked by |
-|---|---|---|
-| #1269 (R0) | **Review as a per-entry tab.** `State.open` becomes a map keyed by entry; the header **Changes** button and **Review changes** open or focus the tab; switching tab, session, worktree or project keeps the view; × or worktree removal drops it; hidden tab marks "changed since you looked" and re-reads when shown. Drafts badge on the tab. | #1126 |
-| #1270 (R1) | **Review bar and comments drawer.** Fixed bar above the status bar (counts, **Send review (n)**, overflow with Clear sent / Discard drafts…); right-hand drawer with **Drafts** and **Replies** tabs, overlaying the diff, `Esc` closes; replies shown on cards. | R0, #1124 |
-| #1272 (R2) | **Source dropdown and two-column layout.** Working tree (Committed / Uncommitted chips), Pull requests, Files in one control; the PR section and toggles leave the left column; keep Whole file, Files, Back, Open diff. | R1, #1150 merged |
-| #1273 (R3) | **File tree, filter, sort.** Collapsible directories, name-first rows, `+a −r` bar, filter box, sort by path / size / unreviewed first; reuse `tree_rows`. | R2, #1150 merged |
-| #1271 (R4) | **Reviewed marks and progress.** `reviewed` set per entry and head, stored by the session service with the comments (protocol field, all windows agree); *n of m reviewed*; a changed file drops back to unseen. **Done** (#1360, #1374, #1390, #1411, #1417, #1419). | R0 |
-| #1274 (R5) | **Keyboard map.** `j`/`k` file, `n`/`p` hunk, `]`/`[` comment, `v` reviewed, `g` next unreviewed, `c` comment, `Ctrl+Shift+Enter` send, `?` sheet; jump-to field searches files and comments (#1127). | R3, R4, #1127 |
-| #1275 (R6) | **Stale-awareness and quick comment.** "n files changed since you looked" without reflowing the open diff; drag over line numbers opens the composer; optional suggestion chips. | R4 |
-| #1276 (R7) | **Docs, snapshot, visual pass, mockup sync.** `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`, layout snapshot, visual pass; update the canvas to the as-built state. | R0–R6, #1128 |
-| R8 | **Diff font** (take #1260 first so the polish is judged on the final font). | #1260 |
+| ID | Task | Blocked by | PRs |
+|---|---|---|---|
+| #1269 (R0) | **Review as a per-entry tab.** `State.open` becomes a map keyed by entry; the header **Changes** button and **Review changes** open or focus the tab; switching tab, session, worktree or project keeps the view; × or worktree removal drops it; hidden tab marks "changed since you looked" and re-reads when shown. Drafts badge on the tab. | #1126 | #1361, #1371, #1384, #1387, #1394 |
+| #1270 (R1) | **Review bar and comments drawer.** Fixed bar above the status bar (counts, **Send review (n)**, overflow with Clear sent / Discard drafts…); right-hand drawer with **Drafts** and **Replies** tabs, overlaying the diff, `Esc` closes; replies shown on cards. | R0, #1124 | #1356, #1369, #1382, #1402 |
+| #1272 (R2) | **Source dropdown and two-column layout.** Working tree (Committed / Uncommitted chips), Pull requests, Files in one control; the PR section and toggles leave the left column; keep Whole file, Files, Back, Open diff. | R1, #1150 merged | #1355, #1368, #1383, #1418 |
+| #1273 (R3) | **File tree, filter, sort.** Collapsible directories, name-first rows, `+a −r` bar, filter box, sort by path / size / unreviewed first; reuse `tree_rows`. | R2, #1150 merged | #1354, #1367, #1375, #1426, #1430 |
+| #1271 (R4) | **Reviewed marks and progress.** `reviewed` set per entry and head, stored by the session service with the comments (protocol field, all windows agree); *n of m reviewed*; a changed file drops back to unseen. | R0 | #1360, #1374, #1390, #1411, #1417, #1419 |
+| #1274 (R5) | **Keyboard map.** `j`/`k` file, `n`/`p` hunk, `]`/`[` comment, `v` reviewed, `g` next unreviewed, `c` comment, `Ctrl+Shift+Enter` send, `?` sheet; jump-to field searches files and comments (#1127). | R3, R4, #1127 | #1366, #1404, #1415, #1451, #1458, #1460, #1468 |
+| #1275 (R6) | **Stale-awareness and quick comment.** "n files changed since you looked" without reflowing the open diff; drag over line numbers opens the composer; optional suggestion chips. | R4 | #1370, #1380, #1413, #1424, #1443, #1447, #1450 |
+| #1276 (R7) | **Docs, snapshot, visual pass, mockup sync.** `reviewing-changes.md`, `terminal-panes.md`, `worktrees-and-sessions.md`, layout snapshot, visual pass; update the canvas to the as-built state. | R0–R6, #1128 | #1358, #1473, #1495, #1520, #1541, #1544, and #1545 (this page) |
+| R8 | **Diff font** (take #1260 first so the polish is judged on the final font). | #1260 | #1316, #1323, #1329, #1332 (#1260) |
 
-Order: #1124–#1127 → #1126 → R0 → R1 / R4 (parallel) → R2 → R3 → R5, R6 → R7. Epic: #1277.
+Built in this order: #1124–#1127 → #1126 → R0 → R1 / R4 (parallel) → R2 → R3 → R5, R6 → R7. Epic: #1277.
+
+## Differences from the proposal
+
+- **Names.** The header button keeps its name **Changes** (with files and `+a −r`) and opens or shows
+  the **Review** tab; the tab is the view. `g` is "next file not reviewed"; `n`/`p` step "changes"
+  (hunks).
+- **Tab position.** After the session and shell tabs, before **New session**; with the Review tab
+  shown the status words and split buttons stay in the strip, greyed out.
+- **Bar and menu.** The bar reads *2 drafts · 1 sent · 1 answered* (non-zero counts only) with
+  **Comments**, a ⋮ menu (Clear sent, Discard drafts…, **Keyboard shortcuts**) and **Send review (n)**;
+  the counts shorten to the drafts, then go, in a narrow window.
+- **File tree.** Fixed width (not resizable or collapsible); the diff takes the rest. Marks per row:
+  ✓ reviewed, ○ unseen, ◉ has drafts or selected.
+- **Source control.** An outlined dropdown showing the current source, beside the entry name and the
+  base line; the base line is on one line and in its tooltip.
+- **Stale-awareness.** A dot on the hidden tab and *n files changed since you looked* in the header
+  (no Refresh button); the open diff stays as it was until the changes are read.
+- **Jump-to.** The title bar's jump-to field lists the review's files (in `j` order) and comments
+  (in `]` order); there is no `g f` chord.
+- **Suggestion chips.** Off by default, switch in Settings, as proposed.
+- **Mockup.** The canvas was brought to the build in #1276 (`specs/1276-review-ui-docs-sync/visual-pass/mockup-sync.md`).
+
+## Follow-ups not built
+
+- **Split view** (section 0): drag the Review tab to the right half to see a session beside it. The
+  strip draws the split buttons, disabled while the Review tab shows; no issue yet.
+- **Sidebar third line** *Review · n drafts* under the selected worktree (#1125 row of the table):
+  the sidebar shows no drafts. No issue yet.
+- **Resizable and collapsible file tree** (item 2). No issue yet.
+- Found by the visual pass and the layout gates: #1519 (comment cards and the composer are as wide as
+  the longest diff line, so their buttons sit off-screen), #1539 (source control tooltip over its open
+  list), #1540 (file list rows run under the scrollbar), #1474 (squeeze of the review tab at
+  640×480, declared per state in the layout gate), #1501 (header title ellipsis past its clip at
+  640×480).
 
 ## Overview (earlier redesign) in the same snapshot
 
