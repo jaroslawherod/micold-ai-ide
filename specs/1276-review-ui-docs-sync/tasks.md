@@ -247,14 +247,14 @@ shows what the build draws, Overview board and `OverviewCard` included (FR-011, 
 **Independent Test**: `specs/1276-review-ui-docs-sync/visual-pass/mockup-sync.md` lists every board
 against its crop with 0 unlabelled differences (quickstart §C, SC-004).
 
-- [ ] T030 [US4] Read the canvas with the Artifact tool (`action: read`); note whether it says
+- [x] T030 [US4] Read the canvas with the Artifact tool (`action: read`); note whether it says
   *writer* and where the saved file is.
-- [ ] T031 [US4] Compare each board of [data-model.md](data-model.md) § *Mockup board* with its M3 crop
+- [x] T031 [US4] Compare each board of [data-model.md](data-model.md) § *Mockup board* with its M3 crop
   (labels, order and presence of controls, count formats, state colours), and the Overview board and
   `OverviewCard` with crop 17 (tiers, stripe on a neutral card, empty rows removed, title wrapping,
   cards per row at the board's width); write each difference in
   `specs/1276-review-ui-docs-sync/visual-pass/mockup-sync.md` (board, crop, difference, action).
-- [ ] T032 [US4] With *writer*: fix each difference in the shared components (`TitleBar`, `Sidebar`,
+- [x] T032 [US4] With *writer*: fix each difference in the shared components (`TitleBar`, `Sidebar`,
   `StatusBar`, tab strip, review bar, drawer, source control, file tree row, comment card, shortcut
   sheet, `OverviewCard`) on the canvas's `tokens.css`; label "follow-up, not built" each element that
   `docs/development/review-redesign.md` or a slice's merged spec lists as a follow-up (the split

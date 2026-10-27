@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1276
 - **Worktree branch**: claude/project-thread-kxels1
 - **Started**: 2026-10-24
-- **Phase**: M3 stop (b)
-- **Next step**: orchestrator waits on the M3 PR's CI and merges; then M4 (blocked: #1269–#1275, #1128)
+- **Phase**: M4 done, review B pending
+- **Next step**: orchestrator runs review B on the M4 diff, then the unit opens the M4 PR; then M5 (blocked: M1, M4)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1473 | M1 guide + review_keys_doc | merged | 1669ef5df6520fead74b379ed75d307d20f3d81c |
 | #1495 | M2 layout snapshot + review_tab_fits | merged | ba0482621516b364c80b63df888257b5a8efe29b |
 | #1520 | fix red main after M2 + #1466/BUG-1470 | merged | 2a4b372d52ab16e7165cc6f2e9c885b3b1af9656 |
-| #1541 | M3 visual pass + fixes + fixture | open (CI) | — |
+| #1541 | M3 visual pass + fixes + fixture | merged | 3054321a9cef77929487989d9cdc73097b417399 |
 
 ## Milestones
 
@@ -30,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T025 | full | fixture covers every review state, re-recorded once; `review_tab_fits` gate | #1495 | merged (ba048262); T014–T025 done; origin/main merged at 9653cbce (not rebased); fixture re-recorded after the merge: only the expected groups (four new states, `@` anchor lines on ten slice states, records unchanged); +1 px names `inside review.bar`; full gate green at 5b70d4e4 (scripts/gate.sh). Second merge of origin/main (204cf601, for #1463's one-line header; conflict in session_area_fits.rs resolved: main's paths and wording, this branch's `pub(crate)`): `review_tab_fits` then found the header title's "…" painted past a 2–4 px clip at 640×480 in every review state (main's #1463 defect, filed as #1501, exempted narrowly as `HEADER_TITLE_TEXT`, required to fire) and the `review-source-open` overlay scroll exemption no longer firing (dropped); fixture re-recorded, same groups vs main as before (four new states, `@` lines on ten slice states, records unchanged); Third merge of origin/main (for BUG-1493, #1491; fixture conflict: took main's, re-recorded): same groups vs main (four new states, `@` lines on ten slice states, records unchanged); `review_tab_fits` passed unchanged; full gate green at c684c36f (first run hit a parallel-load flake in card_grid `a_link_scrolled_out_of_the_body_is_not_under_the_pointer`, passes alone and on rerun). T025 waits on CI. Smallest-window squeeze filed as #1474, declared per state in `SMALLEST_WINDOW` |
 | M2-fix | — | full | main green: `layout_snapshot` after M2 + #1466 + BUG-1470 | #1520 | merged (2a4b372d); #1466's zero-height ruler shifted `REVIEW_COMPOSER` …/3/1 → …/4/1 and makes the diff's Scrollable scroll sideways at 640×480 (exempted as scrolling in `SMALLEST_WINDOW`, 4 states); fixture re-recorded: BUG-1470 sidebar chip glyphs + ruler in `review-drag-composer` + the anchor line only |
 | M3 | T026–T029 | full | visual pass 17 checks × 2 themes at 1280×800 with verdicts | #1541 | T026–T029 done; reviews A and B CLEAN (A F1 fixed test-first: cut names and PR titles read whole in a tooltip); origin/main merged at 4b76f4f8 (not rebased); fixture re-recorded after it: only M3 groups vs main (header name Ellipsized at Fill in 29 review states, PR row title one line in the three source-open overlays, draft/reply row actions line in drawer-drafts/-replies; anchors unchanged); full gate green at 74f364af (scripts/gate.sh; first run lost to a full disk, second caught `Ellipsized::content` breaking the builder-API contract, made crate-private); geometry changed (draft row actions line, header name, PR row): `review_tab_fits` declares the drafts actions rows under #1474 (passes), `the_layout_matches_the_committed_fixture` fails until the stop-(b) re-record; 34 crops + results.md; 11 PASS, 4 FAIL fixed test-first in shared components (f8c46db0: PullRequestRow, ReviewBar, ReviewPanelRow, changes::heading; checks 02, 07, 08, 11), FAIL/issue: #1519 (checks 04, 12), #1539 (02), #1540 (03); spec status names them. Release build on Xvfb at 1280×800, macOS/Windows not run |
-| M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | blocked: M3, #1269–#1275, #1128 |
-| M5 | T033–T034 | docs | `review-redesign.md` is a record | — | blocked: M1, M4, #1269–#1275, #1128 |
+| M4 | T030–T032 | docs | mockup canvas (incl. Overview board, `OverviewCard`) matches M3 crops | — | T030–T032 done; canvas read as owner ("owned by you"), republished to the same url (version 10) with the Artifact tool and re-read; `visual-pass/mockup-sync.md` has an action on every row; split option labelled "follow-up, not built" on `TabStrip`; ShortcutSheet board added; Session footer note, tier chips, Overview title removed; boards for source-control list, bar error/empty, composer, empty states, PR unreadable were never on the canvas and are left for the owner; specs-only gate |
+| M5 | T033–T034 | docs | `review-redesign.md` is a record | — | unblocked once the M4 PR merges |
 
 ## Blockers merged (T001, input to T033)
 
