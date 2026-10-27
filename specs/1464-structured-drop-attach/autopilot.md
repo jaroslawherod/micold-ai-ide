@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: spec
-- **Next step**: clarify unit resolves the one [NEEDS CLARIFICATION] in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit (clarify round 1 done, 1 question agent-resolved, no escalation)
 
 ## Pull requests
 

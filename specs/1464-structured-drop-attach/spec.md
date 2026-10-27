@@ -99,7 +99,7 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - **FR-002**: Multiple files dropped at once MUST all be processed, in the order they were dropped.
 - **FR-003**: The behaviour of spec 941 FR-026 to FR-029 MUST be kept: images become attachment chips, other files and folders become quoted path references at the caret, and rejected images (unreadable, too large, over the count limit) produce a notification naming the file and the reason.
 - **FR-004**: Drops on a structured view MUST be received, and the picker and its shortcut MUST work, on Linux (Wayland and X11), macOS and Windows. If drops are not received today on any of them, that is a defect fixed as part of this feature.
-- **FR-005**: While files are dragged over a structured view that accepts input, the view MUST show a drop-target cue, which MUST disappear when the drag leaves or the drop completes.
+- **FR-005**: While files are dragged over a structured view that accepts input, the view MUST show a drop-target cue wherever the windowing system reports the file hover (the cue is best-effort; the drop itself MUST work with or without it), which MUST disappear when the drag leaves or the drop completes.
 
 **Add attachment button**
 
@@ -133,13 +133,13 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - **SC-002**: A user can attach a file with the button in at most 3 interactions (click, choose, confirm).
 - **SC-003**: Dropping files on any part of a structured view reaches the composer in 100% of tested cases on Linux (Wayland and X11), macOS and Windows, with no input reaching a terminal.
 - **SC-004**: While the picker is open the interface still responds to input within 100 ms.
-- **SC-005**: The drop cue is visible while files hover and is gone by the next rendered frame after the drag leaves or drops.
+- **SC-005**: Where the windowing system reports file hover, the drop cue is visible while files hover and is gone by the next rendered frame after the drag leaves or drops.
 - **SC-006**: Every rejected image on either route is reported with its name and the reason.
 
 ## Assumptions
 
 - The attachment rules of spec 941 (accepted image types, size and count limits, quoting) are unchanged and are reused as is.
-- The cue is shown only where the windowing system reports a file hover; where it does not, the drop still works without the cue [NEEDS CLARIFICATION: is a missing cue on a platform that does not report hover acceptable, or must hover be emulated?].
+- The cue is shown only where the windowing system reports a file hover; where it does not, the drop still works without the cue. Hover is not emulated: the platform gives no pointer position during an OS drag, and the terminal-pane drop (feature 487) has no cue either. Functional behavior stays equivalent on all platforms (constitution VI); only this visual hint may be absent.
 - A disabled button is preferred over a hidden one, so the layout does not shift; the choice may be revisited in planning.
 - The shortcut key combination is chosen in planning to avoid clashing with existing composer and shell shortcuts.
 - The picker starts in the platform's default location and has no file type filter, since any file may be referenced by path.
@@ -150,3 +150,9 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - Terminal-pane drop behaviour (feature 487) and changes to the image size, type or count limits.
 - Attaching files by pasting from the clipboard, and non-image attachment chips.
 - Previewing or editing attached files beyond the existing chip.
+
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: Is a missing cue on a platform that does not report hover acceptable, or must hover be emulated? → A: Acceptable; hover is not emulated, the drop works regardless. _(agent-resolved: .specify/memory/constitution.md#VI. Cross-Platform Parity; specs/487 terminal drop has no cue)_
