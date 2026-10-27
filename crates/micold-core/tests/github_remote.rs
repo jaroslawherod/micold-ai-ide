@@ -199,7 +199,6 @@ fn ssh_alias_elsewhere_or_unresolved_is_not_github() {
         "git@unknown-alias:o/r.git",
         // Only SSH remotes are resolved: an https host is never run through `ssh -G`.
         "https://github-micold/o/r.git",
-        "git@-oProxyCommand=x:o/r.git",
     ] {
         assert_eq!(resolved_repo(url), None, "`{url}`");
     }
@@ -208,25 +207,93 @@ fn ssh_alias_elsewhere_or_unresolved_is_not_github() {
 #[test]
 fn resolver_runs_only_for_non_github_ssh_hosts() {
     let calls = std::cell::RefCell::new(Vec::new());
+    // A spy that would call every host GitHub: an unguarded host would be rewritten.
     let spy = |h: &str| {
         calls.borrow_mut().push(h.to_string());
-        None
+        Some("github.com".to_string())
     };
-    let remotes = [
+    let urls = [
         "git@github.com:o/r",
         "https://x.example/o/r",
-        "git@alias:o/r",
+        "git@Alias:o/r",
+        "ssh://git@alias/o/r",
         "/tmp/repo",
-    ]
-    .iter()
-    .map(|u| remote("origin", u))
-    .collect();
+        // Never handed to `ssh -G`: an option, a space, a shell separator, a `%` token.
+        "git@-oProxyCommand=x:o/r.git",
+        "ssh://git@-oProxyCommand=x/o/r.git",
+        "git@a b:o/r.git",
+        "git@a;b:o/r.git",
+        "git@%h:o/r.git",
+    ];
+    let remotes = urls.iter().map(|u| remote("origin", u)).collect();
     let out = micold_core::github::resolve_ssh_aliases_with(remotes, &spy);
-    assert_eq!(*calls.borrow(), vec!["alias".to_string()]);
     assert_eq!(
-        out[2].url, "git@alias:o/r",
-        "an unresolved alias keeps its URL"
+        *calls.borrow(),
+        vec!["alias".to_string()],
+        "one call per host, lower-cased, and none for a GitHub, https, local or unsafe host"
     );
+    assert_eq!(out[2].url, "ssh://git@github.com/o/r");
+    assert_eq!(out[3].url, "ssh://git@github.com/o/r");
+    for (got, url) in out.iter().zip(urls).skip(4) {
+        assert_eq!(got.url, url, "`{url}` keeps its URL");
+    }
+}
+
+#[test]
+fn an_unresolved_alias_keeps_its_url() {
+    let out = micold_core::github::resolve_ssh_aliases_with(
+        vec![remote("origin", "git@alias:o/r")],
+        &|_| None,
+    );
+    assert_eq!(out[0].url, "git@alias:o/r");
+}
+
+#[test]
+fn a_client_supplied_alias_set_resolves_without_ssh() {
+    use micold_core::github::{known_github_aliases, resolve_ssh_alias_url_with};
+    let known: std::collections::BTreeSet<String> = ["github-micold".to_string()].into();
+    // No fallback: a container daemon never runs its own `ssh -G` (#1475).
+    let resolve = known_github_aliases(&known, None);
+    let remotes = vec![
+        remote("origin", "git@github-micold:o/r.git"),
+        remote("other", "git@gitlab-alias:o/r.git"),
+    ];
+    let out = micold_core::github::resolve_ssh_aliases_with(remotes, &resolve);
+    assert_eq!(out[0].url, "ssh://git@github.com/o/r.git");
+    assert_eq!(out[1].url, "git@gitlab-alias:o/r.git");
+    assert!(matches!(
+        choose_remote(&out),
+        RemoteChoice::Github { ref repo, .. } if repo.to_string() == "o/r"
+    ));
+    assert_eq!(
+        resolve_ssh_alias_url_with("GitHub-Micold:o/r", &resolve),
+        "ssh://git@github.com/o/r"
+    );
+    // With a fallback, a host the set does not hold is asked about.
+    let fallback = |h: &str| (h == "gh-443").then(|| "ssh.github.com".to_string());
+    let resolve = known_github_aliases(&known, Some(&fallback));
+    assert_eq!(
+        resolve_ssh_alias_url_with("git@gh-443:o/r", &resolve),
+        "ssh://git@github.com/o/r"
+    );
+}
+
+#[test]
+fn alias_candidates_are_plain_non_github_ssh_hosts() {
+    use micold_core::github::ssh_alias_candidate;
+    assert_eq!(
+        ssh_alias_candidate("git@GH-Work:o/r").as_deref(),
+        Some("gh-work")
+    );
+    for url in [
+        "git@github.com:o/r",
+        "ssh://git@ssh.github.com:443/o/r",
+        "https://alias/o/r",
+        "/tmp/repo",
+        "git@-oX:o/r",
+    ] {
+        assert_eq!(ssh_alias_candidate(url), None, "`{url}`");
+    }
 }
 
 #[test]

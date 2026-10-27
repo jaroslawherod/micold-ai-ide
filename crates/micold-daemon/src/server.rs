@@ -2158,6 +2158,7 @@ where
                 let done = tokio::task::spawn_blocking(move || {
                     crate::git_credential::apply_grant(
                         &st.project_paths(),
+                        &st.ssh_github_aliases(),
                         &repo,
                         &token,
                         expires_at,
@@ -2219,18 +2220,25 @@ where
                     }
                 }
             }
+            // #1475: the SSH aliases of github.com the user's machine resolved. A grown set can
+            // turn a project's push URL into GitHub's, so the credential targets are re-announced.
+            ClientMsg::SshHostAliases { github_hosts } => {
+                if state.remember_ssh_github_aliases(github_hosts) {
+                    announce_git_targets(state, None).await;
+                }
+            }
             ClientMsg::RemoteList { req, project } => {
-                // Read-only and local: `git config`, never a network call (034 FR-002).
+                // Read-only and local: `git config`, never a network call (034 FR-002). The URLs
+                // are as configured: the client resolves an SSH alias itself, with its own
+                // `~/.ssh/config` (#1475).
                 let Some((repo, true)) = state.project_repo(&project) else {
                     reject_non_repo(state, id, req, &project);
                     continue;
                 };
                 let listed = tokio::task::spawn_blocking(move || {
-                    GitCli::new().remote_list(&repo).map(|raw| {
-                        micold_core::github::resolve_ssh_aliases(
-                            micold_core::git::parse_remote_list(&raw),
-                        )
-                    })
+                    GitCli::new()
+                        .remote_list(&repo)
+                        .map(|raw| micold_core::git::parse_remote_list(&raw))
                 })
                 .await;
                 let reply = match listed {
@@ -2778,7 +2786,7 @@ async fn announce_git_targets(state: &Arc<DaemonState>, only: Option<crate::stat
     let st = Arc::clone(state);
     let computed = tokio::task::spawn_blocking(move || {
         (
-            crate::git_credential::collect_targets(&st.project_paths()),
+            crate::git_credential::collect_targets(&st.project_paths(), &st.ssh_github_aliases()),
             crate::git_credential::git_too_old(),
         )
     })

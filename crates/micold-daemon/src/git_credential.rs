@@ -112,10 +112,15 @@ fn too_old(text: &str) -> Option<String> {
     ((major, minor) < (2, 31)).then(|| version.to_string())
 }
 
-/// What each of `projects` pushes to: `git remote get-url --push origin`, verbatim, `None` when
-/// there is no `origin` or the folder is no repository (an SSH alias of github.com is rewritten
-/// to its `ssh://git@github.com/…` form). Blocking.
-pub fn collect_targets(projects: &[PathBuf]) -> Vec<CredentialTarget> {
+/// What each of `projects` pushes to: `git remote get-url --push origin`, `None` when there is no
+/// `origin` or the folder is no repository. A URL on one of `github_aliases` (the SSH aliases of
+/// github.com the client reported, #1475) is given as its `ssh://git@github.com/…` form, any
+/// other verbatim: this runs in a container, whose own `ssh` knows no alias. Blocking.
+pub fn collect_targets(
+    projects: &[PathBuf],
+    github_aliases: &std::collections::BTreeSet<String>,
+) -> Vec<CredentialTarget> {
+    let resolve = micold_core::github::known_github_aliases(github_aliases, None);
     projects
         .iter()
         .map(|project| {
@@ -129,8 +134,7 @@ pub fn collect_targets(projects: &[PathBuf]) -> Vec<CredentialTarget> {
                 .filter(|o| o.status.success())
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .filter(|u| !u.is_empty())
-                // An SSH host alias for github.com counts as GitHub (#1475).
-                .map(|u| micold_core::github::resolve_ssh_alias_url(&u));
+                .map(|u| micold_core::github::resolve_ssh_alias_url_with(&u, &resolve));
             CredentialTarget {
                 project: project.clone(),
                 push_url,
@@ -155,9 +159,11 @@ pub enum GrantRefused {
 }
 
 /// Write a grant when it is allowed: sandboxed, git new enough, and `repo` one of the repositories
-/// `projects` push to (a client bug cannot widen the daemon's reach). Blocking.
+/// `projects` push to (a client bug cannot widen the daemon's reach), with `github_aliases` as in
+/// [`collect_targets`]. Blocking.
 pub fn apply_grant(
     projects: &[PathBuf],
+    github_aliases: &std::collections::BTreeSet<String>,
     repo: &GithubRepo,
     token: &SecretToken,
     expires_at: UnixTime,
@@ -174,7 +180,7 @@ pub fn apply_grant(
         return Err(GrantRefused::Invalid);
     }
     let want = repo.lowercased();
-    let pushes_there = collect_targets(projects)
+    let pushes_there = collect_targets(projects, github_aliases)
         .iter()
         .any(|t| t.repo().is_ok_and(|r| r.lowercased() == want));
     if !pushes_there {

@@ -520,7 +520,10 @@ rewrites, which usually live in `~/.gitconfig`, and that file reaches a sandboxe
 the user opts into `CredentialShare::GitConfig`. An aliased remote would then be GitHub on one
 placement and not on the other. The repository's own `.git/config` is in the mounted project on
 both, so the answer does not depend on where the daemon runs. The cost is documented for users: a
-remote spelled through a global `insteadOf` alias is not recognised as GitHub.
+remote spelled through a global `insteadOf` alias is not recognised as GitHub. An SSH `Host` alias whose `HostName` is
+github.com or ssh.github.com is recognised: the client resolves it with `ssh -G` on the user's
+machine and tells the daemon (`ClientMsg::SshHostAliases`), since a container daemon has no
+`~/.ssh` (#1475).
 
 The decision record is `specs/034-github-issue-worktree/research.md` R4 and R5.
 

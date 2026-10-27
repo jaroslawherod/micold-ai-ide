@@ -86,7 +86,8 @@ fn update_inner_applies_window_focus_changed() {
             .without_settings()
             .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
-            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none())
+            .with_ssh_hosts(crate::shell::ssh_aliases::SshHosts::new(None)),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -273,7 +274,8 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
             .without_settings()
             .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
-            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none())
+            .with_ssh_hosts(crate::shell::ssh_aliases::SshHosts::new(None)),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -975,7 +977,9 @@ fn base_app_fields() -> App {
                     micold_core::script_path_check::ProbeAnswer::File,
                 ),
             ))
-            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none())
+            // #1475: no test runs the developer's own `ssh`.
+            .with_ssh_hosts(crate::shell::ssh_aliases::SshHosts::new(None)),
         core: {
             // As startup seeds it from the loaded settings (feature 613): a save validates it.
             let mut core = State::default();
@@ -4040,7 +4044,8 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
             .without_settings()
             .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
-            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none()),
+            .with_issue_tooling(crate::shell::capabilities::IssueTooling::none())
+            .with_ssh_hosts(crate::shell::ssh_aliases::SshHosts::new(None)),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),

@@ -33,7 +33,7 @@ impl GithubRepo {
     /// `[user@]github.com:o/r`, each with an optional `.git` and trailing `/`; the host is compared
     /// ignoring case. Userinfo is discarded. Anything else — another host, a local path, an alias
     /// a global `insteadOf` would expand — is not a GitHub remote. An SSH host alias is resolved
-    /// before this runs, by [`resolve_ssh_aliases`] (#1475); this parser stays pure.
+    /// before this runs, by [`resolve_ssh_aliases_with`] (#1475); this parser stays pure.
     pub fn from_remote_url(url: &str) -> Option<GithubRepo> {
         let (host, path, over_ssh) = split_remote(url)?;
         let on_github = host.eq_ignore_ascii_case("github.com")
@@ -64,6 +64,7 @@ impl GithubRepo {
             name: name.to_string(),
         })
     }
+
     /// The same repository with lower-case names: GitHub ignores case, so this is the key to
     /// share one credential (and one file) between `Foo/Bar` and `foo/bar`.
     pub fn lowercased(&self) -> GithubRepo {
@@ -140,7 +141,8 @@ fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
     Some((host, path, over_ssh))
 }
 
-/// How long `ssh -G` may take; it only reads configuration, so a hang is a broken `ssh`.
+/// How long `ssh -G` may take. It makes no connection, but a `Match exec` or `CanonicalizeHostname`
+/// line in the user's configuration can run a command or a DNS lookup, so it is bounded.
 const SSH_G_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// The `HostName` line of `ssh -G` output (`hostname <name>`), lower-cased.
@@ -153,8 +155,10 @@ pub fn hostname_from_ssh_g(output: &str) -> Option<String> {
     })
 }
 
-/// The real host behind SSH alias `host`, as `ssh -G <host>` reports it; `None` when `ssh` is
-/// missing, fails or times out. Reads configuration only: no connection is made.
+/// The real host behind SSH alias `host`, as `ssh -G <host>` reports it on this machine; `None`
+/// when `ssh` is missing, fails or takes longer than 5 seconds. Blocking. Only the user's machine
+/// has the `~/.ssh/config` that defines an alias, so only the client and a host-process daemon
+/// call this (#1475); a container daemon is told the answer instead.
 pub fn ssh_resolved_hostname(host: &str) -> Option<String> {
     let mut cmd = std::process::Command::new("ssh");
     crate::process::no_window(&mut cmd)
@@ -169,19 +173,39 @@ pub fn ssh_resolved_hostname(host: &str) -> Option<String> {
     }
 }
 
-/// `remotes` with each SSH host alias that `resolve` maps to github.com rewritten to the
-/// equivalent `ssh://git@github.com/<path>` URL, so the pure parser and every consumer of the
-/// remote list recognise it (#1475). `resolve` runs only for an SSH remote whose host is not
-/// GitHub's and looks like a plain host name; any other remote is untouched, and so is one whose
-/// alias resolves elsewhere or not at all.
+/// Whether `host` is github.com's own SSH host, which needs no resolving.
+fn is_github_ssh_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("github.com") || host.eq_ignore_ascii_case("ssh.github.com")
+}
+
+/// The SSH host of `url` that may be an alias of github.com, lower-cased: an SSH (or scp-form)
+/// remote whose host is not GitHub's and is a plain host name. Anything that could be read as an
+/// option or holds a shell or `ssh` token (`-oProxyCommand=…`, a space, `;`, `%`) is never one, so
+/// it never reaches `ssh -G`.
+pub fn ssh_alias_candidate(url: &str) -> Option<String> {
+    let (host, _, over_ssh) = split_remote(url)?;
+    let plain = !host.is_empty()
+        && !host.starts_with('-')
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    (over_ssh && plain && !is_github_ssh_host(host)).then(|| host.to_ascii_lowercase())
+}
+
+/// `remotes` with each SSH host alias that `resolve` maps to github.com (or ssh.github.com)
+/// rewritten to the equivalent `ssh://git@github.com/<path>` URL, so the pure parser and every
+/// consumer of the remote list recognise it (#1475). `resolve` is asked about each
+/// [`ssh_alias_candidate`] host once per call, whatever the number of remotes naming it; any other
+/// remote is untouched, and so is one whose alias resolves elsewhere or not at all.
 pub fn resolve_ssh_aliases_with(
     remotes: Vec<GitRemote>,
     resolve: &dyn Fn(&str) -> Option<String>,
 ) -> Vec<GitRemote> {
+    let mut seen = std::collections::HashMap::new();
     remotes
         .into_iter()
         .map(|mut r| {
-            if let Some(url) = alias_to_github(&r.url, resolve) {
+            if let Some(url) = alias_to_github(&r.url, &mut seen, resolve) {
                 r.url = url;
             }
             r
@@ -189,34 +213,46 @@ pub fn resolve_ssh_aliases_with(
         .collect()
 }
 
-/// [`resolve_ssh_aliases_with`] using `ssh -G`.
-pub fn resolve_ssh_aliases(remotes: Vec<GitRemote>) -> Vec<GitRemote> {
-    resolve_ssh_aliases_with(remotes, &ssh_resolved_hostname)
+/// [`resolve_ssh_aliases_with`] for one URL (`git remote get-url`): the URL itself when it is no
+/// alias of github.com.
+pub fn resolve_ssh_alias_url_with(url: &str, resolve: &dyn Fn(&str) -> Option<String>) -> String {
+    alias_to_github(url, &mut std::collections::HashMap::new(), resolve)
+        .unwrap_or_else(|| url.to_string())
 }
 
-/// [`resolve_ssh_aliases`] for one URL (`git remote get-url`): the URL itself when it is no alias.
-pub fn resolve_ssh_alias_url(url: &str) -> String {
-    alias_to_github(url, &ssh_resolved_hostname).unwrap_or_else(|| url.to_string())
+/// What resolves an SSH host to its real host name, as `ssh -G` does.
+pub type HostResolver<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// A resolver for [`resolve_ssh_aliases_with`] that knows `github_aliases` (lower-cased hosts the
+/// user's machine resolved to github.com, #1475) and asks `fallback`, when there is one, about any
+/// other host.
+pub fn known_github_aliases<'a>(
+    github_aliases: &'a std::collections::BTreeSet<String>,
+    fallback: Option<HostResolver<'a>>,
+) -> impl Fn(&str) -> Option<String> + 'a {
+    move |host: &str| {
+        if github_aliases.contains(host) {
+            Some("github.com".to_string())
+        } else {
+            fallback.and_then(|f| f(host))
+        }
+    }
 }
 
-fn alias_to_github(url: &str, resolve: &dyn Fn(&str) -> Option<String>) -> Option<String> {
-    let (host, path, over_ssh) = split_remote(url)?;
-    let plain = !host.is_empty()
-        && !host.starts_with('-')
-        && host
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
-    if !over_ssh
-        || !plain
-        || host.eq_ignore_ascii_case("github.com")
-        || host.eq_ignore_ascii_case("ssh.github.com")
-    {
+fn alias_to_github(
+    url: &str,
+    seen: &mut std::collections::HashMap<String, Option<String>>,
+    resolve: &dyn Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let host = ssh_alias_candidate(url)?;
+    let real = seen
+        .entry(host)
+        .or_insert_with_key(|h| resolve(h))
+        .clone()?;
+    if !is_github_ssh_host(&real) {
         return None;
     }
-    let real = resolve(host)?;
-    if real != "github.com" && real != "ssh.github.com" {
-        return None;
-    }
+    let (_, path, _) = split_remote(url)?;
     let rewritten = format!("ssh://git@github.com/{}", path.trim_start_matches('/'));
     GithubRepo::from_remote_url(&rewritten).map(|_| rewritten)
 }

@@ -21,8 +21,7 @@ use std::sync::Arc;
 use micold_core::git::parse_remote_list;
 use micold_core::git::{Git, GitCli};
 use micold_core::github::{
-    choose_remote, resolve_ssh_aliases, GithubRepo, IssueLoadError, IssueLookup, IssueLookupError,
-    RemoteChoice,
+    choose_remote, GithubRepo, IssueLoadError, IssueLookup, IssueLookupError, RemoteChoice,
 };
 use micold_core::issue_details::{details_error_json, IssueDetails};
 use micold_core::mcp::errors::{ErrorCategory, OpError};
@@ -913,12 +912,12 @@ async fn resolve_naming(
         ));
     }
 
-    let repo = repo.to_path_buf();
+    let (st, repo) = (Arc::clone(state), repo.to_path_buf());
     let github = blocking(move || {
         let raw = GitCli::new()
             .remote_list(&repo)
             .map_err(|e| OpError::service_error(format!("could not read the remotes: {e}")))?;
-        match choose_remote(&resolve_ssh_aliases(parse_remote_list(&raw))) {
+        match choose_remote(&st.resolve_ssh_aliases(parse_remote_list(&raw))) {
             RemoteChoice::Github { repo, .. } => Ok(repo),
             RemoteChoice::NoGithubRemote => Err(OpError::invalid_input(
                 "This repository has no GitHub remote.",

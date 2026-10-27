@@ -335,7 +335,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 68 → 69 for feature 1271's `ReviewEditOp::SetReviewed` and `ReviewChanged.marks` (RM7).
 ///
 /// And 69 → 70 for feature 1289's setup messages (contracts C1–C2).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 70;
+///
+/// And 70 → 71 for #1475's `ClientMsg::SshHostAliases`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 71;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

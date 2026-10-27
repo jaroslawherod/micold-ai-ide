@@ -561,6 +561,15 @@ pub enum ClientMsg {
         /// Project path.
         project: PathBuf,
     },
+    /// The SSH host aliases that the user's machine resolves to github.com or ssh.github.com with
+    /// `ssh -G` (#1475), lower-cased. A container daemon has no `~/.ssh/config` to resolve them
+    /// with itself, so the client tells it. The daemon adds them to the set it already holds and
+    /// treats a remote on one of these hosts as GitHub's: the issue source, an issue-driven
+    /// `create_worktree` and the scoped credential's targets. Only compared, never run. Unanswered.
+    SshHostAliases {
+        /// The aliases of github.com, lower-cased.
+        github_hosts: Vec<String>,
+    },
     /// Ask what `project` offers to attach: the stored provider sessions the catalog does not
     /// hold (features 582, 552). Read-only; answered with [`DaemonMsg::AttachReport`].
     AttachDiscover {
@@ -1607,7 +1616,9 @@ pub enum TurnPhase {
 pub struct CredentialTarget {
     /// The daemon's path for the project.
     pub project: PathBuf,
-    /// `git remote get-url --push origin`, verbatim; `None` without an `origin`.
+    /// `git remote get-url --push origin`; `None` without an `origin`. An SSH host alias the
+    /// client reported as github.com's ([`ClientMsg::SshHostAliases`]) is given as its
+    /// `ssh://git@github.com/…` form (#1475); any other URL is verbatim.
     pub push_url: Option<String>,
 }
 
@@ -2749,6 +2760,7 @@ mod setup_wire_tests {
 
     #[test]
     fn the_setup_messages_bump_the_protocol_to_70() {
-        assert_eq!(PROTOCOL_VERSION, 70);
+        // #1475 took 71 after it.
+        assert!(PROTOCOL_VERSION >= 70);
     }
 }
