@@ -16754,6 +16754,46 @@ mod history_tests {
             "the Review tab is shown"
         );
     }
+
+    /// SC-005: from a browsed file, Back returns to what was being read in one press and the next
+    /// Back leaves the tab.
+    #[test]
+    fn back_in_a_browsed_review_tab_returns_to_the_reading_then_leaves_the_tab() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let _ = update(
+            &mut app,
+            Message::Sidebar(
+                micold_client::features::sidebar::Msg::ReviewChangesRequested(
+                    SessionLocation::Default,
+                ),
+            ),
+        );
+        let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
+        let _ = update(
+            &mut app,
+            Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
+        );
+        let browsing = |app: &App| {
+            app.core
+                .changes
+                .tabs
+                .shown_view()
+                .is_some_and(|v| v.browse.is_some())
+        };
+        assert!(browsing(&app));
+        let entries = app.core.history.list.entries().len();
+        press(&mut app, Dir::Back);
+        assert!(!browsing(&app), "one press returns to the previous reading");
+        assert!(app.core.review_shown().is_some(), "the tab stays shown");
+        assert_eq!(app.core.history.list.entries().len(), entries);
+        press(&mut app, Dir::Back);
+        assert!(
+            app.core.review_shown().is_none(),
+            "the next press leaves the tab"
+        );
+        assert_eq!(app.core.session.active, Some(ids[0]));
+    }
 }
 
 // ---- Feature 1400, US2: the remembered GitHub selector's shell paths (T031) ----

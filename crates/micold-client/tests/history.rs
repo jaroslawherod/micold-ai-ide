@@ -604,3 +604,81 @@ fn a_button_move_lands_on_the_terminal_as_a_click_would() {
     assert_eq!(state.session.active, Some(a));
     assert!(state.terminal_focused(), "A's terminal has the keyboard");
 }
+
+// ---- FR-011: the Review tab's own Back first (T024) --------------------------------------------
+
+/// `feat-a` shown as a Review tab, after a session was shown; with `browse`, a file is opened in
+/// it (one Back frame on its stack).
+fn in_review(browse: bool) -> (State, SessionId) {
+    let (mut state, _, a, _) = three();
+    select(&mut state, a);
+    send(
+        &mut state,
+        Message::Sidebar(sidebar::Msg::ReviewChangesRequested(worktree("feat-a"))),
+    );
+    if browse {
+        let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
+        send(
+            &mut state,
+            Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
+        );
+    }
+    (state, a)
+}
+
+#[test]
+fn back_in_a_browsing_review_tab_is_the_tabs_own_back() {
+    for source in [Source::Button, Source::Key] {
+        let (mut state, _) = in_review(true);
+        let before = entries(&state);
+        let position = state.history.list.position();
+        let step = state.press_history(Msg::Pressed {
+            dir: Dir::Back,
+            source,
+        });
+        assert_eq!(step, Step::ReviewBack, "{source:?}");
+        assert_eq!(state.history.list.position(), position, "{source:?}");
+        assert_eq!(entries(&state), before, "{source:?}");
+        assert!(
+            !state.history.moving,
+            "{source:?}: nothing is being moved to"
+        );
+        assert_eq!(
+            state.apply_history(step),
+            vec![Message::Changes(
+                micold_client::features::changes::Msg::BrowseBack
+            )],
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn back_in_a_review_tab_without_a_browse_frame_is_the_global_back() {
+    let (mut state, a) = in_review(false);
+    let step = back(&mut state);
+    assert_eq!(step, Step::Show(at_session(worktree("feat-a"), a)));
+}
+
+#[test]
+fn forward_from_a_browsing_review_tab_is_the_global_forward() {
+    let (mut state, a) = in_review(true);
+    // D, A, Review(feat-a): leave the browse, go Back to A, then Forward is the Review tab again.
+    let file_back = Message::Changes(micold_client::features::changes::Msg::BrowseBack);
+    send(&mut state, file_back);
+    back(&mut state);
+    assert_eq!(state.session.active, Some(a));
+    let step = press(&mut state, Dir::Forward, Source::Button);
+    assert_eq!(step, Step::Show(at(View::Review(worktree("feat-a")))));
+    // Browsing there again: Forward with nothing ahead stays the global Forward (does nothing).
+    let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
+    send(
+        &mut state,
+        Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
+    );
+    assert_eq!(
+        press(&mut state, Dir::Forward, Source::Key),
+        Step::None,
+        "Forward never reaches the tab's own Back"
+    );
+}
