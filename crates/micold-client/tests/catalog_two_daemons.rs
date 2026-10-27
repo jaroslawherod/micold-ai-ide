@@ -404,6 +404,15 @@ fn another_daemons_session_at_an_unbound_location_stays_while_it_lists_it() {
     reconcile_catalog(&mut state, B, &b_snapshot(), true);
     listed(&state, "after B listed it again");
 
+    // B pushes a catalog that has not loaded the project yet: what it listed there still stands.
+    let unloaded = CatalogSnapshot {
+        projects: vec![],
+        ..b_snapshot()
+    };
+    reconcile_catalog(&mut state, B, &unloaded, true);
+    reconcile_catalog(&mut state, A, &a_snapshot(), true);
+    listed(&state, "after B omitted the project");
+
     // B stops listing it (archived there): the row leaves, and A's next push keeps it gone.
     reconcile_catalog(&mut state, B, &snapshot(vec![], vec![]), true);
     assert!(!session_ids(&state).contains(&s_u), "B archived it");

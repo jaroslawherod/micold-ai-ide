@@ -1802,6 +1802,11 @@ pub fn interpret(
             let canonical = micold_core::project::canonicalize_best_effort(&path);
             state.changes.tabs.drop_project(&canonical);
             state.changes.tabs.drop_project(&path);
+            // Bug 1538: so does what each daemon last listed there.
+            for projects in state.settings.listed_sessions.values_mut() {
+                projects.remove(&canonical);
+                projects.remove(&path);
+            }
         }
         Outcome::RunInParallelRequested => return crate::features::runs::requested(state),
         Outcome::WorktreeCreated(worktree) => {
