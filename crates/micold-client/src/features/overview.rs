@@ -30,7 +30,7 @@ pub enum TitleLookup {
     Pending,
     /// The title.
     Known(String),
-    /// Could not be read (offline, closed, no tooling): the card shows its branch.
+    /// Could not be read (offline, no such issue, no tooling): the card shows its branch.
     Unavailable,
 }
 

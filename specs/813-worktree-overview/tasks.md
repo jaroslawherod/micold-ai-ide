@@ -610,14 +610,14 @@ HIGH findings and the loosened gate) are cleared and `tdd-verify` is re-run.
 **Bugfix**: 2026-10-27 — BUG-1488 Updated from bugfix patch. Source: `bugs/BUG-1488.md`. T083 before
 T084; neither depends on other open tasks.
 
-- [ ] T083 [US4] Regression tests, written first and seen failing: in
+- [x] T083 [US4] Regression tests, written first and seen failing: in
   crates/micold-core/tests/github_issue_lookup.rs, `parse_title` gives `Some(title)` for an OPEN and a
   CLOSED issue node, `None` for `issue: null` (with or without the NOT_FOUND error), and the
   `parse_lookup` error for no `data` or a null repository; the default `IssueLookup::read_title` over
   `FakeIssueSource` gives the scripted snapshot's title. In crates/micold-client/src/shell/issues.rs
   `title_tests`, `read_title` over a source whose `read_title` answers a closed issue's title gives
   `TitleLookup::Known(title)`, and over `None` or an error gives `Unavailable` (FR-015, BUG-1488)
-- [ ] T084 [US4] Fix: in crates/micold-core/src/github.rs add `parse_title` and
+- [x] T084 [US4] Fix: in crates/micold-core/src/github.rs add `parse_title` and
   `IssueLookup::read_title(repo, number) -> Result<Option<String>, IssueLookupError>` (default via
   `read_issue`: an open issue's title, `NotOpenIssue` → `Ok(None)`), overridden by `GhCli` with
   `lookup_args` + `parse_title`; crates/micold-client/src/shell/issues.rs `read_title` calls it, the
