@@ -12,6 +12,12 @@
 
 Feature 034 (`specs/034-github-issue-worktree`) added the GitHub issue source to the New worktree form: it loads up to 1,000 of the repository's open issues, most recently updated first, searches them locally by number, title and label name (034 FR-005), and asks GitHub's search for matches beyond the loaded issues only when the loaded list is incomplete (034 FR-005a). Feature 1102 added the switch that turns GitHub issues on or off. The Jira source of the same form gained basic field filters behind a **Filters** button (1185) and a Basic / Advanced switch with a JQL query remembered per project (1186). This feature gives the GitHub source the same two modes, with GitHub's own filter fields and search syntax, and remembers the filter per project.
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: The issue lists "optionally assignee, author and milestone" among the basic filters. Are these three filters part of this feature? → A: Yes, as User Story 6 (P3), built in the last milestone after the P1 and P2 stories; each filter may be left unset. _(provisional: recommended option, awaiting user; autopilot ledger D1)_
+
 ## Terms
 
 - **Selector**: the GitHub issue picker in the New worktree form (feature 034): its list of the repository's issues and its search text.
@@ -124,7 +130,7 @@ A developer wants to restart work on a recently closed issue. In **Filters** the
 
 A developer chooses "no assignee" in the assignee filter (or themselves as the author, or the milestone `v2.4`), and the list shows only the matching issues.
 
-**Why this priority**: The issue names these filters as optional; advanced mode already reaches them.
+**Why this priority**: The issue names these filters as optional; advanced mode already reaches them. They are in scope and are built last, after the P1 and P2 stories.
 
 **Independent Test**: Choose each value kind in turn — assignee "me", "no assignee", a person; author "me", a person; a milestone, "no milestone" — and check the list holds exactly the matching issues.
 
@@ -134,8 +140,6 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 2. **Given** the author filter, **When** the user opens it, **Then** it offers "me" first, then the repository's assignable users whose login or name matches the typed text, and accepts any typed GitHub login.
 3. **Given** the milestone filter, **When** the user opens it, **Then** it offers "no milestone" and the repository's open milestones by title.
 4. **Given** an assignee, author or milestone is chosen, **When** the list reloads, **Then** every listed issue matches it, and it combines with the other filters (AND).
-
-[NEEDS CLARIFICATION: The issue says "optionally assignee, author and milestone". Does "optionally" mean these three filters are part of this feature (filters the user may leave unset, User Story 6 as written), or that they may be left out of this feature and reached through advanced mode until a later issue adds them?]
 
 ---
 
@@ -179,7 +183,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 
 ### Basic filters
 
-- **FR-003**: Basic mode MUST offer, behind one **Filters** control naming how many filters are chosen, these filters: include labels and exclude labels (each any number of the repository's labels), state (open, closed or all; open by default), and [NEEDS CLARIFICATION, see User Story 6] assignee (me, no assignee, or one person), author (me or one GitHub login) and milestone (no milestone, or one of the repository's open milestones).
+- **FR-003**: Basic mode MUST offer, behind one **Filters** control naming how many filters are chosen, these filters: include labels and exclude labels (each any number of the repository's labels), state (open, closed or all; open by default), and assignee (me, no assignee, or one person), author (me or one GitHub login) and milestone (no milestone, or one of the repository's open milestones).
 - **FR-004**: The listed issues MUST be the issues of the repository that satisfy every chosen filter (AND): each carries every included label, carries no excluded label, is in the chosen state, and matches the chosen assignee, author and milestone.
 - **FR-005**: Label choices MUST be the repository's labels, alphabetically, up to 1,000, with the incomplete-list notice of the Edge Cases; milestone choices the repository's open milestones; assignee and author people the repository's assignable users matching the typed text. A choice list MUST be requested only when the user first opens the control that needs it in a form showing the GitHub source, and held only in the open form (034 FR-023).
 - **FR-006**: Each basic filter value MUST be sent so that it matches exactly that value and can never change the structure of the query; a label whose name holds a `"` or a control character MUST NOT be offered; an author login typed by hand MUST be a valid GitHub login (letters, digits and single hyphens, at most 39 characters) before it is used.
