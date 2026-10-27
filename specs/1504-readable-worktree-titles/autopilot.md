@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M2 review fixes committed on branch 1504-m2 (worktree /home/user/wt-1504-m2), rebased onto origin/main after M1 #1566 merged (2104379be); full gate run on the rebased tree; not pushed
+- **Phase**: M2 review fixes committed (ef2d329bc) on branch 1504-m2 (worktree /home/user/wt-1504-m2), rebased onto origin/main after M1 #1566 merged (2104379be); full gate (`scripts/gate.sh`) green at ef2d329bc; not pushed; review B round 2 pending
 - **Next step**: orchestrator runs a scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the T049 disclosure fix commit; then push `claude/project-thread-t2a600` and open the M2 PR from scratchpad pr-title-m2.md / pr-body-m2.md
 
 ## Pull requests
@@ -101,6 +101,10 @@ The longer selector notice wraps one more line in the Jira New-worktree dialog: 
 `layout_snapshot` failed on the `add-worktree-dialog-jira-*` states only (dialog 16 px taller,
 `0/8/…` paths), accepted with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test
 layout_snapshot`.
+
+Pending (M2): scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the
+T049 fix commit `1b94d0344..ef2d329bc` (the round-1 snapshot is stale after the rebase onto
+2104379be, so the diff is given as a commit range). Full gate green at ef2d329bc.
 
 Round-1 reviews (M2, done): review A (`code-review` high) and review B (`rubrics/conformance.md`,
 sonnet) on `ac5ada9ea...HEAD` (`code-review` high) and review B (`rubrics/conformance.md`,
