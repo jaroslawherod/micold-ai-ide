@@ -109,9 +109,9 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - **FR-009**: Cancelling the picker MUST leave the composer unchanged and show no notification.
 - **FR-010**: The button MUST be reachable and operable by keyboard, with a visible focus state, and MUST have a shortcut listed in the shortcut sheet.
 - **FR-011**: The button MUST be disabled or hidden, and a drop MUST NOT be admitted, when the session cannot accept input; a refused drop MUST tell the user why.
+- **FR-012**: A picker result MUST be applied only to the session that requested it; if that session can no longer accept input, the result MUST NOT be applied and the user MUST be told.
 - **FR-015**: While a picker is open for a session, activating the button again MUST NOT open a second picker.
 - **FR-016**: A drop or picker confirmation carrying no files, or carrying a non-file payload such as text, MUST leave the composer unchanged and show no notification.
-- **FR-012**: A picker result MUST be applied only to the session that requested it; if that session can no longer accept input, the result MUST NOT be applied and the user MUST be told.
 
 **Verification**
 
@@ -134,7 +134,7 @@ A keyboard user reaches the button with the focus order and triggers it with a s
 - **SC-003**: Dropping files on any part of a structured view reaches the composer in 100% of tested cases on Linux (Wayland and X11), macOS and Windows, with no input reaching a terminal.
 - **SC-004**: While the picker is open the interface still responds to input within 100 ms.
 - **SC-005**: The drop cue is visible while files hover and is gone by the next rendered frame after the drag leaves or drops.
-- **SC-006**: Every rejected file on either route is reported with its name and the reason.
+- **SC-006**: Every rejected image on either route is reported with its name and the reason.
 
 ## Assumptions
 
