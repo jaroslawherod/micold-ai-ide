@@ -188,7 +188,10 @@ fn the_shown_sessions_removal_records_where_the_app_moved() {
         Message::Sidebar(sidebar::Msg::ReviewChangesRequested(worktree("feat-a"))),
     );
     select(&mut state, a);
-    send(&mut state, Message::Session(session::Msg::CloseRequested(a)));
+    send(
+        &mut state,
+        Message::Session(session::Msg::CloseRequested(a)),
+    );
     let review = at(View::Review(worktree("feat-a")));
     assert_eq!(
         state.shown_place(),
@@ -436,7 +439,11 @@ fn finishing_a_move_records_only_a_place_other_than_the_target() {
     }
     state.finish_history_move();
     assert!(!state.history.moving);
-    assert_eq!(entries(&state).len(), 3, "landed on the target: nothing new");
+    assert_eq!(
+        entries(&state).len(),
+        3,
+        "landed on the target: nothing new"
+    );
     assert_eq!(state.history.list.position(), 1);
 
     // A move that lands elsewhere than its target: the shown place is recorded.

@@ -198,7 +198,11 @@ mod tests {
     fn recording_the_current_entry_adds_nothing() {
         let mut h = filled(&[1, 2]);
         h.record(2);
-        assert_eq!(h.entries(), &[1, 2], "FR-003: equal to current adds nothing");
+        assert_eq!(
+            h.entries(),
+            &[1, 2],
+            "FR-003: equal to current adds nothing"
+        );
         assert_eq!(h.position(), 1);
     }
 
@@ -209,8 +213,16 @@ mod tests {
         assert_eq!(h.step(Dir::Back, Some(&2), all), Some(1));
         h.record(4);
         assert_eq!(h.entries(), &[1, 4], "US1 AS3, FR-004: B and C dropped");
-        assert_eq!(h.step(Dir::Forward, Some(&4), all), None, "forward is empty");
-        assert_eq!(h.step(Dir::Back, Some(&4), all), Some(1), "back returns to A");
+        assert_eq!(
+            h.step(Dir::Forward, Some(&4), all),
+            None,
+            "forward is empty"
+        );
+        assert_eq!(
+            h.step(Dir::Back, Some(&4), all),
+            Some(1),
+            "back returns to A"
+        );
     }
 
     #[test]
@@ -234,11 +246,19 @@ mod tests {
     #[test]
     fn stepping_past_either_end_changes_nothing() {
         let mut h = filled(&[1, 2, 3]);
-        assert_eq!(h.step(Dir::Forward, Some(&3), all), None, "US1 AS6: at the last");
+        assert_eq!(
+            h.step(Dir::Forward, Some(&3), all),
+            None,
+            "US1 AS6: at the last"
+        );
         assert_eq!(h.position(), 2);
         h.step(Dir::Back, Some(&3), all);
         h.step(Dir::Back, Some(&2), all);
-        assert_eq!(h.step(Dir::Back, Some(&1), all), None, "US1 AS6: at the first");
+        assert_eq!(
+            h.step(Dir::Back, Some(&1), all),
+            None,
+            "US1 AS6: at the first"
+        );
         assert_eq!(h.position(), 0);
         assert_eq!(h.entries(), &[1, 2, 3]);
         let mut empty = History::<u32>::default();
@@ -265,7 +285,11 @@ mod tests {
     fn removal_merges_neighbouring_equal_entries() {
         let mut h = filled(&[1, 2, 1, 3]);
         let gone = |p: &u32| *p != 2;
-        assert_eq!(h.step(Dir::Back, Some(&3), gone), Some(1), "Back from C lands on A");
+        assert_eq!(
+            h.step(Dir::Back, Some(&3), gone),
+            Some(1),
+            "Back from C lands on A"
+        );
         assert_eq!(
             h.step(Dir::Back, Some(&1), gone),
             None,

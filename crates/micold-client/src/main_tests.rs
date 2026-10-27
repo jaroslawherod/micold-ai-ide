@@ -13039,7 +13039,12 @@ mod panes {
         ));
         app.core.workspace.active = Some(project.clone());
         let sessions: Vec<Session> = (0..n)
-            .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
+            .map(|_| {
+                // Idle, so selecting one asks nothing (a session that is not running yet would).
+                let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+                session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+                session
+            })
             .collect();
         let ids: Vec<SessionId> = sessions.iter().map(|s| s.id).collect();
         app.core.workspace.sessions.insert(project, sessions);
@@ -16587,4 +16592,166 @@ fn worktrees_fingerprint_follows_the_branch() {
     let before = shell::issues::worktrees_fingerprint(&app);
     app.core.worktree.worktrees[0].branch = Some("feat/1504-readable-titles".to_string());
     assert_ne!(shell::issues::worktrees_fingerprint(&app), before);
+}
+
+// --- Feature 1465: Back/Forward through the real root `update` (T011) ---
+
+mod history_tests {
+    use super::*;
+    use micold_client::features::history::{Msg as HistoryMsg, Source};
+    use micold_core::history::{Dir, View};
+    use micold_core::session::{Session, SessionLocation};
+
+    fn project() -> std::path::PathBuf {
+        std::path::PathBuf::from("/tmp/project")
+    }
+
+    /// A connected app on `/tmp/project` with `n` sessions at its root, none shown.
+    fn app_with_sessions(n: usize) -> (App, Vec<SessionId>, SentRx) {
+        let (mut app, rx) = connected_app();
+        app.core.workspace.active = Some(project());
+        let sessions: Vec<Session> = (0..n)
+            .map(|_| {
+                // Idle, so selecting one asks nothing (a session that is not running yet would).
+                let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+                session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+                session
+            })
+            .collect();
+        let ids = sessions.iter().map(|s| s.id).collect();
+        app.core.workspace.sessions.insert(project(), sessions);
+        (app, ids, rx)
+    }
+
+    fn select(app: &mut App, id: SessionId) {
+        let _ = update(app, Message::Session(SessionMsg::Selected(id)));
+    }
+
+    fn press(app: &mut App, dir: Dir) {
+        let _ = update(
+            app,
+            Message::History(HistoryMsg::Pressed {
+                dir,
+                source: Source::Button,
+            }),
+        );
+    }
+
+    fn shown_session_ids(app: &App) -> Vec<SessionId> {
+        app.core
+            .history
+            .list
+            .entries()
+            .iter()
+            .filter_map(|p| match p.view {
+                View::Session { id, .. } => Some(id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// US1 AS1–AS3: A → B → C, Back, Back, select D: forward does nothing and the entries are A, D.
+    #[test]
+    fn back_twice_then_a_new_selection_drops_the_forward_entries() {
+        let (mut app, ids, _rx) = app_with_sessions(4);
+        let [a, b, c, d] = [ids[0], ids[1], ids[2], ids[3]];
+        for id in [a, b, c] {
+            select(&mut app, id);
+        }
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(b), "US1 AS1");
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(a));
+        assert_eq!(
+            shown_session_ids(&app),
+            vec![a, b, c],
+            "moving records nothing"
+        );
+        select(&mut app, d);
+        press(&mut app, Dir::Forward);
+        assert_eq!(
+            app.core.session.active,
+            Some(d),
+            "US1 AS3: forward does nothing"
+        );
+        assert_eq!(shown_session_ids(&app), vec![a, d]);
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(a), "back returns to A");
+    }
+
+    #[test]
+    fn back_from_the_overview_shows_the_previous_session_with_the_overview_closed() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let _ = update(
+            &mut app,
+            Message::Overview(micold_client::features::overview::Msg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(app.core.overview.open);
+        press(&mut app, Dir::Back);
+        assert!(!app.core.overview.open, "the Overview closed");
+        assert_eq!(app.core.session.active, Some(ids[0]));
+        press(&mut app, Dir::Forward);
+        assert!(app.core.overview.open, "Forward opens it again");
+    }
+
+    #[test]
+    fn back_from_compare_shows_the_review_tab() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let group = micold_core::runs::RunGroup::new(micold_core::runs::NewGroup {
+            id: micold_core::runs::GroupId(uuid::Uuid::from_u128(7)),
+            name: "g".into(),
+            naming: micold_core::naming::WorktreeNaming {
+                type_: Some(micold_core::naming::ConventionalType::Feat),
+                ticket: None,
+                name: "g".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs: (1u8..=2)
+                .map(|number| micold_core::runs::Run {
+                    number,
+                    provider: AiCli::ClaudeCode,
+                    names: micold_core::naming::DerivedNames {
+                        dir_name: format!("g-{number}"),
+                        branch: format!("feat/g-{number}"),
+                    },
+                    session: None,
+                    status: micold_core::runs::RunStatus::Creating,
+                })
+                .collect(),
+        })
+        .expect("valid group");
+        let gid = group.id;
+        app.core.runs.groups = vec![group];
+        let _ = update(
+            &mut app,
+            Message::Sidebar(
+                micold_client::features::sidebar::Msg::ReviewChangesRequested(
+                    SessionLocation::Default,
+                ),
+            ),
+        );
+        assert!(app.core.review_shown().is_some());
+        let _ = update(
+            &mut app,
+            Message::Runs(micold_client::features::runs::Msg::CompareOpened {
+                group: gid,
+                project: project(),
+            }),
+        );
+        assert!(app.core.runs.compare.is_some());
+        press(&mut app, Dir::Back);
+        assert!(app.core.runs.compare.is_none(), "Compare closed");
+        assert_eq!(
+            app.core.shown_place().map(|p| p.view),
+            Some(View::Review(SessionLocation::Default)),
+            "the Review tab is shown"
+        );
+    }
 }

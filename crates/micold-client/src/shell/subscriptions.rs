@@ -174,6 +174,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     {
         subs.push(iced::event::listen_with(changes_drag_message));
     }
+    // Feature 1465 (H4, research R7): the mouse's side buttons go Back and Forward from anywhere
+    // in the window, a focused terminal included, so they are always heard.
+    subs.push(iced::event::listen_with(side_button));
     // Compare's per-run watches (483 R11), likewise only while the view is open.
     subs.extend(crate::shell::runs_watch::watches(app));
     // The Overview's progress watches (813 R9), likewise only while it is open.
@@ -239,6 +242,28 @@ fn changes_drag_message(
         }
         _ => None,
     }
+}
+
+/// The `listen_with` callback for the mouse's side buttons (feature 1465, contracts/keys.md H4):
+/// a Back or Forward press is a history press whatever its status, so a widget that captured it
+/// does not hide it (FR-008). Releases, other buttons and every other event map to nothing.
+fn side_button(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    use iced::mouse::{Button, Event as MouseEvent};
+    use micold_client::features::history::{Msg, Source};
+    use micold_core::history::Dir;
+    let dir = match event {
+        iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Back)) => Dir::Back,
+        iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Forward)) => Dir::Forward,
+        _ => return None,
+    };
+    Some(Message::History(Msg::Pressed {
+        dir,
+        source: Source::Button,
+    }))
 }
 
 /// The message for a poll result, or `None` when `update` has nothing to learn from it. Only a
@@ -371,6 +396,65 @@ mod tests {
 
     fn dummy_status() -> iced::event::Status {
         iced::event::Status::Ignored
+    }
+
+    /// Feature 1465 (H4): a side button's press is Back or Forward, captured or not; releases,
+    /// other buttons and other events are nothing.
+    #[test]
+    fn side_button_maps_back_and_forward_presses_whatever_their_status() {
+        use iced::mouse::{Button, Event as MouseEvent};
+        use micold_client::features::history::{Msg, Source};
+        use micold_core::history::Dir;
+        let id = iced::window::Id::unique();
+        for status in [iced::event::Status::Captured, iced::event::Status::Ignored] {
+            for (button, dir) in [(Button::Back, Dir::Back), (Button::Forward, Dir::Forward)] {
+                assert_eq!(
+                    side_button(
+                        iced::Event::Mouse(MouseEvent::ButtonPressed(button)),
+                        status,
+                        id
+                    ),
+                    Some(Message::History(Msg::Pressed {
+                        dir,
+                        source: Source::Button
+                    })),
+                    "{button:?} with {status:?}"
+                );
+                assert_eq!(
+                    side_button(
+                        iced::Event::Mouse(MouseEvent::ButtonReleased(button)),
+                        status,
+                        id
+                    ),
+                    None,
+                    "a release is nothing"
+                );
+            }
+            for button in [
+                Button::Left,
+                Button::Middle,
+                Button::Right,
+                Button::Other(8),
+            ] {
+                assert_eq!(
+                    side_button(
+                        iced::Event::Mouse(MouseEvent::ButtonPressed(button)),
+                        status,
+                        id
+                    ),
+                    None,
+                    "{button:?} is not a side button"
+                );
+            }
+            assert_eq!(
+                side_button(
+                    iced::Event::Window(iced::window::Event::Focused),
+                    status,
+                    id
+                ),
+                None
+            );
+        }
     }
 
     #[test]
