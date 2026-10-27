@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m1 (M1, stacked on the design commits; design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M1 review round 1 fixes committed (TDD cycle log, Back-with-nothing-shown fix, guide key cells); scoped round 2 of A and B pending (orchestrator)
+- **Phase**: M1 review round 1 fixes committed at 231f98fba (TDD cycle log, Back-with-nothing-shown fix, guide key cells), full gate green there (scratchpad gate-m1-4.log); scoped round 2 of A and B pending (orchestrator)
 - **Next step**: review A round 2 and review B round 2 (Verify re-run) on the fix diff from snapshot 4742c44666bc7576334aedf07d226cb001a6afdb:4573c0ab874ab208ce66d974a57beb15087369e9; then the orchestrator rebases and opens the M1 PR (pr-title-m1.md / pr-body-m1.md in the scratchpad)
 
 ## Pull requests
