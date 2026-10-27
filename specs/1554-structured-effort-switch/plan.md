@@ -58,11 +58,11 @@ unchanged.
 |---|---|---|
 | **I. Test-First** | PASS | Every decision — level parsing, offered and effective level, availability wording, `/effort` argument, control encoding and answer, `classify_draft`, the kind rule, the marker, saved-history compatibility, launch argv — is in `micold-core::structured::{effort, control, commands, transcript, saved}`, `terminal.rs` or the render-free `features/effort_picker.rs` / `features/command_palette.rs`, driven by failing tests first with recorded fixtures as the oracle. Daemon behaviour by stand-in integration tests (FR-013). Only draw glue uses the GUI exception, checked by quickstart Part B. |
 | **II. Multi-Session** | PASS | The choice, the pick counters and the deferred write are per session; every wire message names its session; tests run two sessions (a pick on A never touches B) and two windows on one session (last pick wins, both show it). No settings file is written (`update_settings` rejected, R1), so one session's choice never reaches another. |
-| **III. Worktree Integration** | PASS | Launches keep the session's own `SessionLocation::cwd` and sandbox; no new location or file operation. |
+| **III. Worktree Integration** | PASS | Launches keep the session's own `SessionLocation::cwd` and sandbox; no new location or file operation. A sandboxed session's argv is built by the same `terminal::launch_args` (`daemon/src/supervisor.rs`), so `--effort` reaches the container's CLI and `apply_flag_settings` goes over the same stdin; no sandbox-specific code or test (spec Edge Case "Sandboxed sessions"). |
 | **IV. Local-First** | PASS | Effort is a launch flag and a local stdin control request; nothing new leaves the device beyond what Claude Code itself sends. Stored in the local catalog and event history. |
 | **V. Rust + iced** | PASS | `EffortLevel` is a validated newtype (no blank, flag-like, `auto` or `ultracode` level can reach the CLI); `EffortChoice` makes Default explicit; `DraftCommand::Effort` keeps `/effort` off the send path; `effort_args` defaults to nothing for other CLIs. iced only. |
 | **VI. Cross-Platform** | PASS | One argv flag and one stdin line, built in core with no OS branch; launches go through the per-platform paths that exist; stand-in tests on all three CI platforms. |
-| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` *Commands and the model* becomes *Commands, the model and effort*: the picker, `/effort`, one sentence per level, the unsupported-model wording, and that a change made inside the terminal screen is not seen — in M4, which ships the window (FR-014). |
+| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` *Commands and the model* becomes *Commands, the model and effort*: the picker, `/effort`, one sentence per level, the unsupported-model wording, and that a change made inside the terminal screen is not seen — the picker part in M4, `/effort` in M5, the milestones that ship each (FR-014). |
 | **VIII. Reusable UI** | PASS | The picker is the shared `MenuSelect` (feature 1272) with caller-held openness, the marker reuses the model marker's entry layout in `ui/transcript/entries.rs`; no new component, so no showcase or snapshot entry is owed. |
 
 No violations; Complexity Tracking is empty.
@@ -142,7 +142,7 @@ crates/micold-client/src/
 crates/micold-client/tests/
 ├── features_command_palette.rs   # + /effort
 └── features_effort_picker.rs     # NEW
-docs/user-guide/worktrees-and-sessions.md   # FR-014 (M4)
+docs/user-guide/worktrees-and-sessions.md   # FR-014 (picker M4, /effort M5)
 ```
 
 **Structure Decision**: the existing three-crate split. Decisions in `micold-core` and render-free
@@ -171,7 +171,7 @@ existing row (`MenuSelect`'s own gates cover it); §B 1–2 check it fits.
 | FR-011 | `#[default] Default`; no argv for `None` | core (new session `Default`; argv); daemon (existing argv assertions unchanged) |
 | FR-012 | R5 refusal; `effort_args` default; no trigger for other CLIs | core (other providers' argv); daemon (Copilot session refused, nothing stored; two sessions independent); client (no trigger) |
 | FR-013 | R9 | the daemon suite `structured_effort.rs` covers each listed case |
-| FR-014 | guide in M4 | milestone diff review (each topic present); §B 7 |
+| FR-014 | guide: picker in M4, `/effort` in M5 | milestone diff review (each topic present); §B 7a, 7b |
 | SC-001 | FR-004 | daemon (idle and busy, conversation kept: same pid, no `--resume`) |
 | SC-002 | R5 | daemon (two clients ≤ 1 s) |
 | SC-003 | R6 | daemon (every `/effort` form refused on `SessionUserMessage`, stdin untouched); client (never sent) |
@@ -181,15 +181,17 @@ existing row (`MenuSelect`'s own gates cover it); §B 1–2 check it fits.
 
 ## Delivery
 
-Four milestones; each merges to `main` on its own and leaves the app working. Nothing is visible
-before M4.
+Five milestones (cut in [tasks.md](tasks.md) *Milestones*); each merges to `main` on its own and
+leaves the app working. Nothing is visible before M4 except that the palette lists `/effort` under
+"In this app" from M1, still sent as text until M5, as today.
 
 | M | Delivers | Depends on |
 |---|---|---|
 | M1 | Core: `effort` module, `ReportedModel.effort` + `parse_initialize`, the two notes, saved-history V1/V2 split, `encode_apply_effort`/`parse_apply_effort`, `APP_COMMANDS` and `DraftCommand::Effort`, `EntryKind::EffortChanged`; recordings `effort-change.jsonl`, `effort-launch.jsonl`; wire +1 | — |
-| M2 | Daemon: `Session.effort`, store, `Catalog::set_effort`, `LaunchSpec.effort` + `effort_args`, effective level in `SpawnPlan`, `SetSessionEffort` + `SessionSummary.effort` (wire +1), idle and deferred `apply_flag_settings`, notes, re-apply on model change, `/effort` refused in `SessionUserMessage`; stand-in directives; `structured_effort.rs` | M1 |
-| M3 | Client render-free: `features/effort_picker.rs`, `SendIntent::SetEffort` and `/effort` handling, `daemon_sync` wiring | M2 |
-| M4 | Window: effort trigger beside the model (`MenuSelect`), the effort marker; guide section (FR-014); quickstart Part B | M3 |
+| M2 | Daemon, idle and stopped: `Session.effort`, store, `Catalog::set_effort`, `LaunchSpec.effort` + `effort_args`, effective level in `SpawnPlan`, `SetSessionEffort` + `SessionSummary.effort` (wire +1), idle `apply_flag_settings`, notes; stand-in directives; `structured_effort.rs`. A busy pick is refused until M3 (no window sends one before M4) | M1 |
+| M3 | Daemon, busy: deferred `apply_flag_settings` at the turn's end, `EffortRefused` and put back, re-apply on model change | M2 |
+| M4 | Window: `features/effort_picker.rs`, `set_effort` and `daemon_sync` wiring, the effort trigger beside the model (`MenuSelect`), the effort marker; guide (picker part of FR-014); quickstart Part B 1–3, 6, 7a | M3 |
+| M5 | `/effort`: `SendIntent::SetEffort` and `/effort` handling in the composer, `/effort` refused in `SessionUserMessage`; guide (`/effort` part of FR-014); quickstart Part B 4–5, 7b | M4 |
 
 ## Complexity Tracking
 

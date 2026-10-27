@@ -9,18 +9,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: tasks
-- **Next step**: tasks unit (plan CLEAN in round 1; four milestones M1 core, M2 daemon, M3 client render-free, M4 window + guide).
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR (body in the session scratchpad), waits on CI and merges; then milestone M1 (T001–T010).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | Design: spec, clarifications, plan, research, contracts, tasks | pushed, PR to be opened by the orchestrator | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | — | pending |
+| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | pending |
+| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
+| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
+| M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
 
 ## Decisions
 
@@ -33,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | clarify 1 | Launch with a stored level the model is known not to support? | Launch anyway naming no level (FR-010a); CLI default applies, view says so | agent-resolved | D2, spec.md#FR-011 |
 | D6 | plan | Does a running CLI take an effort change, or must the session relaunch? (spec Assumption 1) | Running: `apply_flag_settings {"effortLevel": level|null}`; deferred to turn end when busy, like `set_model`; `--effort` at launch in both kinds | agent-resolved | research.md P-1, P-2 (recorded against the real CLI 2.1.311), R1 |
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
+| D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 
 ## Review rounds
 
@@ -42,6 +49,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1 | — | 2 questions, both agent-resolved (D4, D5); FR-003 amended, FR-010a added, FR-013 extended |
 | Clarify | 2 | — | No critical ambiguities |
 | Plan | 1 | c3f46ffa915d65a2d4339354633aba57e70384f6:976f758bfa2f4870bff251d80a5ab2f67250317e | CLEAN: 3 MINOR — F1 spec Assumption 3 corrected (`get_settings` reports the level; view still shows the choice); F2 R4 re-apply hooked on `ModelAnswer::Accepted` in state.rs; F3 mid-turn effect and `CLAUDE_EFFORT` marked as assumptions — fixed, prose only. Reviewer ran as a fresh headless `claude -p` (read-only tools): no Agent tool in this unit |
+| Analyze | 1 | — | speckit-analyze (fresh headless process): 0 CRITICAL, 2 HIGH (C1 marker text in draw code → `effort_changed_text` tested; D1 terminal-kind pick → spec Edge Case added), 5 MEDIUM, 5 LOW — all fixed except S1 (task size, LOW) |
+| Tasks | 1 | b3b75d3032d7a421da8cbd34fcd4c3151089a0b8:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CHANGES: F1 MAJOR (M4 verified against guide text M5 ships → Part B 7 split 7a/7b), F2–F4 MINOR — all fixed. Fresh headless `claude -p`, read-only tools |
+| Tasks | 2 | 46f2f3cf63681dad6afe2f105902d3c5b928d369:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CLEAN (scoped re-review of the fix diff) |
 
 ## Declined review findings
 
