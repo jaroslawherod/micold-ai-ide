@@ -355,3 +355,51 @@ fn unbound_locations_survive_another_daemons_snapshots_and_reconnects() {
         .iter()
         .any(|s| s.id == sb));
 }
+
+/// Bug 1538: B reports a session at a location with no stored binding, which the router reads as
+/// the legacy default's (A here). Its row is B's to keep and B's to drop: A's snapshots, which never
+/// list it, must not remove it (B's next push brought it back), and B's own omission must.
+#[test]
+fn another_daemons_session_at_an_unbound_location_stays_while_it_lists_it() {
+    use micold_client::catalog_sync::note_lost_sessions;
+    let (sa, s_u) = (SessionId::new(), SessionId::new());
+    let mut state = state();
+    let a_snapshot = || snapshot(vec![session(sa, "feat-a")], vec![]);
+    let b_snapshot = || snapshot(vec![session(s_u, "feat-u")], vec![]);
+    let listed = |state: &State, step: &str| {
+        assert!(
+            session_ids(state).contains(&s_u),
+            "{step}: B's unbound session left the list"
+        );
+        assert!(
+            !state.settings.lost_sessions.contains(&s_u),
+            "{step}: B still lists it, so it is not lost"
+        );
+    };
+
+    note_lost_sessions(&mut state, A, &a_snapshot());
+    reconcile_catalog(&mut state, A, &a_snapshot(), false);
+    note_lost_sessions(&mut state, B, &b_snapshot());
+    reconcile_catalog(&mut state, B, &b_snapshot(), false);
+    listed(&state, "after B's welcome");
+    for round in 0..3 {
+        reconcile_catalog(&mut state, A, &a_snapshot(), true);
+        listed(&state, &format!("after A's push {round}"));
+        reconcile_catalog(&mut state, B, &b_snapshot(), true);
+        listed(&state, &format!("after B's push {round}"));
+    }
+    // A reconnects: its welcome does not list B's session, which is not A's to call lost.
+    note_lost_sessions(&mut state, A, &a_snapshot());
+    reconcile_catalog(&mut state, A, &a_snapshot(), false);
+    listed(&state, "after A reconnected");
+    note_lost_sessions(&mut state, B, &b_snapshot());
+    reconcile_catalog(&mut state, B, &b_snapshot(), false);
+    listed(&state, "after B reconnected");
+
+    // B stops listing it (archived there): the row leaves, and A's next push keeps it gone.
+    reconcile_catalog(&mut state, B, &snapshot(vec![], vec![]), true);
+    assert!(!session_ids(&state).contains(&s_u), "B archived it");
+    reconcile_catalog(&mut state, A, &a_snapshot(), true);
+    let ids = session_ids(&state);
+    assert!(!ids.contains(&s_u) && ids.contains(&sa));
+}

@@ -63,6 +63,24 @@ fn bound_elsewhere(core: &State, project: &Path, key: &str, daemon: DaemonId) ->
     location_owner(core, project, key) != daemon
 }
 
+/// Whether session `id` at location `key` of `project` is `daemon`'s to keep and to drop: the daemon
+/// whose latest snapshot listed it, or, when no daemon lists it, its location's owner (bug 1538). By
+/// owner alone, a session another daemon reported at an unbound location was the legacy default's:
+/// that daemon's snapshots dropped it and its own daemon's next push brought it back.
+fn answers_for(core: &State, project: &Path, key: &str, id: SessionId, daemon: DaemonId) -> bool {
+    let listed = &core.settings.listed_sessions;
+    let lists = |d: &DaemonId| {
+        listed
+            .get(d)
+            .and_then(|projects| projects.get(project))
+            .is_some_and(|ids| ids.contains(&id))
+    };
+    if lists(&daemon) {
+        return true;
+    }
+    !listed.keys().any(lists) && location_owner(core, project, key) == daemon
+}
+
 /// The binding key of a session's location: its worktree's `dir_name`, `""` for the Default one.
 fn location_key(session: &Session) -> &str {
     match &session.location {
@@ -118,7 +136,7 @@ pub fn note_lost_sessions(core: &mut State, daemon: DaemonId, snapshot: &Catalog
                     | SessionLifecycle::Starting
                     | SessionLifecycle::Restarting { .. }
             );
-            let on_daemon = location_owner(core, project, location_key(s)) == daemon;
+            let on_daemon = answers_for(core, project, location_key(s), s.id, daemon);
             if live && !s.archived && on_daemon && !listed.contains(&s.id) {
                 lost.push(s.id);
             }
@@ -139,7 +157,8 @@ pub fn note_lost_sessions(core: &mut State, daemon: DaemonId, snapshot: &Catalog
 /// a session whose location is bound to another daemon survives this snapshot's omission of it, a
 /// worktree bound to another daemon keeps the record (and status) its own daemon reported, and the
 /// provenance and display-name records of other daemons' worktrees are left alone. A location with
-/// no recorded binding is the snapshot's, which is the single-daemon behaviour unchanged.
+/// no recorded binding is the legacy default's (bug 1467), and a session another daemon lists is
+/// that daemon's wherever it is (bug 1538): the fold records what each snapshot listed.
 pub fn reconcile_catalog(
     core: &mut State,
     daemon: DaemonId,
@@ -280,11 +299,11 @@ pub fn reconcile_catalog(
             }
         }
         // Drop sessions the daemon no longer reports (archived/removed on its side), but only its
-        // own: a session on a location another daemon owns is that daemon's to report (R11), an
-        // unbound location's included (bug 1467).
+        // own: one another daemon lists, or on a location another daemon owns, is that daemon's to
+        // report (R11), an unbound location's included (bugs 1467, 1538).
         let theirs: HashSet<SessionId> = core.workspace.sessions[&project.path]
             .iter()
-            .filter(|s| bound_elsewhere(core, &project.path, location_key(s), daemon))
+            .filter(|s| !answers_for(core, &project.path, location_key(s), s.id, daemon))
             .map(|s| s.id)
             .collect();
         let list = core
@@ -297,6 +316,11 @@ pub fn reconcile_catalog(
                 || (lost.contains(&s.id) && !s.archived)
                 || theirs.contains(&s.id)
         });
+        core.settings
+            .listed_sessions
+            .entry(daemon)
+            .or_default()
+            .insert(project.path.clone(), snap_ids);
     }
     // An id no session carries any more (removed or closed) is not lost to anything.
     let held: HashSet<SessionId> = core
