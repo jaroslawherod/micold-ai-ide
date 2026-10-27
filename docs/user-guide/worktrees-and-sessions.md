@@ -687,9 +687,9 @@ github.com is supported. A remote whose address is rewritten by git's `url.<base
 is read as written in the configuration, so an alias that only becomes a github.com address after
 rewriting is not recognised. An SSH `Host` alias in your `~/.ssh/config` whose `HostName` is
 github.com or ssh.github.com (`git@github-work:owner/repo.git`) is recognised: the app resolves it
-with `ssh -G` on your machine, also when sessions run in a container. When no github.com remote is found, the chip is disabled and the line
-under the chips says why: "This repository has no GitHub remote." or "Couldn't read this
-repository's remotes: …".
+with `ssh -G` on your machine, also when sessions run in a container. When no github.com remote
+is found, the chip is disabled and the line under the chips says why: "This repository has no
+GitHub remote." or "Couldn't read this repository's remotes: …".
 
 **What is sent to GitHub, and when.** Opening the form contacts nothing but the app's own session
 service. Before you choose the chip, the line under the chips names the repository it would read:

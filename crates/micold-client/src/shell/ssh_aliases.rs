@@ -68,6 +68,9 @@ impl SshHosts {
             return;
         };
         for host in hosts {
+            // Recorded first, so a resolver that panics cannot leave the host unasked and hold
+            // the replayed event again.
+            self.answers().insert(host.clone(), None);
             let real = resolve(host);
             self.answers().insert(host.clone(), real);
         }
