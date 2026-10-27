@@ -202,7 +202,8 @@ layout_text_overflow` pass on a clean checkout; +1 px on the review bar's paddin
 - [x] T024 [US2] Same file: replace the `session-area-changes-open` sentences (old line ~105, "header
   over the open Changes view, with no strip") with what T016 records (US2 sc.3); `grep -n "Changes view"
   docs/development/layout-snapshot.md` returns nothing.
-- [ ] T025 [US2] `scripts/gate.sh` green; CI green on Linux, macOS and Windows (US2 sc.2).
+- [x] T025 [US2] `scripts/gate.sh` green; CI green on Linux, macOS and Windows (US2 sc.2).
+  *Done: gate green at c684c36f; #1495's CI `build + test` green on ubuntu, macos and windows.*
 
 **Checkpoint**: M2 deliverable observable.
 
@@ -289,8 +290,8 @@ against its crop with 0 unlabelled differences (quickstart §C, SC-004).
 
 ## Phase 8: Polish & Cross-Cutting (close unit; no code)
 
-- [ ] T035 Run quickstart §A–§C end to end on `main` and record the results in the close PR.
-- [ ] T036 Set spec status to built, naming any issue filed by T002 or T029 and the mockup route
+- [x] T035 Run quickstart §A–§C end to end on `main` and record the results in the close PR.
+- [x] T036 Set spec status to built, naming any issue filed by T002 or T029 and the mockup route
   taken by T032; tick the tasks.
 
 ---
@@ -395,3 +396,16 @@ implemented now**: every one waits on unmerged blockers, listed under **Depends 
 - **Tier**: docs
 
 Polish (T035–T036) changes no code: the close unit does it in the close PR.
+
+---
+
+## Phase 9: TDD remediation (close unit, from `tdd/verification.md`)
+
+- [x] T037 F1: `crates/micold-client/tests/gates/review_tab_fits.rs` `findings` asserts that a
+  state anchoring `review.bar` or `review.drawer` lays it out at its path, so the bar and drawer
+  checks cannot be skipped. Done when `cargo test -p micold-client --test layout_snapshot
+  review_tab_fits` passes and fails with the bar's path in the premise moved.
+- [x] T038 F2: split `crates/micold-client/src/ui/changes.rs` `a_long_entry_name_is_one_ellipsized_line`
+  into the one-line test and `a_cut_entry_name_reads_whole_in_its_tooltip`. Done when
+  `cargo test -p micold-client --lib -- changes::tests::a_long_entry_name changes::tests::a_cut_entry`
+  passes 2.

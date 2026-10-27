@@ -1622,55 +1622,59 @@ mod tests {
         }
     }
 
-    /// #1276 visual pass, check 11: a name longer than the header's room is one line ending in
-    /// "…", so the header keeps its height whatever stands beside it, and hovering it reads it
-    /// whole.
-    #[test]
-    fn a_long_entry_name_is_one_ellipsized_line() {
-        use crate::ui::material::test_support::Mounted;
-        let r = micold_core::tokens::LIGHT;
-        let name = "Scheduler priorities for operators running mixed pools of workers";
+    const LONG_ENTRY_NAME: &str =
+        "Scheduler priorities for operators running mixed pools of workers";
+
+    /// `heading(name)` comparing with a base, mounted 200 px wide, with its painted name.
+    fn narrow_heading(
+        name: &str,
+    ) -> (
+        crate::ui::material::test_support::Mounted<'static>,
+        crate::ui::material::test_support::Painted,
+    ) {
         let base = Some("Compared with main at fbcef51".to_owned());
-        let one_line = Mounted::new_in(
-            heading("Idle".into(), base.clone(), r),
-            iced::Size::new(600.0, 400.0),
-        )
-        .painted_text();
-        let mut narrow = Mounted::new_in(
-            container(heading(name.into(), base, r)).width(Length::Fixed(200.0)),
+        let mut mounted = crate::ui::material::test_support::Mounted::new_in(
+            container(heading(name.into(), base, micold_core::tokens::LIGHT))
+                .width(Length::Fixed(200.0)),
             iced::Size::new(600.0, 400.0),
         );
-        let painted = narrow.painted_text();
-        let title = painted
+        let painted = mounted.painted_text();
+        let shown = painted
             .iter()
-            .find(|p| p.content.starts_with("Scheduler"))
+            .find(|p| name.starts_with(p.content.trim_end_matches('\u{2026}')))
+            .cloned()
             .unwrap_or_else(|| panic!("the name is painted: {painted:?}"));
-        let short = one_line
-            .iter()
-            .find(|p| p.content == "Idle")
-            .unwrap_or_else(|| panic!("the short name is painted: {one_line:?}"));
+        (mounted, shown)
+    }
+
+    /// #1276 visual pass, check 11: a name longer than the header's room is one line ending in
+    /// "…", so the header keeps its height whatever stands beside it.
+    #[test]
+    fn a_long_entry_name_is_one_ellipsized_line() {
+        let (_, title) = narrow_heading(LONG_ENTRY_NAME);
+        let (_, short) = narrow_heading("Idle");
         assert!(title.content.ends_with('\u{2026}'), "{title:?}");
         assert_eq!(
             title.bounds.height, short.bounds.height,
             "one line: {title:?}"
         );
         assert!(title.bounds.x + title.bounds.width <= 200.0, "{title:?}");
-        // Cut, it reads whole on hover; whole, it has no tooltip.
-        let at = title.bounds.center();
-        assert_eq!(narrow.floated_text(at), [name.to_owned()], "{title:?}");
-        let mut wide = Mounted::new_in(
-            heading("Idle".into(), None, r),
-            iced::Size::new(600.0, 400.0),
-        );
-        let idle = wide
-            .painted_text()
-            .into_iter()
-            .find(|p| p.content == "Idle")
-            .expect("the short name is painted");
-        assert_eq!(
-            wide.floated_text(idle.bounds.center()),
-            Vec::<String>::new()
-        );
+    }
+
+    /// #1276 review A F1: a cut name reads whole on hover; a name shown whole has no tooltip.
+    #[test]
+    fn a_cut_entry_name_reads_whole_in_its_tooltip() {
+        for (name, tooltip) in [
+            (LONG_ENTRY_NAME, vec![LONG_ENTRY_NAME.to_owned()]),
+            ("Idle", vec![]),
+        ] {
+            let (mut mounted, shown) = narrow_heading(name);
+            assert_eq!(
+                mounted.floated_text(shown.bounds.center()),
+                tooltip,
+                "{shown:?}"
+            );
+        }
     }
 
     fn changed(kind: ChangeKind, content: Content) -> ChangedFile {
