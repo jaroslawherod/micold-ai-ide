@@ -1279,6 +1279,50 @@ impl DaemonState {
         resolved
     }
 
+    /// Tell the AI agent about the sandbox (#1439 FR-019, BUG-1500): on a daemon with an
+    /// `offered.json` of its own (container and Kubernetes, the predicate of
+    /// [`Self::with_sandbox_env`]), write the guide to `$HOME/.micold/AGENTS.md` and merge its
+    /// marked block into Claude Code's and Codex's user-level instruction files. `own` is this
+    /// process's environment (`HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Host and remote daemons
+    /// write nothing. Each failure is logged and the next file still tried; nothing is fatal.
+    pub fn write_agent_guide(&self, own: impl Fn(&str) -> Option<std::ffi::OsString>) {
+        use micold_core::sandbox::agent_guide::{guide_files, merge_block, pointer_block, GUIDE};
+        if self.offered_clis().is_none() {
+            return;
+        }
+        let Some(home) = own("HOME").filter(|h| !h.is_empty()).map(PathBuf::from) else {
+            tracing::warn!("no HOME: the sandbox guide for the AI agent is not written");
+            return;
+        };
+        let files = guide_files(&home, own);
+        let block = pointer_block(&files.guide);
+        let writes = std::iter::once((files.guide.clone(), None))
+            .chain(files.instructions.into_iter().map(|f| (f, Some(&block))));
+        for (file, block) in writes {
+            let result = (|| -> std::io::Result<()> {
+                let existing = match std::fs::read_to_string(&file) {
+                    Ok(text) => text,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+                    Err(e) => return Err(e),
+                };
+                let wanted = match block {
+                    Some(block) => merge_block(&existing, block),
+                    None => GUIDE.to_string(),
+                };
+                if wanted == existing {
+                    return Ok(());
+                }
+                if let Some(parent) = file.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&file, wanted)
+            })();
+            if let Err(why) = result {
+                tracing::warn!(file = %file.display(), %why, "sandbox guide for the AI agent not written");
+            }
+        }
+    }
+
     /// `available` limited to the CLIs `offered.json` lists, when there is one, and to those whose
     /// command is in the `bin` folder it names: a copy elsewhere on the spawn `PATH` (the home's
     /// `.local/bin`, feature 1289) is not the one the application installed.
@@ -9007,6 +9051,67 @@ mod offered_tests {
         );
         let resolved = state.with_sandbox_env(state.resolved_env_for(cwd.path()), own_env(&[]));
         assert_eq!(install_env_of(&resolved.vars), install_env_pairs(&[]));
+    }
+
+    /// 1439 FR-019 (BUG-1500): a daemon with an `offered.json` of its own writes the agent guide
+    /// and merges the marked block into Claude Code's and Codex's instruction files under its
+    /// `HOME`, keeping the user's text; a second start changes no byte.
+    #[cfg(unix)]
+    #[test]
+    fn agent_guide_written_on_a_sandbox_daemon_and_kept_idempotent() {
+        use micold_core::sandbox::agent_guide::{BEGIN, GUIDE};
+        let store = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        offer(&dir, &[]);
+        let claude = home.path().join(".claude/CLAUDE.md");
+        std::fs::create_dir_all(claude.parent().unwrap()).unwrap();
+        std::fs::write(&claude, "my own rule\n").unwrap();
+        let home_str = home.path().to_str().unwrap();
+        let own = [("HOME", home_str)];
+
+        state.write_agent_guide(own_env(&own));
+
+        let guide = home.path().join(".micold/AGENTS.md");
+        assert_eq!(std::fs::read_to_string(&guide).unwrap(), GUIDE);
+        let codex = home.path().join(".codex/AGENTS.md");
+        let first: Vec<String> = [&claude, &codex]
+            .iter()
+            .map(|f| std::fs::read_to_string(f).unwrap())
+            .collect();
+        assert!(first[0].starts_with("my own rule\n\n"), "{}", first[0]);
+        for text in &first {
+            assert!(text.contains(BEGIN), "{text}");
+            assert!(text.contains(&guide.display().to_string()), "{text}");
+        }
+
+        state.write_agent_guide(own_env(&own));
+        let again: Vec<String> = [&claude, &codex]
+            .iter()
+            .map(|f| std::fs::read_to_string(f).unwrap())
+            .collect();
+        assert_eq!(again, first);
+    }
+
+    /// 1439 FR-019: host and remote daemons (no `offered.json` of their own) write nothing, and a
+    /// file that cannot be written is logged while the others are still written.
+    #[cfg(unix)]
+    #[test]
+    fn agent_guide_nothing_on_a_host_daemon_and_a_failed_write_is_not_fatal() {
+        let store = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let home_str = home.path().to_str().unwrap();
+        let own = [("HOME", home_str)];
+        state.write_agent_guide(own_env(&own));
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+
+        offer(&dir, &[]);
+        // `.claude` is a file, so `.claude/CLAUDE.md` cannot be written.
+        std::fs::write(home.path().join(".claude"), "").unwrap();
+        state.write_agent_guide(own_env(&own));
+        assert!(home.path().join(".micold/AGENTS.md").is_file());
+        assert!(home.path().join(".codex/AGENTS.md").is_file());
     }
 
     /// 1289 A2 (c), FR-008: without an `offered.json` (host and remote daemons) the resolved
