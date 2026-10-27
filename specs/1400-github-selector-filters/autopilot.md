@@ -10,12 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
 - **Phase**: tasks
-- **Next step**: tasks review CLEAN; after CLEAN: specs-only gate, push, design PR. T061 (Polish, no code) left to the close unit.
+- **Next step**: design PR pending (orchestrator opens; gh unauthenticated). Specs-only gate green after rebase on origin/main. Then M1. Earlier plan: after CLEAN: specs-only gate, push, design PR. T061 (Polish, no code) left to the close unit.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | Design (spec, plan, tasks) | pushed, PR text in scratchpad; orchestrator opens | |
 
 ## Milestones
 
