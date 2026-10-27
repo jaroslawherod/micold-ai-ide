@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m1 (M1, stacked on the design commits; design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M1 implementing
-- **Next step**: M1 T001–T016, then verify
+- **Phase**: M1 implemented (T001–T016 ticked); full gate run; review A and B pending (orchestrator)
+- **Next step**: review A (code-review high) and review B (conformance) on 23915f816..HEAD; then PR title/body for M1
 
 ## Pull requests
 
@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 2 | 41ae8cd58f1600b8d9892ebc6d9c08f3694d1578:38cb3341b7aae78134abfabbd81189bd87e758cf | CLEAN, 1 MINOR (data-model runs.rs table: `known[P]` for a removed project unspecified — fixed, prose only: one row saying it is left as is and never read while P is unknown) |
 | Tasks review | 1 | 8f4a09d125d94bf6e90b271da7ab675c7845d785:fd6e8bf13a1b2d6f1913c226359527d6733732b2 | CHANGES: 1 MAJOR, 2 MINOR (F1 `history`→`changes` allowlist entry moved from T005 (M1) to T025 (M3), T012 spells `crate::features::navigation::blocked` — dead-entry assert would fail M1; F2 T022/T023 green claims split (docs test greens in T023) — prose only; F3 ledger notes the review stands in for analyze — prose only). No [NEEDS CLARIFICATION] in spec.md confirmed |
 | Tasks review | 2 | 5265a22b329483958f659f75aa46b16ae46aeb60:382b7ce61dbd18769aa157d47987bb3797120edb | CLEAN, 1 MINOR (T025 prose named `changes::can_go_back`; fixed, prose only: full `crate::features::changes::can_go_back` path) |
+| Review A M1 (code-review high) + Review B M1 (conformance) | 1 | 0023312419ed37e71de2f2b81292fc770186f678:02623b87546736987e7fa4ecee318e1c9ddfb070 | pending (dispatched by orchestrator) |
 
 ## Declined review findings
 
