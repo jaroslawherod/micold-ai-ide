@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | #1564 | merged 2f7426506 |
-| M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | implemented on branch `1400-m2` (rebased on M1 ad5f56240); round 1 (A, B, visual) fixed test-first; scoped gate green (fmt, clippy -p micold-material -p micold-client -D warnings, tests 5,809 passed, layout_snapshot unchanged); round 2 pending |
+| M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | pending (orchestrator pushes `1400-m2`, opens) | rebased on origin/main 2f7426506; review rounds 1–2 done (A, B CLEAN; visual MINORs fixed test-first); full gate green at 069d111f8 (`scripts/gate.sh`, 594 test results ok, scripts 0 failures, layout_snapshot unchanged); not pushed |
 | M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
 | M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
 | M5 | T040–T049 | full | Advanced GitHub search query with its errors (US3, US4) | | planned |
@@ -85,6 +85,7 @@ Clarify round 1, category 1 (product or scope decision the repo does not settle)
 
 ## Follow-ups not done
 
+- M2 round 2: visual MINORs F2 (field drawn open after a pick) and F3 (highlight reset) fixed by reducer tests only, not re-shot (no Agent tool for `visual-pass` in this unit).
 - Separate bug (visual re-check M2 round 2, F1, predates 1400: reproduces in the plain Ticket field): Enter in the New worktree form re-clicks the sidebar button behind the scrim and resets the form. The sidebar "new worktree" button keeps the keyboard behind the scrim, so Enter with no highlighted row reopens a blank New-branch form. Not fixed here; needs its own issue.
 - M1 (T018, deviation): `ISSUE_ADVANCED` (R3) and a refused search's error shape (R7, incl. `\` inside a quoted term) **not probed** live: no signed-in `gh` in the cloud container. `parse_search_page` tests use hand-written answers (search-rules §6), and `tests/fixtures/gh/search_filtered_page.json`, `search_rejected.json`, `labels_page.json` are hand-written, not recorded. Probe with a signed-in `gh` before release; if GitHub refuses the type, only `github_filter::search_type!` changes.
 - M2 unit: `mise` is not installed in this container; the gate steps ran as `scripts/build-lock.sh cargo …` (the M2 scoped gate: fmt --all --check, clippy -p micold-client --all-targets -D warnings, test -p micold-client). LSP not tried (grep used). Quickstart §B with `fake_gh` not run (no Agent tool for the visual pass in this unit).
