@@ -119,21 +119,55 @@ client. No new crate is needed.
 - **Decision**: every secret is a `*_file` key. `config check` and the diagnostic print each path
   and whether it is readable, never the content. Secret files must be owner-only on unix (`0600`,
   directory `0700`); a looser mode is a warning on host/SSH and an error in a sandbox. Kubernetes
-  Secrets are mounted as **directories** (a `subPath` mount never updates).
+  Secrets are mounted as **directories** (a `subPath` mount never updates). Every secret file and the
+  config are **read-only to the daemon and its sessions** on every kind (D13).
 
-### D5. Live reload
+### D5. Live reload and change detection
 
-- **Decision**: the daemon watches the config file and every named secret file with `notify`
-  (watching the parent directory, since a Kubernetes Secret update swaps a `..data` symlink and
-  editors replace files by rename). A change re-parses; an invalid new file is logged and the
-  previous one kept. Reload scope:
+Only the application changes a credential or the config (D13): it rewrites a file and the daemon
+notices. The daemon never asks for one.
+
+- **How the application writes**: always a temporary file in the same directory, then a rename, so a
+  reader sees the old file or the new one, never half. Secret files first, the config last (a config
+  naming a new secret then finds it). Per kind: host — in place in `<data_dir>`; SSH — the same over
+  the existing provisioning channel (`scp` to a temporary name, `mv`); container — on the host side
+  of a **directory** bind mount; pod — `kubectl apply` of the Secret / ConfigMap.
+- **How the daemon notices**, two mechanisms, deduplicated by content hash:
+  1. **Watcher** (`notify`, already a daemon dependency): a non-recursive watch on the **directory**
+     that holds the config and on each directory holding a named secret, never on the file itself —
+     a rename replaces the inode a file watch is on, and a Kubernetes Secret or ConfigMap volume is
+     updated by the kubelet writing a new timestamped directory and swapping the `..data` symlink
+     (the visible files are links through `..data`), which only a directory watch sees. Files are
+     always opened by path at read time, so the symlink swap is followed.
+  2. **Poll** every 2 s: SHA-256 of the config and of every named secret file, compared with the last
+     applied set. It covers what inotify cannot see: a podman/Docker machine VM (virtiofs/9p do not
+     forward host-side events), network home directories (NFS/SMB), an exhausted inotify watch limit,
+     and a watcher that failed to start. The files are small, so the poll is cheap.
+- **Single-file bind mounts and `subPath` mounts are never used**: both pin the inode they were
+  created with, so a host-side rename is never seen and the container keeps the old credential
+  forever. Containers mount directories; pods mount Secret and ConfigMap volumes without `subPath`.
+- **Atomic reload**: a change (debounced 250 ms) builds a complete new configuration — parse,
+  validate (the same `validate` as `config check`), check that every referenced secret is readable —
+  and only then swaps it in as one value (`Arc`). Anything invalid → the previous configuration
+  stays in force, the error goes to the log and to `ConfigStatus.last_error`, and the daemon's status
+  push carries it so Settings shows it without a refresh. A config that names a secret file not yet
+  present (a pod's ConfigMap and Secret volumes update independently) is retried on every poll and
+  reported only if still missing after 120 s.
+- **Reload scope**:
   - **live**: `github.*`, `ai.cli.*` (applied to the next session start; env and API keys are fixed
-    for a running CLI process), `session.*`, `projects` (added ones served, removed ones stop being
-    offered; running sessions untouched).
-  - **restart required**: `daemon.*`, `listen`, `auth`, `ssh`, `storage.clone_root`. The daemon
-    reports "restart needed" in its diagnostic instead of half-applying.
-- **Rationale**: FR-006; SC-004 (5 s) is met because the credential helper reads files at each call
-  (D7), so the watcher is not on the credential path at all.
+    for a running CLI process, except where D9/D14 say a CLI re-reads its file), `session.*`,
+    `projects` (added ones served, removed ones stop being offered; running sessions untouched).
+  - **restart required**: `daemon.*`, `listen`, `auth`, `ssh`, `storage.clone_root`, `startup`. The
+    daemon reports "restart needed" in its diagnostic instead of half-applying.
+- **How fast (SC-004)**: within 5 s of the file changing on the daemon's filesystem — watcher
+  ≈ 250 ms, poll ≤ 2 s. Git and `gh` read the token file on every call (D7, D8), so a token is in use
+  by the next command as soon as the file is there. **Pods**: the kubelet itself copies an updated
+  Secret into the volume on its next sync — up to its sync period plus cache TTL, about a minute by
+  default — and nothing the daemon does shortens that. The 5 s is measured from the volume update;
+  Settings says "delivered, waiting for the cluster" until the daemon reports the new hash.
+- **Drift check**: the application records the hash of what it delivered; the daemon reports the
+  hash it applied (`ConfigStatus`). A difference means someone else changed the file — on host and
+  SSH, possibly a session (D13) — and Settings says so. It detects; it cannot prevent.
 
 ### D6. Multi-repository tokens and reach
 
@@ -216,35 +250,37 @@ session, because they carry per-session secrets.
 | Model | file `ai.cli[].model` | the default when a session's `ModelChoice` is `Default`; the per-session choice still wins; refused at load for a CLI without model args (only Claude Code today) |
 | API base URL | file `ai.cli[].api_base_url` | set as the provider's documented variable (Claude `ANTHROPIC_BASE_URL`, Codex `OPENAI_BASE_URL`); refused for a CLI with none |
 | CLI env | file `ai.cli[].env` | merged after `launch_env`, before the session's own variables |
-| Sign-in | file `ai.cli[].sign_in_file`, `sign_in_writable` | replaces `CredentialLayout.ai_cli_auth` and the kube `SignIn` Secret; refused for Copilot and Pi (no shareable file) |
+| Sign-in | file `ai.cli[].sign_in_file` (read-only) or `ai.cli[].token_file` | replaces `CredentialLayout.ai_cli_auth` and the kube `SignIn` Secret; `sign_in_writable` is gone (D13); how the application keeps a sign-in fresh is D14 |
 | API key | file `ai.cli[].api_key_file` | read at session start into the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`); never on the command line. **Rotation** (user answer): through the CLI's own key helper where one exists — Claude Code: the daemon's per-session `--settings` (`micold-daemon/src/hooks.rs:663 settings_json`, typed `SettingsDoc`) gains `"apiKeyHelper": "<daemon> ai-key claude_code"`, which prints the key file's content on each use, and `ANTHROPIC_API_KEY` is then not set. Codex and OpenCode have no per-use helper we can rely on: the key is read at session start, so a replaced key reaches the next session. Issue 11 confirms each against the pinned CLI version |
 | CLI settings files | file `ai.cli[].settings_file`, `[[ai.cli.place]]` | sandbox kinds only (FR-013c): copied into the CLI's config dir in the sandbox home at session start if changed; host/SSH refuse at load, the user's own files are the configuration there |
 | Tool server switch, cross-session access, Pi activity component | stay `settings.json` | live UI settings |
 | Hook settings, MCP binding | stay per-session, generated | carry per-session tokens |
 
-**Sign-in placement (sandboxes)**: `sign_in_file` names where the daemon finds the sign-in. If it is
-not the CLI's own location (`sandbox_auth_file(home)`), the daemon links the CLI's location to it in
-the sandbox home. For a writable sign-in in a container the delivery keeps today's single-file bind
-mount of the host's file at the CLI's own location (so a refreshed sign-in reaches the host), and
-the file names that location. Pods keep read-only Secrets (user answer): a sign-in the CLI refreshes
-in a pod is lost when the pod restarts — a known limit, documented in the Kubernetes guide.
+**Sign-in placement (every kind)**: the delivered sign-in is a read-only file in the secrets
+directory (D13). The CLI still needs a writable config dir (history, session store), so the daemon
+gives the CLI its config dir — the CLI's own location in a sandbox home, `<data_dir>/ai/<id>/` on
+host and SSH — and links only the sign-in file in it to the delivered one. At every session start the
+daemon re-creates that link, so a session that deleted it and wrote its own sign-in does not change
+what the next session uses. Pods are no longer a special case: every kind is read-only.
 
-**Sign-in on host and SSH (user answer: the configured sign-in wins)**. The machine's own sign-in
-file must never be overwritten, moved or removed (FR-013e), so the daemon does not touch the CLI's
-default location. It gives the daemon's sessions of that CLI their **own config directory**
-`<data_dir>/ai/<id>/` that holds the configured sign-in, and points the CLI at it through the
-CLI's config-dir variable in that session's launch env only. Per CLI (verified in `provider.rs`):
+**Sign-in on host and SSH (answer 4, revised by the credential rule)**: a configured sign-in still
+wins over the one already on the machine, and the machine's own sign-in file is never written. The
+daemon points its sessions at their config dir through the CLI's config-dir variable in that
+session's launch env only. Per CLI (verified in `provider.rs`):
 
 | CLI | Where the sign-in is read (code) | How the session is pointed elsewhere | Consequence |
 |---|---|---|---|
-| Claude Code | `~/.claude/.credentials.json` (`sandbox_auth_file`, `provider.rs:779`); dir from `CLAUDE_CONFIG_DIR` (`:612`, `config_dir` `:776`) | `CLAUDE_CONFIG_DIR=<data_dir>/ai/claude_code` with `.credentials.json` → the configured file | That dir is the whole Claude config: history, projects, `settings.json`. The daemon links the user's `~/.claude/settings.json`, `CLAUDE.md`, `agents/`, `commands/` into it (read-through links, never copies back), so only the sign-in differs. Sessions started before the switch keep resuming from `~/.claude` (their transcripts stay there; the daemon records which dir each session used). On macOS Claude Code keeps its sign-in in the Keychain, not this file (`docs/user-guide/sandboxed-daemon.md:462`) — issue 11 must verify whether `CLAUDE_CONFIG_DIR` changes that and, if not, refuse `sign_in_file` for a macOS host with a clear message. |
-| Codex | `$CODEX_HOME/auth.json`, else `~/.codex/auth.json` (`codex_sign_in`, `provider.rs:1669-1675`); a `CODEX_HOME` outside the home is not shared (feature 488) | `CODEX_HOME=<data_dir>/ai/codex` with `auth.json` → the configured file; the user's `config.toml`, `AGENTS.md` linked in | Same as Claude: history in the per-daemon dir. `<data_dir>` must be under the home for the existing sharing rule; on Linux/macOS it is (`~/.local/share/…`, `~/Library/…`), on Windows `%APPDATA%` is too. |
-| OpenCode | `$XDG_DATA_HOME/opencode/auth.json`, else `~/.local/share/opencode/auth.json` (`provider.rs:2234-2251`) | `XDG_DATA_HOME=<data_dir>/ai/opencode/data` on the OpenCode process | `XDG_DATA_HOME` is not OpenCode-specific: tools OpenCode runs inherit it. The daemon sets it on the CLI process only and restores the user's value for commands the CLI runs where OpenCode allows it (issue 11 verifies; if not, documented). |
-| Copilot, Pi | no shareable sign-in file (`sandbox_auth_file` → `None`, `:1124`, `:1527`) | — | `sign_in_file` refused (V7), as before. |
+| Claude Code | `~/.claude/.credentials.json` (`sandbox_auth_file`, `provider.rs:779`); dir from `CLAUDE_CONFIG_DIR` (`:612`, `config_dir` `:776`) | `CLAUDE_CONFIG_DIR=<data_dir>/ai/claude_code` with `.credentials.json` → the delivered file; or no file at all with `token_file` (`CLAUDE_CODE_OAUTH_TOKEN`, D14) | That dir is the whole Claude config: history, projects, `settings.json`. The daemon links the user's `~/.claude/settings.json`, `CLAUDE.md`, `agents/`, `commands/` into it (read-through links, never copies back), so only the sign-in differs. Sessions started before the switch keep resuming from `~/.claude` (the daemon records which dir each session used). |
+| Codex | `$CODEX_HOME/auth.json`, else `~/.codex/auth.json` (`codex_sign_in`, `provider.rs:1669-1675`); a `CODEX_HOME` outside the home is not shared (feature 488) | `CODEX_HOME=<data_dir>/ai/codex` with `auth.json` → the delivered file; the user's `config.toml`, `AGENTS.md` linked in | Same as Claude: history in the per-daemon dir. `<data_dir>` must be under the home for the existing sharing rule; on Linux/macOS it is (`~/.local/share/…`, `~/Library/…`), on Windows `%APPDATA%` is too. |
+| OpenCode | `$XDG_DATA_HOME/opencode/auth.json`, else `~/.local/share/opencode/auth.json` (`provider.rs:2234-2251`) | `XDG_DATA_HOME=<data_dir>/ai/opencode/data` on the OpenCode process | `XDG_DATA_HOME` is not OpenCode-specific: tools OpenCode runs inherit it. Issue 11 verifies whether it can be kept from them; if not, documented. |
+| Copilot | no shareable sign-in file (`sandbox_auth_file` → `None`, `:1124`) | `token_file` → `COPILOT_GITHUB_TOKEN` (D14) | `sign_in_file` refused (V7). |
+| Pi | none (`:1527`) | API keys only (`[session.secret_env]`) | `sign_in_file` and `token_file` refused (V7); D14 explains why. |
 
-A writable configured sign-in is linked, not copied, so a refresh writes through to the configured
-file; a CLI that replaces the file by rename would break the link, so issue 11 tests a refresh per
-CLI and falls back to copying the refreshed file back after the session when it does.
+With no sign-in configured on host and SSH, nothing is delivered and the CLI uses the machine's own
+sign-in exactly as the user's own CLI does — including refreshing it, because that file is the
+user's, not one the daemon was given. This is the one place the "only the application refreshes"
+rule does not reach; Settings labels the choice ("Use this machine's own sign-in — the CLI manages
+it") and recommends a delivered sign-in.
 
 **Placement over the daemon's per-session files**: Claude's per-session `--settings` (hooks) is a
 separate layer from `~/.claude/settings.json`, so a placed user `settings.json` and the hook layer
@@ -257,10 +293,10 @@ mapped to `AiCli` by the config type only; `settings.json` keeps its existing sp
 
 | Kind | Config | Secrets |
 |---|---|---|
-| Host | rendered to `<data_dir>/daemon.toml` (`0600`) before `spawn_detached_daemon` | in place (PAT store, the CLI's own sign-in) |
+| Host | rendered to `<data_dir>/daemon.toml` (`0600`) before `spawn_detached_daemon` | in place (PAT store); a delivered AI sign-in in `<data_dir>/daemons/<id>/secrets/ai/` |
 | SSH host | copied to `~/.micold/remote/daemon.toml` by the provisioning copy step | copied to `~/.micold/remote/secrets/` (`0700`/`0600`); a rotated token is re-copied (one `scp`) and the watcher picks it up |
-| Container | host `<data_dir>/daemons/<id>/config/` bind-mounted read-only at `/run/micold/config` | host `<data_dir>/daemons/<id>/secrets/` read-only at `/run/micold/secrets`; writable sign-ins keep their single-file mount (D9); the `-e` list and `container_env` are removed except `HOME` (the passwd entry) |
-| Kubernetes | ConfigMap `<name>-config` mounted at `/run/micold/config` | one Secret per credential mounted as a directory under `/run/micold/secrets/…`; `daemon_env` removed |
+| Container | host `<data_dir>/daemons/<id>/config/` bind-mounted read-only at `/run/micold/config` | host `<data_dir>/daemons/<id>/secrets/` read-only at `/run/micold/secrets`, AI sign-ins included; today's writable single-file sign-in mount (`CredentialShare::writable`, `sandbox/mod.rs:318`) is removed (D13); the `-e` list and `container_env` are removed except `HOME` (the passwd entry) |
+| Kubernetes | ConfigMap `<name>-config` mounted at `/run/micold/config` (`readOnly: true`) | one Secret per credential mounted as a directory under `/run/micold/secrets/…` (`readOnly: true`, `defaultMode: 0440`, `fsGroup` = the daemon's group); `daemon_env` removed |
 
 The client re-renders on every Settings change; it rewrites the file only when the rendered bytes
 differ (so the watcher sees no spurious change). Rendering is a pure function of the daemon's
@@ -342,6 +378,100 @@ shims (`entrypoint.sh:55-62`).
   "Edit" action opening an inline multi-line editor (the shared text-editor component; Principle
   VIII) whose text the app stores as `<data_dir>/daemons/<id>/startup.sh`.
 
+### D13. Only the application refreshes or rotates a credential (user rule, 2026-10-27)
+
+The external party — the user, through the application on their own machine — is the only one that
+refreshes, rotates or writes a credential. Neither the daemon nor an agent or AI CLI running under it
+may refresh, rotate or write one back. A new credential reaches the daemon only as an updated file
+(D5).
+
+- **Read-only on every kind**: the config and every secret file are read-only to the daemon and its
+  sessions. `sign_in_writable` is removed from the schema, and with it the writable single-file
+  sign-in mount the container uses today (`CredentialShare::writable`, `sandbox/mod.rs:317-322`,
+  rule N-4 / FR-004e of #1002, which existed so a container CLI could refresh the host's file).
+- **What the daemon does with credentials**: reads them. The GitHub token is read by the credential
+  helper and the `gh` shim at each call (D7, D8) and never refreshed — a token near its expiry is
+  shown in Settings for the user to replace. Reach discovery (`GET /user/repos`) only reads. The API
+  key helper (`apiKeyHelper`, D9) only reads the key file. The daemon writes only its own non-secret
+  state in `<data_dir>` (reach cache, start-script marker, failure file, the `gh` shim, the per-CLI
+  config dirs) — never a file a credential came from.
+- **An agent cannot change what the daemon uses — in sandboxes**:
+  - container: `/run/micold/config` and `/run/micold/secrets` are read-only bind mounts (`:ro`);
+    sessions run as the daemon's non-root user without `CAP_SYS_ADMIN`, so they cannot remount.
+  - pod: Secret and ConfigMap volumes are read-only (kubelet), and the mounts say `readOnly: true`.
+  - Sessions can *read* the secrets — they are given the tokens (`GH_TOKEN`, the CLI's sign-in) to do
+    their work — but cannot change them.
+  - Session-writable state the daemon reads is advisory only: the reach cache can at worst change
+    which configured token is offered for a repository, and GitHub still enforces each token's real
+    reach; the `gh` shim and the CLI sign-in links are re-created at every session start.
+- **Host and SSH — the honest limit**: sessions run as the same OS user as the daemon, and the
+  config and secrets are that user's `0600` files. A session can rewrite them, and the daemon would
+  reload what it wrote. File modes cannot stop the owner. The drift check (D5) shows that the file
+  differs from what the application delivered; when this matters, use a container or pod daemon.
+
+### D14. Keeping an AI CLI sign-in fresh without the CLI refreshing it
+
+**The difficulty.** OAuth CLIs refresh their own short-lived access token and write the new one
+back. Measured on this machine (Claude Code 2.1.311, key names and timestamps only): the access token
+in `~/.claude/.credentials.json` lives **8 h** and the file holds a `refreshToken` with its own
+`refreshTokenExpiresAt` **7 days** out. The refresh token is replaced on refresh. With a read-only
+file a CLI could still refresh *in memory* — and that spends the refresh token, so the host's copy
+(the user's own CLI) can be signed out. The user guide already lists this collision
+("Sign-ins can collide", `docs/user-guide/sandboxed-daemon.md`). So the delivered copy must not let
+the CLI refresh at all, and the application must keep it fresh.
+
+**Proposal: three sign-in modes per CLI in Settings, in this order of preference.**
+
+1. **A long-lived token (recommended, nothing to refresh)**: `token_file`.
+   - Claude Code: `claude setup-token` (present in 2.1.311: "Set up a long-lived authentication
+     token (requires Claude subscription)") creates a one-year OAuth token. The daemon sets it as
+     `CLAUDE_CODE_OAUTH_TOKEN` at session start (the variable is in the 2.1.311 binary). Settings
+     runs `claude setup-token` on the user's machine or takes a pasted token, stores it as a secret
+     file and warns 14 days before its expiry; renewing is the user's act in the application.
+   - Copilot: a fine-grained GitHub PAT with the *Copilot Requests* permission, set as
+     `COPILOT_GITHUB_TOKEN` (Copilot CLI documents `COPILOT_GITHUB_TOKEN`, then `GH_TOKEN`,
+     `GITHUB_TOKEN`; it takes precedence over the `GH_TOKEN` the `gh` shim sets). This gives Copilot
+     a delivered sign-in for the first time.
+   - Works on every kind, including a macOS host whose sign-in is in the Keychain.
+2. **An API key**: `api_key_file` (Claude Code via `apiKeyHelper`, Codex `OPENAI_API_KEY`, OpenCode
+   and Pi through their provider's key variable). Read-only by nature.
+3. **Share this computer's sign-in (relay)**: for Claude Code, Codex and OpenCode, from the
+   sign-in file on the user's machine.
+   - The application **watches the host's own sign-in file** (`notify`) and, whenever it changes,
+     derives the delivered copy and re-delivers it (D5) if the bytes differ.
+   - The derived copy **drops the refresh token** (Claude `claudeAiOauth.refreshToken`, Codex
+     `tokens.refresh_token`, OpenCode `<provider>.refresh`). The daemon-side CLI then cannot
+     refresh, so it can never spend or rotate the user's refresh token. For Codex the copy also sets
+     `last_refresh` to the delivery time so Codex does not attempt its age-based refresh.
+   - **Freshness**: the host's file changes only when the user's own CLI refreshes. So the
+     application schedules a refresh **by the host's own CLI** before the delivered access token
+     expires (at 75 % of its life, Claude ≈ 6 h): it runs the host CLI's cheapest authenticated
+     command with the user's own config (candidates: `claude auth status`, `codex login status`;
+     issue 11 measures which one actually refreshes a near-expiry token), and the watcher re-delivers
+     the result. It never calls the provider's token endpoint itself: the OAuth clients are not
+     public API, and the application would become a second writer of the user's own CLI file. If no
+     command refreshes without spending a model request, the relay falls back to warning in Settings
+     when the delivered token has less than 1 h left; the user opens their own CLI or switches to
+     mode 1.
+   - **Running sessions**: a new session starts from the delivered file. Whether a *running* CLI
+     re-reads the file when its access token expires, or must be restarted (a session resume keeps
+     the conversation), is per CLI and measured in issue 11. If it does not re-read, the daemon shows
+     "sign-in expired — restart the session" for that session.
+   - macOS: Claude Code keeps the host's sign-in in the Keychain, not a file (user guide), so the
+     relay has nothing to watch; Settings offers mode 1 there.
+
+**What each CLI does with a read-only credential file**
+
+| CLI | Credential | Read-only file | Evidence |
+|---|---|---|---|
+| Claude Code | `.credentials.json` (OAuth) or `CLAUDE_CODE_OAUTH_TOKEN` | **Runs.** With a `0444` file and no `refreshToken`, `claude -p` starts, does not touch the file, and fails only on authentication. | Run here, 2.1.311, throwaway `CLAUDE_CONFIG_DIR` with fake tokens ("401 OAuth access token is invalid", file mode unchanged). Not yet observed: expiry of a valid token mid-session. |
+| Codex | `auth.json` (ChatGPT OAuth or API key) | Expected to run; a refresh (age-based or on 401) needs to write `auth.json` and would fail. The derived copy avoids both (no refresh token, fresh `last_refresh`). API-key mode is unaffected. | Not installed here; from Codex's documented auth file. Issue 11 verifies. |
+| OpenCode | `auth.json`, per provider `oauth` or `api` | Expected to run; an `oauth` entry past its `expires` makes it refresh and write the file. `api` entries never refresh. | 1.19.3 installed, no sign-in on this machine. Issue 11 verifies. |
+| Copilot | Keychain / own config; or `COPILOT_GITHUB_TOKEN` | No file is delivered; a PAT in the env needs no refresh. | GitHub's Copilot CLI documentation. Issue 11 verifies. |
+| Pi | `auth.json` under `PI_CODING_AGENT_DIR` (OAuth and keys) | **At risk**: Pi is understood to take a lock file next to `auth.json` before reading or refreshing it; on a read-only directory that may stop it at start. Hence no `sign_in_file` for Pi; API keys through the env only. | Not installed here; issue 11 verifies, and Settings refuses a Pi sign-in until then. |
+
+No CLI is confirmed to refuse to run with a read-only credential file. Pi is the one at risk.
+
 ## 3. Answered questions (user, 2026-10-27)
 
 Recorded in spec.md Clarifications; the decisions above already apply them.
@@ -354,18 +484,29 @@ Recorded in spec.md Clarifications; the decisions above already apply them.
    application shows which token each repository uses. Replaces "equal specificity → refuse". D6.
 4. **Host/SSH sign-in conflict**: the configured sign-in wins; the machine's own sign-in file is never
    overwritten — the CLI is pointed at the configured one per session. D9 (per-CLI table).
+   *Revised by answer 9*: the configured sign-in is a read-only delivered file kept fresh by the
+   application (D14); "use this machine's own sign-in" stays as an explicit, labelled choice.
 5. **Validate before delivery**: the application runs the same check as `micold-daemon config
    check` and shows errors in Settings.
-6. **Pod sign-ins**: stay read-only Secrets; a refreshed sign-in is lost on restart — documented as a
-   known limit.
+6. **Pod sign-ins**: stay read-only Secrets. *Revised by answer 9*: read-only now holds for every
+   kind, and nothing is "lost on restart" because the CLI never refreshes — the application
+   re-delivers a fresh sign-in by updating the Secret (D14).
 7. **Run policy name**: `once_per_container`; on host and SSH daemons it means once per data
    directory. D12.
 8. **Start-script env**: `env_file` values are visible to the script only; a variable reaches the
    daemon and sessions only when the script exports it. D12.
+9. **Who refreshes credentials** (rule, overrides 4 and 6): only the application, on the user's
+   machine. The daemon, its sessions and the AI CLIs never refresh, rotate or write a credential; a
+   new one arrives as an updated file and the daemon reloads within 5 s. D5, D13, D14.
 
 ## 4. Questions left for the implementing issues
 
-- Claude Code on macOS keeps its sign-in in the Keychain: does `CLAUDE_CONFIG_DIR` move it? (Issue 11;
-  if not, `sign_in_file` is refused on a macOS host.)
-- Does each CLI refresh its sign-in in place or by rename (decides link vs copy-back)? (Issue 11.)
+- Which host CLI command refreshes a near-expiry token without a model request (`claude auth
+  status`, `codex login status`, OpenCode)? Decides the relay's refresh trigger (D14). (Issue 11.)
+- Does a running CLI re-read its sign-in file when its access token expires (Claude Code, Codex,
+  OpenCode)? Decides whether a relayed refresh reaches running sessions. (Issue 11.)
+- Pi with a read-only `auth.json` directory: does it start? (Issue 11.)
+- Copilot with `COPILOT_GITHUB_TOKEN` from a fine-grained PAT: confirm on the pinned version. (Issue 11.)
 - Can OpenCode's `XDG_DATA_HOME` be kept from the commands it runs? (Issue 11.)
+- Kubelet propagation time for Secret updates on the clusters we test (kind): record it in the
+  Kubernetes guide. (Issue 7.)

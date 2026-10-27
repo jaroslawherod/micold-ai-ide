@@ -58,11 +58,12 @@ the reach. Output: one token name, or none.
 ### AiCli
 
 `id: CliId { ClaudeCode, Copilot, Pi, Codex, Opencode }` (unique), `enabled`, `version?: Semver`,
-`args: Vec<String>`, `model?`, `api_base_url?: Url`, `env: Map`, `sign_in_file?: SecretPath`,
-`sign_in_writable`, `api_key_file?: SecretPath`, `settings_file?: Path`, `place: [Place {file, as}]`.
+`args: Vec<String>`, `model?`, `api_base_url?: Url`, `env: Map`, at most one of
+`sign_in_file?: SecretPath` / `token_file?: SecretPath` / `api_key_file?: SecretPath`, `settings_file?: Path`, `place: [Place {file, as}]`.
 On host and SSH a `sign_in_file` gives the CLI's sessions a per-daemon config dir
 `<data_dir>/ai/<id>/` (sign-in linked in, the user's own settings files linked read-through); the
-machine's own sign-in is never written. Each field is checked against the CLI's capabilities from `provider.rs` (model argument, base-URL
+machine's own sign-in is never written. Every `SecretPath` is opened read-only; nothing in the daemon
+opens one for writing. Each field is checked against the CLI's capabilities from `provider.rs` (model argument, base-URL
 variable, key variable, sign-in support, config dir).
 
 ### Session
@@ -103,9 +104,9 @@ startup: StartupRun summary, restart_needed: bool, changed_restart_keys: [key pa
 | V6 | (retired: equal specificity is resolved by file order, not refused) | — |
 | V7 | `ai.cli` field the CLI does not support (`model`, `api_base_url`, `sign_in_file` for copilot/pi) | CLI id, key |
 | V8 | `ai.cli.args` containing a daemon-owned argument | the argument |
-| V9 | `sign_in_file` and `api_key_file` both set, CLI with no documented precedence | CLI id |
+| V9 | More than one of `sign_in_file`, `token_file`, `api_key_file` for one CLI; `token_file` for a CLI other than claude_code or copilot | CLI id |
 | V10 | `settings_file`/`place` on host or ssh; `place.as` escaping the config dir | the key |
-| V11 | `sign_in_writable = true` on kubernetes | the key |
+| V11 | (retired with `sign_in_writable`: every secret is read-only) | — |
 | V12 | `remote` without `clone_root`, or `path` outside it | the project |
 | V13 | `startup.timeout_secs` out of range | the value |
 | V14 | Secret file mode wider than `0600` (unix) | warning on host/ssh, error on container/kubernetes |
@@ -121,7 +122,13 @@ Loaded(v) --file changed, parse ok--> Loaded(v') ; live keys applied; restart ke
                                          differ  → restart_needed = true (UI: "Restart to apply")
 Loaded(v) --file changed, parse error--> Loaded(v) + last_error (logged, shown; v kept)
 Loaded(v) --file removed--> Loaded(v) + last_error ("file removed; keeping the last configuration")
+Loaded(v) --names a secret not yet present--> Loaded(v), retried each poll; last_error after 120 s
 ```
+
+Change sources, deduplicated by the content hash of the config plus every named secret: directory
+watch events (debounced 250 ms; the Kubernetes `..data` swap included) and a 2 s poll. Applied
+within 5 s. `ConfigStatus` gains `applied_hash`; the application compares it with the hash it
+delivered (drift).
 
 ### Secret file
 
