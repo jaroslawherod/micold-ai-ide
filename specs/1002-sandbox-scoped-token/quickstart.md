@@ -53,3 +53,26 @@ container's `/`, `$HOME` and `env` find none of them, and that `/run/micold/git`
     narrow it, that a leaked token stays valid until it expires or is deleted on GitHub, and that
     *Remove* does not delete it there. A token also given *Pull requests: Read and write* lets the
     sandbox open a pull request, as the text says.
+
+### Part C results (#1147, 2026-10-27)
+
+No real fine-grained PAT was made (user decision 2026-10-27), and the app has no base-URL override:
+`https://api.github.com` and `github.com` are fixed in `scoped_credential/pat.rs` and the daemon
+helper, so a local fake GitHub cannot be pointed at without product code (out of scope for a chore;
+follow-up filed). So **no step was run live.** What stands in for each, by an automated test CI
+already runs (`mise run gate`):
+
+| Step | Result | Covered by (not live) |
+|---|---|---|
+| 1 | NOT RUN: no real PAT | |
+| 2 | NOT RUN live | `micold-core` `scoped_credential::pat` shape/expiry tests; client `shell::scoped_credential` `a_refused_token_is_not_stored_and_an_accepted_one_is`; `features_settings` `a_token_that_is_not_fine_grained_is_refused_before_any_check` |
+| 3 | NOT RUN: real API facts (R2) unverified | only the fake-transport tests: `the_expiry_header_parses_to_unix_seconds`, `the_probe_needs_push_and_a_future_expiry`, `statuses_map_to_their_reasons` (403/404), `the_reach_listing_refuses_another_private_repository_naming_it` |
+| 4, 5 | NOT RUN live (container) | client `a_stored_token_is_granted_for_its_own_repository_only`; daemon `--test mcp scoped_git_credential` (git push/pull over HTTP with the helper against a local git HTTP backend) |
+| 6, 7 | NOT RUN live | same daemon test (helper empty for another repo/host); `sandbox_real_no_user_credentials_reach_the_container` (`mise run test-sandbox`, CI job `sandbox-runtime`) for the tmpfs credential directory |
+| 8 | NOT RUN live | client `a_removed_token_is_withdrawn_from_the_daemon`, `a_replaced_token_is_granted_without_a_daemon_restart`, `a_token_removed_while_disconnected_is_revoked_on_the_reconnect` |
+| 9 | NOT RUN live | `features_daemons` `dismissing_the_notice_clears_it_from_the_registry_and_the_row` |
+| 10 | NOT RUN live | client `at_the_expiry_the_status_is_expired_and_the_daemon_is_told_to_delete_the_token`, `a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry`; core `schedule` tests (injected clock) |
+| 11 | NOT RUN (kind) | `kube::start_tests` (fake) only |
+| 12 | NOT RUN live | `micold-client` `features::settings::github_tokens` tests |
+
+The live check against real GitHub and the visual pass of the status rows (T055) remain open on #1147.
