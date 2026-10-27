@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M1 in review (worktree /home/user/wt-1504-m1, branch 1504-m1, stacked on design PR #1557 head c91788da9); review A round 1 fixes committed; review B CLEAN; visual pass PASS
-- **Next step**: review A round 2 (scoped, sonnet) on the fix diff; then PR files (pr-title-m1.md / pr-body-m1.md); not pushed until #1557 merges.
+- **Phase**: M1 reviews done (review A round 2 CLEAN, review B CLEAN, visual pass PASS); rebasing onto main after #1557 merged (24a2a839f)
+- **Next step**: rebase on origin/main, full gate, push claude/project-thread-t2a600, PR files pr-title-m1.md / pr-body-m1.md; orchestrator opens the M1 PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1557 | design | open | pending |
+| #1557 | design | merged | 24a2a839f |
 
 ## Milestones
 
@@ -58,7 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A (code-review high) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CHANGES: 1 MAJOR, 2 MINOR — all fixed (F1 a folder ticket of neither kind no longer stops the branch being read; F2 a non-conventional namespace segment (`jh/`, `user/`) is skipped before the branch ticket is read; F3 Jira key rule reused from `issue_link::ticket_ref` (digits after the first letter); L2 rows and tests added) |
 | M1 review B (conformance, sonnet) | 1 | 832dfdb47fcacca1e78bd06d65e1d4b9fdf9af48:7fbb9ec20822de72e5b0e383eeb033f2b096b67f | CLEAN (1 MINOR: no TDD cycle log; red runs named in the PR body) |
 | M1 visual pass | 1 | 7fbb9ec20 | PASS: quickstart §B rows A, B and rename, light and dark (/mnt/project-files/issue-1504/) |
-| M1 review A (code-review, scoped) | 2 | d074ecd6fb6b943300885d215029a356dea395db:104b7ed0222554ea88387a5c7dc81eec981d4073 | pending (orchestrator; fix diff from 832dfdb47…:7fbb9ec20…); full gate green at 104b7ed02 |
+| M1 review A (code-review, scoped) | 2 | d074ecd6fb6b943300885d215029a356dea395db:104b7ed0222554ea88387a5c7dc81eec981d4073 | CLEAN (F1–F3 fixed; `issue_ref` unchanged for callers); full gate green at 104b7ed02 |
 
 ## Declined review findings
 
