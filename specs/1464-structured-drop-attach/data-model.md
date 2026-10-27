@@ -8,3 +8,5 @@ All in-memory, client side; nothing persisted or sent on the wire.
 - **`apply_drop(session, files, can_accept)`**: `can_accept == false` -> no change except `notice`.
 - **Hover flag (new)**: `App.files_hovering: bool`; set by `FileHovered`, cleared by `FilesHoveredLeft` and `FileDropped`.
 - **Transitions**: closed --AttachRequested(accepting)--> open; open --Picked|Closed--> closed; open + AttachRequested -> unchanged (FR-015).
+
+- **Sheet (new)**: `App.shortcuts_open: bool`, `app::Message::ShortcutsToggled(bool)`; `SheetModel` groups `Vec<(title, rows)>`; palette command "Keyboard shortcuts".

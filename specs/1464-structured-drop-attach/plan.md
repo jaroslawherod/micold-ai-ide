@@ -49,10 +49,10 @@ frame (SC-005).
 | II. Multi-Session | PASS | Picker flag and results carry `SessionId`; a late result for a closed/ended session is refused (FR-012). Cue/flag is window state, no session state shared. |
 | III. Worktree Integration | PASS | Paths quoted for the session's sandbox share exactly as for a drop; no VCS operation added. |
 | IV. Local-First | PASS | Local picker and files only; no network. |
-| V. Rust + iced | PASS | Rust/iced only; `rfd` is a dialog library, not a GUI framework. "Picker open" is an `Option`-style state on the composer entry, not a bool pair. |
+| V. Rust + iced | PASS | Rust/iced only; `rfd` is a dialog library, not a GUI framework. "Picker open" is one `bool` on the composer entry (a single two-state fact; no invalid combination exists). |
 | VI. Cross-Platform Parity | PASS | rfd covers all three; shortcut uses Ctrl/Cmd; cue best-effort per Clarification (hover not emulated), results identical. CI builds all three. |
 | VII. Documentation | PASS | User-guide page for structured input updated in the same change (Docs below). |
-| VIII. Reusable UI Components | PASS | Button is `material::IconButton` (builder, `.into()`); cue is a small shared overlay widget wrapper in `ui/material`, not feature-local. |
+| VIII. Reusable UI Components | PASS | Button is `material::IconButton` (builder, `.into()`); cue is `drop_cue` in the shared `micold-material` crate, not feature-local. |
 
 No violations; Complexity Tracking empty. Re-checked after design: unchanged.
 
@@ -60,8 +60,7 @@ No violations; Complexity Tracking empty. Re-checked after design: unchanged.
 
 ### D1 Admission path (FR-001..003, 008, 011, 016)
 Keep `Msg::Dropped { session, files }` + `apply_drop` as the one admission. Add a reducer guard in
-`composer::State`: `apply_drop` takes a `can_accept: bool` (from the session's input state; same
-test as `can_send`'s session half) and, when false, applies nothing and sets `notice`
+`composer::State`: `apply_drop` takes a `can_accept: bool`, computed in `shell/composer.rs` where `Msg::Dropped` and `Msg::AttachPicked` are routed, from `app.core` (the session's input state: the session half of `can_send`, without its `connected` flag, which is a send-time concern) and, when false, applies nothing and sets `notice`
 "<n> file(s) not attached: the session is not accepting input". Empty `plan` (no images, no
 paths) returns without touching `notice` (FR-016). Text drops never reach it: iced only emits
 `FileDropped`. See [contracts/admission.md](contracts/admission.md), [data-model.md](data-model.md).
@@ -76,7 +75,7 @@ New `shell/attach_picker.rs`: `open(session) -> Task<Message>` runs
 `rfd::AsyncFileDialog::new().pick_files().await` (no filter, default location, title
 "Add attachment"); maps `None`/empty to `Msg::AttachPickerClosed(session)` and `Some(paths)` to
 `Msg::AttachPicked { session, paths }`. Reducer: `AttachRequested(session)` is ignored unless the
-composer can accept input and `picker_open` is `None`; it sets `picker_open` and the shell spawns
+composer can accept input and `picker_open` is false; it sets `picker_open` and the shell spawns
 the task. `AttachPickerClosed` clears it silently; `AttachPicked` clears it, then checks the
 session still accepts input (else a notice, FR-012) and hands paths to `read_for_composer`. The
 flag is keyed by session, so the result can only land on the requester. The dialog is parentless
@@ -84,19 +83,24 @@ on Linux/Windows and parented to the main window on macOS where rfd needs it; if
 is awkward in iced, parentless is acceptable (research R2).
 
 ### D4 Button and shortcut (FR-006, 010)
-In `ui/composer.rs` input row, push a `material::IconButton` (new `Icon::Attach`, paperclip,
-added to the icon set with its docs in `docs/user-guide/icons.md`) before Stop/Send, with a
-tooltip "Add attachment (Ctrl+Shift+U)" / "(Cmd+Shift+U)". Disabled (not hidden) when the
-session cannot accept input or `picker_open` is set. Keyboard: the button joins the focus order via
-the standard button focus; a composer chord `Ctrl+Shift+U` / `Cmd+Shift+U` is a new
-`KeyIntent::Attach` in `composer_key` (checked against `keymap.rs` reserved chords D H W O T E F P
-and composer keys; U is free). The shortcut sheet gains a "Composer" section listing it (D7).
+In `ui/composer.rs` input row, push `micold_material::IconButton` (`crates/micold-material/src/icon_button.rs`;
+disabled = `on_press_maybe(None)`, focus via its existing `keyboard` support) before Stop/Send, wrapped
+in iced's `widget::tooltip` for the text "Add attachment (Ctrl+Shift+A)" / "(Cmd+Shift+A)" (IconButton
+has no tooltip method; the wrapper is the pattern, no new API). New `Icon::Attach` (paperclip) is added
+in `crates/micold-material/src/icons.rs` with its glyph source and listed in `docs/user-guide/icons.md`.
+Disabled (not hidden) when the session cannot accept input or `picker_open` is set.
+Shortcut: `composer_key` currently returns `Edit` for any non-plain press (`if !plain(press)`, "no key
+needs a platform modifier", R12). Add, before that guard, a check for the attach chord (primary modifier
++ Shift + `A`, Cmd on macOS via the `logo` flag of `KeyInput.mods`, Ctrl elsewhere) returning the new
+`KeyIntent::Attach`, and amend the R12 doc comment. `Ctrl+Shift+A` is not among the reserved chords
+(D H W O T E F P) and, unlike `Ctrl+Shift+U` (the GTK/IBus Unicode-entry chord), no Linux input
+method takes it (research R5). Unit test: the chord gives `Attach`, plain `a` and `Ctrl+A` stay `Edit`.
 
 ### D5 Drop cue (FR-005, SC-005)
 `SplitView` also forwards `FileHovered` / `FilesHoveredLeft` / `FileDropped` as
 `PaneMsg::FilesHovering(bool)`. App holds `files_hovering: bool` (window-level; the OS gives no
 pointer position during a drag, so the cue marks every structured pane that accepts input, not one
-pane). `ui/panes.rs` wraps such a pane's body in a small `drop_cue` overlay (outline + tinted fill
+pane). `ui/panes.rs` wraps such a pane's body in the `micold_material::drop_cue` overlay (outline + tinted fill
 from `Roles`, in `ui/material`) while the flag is set; the flag clears on leave and on drop. Where
 no hover event arrives, no cue and the drop still works. Terminal panes get no cue (feature 487).
 
@@ -108,11 +112,15 @@ position; transcript/composer widgets that capture events could swallow the wind
 milestone with a regression test; recorded in the ledger.
 
 ### D7 Shortcut sheet (FR-010)
-`features/changes/keys.rs::shortcut_sheet` is Review-only and gated on the Review tab
-(`ShortcutSheet::open_in`). Extend `SheetModel` with a second group (title "Composer") built from a
-`COMPOSER_KEYS` table, and let the sheet open from a structured session via the existing
-Keyboard-shortcuts command. Task 1 of that milestone confirms the gate; if opening from a
-structured session needs a new palette command, add it (name "Keyboard shortcuts").
+Today the sheet is Review-only: `Msg::ShortcutsOpened` (`ui/changes.rs`, Review overflow menu) sets
+a per-Review-view `sheet_open`; `ShortcutSheet::open_in` (`features/changes.rs`) reads it, and
+`SheetModel` (`features/changes/keys.rs`) is one flat `rows` list. Design: (a) `SheetModel` becomes
+groups (`Vec<(title, rows)>`): "Review" (unchanged rows, shown only when a Review view is shown) and
+"Composer" (`COMPOSER_KEYS`: the attach chord); (b) new app-level `State.shortcuts_open: bool` with
+`app::Message::ShortcutsToggled(bool)`; `ShortcutSheet::open_in` is true when either flag is set, and
+closing clears both; (c) a command-palette entry "Keyboard shortcuts" (`features/command_palette.rs`)
+sets it, available everywhere, so a structured session reaches the sheet; (d) `ui/shortcut_sheet.rs`
+renders the groups; showcase poses both. New messages are listed in data-model.md.
 
 ## Project Structure
 
@@ -122,14 +130,17 @@ specs/1464-structured-drop-attach/
 ├── contracts/admission.md        # drop/picker admission + messages
 └── tasks.md                      # tasks unit
 crates/micold-core/src/structured/attachment.rs     # unchanged API; tests for refusal text
+crates/micold-material/src/icons.rs      # Icon::Attach (new variant)
+crates/micold-material/src/drop_cue.rs   # NEW: shared presentational drop cue (theme Roles), reused by any pane
 crates/micold-client/
 ├── Cargo.toml (+ rfd), ../../Cargo.toml (workspace dep)
 ├── src/features/composer.rs      # Msg::{AttachRequested,AttachPicked,AttachPickerClosed}, picker_open, can_accept guard, KeyIntent::Attach
 ├── src/shell/attach_picker.rs    # NEW: rfd task        src/shell/drops.rs  # read_for_composer pub(crate)
 ├── src/shell/composer.rs         # route new Msgs        src/shell/panes.rs  # FilesHovering
 ├── src/ui/composer.rs            # IconButton + tooltip  src/ui/panes.rs     # cue wrap
-├── src/ui/material/split_view.rs # forward hover events  src/ui/material/drop_cue.rs # NEW
-├── src/ui/shortcut_sheet.rs + features/changes/keys.rs # Composer group
+├── src/ui/material/split_view.rs # forward hover events
+├── src/features/command_palette.rs # "Keyboard shortcuts" entry; src/app.rs # shortcuts_open, ShortcutsToggled
+├── src/ui/shortcut_sheet.rs + features/changes/keys.rs + features/changes.rs # groups, Composer group, open_in
 ├── src/showcase/sections/*.rs    # button states + cue
 └── tests/ (features_composer, pane_drop_target, layout_snapshot)
 docs/user-guide/ (structured input page; icons.md)
@@ -160,15 +171,15 @@ shell task, cue widget). No core or daemon change beyond tests.
 | FR-007/009/012/015 | reducer tests: `AttachRequested` twice opens one; `AttachPickerClosed` silent; `AttachPicked` after session ended refused; result keyed to requester |
 | FR-001 routing, multi-pane | `tests/pane_drop_target.rs` / `features_session.rs` |
 | FR-005, SC-005 | reducer test for the hover flag set/clear; showcase for the look |
-| FR-006, 010 | `layout_snapshot` geometry gate (row fits, button size), key-intent unit test for the chord, sheet model test |
+| FR-006, 010 | `layout_snapshot` geometry gate (row fits, button size), key-intent unit test for the chord, sheet-groups and palette-entry tests |
+| SC-002 | reducer/UI test: button press -> picker requested -> `AttachPicked` is click, choose, confirm (3 interactions); no extra step exists |
 | FR-004, SC-003, SC-004 | quickstart §B manual matrix (Wayland, X11, macOS, Windows; native picker) |
 | FR-014 | showcase section + visual-pass |
 | Core | `micold-core` unit tests unchanged; add none unless refusal wording moves |
 
 ## Documentation
 
-Update the structured-input user-guide page (create `docs/user-guide/structured-input.md` section
-if absent; list in `SUMMARY.md`): drag onto the view, the button, the shortcut, cue best-effort.
+New user-guide page `docs/user-guide/structured-input.md` (no structured-input page exists; list it in `SUMMARY.md` and `docs/README.md` as the others are): drag onto the view, the button, the shortcut, cue best-effort.
 `icons.md` lists the new Attach icon.
 
 ## Complexity Tracking
