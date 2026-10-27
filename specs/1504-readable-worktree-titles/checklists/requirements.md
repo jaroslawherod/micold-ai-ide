@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,6 @@
 
 ## Notes
 
-- One [NEEDS CLARIFICATION] marker (FR-001: rank of the session title) is left for the clarify unit.
+- The one [NEEDS CLARIFICATION] marker (FR-001: rank of the session title) was resolved in clarify
+  (Clarifications, Session 2026-10-27); none remain.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
