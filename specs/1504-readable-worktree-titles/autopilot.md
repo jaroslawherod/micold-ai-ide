@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR #1568 open); review A (CLEAN, 2 MINOR) and review B round 1 (F1 MAJOR) fixed at e51e05b76; full gate (`scripts/gate.sh`) green at e51e05b76; not pushed
-- **Next step**: orchestrator runs M3 review B round 2 (sonnet, scoped to `253f3f912..e51e05b76`) and the visual pass; then fill `VISUAL_PASS` in scratchpad pr-body-m3.md and open the M3 PR
+- **Phase**: M2 review fixes committed on branch 1504-m2 (worktree /home/user/wt-1504-m2), rebased onto origin/main after M1 #1566 merged (2104379be); full gate run on the rebased tree; not pushed
+- **Next step**: orchestrator runs a scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the T049 disclosure fix commit; then push `claude/project-thread-t2a600` and open the M2 PR from scratchpad pr-title-m2.md / pr-body-m2.md
 
 ## Pull requests
 
@@ -18,7 +18,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1557 | design | merged | 24a2a839f |
 | #1566 | M1 | merged | 2104379be |
-| — | M2 | pending (not opened; branch 1504-m2 at 075ac3985) | — |
 
 ## Milestones
 
@@ -26,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | #1566 | merged |
 | M2 | T017–T024, T049 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | implemented, reviews pending |
-| M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | implemented on 1504-m3, reviews pending |
+| M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
 | M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
 
@@ -64,43 +63,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CLEAN, 2 MINOR — both fixed, no round 2 (only MINORs): (a) `without_a_jira_summary_the_title_falls_through_to_the_branch` now asserts the summary after the t=1 read and after the first failure; (b) `StatusBoard::apply` doc names the one-read-in-flight assumption `due` ensures |
 | M2 review B (conformance, sonnet) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CHANGES: 1 MAJOR, 1 MINOR — F1 fixed (T049: `DATA_USE`, both selector notices and settings.md now disclose the title and keys named only in a branch; tests changed first, red); F2 no TDD cycle log — accepted as in M1, red runs in ledger and PR body |
 | M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
-| M3 review A (code-review high) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CLEAN, 2 MINOR — both fixed: (a) a renamed row's tooltip led with the location title the row does not show (1125 FR-012): `with_title_line` takes the rename and leads with it, no source line (test `a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title`); (b) = review B F1 |
-| M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CHANGES: 1 MAJOR, 1 MINOR. F1 [MAJOR] fixed: `with_title_line` skipped the source line for a Branch title (L3 exempts only Folder); now only Folder names no source, and a title that repeats the Name/Branch line is dropped but its words stay (`Branch name\n{tooltip}`); test rewritten, worktrees-and-sessions.md aligned with overview.md. F2 [MINOR] deferred to M4 (Follow-ups) |
-| M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | pending (orchestrator, sonnet; fix diff `review-snapshot.sh diff bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc` = `253f3f912..e51e05b76`; re-run Verify) |
-| M3 visual pass | 1 | e51e05b76 | pending (title, row tooltip, header tooltip, expanded card for rows A, C, E, G, I, a folder-titled and a renamed worktree; Refresh E/G) |
-
-## Red runs (M3)
-
-Each new test was written before the code and run red against a stub (`TitleSource::words`
-returning `None`, `with_title_line` taking the `LocationTitle` but adding no source line,
-`ExpandedText.source` always `None`, `location_title` still ignoring the pull request and session),
-so every red is a failing assertion, not a compile error:
-
-- `cargo test -p micold-core --lib -- location_title context_header overview_text` (T025, T027):
-  exit 101, 3 failed — `each_source_has_its_l3_words_and_the_folder_none` left `None`, right
-  `Some("From GitHub issue #1504")`; `the_title_tooltip_names_the_titles_source` left
-  `"Add readable titles\nx"`, right `"Add readable titles\nFrom pull request #1520\nx"`;
-  `the_expanded_text_names_the_titles_source` left `None`, right `Some("From pull request #1520")`.
-- `cargo test -p micold-client --test features_overview` (T026): exit 101, 4 failed —
-  `an_open_or_draft_pull_request_of_the_branch_titles_the_card` left
-  `("claude/project-thread-7041o6", Branch)`, right `("Add readable titles", PullRequest(1520))`;
-  `the_main_sessions_title_titles_the_card` left `(…, Branch)`, right
-  `("Fix the flaky resize test", Session)`; `the_pull_request_wins_over_the_session` and
-  `a_reading_or_an_archive_changes_the_title_with_no_other_message` left `Branch`.
-  `nothing_gives_the_branch_then_the_folder` passed (today's behaviour, kept).
-- `cargo test -p micold-client --test features_sidebar two_line` (T027): exit 101, 2 failed —
-  `the_tooltip_begins_with_the_full_title_and_names_the_full_branch` left `Some("Name: ci-red")`,
-  right `Some("From GitHub issue #1117")`; `the_tooltip_names_the_titles_source_after_the_title`
-  left the tooltip without the `From pull request #1520` line.
-
-Green after T028–T030: the same commands, all passed (core 40, features_overview 13).
-
-Review fixes (A minor (a), B F1), `cargo test -p micold-client --test features_sidebar -- tooltip`
-with `with_title_line` given an ignored `renamed` parameter: 2 failed as assertions —
-`a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title` (left opened with
-`Add readable titles\nFrom pull request #1520`, right `my pet name`) and
-`the_tooltip_names_the_titles_source_after_the_title` (Branch title: left today's tooltip, right
-`Branch name\n…`). Green after the fix: features_sidebar 107 passed.
 
 ## Red runs (M2)
 
@@ -140,10 +102,6 @@ The longer selector notice wraps one more line in the Jira New-worktree dialog: 
 `0/8/…` paths), accepted with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test
 layout_snapshot`.
 
-Pending (M2): scoped review B round 2 (sonnet, `rubrics/conformance.md`, re-run Verify) on the
-T049 fix commit `1b94d0344..ef2d329bc` (the round-1 snapshot is stale after the rebase onto
-2104379be, so the diff is given as a commit range). Full gate green at ef2d329bc.
-
 Round-1 reviews (M2, done): review A (`code-review` high) and review B (`rubrics/conformance.md`,
 sonnet) on `ac5ada9ea...HEAD` (`code-review` high) and review B (`rubrics/conformance.md`,
 sonnet) on `ac5ada9ea...HEAD`, brief `brief.py milestone specs/1504-readable-worktree-titles M2`;
@@ -165,4 +123,4 @@ None.
 
 ## Follow-ups not done
 
-- M4: add `TitleSource::Spec` and `TitleSource::Commit` to `showcase::samples::title_sources()` (M3 review B F2).
+None yet.
