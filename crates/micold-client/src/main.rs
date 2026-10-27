@@ -1517,6 +1517,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_opened(app)
         }
+        // BUG-1555: a dismissal is written to the settings so it survives a restart.
+        Message::Attach(AttachMsg::OfferDismissed) => {
+            app.core.update(Message::Attach(AttachMsg::OfferDismissed));
+            shell::persist::persist_offer_dismissal(app.caps.settings(), &mut app.core);
+            Task::none()
+        }
         Message::Attach(msg @ AttachMsg::OfferAttachAll) => {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_offer_apply(app)
