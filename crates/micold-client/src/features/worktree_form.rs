@@ -1086,9 +1086,9 @@ impl WorktreeForm {
     ///
     /// A list reloaded with text typed and capped searches beyond it again, after the usual pause:
     /// Jira's (1185), a filtered GitHub list's (1400, FR-016), and 034's after **Clear filters**.
-    /// The descriptions of 034's
-    /// GitHub listing follow under this load's seq, so a later load's pass can never take this
-    /// one's pages (038 FR-024); a filtered listing carries them already (research R9).
+    /// The descriptions of 034's GitHub listing follow under this load's seq, so a later load's
+    /// pass can never take this one's pages (038 FR-024); a filtered listing carries them already
+    /// (research R9).
     fn take_listing(&mut self, seq: u64, listing: IssueListing, gh: PathBuf) {
         let filtered = self.github_filter();
         let searchable = match (&filtered, self.github_repo()) {

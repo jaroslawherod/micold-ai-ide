@@ -176,22 +176,13 @@ impl LabelRow {
     }
 }
 
-/// A labels load's failure in words for the labels: 034's notice for `source` without its
-/// "Couldn't read issues" opening, which would name the wrong thing under "Couldn't load the
-/// labels." (visual pass M2 F5).
+/// A labels load's failure in words for the labels: the cause without 034's "Couldn't read
+/// issues" opening, which would name the wrong thing under "Couldn't load the labels." (visual
+/// pass M2 F5).
 fn label_failure(error: &IssueLoadError, source: NoticeSource<'_>) -> String {
-    let notice = error.message(source);
-    let cause = notice
-        .strip_prefix("Couldn't read issues: ")
-        .or_else(|| notice.strip_prefix("Couldn't read issues. "));
-    match cause {
-        Some(cause) => {
-            let mut chars = cause.chars();
-            chars.next().map_or_else(String::new, |first| {
-                first.to_uppercase().chain(chars).collect()
-            })
-        }
-        None => notice,
+    match source {
+        NoticeSource::Github(repo) => error.github_cause(repo),
+        jira @ NoticeSource::Jira { .. } => error.message(jira),
     }
 }
 
@@ -359,7 +350,9 @@ impl GithubSelector {
     }
 
     /// Add `label` to `list` (moving it out of the other) and clear the field; `true` when the
-    /// filter changed.
+    /// filter changed. The field keeps the keyboard, so its list stays open on the labels left,
+    /// and its highlight starts over: Enter adds nothing until a row is highlighted again (visual
+    /// pass M2 round 2 F2, F3).
     fn choose(&mut self, list: LabelList, label: LabelName) -> bool {
         let before = self.basic.clone();
         match list {
@@ -368,7 +361,7 @@ impl GithubSelector {
         }
         let field = self.field_mut(list);
         field.query.clear();
-        field.open = false;
+        field.highlight = None;
         self.rematch_both();
         self.basic != before
     }

@@ -326,8 +326,8 @@ pub fn on_issues_loaded(
             resolved_env: None,
         },
     );
-    // Feature 1185 (FR-009): a Jira list reloaded with text typed searches beyond it again; the
-    // reducer left that search pending under the load's seq.
+    // Features 1185 (FR-009) and 1400 (FR-016): a list reloaded with text typed searches beyond
+    // it again; the reducer left that search pending under the load's seq.
     match app.core.worktree_form.pending_issue_search() {
         Some(pending) if pending == seq => Task::batch([work, search_after_pause(seq)]),
         _ => work,

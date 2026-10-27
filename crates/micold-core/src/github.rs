@@ -2126,23 +2126,53 @@ impl IssueLoadError {
     }
 
     fn github_message(&self, repo: &GithubRepo) -> String {
+        let (opening, cause) = self.github_parts(repo);
+        format!("{}{cause}", opening.unwrap_or_default())
+    }
+
+    /// The GitHub notice's cause alone, without 034's "Couldn't read issues" opening, for a load
+    /// that is not the issue list (feature 1400's labels, under "Couldn't load the labels.").
+    pub fn github_cause(&self, repo: &GithubRepo) -> String {
+        let (opening, cause) = self.github_parts(repo);
+        if opening.is_none() {
+            return cause;
+        }
+        let mut chars = cause.chars();
+        chars.next().map_or_else(String::new, |first| {
+            first.to_uppercase().chain(chars).collect()
+        })
+    }
+
+    /// The GitHub notice as 034's opening, when it has one, and the cause after it.
+    fn github_parts(&self, repo: &GithubRepo) -> (Option<&'static str>, String) {
+        const READ: Option<&str> = Some("Couldn't read issues: ");
         match self {
-            Self::ToolMissing => "Couldn't read issues: the GitHub CLI (`gh`) isn't installed. \
-                                  Install it from cli.github.com, then sign in with `gh auth login`."
-                .to_owned(),
-            Self::NotSignedIn => "Couldn't read issues: you're not signed in to GitHub. \
-                                  Run `gh auth login` in a terminal, then retry."
-                .to_owned(),
-            Self::NoAccess => format!("Couldn't read issues: your GitHub sign-in can't access {repo}."),
-            Self::Offline => "Couldn't reach GitHub. Check your connection, then retry.".to_owned(),
-            Self::RateLimited => {
-                "GitHub's rate limit was reached. Wait a minute, then retry.".to_owned()
-            }
-            Self::TimedOut => "GitHub didn't answer within 10 seconds.".to_owned(),
-            Self::Other(detail) => format!("Couldn't read issues: {detail}"),
-            Self::Unreachable(_) | Self::CredentialsRefused | Self::NotJiraCloud => {
-                "Couldn't read issues. Check your connection and settings, then retry.".to_owned()
-            }
+            Self::ToolMissing => (
+                READ,
+                "the GitHub CLI (`gh`) isn't installed. \
+                 Install it from cli.github.com, then sign in with `gh auth login`."
+                    .to_owned(),
+            ),
+            Self::NotSignedIn => (
+                READ,
+                "you're not signed in to GitHub. Run `gh auth login` in a terminal, then retry."
+                    .to_owned(),
+            ),
+            Self::NoAccess => (READ, format!("your GitHub sign-in can't access {repo}.")),
+            Self::Offline => (
+                None,
+                "Couldn't reach GitHub. Check your connection, then retry.".to_owned(),
+            ),
+            Self::RateLimited => (
+                None,
+                "GitHub's rate limit was reached. Wait a minute, then retry.".to_owned(),
+            ),
+            Self::TimedOut => (None, "GitHub didn't answer within 10 seconds.".to_owned()),
+            Self::Other(detail) => (READ, detail.clone()),
+            Self::Unreachable(_) | Self::CredentialsRefused | Self::NotJiraCloud => (
+                Some("Couldn't read issues. "),
+                "Check your connection and settings, then retry.".to_owned(),
+            ),
         }
     }
 
