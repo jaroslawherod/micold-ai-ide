@@ -322,7 +322,7 @@ check the terminal launch uses `xhigh`; switch back and check again.
 - The CLI accepts an effort level at launch, in both kinds, so a stored choice can be applied when
   a session starts (FR-010).
 - The CLI reports, per model, whether effort is supported and which levels (recorded in
-  `crates/micold-core/tests/fixtures/stream-json/command-initialize.jsonl`); it does not report the level a session currently uses, so the view shows the
-  effort choice rather than a level read back from the CLI.
+  `crates/micold-core/tests/fixtures/stream-json/command-initialize.jsonl`); the level a session currently uses is readable on request (`get_settings`, research R10), but
+  the view shows the effort choice rather than a level read back from the CLI.
 - The five level names are those Claude Code accepts today; a later release that adds or drops a
   level shows up through the supported levels the CLI reports.
