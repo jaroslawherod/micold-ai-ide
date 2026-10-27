@@ -787,6 +787,7 @@ fn change_tree<'a>(
         },
         r,
     )
+    .clear_of_bar()
     .offset(view.list_offset)
     .viewport(view.list_viewport)
     .id(LIST_SCROLL_ID.clone())
