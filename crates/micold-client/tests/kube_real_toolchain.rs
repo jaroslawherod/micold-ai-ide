@@ -35,8 +35,12 @@ const NAME: &str = "Toolchain box";
 /// The setup command the sandbox page gives for a mise project, in the fixture's folder.
 const SETUP: &str = "cd mise-c-crate && mise trust && mise install";
 
-/// A first toolchain download takes well under this; the bound only stops a hang.
-const INSTALL_SECS: u64 = 15 * 60;
+/// The setup's first toolchain download takes well under this; the bound only stops a hang, and
+/// with the steps' bounds stays inside the job's 60 minutes so a hang still prints its log.
+const INSTALL_SECS: u64 = 8 * 60;
+
+/// A step after the setup: a build with the toolchain already there, or the session's own installs.
+const STEP_SECS: u64 = 5 * 60;
 
 /// The session's shell instance the steps are typed into.
 const SHELL: ShellInstanceId = ShellInstanceId(1);
@@ -68,8 +72,8 @@ struct Shell {
 }
 
 impl Shell {
-    /// `welcome` is the connection's: its catalog holds the session's last input serial, which the
-    /// daemon keeps across a restart.
+    /// `welcome` is the connection's: its catalog holds the next input serial the daemon expects
+    /// for the session, which it keeps across a restart.
     async fn open(
         conn: &mut DaemonConnection,
         welcome: &Welcome,
@@ -114,10 +118,11 @@ impl Shell {
         let typed = format!(
             "({cmd}) >/tmp/{tag}.log 2>&1 && echo {tag}\"-OK\" || {{ tail -n 30 /tmp/{tag}.log; echo {tag}\"-FAILED\"; }}\r"
         );
+        let serial = self.serial;
         self.serial += 1;
         conn.send(Frame::Control(ClientMsg::SessionInput {
             session: self.session,
-            serial: self.serial,
+            serial,
             bytes: typed.into_bytes(),
             process: Some(SessionProcess::Shell(SHELL)),
         }))
@@ -216,9 +221,9 @@ async fn kube_real_toolchain_builds_and_a_sessions_installs_survive_the_pod() {
     let mut shell = Shell::open(&mut conn, &welcome, &work.project, work.session).await;
     shell.step(&mut conn, "B6TOOLS", IMAGE_TOOLS, 60).await;
     setup(&mut conn, &work.project, worktree).await;
-    shell.step(&mut conn, "B6BUILD", BUILD, INSTALL_SECS).await;
+    shell.step(&mut conn, "B6BUILD", BUILD, STEP_SECS).await;
     shell
-        .step(&mut conn, "B6OWN", &own_installs(), INSTALL_SECS)
+        .step(&mut conn, "B6OWN", &own_installs(), STEP_SECS)
         .await;
     shell.step(&mut conn, "B6FOUND", &installed(), 120).await;
 
