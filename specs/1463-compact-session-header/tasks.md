@@ -83,3 +83,25 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test layout_snapshot --test session_area_stability`
 - **Depends on**: M1
 - **Tier**: full
+
+### M3 — Test-strength remediation
+
+- **Tasks**: T021–T028
+- **Deliverable**: The fit gates and unit tests kill the five surviving mutants of `tdd/verification.md` (exact button width, tiled switch row numbers, caption cap, held-queue caption, GiveWayRow/Button::density, rank tie), with no behaviour change.
+- **Satisfies**: FR-007, FR-011, FR-012; SC-004
+- **Verify**: `cargo test -p micold-client --test layout_snapshot` and `cargo test -p micold-material`; each task's mutant fails
+- **Depends on**: M2
+- **Tier**: full
+
+## Phase 7: TDD remediation
+
+Test-strength findings of `tdd/verification.md` (verdict FAIL). The missing red phase (F1) cannot be redone and is a recorded limitation, not a task.
+
+- [ ] T021 Finding 2: restore an exact-width check for `assert_button_unsqueezed` in `C/tests/gates/session_area_fits.rs` wherever the title is at or above `TITLE_MINIMUM`, and add a case that drives the title below it and asserts the cut width equals the width left by the line (not just `<= wanted`); or record in the spec a user-approved amendment with the number. Proof: `cargo test -p micold-client --test layout_snapshot` green, and a mutant that always returns `wanted` for the cut case fails.
+- [ ] T022 Finding 4: rewrite `a_tiled_pane_still_has_its_switch_row` in `C/tests/gates/session_area_fits.rs:1434` to locate the tile's switch row by path, and assert its size and its offset from the pane-area origin equal the recorded pre-change values (FR-007, SC-004). Proof: mutants dropping the tiled switch row or changing its padding (`[XS, SM]` -> `[SM, SM]` in `terminal_switch_strip`) fail.
+- [ ] T023 Finding 5: pin the caption cap independently (a literal in the test, or caption width equals 120 at 1280x800 for the longest caption). Proof: mutant `SWITCH_CAPTION_MAX_WIDTH = 400.0` fails `a_long_caption_is_cut_before_the_switch_or_restart_is_clipped`.
+- [ ] T024 Findings 3, 6, 7, 13: name the zero-width exemption of `"strip tab region"` at `session_area_fits.rs:269` with a comment citing FR-012, replace the `80.0`/`36.0`/`12.0` literals with named constants, drop the redundant restart conjunct, tighten the switch-row heuristic and the natural-width check of New session/split buttons. Proof: `cargo test -p micold-client --test layout_snapshot` green.
+- [ ] T025 Finding 10: add a unit test for `switch_offer_of` with a held queue (caption is `Some(line)`) and without (`None`). Proof: mutant `caption: None` fails.
+- [ ] T026 Finding 11: add micold-material unit tests for `GiveWayRow` (`shorten` yields before `keep`, ranks in order) and `Button::density` (height at DENSE vs STANDARD). Proof: mutants `Shorten(rank)` -> `Keep` and density ignored fail `cargo test -p micold-material`.
+- [ ] T027 Finding 12: add a layout case where words and the switch slot both overflow and assert which shortens first. Proof: mutant `.shorten(1, words)` -> `.shorten(0, words)` fails.
+- [ ] T028 Finding 13: add a direct test that `tab::SESSION_WIDTH` still equals its recorded value (FR-011), or note it is guarded only by the tab snapshots.

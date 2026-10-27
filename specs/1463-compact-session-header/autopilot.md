@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1463
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
-- **Phase**: tasks
-- **Next step**: wait on CI for the M2 PR, merge, then close
+- **Phase**: milestone M3
+- **Next step**: run M3 (test-strength remediation from tdd/verification.md), then a new close unit
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1469 | Design | merged | |
 | #1487 | M1 | merged | 304bfb4ffa97076810692dcbe28c9a135eb63cbf |
+| #1505 | M2 | merged | e727ac22955731c40e6ea5a719038cb054309e0e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001, T003–T008 | full | One-line header | #1487 | merged |
-| M2 | T002, T009–T018 | full | Switch control in strip | | in review |
+| M2 | T002, T009–T018 | full | Switch control in strip | #1505 | merged |
+| M3 | T021–T028 | full | Gates pinned against the surviving mutants of tdd/verification.md | | pending |
 
 ## Decisions
 
@@ -71,10 +73,14 @@ None. (The M2 push block was stale: the remote branch was deleted after #1487 me
 - M1 visual pass was partial (dark only, 1600x1200 and 640x480 at the default sidebar; Xvfb/xdotool missing). Light scheme, 1280x800 and long-chip states unchecked; the label is cut at 640x480 as the user's Q1 answer allows. Screenshots in `visual-pass/`.
 
 - With three long chips at the smallest window the Changes button can get no room (flat row, chips before button). A priority layout would fix it.
-- `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` failed in the scoped gate (cap 0); unrelated to the header, check on main.
+- `ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` failed once in the M2 scoped gate; checked at close: passes on main.
 
-None yet. Pre-existing failure on main: ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth.
+`ui::changes::tests::a_24_character_name_keeps_its_room_at_every_depth` does NOT fail on main: it passes at e727ac229 (main, M2 merged) in a scoped run, and the full workspace run in the close unit (11541 passed, 0 failed) included it. The earlier scoped-gate failure was not reproduced (likely an artifact of the mid-edit tree).
 
 ## Tasks unit
 
 - Review round 1 (tasks, snapshot b95ec35da:421a1eab3): F1 Verify targets fixed (verified: gates are a module of `layout_snapshot`), F2 checklist ticked, F3 note added; fixed, prose only. speckit-analyze HIGH findings I1-I3, C1 fixed.
+
+## Close unit
+
+- `speckit-tdd-verify`: FAIL on test strength (mutation 7/11; F2 HIGH, F4/F5/F10/F11/F12 survivors). The missing red phase (F1) is a recorded limitation. Remediation tasks T021–T028 cut into M3. Full suite 11541 passed; one unrelated flake `micold-core streaming_child` passed on rerun.
