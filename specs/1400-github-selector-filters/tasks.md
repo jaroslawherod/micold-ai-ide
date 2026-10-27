@@ -133,9 +133,9 @@ the exclusion; open on B: B's own filter or the default; a new `App` on A: the e
 
 **Independent Test**: set the state to Closed: only closed issues, each marked; All: both, each by its state.
 
-- [ ] T036 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/github_filter_state.rs`: the State row offers Open, Closed, All with Open chosen by default (US5 AS1); Closed → one listing with `is:closed`, every row `is_closed()` (AS2); All → no state term; picking a closed issue fills ticket, name and type exactly as an open one (AS3, FR-017); `described()` and `chosen_count` include the state
+- [ ] T036 [P] [US5] Write failing reducer tests in `crates/micold-client/tests/github_filter_state.rs`: the State row offers Open, Closed, All with Open chosen by default (US5 AS1); Closed → one listing with `is:closed`, every row `is_closed()` (AS2); All → no state term; picking a closed issue fills ticket, name and type exactly as an open one (AS3, FR-017); `described()` and `chosen_count` include the state; each state change returns `Outcome::GithubSelectorRemembered { change: SelectorChange::Basic(..) }` (FR-021), and a selector built by `from_remembered` with a remembered Closed state reopens with one listing carrying `is:closed`
 - [ ] T037 [P] [US5] Extend `crates/micold-client/tests/gates/issue_rows_show_all_text.rs` (failing first): an arm with a closed issue row whose "Closed" status chip fits, and an arm with a closed issue the status board holds as "In Progress": the row shows "Closed", not stale (selector-ui §3)
-- [ ] T038 [US5] Add the `StateChosen` arm to `update` in `crates/micold-client/src/features/worktree_form/github_filter.rs`, the State row (`ToggleChip`s "Open", "Closed", "All", one active, `takes_the_keyboard()`) in `crates/micold-client/src/ui/github_filter.rs`, and the closed status chip `TicketStatus { name: "Closed", category: Some(StatusCategory::Done) }` ahead of any status-board entry in `issue_row` in `crates/micold-client/src/ui/worktree_form.rs`, until T036–T037 pass
+- [ ] T038 [US5] Add the `StateChosen` arm to `update` in `crates/micold-client/src/features/worktree_form/github_filter.rs`, emitting `GithubSelectorRemembered(Basic)` as T034's basic arms do, the State row (`ToggleChip`s "Open", "Closed", "All", one active, `takes_the_keyboard()`) in `crates/micold-client/src/ui/github_filter.rs`, and the closed status chip `TicketStatus { name: "Closed", category: Some(StatusCategory::Done) }` ahead of any status-board entry in `issue_row` in `crates/micold-client/src/ui/worktree_form.rs`, until T036–T037 pass
 - [ ] T039 [US5] Add the state filter and the Closed chip to "Filtering GitHub issues" in `docs/user-guide/worktrees-and-sessions.md`
 
 **Checkpoint**: US5 AS1–AS3 pass; quickstart §B B6 passes.
@@ -204,8 +204,8 @@ milestone (no milestone, an open milestone).
 - [ ] T054 [US6] Implement `Login`, `Assignee`, `Author`, `MilestoneTitle`, `Milestone`, the three `BasicFilters` fields and setters, their terms appended after the label terms in `ScopedSearch::listing`, `MilestoneChoices`, `Person`, `parse_people` and `load_milestone_choices` in `crates/micold-core/src/github_filter.rs` until T053 passes
 - [ ] T055 [P] [US6] Write failing tests in `crates/micold-core/tests/github_gh_cli.rs` for `GhCli::{milestones_page, assignable_users}` argument vectors (`MILESTONES_QUERY` with `states: OPEN`; `ASSIGNABLE_USERS_QUERY` with `-f q=<text>`)
 - [ ] T056 [US6] Append `IssueSource::{milestones_page, assignable_users}` with default bodies, implement them on `GhCli` with `MILESTONES_QUERY` and `ASSIGNABLE_USERS_QUERY`, and add `FakeIssueSource::{with_milestones, with_people}` in `crates/micold-core/src/github.rs`, until T055 passes
-- [ ] T057 [P] [US6] Write failing tests in `crates/micold-client/tests/github_filter_state.rs` and `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs`: assignee offers "Me", "No assignee", then people matching the typed text from one debounced (300 ms) search (US6 AS1); author offers "Me", people, then "Use login <typed>" only for a valid login (AS2); milestone's first focus → one milestone load, "No milestone" and open milestones by title (AS3); each choice → one listing with its term ANDed with labels and state (AS4); "Any assignee/author/milestone" clears; `start_milestones` and `start_people_search` only from source-and-storage §3's events
-- [ ] T058 [US6] Implement the US6 sections of `crates/micold-client/src/features/worktree_form/github_filter.rs` (`milestones`, `people`, `people_pending`, the three `FilterField`s and their arms) and `start_milestones`, `start_people_search` in `crates/micold-client/src/shell/github_filter.rs`, until T057 passes
+- [ ] T057 [P] [US6] Write failing tests in `crates/micold-client/tests/github_filter_state.rs` and `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs`: assignee offers "Me", "No assignee", then people matching the typed text from one debounced (300 ms) search (US6 AS1); author offers "Me", people, then "Use login <typed>" only for a valid login (AS2); milestone's first focus → one milestone load, "No milestone" and open milestones by title (AS3); each choice → one listing with its term ANDed with labels and state (AS4); "Any assignee/author/milestone" clears; `start_milestones` and `start_people_search` only from source-and-storage §3's events; each assignee, author and milestone choice (and each "Any …" clear) returns `Outcome::GithubSelectorRemembered { change: SelectorChange::Basic(..) }` (FR-021), and a remembered assignee, author and milestone round-trip through `from_remembered` into one listing with their terms
+- [ ] T058 [US6] Implement the US6 sections of `crates/micold-client/src/features/worktree_form/github_filter.rs` (`milestones`, `people`, `people_pending`, the three `FilterField`s and their arms, each emitting `GithubSelectorRemembered(Basic)`) and `start_milestones`, `start_people_search` in `crates/micold-client/src/shell/github_filter.rs`, until T057 passes
 - [ ] T059 [US6] Draw the Assignee, Author and Milestone rows (selector-ui §2 rows 4–6) in `crates/micold-client/src/ui/github_filter.rs`, extend `crates/micold-client/tests/gates/github_filters_fit.rs` with the six-row panel inside the window, and add milestones and assignable users (honouring `no:assignee`, `assignee:`, `author:`, `milestone:`) to `crates/micold-client/examples/fake_gh.rs`
 - [ ] T060 [US6] Add the assignee, author and milestone filters to "Filtering GitHub issues" in `docs/user-guide/worktrees-and-sessions.md`
 
@@ -226,10 +226,10 @@ milestone (no milestone, an open milestone).
 - **US1** needs every Foundational rule. Inside it: state (T019–T023), then shell (T024–T025), then
   view (T026–T030).
 - **US2 basic** needs US1's reducer (it emits the outcomes) and T015's format.
-- **US5** needs US1's panel and T010's `Issue.closed`.
+- **US5** needs US1's panel, T010's `Issue.closed` and US2 basic's outcome (a state change is remembered, FR-021).
 - **US3** needs US1's reducer and view; **US4** needs US3's Run; **US2 advanced** needs US2 basic's
   outcome and shell and US3's Run.
-- **US6** needs US1's panel and US2 basic's format; nothing before it names US6.
+- **US6** needs US1's panel, US2 basic's format and outcome, US5's State row (its choices AND with state) and US2 advanced's file fields (files written by M3–M6 read unchanged); nothing before it names US6.
 - Inside each story: tests before the code they cover, core before client, state before view.
 
 ## Parallel Opportunities
@@ -310,10 +310,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T036–T039
 - **Deliverable**: the Filters panel's State row lists open, closed or all issues; closed rows carry
   a "Closed" chip (ahead of a status-board status) and pick like open ones
-- **Satisfies**: US5 AS1–AS3; FR-003 (state), FR-014 (closed mark), FR-017
+- **Satisfies**: US5 AS1–AS3; FR-003 (state), FR-014 (closed mark), FR-017, FR-021 (state)
 - **Verify**: `cargo test -p micold-client --test github_filter_state --test layout_snapshot
   issue_rows_show_all_text`; quickstart §B B6
-- **Depends on**: M2
+- **Depends on**: M3
 - **Tier**: light
 
 ### M5 — Advanced GitHub search query, with its errors
@@ -349,12 +349,12 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: the Filters panel offers assignee (me, no assignee, a person), author (me, a
   login) and milestone (no milestone, an open milestone), each ANDed with the other filters; files
   written by M3–M6 read unchanged
-- **Satisfies**: US6 AS1–AS4; FR-003 (US6), FR-005 (people, milestones), FR-006 (logins), FR-027
-  (US6)
+- **Satisfies**: US6 AS1–AS4; FR-003 (US6), FR-005 (people, milestones), FR-006 (logins), FR-021
+  (US6), FR-027 (US6)
 - **Verify**: `cargo test -p micold-core --test github_filter --test github_gh_cli`, `cargo test -p
   micold-client --test github_filter_state --test issues_are_requested_only_on_named_events --test
   layout_snapshot`; quickstart §B B16
-- **Depends on**: M3
+- **Depends on**: M4, M6
 - **Tier**: full
 - If the user leaves US6 out (D1), M7 is dropped (plan §US6 separability).
 
