@@ -60,11 +60,13 @@ Repository `acme/app`.
 
 `ScopedSearch::beyond(repo, filter, typed)` is the listing text without its sort qualifiers, then
 the typed search text as **quoted words** (research R4): the typed text is cleaned like a query
-(§1), every `"` is removed, it is split on whitespace, and each word is appended as ` "<word>"`.
+(§1), every `"` and `\` is removed, it is split on whitespace, and each word is appended as ` "<word>"`.
 A quoted word is a literal search term under `ISSUE_ADVANCED`: it cannot be read as `OR`/`AND`/`NOT`,
 a parenthesis, a `-` negation or a qualifier, so the typed text can only narrow the filter, never
-widen it or change its scope (FR-016). This is 034's meaning of the typed text, where `type: ISSUE`
-reads `OR` as a plain word. No word left (empty, whitespace or only `"`) → `None`: no search
+widen it or change its scope (FR-016). `\` is dropped too: GitHub's handling of a backslash inside a
+quoted term is not verified live (research R7), and a word ending in `\` could otherwise close its
+own quote early. This is 034's meaning of the typed text, where `type: ISSUE`
+reads `OR` as a plain word. No word left (empty, whitespace or only `"` and `\`) → `None`: no search
 beyond is sent, the local narrowing alone applies. 034's default-filter `search_args` is untouched
 (FR-009).
 
@@ -76,8 +78,9 @@ beyond is sent, the local narrowing alone applies. 034's default-filter `search_
 | Basic: exclude `blocked` | `repo:x` | `Some("… -label:\"blocked\" \"repo:x\"")` (a word, not a scope qualifier) |
 | Basic: exclude `blocked` | `-label:ui (x` | `Some("… -label:\"blocked\" \"-label:ui\" \"(x\"")` |
 | Basic: exclude `blocked` | `say "hi"` | `Some("… -label:\"blocked\" \"say\" \"hi\"")` (quotes dropped) |
+| Basic: exclude `blocked` | `a\ OR b` | `Some("… -label:\"blocked\" \"a\" \"OR\" \"b\"")` (backslash dropped) |
 | Advanced `a OR b sort:created-asc` | `crash OR ui` | `Some("repo:acme/app is:issue (a OR b) \"crash\" \"OR\" \"ui\"")` |
-| any | `""`, `"   "`, `"\"\""` | `None` |
+| any | `""`, `"   "`, `"\"\""`, `"\\"`, `"\\\" \\"` | `None` |
 
 The string cells are Rust literals; `…` stands for `repo:acme/app is:issue is:open`. One core test
 per row in `github_filter.rs`.

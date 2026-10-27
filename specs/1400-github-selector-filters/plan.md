@@ -212,7 +212,7 @@ Milestones for the tasks unit to size (task-size gate); tasks.md §Milestones is
    `BasicFilters`, `UserQuery`/`QueryRefusal`, `GithubFilter`, `ScopedSearch`, `FilterFailure`,
    `parse_search_page`, `load_filtered`, `LabelChoices`, `RememberedSelector`; `Issue.closed`;
    `IssueSource` additions (search, labels) + `GhCli` + fake; store paths. Core tests only. R3/R7
-   fixture probe when a signed-in `gh` is available.
+   fixture probe (incl. backslash inside a quoted term) when a signed-in `gh` is available.
 2. **M2 Basic filters in the form (US1, US2 basic, US5)** — `GithubSelector` basic half, reducer,
    label choices, Filters panel, chips, state, active line, Clear filters, Closed chip, filtered
    search beyond, statement; remembered file (`shell::remembered`), read at open, forget deletes;

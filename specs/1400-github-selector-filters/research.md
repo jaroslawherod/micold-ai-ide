@@ -78,14 +78,16 @@ terms fall back to what `ISSUE` supports, recorded as a ledger deviation).
 - **Advanced:** `repo:<owner>/<name> is:issue` + `(<condition>)` when the condition is not empty
   + the user's sort qualifiers in typed order, or `sort:updated-desc` when there are none.
 - **Search beyond the loaded issues** (FR-016): the same text without its sort qualifiers,
-  followed by the typed search text as quoted words — cleaned, every `"` removed, split on
+  followed by the typed search text as quoted words — cleaned, every `"` and `\` removed, split on
   whitespace, each word appended as ` "<word>"` — sent with `ISSUE_ADVANCED`, `first: 50` and no
   number lookup (Edge "Typed issue number with a filter"). No word left → no request. The raw
   typed text is never appended: under the advanced syntax a typed `OR` or `)` would escape the
   filter (`… -label:"blocked" crash OR ui` reads as `(… crash) OR ui`) and a typed `repo:x` would
   add a scope term, the same escape the parentheses around the advanced condition close. A quoted
   word is a literal term, so the typed text only narrows, and it keeps 034's meaning (`type:
-  ISSUE` reads `OR` as a word). search-rules §4 lists the cases.
+  ISSUE` reads `OR` as a word). `\` is removed as well as `"`: whether GitHub reads `\"` inside a
+  quoted term as an escaped quote is unverified (R7), and if it does, a typed `a\ OR b` would
+  give `"a\" "OR" "b"` with `OR` left bare. search-rules §4 lists the cases.
 
 `GithubRepo` is validated at construction (`GithubRepo::checked`: no space, quote or colon), so
 the `repo:` term cannot be broken by the repository's name.
@@ -99,12 +101,13 @@ keeps `sort:` from appearing inside a group. `sort:updated-desc` is the selector
 
 **Rejected.** (a) Appending the user query unwrapped (`repo:x is:issue <query>`): a top-level `OR`
 escapes the scope; FR-015's post-filter would hide it, but the list would hold wrong issues up to
-the cap. (c) For the search beyond: sending it with `type: ISSUE` and the raw typed text — no
+the cap. (b) Rewriting the query into an AST: GitHub decides what is valid (Edge "Unknown
+qualifier"); the app only guarantees the scope.
+(c) For the search beyond: sending it with `type: ISSUE` and the raw typed text — no
 `ISSUE` form exists for an advanced condition's `OR` and parentheses, and a typed `repo:x` would
 still add a repository; wrapping the typed text in its own parentheses — a typed `a)` or `"`
 would unbalance it and needs the same scanner as R5 with a refusal the search field has no place
-to show; one `"…"` phrase for the whole text — a phrase match, narrower than 034's words. (b) Rewriting the query into an AST: GitHub decides what is valid (Edge "Unknown
-qualifier"); the app only guarantees the scope.
+to show; one `"…"` phrase for the whole text — a phrase match, narrower than 034's words.
 
 ## R5 — One left-to-right scanner for the advanced query
 
@@ -171,7 +174,9 @@ filtered GitHub requests produce. (b) Reusing `jira_query::QueryFailure`: Jira-n
 `Load` branch is the same shape; a second two-variant enum costs less than a misleading name.
 **Risk:** the exact `type` GitHub gives a refused search is not probed (no signed-in `gh` in the
 container); the rule above does not depend on it. M1's fixture probe (R3) records real answers for
-three refused queries when a signed-in `gh` is available.
+three refused queries when a signed-in `gh` is available, and one search whose quoted term holds a
+backslash (`"a\" "OR" "b"`), to record how GitHub reads `\` inside quotes. Unverified until then;
+the search beyond drops `\` from typed words (R4), so its safety does not depend on the answer.
 
 ## R8 — One `IssueList` for every filter; refusals and rejections are list states
 
