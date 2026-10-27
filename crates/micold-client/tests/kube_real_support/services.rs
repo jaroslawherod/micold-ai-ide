@@ -213,6 +213,7 @@ impl GitRemote {
         };
         git(&seed, &["init", "-q"])?;
         std::fs::write(seed.join("seed.txt"), "kube real\n").map_err(|e| e.to_string())?;
+        toolchain_probes(&seed)?;
         git(&seed, &["add", "."])?;
         git(&seed, &["commit", "-q", "-m", "init"])?;
         let bare = base.join("repo.git");
@@ -243,6 +244,35 @@ impl GitRemote {
     pub fn url(&self) -> String {
         format!("git://{}:{GIT_PORT}/repo.git", super::HOST_IP)
     }
+}
+
+/// The npm package `kube_real_toolchain` installs with `npm install -g` (#1439 quickstart B6).
+pub const NPM_PROBE: &str = "kube-toolchain-probe";
+
+/// What `kube_real_toolchain` (#1439 quickstart B6) builds and installs, in the seed: #1439's A7
+/// fixture crate (`mise-c-crate/`, rust pinned by its `mise.toml`, a `build.rs` that runs `cc`) and
+/// a local npm package with no dependencies (`npm-probe/`) whose command prints `NPM-PROBE-OK`.
+fn toolchain_probes(seed: &Path) -> Result<(), String> {
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-daemon/tests/fixtures/mise-c-crate");
+    super::run(
+        "cp",
+        &[
+            "-R",
+            fixture.to_str().unwrap(),
+            seed.join("mise-c-crate").to_str().unwrap(),
+        ],
+    )?;
+    let npm = seed.join("npm-probe");
+    std::fs::create_dir_all(&npm).map_err(|e| e.to_string())?;
+    let package =
+        format!(r#"{{"name":"{NPM_PROBE}","version":"1.0.0","bin":{{"{NPM_PROBE}":"cli.js"}}}}"#);
+    std::fs::write(npm.join("package.json"), package).map_err(|e| e.to_string())?;
+    std::fs::write(
+        npm.join("cli.js"),
+        "#!/usr/bin/env node\nconsole.log('NPM-PROBE-OK');\n",
+    )
+    .map_err(|e| e.to_string())
 }
 
 impl Drop for GitRemote {
