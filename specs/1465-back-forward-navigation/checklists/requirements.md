@@ -31,7 +31,7 @@
 
 ## Notes
 
-- One open marker (Edge Cases, Cross-platform): the macOS chord. Left for the clarify unit.
+- The macOS chord marker was resolved in clarify (Cmd+[ / Cmd+]; see spec Clarifications).
 - FR-015 names reducer and event-routing tests because issue #1465's acceptance criteria require
   them; it names the test level, not an implementation.
 - The issue's "Changes: diff → file list" is mapped to the Review tab's own **Back** (Assumptions).
