@@ -103,12 +103,13 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
         // Taken apart rather than built with `Text`, because a tag carries an accent colour instead
         // of a `Roles` set and `Text` needs one. Still a role, so the weight and line height come
         // from the scale rather than from the renderer's defaults.
-        let colour = t.on_accent.unwrap_or(t.accent);
+        // An ellipsized label draws in the chip's own text colour, as the natural one does: the
+        // tonal chip's ink is not the raw accent but one pulled to read on its tint (#1492).
+        let ellipsized =
+            || super::Ellipsized::at_role(t.label.clone(), t.role, t.accent).inherit_color();
         let label: Element<'a, M> = match (t.truncate_to, t.max_width) {
-            (Some(_), _) => super::Ellipsized::at_role(t.label, t.role, colour).into(),
-            (None, Some(_)) => super::Ellipsized::at_role(t.label, t.role, colour)
-                .shrink()
-                .into(),
+            (Some(_), _) => ellipsized().into(),
+            (None, Some(_)) => ellipsized().shrink().into(),
             (None, None) => text(t.label)
                 .size(t.role.size())
                 .font(t.role.font())

@@ -240,6 +240,8 @@ pub struct Mounted<'a> {
     /// The window the element lays out, takes events and floats overlays in: [`WINDOW`] unless
     /// [`Self::new_in`] named another.
     pub room: Size,
+    /// The theme the element is drawn in: light unless [`Self::in_scheme`] named another.
+    pub scheme: ColorScheme,
 }
 
 impl<'a> Mounted<'a> {
@@ -266,7 +268,14 @@ impl<'a> Mounted<'a> {
             origin: std::time::Instant::now(),
             frame: 0,
             room,
+            scheme: ColorScheme::Light,
         }
+    }
+
+    /// Draw in `scheme`'s theme rather than the light one.
+    pub fn in_scheme(mut self, scheme: ColorScheme) -> Self {
+        self.scheme = scheme;
+        self
     }
 
     /// Lay the element out again over the same tree.
@@ -469,7 +478,7 @@ impl<'a> Mounted<'a> {
         let node = floated.as_overlay_mut().layout(&self.renderer, self.room);
         floated.as_overlay().draw(
             &mut self.renderer,
-            &super::theme(micold_core::theme::ColorScheme::Light),
+            &super::theme(self.scheme),
             &iced::advanced::renderer::Style {
                 text_color: iced::Color::BLACK,
             },
@@ -528,7 +537,7 @@ impl<'a> Mounted<'a> {
         self.element.as_widget().draw(
             &self.tree,
             &mut self.renderer,
-            &super::theme(micold_core::theme::ColorScheme::Light),
+            &super::theme(self.scheme),
             &iced::advanced::renderer::Style {
                 text_color: iced::Color::BLACK,
             },
