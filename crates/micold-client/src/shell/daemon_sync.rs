@@ -2733,6 +2733,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
         app.pane_layouts.remove(&path);
         app.pane_saved.remove(&path);
         app.pane_restored.remove(&path);
+        // Feature 1400 (FR-022): the project's remembered GitHub selector goes with it.
+        crate::shell::issues::forget_github_selector(app, &path);
         app.scrollback_inflight
             .retain(|_, (session, _)| app.grids.keys().any(|t| t.session == *session));
         // Each daemon that holds a location of the project forgets it; one that is down is

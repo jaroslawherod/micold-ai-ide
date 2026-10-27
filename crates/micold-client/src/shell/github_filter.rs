@@ -14,6 +14,17 @@
 //! opening of a label field, or a **Retry** of a failed request, and handed out a new filter seq
 //! (FR-005). Nothing else here sends anything: not opening the form, not a redraw.
 //!
+//! # What the project remembers
+//!
+//! The form opens with the project's remembered selector (`shell::issues::remembered_selector`),
+//! read from `<data_dir>/github/<project id>.selector.json` at each open and nowhere else, whatever
+//! the GitHub availability, so another window's later write leaves an open form alone. Each basic
+//! filter change hands back `Outcome::GithubSelectorRemembered`, which
+//! `shell::issues::remember_github_selector` writes as a read-modify-write of that one field
+//! (FR-021). Forgetting the project deletes the file (`forget_github_selector` there, FR-022).
+//! Those live in `shell::issues`, beside 1186's `remember_jira_query`, because their failure is a
+//! notification and this file notifies nothing (below).
+//!
 //! Nothing here logs or notifies a filter value, the scoped search text or a typed label (FR-024):
 //! `tests/issues_are_requested_only_on_named_events.rs` scans this file for it.
 
@@ -26,7 +37,7 @@ use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_core::github::{GithubRepo, IssueLoadError};
 use micold_core::github_filter::{load_filtered, load_label_choices, FilterFailure, ScopedSearch};
 
-use crate::shell::issues::{search_after_pause, start_issue_load, GhJob};
+use crate::shell::issues::{remember_github_selector, search_after_pause, start_issue_load, GhJob};
 use crate::App;
 
 /// A filter message: the reducer takes it, then the listing, the label choices or the search it
@@ -53,8 +64,10 @@ pub fn on_filter(app: &mut App, msg: GithubMsg) -> Task<Message> {
         }
         other => (other, None),
     };
-    app.core
-        .update(Message::WorktreeForm(FormMsg::GithubFilter(msg)));
+    let remembered = app
+        .core
+        .update_worktree_form_for_effects(FormMsg::GithubFilter(msg));
+    remember_github_selector(app, remembered);
     let mut work = Vec::new();
     if let Some(seq) = app
         .core

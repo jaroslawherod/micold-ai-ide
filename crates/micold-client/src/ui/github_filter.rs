@@ -55,7 +55,7 @@ fn title(list: LabelList) -> &'static str {
 
 /// One label list: the field over the labels on offer, its list's state as rows, then the chosen
 /// labels as chips, wrapping inside the panel. Pressing a chip, or Enter or Space on it, removes
-/// the label.
+/// the label. A remembered label the repository lacks says so on its chip.
 fn label_field<'a>(
     form: &'a WorktreeForm,
     list: LabelList,
@@ -103,7 +103,7 @@ fn label_field<'a>(
         .iter()
         .map(|label| {
             ToggleChip::new(
-                label.as_str().to_string(),
+                selector.chip_text(label),
                 github(GithubMsg::Removed(label.clone())),
                 r,
             )

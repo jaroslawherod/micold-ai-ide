@@ -858,6 +858,14 @@ filters, the list says "No issue matches these filters."; if GitHub refuses the 
 messages are shown in place of the list. If GitHub refuses the search beyond the list, the line
 under the list says so with its messages, and the issues already listed stay.
 
+The filters are remembered per project, on this computer only: the next time you open **Add
+worktree** on the project, in this or a later run of the app, the list loads with them already
+applied. Another project keeps its own filters, or none. **Clear filters** is remembered too. A
+remembered label the repository no longer has still applies, and its chip adds "· not in this
+repository" after the name so you can remove it. Turning GitHub issues off, or switching the project to Jira,
+keeps what was remembered; the remembered filters are deleted when the project is removed from the
+app.
+
 GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
 still show under its old labels. Change a filter, or clear them, to ask again.
 

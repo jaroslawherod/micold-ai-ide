@@ -13,6 +13,10 @@
 //! listing, or 034's listing once the filter is the default again, FR-009), and the seq check drops
 //! every older answer.
 //!
+//! The project remembers its basic filters (FR-021): the form opens with them (`Msg::Restored`,
+//! read by the shell), and each change hands back `Outcome::GithubSelectorRemembered`. A
+//! remembered label the repository no longer has still applies, its chip saying so.
+//!
 //! The selector is kept while the form is open, across a change of source or provider (spec Edge
 //! "Switching source to Jira and back"); its text fields and panel close with the issues.
 
@@ -26,7 +30,7 @@ use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::github_filter::{
     BasicFilters, FilterFailure, GithubFilter, LabelChoices, LabelName, RememberedSelector,
-    UserQuery, NOT_ACCEPTED,
+    SelectorChange, UserQuery, NOT_ACCEPTED,
 };
 use micold_core::jira_query::QueryMode;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
@@ -187,11 +191,13 @@ fn label_failure(error: &IssueLoadError, source: NoticeSource<'_>) -> String {
 }
 
 impl GithubSelector {
-    /// The selector a form opens with, from what the project remembers (data-model §10). Feature
-    /// 1400's M3 restores the remembered filters; until then every form opens on the default.
+    /// The selector a form opens with, from what the project remembers (data-model §10): its basic
+    /// filters, applied as the GitHub source shows (US2 AS1).
     pub fn from_remembered(remembered: &RememberedSelector) -> GithubSelector {
-        let _ = remembered;
-        GithubSelector::default()
+        GithubSelector {
+            basic: remembered.basic.clone(),
+            ..GithubSelector::default()
+        }
     }
 
     /// The filter a request is made with: the basic filters in basic mode; in advanced mode the
@@ -209,6 +215,26 @@ impl GithubSelector {
         match self.mode {
             QueryMode::Basic => self.basic.described(),
             QueryMode::Advanced => None,
+        }
+    }
+
+    /// What `label`'s chip says: its name, and "not in this repository" when the repository's
+    /// labels loaded in full without it (spec Edge "Remembered value no longer in the repository").
+    /// GitHub matches labels case-insensitively, so neither does this; a partial list says nothing,
+    /// the label may be further on.
+    pub fn chip_text(&self, label: &LabelName) -> String {
+        let name = label.as_str();
+        let missing = self.choices().is_some_and(|choices| {
+            !choices.partial
+                && !choices
+                    .labels
+                    .iter()
+                    .any(|l| l.as_str().to_lowercase() == name.to_lowercase())
+        });
+        if missing {
+            format!("{name} · not in this repository")
+        } else {
+            name.to_string()
         }
     }
 
@@ -411,6 +437,8 @@ pub enum Msg {
     Removed(LabelName),
     /// **Clear filters**: the default filter.
     ClearedAll,
+    /// The form opened: the project's remembered selector, read by the shell (FR-021).
+    Restored(RememberedSelector),
     /// The repository's labels answered. Applies only while awaited under `seq`.
     LabelsLoaded {
         seq: u64,
@@ -442,12 +470,13 @@ pub fn refusal_line(messages: &[String]) -> String {
     )
 }
 
-/// The filters' reducer.
-pub fn update(state: &mut crate::app::State, msg: Msg) {
+/// The filters' reducer. A change of the basic filters hands back
+/// `Outcome::GithubSelectorRemembered` for the shell to write (FR-021).
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     let next_issue_seq = state.worktree_form.issue_request_seq + 1;
     let next_filter_seq = state.worktree_form.filter_request_seq + 1;
     let Some(form) = state.worktree_form.form.as_mut() else {
-        return;
+        return Vec::new();
     };
     let editing = form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting();
     let mut reload = false;
@@ -456,7 +485,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) {
         // Answers apply whatever the form is doing, as a load's answer does.
         Msg::Loaded { seq, result, .. } => {
             if form.issues != (IssueList::Loading { seq }) {
-                return;
+                return Vec::new();
             }
             match result {
                 Ok((listing, gh)) => form.take_listing(seq, listing, gh),
@@ -488,9 +517,13 @@ pub fn update(state: &mut crate::app::State, msg: Msg) {
             field.query.clear();
             selector.rematch(list);
         }
+        // At form open, before anything loads: not a change, so nothing is remembered.
+        Msg::Restored(remembered) => {
+            form.github_selector = GithubSelector::from_remembered(&remembered);
+        }
         Msg::PanelDismissed => form.github_selector.close_lists(),
         Msg::PanelToggled if form.github_selector.panel_open => form.github_selector.close_lists(),
-        _ if !editing || !form.shows_github_filters() => return,
+        _ if !editing || !form.shows_github_filters() => return Vec::new(),
         Msg::PanelToggled => form.github_selector.panel_open = true,
         Msg::Focused(list) => {
             let selector = &mut form.github_selector;
@@ -516,7 +549,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) {
         Msg::Picked(list, index) => {
             let selector = &mut form.github_selector;
             let Some(row) = selector.rows(list).into_iter().nth(index) else {
-                return;
+                return Vec::new();
             };
             match row.action {
                 LabelAction::Choice(label) => reload = selector.choose(list, label),
@@ -541,17 +574,27 @@ pub fn update(state: &mut crate::app::State, msg: Msg) {
             selector.rematch_both();
         }
     }
+    let mut outcomes = Vec::new();
     if reload {
         form.issues = IssueList::Loading {
             seq: next_issue_seq,
         };
         form.issue_highlight = None;
         form.github_selector.listed_for = Some(QueryMode::Basic);
+        let basic = form.github_selector.basic.clone();
         state.worktree_form.issue_request_seq = next_issue_seq;
+        // FR-021: the basic filters are remembered at each change.
+        if let Some(project) = state.workspace.active.clone() {
+            outcomes.push(crate::features::Outcome::GithubSelectorRemembered {
+                project,
+                change: SelectorChange::Basic(basic),
+            });
+        }
     }
     if asked {
         state.worktree_form.filter_request_seq = next_filter_seq;
     }
+    outcomes
 }
 
 #[cfg(test)]
