@@ -268,7 +268,7 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
                 if what == "New session" || what == "split buttons" {
                     assert!(
                         part.width >= micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET - TOLERANCE,
-                        "{name} {theme:?} {window:?}: the {what} {part:?} is narrower than its natural width"
+                        "{name} {theme:?} {window:?}: the {what} {part:?} is narrower than the touch target"
                     );
                 }
             }
