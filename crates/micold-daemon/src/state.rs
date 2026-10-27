@@ -737,13 +737,11 @@ fn with_launch_env(mut env: Vec<(String, String)>, provider: AiCli) -> Vec<(Stri
 }
 
 /// Write `wanted(<current content>)` to `file` unless it is already that, creating its folder; a
-/// missing file reads as empty. Atomic (a staging file renamed over the target, through a link to
-/// the file it names), so a failure never leaves the user's text half written. A failure is logged
-/// (#1439 FR-019: never fatal).
-fn write_if_changed(file: &Path, wanted: impl FnOnce(&str) -> String) {
+/// missing file reads as empty. Written in place, so the file keeps its mode, owner and any link to
+/// it. A failure is logged (#1439 FR-019: never fatal); `false` then.
+fn write_if_changed(file: &Path, wanted: impl FnOnce(&str) -> String) -> bool {
     let result = (|| -> std::io::Result<()> {
-        let target = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
-        let existing = match std::fs::read_to_string(&target) {
+        let existing = match std::fs::read_to_string(file) {
             Ok(text) => text,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(e) => return Err(e),
@@ -752,14 +750,15 @@ fn write_if_changed(file: &Path, wanted: impl FnOnce(&str) -> String) {
         if wanted == existing {
             return Ok(());
         }
-        if let Some(parent) = target.parent() {
+        if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        micold_core::store::write_atomic(&target, &wanted)
+        std::fs::write(file, wanted)
     })();
-    if let Err(why) = result {
+    if let Err(why) = &result {
         tracing::warn!(file = %file.display(), %why, "sandbox guide for the AI agent not written");
     }
+    result.is_ok()
 }
 
 /// The `PATH` in a session's resolved variables, or this process's own when they carry none
@@ -1312,7 +1311,8 @@ impl DaemonState {
     /// each offered CLI that has one (Claude Code, Codex). An offer listing no CLI has no agent to
     /// tell, and is also what a host daemon may see through the mounted state directory, so it
     /// writes nothing. `own` is this process's environment (`HOME`, `CLAUDE_CONFIG_DIR`,
-    /// `CODEX_HOME`). Each failure is logged and the next file still tried; nothing is fatal.
+    /// `CODEX_HOME`). Each failure is logged and the next file still tried; nothing is fatal. When the
+    /// guide cannot be written no block is added, as it would name a missing file.
     pub fn write_agent_guide(&self, own: impl Fn(&str) -> Option<std::ffi::OsString>) {
         use micold_core::sandbox::agent_guide::{guide_files, merge_block, pointer_block, GUIDE};
         let Some(offered) = self.offered_clis().filter(|o| !o.clis.is_empty()) else {
@@ -1323,12 +1323,19 @@ impl DaemonState {
             return;
         };
         let files = guide_files(&home, own);
-        write_if_changed(&files.guide, |_| GUIDE.to_string());
+        let targets: Vec<&PathBuf> = files
+            .instructions
+            .iter()
+            .filter(|(cli, _)| offered.clis.iter().any(|o| o.cli == *cli))
+            .map(|(_, file)| file)
+            .collect();
+        // No offered CLI reads an instruction file we know, or no guide to point at: no block.
+        if targets.is_empty() || !write_if_changed(&files.guide, |_| GUIDE.to_string()) {
+            return;
+        }
         let block = pointer_block(&files.guide);
-        for (cli, file) in &files.instructions {
-            if offered.clis.iter().any(|o| o.cli == *cli) {
-                write_if_changed(file, |existing| merge_block(existing, &block));
-            }
+        for file in targets {
+            write_if_changed(file, |existing| merge_block(existing, &block));
         }
     }
 

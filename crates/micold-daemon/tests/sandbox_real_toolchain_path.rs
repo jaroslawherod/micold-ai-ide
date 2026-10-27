@@ -127,15 +127,14 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
     // command never carries it joined.
     // The block goes only into an offered CLI's file.
     let begin = micold_core::sandbox::agent_guide::BEGIN;
-    let claude = offered
-        .clis
-        .iter()
-        .any(|c| c.cli == micold_core::session::AiCli::ClaudeCode);
-    let block_check = if claude {
-        format!("grep -qF '{begin}' '{sandbox_home}/.claude/CLAUDE.md' && ")
-    } else {
-        String::new()
-    };
+    let block_check: String = [
+        (micold_core::session::AiCli::ClaudeCode, ".claude/CLAUDE.md"),
+        (micold_core::session::AiCli::Codex, ".codex/AGENTS.md"),
+    ]
+    .iter()
+    .filter(|(cli, _)| offered.clis.iter().any(|c| c.cli == *cli))
+    .map(|(_, file)| format!("grep -qF '{begin}' '{sandbox_home}/{file}' && "))
+    .collect();
     let guide = term
         .run(&format!(
             "test -s '{sandbox_home}/.micold/AGENTS.md' && {block_check}echo GUIDE\"-WRITTEN\""
@@ -143,8 +142,8 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
         .await;
     assert!(
         guide.lines().any(|l| l.trim() == "GUIDE-WRITTEN"),
-        "no agent guide in {sandbox_home}/.micold/AGENTS.md or no marked block in \
-         {sandbox_home}/.claude/CLAUDE.md: {guide}"
+        "no agent guide in {sandbox_home}/.micold/AGENTS.md or no marked block in an offered \
+         CLI's instruction file: {guide}"
     );
 
     // Edge case "A `mise` already in `~/.local/bin`": the user's copy comes first on PATH, ahead of
