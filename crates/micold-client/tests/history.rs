@@ -507,3 +507,90 @@ fn an_empty_project_has_nothing_to_go_back_to() {
     assert_eq!(back(&mut state), Step::None);
     assert!(entries(&state).is_empty());
 }
+
+// ---- U3: the keys (M2, FR-009, FR-012) ---------------------------------------------------------
+
+fn key_back(state: &mut State) -> Step {
+    press(state, Dir::Back, Source::Key)
+}
+
+/// A key press that changes nothing: no step, the list and the shown place as they were.
+fn assert_key_ignored(state: &mut State, why: &str) {
+    let before_shown = state.shown_place();
+    let before = state.history.list.clone();
+    assert_eq!(key_back(state), Step::None, "{why}");
+    assert_eq!(state.history.list, before, "{why}: the list did not move");
+    assert_eq!(state.shown_place(), before_shown, "{why}: nothing moved");
+}
+
+/// D → A → B recorded, B shown, and the user gave the terminal's keyboard back to the app (B5).
+fn walked_released() -> (State, SessionId, SessionId, SessionId) {
+    let (mut state, d, a, b) = walked();
+    send(
+        &mut state,
+        Message::Session(session::Msg::TerminalFocusReleased),
+    );
+    assert!(!state.terminal_focused(), "released");
+    (state, d, a, b)
+}
+
+#[test]
+fn a_key_press_does_nothing_while_a_field_holds_the_keyboard() {
+    use micold_client::features::window::FieldId;
+    let (mut state, _, _, b) = walked_released();
+    state.window.focused_field = Some(FieldId::Composer(b));
+    assert!(state.live_focused_field().is_some());
+    assert_key_ignored(&mut state, "a focused composer (US2 AS2)");
+}
+
+#[test]
+fn a_key_press_acts_over_a_closed_comment_boxs_stale_focus() {
+    use micold_client::features::window::FieldId;
+    let (mut state, _, a, _) = walked_released();
+    state.window.focused_field = Some(FieldId::ReviewComposer);
+    assert_eq!(state.live_focused_field(), None, "no comment box is open");
+    assert_eq!(
+        key_back(&mut state),
+        Step::Show(at_session(worktree("feat-a"), a))
+    );
+}
+
+#[test]
+fn a_key_press_does_nothing_while_the_terminal_holds_the_keyboard() {
+    let (mut state, _, _, _) = walked();
+    assert!(state.terminal_focused(), "selecting B focused its terminal");
+    assert_key_ignored(&mut state, "a focused terminal (US2 AS3)");
+}
+
+#[test]
+fn a_key_press_does_nothing_over_settings() {
+    let (mut state, _, _, _) = walked_released();
+    state.settings.settings_draft = Some(Default::default());
+    let before = state.history.list.clone();
+    assert_eq!(key_back(&mut state), Step::None, "Settings (FR-010)");
+    assert_eq!(state.history.list, before);
+}
+
+#[test]
+fn three_key_presses_step_back_three_entries() {
+    // US2 AS4, FR-012: each press or repeat steps one more entry, through sessions too, so a key
+    // move leaves the keyboard with the app rather than in the terminal it shows.
+    let (mut state, d, a, b) = walked();
+    send(
+        &mut state,
+        Message::Overview(overview::Msg::Toggled {
+            settings_open: false,
+        }),
+    );
+    assert_eq!(state.shown_place(), Some(at(View::Overview)));
+    for (want, id) in [("B", b), ("A", a), ("D", d)] {
+        assert!(
+            matches!(key_back(&mut state), Step::Show(_)),
+            "back to {want}"
+        );
+        assert_eq!(state.session.active, Some(id), "{want} shown");
+        assert!(!state.overview.open, "the Overview closed");
+    }
+    assert_eq!(key_back(&mut state), Step::None, "until there is none");
+    assert_eq!(entries(&state).len(), 4, "moving recorded nothing (FR-007)");
+}
