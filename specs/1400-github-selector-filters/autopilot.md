@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
 - **Phase**: clarify
-- **Next step**: clarify round 1 escalated (Open escalation, category 1); on the answer, the clarify unit records it, applies it to spec.md (US6, FR-003, FR-004, FR-005, Key Entities) and runs round 2 if it changed a requirement.
+- **Next step**: plan unit (clarify CLEAN; D1 provisional, awaiting the user's decision card).
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D1 | clarify | Are assignee, author and milestone basic filters in scope (issue says "optionally")? | Yes: US6 as P3, built in the last milestone | provisional: recommended option, awaiting user | spec.md US6/FR-003/FR-005 already specify them; issue #1400 lists them in the basic-filter proposal; no repo source settles it. If the user picks "leave them out", a later unit moves US6 to Out of Scope. |
 
 ## Review rounds
 
@@ -45,7 +46,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product or scope decision the repo does not settle).
+Clarify round 1, category 1 (product or scope decision the repo does not settle). On the user's decision card; proceeding on the recommended option as D1 (provisional). Move to Decisions as decided by user when answered.
 
 - **Q1**: Issue #1400 lists "optionally assignee, author and milestone" among the basic filters. Are those three basic filters part of this feature?
   - **(Recommended) Include them, as P3 in the last milestone** — spec.md US6/FR-003/FR-005 already specify them in full; the issue names them in its basic-filter proposal; shipping them last keeps the P1 use case (exclude `in-progress`/`blocked`) unblocked and lets them be dropped late if needed.
