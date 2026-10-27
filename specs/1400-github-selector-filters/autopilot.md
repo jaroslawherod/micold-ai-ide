@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1400
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
-- **Phase**: clarify
-- **Next step**: plan unit (clarify CLEAN; D1 provisional, awaiting the user's decision card).
+- **Phase**: plan
+- **Next step**: plan review round 1 (fresh reviewer, rubrics/plan.md); then tasks unit. D1 still provisional: plan keeps US6 separable in M4 (plan.md §US6 separability).
 
 ## Pull requests
 
