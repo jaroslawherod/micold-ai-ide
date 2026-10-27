@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: GitHub issue #1465 "Back/forward navigation with mouse side buttons and Alt+←/→". Today the only "go back" is local to the Review tab (the **Back** above a browsed file, `features::changes::can_go_back`), and the mouse's back/forward side buttons do nothing.
+**Input**: GitHub issue #1465 "Back/forward navigation with mouse side buttons and Alt+←/→". Today the only "go back" is local to the Review tab (the **Back** above a browsed file), and the mouse's back/forward side buttons do nothing.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -85,12 +85,12 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 
 **Why this priority**: Discoverability only; the feature works without it.
 
-**Independent Test**: Open the keyboard shortcuts reference in the user guide and the in-app shortcut sheet; both list Back and Forward.
+**Independent Test**: Read the app-chord table in the user guide's terminal panes page and open the Review tab's shortcut sheet; both list Back and Forward.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user guide's keyboard shortcuts table, **When** the user reads it, **Then** it lists Back (mouse back button, Alt+←) and Forward (mouse forward button, Alt+→) with the platform forms and the rule that a focused text field or terminal keeps the keys.
-2. **Given** the in-app shortcut sheet, **When** it is open, **Then** it lists Back and Forward in the platform's form.
+1. **Given** the app-chord table under *Keyboard shortcuts* in the user guide's terminal panes page, **When** the user reads it, **Then** it lists Back (mouse back button, Alt+←) and Forward (mouse forward button, Alt+→) with the platform forms and the rule that a focused text field or terminal keeps the keys.
+2. **Given** the Review tab's shortcut sheet, **When** it is open, with single-key shortcuts on or off, **Then** it lists Back and Forward in the platform's form.
 
 ---
 
@@ -106,7 +106,7 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - **Surfaces open**: while a dialog, menu, the quick switcher, the Settings panel or the shortcut sheet is open, back and forward (mouse and keys) do nothing, as the navigation chords do today.
 - **Review tab entries**: going back to a Review tab entry whose tab was closed shows that location's Review tab again (it is reopened, not skipped) as long as the location exists.
 - **Mouse without side buttons / trackpads**: the keys are the path; trackpad swipe gestures are out of scope.
-- **Cross-platform (Principle VI)**: the side buttons arrive under different names per platform (X11 buttons 8/9, Wayland side/extra, Windows XButton1/2, macOS buttons 3/4); on all three platforms they mean back and forward. On macOS Alt is the Option key, which macOS text fields use for word movement — those fields keep it under FR-008. [NEEDS CLARIFICATION: macOS chord — keep Option+←/→ on macOS as the issue says, or use macOS's browser convention Cmd+[ / Cmd+] there?]
+- **Cross-platform (Principle VI)**: each platform reports the mouse's back/forward side buttons in its own way; on Linux (X11 and Wayland), Windows and macOS they mean back and forward. On macOS Alt is the Option key, which macOS text fields use for word movement — those fields keep it under FR-009. [NEEDS CLARIFICATION: macOS chord — keep Option+←/→ on macOS as the issue says, or use macOS's browser convention Cmd+[ / Cmd+] there?]
 - **Terminal mouse reporting**: a terminal program that asked for mouse events never receives the side buttons; the app always takes them.
 
 ## Requirements *(mandatory)*
@@ -125,8 +125,8 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - **FR-010**: While a dialog, menu, the quick switcher, the Settings panel or a shortcut sheet is open, Back and Forward (buttons and keys) MUST do nothing.
 - **FR-011**: When the shown place is a Review tab whose own **Back** is available, Back MUST perform that tab's **Back** and leave the global history unchanged. Forward MUST always use the global history.
 - **FR-012**: Back and Forward MUST act once per key press and once per key repeat, and once per side-button press.
-- **FR-013**: The user guide's keyboard shortcuts table MUST list Back and Forward with their mouse buttons and keys in the Linux/Windows and macOS forms, and say that a focused text field or terminal keeps the keys.
-- **FR-014**: The in-app shortcut sheet MUST list Back and Forward in the platform's form.
+- **FR-013**: The app-chord table under *Keyboard shortcuts* in the user guide's terminal panes page (`docs/user-guide/terminal-panes.md#keyboard-shortcuts`) MUST list Back and Forward with their mouse buttons and keys in the Linux/Windows and macOS forms, and say that a focused text field or terminal keeps the keys.
+- **FR-014**: The Review tab's shortcut sheet MUST list Back and Forward in the platform's form, both with single-key shortcuts on and with them off (they are not single keys). No other in-app shortcut sheet is added.
 - **FR-015**: The history rules (record, back, forward, truncation, cap, skipping gone entries, the Review tab's own back first) MUST be covered by reducer tests that need no window; the side buttons and the keys MUST be covered by event-routing tests that show which press becomes Back or Forward, and when a press is left to a focused field or terminal.
 
 ### Key Entities
@@ -138,7 +138,7 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 
 ### Measurable Outcomes
 
-- **SC-001**: After selecting A then B, one back press shows A and one forward press shows B, by mouse button and by Alt+←/→, on Linux, Windows and macOS.
+- **SC-001**: After selecting A then B, one back press shows A and one forward press shows B, by mouse button and by the platform's Back/Forward keys, on Linux, Windows and macOS.
 - **SC-002**: In 100% of the reducer test cases where entries' targets are gone, back and forward land on an existing place or change nothing, and none shows an error.
 - **SC-003**: With a text field or terminal holding the keyboard, Alt+←/→ produce exactly the same text or terminal input as before this feature (no regression in the existing input tests).
 - **SC-004**: The history never holds more than 50 entries, whatever the number of moves.
@@ -159,3 +159,4 @@ A user looking up the app's shortcuts finds back and forward listed with their m
 - History persisted across restarts, or a visible history list or back/forward toolbar buttons.
 - In-view back for views other than the Review tab.
 - Rebinding the Back/Forward keys.
+- An app-wide shortcut sheet; listing Back/Forward in the user guide's other shortcut tables (Review keys, Overview keys).
