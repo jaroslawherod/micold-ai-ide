@@ -80,7 +80,8 @@ status, else the listing's).
 Tab order: switch chips → Clear filters → search → Filters button (basic) / Query → Run
 (advanced). The Filters panel opens with Enter/Space on the button; Tab moves through its fields
 and chips; Escape closes it (MenuSelect's behaviour). Enter in Query runs; Enter in a label field
-with a highlighted row adds that label. Every chip is a `ToggleChip` with `takes_the_keyboard()`.
+with a highlighted row adds that label; the field keeps the keyboard, its list stays open on the
+labels left, and no row is highlighted until Down moves to one. Every chip is a `ToggleChip` with `takes_the_keyboard()`.
 
 ## 5. Geometry
 

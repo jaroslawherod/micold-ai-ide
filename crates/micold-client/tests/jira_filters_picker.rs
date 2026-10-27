@@ -564,6 +564,8 @@ fn the_keyboard_reaches_every_row_picks_with_enter_and_escape_keeps_the_choice()
     filter(&mut state, FilterMsg::Focused(COMPONENT));
     filter(&mut state, FilterMsg::QueryChanged(COMPONENT, "Au".into()));
     assert_eq!(row_labels(&state), ["Any component", "Auth"]);
+    // A pick starts the highlight over (as 1400's label fields): typing highlights no row.
+    assert_eq!(highlight(&state), None);
     filter(&mut state, FilterMsg::Dismissed(COMPONENT));
     let field = form(&state).jira_filters.field(COMPONENT);
     assert!(!field.open);

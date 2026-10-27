@@ -23,6 +23,7 @@ use micold_core::github_filter::{
     load_filtered, load_label_choices, FilterFailure, LabelName, NOT_ACCEPTED,
 };
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
+use micold_core::typeahead::Direction;
 
 const EXCLUDE_IN_PROGRESS: &str =
     "repo:o/r is:issue is:open -label:\"in-progress\" sort:updated-desc";
@@ -502,6 +503,35 @@ fn the_first_focus_of_a_label_field_loads_the_labels_once() {
     filter(&mut state, GithubMsg::Focused(LabelList::Exclude));
     assert_eq!(state.worktree_form.awaited_label_choices(), None);
     assert_eq!(state.worktree_form.filter_request_seq, seq);
+}
+
+/// Visual pass M2 round 2 F2, F3: after Down and Enter add a label, the field keeps the keyboard,
+/// so it stays drawn open (its list shows the labels left) and its highlight starts over: the next
+/// letter typed highlights nothing, and Enter adds nothing until Down picks a row again.
+#[test]
+fn a_picked_label_leaves_the_field_open_with_no_highlight() {
+    let mut state = shown(default_issues());
+    with_labels(&mut state);
+    filter(&mut state, GithubMsg::Focused(LabelList::Include));
+    filter(
+        &mut state,
+        GithubMsg::HighlightMoved(LabelList::Include, Direction::Next),
+    );
+    let highlighted = form(&state).github_selector.field(LabelList::Include).highlight;
+    assert_eq!(highlighted, Some(0));
+    filter(&mut state, GithubMsg::Picked(LabelList::Include, 0));
+    let field = form(&state).github_selector.field(LabelList::Include);
+    assert_eq!(field.query, "");
+    assert!(field.open, "the field holds the keyboard, so it is drawn open");
+    assert_eq!(field.highlight, None);
+    filter(
+        &mut state,
+        GithubMsg::QueryChanged(LabelList::Include, "u".into()),
+    );
+    assert_eq!(
+        form(&state).github_selector.field(LabelList::Include).highlight,
+        None
+    );
 }
 
 /// US1 AS1: the labels alphabetically, less those chosen in the field's own list.

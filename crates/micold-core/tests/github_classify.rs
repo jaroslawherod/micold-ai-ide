@@ -181,3 +181,59 @@ fn messages_name_cause_and_remedy() {
         assert_eq!(error.message(&repo), text, "{error:?}");
     }
 }
+
+/// Feature 1400 (visual pass M2 F5, review F1): the cause alone, for a load that is not the issue
+/// list (the labels, under "Couldn't load the labels."). No variant opens with 034's "Couldn't
+/// read issues", and each is the message's own words.
+#[test]
+fn causes_leave_out_the_read_issues_opening() {
+    let repo = GithubRepo::from_remote_url("https://github.com/o/r").unwrap();
+    for (error, text) in [
+        (
+            IssueLoadError::ToolMissing,
+            "The GitHub CLI (`gh`) isn't installed. Install it from cli.github.com, then sign in \
+             with `gh auth login`.",
+        ),
+        (
+            IssueLoadError::NotSignedIn,
+            "You're not signed in to GitHub. Run `gh auth login` in a terminal, then retry.",
+        ),
+        (
+            IssueLoadError::NoAccess,
+            "Your GitHub sign-in can't access o/r.",
+        ),
+        (
+            IssueLoadError::Offline,
+            "Couldn't reach GitHub. Check your connection, then retry.",
+        ),
+        (
+            IssueLoadError::RateLimited,
+            "GitHub's rate limit was reached. Wait a minute, then retry.",
+        ),
+        (
+            IssueLoadError::TimedOut,
+            "GitHub didn't answer within 10 seconds.",
+        ),
+        (
+            IssueLoadError::Other("HTTP 502: Bad Gateway".into()),
+            "HTTP 502: Bad Gateway",
+        ),
+        (IssueLoadError::Other("boom".into()), "Boom"),
+        (
+            IssueLoadError::Unreachable("x".into()),
+            "Check your connection and settings, then retry.",
+        ),
+        (
+            IssueLoadError::CredentialsRefused,
+            "Check your connection and settings, then retry.",
+        ),
+        (
+            IssueLoadError::NotJiraCloud,
+            "Check your connection and settings, then retry.",
+        ),
+    ] {
+        let cause = error.github_cause(&repo);
+        assert_eq!(cause, text, "{error:?}");
+        assert!(!cause.contains("Couldn't read issues"), "{error:?}");
+    }
+}
