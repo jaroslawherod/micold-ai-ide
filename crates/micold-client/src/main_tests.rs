@@ -16542,3 +16542,22 @@ fn the_jump_field_opens_the_quick_switcher_with_its_input_focused() {
         "the switcher's input takes the keyboard"
     );
 }
+
+/// Feature 1504 (plan D2, T011): a branch carries a title ticket, so a worktree whose branch alone
+/// changed counts as a changed list and its title is asked for again.
+#[test]
+fn worktrees_fingerprint_follows_the_branch() {
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+
+    let mut app = base_app();
+    app.core.worktree.worktrees = vec![Worktree {
+        dir_name: "project-thread-t2a600".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/project-thread-t2a600"),
+        branch: Some("claude/project-thread-t2a600".to_string()),
+        status: WorktreeStatus::Valid,
+        included: false,
+    }];
+    let before = shell::issues::worktrees_fingerprint(&app);
+    app.core.worktree.worktrees[0].branch = Some("feat/1504-readable-titles".to_string());
+    assert_ne!(shell::issues::worktrees_fingerprint(&app), before);
+}

@@ -927,8 +927,7 @@ fn build_items(
         });
         // The two lines (feature 1125, FR-011): the title, then the short branch and sessions.
         let title = crate::features::sidebar::row_title(
-            &node,
-            state.overview.known_title(&node.location()),
+            &crate::features::overview::location_title(state, &node.worktree, &node.display_name),
             state.workspace.worktree_name(&dir),
         );
         let second_line = crate::features::sidebar::row_second_line(&node, &title);

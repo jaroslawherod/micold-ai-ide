@@ -1281,6 +1281,7 @@ mod tests {
             state: CardState::Idle,
             reason: CardReason::Idle,
             title: "s".into(),
+            title_source: micold_core::location_title::TitleSource::Folder,
             prs: micold_core::overview::PrDisplay::Hidden,
             progress: Default::default(),
             activity: None,

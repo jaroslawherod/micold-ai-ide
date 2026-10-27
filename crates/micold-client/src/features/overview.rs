@@ -9,11 +9,14 @@ use crate::app::Message;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
+use micold_core::jira_status::StatusBoard;
+use micold_core::location_title::{choose, title_ticket, LocationTitle, TitleInputs, TitleTicket};
 use micold_core::overview::Activation;
 use micold_core::overview_expansion::{Event, Expansion};
 use micold_core::session::SessionLocation;
 use micold_core::task_progress::FileProgress;
 use micold_core::tokens::motion::duration;
+use micold_core::worktree::Worktree;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -77,7 +80,7 @@ pub struct State {
     pub open: bool,
     /// The last file reading per worktree directory name (R9). Cleared on a project switch.
     pub progress: BTreeMap<String, FileProgress>,
-    /// The issue title per numeric ticket (R8). Cleared on a project switch.
+    /// The issue title per GitHub title ticket (R8; feature 1504). Cleared on a project switch.
     pub titles: BTreeMap<u64, TitleLookup>,
     /// The activation accepted and waiting out [`OVERVIEW_ACTIVATION_DELAY`] (feature 971, D3).
     /// While set, further activations, closing and toggling are ignored: the first one stands.
@@ -113,15 +116,15 @@ impl State {
         }
     }
 
-    /// The known issue title of a location (R8): its worktree directory's numeric ticket's title,
-    /// once read. The Overview's card and the sidebar's row (feature 1125) both read it here.
-    pub fn known_title(&self, location: &SessionLocation) -> Option<&str> {
-        let SessionLocation::Worktree(dir) = location else {
-            return None;
-        };
-        match self.titles.get(&numeric_ticket(dir)?) {
-            Some(TitleLookup::Known(text)) => Some(text.as_str()),
-            _ => None,
+    /// The known issue title of a title ticket (feature 1504, FR-003): a GitHub issue's title,
+    /// once read. Every location title reads it here, through [`location_title`].
+    pub fn issue_title(&self, ticket: &TitleTicket, _board: &StatusBoard) -> Option<&str> {
+        match ticket {
+            TitleTicket::Github(number) => match self.titles.get(number) {
+                Some(TitleLookup::Known(text)) => Some(text.as_str()),
+                _ => None,
+            },
+            TitleTicket::Jira(_) => None,
         }
     }
 
@@ -490,9 +493,23 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
     Vec::new()
 }
 
-/// The numeric ticket of a worktree directory name; a Jira key or no ticket is `None`.
-pub fn numeric_ticket(dir_name: &str) -> Option<u64> {
-    micold_core::naming::ticket(dir_name)?.parse().ok()
+/// A worktree's location title (feature 1504, FR-001, FR-007): the Overview card, the sidebar row
+/// and the session-area header all read it here, so they cannot disagree.
+pub fn location_title(
+    app: &crate::app::State,
+    worktree: &Worktree,
+    display_name: &str,
+) -> LocationTitle {
+    let ticket = title_ticket(&worktree.dir_name, worktree.branch.as_deref());
+    let issue_title = ticket
+        .as_ref()
+        .and_then(|ticket| app.overview.issue_title(ticket, &app.jira_status.board));
+    choose(&TitleInputs {
+        ticket: ticket.as_ref(),
+        issue_title,
+        branch: worktree.branch.as_deref(),
+        ..TitleInputs::named(display_name)
+    })
 }
 
 /// A location's card state and why (feature 1125, research R2): from its un-archived sessions, the
@@ -539,16 +556,20 @@ pub fn pr_signal(
     }
 }
 
-/// The titles to fetch on opening: each numeric ticket of `dirs` with no entry yet, once, in
-/// order. None unless the project's issue tooling is GitHub and available (R8, FR-019).
-pub fn titles_to_fetch(state: &State, dirs: &[String], github_available: bool) -> Vec<u64> {
+/// The titles to fetch on opening: each GitHub title ticket in `tickets` with no entry yet, once,
+/// in order. None unless the project's issue tooling is GitHub and available (R8, FR-019; feature
+/// 1504, FR-003).
+pub fn titles_to_fetch(state: &State, tickets: &[TitleTicket], github_available: bool) -> Vec<u64> {
     let mut wanted = Vec::new();
     if !github_available {
         return wanted;
     }
-    for number in dirs.iter().filter_map(|dir| numeric_ticket(dir)) {
-        if !state.titles.contains_key(&number) && !wanted.contains(&number) {
-            wanted.push(number);
+    for ticket in tickets {
+        let TitleTicket::Github(number) = ticket else {
+            continue;
+        };
+        if !state.titles.contains_key(number) && !wanted.contains(number) {
+            wanted.push(*number);
         }
     }
     wanted

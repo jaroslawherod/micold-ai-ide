@@ -54,6 +54,7 @@ use micold_core::github::{
 use micold_core::issue_details::DETAILS_BOUND;
 use micold_core::jira::{connection_key, ApiToken, IssueProvider};
 use micold_core::jira_query::RememberedQuery;
+use micold_core::location_title::{title_ticket, TitleTicket};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::store::jira_token_path;
 
@@ -735,9 +736,9 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
 
 /// The Overview opened: read the title of every worktree's issue ([`request_titles`]).
 pub fn on_overview_opened(app: &mut App) -> Task<Message> {
-    let dirs = worktree_dirs(app);
+    let tickets = worktree_tickets(app);
     // The issue links need the repository even when no title is read (feature 1122, R2).
-    if !request_titles(app, &dirs) {
+    if !request_titles(app, &tickets) {
         read_repo(app);
     }
     Task::none()
@@ -747,45 +748,60 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
 /// first line is its issue's title, so every worktree's title is read as the Overview would read
 /// it, without the Overview having opened. Each title is read once ([`request_titles`]).
 pub fn on_worktrees_changed(app: &mut App) {
-    let dirs = worktree_dirs(app);
-    request_titles(app, &dirs);
+    let tickets = worktree_tickets(app);
+    request_titles(app, &tickets);
 }
 
-/// A fingerprint of the active project's worktree list, by directory name, so the shell can tell
-/// that a message changed it without keeping a copy.
+/// A fingerprint of the active project's worktree list, by directory name and branch (a branch
+/// carries a title ticket too, feature 1504 D2), so the shell can tell that a message changed it
+/// without keeping a copy.
 pub fn worktrees_fingerprint(app: &App) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for worktree in &app.core.worktree.worktrees {
         worktree.dir_name.hash(&mut hasher);
+        worktree.branch.hash(&mut hasher);
     }
     hasher.finish()
 }
 
-fn worktree_dirs(app: &App) -> Vec<String> {
+/// The title tickets of the active project's worktrees, from folder and branch (feature 1504,
+/// FR-002).
+fn worktree_tickets(app: &App) -> Vec<TitleTicket> {
     app.core
         .worktree
         .worktrees
         .iter()
-        .map(|worktree| worktree.dir_name.clone())
+        .filter_map(|worktree| title_ticket(&worktree.dir_name, worktree.branch.as_deref()))
         .collect()
 }
 
 /// The session area's header followed the worktree `dir` (feature 1126, R3): read its issue's
 /// title, as an Overview card would, so the header shows it without the Overview having opened.
 pub fn on_header_followed(app: &mut App, dir: &str) {
-    request_titles(app, &[dir.to_string()]);
+    let branch = app
+        .core
+        .worktree
+        .worktrees
+        .iter()
+        .find(|worktree| worktree.dir_name == dir)
+        .and_then(|worktree| worktree.branch.as_deref());
+    let tickets: Vec<TitleTicket> = title_ticket(dir, branch).into_iter().collect();
+    request_titles(app, &tickets);
 }
 
-/// Seed titles of `dirs`' issues from the issues the New-worktree form already holds, then read
-/// each numeric ticket still without an entry, once. The remotes come first (the repository is
+/// Seed titles of `tickets`' GitHub issues from the issues the New-worktree form already holds,
+/// then read each one still without an entry, once. The remotes come first (the repository is
 /// whatever the daemon says); a window with no route to a daemon reads nothing (FR-019). Whether a
 /// read was sent.
-fn request_titles(app: &mut App, dirs: &[String]) -> bool {
-    use micold_client::features::overview::{numeric_ticket, titles_to_fetch, Msg, TitleLookup};
-    let seeds: Vec<(u64, String)> = dirs
+fn request_titles(app: &mut App, tickets: &[TitleTicket]) -> bool {
+    use micold_client::features::overview::{titles_to_fetch, Msg, TitleLookup};
+    let seeds: Vec<(u64, String)> = tickets
         .iter()
-        .filter_map(|dir| numeric_ticket(dir))
+        .filter_map(|ticket| match ticket {
+            TitleTicket::Github(number) => Some(*number),
+            TitleTicket::Jira(_) => None,
+        })
         .filter(|number| !app.core.overview.titles.contains_key(number))
         .filter_map(|number| {
             let held = app.core.worktree_form.form.as_ref()?.issues.held();
@@ -807,7 +823,7 @@ fn request_titles(app: &mut App, dirs: &[String]) -> bool {
     // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
     let routed = has_route(app);
     let wanted = if app.core.settings.github_issues_enabled {
-        titles_to_fetch(&app.core.overview, dirs, routed)
+        titles_to_fetch(&app.core.overview, tickets, routed)
     } else {
         Vec::new()
     };

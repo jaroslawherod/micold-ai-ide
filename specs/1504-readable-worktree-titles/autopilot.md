@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: design done (tasks review CLEAN at round 3; specs-only gate green); design PR pending
-- **Next step**: orchestrator opens the design PR (title/body in session scratchpad pr-title.md / pr-body.md), waits on CI and merges; then M1 (T001–T016, T048).
+- **Phase**: M1 implemented in worktree /home/user/wt-1504-m1 (branch 1504-m1, stacked on design PR #1557 head c91788da9); reviews pending
+- **Next step**: M1 review A (code-review high) and review B (conformance, sonnet) on c91788da9...HEAD; then full gate, PR files (pr-title-m1.md / pr-body-m1.md); not pushed until #1557 merges.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1557 | design | open | pending |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | — | pending |
+| M1 | T001–T016, T048 | full | Chooser behind card/row/header; GitHub ticket from the branch titles the worktree | — | in review |
 | M2 | T017–T024 | full | Jira title ticket shows its summary; branch-only key gets no chip | — | pending |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | pending |
@@ -40,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | tasks | M1 = Foundational (8 tasks) + US1 GitHub branch ticket (8) = 16 tasks, over ~10: split further? | No: US1 split along scenarios (M1: 1,3; M2: 2,4) and US2 (M3: 1,3,5–7; M4: 2,4); Foundational alone is never a milestone and is a behaviour-preserving refactor, so M1's new behaviour is 8 tasks | agent | milestones.md rules 1, 3 |
 | D9 | tasks | Analyze F1: spec "git missing" (commit only) vs plan "no local git → no read" | Two cases: `git` failing/missing loses only the commit (spec still read); no local git capability (remote daemon, 027) reads neither, paths are the daemon's. Spec edge case split, L7, T034/T036/T040 | agent | research.md R5; shell/capabilities.rs `git`/`without_local_git` |
 | D10 | tasks | Analyze F4: 813/1120 amendment notes only at close? | No: T048 moved into M1, with the first title-order change | agent | spec FR-013 |
+| D11 | M1 | T005/T012 put card-vs-row agreement in `tests/features_sidebar.rs`, whose header forbids building `State` or naming another feature | The State-based agreement tests (branch ticket, folder wins, rename, Default, orphan) live in `tests/overview.rs`; `features_sidebar.rs` pins `row_title` over each `LocationTitle` source and the rename | agent | tests/features_sidebar.rs module doc (feature 021, SC-004) |
 | D8 | tasks | Optional after_tasks hooks (tdd plan, docguard score), optional before_tasks docguard review | Skipped (optional; tests already first in every phase) | agent | .specify/extensions.yml |
 
 ## Review rounds

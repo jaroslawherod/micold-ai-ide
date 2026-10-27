@@ -24,7 +24,7 @@ string-only (Constitution VI; plan Constitution Check).
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `crates/micold-core/src/location_title.rs` (module doc citing FR-001 and the
+- [x] T001 Create `crates/micold-core/src/location_title.rs` (module doc citing FR-001 and the
   contract) and register `pub mod location_title;` in `crates/micold-core/src/lib.rs`
 
 ---
@@ -36,18 +36,18 @@ all read, before any new source is fed in.
 
 ### Tests
 
-- [ ] T002 Write failing unit tests for `first_line` in `crates/micold-core/src/location_title.rs`
+- [x] T002 Write failing unit tests for `first_line` in `crates/micold-core/src/location_title.rs`
   (L4): BOM stripped, first line only, trailing `\r` stripped, trimmed, empty or whitespace-only →
   `None`
-- [ ] T003 Write failing unit tests for `choose` in `crates/micold-core/src/location_title.rs`
+- [x] T003 Write failing unit tests for `choose` in `crates/micold-core/src/location_title.rs`
   (L1): one test per source in FR-001 order (GitHub issue, Jira summary, pull request, spec,
   session, commit, branch, folder), each winning over every lower one; a source whose text
   normalises to nothing is skipped; `branch` and `display_name` used as they are. Move the five
   `card_title` tests from `crates/micold-core/src/overview_text.rs` (lines ~290–310) here as
   `choose` cases
-- [ ] T004 Write a failing unit test in `crates/micold-core/src/location_title.rs` that
+- [x] T004 Write a failing unit test in `crates/micold-core/src/location_title.rs` that
   `format!("{:?}", LocationTitle)` does not contain the title text (L9, FR-011)
-- [ ] T005 [P] Write failing client tests in `crates/micold-client/tests/features_sidebar.rs` that
+- [x] T005 [P] Write failing client tests in `crates/micold-client/tests/features_sidebar.rs` that
   the Overview card title and `features::sidebar::row_title` agree for a worktree titled by its
   GitHub issue, by its branch and by its folder, that a custom name (1125) still wins in the
   row (FR-007), and that the project root (Default location) and an orphan folder keep today's
@@ -55,15 +55,15 @@ all read, before any new source is fed in.
 
 ### Implementation
 
-- [ ] T006 Implement `TitleTicket` (`Github(u64) | Jira(String)`), `TitleSource`
+- [x] T006 Implement `TitleTicket` (`Github(u64) | Jira(String)`), `TitleSource`
   (`GithubIssue(u64) | JiraIssue(String) | PullRequest(u64) | Spec | Session | Commit | Branch |
   Folder`), `TitleInputs<'a>` (fields per data-model.md), `LocationTitle { text, source }` with a
   hand-written `Debug` omitting `text`, `first_line` and `choose` in
   `crates/micold-core/src/location_title.rs` (data-model "Core")
-- [ ] T007 Remove `overview_text::card_title` from `crates/micold-core/src/overview_text.rs`; add
+- [x] T007 Remove `overview_text::card_title` from `crates/micold-core/src/overview_text.rs`; add
   `CardModel.title_source: TitleSource` in `crates/micold-core/src/overview.rs` and fix its doc
   link (line ~397)
-- [ ] T008 Add `features::overview::location_title(app, worktree, display_name) -> LocationTitle`
+- [x] T008 Add `features::overview::location_title(app, worktree, display_name) -> LocationTitle`
   in `crates/micold-client/src/features/overview.rs`, filling `TitleInputs` from today's data only
   (folder GitHub title via `State::known_title`, branch, display name); switch the card in
   `crates/micold-client/src/ui/overview.rs` (~line 754; Default keeps `choose` with only
@@ -84,27 +84,27 @@ ticket gives its summary (FR-004).
 
 ### Tests — GitHub ticket from the branch (US1.1, US1.3)
 
-- [ ] T009 [P] [US1] Write failing table tests for `title_ticket(dir_name, branch)` in
+- [x] T009 [P] [US1] Write failing table tests for `title_ticket(dir_name, branch)` in
   `crates/micold-core/src/location_title.rs`, one per L2 row (folder wins; `feat/1504-readable-titles`
   and `feat/1504_readable-titles` → `Github(1504)`; Jira keys uppercased; `fix/some_bug`,
   `claude/project-thread-7041o6` and a detached HEAD → none), plus `feat/1504_überblick` →
   `Github(1504)`
-- [ ] T010 [P] [US1] Write failing client tests in `crates/micold-client/tests/overview.rs`:
+- [x] T010 [P] [US1] Write failing client tests in `crates/micold-client/tests/overview.rs`:
   `titles_to_fetch` asks 1504 for folder `project-thread-t2a600` + branch
   `feat/1504-readable-titles`; asks 813 (not 900) for folder `feat-813_x` + branch `feat/900_y`;
   asks nothing without GitHub (extend the test at ~line 1340); `State::issue_title` returns the
   branch ticket's known title (US1.1, US1.3, FR-003)
-- [ ] T011 [P] [US1] Write a failing test `worktrees_fingerprint_follows_the_branch` in
+- [x] T011 [P] [US1] Write a failing test `worktrees_fingerprint_follows_the_branch` in
   `crates/micold-client/src/main_tests.rs` that `shell::issues::worktrees_fingerprint` changes when only a worktree's branch changes (plan D2)
-- [ ] T012 [P] [US1] Write a failing test in `crates/micold-client/tests/features_sidebar.rs` that
+- [x] T012 [P] [US1] Write a failing test in `crates/micold-client/tests/features_sidebar.rs` that
   the card and the row of a worktree whose ticket is only in its branch both show that issue's
   title (US1.1, SC-002, FR-007)
 
 ### Implementation — GitHub ticket from the branch
 
-- [ ] T013 [US1] Implement `title_ticket` in `crates/micold-core/src/location_title.rs` per
+- [x] T013 [US1] Implement `title_ticket` in `crates/micold-core/src/location_title.rs` per
   research R2 (folder via `naming`, else branch via `short_branch`'s rule)
-- [ ] T014 [US1] In `crates/micold-client/src/features/overview.rs`: replace `known_title` with
+- [x] T014 [US1] In `crates/micold-client/src/features/overview.rs`: replace `known_title` with
   `State::issue_title(&TitleTicket, &StatusBoard)` (GitHub arm only here), make `titles_to_fetch`
   take title tickets, and switch the two `numeric_ticket` callers here to `title_ticket`; feed
   the title ticket into `location_title`. In the same task, so it builds alone: `request_titles`
@@ -112,9 +112,9 @@ ticket gives its summary (FR-004).
   title tickets from `(dir_name, branch)`, and the existing `titles_to_fetch` call in
   `crates/micold-client/tests/overview.rs` (~line 1352) takes the new signature; then remove
   `features::overview::numeric_ticket`, which has no caller left
-- [ ] T015 [US1] In `crates/micold-client/src/shell/issues.rs`: `worktrees_fingerprint`
+- [x] T015 [US1] In `crates/micold-client/src/shell/issues.rs`: `worktrees_fingerprint`
   (~line 756) hashes `(dir_name, branch)`
-- [ ] T016 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a ticket in the branch
+- [x] T016 [US1] Update the *Title* section of `docs/user-guide/overview.md`: a ticket in the branch
   name gives the issue's title when the folder name has none; the folder's ticket wins
 
 ### Tests — Jira summary (US1.2, US1.4)
@@ -286,7 +286,7 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 - [ ] T047 Confirm `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` pass with caller counts
   unchanged (L8, SC-004)
-- [ ] T048 (ships in M1) Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
+- [x] T048 (ships in M1) Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
   `specs/1120-overview-card-readability/spec.md` US2 scenarios 1–2 (FR-013, plan D8)
 - [ ] T049 Run quickstart.md Part A and Part B (visual pass) and record the result in
   `specs/1504-readable-worktree-titles/quickstart.md`

@@ -751,9 +751,18 @@ fn card(app: &State, place: &Place) -> CardModel {
         .collect();
     let (state, reason) =
         crate::features::overview::location_card_state(app, &location, branch.as_deref());
-    let issue_title = app.overview.known_title(&location);
-    let title =
-        micold_core::overview_text::card_title(issue_title, branch.as_deref(), &display_name);
+    // Feature 1504 (FR-001, FR-007): the one chooser the sidebar row and the header read too.
+    let micold_core::location_title::LocationTitle {
+        text: title,
+        source: title_source,
+    } = match place {
+        Place::Default => micold_core::location_title::choose(
+            &micold_core::location_title::TitleInputs::named(&display_name),
+        ),
+        Place::Worktree(node) => {
+            crate::features::overview::location_title(app, &node.worktree, &display_name)
+        }
+    };
     let pr_open = matches!(
         crate::features::overview::pr_signal(&app.pr_status, branch.as_deref()),
         PrSignal::Known { current: Some(current), .. } if current.open
@@ -782,6 +791,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         state,
         reason,
         title,
+        title_source,
         progress,
         activity,
         prs,
