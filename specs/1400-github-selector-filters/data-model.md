@@ -16,7 +16,7 @@ function or test names them (plan §US6 separability).
 
 | Type | Shape | Rule |
 |---|---|---|
-| `LabelName` | `struct(String)` | Only from `LabelName::parse(&str) -> Option<LabelName>`: non-empty, no `"`, no control character (FR-006, research R6). Compared exactly (GitHub label names are case-insensitive on github.com, but the choice list and the remembered value hold GitHub's own spelling). |
+| `LabelName` | `struct(String)` | Only from `LabelName::parse(&str) -> Option<LabelName>`: non-empty, no `"`, no `\`, no control character (FR-006, research R6). Compared exactly (GitHub label names are case-insensitive on github.com, but the choice list and the remembered value hold GitHub's own spelling). |
 | `IssueState` | `enum { Open, Closed, All }` | `Default = Open`; serde lowercase. |
 | **US6** `Login` | `struct(String)` | Only from `Login::parse`: 1–39 ASCII letters, digits and single inner hyphens. |
 | **US6** `Assignee` | `enum { Me, Nobody, User(Login) }` | |

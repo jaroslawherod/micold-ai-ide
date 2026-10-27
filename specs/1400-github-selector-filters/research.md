@@ -115,9 +115,11 @@ to show; one `"…"` phrase for the whole text — a phrase match, narrower than
 control characters removed, ends trimmed: the shared `micold_core::query_text::clean`, R12), refuses
 it when longer than 1,000 `char`s, then walks it once, tracking whether it is inside a `"` quoted
 string (GitHub's search has no escape inside quotes, so the next `"` closes) and the parenthesis
-depth outside strings. At each token start outside a string (start of text, or after whitespace or
-`(`), it checks for an optional `-` then `repo:`, `org:`, `user:` or `owner:` (ASCII
-case-insensitive) — a scope qualifier — and records each `sort:` token's byte range. Refusals, in
+depth outside strings. At each position outside a string that follows no letter, digit, `_` or `-`
+(so `(a)repo:x` and `"x"repo:x` count, `myrepo:x` does not; M1 review A F2), it checks for an
+optional `-` then `repo:`, `org:`, `user:` or `owner:` (ASCII case-insensitive) — a scope
+qualifier. At each token start (start of text, or after whitespace or `(`) it records each `sort:`
+token's byte range. Refusals, in
 priority order: `TooLong`, `UnclosedQuote`, `ScopeQualifier`, `UnbalancedParentheses` (depth below
 zero at any point, or non-zero at the end). `condition()` is the text with the sort tokens cut out
 and runs of spaces collapsed; `sorts()` the sort tokens in order.
@@ -136,7 +138,8 @@ track.
 ## R6 — Basic filter values are quoted and constructed only by validation
 
 **Decision.** `LabelName::parse` and `MilestoneTitle::parse` (US6) refuse an empty name and any
-name holding `"` or a control character; every accepted value is sent as `label:"<name>"`. `Login`
+name holding `"` or a control character (`LabelName` also `\`, as typed words drop it: if GitHub
+read `\"` as an escape the quote would stay open; M1 review A F1); every accepted value is sent as `label:"<name>"`. `Login`
 (US6) accepts 1–39 ASCII letters, digits and single inner hyphens (no leading, trailing or double
 hyphen), sent bare. `Assignee::Me`/`Author::Me` send `@me`. A label GitHub returns that fails
 `LabelName::parse` is not offered, and the label field counts them ("2 labels can't be offered").
@@ -153,7 +156,8 @@ else.
 
 **Decision.** A filtered request returns `Result<_, FilterFailure>` where
 `FilterFailure::{Rejected(Vec<String>), Load(IssueLoadError)}` (new, core). The page parser reads
-`errors[]`: `RATE_LIMITED` is `Load(RateLimited)`; every other error whose `path` is `["search"]`,
+`errors[]`: `RATE_LIMITED`, `FORBIDDEN` and `INSUFFICIENT_SCOPES` are `Load(..)`, classified as the
+default listing classifies them (034's SAML and scope notices; M1 review A F3); every other error whose `path` is `["search"]`,
 or which has no `path` and no `data.search`, is a refusal of the query, and the messages of all
 such errors, in GitHub's order, become `Rejected` — each cleaned (R12), cut at 300 characters with
 `…`, at most 10, empty ones dropped. Any other error is classified as `parse_list_page` classifies

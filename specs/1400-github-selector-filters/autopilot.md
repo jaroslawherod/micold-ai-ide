@@ -10,19 +10,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
 - **Phase**: implement
-- **Next step**: M1 review round 1 (A and B), dispatched by the orchestrator (no Agent tool in the unit); after both CLEAN: full gate, then wait for #1558 to merge before pushing branch `1400-m1` and opening the M1 PR. T061 (Polish, no code) left to the close unit.
+- **Next step**: M1 review round 2 (B scoped re-review incl. Verify, sonnet; A scoped on the fix diff, sonnet), dispatched by the orchestrator; after both CLEAN: full gate, push branch `1400-m1`, open the M1 PR. T061 (Polish, no code) left to the close unit.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1558 | Design (spec, plan, tasks) | open, CI running | |
+| #1558 | Design (spec, plan, tasks) | merged (rebase) | 1236152a3c3438f2bd27a213a897ec576ad397fd |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | implemented, in review (stacked on #1558, branch `1400-m1`) |
+| M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | | implemented, review round 1 fixed, round 2 pending (branch `1400-m1`, rebased on origin/main after #1558 merged) |
 | M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | | planned |
 | M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | | planned |
 | M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | planned |
@@ -47,7 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 3 | 7ef6a6ed83e2180a6e75229f426245b7253c762a:f3a47188b3059b604added461442c2a427b087ef | CLEAN (scoped re-review, sonnet): round-2 F1 and F2 confirmed fixed; no new contradiction |
 | Tasks review | 1 | f5fa5bfd7b7859e302bfa962e54775ef046fef9e:7f0754f2ffcf14296b214ca93ee778cbfb417a13 | CHANGES: F1 MAJOR (M4 state change never remembered) fixed: T036 asserts `Remembered(Basic)` per state change + remembered Closed reopens with one `is:closed` listing, T038 emits it, M4 depends on M3, FR-021 (state) in Satisfies; F2 MAJOR (M7 US6 choices never remembered) fixed: T057 asserts `Remembered(Basic)` + `from_remembered` round trip, T058 emits it, FR-021 (US6) in Satisfies; F3 MINOR (M7 depends) fixed: M4, M6; F4 MINOR (checklist note) fixed, prose only: resolved as provisional D1. Dependencies section updated to match |
 | Tasks review | 2 | 207cf7e50321622990b774afe49fb080ed3f61e5:f13cb90003f50fb93e8427f02f0a869de921b205 | CLEAN (scoped re-review, sonnet): round-1 F1–F4 all fixed; no new contradiction |
-| M1 Review A + B | 1 | 71cbb1a04f82954925457fedd5089a6ad915a306:a3e43dbacff6b9601ba1acfd5bd86df98c94719f | pending: dispatched by the orchestrator. Scoped gate at a3e43dbac: fmt + clippy (core, workspace, `-D warnings`) green; Verify suites green (github_filter 47, github_gh_cli 17, jira_query, github_privacy, github_search, github_load); `cargo test --workspace --no-fail-fast` red only in 6 permission tests that cannot fail a write as root (container runs as uid 0: settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers ×2, daemon sessions worktree_delete_blocked…, daemon settings …unreadable…), untouched by M1 |
+| M1 Review A + B | 1 | 71cbb1a04f82954925457fedd5089a6ad915a306:a3e43dbacff6b9601ba1acfd5bd86df98c94719f | A (code-review, high): CLEAN with 3 MINOR — F1 `LabelName::parse` accepted `\`, F2 scope check missed `(a)repo:`/`"x"repo:`, F3 FORBIDDEN/INSUFFICIENT_SCOPES at `["search"]` read as `Rejected`; all fixed test-first (`\` refused, scope checked after any char but alnum/`_`/`-`, both types → `Load(graphql_error_of)`; §2/§5/§6 rows, spec FR-006/Edge, data-model, research R4/R5/R6/R7 updated). B (conformance): CHANGES — F1 MAJOR no red-before-green evidence: fixed by `tdd/cycle-log.md` (red reconstructed structurally on pre-M1 src and by one mutant per task, plus the A fixes' red/green); F2 MINOR hand-written fixtures (T018): accepted, already a Follow-up (probe before release). Verify green. Scoped gate at a3e43dbac: fmt + clippy (core, workspace, `-D warnings`) green; Verify suites green (github_filter 47, github_gh_cli 17, jira_query, github_privacy, github_search, github_load); `cargo test --workspace --no-fail-fast` red only in 6 permission tests that cannot fail a write as root (container runs as uid 0: settings_refuses_save_over_failed_read, settings_write_is_logged, worktree_leftovers ×2, daemon sessions worktree_delete_blocked…, daemon settings …unreadable…), untouched by M1 |
+| M1 Review A + B | 2 | (see next row) | pending: B scoped (MAJOR fix) + A scoped on the fix diff. Scoped gate: fmt, clippy core `-D warnings` green; github_filter 48, github_gh_cli 18, jira_query 36, github_privacy/search/load green |
 
 ## Notes
 

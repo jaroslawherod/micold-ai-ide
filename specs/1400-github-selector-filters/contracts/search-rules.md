@@ -23,7 +23,8 @@ Priority: `TooLong` > `UnclosedQuote` > `ScopeQualifier` > `UnbalancedParenthese
 | `repo:other/x is:open` | `ScopeQualifier` |
 | `-repo:other/x`, `org:acme`, `USER:bob`, `owner:me`, `(a OR repo:x)` | `ScopeQualifier` |
 | `"repo:x" label:bug` | `Ok` (inside a quoted string, spec Edge) |
-| `myrepo:x` | `Ok` (not at a token start; GitHub judges it) |
+| `(a)repo:other/x`, `"x"repo:other/x`, `label:a,repo:other/x` | `ScopeQualifier` (after any character but a letter, digit, `_` or `-`) |
+| `myrepo:x`, `my_repo:x`, `my-repo:x` | `Ok` (inside a word; GitHub judges it) |
 | `(label:a OR label:b` | `UnbalancedParentheses` |
 | `label:a) OR (label:b` | `UnbalancedParentheses` (depth below zero) |
 | `"(" label:a` | `Ok` |
@@ -90,7 +91,7 @@ per row in `github_filter.rs`.
 | Input | `LabelName::parse` |
 |---|---|
 | `bug`, `good first issue`, `area: ui`, `(wip)`, `日本語`, ` lead space` (kept as is) | `Some` |
-| `say "hi"`, `tab\there`, `` | `None` |
+| `say "hi"`, `tab\there`, ``, `foo\`, `a\b` | `None` (`\` refused as typed words drop it: if GitHub read `\"` as an escape, `label:"foo\"` would leave its quote open) |
 
 | Input | US6 `Login::parse` |
 |---|---|
@@ -116,6 +117,8 @@ bodyText state repository { nameWithOwner } } } } }`. `SEARCH_FILTERED_QUERY` is
 | `errors: [{type: "NOT_FOUND", path: ["search"], message: "The listed users cannot be searched…"}]` | `Rejected([..])` |
 | `errors: [{message: "x"}]`, no `data.search` | `Rejected(["x"])` |
 | `errors: [{type: "RATE_LIMITED", …}]` | `Load(RateLimited)` |
+| `errors: [{type: "FORBIDDEN", path: ["search"], …}]` (beside any refusal) | `Load(graphql_error_of(..))`; `gh`'s stderr then gives 034's SAML notice (`NoAccess`) |
+| `errors: [{type: "INSUFFICIENT_SCOPES", path: ["search"], …}]` (beside any refusal) | `Load(graphql_error_of(..))`; `gh`'s stderr then gives 034's scope notice |
 | a message of 400 chars / with `\n` / empty | cut at 300 + `…` / cleaned / dropped; at most 10 kept |
 | JSON that is not this shape | `Load(Other(..))` |
 

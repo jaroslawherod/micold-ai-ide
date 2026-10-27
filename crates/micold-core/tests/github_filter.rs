@@ -65,7 +65,7 @@ fn labels(names: &[LabelName]) -> Vec<&str> {
 // §5 Values
 
 #[test]
-fn a_label_name_is_any_non_empty_name_without_a_quote_or_control_character() {
+fn a_label_name_is_any_non_empty_name_without_a_quote_backslash_or_control_character() {
     for name in [
         "bug",
         "good first issue",
@@ -80,7 +80,7 @@ fn a_label_name_is_any_non_empty_name_without_a_quote_or_control_character() {
             "{name:?} is offered and kept as is"
         );
     }
-    for name in ["say \"hi\"", "tab\there", ""] {
+    for name in ["say \"hi\"", "tab\there", "", "foo\\", "a\\b"] {
         assert_eq!(LabelName::parse(name), None, "{name:?} is not a label");
     }
 }
@@ -257,6 +257,9 @@ fn a_scope_qualifier_is_refused() {
         "USER:bob",
         "owner:me",
         "(a OR repo:x)",
+        "(a)repo:other/x",
+        "\"x\"repo:other/x",
+        "label:a,repo:other/x",
     ] {
         assert_eq!(refusal(raw), QueryRefusal::ScopeQualifier, "{raw}");
     }
@@ -269,7 +272,7 @@ fn a_scope_qualifier_is_refused() {
 
 #[test]
 fn a_scope_qualifier_in_a_quoted_string_or_inside_a_word_is_text() {
-    for raw in ["\"repo:x\" label:bug", "myrepo:x"] {
+    for raw in ["\"repo:x\" label:bug", "myrepo:x", "my_repo:x", "my-repo:x"] {
         assert_eq!(parsed(raw).as_str(), raw);
     }
 }
@@ -575,6 +578,20 @@ fn a_rate_limit_is_a_load_failure() {
         ]})),
         FilterFailure::Load(IssueLoadError::RateLimited)
     );
+}
+
+#[test]
+fn a_refused_access_or_missing_scope_is_a_load_failure_not_a_rejection() {
+    for kind in ["FORBIDDEN", "INSUFFICIENT_SCOPES"] {
+        assert_eq!(
+            failure(json!({"data": {"search": null}, "errors": [
+                {"type": "INVALID", "path": ["search"], "message": "m1"},
+                {"type": kind, "path": ["search"], "message": "Resource protected by SAML"}
+            ]})),
+            FilterFailure::Load(IssueLoadError::Other("Resource protected by SAML".into())),
+            "{kind} goes to 034's classification, which knows SAML and scopes"
+        );
+    }
 }
 
 #[test]
