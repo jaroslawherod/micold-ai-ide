@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M2 implemented on branch 1504-m2 (worktree /home/user/wt-1504-m2, stacked on M1 head ac5ada9ea; not pushed); review A and review B pending
+- **Phase**: M2 implemented on branch 1504-m2 (worktree /home/user/wt-1504-m2, stacked on M1 head ac5ada9ea; not pushed); full gate (`scripts/gate.sh`) green at aeac356e2; review A, review B and the visual pass pending
 - **Next step**: orchestrator runs review A (code-review high) and review B (conformance) on `ac5ada9ea...HEAD`; then fix findings, full gate, PR (title/body in scratchpad pr-title-m2.md / pr-body-m2.md) once M1 #1566 merges
 
 ## Pull requests
@@ -87,6 +87,10 @@ Placement notes: T020's card-and-row tests live in `tests/overview.rs` (beside M
 helper, which builds the card and the row from one state) rather than `tests/features_sidebar.rs`;
 T018's "switch off or no connection sends nothing" case lives in `main_tests.rs`
 `jira_status_driver` (the gate is the shell's, `State::plan` never sees the switch).
+
+Pending reviews (M2): review A (`code-review` high) and review B (`rubrics/conformance.md`,
+sonnet) on `ac5ada9ea...HEAD`, brief `brief.py milestone specs/1504-readable-worktree-titles M2`;
+visual pass on quickstart §B rows C–D (title text only) with a loopback Jira stub.
 
 ## Declined review findings
 
