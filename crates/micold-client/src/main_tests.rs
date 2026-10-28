@@ -13039,12 +13039,7 @@ mod panes {
         ));
         app.core.workspace.active = Some(project.clone());
         let sessions: Vec<Session> = (0..n)
-            .map(|_| {
-                // Idle, so selecting one asks nothing (a session that is not running yet would).
-                let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
-                session.lifecycle = micold_core::session::SessionLifecycle::Idle;
-                session
-            })
+            .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
             .collect();
         let ids: Vec<SessionId> = sessions.iter().map(|s| s.id).collect();
         app.core.workspace.sessions.insert(project, sessions);
