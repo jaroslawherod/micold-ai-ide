@@ -732,7 +732,7 @@ pub fn rows_with(buffer: &[u8], width: u32, colour: micold_core::tokens::Rgb) ->
     let c = super::style::color(colour);
     let want = [c.r, c.g, c.b].map(|v| (v * 255.0).round() as i32);
     let mut rows: Vec<u32> = Vec::new();
-    for (i, px) in buffer.chunks_exact(4).enumerate() {
+    for (i, px) in buffer.as_chunks::<4>().0.iter().enumerate() {
         let close = (0..3).all(|k| (i32::from(px[k]) - want[k]).abs() <= 2);
         let y = i as u32 / width;
         if close && rows.last() != Some(&y) {
