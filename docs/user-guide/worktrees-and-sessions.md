@@ -826,11 +826,15 @@ retry.
 ### Filtering GitHub issues
 
 With the GitHub source showing, a **Filters** button sits beside **Issue**. It opens a panel with
-two fields:
+two fields and a **State** row:
 
 - **Include labels**: only issues carrying every label you add are listed.
 - **Exclude labels**: no issue carrying any label you add is listed. Add `in-progress` and
   `blocked`, for example, to see only the issues nobody has taken.
+- **State**: **Open** (the default), **Closed** or **All**. Choose **Closed** to restart work on a
+  recently closed issue, or **All** to see both. A closed issue's row carries a **Closed** chip
+  (ahead of any status shown for it), and you pick it like an open one: the ticket, name and type
+  are filled the same way.
 
 The labels are the repository's, alphabetically, read from GitHub the first time you open one of
 the fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It
@@ -844,7 +848,7 @@ the search keep working.
 
 The button names how many filters you chose ("Filters · 2"). Each change reloads the list from
 GitHub with the filters, most recently updated first, and a line under the search names them, for
-example "Excluding labels in-progress, blocked". The statement under the source then reads "Reads
+example "Excluding labels in-progress, blocked" or "Closed issues". The statement under the source then reads "Reads
 issues of <repository> from GitHub, sending the filter and the search text." **Clear filters**,
 above the statement, removes every filter and brings back the usual list of open issues. With no
 filter chosen, the picker reads and sends exactly what it did before. Switching the source to Jira

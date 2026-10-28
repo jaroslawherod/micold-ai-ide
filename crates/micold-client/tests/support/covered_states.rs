@@ -38,6 +38,7 @@ use micold_core::issue_details::{
 };
 use micold_core::jira::{IssueProvider, JiraConnection, ProjectKey};
 use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
+use micold_core::jira_status::{StatusCategory, TicketStatus};
 use micold_core::project::Availability;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
@@ -1483,6 +1484,25 @@ pub fn covered_states() -> &'static [CoveredState] {
                     ),
                     reported_issue(42, "Crash when opening empty project", &["bug"], "hubot"),
                     reported_issue(7, "Sidebar flickers on resize", &[], "monalisa"),
+                ])
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Closed issues (feature 1400, US5): the "Closed" chip beside the first line, on a row whose
+        // listing carried another status ("In Progress") too: the closed mark wins (selector-ui §3).
+        CoveredState {
+            name: "add-worktree-dialog-issue-list-closed",
+            build: || {
+                issue_list_state(vec![
+                    reported_issue(21, "Sidebar flickers on resize", &["bug"], "monalisa")
+                        .closed(true),
+                    reported_issue(22, "Open one for contrast", &[], "octocat"),
+                    reported_issue(23, "Crash when opening empty project", &["bug"], "hubot")
+                        .closed(true)
+                        .with_status(Some(TicketStatus {
+                            name: "In Progress".to_string(),
+                            category: Some(StatusCategory::InProgress),
+                        })),
                 ])
             },
             anchors: ADD_WORKTREE_ANCHORS,

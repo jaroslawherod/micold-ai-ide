@@ -27,7 +27,7 @@ use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::github::Issue;
 use micold_core::issue_details::DetailLine;
 use micold_core::jira::IssueProvider;
-use micold_core::jira_status::StatusBoard;
+use micold_core::jira_status::{StatusBoard, StatusCategory, TicketStatus};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
@@ -493,13 +493,24 @@ pub fn issue_rows_with(
     (rows, selected)
 }
 
+/// The chip a closed issue's row carries.
+fn closed_status() -> TicketStatus {
+    TicketStatus {
+        name: "Closed".to_string(),
+        category: Some(StatusCategory::Done),
+    }
+}
+
 /// One issue's row, the one form every issue list shows (038 FR-006, 1186 FR-006): the title line
 /// and the details line with the match's emphasis, the status (the board's when it holds the
 /// ticket) and the description as the tooltip.
 fn issue_row(issue: &Issue, spans: &[std::ops::Range<usize>], board: &StatusBoard) -> TypeaheadRow {
     let emphasis = issue.emphasis(spans);
     let entry = issue.key().and_then(|key| board.status_of(key));
+    // A closed issue says so, ahead of any status the board or its listing holds (feature 1400,
+    // selector-ui §3).
     let (status, stale) = match entry {
+        _ if issue.is_closed() => (Some(closed_status()), false),
         Some(entry) => (Some(entry.status.clone()), entry.stale),
         None => (issue.status().cloned(), false),
     };

@@ -101,3 +101,17 @@ read nowhere. Then the code.
 | T033 | `shell/remembered.rs` extracted; `jira.rs` `read_query`/`remember_query`/`remove_query` (and `remove_token`) call into it | refactor: `jira_connection_shell` 13 passed before, unchanged file | 13 passed |
 | T034 | outcome, partition, reducer emits, `from_remembered`, shell read/write/delete | covered by the T031/T032 reds above | above |
 | T035 | chip text drawn; user guide paragraph | `chip_text` red above; docs | — |
+
+## M4 — filter by state, with a Closed chip (T036–T039; red run before the code)
+
+Seam first, so the tests fail on behaviour: `Msg::StateChosen(IssueState)` accepted and ignored,
+`GithubSelector::state_choices` answering `[]`, `issue_row` unchanged.
+
+| Task | Behaviour | Red (seam, before the code) | Green |
+|---|---|---|---|
+| T036 (`tests/github_filter_state.rs`) | State row Open/Closed/All, Open default (AS1); Closed → one `is:closed` listing, all rows closed (AS2); All → no state term, Open → 034's listing; a closed issue picks like an open one (AS3, FR-017); `Remembered(Basic)` per state change, none for the chosen state; remembered Closed reopens with one `is:closed` listing | `cargo test -p micold-client --test github_filter_state`: 6 FAILED (`the_state_row_offers_…`, `closed_lists_the_closed_issues_with_one_listing`, `all_sends_no_state_term_…`, `a_closed_issue_fills_the_form_…`, `each_state_change_is_remembered`, `a_remembered_closed_state_reopens_…`); 32 earlier passed | 38 passed |
+| T037 (`gates/issue_rows_show_all_text.rs`, state `add-worktree-dialog-issue-list-closed`) | every closed row paints its "Closed" chip (also a closed issue whose listing said "In Progress"); a closed Jira-keyed row shows "Closed" over the board's "In Progress", an open one keeps the board's | `--test layout_snapshot issue_rows_show_all_text`: 3 FAILED (`a_closed_row_shows_closed_not_a_stale_status`, both `every_issue_row_shows_all_of_its_text*`: no "Closed" painted) | 7 passed |
+| T038 | reducer arm, State row, closed chip ahead of the board | above | above |
+| T039 | docs | — | — |
+
+`layout_snapshot.txt` re-recorded: the new covered state, and the Filters panel is 40px taller (the State row).

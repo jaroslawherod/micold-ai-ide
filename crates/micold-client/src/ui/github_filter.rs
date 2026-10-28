@@ -8,7 +8,7 @@
 //! quickstart §B.
 
 use crate::app::Message;
-use crate::features::worktree_form::github_filter::{LabelList, Msg as GithubMsg};
+use crate::features::worktree_form::github_filter::{GithubSelector, LabelList, Msg as GithubMsg};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::WorktreeForm;
 use crate::icons::Icon;
@@ -31,10 +31,11 @@ fn filters_control<'a>(
     r: Roles,
 ) -> Element<'a, Message> {
     let selector = &form.github_selector;
-    let rows = [LabelList::Include, LabelList::Exclude]
+    let mut rows: Vec<_> = [LabelList::Include, LabelList::Exclude]
         .into_iter()
         .map(|list| material::MenuSelectRow::controls(label_field(form, list, source, r)))
         .collect();
+    rows.push(material::MenuSelectRow::controls(state_row(selector, r)));
     super::worktree_form::filters_panel(
         selector.basic.chosen_count(),
         rows,
@@ -43,6 +44,21 @@ fn filters_control<'a>(
         github(GithubMsg::PanelDismissed),
         r,
     )
+}
+
+/// The State row: one chip each for Open, Closed and All, the chosen one active (US5).
+fn state_row<'a>(selector: &GithubSelector, r: Roles) -> Element<'a, Message> {
+    let chips: Vec<Element<'a, Message>> = selector
+        .state_choices()
+        .into_iter()
+        .map(|(state, words, active)| {
+            ToggleChip::new(words, github(GithubMsg::StateChosen(state)), r)
+                .active(active)
+                .takes_the_keyboard()
+                .into()
+        })
+        .collect();
+    Row::with_children(chips).spacing(spacing::XS).wrap().into()
 }
 
 /// What a label field is called, as its label and its placeholder.
