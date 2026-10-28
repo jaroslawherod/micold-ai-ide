@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m4 (M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M4 implementing (T027–T033)
-- **Next step**: M4 TDD cycles 15+ (runs.known, cross-project resolve, shell lookup), then gates and reviews A/B on M4
+- **Phase**: M4 implemented (T027–T033 ticked, TDD cycles 15–17); full gate running; reviews A and B round 1 pending
+- **Next step**: full gate on M4, then review A (code-review high) and review B (conformance) on range 9b3e348bb..HEAD, then pr-title-m4.md / pr-body-m4.md
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
 | M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implementing |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate running, reviews pending |
 | M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | planned |
 
 ## Decisions
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 4 | tasks | Guide updates per milestone | Each feat milestone adds its own line to terminal-panes.md §Keyboard shortcuts (plan D7: the only page), so the user-guide gate passes without docs-not-needed | agent | milestones.md rule 4; tasks T016, T023, T026, T033, T036 |
 | 5 | tasks | speckit-analyze | Not available in this environment (no skill, no subagent); coverage checked by grep: every FR-001–015 and SC-001–005 named by a task or milestone. Tasks review round 1 stands in for analyze (reviewer checked coverage, paths, anchors, test-first order and milestone deps: no gaps) | agent | tasks.md; tasks review r1 F3 |
 | 6 | M2 implement | After a key-made move shows a session, its terminal takes the keyboard and swallows the next Alt+← (US2 AS4 broken after one step). Keep U4's click landing for keys? | No: a `Source::Key` move ends with `release_terminal` if it focused one (`finish_history_move(source)`); a side-button move still lands as a click. The user clicks the terminal (or it focuses on the next selection) to type | agent | spec US2 AS4 + FR-012 (each repeat steps until none) vs contracts/ui.md U4 (plan-level); quickstart B5 expects a held key to walk to the oldest entry; tests `three_key_presses_step_back_three_entries`, `a_button_move_lands_on_the_terminal_as_a_click_would`; U4, R8, guide amended |
+| 7 | M4 implement | The lookup of another project's worktrees: paths (as T031/T032 said) or `dir_name`s? | `dir_name`s: `SessionLocation::Worktree` holds the worktree's `dir_name` identity, which `reconcile` may disambiguate for included worktrees, so a path's last component is not it. tasks.md T031/T032, data-model.md, contracts/ui.md U2 reworded | agent | crates/micold-core/src/worktree.rs `Worktree::dir_name` doc; cycle-log cycle 16 |
 
 ## Review rounds
 
