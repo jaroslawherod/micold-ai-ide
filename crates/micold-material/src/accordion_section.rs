@@ -16,11 +16,64 @@
 //! Whether it is open is the caller's: this keeps no state, so a form can hold it as view state and
 //! decide, for example, to show a section open while an error stands in it.
 
+use super::selectable_text::{Hit, Measure, Selectable, Shape};
 use super::{Accordion, AccordionGroup, Button, ButtonVariant, Ellipsized, Text, TypeRole};
 use crate::icons::Icon;
+use iced::advanced::text::Shaping;
+use iced::widget::text::{LineHeight, Wrapping};
 use iced::widget::{column, row, Space};
 use iced::{alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
+use std::ops::Range;
+use std::rc::Rc;
+
+/// Which text of a section's header a selectable part is (feature 1550): the title, or the
+/// summary drawn under it while closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HeaderText {
+    Title,
+    Summary,
+}
+
+/// What [`AccordionSection::selectable`] was given, with its slot type erased: the step that
+/// makes the title selectable, and the wrapper of the summary's line.
+pub(crate) struct HeaderSelect<'a, M> {
+    title: Box<dyn FnOnce(Text<'a, M>) -> Text<'a, M> + 'a>,
+    summary: WrapLine<'a, M>,
+}
+
+/// What wraps the summary's drawn line, given the summary's whole text.
+type WrapLine<'a, M> = Box<dyn FnOnce(Element<'a, M>, &str) -> Element<'a, M> + 'a>;
+
+impl<'a, M: 'a> HeaderSelect<'a, M> {
+    pub(crate) fn new<K: Clone + 'static>(
+        part: impl Fn(HeaderText) -> (K, Option<Range<usize>>) + 'static,
+        on_hit: impl Fn(K, Hit) -> M + 'a,
+    ) -> Self {
+        let on_hit: Rc<dyn Fn(K, Hit) -> M + 'a> = Rc::new(on_hit);
+        let (title, selected) = part(HeaderText::Title);
+        let (summary, _) = part(HeaderText::Summary);
+        let title_hit = Rc::clone(&on_hit);
+        Self {
+            title: Box::new(move |t| t.selectable(title, selected, move |k, h| title_hit(k, h))),
+            summary: Box::new(move |child, text| {
+                // The summary is drawn cut to one line; its whole text is measured, as an
+                // `Ellipsized` at the caption role shapes it.
+                let shape = Shape {
+                    size: TypeRole::Caption.size(),
+                    line_height: LineHeight::default(),
+                    font: TypeRole::Caption.font(),
+                    wrapping: Wrapping::None,
+                    shaping: Shaping::Advanced,
+                };
+                Selectable::new(child, Measure::plain(text, shape), summary, move |k, h| {
+                    on_hit(k, h)
+                })
+                .into()
+            }),
+        }
+    }
+}
 
 /// The chevron's size: the same as a select's trailing glyph.
 const CHEVRON: f32 = 24.0;
@@ -37,6 +90,7 @@ pub struct AccordionSection<'a, M> {
     required: bool,
     leading: Option<Icon>,
     trailing: Option<Element<'a, M>>,
+    select: Option<HeaderSelect<'a, M>>,
 }
 
 impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
@@ -52,6 +106,7 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
             required: false,
             leading: None,
             trailing: None,
+            select: None,
         }
     }
 
@@ -118,6 +173,25 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
         self.trailing = Some(trailing.into());
         self
     }
+
+    /// Make the header's title and closed summary selectable (feature 1550): `part` names each
+    /// one's slot and selected bytes, and hits are sent as `on_hit(slot, hit)`. The title draws
+    /// its selected bytes highlighted; the summary, drawn cut, answers hits in its whole text and
+    /// draws no highlight yet. Without this call the header draws exactly as before.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        part: impl Fn(HeaderText) -> (K, Option<Range<usize>>) + 'static,
+        on_hit: impl Fn(K, Hit) -> M + 'a,
+    ) -> Self {
+        self.select = Some(HeaderSelect::new(part, on_hit));
+        self
+    }
+
+    /// [`Self::selectable`] from what a caller already erased.
+    pub(crate) fn select_maybe(mut self, select: Option<HeaderSelect<'a, M>>) -> Self {
+        self.select = select;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
@@ -130,12 +204,22 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
         } else {
             s.title
         };
-        let title = Text::new(title, TypeRole::Action, s.roles);
+        let mut title = Text::new(title, TypeRole::Action, s.roles);
         let summary = s.summary.filter(|text| !s.open && !text.is_empty());
+        let line = |text: String| -> Element<'a, M> {
+            Ellipsized::at_role(text, TypeRole::Caption, s.roles.on_surface_variant).into()
+        };
+        let summary = match s.select {
+            None => summary.map(line),
+            Some(select) => {
+                title = (select.title)(title);
+                summary.map(|text| (select.summary)(line(text.clone()), &text))
+            }
+        };
         let header: Element<'a, M> = if s.leading.is_some() || s.trailing.is_some() {
             slotted(title, summary, s.leading, s.trailing, chevron, s.roles)
         } else {
-            plain(title, summary, chevron, s.roles)
+            plain(title, summary, chevron)
         };
         column![
             Button::with_content(header, ButtonVariant::Text, s.roles)
@@ -154,24 +238,16 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
 /// feature 890), so no existing section's layout moves.
 fn plain<'a, M: 'a>(
     title: Text<'a, M>,
-    summary: Option<String>,
+    summary: Option<Element<'a, M>>,
     chevron: Element<'a, M>,
-    roles: Roles,
 ) -> Element<'a, M> {
     match summary {
         // The summary is a second line of the same button, so the header stays one press
         // target and one focus stop (FR-011, FR-013). The column fills the row, so the
         // summary is cut against everything the chevron leaves it.
-        Some(summary) => row![
-            column![
-                title,
-                Ellipsized::at_role(summary, TypeRole::Caption, roles.on_surface_variant),
-            ]
-            .width(Length::Fill),
-            chevron,
-        ]
-        .align_y(alignment::Vertical::Center)
-        .into(),
+        Some(summary) => row![column![title, summary].width(Length::Fill), chevron,]
+            .align_y(alignment::Vertical::Center)
+            .into(),
         None => row![title, Space::new().width(Length::Fill), chevron]
             .align_y(alignment::Vertical::Center)
             .into(),
@@ -183,7 +259,7 @@ fn plain<'a, M: 'a>(
 /// fills the row, so the summary is cut against everything the slots leave it.
 fn slotted<'a, M: 'a>(
     title: Text<'a, M>,
-    summary: Option<String>,
+    summary: Option<Element<'a, M>>,
     leading: Option<Icon>,
     trailing: Option<Element<'a, M>>,
     chevron: Element<'a, M>,
@@ -191,12 +267,7 @@ fn slotted<'a, M: 'a>(
 ) -> Element<'a, M> {
     let title = title.wrapping(iced::widget::text::Wrapping::None);
     let text: Element<'a, M> = match summary {
-        Some(summary) => column![
-            title,
-            Ellipsized::at_role(summary, TypeRole::Caption, roles.on_surface_variant),
-        ]
-        .width(Length::Fill)
-        .into(),
+        Some(summary) => column![title, summary].width(Length::Fill).into(),
         None => column![title].width(Length::Fill).into(),
     };
     let leading = leading.map(|icon| super::glyph::icon(icon, CHEVRON, roles.on_surface_variant));

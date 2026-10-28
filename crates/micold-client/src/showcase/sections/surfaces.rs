@@ -492,6 +492,8 @@ fn transcript_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Me
             roles,
             scheme: showcase.scheme,
             cache: showcase.block_cache(),
+            selected: None,
+            row: None,
         },
     );
     iced::widget::container(view.map(Message::Transcript))
@@ -516,6 +518,8 @@ fn insights_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Mess
             roles,
             scheme: showcase.scheme,
             cache: showcase.block_cache(),
+            selected: None,
+            row: None,
         },
     );
     iced::widget::container(view.map(Message::Transcript))

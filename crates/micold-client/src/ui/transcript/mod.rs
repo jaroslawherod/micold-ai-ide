@@ -13,7 +13,7 @@ pub mod session_bar;
 
 pub use blocks::{
     plain_text, unshown_caption, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
-    RenderCtx, ThinkingText, ToolInput, ToolResult,
+    RenderCtx, RowCtx, ThinkingText, ToolInput, ToolResult,
 };
 pub use entries::{
     compacted_text, edit_meta, footer_view, model_changed_text, omitted_text, oversized_text, rows,
@@ -39,6 +39,7 @@ use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::protocol::messages::PromptId;
 use micold_core::session::SessionId;
+use micold_core::structured::selection::{RowPos, Under};
 use micold_core::structured::transcript::{EntryId, EntryKey, Transcript};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::spacing;
@@ -232,8 +233,9 @@ fn build<'a, M: Clone + 'a>(
         focused: p.focused,
         on_focus: p.on_focus,
     });
-    // The request block of request `id`, `card` its tool call's entry when held.
-    let block = |id: PromptId, card| -> Option<Element<'a, M>> {
+    // The request block of request `id` drawn as row `pos`, `card` its tool call's entry when
+    // held.
+    let block = |id: PromptId, card, pos: RowPos| -> Option<Element<'a, M>> {
         let (p, d) = (prompts.as_ref()?, draw.as_ref()?);
         let shown = p.state.shown(session, id)?;
         Some(permission::request_block(
@@ -241,15 +243,26 @@ fn build<'a, M: Clone + 'a>(
             card,
             p.state.can_submit(session, id),
             d,
+            pos,
         ))
     };
-    // Under the card of `key`: its pending requests, else how its last request ended.
+    // Under the card of `key`: its pending requests, else how its last request ended; the k-th
+    // drawn is row `Under::Prompt(k)` of the entry (feature 1550).
     let trailing = |entry: &'a micold_core::structured::transcript::Entry| {
         let key = entry.key();
+        let mut k = 0;
         let under: Vec<Element<'a, M>> = placed
             .iter()
             .filter(|(placement, _)| matches!(placement, Placement::UnderCard(k) if k == key))
-            .filter_map(|(_, id)| block(*id, Some(entry)))
+            .filter_map(|(_, id)| {
+                let drawn = block(
+                    *id,
+                    Some(entry),
+                    RowPos::Entry(entry.id(), Under::Prompt(k)),
+                )?;
+                k += 1;
+                Some(drawn)
+            })
             .collect();
         if !under.is_empty() {
             return Some(column(under).spacing(spacing::SM).into());
@@ -258,15 +271,33 @@ fn build<'a, M: Clone + 'a>(
             return None;
         };
         let resolution = prompts.as_ref()?.state.resolution(session, tool_use_id)?;
-        Some(permission::resolution_row(resolution, roles))
+        let pos = RowPos::Entry(entry.id(), Under::Prompt(0));
+        Some(permission::resolution_row(
+            resolution,
+            &ctx,
+            session,
+            pos,
+            on_transcript,
+        ))
     };
     let mut keyed: Vec<(RowKey, Element<'a, M>)> = rows(transcript)
         .into_iter()
         .map(|row| match row {
-            Row::Omitted(n) => (
-                RowKey::Omitted,
-                entries::omitted_notice(n, roles).map(on_transcript),
-            ),
+            Row::Omitted(n) => {
+                let part = ctx.selected.and_then(|s| s.in_row(&RowPos::Omitted));
+                let ctx = RenderCtx {
+                    row: Some(RowCtx {
+                        session,
+                        pos: RowPos::Omitted,
+                        part: part.as_ref(),
+                    }),
+                    ..ctx
+                };
+                (
+                    RowKey::Omitted,
+                    entries::omitted_notice(n, &ctx).map(on_transcript),
+                )
+            }
             Row::Empty => (RowKey::Empty, entries::no_output(roles).map(on_transcript)),
             Row::Entry(entry) => {
                 let open = state.is_open(session, entry.key());
@@ -275,6 +306,10 @@ fn build<'a, M: Clone + 'a>(
                 // The era tag is part of what the entry draws, and a `/clear` changes it without
                 // touching the entry, so it belongs in the key (#943 FR-005).
                 let era = entries::era_tag(entry.era(), scope.latest_era).is_some();
+                // The part of the selection in the entry's body (feature 1550, research R6): a
+                // selection moving through other rows rebuilds no entry it does not touch.
+                let pos = RowPos::Entry(entry.id(), Under::Body);
+                let part = ctx.selected.and_then(|s| s.in_row(&pos));
                 let key = (
                     entry.key(),
                     entry.revision(),
@@ -283,11 +318,20 @@ fn build<'a, M: Clone + 'a>(
                     stamp,
                     extras,
                     era,
+                    part,
                 );
-                let drawn = lazy(key, move |_| {
+                let drawn = lazy(key, move |key| {
                     let toggle = TranscriptMsg::Toggle {
                         session,
                         key: entry.key().clone(),
+                    };
+                    let ctx = RenderCtx {
+                        row: Some(RowCtx {
+                            session,
+                            pos,
+                            part: key.7.as_ref(),
+                        }),
+                        ..ctx
                     };
                     entries::entry(entry, open, toggle, renderers, &ctx, scope)
                 });
@@ -299,11 +343,16 @@ fn build<'a, M: Clone + 'a>(
             }
         })
         .collect();
+    let mut k = 0;
     keyed.extend(
         placed
             .iter()
             .filter(|(placement, _)| *placement == Placement::AtEnd)
-            .filter_map(|(_, id)| Some((RowKey::Prompt(*id), block(*id, None)?))),
+            .filter_map(|(_, id)| {
+                let drawn = block(*id, None, RowPos::End(k))?;
+                k += 1;
+                Some((RowKey::Prompt(*id), drawn))
+            }),
     );
     let list = Keyed::column(keyed)
         .spacing(spacing::MD)

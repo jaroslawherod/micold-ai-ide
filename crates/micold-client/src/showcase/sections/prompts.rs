@@ -144,6 +144,8 @@ pub fn prompt_card_sample(pose: PromptPose, scheme: ColorScheme) -> Element<'sta
             roles: micold_core::tokens::roles(scheme),
             scheme,
             cache: &CACHE,
+            selected: None,
+            row: None,
         },
         |_| Message::NoOp,
     )

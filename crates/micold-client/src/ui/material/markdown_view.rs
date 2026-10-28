@@ -25,16 +25,20 @@ use std::rc::Rc;
 use iced::alignment::Horizontal;
 use iced::widget::{column, container, lazy, row, table, text::Wrapping, Space};
 use iced::{Element, Length};
+use std::ops::Range;
+
 use micold_core::markdown::{
-    list_marker, Align, Block, CodeBlock as Code, CodeId, Document, Inlines, ListItem,
+    list_marker, shown_text, Align, Block, CodeBlock as Code, CodeId, Document, Inlines, ListItem,
 };
 use micold_core::review::diff::{SchemeSpans, Spans};
 use micold_core::review::limits;
+use micold_core::structured::selection::{range_in, RowPos, RowSelection, TextPath};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{spacing, Roles};
 
 use super::glyph::icon;
 use super::link_text::ink;
+use super::selectable_text::Hit;
 use super::{CodeBlock, Divider, LinkText, Text, TypeRole};
 use crate::features::transcript_rich::CopyState;
 use crate::icons::Icon;
@@ -69,6 +73,51 @@ pub struct MarkdownView<'a, M> {
     copy_state: Option<Box<dyn Fn(CodeId) -> Option<CopyState> + 'a>>,
     full: Option<Box<dyn Fn(CodeId) -> bool + 'a>>,
     on_show: Option<ById<M>>,
+    select: Option<Select<M>>,
+}
+
+/// A selectable leaf's slot: its transcript row and its unit's path there.
+type Slot = (RowPos, TextPath);
+
+/// What [`MarkdownView::selection`] was given (feature 1550): the row drawn, the path the
+/// document's blocks are under, the part of the selection in the row, and what a hit sends.
+struct Select<M> {
+    row: RowPos,
+    prefix: Vec<u16>,
+    part: Option<RowSelection>,
+    on_hit: Rc<dyn Fn(Slot, Hit) -> M>,
+}
+
+impl<M> Clone for Select<M> {
+    fn clone(&self) -> Self {
+        Self {
+            row: self.row,
+            prefix: self.prefix.clone(),
+            part: self.part.clone(),
+            on_hit: Rc::clone(&self.on_hit),
+        }
+    }
+}
+
+impl<M: 'static> Select<M> {
+    /// The slot of the unit at `path`, the bytes of its `len`-byte text the selection holds,
+    /// and what a hit on it sends.
+    fn leaf(
+        &self,
+        path: &[u16],
+        len: usize,
+    ) -> (
+        Slot,
+        Option<Range<usize>>,
+        impl Fn(Slot, Hit) -> M + 'static,
+    ) {
+        let path = TextPath::new(path);
+        let selected = self.part.as_ref().and_then(|p| range_in(p, &path, len));
+        let on_hit = Rc::clone(&self.on_hit);
+        ((self.row, path), selected, move |slot, hit| {
+            on_hit(slot, hit)
+        })
+    }
 }
 
 impl<'a, M: Clone + 'static> MarkdownView<'a, M> {
@@ -84,7 +133,29 @@ impl<'a, M: Clone + 'static> MarkdownView<'a, M> {
             copy_state: None,
             full: None,
             on_show: None,
+            select: None,
         }
+    }
+
+    /// Make the document's text selectable as the units of transcript row `row` (feature 1550,
+    /// research R3): block `b` is the unit (or holds the units) at `prefix + [b]`; a list item's
+    /// marker is `[.., k, 0]` and its blocks are under `[.., k, 1]`; a quote's blocks are under
+    /// its own path; a table cell is `[.., r, j]`, the header row first; a code block is one unit
+    /// unless it is held back as large. `part` is the selection in the row, drawn highlighted.
+    pub fn selection(
+        mut self,
+        row: RowPos,
+        prefix: Vec<u16>,
+        part: Option<RowSelection>,
+        on_hit: impl Fn(Slot, Hit) -> M + 'static,
+    ) -> Self {
+        self.select = Some(Select {
+            row,
+            prefix,
+            part,
+            on_hit: Rc::new(on_hit),
+        });
+        self
     }
 
     /// Draw the text in the muted style of a thinking card (FR-002).
@@ -155,10 +226,27 @@ struct Draw<M> {
     on_copy: Option<ById<M>>,
     on_show: Option<ById<M>>,
     codes: HashMap<CodeId, CodeInputs>,
+    select: Option<Select<M>>,
+}
+
+/// `at` and `more` as one path.
+fn path(at: &[u16], more: &[u16]) -> Vec<u16> {
+    [at, more].concat()
+}
+
+fn seg(i: usize) -> u16 {
+    u16::try_from(i).unwrap_or(u16::MAX)
 }
 
 impl<M: Clone + 'static> Draw<M> {
-    fn text(&self, inlines: &Inlines, role: TypeRole, strong: bool) -> Element<'static, M> {
+    /// `inlines` as one `LinkText`, the unit at `at` when the view is selectable.
+    fn text(
+        &self,
+        inlines: &Inlines,
+        role: TypeRole,
+        strong: bool,
+        at: &[u16],
+    ) -> Element<'static, M> {
         let mut text = LinkText::new(inlines, self.roles)
             .role(role)
             .muted(self.muted)
@@ -167,17 +255,28 @@ impl<M: Clone + 'static> Draw<M> {
             let on_link = Rc::clone(on_link);
             text = text.on_link(move |url| on_link(url));
         }
+        if let Some(select) = &self.select {
+            let (slot, selected, on_hit) = select.leaf(at, shown_text(inlines).len());
+            text = text.selectable(slot, selected, on_hit);
+        }
         text.into()
     }
 
-    fn blocks(&self, blocks: &[Block]) -> Element<'static, M> {
-        column(blocks.iter().map(|b| self.block(b)))
-            .spacing(spacing::SM)
-            .width(Length::Fill)
-            .into()
+    /// `blocks`, block `b` at `at + [b]`.
+    fn blocks(&self, blocks: &[Block], at: &[u16]) -> Element<'static, M> {
+        column(
+            blocks
+                .iter()
+                .enumerate()
+                .map(|(b, block)| self.block(block, &path(at, &[seg(b)]))),
+        )
+        .spacing(spacing::SM)
+        .width(Length::Fill)
+        .into()
     }
 
-    fn block(&self, block: &Block) -> Element<'static, M> {
+    /// `block`, whose path is `at`.
+    fn block(&self, block: &Block, at: &[u16]) -> Element<'static, M> {
         let r = self.roles;
         match block {
             Block::Heading { level, text } => {
@@ -186,10 +285,10 @@ impl<M: Clone + 'static> Draw<M> {
                     2 => TypeRole::Title,
                     _ => TypeRole::Section,
                 };
-                self.text(text, role, false)
+                self.text(text, role, false, at)
             }
-            Block::Paragraph { text } => self.text(text, TypeRole::Body, false),
-            Block::List { start, items, .. } => self.list(*start, items),
+            Block::Paragraph { text } => self.text(text, TypeRole::Body, false, at),
+            Block::List { start, items, .. } => self.list(*start, items, at),
             Block::Quote { blocks } => row![
                 container(Space::new())
                     .width(Length::Fixed(QUOTE_RULE))
@@ -200,21 +299,21 @@ impl<M: Clone + 'static> Draw<M> {
                         ))),
                         ..container::Style::default()
                     }),
-                self.blocks(blocks),
+                self.blocks(blocks, at),
             ]
             .spacing(spacing::SM)
             .into(),
             Block::Rule => Divider::horizontal(r).into(),
-            Block::Code(code) => self.code(code),
+            Block::Code(code) => self.code(code, at),
             Block::Table {
                 align,
                 header,
                 rows,
-            } => self.table(align, header, rows),
+            } => self.table(align, header, rows, at),
         }
     }
 
-    fn list(&self, start: Option<u64>, items: &[ListItem]) -> Element<'static, M> {
+    fn list(&self, start: Option<u64>, items: &[ListItem], at: &[u16]) -> Element<'static, M> {
         let r = self.roles;
         let tint = ink(r, self.muted);
         let width = match start {
@@ -222,22 +321,31 @@ impl<M: Clone + 'static> Draw<M> {
             None => GUTTER,
         };
         column(items.iter().zip(0u64..).map(|(item, k)| {
+            let item_at = path(at, &[seg(k as usize)]);
             let gutter: Element<'static, M> = match item.task {
                 Some(done) => {
                     let glyph = if done { Icon::TaskDone } else { Icon::TaskOpen };
                     icon(glyph, TypeRole::Body.size(), tint)
                 }
-                None => Text::new(list_marker(start, k), TypeRole::Body, r)
-                    .tint(tint)
-                    .wrapping(Wrapping::None)
-                    .into(),
+                None => {
+                    let marker = list_marker(start, k);
+                    let len = marker.len();
+                    let mut text = Text::new(marker, TypeRole::Body, r)
+                        .tint(tint)
+                        .wrapping(Wrapping::None);
+                    if let Some(select) = &self.select {
+                        let (slot, selected, on_hit) = select.leaf(&path(&item_at, &[0]), len);
+                        text = text.selectable(slot, selected, on_hit);
+                    }
+                    text.into()
+                }
             };
             row![
                 container(gutter)
                     .width(Length::Fixed(width))
                     .align_x(Horizontal::Right)
                     .padding([0.0, spacing::XS]),
-                self.blocks(&item.blocks),
+                self.blocks(&item.blocks, &path(&item_at, &[1])),
             ]
             .into()
         }))
@@ -246,7 +354,7 @@ impl<M: Clone + 'static> Draw<M> {
         .into()
     }
 
-    fn code(&self, code: &Code) -> Element<'static, M> {
+    fn code(&self, code: &Code, at: &[u16]) -> Element<'static, M> {
         let mut block = CodeBlock::new(code.code.clone(), self.roles);
         if let Some(tag) = &code.tag {
             block = block.language(tag.clone());
@@ -258,8 +366,14 @@ impl<M: Clone + 'static> Draw<M> {
         if let Some(on_copy) = &self.on_copy {
             block = block.copy(inputs.and_then(|i| i.state), on_copy(code.id));
         }
-        if let (Some(on_show), true) = (&self.on_show, inputs.is_some_and(|i| i.large)) {
+        let large = inputs.is_some_and(|i| i.large);
+        if let (Some(on_show), true) = (&self.on_show, large) {
             block = block.large(code.lines, on_show(code.id));
+        }
+        // A block held back as large shows no code, so it is no unit.
+        if let (Some(select), false) = (&self.select, large) {
+            let (slot, selected, on_hit) = select.leaf(at, code.code.len());
+            block = block.selectable(slot, selected, on_hit);
         }
         block.into()
     }
@@ -269,6 +383,7 @@ impl<M: Clone + 'static> Draw<M> {
         align: &[Align],
         header: &[Inlines],
         rows: &[Vec<Inlines>],
+        at: &[u16],
     ) -> Element<'static, M> {
         let empty = Inlines::new();
         let columns = header.iter().enumerate().map(|(j, head)| {
@@ -278,9 +393,16 @@ impl<M: Clone + 'static> Draw<M> {
                 Some(Align::Left | Align::None) | None => Horizontal::Left,
             };
             let empty = &empty;
-            table::column(self.text(head, TypeRole::Body, true), move |i: usize| {
+            // Row `r` of the grid is `[.., r, j]`: the header first, a missing cell drawn empty.
+            let head = self.text(head, TypeRole::Body, true, &path(at, &[0, seg(j)]));
+            table::column(head, move |i: usize| {
                 let cell = rows[i].get(j).unwrap_or(empty);
-                self.text(cell, TypeRole::Body, false)
+                self.text(
+                    cell,
+                    TypeRole::Body,
+                    false,
+                    &path(at, &[seg(i + 1), seg(j)]),
+                )
             })
             .align_x(align_x)
             .width(Length::Fill)
@@ -294,10 +416,26 @@ impl<M: Clone + 'static> Draw<M> {
     }
 }
 
-/// A settled block's lazy key: what it is drawn from, and what it is drawn with.
-fn key(index: usize, stamp: u64, scheme: ColorScheme, muted: bool, block: &Block) -> u64 {
+/// A settled block's lazy key: what it is drawn from, and what it is drawn with — with the part of
+/// the selection over its own units, so a highlight moving elsewhere does not rebuild it.
+fn key(
+    index: usize,
+    stamp: u64,
+    scheme: ColorScheme,
+    muted: bool,
+    block: &Block,
+    select: Option<(RowPos, Option<RowSelection>)>,
+) -> u64 {
     let mut hasher = DefaultHasher::new();
-    (index, stamp, scheme == ColorScheme::Dark, muted, block).hash(&mut hasher);
+    (
+        index,
+        stamp,
+        scheme == ColorScheme::Dark,
+        muted,
+        block,
+        select,
+    )
+        .hash(&mut hasher);
     hasher.finish()
 }
 
@@ -337,15 +475,26 @@ impl<'a, 'b, M: Clone + 'static> From<MarkdownView<'a, M>> for Element<'b, M> {
             on_copy: view.on_copy,
             on_show: view.on_show,
             codes,
+            select: view.select,
         });
+        let prefix = draw
+            .select
+            .as_ref()
+            .map(|s| s.prefix.clone())
+            .unwrap_or_default();
         let settled = view.doc.settled();
         let blocks = view.doc.blocks().iter().enumerate().map(|(i, block)| {
+            let at = path(&prefix, &[seg(i)]);
             if i >= settled {
-                return draw.block(block);
+                return draw.block(block, &at);
             }
-            let dependency = key(i, view.stamp, scheme, view.muted, block);
+            let clip = draw.select.as_ref().map(|s| {
+                let under = TextPath::new(at.as_slice());
+                (s.row, s.part.as_ref().and_then(|p| p.clip(&under)))
+            });
+            let dependency = key(i, view.stamp, scheme, view.muted, block, clip);
             let (draw, block) = (Rc::clone(&draw), block.clone());
-            lazy(dependency, move |_| draw.block(&block)).into()
+            lazy(dependency, move |_| draw.block(&block, &at)).into()
         });
         let element: Element<'static, M> = column(blocks)
             .spacing(spacing::SM)

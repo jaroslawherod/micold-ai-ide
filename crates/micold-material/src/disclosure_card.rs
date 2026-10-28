@@ -17,12 +17,15 @@
 //! between the summary and the trailing status, folded or open. It is never cut: the summary,
 //! which fills what is left, gives way instead.
 
+use super::accordion_section::{HeaderSelect, HeaderText};
+use super::selectable_text::Hit;
 use super::{style, AccordionSection, Text, TypeRole};
 use crate::icons::Icon;
 use iced::widget::text::Wrapping;
 use iced::widget::{container, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::tokens::{spacing, Roles};
+use std::ops::Range;
 
 /// A folding card. Builder form (Principle VIII):
 /// `DisclosureCard::new("Bash", msg, roles).leading(Icon::ToolCall).summary("cargo test")
@@ -38,6 +41,7 @@ pub struct DisclosureCard<'a, M> {
     open: bool,
     body: Option<Element<'a, M>>,
     failed: bool,
+    select: Option<HeaderSelect<'a, M>>,
 }
 
 impl<'a, M: Clone + 'a> DisclosureCard<'a, M> {
@@ -54,6 +58,7 @@ impl<'a, M: Clone + 'a> DisclosureCard<'a, M> {
             open: false,
             body: None,
             failed: false,
+            select: None,
         }
     }
 
@@ -102,6 +107,17 @@ impl<'a, M: Clone + 'a> DisclosureCard<'a, M> {
         self.failed = failed;
         self
     }
+
+    /// Make the header's title and folded summary selectable (feature 1550), as
+    /// [`AccordionSection::selectable`] does. Without this call the card draws exactly as before.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        part: impl Fn(HeaderText) -> (K, Option<Range<usize>>) + 'static,
+        on_hit: impl Fn(K, Hit) -> M + 'a,
+    ) -> Self {
+        self.select = Some(HeaderSelect::new(part, on_hit));
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<DisclosureCard<'a, M>> for Element<'a, M> {
@@ -112,7 +128,8 @@ impl<'a, M: Clone + 'a> From<DisclosureCard<'a, M>> for Element<'a, M> {
         let mut section = AccordionSection::new(c.title, body, c.roles)
             .open(c.open)
             .on_toggle(c.on_toggle)
-            .summary_maybe(c.summary);
+            .summary_maybe(c.summary)
+            .select_maybe(c.select);
         if let Some(icon) = c.leading {
             section = section.leading(icon);
         }
@@ -272,6 +289,43 @@ mod tests {
                 assert!(summary.content.ends_with('…'), "{:?}", summary.content);
             }
         }
+    }
+
+    /// Feature 1550: a selectable header reports its title and, folded, its whole summary, each
+    /// under its slot, and lays out as the plain header does; open, the summary is not drawn and
+    /// not reported; a card without the call reports nothing.
+    #[test]
+    fn a_selectable_header_reports_its_title_and_folded_summary() {
+        use super::super::test_support::ShownTexts;
+        let shown = |card: DisclosureCard<'static, String>| -> Vec<(HeaderText, String)> {
+            Mounted::new(card)
+                .drive(ShownTexts::<HeaderText>(Vec::new()))
+                .expect("the operation finishes")
+                .into_iter()
+                .map(|(slot, _, text)| (slot, text))
+                .collect()
+        };
+        let selectable = |open: bool| {
+            card(open, roles()).selectable(|part| (part, None), |_, _| "hit".to_string())
+        };
+        assert_eq!(
+            shown(selectable(false)),
+            vec![
+                (HeaderText::Title, "Bash".to_owned()),
+                (HeaderText::Summary, SUMMARY.to_owned())
+            ]
+        );
+        assert_eq!(
+            shown(selectable(true)),
+            vec![(HeaderText::Title, "Bash".to_owned())]
+        );
+        assert!(shown(card(false, roles())).is_empty());
+        let (plain, select) = (
+            Mounted::new(card(false, roles())),
+            Mounted::new(selectable(false)),
+        );
+        assert_eq!(plain.node.size(), select.node.size());
+        assert_eq!(header(&plain), header(&select));
     }
 
     /// An open card shows no summary: the body holds the whole of it.

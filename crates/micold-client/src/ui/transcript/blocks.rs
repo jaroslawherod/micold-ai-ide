@@ -4,14 +4,20 @@
 //! #940 swaps a field of [`BlockRenderers`] for a markdown, code or diff renderer.
 
 use crate::features::structured_transcript::TranscriptMsg;
-use crate::ui::material::{Text, TypeRole};
+use crate::features::transcript_selection::SelectMsg;
+use crate::ui::material::selectable_text::Hit;
+use crate::ui::material::{DisclosureCard, HeaderText, IconLabel, Text, TypeRole};
 use iced::widget::column;
 use iced::widget::text::Wrapping;
 use iced::{Element, Length};
 use micold_core::session::SessionId;
+use micold_core::structured::selection::{
+    range_in, RowPos, RowSelection, Selection, TextPath, TextPos,
+};
 use micold_core::structured::transcript::{EntryKey, ResultPart};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{spacing, Roles};
+use std::ops::Range;
 
 pub use crate::features::transcript_selection::shown::{plain_text, unshown_caption};
 
@@ -53,6 +59,9 @@ pub struct BlockRef<'a> {
     pub key: &'a EntryKey,
     pub revision: u64,
     pub streaming: bool,
+    /// The block's first `TextPath` segment in its row (feature 1550, research R3): what its
+    /// selectable leaves' paths start with.
+    pub at: u16,
 }
 
 /// An assistant text block.
@@ -95,6 +104,155 @@ pub struct RenderCtx<'a> {
     /// them (research R12).
     pub scheme: ColorScheme,
     pub cache: &'a BlockCache,
+    /// The session's transcript selection, if any (feature 1550): the caller's input.
+    pub selected: Option<&'a Selection>,
+    /// The row being drawn, set by the view per row; `None` draws nothing selectable.
+    pub row: Option<RowCtx<'a>>,
+}
+
+/// The row a renderer draws in (feature 1550, research R6): its session, its place, and the part
+/// of the selection inside it.
+#[derive(Debug, Clone, Copy)]
+pub struct RowCtx<'a> {
+    pub session: SessionId,
+    pub pos: RowPos,
+    pub part: Option<&'a RowSelection>,
+}
+
+/// A selectable leaf's slot: its row and its unit's path there.
+pub type Slot = (RowPos, TextPath);
+
+/// What a hit on the leaf `slot` of `session`'s transcript sends (contracts/selectable-text.md
+/// *T-1*): a `SelectMsg::Hit` at the hit's offset.
+pub fn hit_msg(session: SessionId, (row, path): Slot, hit: Hit) -> TranscriptMsg {
+    TranscriptMsg::Select(SelectMsg::Hit {
+        session,
+        pos: TextPos {
+            row,
+            path,
+            offset: hit.offset,
+        },
+        click: hit.click.into(),
+        line: Some(hit.line),
+    })
+}
+
+impl RowCtx<'_> {
+    /// The slot of the unit at `path` in this row, and the bytes of its `len`-byte text the
+    /// selection holds.
+    pub fn slot(&self, path: Vec<u16>, len: usize) -> (Slot, Option<Range<usize>>) {
+        let path = TextPath::new(path);
+        let selected = self.part.and_then(|part| range_in(part, &path, len));
+        ((self.pos, path), selected)
+    }
+}
+
+impl<'a> RenderCtx<'a> {
+    /// This context drawing row `pos` of `session`, `part` the selection inside it.
+    pub fn at<'c>(
+        &self,
+        session: SessionId,
+        pos: RowPos,
+        part: Option<&'c RowSelection>,
+    ) -> RenderCtx<'c>
+    where
+        'a: 'c,
+    {
+        RenderCtx {
+            row: Some(RowCtx { session, pos, part }),
+            ..*self
+        }
+    }
+
+    /// The step that makes a text, whose shown text is `len` bytes, the unit at `path` of the row
+    /// drawn, its messages through `on`; it changes nothing when the row is not selectable. It
+    /// holds no borrow, so a component can keep it until it draws the text.
+    pub fn step<'t, M: 't>(
+        &self,
+        path: Vec<u16>,
+        len: usize,
+        on: fn(TranscriptMsg) -> M,
+    ) -> impl FnOnce(Text<'t, M>) -> Text<'t, M> + use<'t, M> {
+        let chosen = self.row.map(|row| (row.slot(path, len), row.session));
+        move |text| match chosen {
+            None => text,
+            Some(((slot, selected), session)) => {
+                text.selectable(slot, selected, move |slot, hit| {
+                    on(hit_msg(session, slot, hit))
+                })
+            }
+        }
+    }
+
+    /// `text`, whose shown text is `len` bytes, as the unit at `path` of the row drawn, its
+    /// messages through `on`; unchanged when the row is not selectable.
+    pub fn text_with<'t, M: 't>(
+        &self,
+        text: Text<'t, M>,
+        path: Vec<u16>,
+        len: usize,
+        on: fn(TranscriptMsg) -> M,
+    ) -> Text<'t, M> {
+        self.step(path, len, on)(text)
+    }
+
+    /// [`Self::text_with`] for the transcript's own messages.
+    pub fn text<'t>(
+        &self,
+        text: Text<'t, TranscriptMsg>,
+        path: Vec<u16>,
+        len: usize,
+    ) -> Text<'t, TranscriptMsg> {
+        self.text_with(text, path, len, std::convert::identity)
+    }
+
+    /// `label`, whose text is `len` bytes, as the unit at `path`; unchanged when the row is not
+    /// selectable.
+    pub fn icon_label_with<'t, M: 't>(
+        &self,
+        label: IconLabel<'t, M>,
+        path: Vec<u16>,
+        len: usize,
+        on: fn(TranscriptMsg) -> M,
+    ) -> IconLabel<'t, M> {
+        let Some(row) = self.row else {
+            return label;
+        };
+        let (slot, selected) = row.slot(path, len);
+        let session = row.session;
+        label.selectable(slot, selected, move |slot, hit| {
+            on(hit_msg(session, slot, hit))
+        })
+    }
+
+    /// A card's header as units `[0]` (title, `title` bytes) and `[1]` (summary, `summary`
+    /// bytes); unchanged when the row is not selectable.
+    pub fn header<'c>(
+        &self,
+        card: DisclosureCard<'c, TranscriptMsg>,
+        title: usize,
+        summary: usize,
+    ) -> DisclosureCard<'c, TranscriptMsg> {
+        let Some(row) = self.row else {
+            return card;
+        };
+        let (pos, part, session) = (row.pos, row.part.cloned(), row.session);
+        card.selectable(
+            move |which| {
+                let (seg, len) = match which {
+                    HeaderText::Title => (0, title),
+                    HeaderText::Summary => (1, summary),
+                };
+                RowCtx {
+                    session,
+                    pos,
+                    part: part.as_ref(),
+                }
+                .slot(vec![seg], len)
+            },
+            move |slot, hit| hit_msg(session, slot, hit),
+        )
+    }
 }
 
 /// The window's block cache (R-4): #940's render cache, filled in update after each applied
@@ -103,33 +261,41 @@ pub struct RenderCtx<'a> {
 pub use crate::features::transcript_rich::RichCache as BlockCache;
 
 /// `text` at `TypeRole::Body`, wrapped to the entry's width, breaking a token with no space in it
-/// (a path, a long JSON string) rather than widening the entry.
-fn body(text: &str, roles: Roles) -> Text<'static, TranscriptMsg> {
-    Text::new(plain_text(text), TypeRole::Body, roles)
+/// (a path, a long JSON string) rather than widening the entry; the unit at `path`.
+fn body(text: &str, ctx: &RenderCtx<'_>, path: Vec<u16>) -> Text<'static, TranscriptMsg> {
+    let shown = plain_text(text);
+    let len = shown.len();
+    let text = Text::new(shown, TypeRole::Body, ctx.roles)
         .wrapping(Wrapping::WordOrGlyph)
-        .width(Length::Fill)
+        .width(Length::Fill);
+    ctx.text(text, path, len)
 }
 
 fn plain_assistant_text(block: &AssistantText<'_>, ctx: &RenderCtx<'_>) -> Block {
-    body(block.text, ctx.roles).into()
+    body(block.text, ctx, vec![block.block.at]).into()
 }
 
 fn plain_thinking(block: &ThinkingText<'_>, ctx: &RenderCtx<'_>) -> Block {
-    body(block.text, ctx.roles).into()
+    body(block.text, ctx, vec![block.block.at]).into()
 }
 
 fn plain_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
-    body(block.input_json, ctx.roles).monospace().into()
+    body(block.input_json, ctx, vec![block.block.at])
+        .monospace()
+        .into()
 }
 
 fn plain_tool_result(block: &ToolResult<'_>, ctx: &RenderCtx<'_>) -> Block {
-    column(block.parts.iter().map(|part| {
+    let at = block.block.at;
+    column(block.parts.iter().enumerate().map(|(k, part)| {
+        let path = vec![at, u16::try_from(k).unwrap_or(u16::MAX)];
         match part {
-            ResultPart::Text(text) => body(text, ctx.roles).monospace().into(),
+            ResultPart::Text(text) => body(text, ctx, path).monospace().into(),
             ResultPart::Unshown { kind } => {
-                Text::new(unshown_caption(kind), TypeRole::Caption, ctx.roles)
-                    .muted()
-                    .into()
+                let caption = unshown_caption(kind);
+                let len = caption.len();
+                let text = Text::new(caption, TypeRole::Caption, ctx.roles).muted();
+                ctx.text(text, path, len).into()
             }
         }
     }))

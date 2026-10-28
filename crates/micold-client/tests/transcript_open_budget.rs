@@ -18,13 +18,17 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{mouse, Renderer as _};
 use iced::{Rectangle, Size};
 use micold_client::features::structured_transcript::State;
+use micold_client::features::transcript_selection::{
+    copy_text, units, Click, SelectMsg, State as SelectionState, TranscriptView,
+};
 use micold_client::ui::syntax::GRAMMAR;
-use micold_client::ui::transcript::{BlockCache, BlockRenderers};
+use micold_client::ui::transcript::{view, BlockCache, BlockRenderers, RenderCtx};
 use micold_core::session::SessionId;
+use micold_core::structured::selection::{RowPos, Selection, TextPos, Under};
 use micold_core::structured::MAX_EVENTS;
 use std::time::{Duration, Instant};
 use support::layout::renderer;
-use support::transcript::{fixture_lines, open_every_card, sequenced, view_of};
+use support::transcript::{ctx, fixture_lines, open_every_card, sequenced};
 
 const OPEN_BUDGET: Duration = Duration::from_secs(1);
 const DELTA_BUDGET: Duration = Duration::from_millis(100);
@@ -95,7 +99,32 @@ fn frame(
     renderer: &mut iced::Renderer,
     draw: bool,
 ) {
-    let mut element = view_of(state, session, renderers, cache);
+    frame_selected(
+        state,
+        session,
+        (renderers, cache),
+        tree,
+        renderer,
+        draw,
+        None,
+    );
+}
+
+/// [`frame`] with `selected` drawn as the session's selection (feature 1550).
+fn frame_selected(
+    state: &State,
+    session: SessionId,
+    (renderers, cache): (&BlockRenderers, &BlockCache),
+    tree: &mut Option<Tree>,
+    renderer: &mut iced::Renderer,
+    draw: bool,
+    selected: Option<&Selection>,
+) {
+    let ctx = RenderCtx {
+        selected,
+        ..ctx(cache)
+    };
+    let mut element = view(state, session, renderers, ctx);
     let tree = match tree {
         Some(tree) => {
             tree.diff(element.as_widget());
@@ -229,6 +258,123 @@ fn each_delta_within_100_ms(kind: Kind, turn: &str) {
     assert!(
         slowest < DELTA_BUDGET,
         "the slowest delta's update, view and layout took {slowest:?}"
+    );
+}
+
+/// The view the selection model reads of `opened`'s transcript.
+fn selection_view(o: &Opened) -> TranscriptView<'_> {
+    TranscriptView {
+        session: o.session,
+        transcript: o.state.transcript(o.session).expect("opened"),
+        open: o.state.open_cards(o.session).expect("opened"),
+        rich: &o.cache,
+        prompts: None,
+        insights: None,
+    }
+}
+
+/// The start of the first unit of the `n`-th entry from `n` on that draws one.
+fn unit_at(view: &TranscriptView<'_>, n: usize) -> TextPos {
+    view.transcript
+        .entries()
+        .skip(n)
+        .find_map(|e| {
+            let row = RowPos::Entry(e.id(), Under::Body);
+            let unit = units(&row, view).into_iter().next()?;
+            Some(TextPos {
+                row,
+                path: unit.path,
+                offset: 0,
+            })
+        })
+        .expect("an entry with a unit")
+}
+
+/// #1550 SC-003 (research R12): on a full rich history, every card open, select-all and the copy
+/// of it take under a second.
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a release-build budget (SC-003, as BUG-003)"
+)]
+fn select_all_and_copy_of_a_full_history_take_under_a_second() {
+    let _alone = alone();
+    let opened = opened(RICH);
+    let view = selection_view(&opened);
+    let session = opened.session;
+    let mut selections = SelectionState::default();
+    let started = Instant::now();
+    selections.update(SelectMsg::SelectAll { session }, Some(&view));
+    let selection = selections.selection(session).expect("all is selected");
+    let copied = copy_text(&view, selection);
+    let elapsed = started.elapsed();
+    eprintln!("select-all and copy in {elapsed:?}, {} bytes", copied.len());
+    assert!(!copied.is_empty());
+    assert!(
+        elapsed < OPEN_BUDGET,
+        "select-all and copy of a {MAX_EVENTS}-event transcript took {elapsed:?}"
+    );
+}
+
+/// #1550 SC-003 (research R12): one drag step on a full rich history — the hit, the update and
+/// the view and layout of the entries it changed — takes under 100 ms.
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a release-build budget (SC-003, as BUG-003)"
+)]
+fn each_drag_step_on_a_full_history_updates_within_100_ms() {
+    let _alone = alone();
+    let mut opened = opened(RICH);
+    let session = opened.session;
+    let mut selections = SelectionState::default();
+    let hit = |pos: TextPos| SelectMsg::Hit {
+        session,
+        pos,
+        click: Click::Single,
+        line: None,
+    };
+    let held = opened
+        .state
+        .transcript(session)
+        .expect("opened")
+        .entries()
+        .len();
+    let steps: Vec<TextPos> = {
+        let view = selection_view(&opened);
+        (1..=6).map(|k| unit_at(&view, k * held / 8)).collect()
+    };
+    selections.update(
+        SelectMsg::Press {
+            session,
+            clicks: Click::Single,
+        },
+        None,
+    );
+    let mut slowest = Duration::ZERO;
+    for (k, pos) in steps.into_iter().enumerate() {
+        let started = Instant::now();
+        selections.update(hit(pos), Some(&selection_view(&opened)));
+        frame_selected(
+            &opened.state,
+            session,
+            (opened.kind.renderers, &opened.cache),
+            &mut opened.tree,
+            &mut opened.renderer,
+            false,
+            selections.selection(session),
+        );
+        // The first hit starts the selection; the steps after it are the drag.
+        if k > 0 {
+            slowest = slowest.max(started.elapsed());
+        }
+    }
+    selections.update(SelectMsg::Release { session }, None);
+    assert!(selections.selecting(session), "the drag selected text");
+    eprintln!("slowest drag step in {slowest:?}");
+    assert!(
+        slowest < DELTA_BUDGET,
+        "the slowest drag step's update, view and layout took {slowest:?}"
     );
 }
 
