@@ -561,14 +561,16 @@ fn a_closed_row_shows_closed_not_a_stale_status() {
     );
     let mut board = StatusBoard::default();
     let asked = vec!["ABC-1".to_string(), "ABC-2".to_string()];
-    let (epoch, _) = board.begin(asked.clone()).expect("keys");
+    let (epoch, _) = board.begin(asked.clone(), Vec::new()).expect("keys");
+    let keyed = |key: &str| micold_core::jira_status::KeyedIssue {
+        key: key.to_string(),
+        status: Some(in_progress()),
+        summary: None,
+    };
     board.apply(
         epoch,
         &asked,
-        Ok(vec![
-            ("ABC-1".to_string(), Some(in_progress())),
-            ("ABC-2".to_string(), Some(in_progress())),
-        ]),
+        Ok(vec![keyed("ABC-1"), keyed("ABC-2")]),
         std::time::Duration::from_secs(1),
     );
     let (rows, _) = micold_client::ui::issue_rows_with(form, &board);
