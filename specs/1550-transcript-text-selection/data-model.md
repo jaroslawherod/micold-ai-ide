@@ -91,7 +91,7 @@ Per window, `HashMap<SessionId, SessionSelection>`:
 A session's entry is dropped when no pane of its project's layout shows it any more (FR-019 "pane
 switches to another session"): `shell/panes.rs::sync`, which runs after every message and already
 computes the layout's shown terminals (`now`), calls `transcript_selection.retain_shown(&sessions,
-&now)` *(new)*: `sessions` is the active project's sessions (`app.core.workspace.sessions[project]`,
+&now)` *(new)*: `sessions` is the active project's sessions (`app.core.workspace.session_ids_of_project(&project)`,
 so no project field is stored), and a session is kept iff `now` holds a `TerminalRef { session,
 process: SessionProcess::Primary }` (the pane drawing its transcript; a pane on one of its shells
 does not count). That one call covers every way a pane changes session (`show_or_focus`,

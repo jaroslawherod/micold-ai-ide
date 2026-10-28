@@ -206,7 +206,7 @@ before and after each prompt message), a card holding part of the range is folde
 entry in range), no pane of the project's layout shows the session any more (`shell/panes.rs::sync`, run after
 every message, already computes the shown terminals as `now`; it calls
 `transcript_selection.retain_shown(&sessions, &now)` *(new)*, `sessions` the project's sessions
-(`app.core.workspace.sessions[project]`) and `now` filtered to `SessionProcess::Primary` terminals
+(`app.core.workspace.session_ids_of_project(&project)`) and `now` filtered to `SessionProcess::Primary` terminals
 (the pane that draws a session's transcript), so a selection is dropped only for this project's
 sessions no pane shows; which covers `show_or_focus`,
 `PaneMsg::Show`, `close` and `prune` in one place; `swap` keeps the session shown and its
