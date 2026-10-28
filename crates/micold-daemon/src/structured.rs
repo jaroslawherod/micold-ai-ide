@@ -145,6 +145,23 @@ impl EventStream {
         latest_reported_models(history.iter().map(|e| &e.event)).to_vec()
     }
 
+    /// Append an `EffortChanged` note naming `effort`, unless the history's last such note already
+    /// names it (#1554 R5): checked and appended under the history lock.
+    pub fn push_effort_note(&self, effort: &micold_core::structured::effort::EffortChoice) {
+        let mut history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        let last = history.iter().rev().find_map(|e| match &e.event {
+            StructuredEvent::EffortChanged { effort } => Some(effort),
+            _ => None,
+        });
+        if last == Some(effort) {
+            return;
+        }
+        let sequenced = history.append(StructuredEvent::EffortChanged {
+            effort: effort.clone(),
+        });
+        let _ = self.live.send(sequenced);
+    }
+
     /// Append `event` to the history and broadcast it, under the history lock, so a viewer that
     /// [`Self::subscribe`]s sees each event exactly once: in its snapshot or on its receiver.
     pub fn push(&self, event: StructuredEvent) {

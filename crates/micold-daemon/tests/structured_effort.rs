@@ -135,6 +135,17 @@ fn efforts_asked(dir: &Path) -> Vec<Option<String>> {
         .collect()
 }
 
+/// The choices `history`'s `EffortChanged` notes name, in order.
+fn effort_notes(history: &[StructuredEvent]) -> Vec<EffortChoice> {
+    history
+        .iter()
+        .filter_map(|e| match e {
+            StructuredEvent::EffortChanged { effort } => Some(effort.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Wait up to 10 s for `done`.
 fn eventually(what: &str, done: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -530,6 +541,61 @@ async fn a_pick_for_a_session_not_running_is_stored_and_noted() {
     assert_eq!(rig.effort(0), level("high"));
     window.shown(rig.ids[0], &level("high")).await;
     assert!(rig.noted(0, &level("high")), "{:#?}", rig.history(0));
+}
+
+/// Review A M2 F3: a pick that leaves a stopped session's choice as it was is answered and writes
+/// no note.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pick_that_changes_nothing_writes_no_note() {
+    let rig = Rig::structured(1);
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(
+        &window
+            .request(pick(1, rig.ids[0], &EffortChoice::Default), 1)
+            .await,
+    );
+    assert_ok(&window.request(pick(2, rig.ids[0], &level("high")), 2).await);
+    assert_ok(&window.request(pick(3, rig.ids[0], &level("high")), 3).await);
+    assert_eq!(effort_notes(&rig.history(0)), [level("high")]);
+}
+
+/// Review A M2 F2: the notes of a stopped session's picks end with the choice the catalog holds,
+/// whatever order they are written in.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_notes_of_quick_picks_end_with_the_choice_held() {
+    use micold_daemon::state::EffortPick;
+    let rig = Rig::structured(1);
+    let id = rig.ids[0];
+    for effort in [level("high"), level("low")] {
+        assert!(matches!(
+            rig.state.pick_effort(id, effort),
+            EffortPick::Stored
+        ));
+    }
+    rig.state.note_effort_changed(id);
+    rig.state.note_effort_changed(id);
+    assert_eq!(rig.effort(0), level("low"));
+    assert_eq!(effort_notes(&rig.history(0)), [level("low")]);
+}
+
+/// Review A M2 F1: a late answer to an idle pick never replaces a choice stored after it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_answer_never_replaces_a_later_stored_choice() {
+    use micold_daemon::state::EffortPick;
+    let rig = Rig::structured(1);
+    let id = rig.ids[0];
+    rig.start(0, "efforts high low\n").await;
+    let EffortPick::Asked(asked) = rig.state.pick_effort(id, level("high")) else {
+        panic!("the idle session's CLI is asked");
+    };
+    eventually("the CLI's answer", || rig.noted(0, &level("high")));
+    rig.state.stop_session(id);
+    assert!(matches!(
+        rig.state.pick_effort(id, level("low")),
+        EffortPick::Stored
+    ));
+    rig.state.finish_effort_pick(asked).await.expect("accepted");
+    assert_eq!(rig.effort(0), level("low"));
 }
 
 /// contracts/wire.md: a terminal session's pick is stored and answered that it applies at the

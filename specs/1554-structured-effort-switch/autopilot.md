@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
 - **Phase**: M2
-- **Next step**: reviews A and B of M2 (orchestrator), then the full gate and the M2 PR.
+- **Next step**: M2 PR (pushed; the orchestrator opens it, waits on CI and merges); then M3.
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
-| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | implemented; reviews due |
+| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | pending | reviews done, full gate green, pushed |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
@@ -63,7 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M1 | 1 | — | green: `scripts/gate.sh` at 023f35c86 (rebased onto origin/main ff9557a57; `PROTOCOL_VERSION` there still 71, branch 72) |
 | B (conformance) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN, no findings. Verify passed: core lib + the five integration test binaries; daemon/client `cargo check --tests` clean. Run by the orchestrator |
 | M2 scoped gate | 1 | — | green but for six root-only permission tests (an unreadable or unremovable file is readable and removable as root): core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2); daemon `sessions` `worktree_delete_blocked_by_an_unremovable_path…`, `settings` `a_service_write_over_an_unreadable_settings_file…`. fmt, clippy (core, workspace) green; `structured_effort` 13/13, `structured_model`, `structured_switch`, `session_store`, `protocol_roundtrip` green. Built from a clean target with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0` |
-| A + B M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | due: run by the orchestrator |
+| A (code-review, high) M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | CLEAN: 3 MINOR — F1 a late answer to an idle pick could replace a choice stored after it (stored and terminal picks now count as the latest pick); F2 two quick stopped-session picks could note out of order (`note_effort_changed` notes the catalog's choice under the daemon lock, `EventStream::push_effort_note` skips a repeat of the last note); F3 an unchanged stored pick wrote a note (`keep_effort` returns `changed`; unchanged is answered without a note) — all fixed test-first (`a_late_answer_never_replaces_a_later_stored_choice`, `the_notes_of_quick_picks_end_with_the_choice_held`, `a_pick_that_changes_nothing_writes_no_note`). No further round (MINOR only). Run by the orchestrator |
+| B (conformance) M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | CLEAN: 1 MINOR — T016 named `ops.rs` `start_with_prompt` for `LaunchSpec.effort`; both sites are in state.rs: fixed, prose only. Verify passed (`structured_effort` 13/13; `session_store`, `protocol_roundtrip`, `schema_hash` green). Run by the orchestrator |
+| M2 scoped gate (fix diff) | 2 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`, `structured_effort` 16/16 |
 
 ## Declined review findings
 
@@ -72,13 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: M2 T011–T017 implemented and committed (df1d83cc5, on origin/main b18b611d1); TDD log
-  cycles 7–9; decisions D11–D13; scoped gate green but for the six root-only tests (Review rounds).
-- Next: reviews A (code-review, high) and B (conformance) of `origin/main...HEAD`, snapshot
-  `a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654`, run by the
-  orchestrator; then fix findings, the full gate (`scripts/gate.sh`), push, PR body
-  `pr-1554-m2-body.md` in the session scratchpad.
-- No PR open for M2.
+None.
 
 ## Open escalation
 
@@ -86,6 +82,7 @@ None.
 
 ## Follow-ups not done
 
+- `pick_model` (#943, state.rs) has the pattern review A M2 F1 fixed for effort: a stopped or terminal session's stored model pick does not bump `model_picks`, so a late answer to an earlier idle pick can replace it. Out of scope for #1554.
 - Show Claude Code's resolved default level (`Default (medium)`) by reading `get_settings` → `applied.effort` after each launch and change (research R10); not in the spec.
 
 Note: this unit had no Agent tool; the spec review ran as a fresh headless `claude -p` process (read-only tools) instead of an `autopilot-reviewer` subagent.

@@ -1044,9 +1044,9 @@ pub type EffortRefused = (micold_core::protocol::messages::ErrorKind, String);
 pub enum EffortPick {
     /// Answered.
     Answered(Result<(), EffortRefused>),
-    /// Stored for a session that is not running: its `EffortChanged` note is for
+    /// Stored, changed, for a session that is not running: its `EffortChanged` note is for
     /// [`DaemonState::note_effort_changed`], which reads a saved history (**blocking**).
-    Stored(EffortChoice),
+    Stored,
     /// A running idle session's CLI asked, its answer for [`DaemonState::finish_effort_pick`].
     Asked(AskedEffort),
 }
@@ -4438,8 +4438,9 @@ impl DaemonState {
         effective_level(choice, effort_support(&models, model)).cloned()
     }
 
-    /// Store `effort` as `session`'s choice and broadcast the catalog when it changed.
-    fn keep_effort(&self, session: SessionId, effort: &EffortChoice) -> Result<(), String> {
+    /// Store `effort` as `session`'s choice and broadcast the catalog when it changed; whether it
+    /// did.
+    fn keep_effort(&self, session: SessionId, effort: &EffortChoice) -> Result<bool, String> {
         let changed = self
             .lock()
             .catalog
@@ -4448,14 +4449,14 @@ impl DaemonState {
         if changed {
             self.broadcast_catalog();
         }
-        Ok(())
+        Ok(changed)
     }
 
     /// The effort pick `ClientMsg::SetSessionEffort` makes (#1554 R5, FR-004–FR-006, FR-012,
     /// contracts/wire.md), up to the CLI's answer: refused for an unknown session and for another
     /// CLI than Claude Code; a terminal session's is stored and answered
     /// [`TERMINAL_EFFORT_REFUSAL`]; a session not running has it stored, its note to follow
-    /// ([`EffortPick::Stored`]). A running idle session's CLI is asked here, with the effective
+    /// ([`EffortPick::Stored`]) when it changed, answered at once when it did not. A running idle session's CLI is asked here, with the effective
     /// level for the session's model, before this returns, so picks sent one after another reach
     /// it in that order; [`Self::finish_effort_pick`] waits for the answer. A busy session's is
     /// refused with [`BUSY_EFFORT_REFUSAL`] for now (M2), nothing stored or written.
@@ -4481,18 +4482,26 @@ impl DaemonState {
             let child = Self::structured_primary(inner, session)
                 .filter(|child| child.is_running())
                 .cloned();
+            // A pick stored here is the latest: an earlier idle pick answered late is not kept
+            // over it (`finish_effort_pick`).
+            if kind == SessionKind::Terminal || child.is_none() {
+                let picks = inner.effort_picks.entry(session).or_default();
+                picks.latest += 1;
+                picks.kept = picks.latest;
+            }
             let child = match (kind, child) {
                 (SessionKind::Terminal, _) => {
                     drop(guard);
                     return match self.keep_effort(session, &effort) {
-                        Ok(()) => refused(ErrorKind::Refused, TERMINAL_EFFORT_REFUSAL.to_owned()),
+                        Ok(_) => refused(ErrorKind::Refused, TERMINAL_EFFORT_REFUSAL.to_owned()),
                         Err(why) => refused(ErrorKind::Refused, why),
                     };
                 }
                 (SessionKind::Structured, None) => {
                     drop(guard);
                     return match self.keep_effort(session, &effort) {
-                        Ok(()) => EffortPick::Stored(effort),
+                        Ok(true) => EffortPick::Stored,
+                        Ok(false) => EffortPick::Answered(Ok(())),
                         Err(why) => refused(ErrorKind::Refused, why),
                     };
                 }
@@ -4558,12 +4567,18 @@ impl DaemonState {
         Ok(())
     }
 
-    /// Note in `session`'s event history that its effort choice is `effort` from here on (#1554
-    /// R5, FR-004): the marker of a pick made while it was not running, where the choice starts
-    /// to apply. **Blocking**: a saved history is read.
-    pub fn note_effort_changed(&self, session: SessionId, effort: EffortChoice) {
-        if let Some(stream) = self.event_stream_loading(session, true) {
-            stream.push(micold_core::structured::StructuredEvent::EffortChanged { effort });
+    /// Note in `session`'s event history the effort choice the catalog holds now (#1554 R5,
+    /// FR-004): the marker of a pick made while it was not running, where the choice starts to
+    /// apply. Read and written under the daemon lock, which every catalog change takes, so of picks
+    /// noted out of order the history still ends with the choice held; nothing is written when the
+    /// history's last effort note already names it. **Blocking**: a saved history is read.
+    pub fn note_effort_changed(&self, session: SessionId) {
+        let Some(stream) = self.event_stream_loading(session, true) else {
+            return;
+        };
+        let inner = self.lock();
+        if let Some((_, s)) = inner.catalog.workspace().find_session(session) {
+            stream.push_effort_note(&s.effort);
         }
     }
 
