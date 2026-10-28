@@ -55,6 +55,51 @@ pub fn text<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Messag
     arrange(instances, Layout::Inline)
 }
 
+/// The sentence the selectable text entries pose.
+static SELECTABLE: std::sync::LazyLock<Vec<micold_core::markdown::Span>> =
+    std::sync::LazyLock::new(|| {
+        vec![micold_core::markdown::Span {
+            text: "Press and drag across this sentence to select it. A double click selects a \
+                   word, a triple click the line under the pointer."
+                .to_owned(),
+            style: micold_core::markdown::Style::default(),
+            link: None,
+        }]
+    });
+
+/// `SelectableText` — formatted text the pointer selects (feature 1550): with nothing selected it
+/// is the plain paragraph; a selected range is drawn on the selection fill across its rows.
+pub fn selectable_text<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let text = |range| {
+        material::SelectableText::new(&SELECTABLE, roles)
+            .slot(0u8)
+            .selected(range)
+            .on_hit(|_, _| Message::NoOp)
+    };
+    arrange(
+        vec![
+            posed("nothing selected", text(None), roles),
+            posed("a range selected across rows", text(Some(10..70)), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `SelectionArea` — the region a selection is made in (feature 1550): it draws nothing of its
+/// own, so it is posed around the selectable text it would hold.
+pub fn selection_area<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let text = material::SelectableText::new(&SELECTABLE, roles)
+        .slot(0u8)
+        .on_hit(|_, _| Message::NoOp);
+    let area = material::SelectionArea::new(text)
+        .on_press(|_| Message::NoOp)
+        .on_release(Message::NoOp);
+    arrange(
+        vec![posed("around selectable text", area, roles)],
+        Layout::FullWidth,
+    )
+}
+
 /// `Ellipsized` — the component whose whole job is a label that does not fit, so it is posed with one
 /// that does and one that does not.
 pub fn ellipsized<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {

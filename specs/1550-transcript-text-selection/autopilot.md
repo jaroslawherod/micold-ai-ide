@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M2
-- **Next step**: M2 PR #1590 CI (red fmt+clippy fixed: merged main, `EffortChanged` handled; pushed)
+- **Phase**: M3
+- **Next step**: M3 scoped gate + review A, then review B and visual pass
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1582 | design (spec, plan, tasks) | merged | 5ce410f219e38800d89f0936dbf9f48a96041cb1 |
 | #1586 | M1: selection model, shown text and work_value in core | merged | f7c34e9d579bc65daea4a1bd7ca865d0ac9253ea |
+| #1590 | M2: window selection state, copy text and copy keys | merged | 94519d3b85af68358495aa1eae645edf53174dc1 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
-| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | review |
-| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
+| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | merged |
+| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | implementing |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | — | todo |
@@ -46,6 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2 (agent-resolved): units are joined by what separates them on screen (`Joint`): a line break between lines and rows, a tab between table cells, a space between texts drawn on one line (list marker and item, a card's title and summary, a footer's status and figures). FR-010 makes only real line breaks into line breaks; research R2's "one `\n` whatever their kind" would put a marker and its item on two lines. `Unit` is a struct (`path`, `text`, `joint`, `source`) rather than the contract's `(TextPath, Cow<str>)` pair, and `TranscriptView` takes the window's `RichCache` (`rich`) and the insights rather than one entry's `Derived`.
 
 - M2 red CI (#1590, `fmt + clippy`): main gained `EntryKind::EffortChanged` (#1554) after our merge, so `body_units`' exhaustive match broke. Merged origin/main (b18b611d1); the effort note copies nothing, matching the transcript, which draws an empty `Space` for it until #1554 M4 draws its marker (then give it that text). Test: `an_effort_note_copies_nothing`. The only other `EntryKind` matches in M1/M2 code have a `_` arm.
+
+- M3 (agent-resolved): `Selectable` (micold-material) wraps the element each leaf already draws and only adds hit-testing over its own one-paragraph-per-hard-line `Measure`; with no range the child is the leaf's unchanged element, so T-4's pixel gate holds by construction, at the cost of shaping the text twice (once for drawing, once for hits; both cached). The highlight is the child's: spans split at the range ends drawn with a `primary_container` span background and `on_primary_container` ink (`selectable_text::highlight`). Code and diff lines are one `Selectable` per drawn line with a `base` (the line's start in the unit), measuring tabs-as-spaces and padding but answering in bytes of the unit's raw text; T-6 reports `Shown { slot, base, text }`. `InlineDiff::selectable(part, on_hit)` takes a `DiffPart -> (slot, range)` closure (path, captions, lines are separate units in M2), `CodeBlock::selectable(slot, range, on_hit)` one slot. The material crate has its own `Click` and `Edge` (the client's `Click`/`EdgeDir` sit above it; M4b maps them). The contrast gate's "visibly distinct" is CIE76 ΔE ≥ 10, not a luminance ratio: light `primary_container` is within 1.04–1.10:1 of the code surface and diff tints but ΔE-distinct by hue.
 
 ## Tasks-unit notes
 

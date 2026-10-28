@@ -1056,3 +1056,85 @@ fn a_chips_ink_is_legible_on_its_tint_for_every_accent_on_every_surface() {
         violations.join("\n  ")
     );
 }
+
+/// Feature 1550 (research R5 *Colours*, FR-020, SC-006): selected text — `on_primary_container`
+/// on the selection's `primary_container` fill — reads at 4.5:1 as composed on every transcript
+/// surface (prose, a card, a failed card, a code surface, a diff's added and removed lines), in
+/// both schemes, and the fill is visibly distinct from each of those surfaces.
+#[test]
+fn selected_transcript_text_is_legible_on_the_highlight_over_every_surface() {
+    use super::selectable_text::highlight;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        let theme = style::theme(scheme);
+        let card = |failed: bool| match style::disclosure_card(r, failed)(&theme).background {
+            Some(Background::Color(c)) => style::to_rgb(c),
+            other => panic!("{scheme:?}: the card paints a colour fill, not {other:?}"),
+        };
+        let (fill, ink) = highlight(r);
+        for (surface, ground) in [
+            ("prose", r.surface),
+            ("card", card(false)),
+            ("failed card", card(true)),
+            ("code surface", style::code_fill(r)),
+            ("diff added line", r.diff_added),
+            ("diff removed line", r.diff_removed),
+        ] {
+            let composed = style::to_rgb(style::over(style::color(fill), style::color(ground)));
+            let ratio = contrast(ink, composed);
+            if ratio < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / selected text on the highlight over {surface}: {ratio:.2}:1 \
+                     (needs {AA_TEXT})"
+                ));
+            }
+            // "Visibly distinct": a tint of another hue at a similar lightness is as visible as a
+            // darker one, so the margin is a colour difference (CIE76 ΔE), not a luminance ratio.
+            let apart = delta_e(composed, ground);
+            if apart < DISTINCT {
+                violations.push(format!(
+                    "{scheme:?} / the highlight against {surface}: ΔE {apart:.1} (needs {DISTINCT})"
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "selected transcript text cannot be read or seen:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// The colour difference a selection fill keeps from the surface under it: well past the ~2.3 of
+/// a just-noticeable difference, so the highlight reads at a glance (SC-006).
+const DISTINCT: f64 = 10.0;
+
+/// The CIE76 colour difference of `a` and `b`: their distance in CIE L*a*b* (D65).
+fn delta_e(a: Rgb, b: Rgb) -> f64 {
+    fn lab(c: Rgb) -> [f64; 3] {
+        let lin = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let (r, g, b) = (lin(c.r), lin(c.g), lin(c.b));
+        let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+        let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+        let f = |t: f64| {
+            if t > 0.008856 {
+                t.cbrt()
+            } else {
+                7.787 * t + 16.0 / 116.0
+            }
+        };
+        let (fx, fy, fz) = (f(x), f(y), f(z));
+        [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
+    }
+    let (p, q) = (lab(a), lab(b));
+    (0..3).map(|i| (p[i] - q[i]).powi(2)).sum::<f64>().sqrt()
+}

@@ -66,6 +66,8 @@ pub mod roboto;
 pub mod scrollable;
 pub mod scrolling_dialog;
 pub mod section_list;
+pub mod selectable_text;
+pub mod selection_area;
 pub mod shaped_text;
 pub mod snackbar;
 /// The split action — a primary button with an adjacent "…or choose" chevron (feature 026,
@@ -154,6 +156,8 @@ pub use roboto::{
 pub use scrollable::{ScrollDirection, Scrollable};
 pub use scrolling_dialog::ScrollingDialog;
 pub use section_list::{Section, SectionList};
+pub use selectable_text::{Hit as SelectHit, Selectable, SelectableText};
+pub use selection_area::{Edge as SelectionEdge, SelectionArea};
 pub use snackbar::Snackbar;
 pub use split_action::SplitAction;
 pub use status_bar::{ItemTone, StatusBar, StatusItem};

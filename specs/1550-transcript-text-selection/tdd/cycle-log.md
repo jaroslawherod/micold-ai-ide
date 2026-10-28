@@ -46,3 +46,18 @@ range) failed six tests, each its own task's; the files were restored by copy.
 | T020 (red), T021 | `transcript_key(press, phase, selecting, focused, mac)`, `KeyIntent::{CopySelection, SelectAll}`, `FieldId::Transcript`, `transcript_keys` | E0061 on the old signature; mutant (`focused` ignored): `k11_…`, `k5_k6_…`, `k7_…` FAILED | `features_composer` 40 passed |
 | T022 (red), T023 | `CopyTarget`, `Checked`, `copy_selection`, the copy outcome and "Copy failed" notice | E0432 `Checked`, `CopyTarget`; E0599 `copy_selection` | `features_transcript_rich` 18 passed |
 | Review A M2 fixes | empty copy text writes nothing; menu Copy/Select all focus the transcript without a selection; Show in full in range clears; `transcript_focused` gates the unfocused transcript listener | stash of the `src` fix: `a_selection_that_covers_no_text_copies_nothing`, `the_menus_copy_and_select_all_focus_the_transcript_without_a_selection`, `show_in_full_in_range_clears_it_and_one_outside_keeps_it` FAILED; `the_transcript_holds_the_keyboard_only_while_nothing_replaces_it` E0599 (`transcript_focused`) | `features_transcript_selection` 32 passed |
+
+## M3 (T024–T032)
+
+The component tests (T024, T025, the leaf tests of T026 and the gate of T027) were written in the
+same step as their widgets, so their red runs were recovered by mutants after green, as M1's were.
+Each set of mutants was applied together, the suites run with `--no-fail-fast`, and the files
+restored by copy.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T024 (red), T028 | `Selectable` hit-testing: one paragraph per hard line, `Hit { offset, click, line }`, drag, links first, the `Shown` operation | mutants (line start not added; every move republished): `a_press_publishes_the_nearest_boundary_in_the_whole_text`, `a_drag_publishes_each_new_offset_once` FAILED | `selectable_text::tests` 9 passed |
+| T025 (red), T030 | `SelectionArea`: controls first, focus, `on_press` before the hit, clamped cursor and `on_edge`, `on_context`, `on_release` | mutants (no clamp; click count always 1): `a_drag_past_an_edge_clamps_the_pointer_and_scrolls_each_frame`, `a_press_on_text_takes_focus_and_comes_before_the_hit` FAILED | `selection_area::tests` 8 passed |
+| T026 (red), T029, T031 | `.selectable` on `Text`, `LinkText`, `CodeBlock`, `InlineDiff`: pixel-equal with nothing selected, selected bytes on the fill, code/diff lines in bytes of their unit | mutants (code line base 0; diff line starts not advanced; highlight `surface_container_high`/`on_surface`): `a_press_on_a_line_answers_in_bytes_of_the_whole_code`, `each_line_reports_its_full_text_while_wider_than_the_block`, `selected_lines_are_drawn_on_the_selection_fill`, `a_press_on_a_line_answers_in_bytes_of_the_joined_lines`, `the_path_captions_and_line_text_are_reported_without_the_gutter` FAILED | `micold-material` lib 440 passed; `ui::material` 648 passed |
+| T027 (red) | contrast gate: `on_primary_container` on the fill ≥ 4.5:1 over six transcript surfaces, both schemes; the fill ΔE ≥ 10 from each | first run red on the design: a luminance margin (1.1:1) failed light code surface (1.06), diff added (1.10), diff removed (1.04) — a tint of another hue; the margin became CIE76 ΔE ≥ 10. Mutant (highlight = code fill): `selected_transcript_text_is_legible_on_the_highlight_over_every_surface` FAILED | same |
+| T032 | showcase entries `SelectableText`, `SelectionArea`; `Selectable` exempted like `TakesTheKeyboard` | `every_named_variant_has_an_instance` FAILED until the `Click`, `Edge` and `DiffPart` variants were named | `showcase_completeness` 46, `material_builder_api` 13 passed |

@@ -20,6 +20,7 @@
 //! Everything shown is owned, so the element is `'static` and can sit inside iced `lazy`.
 
 use std::ops::Range;
+use std::rc::Rc;
 
 use iced::keyboard::key::Named;
 use iced::widget::{column, container, row, Space};
@@ -27,8 +28,9 @@ use iced::{Alignment, Element, Length};
 use micold_core::review::diff::SideSpans;
 use micold_core::tokens::{shape, spacing, Rgb, Roles};
 
-use super::diff_view::line_text;
+use super::diff_view::{line_text, line_text_selected, CODE_SIZE};
 use super::keyboard_focus::{Indicator, TakesTheKeyboard};
+use super::selectable_text::{self, Hit, Measure, Selectable, Shape};
 use super::{style, Button, Ellipsized, IconButton, ScrollDirection, Scrollable, Text, TypeRole};
 use crate::features::transcript_rich::CopyState;
 use crate::icons::Icon;
@@ -41,9 +43,6 @@ pub const COPY_FAILED: &str = "Copy failed";
 
 /// The button that lays out a part held back by the size limits (FR-019).
 pub const SHOW_IN_FULL: &str = "Show in full";
-
-/// How many columns apart the tab stops are when a tab is drawn as spaces.
-const TAB_STOP: usize = 4;
 
 /// What a code block over the size limits says in place of its lines (research R7).
 pub fn large_message(lines: u32) -> String {
@@ -60,6 +59,59 @@ pub struct CodeBlock<M> {
     spans: Option<SideSpans>,
     copy: Option<(Option<CopyState>, M)>,
     large: Option<(u32, M)>,
+    select: Option<(Option<Range<usize>>, MakeSelectable<M>)>,
+}
+
+/// Wraps a drawn line in a [`Selectable`] for one slot: the line's element, what it measures and
+/// where the line starts in the slot's text (feature 1550).
+pub(super) type MakeSelectable<M> =
+    Rc<dyn Fn(Element<'static, M>, Measure, usize) -> Element<'static, M>>;
+
+/// The [`MakeSelectable`] of `slot`, sending hits as `on_hit(slot, hit)`.
+pub(super) fn selectable_line<K: Clone + 'static, M: 'static>(
+    slot: K,
+    on_hit: Rc<dyn Fn(K, Hit) -> M>,
+) -> MakeSelectable<M> {
+    Rc::new(move |child, measure, base| {
+        let on_hit = Rc::clone(&on_hit);
+        Selectable::new(child, measure, slot.clone(), move |k, hit| on_hit(k, hit))
+            .base(base)
+            .into()
+    })
+}
+
+/// How a code line is measured: monospace at the code size, never wrapped, as [`code_line`]
+/// draws it.
+pub(super) fn code_shape() -> Shape {
+    Shape {
+        size: CODE_SIZE,
+        line_height: iced::widget::text::LineHeight::default(),
+        font: iced::Font::MONOSPACE,
+        wrapping: iced::widget::text::Wrapping::None,
+        shaping: iced::advanced::text::Shaping::default(),
+    }
+}
+
+/// Each line of `code` as `.lines()` splits it, with where it starts in `code`.
+pub(super) fn lines_with_starts(code: &str) -> impl Iterator<Item = (usize, &str)> {
+    code.split_inclusive('\n').scan(0, |at, piece| {
+        let start = *at;
+        *at += piece.len();
+        let line = piece.strip_suffix('\n').unwrap_or(piece);
+        Some((start, line.strip_suffix('\r').unwrap_or(line)))
+    })
+}
+
+/// The part of `selected` (bytes of a slot's text) that falls in the line at `start`..`start +
+/// len`, in bytes of the line.
+pub(super) fn in_line(
+    selected: Option<&Range<usize>>,
+    start: usize,
+    len: usize,
+) -> Option<Range<usize>> {
+    let s = selected?;
+    let (from, to) = (s.start.max(start), s.end.min(start + len));
+    (from < to).then(|| from - start..to - start)
 }
 
 impl<M: Clone + 'static> CodeBlock<M> {
@@ -72,6 +124,7 @@ impl<M: Clone + 'static> CodeBlock<M> {
             spans: None,
             copy: None,
             large: None,
+            select: None,
         }
     }
 
@@ -98,6 +151,20 @@ impl<M: Clone + 'static> CodeBlock<M> {
     /// full" sends `on_show` (FR-019).
     pub fn large(mut self, lines: u32, on_show: M) -> Self {
         self.large = Some((lines, on_show));
+        self
+    }
+
+    /// Make the code selectable as one unit, `slot` (feature 1550, contracts/selectable-text.md):
+    /// each line answers hits in bytes of the whole code — full lines, tabs as written, even
+    /// while the block is scrolled sideways — and the bytes of `selected` are drawn on the
+    /// selection's fill. With `selected = None` it draws exactly as without this call.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        slot: K,
+        selected: Option<Range<usize>>,
+        on_hit: impl Fn(K, Hit) -> M + 'static,
+    ) -> Self {
+        self.select = Some((selected, selectable_line(slot, Rc::new(on_hit))));
         self
     }
 }
@@ -151,32 +218,52 @@ pub(super) fn expand_tabs(
     if !line.contains('\t') {
         return (line.to_owned(), spans.to_vec());
     }
-    // `at[i]` is where byte `i` of `line` lands in the expanded text.
-    let mut at = vec![0; line.len() + 1];
-    let mut out = String::with_capacity(line.len() + TAB_STOP);
-    let mut column = 0;
-    for (i, c) in line.char_indices() {
-        at[i] = out.len();
-        if c == '\t' {
-            let pad = TAB_STOP - column % TAB_STOP;
-            out.extend(std::iter::repeat_n(' ', pad));
-            column += pad;
-        } else {
-            out.push(c);
-            column += 1;
-        }
-        at[i + 1..i + c.len_utf8()].fill(out.len());
-    }
-    at[line.len()] = out.len();
+    let (out, map) = selectable_text::expand_tabs(line);
     let moved = spans
         .iter()
         .map(|(range, colour)| {
-            let start = at[range.start.min(line.len())];
-            let end = at[range.end.min(line.len())];
-            (start..end, *colour)
+            (
+                drawn_at(&map, range.start)..drawn_at(&map, range.end),
+                *colour,
+            )
         })
         .collect();
     (out, moved)
+}
+
+/// Where byte `i` of a line lands once its tabs are drawn as spaces: a byte inside a character
+/// lands after it.
+fn drawn_at(map: &[(usize, usize)], i: usize) -> usize {
+    let k = map
+        .partition_point(|&(text, _)| text < i)
+        .min(map.len() - 1);
+    map[k].1
+}
+
+/// `selected` (bytes of `line`) in the line as drawn, tabs as spaces.
+pub(super) fn drawn_range(line: &str, selected: &Range<usize>) -> Range<usize> {
+    let (_, map) = selectable_text::expand_tabs(line);
+    drawn_at(&map, selected.start)..drawn_at(&map, selected.end)
+}
+
+/// One code line, selectable: drawn as [`code_line`] (selected bytes on the selection's fill),
+/// measured in bytes of `line`, starting at `start` in the slot's text.
+fn selectable_code_line<M: 'static>(
+    line: &str,
+    start: usize,
+    spans: &[(Range<usize>, Rgb)],
+    selected: Option<&Range<usize>>,
+    make: &MakeSelectable<M>,
+    r: Roles,
+) -> Element<'static, M> {
+    let child = match in_line(selected, start, line.len()) {
+        None => code_line(line, spans, r),
+        Some(part) => {
+            let (text, spans) = expand_tabs(line, spans);
+            line_text_selected(text, &spans, drawn_range(line, &part), r)
+        }
+    };
+    make(child, Measure::code_line(line, 0, code_shape()), start)
 }
 
 /// One code line in its colours, tabs drawn as spaces; monospace, never wrapped.
@@ -227,11 +314,21 @@ impl<'b, M: Clone + 'static> From<CodeBlock<M>> for Element<'b, M> {
             None => {
                 let none = SideSpans::default();
                 let spans = b.spans.as_ref().unwrap_or(&none);
-                let lines = b
-                    .code
-                    .lines()
-                    .enumerate()
-                    .map(|(i, line)| code_line(line, spans.line(i as u32 + 1), r));
+                let lines: Vec<Element<'static, M>> = match &b.select {
+                    None => b
+                        .code
+                        .lines()
+                        .enumerate()
+                        .map(|(i, line)| code_line(line, spans.line(i as u32 + 1), r))
+                        .collect(),
+                    Some((selected, make)) => lines_with_starts(&b.code)
+                        .enumerate()
+                        .map(|(i, (start, line))| {
+                            let spans = spans.line(i as u32 + 1);
+                            selectable_code_line(line, start, spans, selected.as_ref(), make, r)
+                        })
+                        .collect(),
+                };
                 sideways(column(lines).width(Length::Shrink), r)
             }
         };
@@ -246,7 +343,9 @@ impl<'b, M: Clone + 'static> From<CodeBlock<M>> for Element<'b, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{dark_roles, named_key, roles, Focusables, Mounted};
+    use super::super::test_support::{
+        dark_roles, named_key, roles, rows_with, Focusables, Mounted, ShownTexts,
+    };
     use super::*;
     use crate::features::transcript_rich::Ticket;
     use iced::advanced::mouse;
@@ -379,5 +478,74 @@ mod tests {
         let (text, spans) = expand_tabs("a\tb", &[(2..3, red)]);
         assert_eq!(text, "a   b");
         assert_eq!(spans, vec![(4..5, red)]);
+    }
+
+    fn selectable(selected: Option<Range<usize>>) -> CodeBlock<String> {
+        block(None, roles()).selectable("code", selected, |slot: &str, hit: Hit| {
+            format!("hit {slot} {}", hit.offset)
+        })
+    }
+
+    /// Feature 1550 T-4 (gate): selectable with nothing selected draws pixel-equal to the block.
+    #[test]
+    fn a_selectable_block_with_nothing_selected_draws_as_before() {
+        let draw = |b: CodeBlock<String>| Mounted::new(b).drawn(iced::Color::WHITE);
+        assert_eq!(draw(selectable(None)), draw(block(None, roles())));
+    }
+
+    /// Feature 1550 T-4: selected lines are drawn on the selection fill.
+    #[test]
+    fn selected_lines_are_drawn_on_the_selection_fill() {
+        let r = roles();
+        let (none, width) = Mounted::new(selectable(None)).drawn(iced::Color::WHITE);
+        assert!(rows_with(&none, width, r.primary_container).is_empty());
+        let (some, width) = Mounted::new(selectable(Some(3..CODE.len()))).drawn(iced::Color::WHITE);
+        assert!(!rows_with(&some, width, r.primary_container).is_empty());
+    }
+
+    /// Feature 1550 T-1: a press on the second line answers in bytes of the whole code, the tab
+    /// counted as the one byte it is.
+    #[test]
+    fn a_press_on_a_line_answers_in_bytes_of_the_whole_code() {
+        let mut m = Mounted::new(selectable(None));
+        let painted = m.painted_text();
+        let line = painted
+            .iter()
+            .find(|p| p.content.contains("println!"))
+            .expect("the second line is painted");
+        let advance = line.bounds.width / line.content.chars().count() as f32;
+        let at = Point::new(
+            line.bounds.x + 5.3 * advance,
+            line.bounds.y + line.bounds.height / 2.0,
+        );
+        // Drawn column 5 is `r`, byte 2 of the line after its tab; the line starts at byte 12.
+        assert_eq!(m.press(at), vec!["hit code 14".to_owned()]);
+    }
+
+    /// Feature 1550 (US1 scenario 6): each line reports its full text and where it starts, even
+    /// when it is wider than the block and scrolls sideways.
+    #[test]
+    fn each_line_reports_its_full_text_while_wider_than_the_block() {
+        let wide = format!("let wide = \"{}\";\nend", "x".repeat(200));
+        let b = CodeBlock::new(wide.clone(), roles())
+            .selectable("code", None, |_, h: Hit| h.offset.to_string());
+        let mut m = Mounted::new_in(b, iced::Size::new(200.0, 300.0));
+        let shown = m.drive(ShownTexts::<&str>(Vec::new())).expect("reported");
+        let first = wide.lines().next().expect("a line").to_owned();
+        assert_eq!(
+            shown,
+            vec![
+                ("code", 0, first.clone()),
+                ("code", first.len() + 1, "end".to_owned())
+            ]
+        );
+    }
+
+    #[test]
+    fn lines_with_starts_matches_lines() {
+        let code = "a\r\nbb\n\nc\n";
+        let lines: Vec<(usize, &str)> = lines_with_starts(code).collect();
+        assert_eq!(lines, vec![(0, "a"), (3, "bb"), (6, ""), (7, "c")]);
+        assert_eq!(lines.len(), code.lines().count());
     }
 }

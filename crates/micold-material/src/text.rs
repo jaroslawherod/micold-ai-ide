@@ -12,11 +12,13 @@
 
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::ops::Range;
 
 use crate::roboto::ROBOTO;
+use crate::selectable_text::{highlight, split_at, Hit, Measure, Selectable, Shape};
 use crate::style;
-use iced::widget::text;
 use iced::widget::text::{LineHeight, Wrapping};
+use iced::widget::{rich_text, span, text};
 use iced::{Element, Font, Length};
 use micold_core::tokens::{typography, Rgb, Roles};
 
@@ -255,8 +257,18 @@ pub struct Text<'a, M> {
     align_y: Option<iced::alignment::Vertical>,
     wrapping: Option<Wrapping>,
     monospace: bool,
+    select: Option<Select<'a, M>>,
     marker: PhantomData<M>,
 }
+
+/// What [`Text::selectable`] was given: the selected bytes, and the wrapper that answers hits
+/// (feature 1550).
+struct Select<'a, M> {
+    selected: Option<Range<usize>>,
+    make: SelectableOf<'a, M>,
+}
+
+type SelectableOf<'a, M> = Box<dyn FnOnce(Element<'a, M>, Measure) -> Selectable<'a, M> + 'a>;
 
 impl<'a, M: 'a> Text<'a, M> {
     /// Text reading `content` at `role`, themed by `roles`. Inherits the surrounding foreground
@@ -272,6 +284,7 @@ impl<'a, M: 'a> Text<'a, M> {
             align_y: None,
             wrapping: None,
             monospace: false,
+            select: None,
             marker: PhantomData,
         }
     }
@@ -335,10 +348,109 @@ impl<'a, M: 'a> Text<'a, M> {
         self.monospace = true;
         self
     }
+
+    /// Make the text selectable (feature 1550, contracts/selectable-text.md): hits are sent as
+    /// `on_hit(slot, hit)`, and the bytes of `selected` are drawn on the selection's fill in its
+    /// ink, wrapped rows included. With `selected = None` it draws exactly as without this call.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        slot: K,
+        selected: Option<Range<usize>>,
+        on_hit: impl Fn(K, Hit) -> M + 'a,
+    ) -> Self {
+        self.select = Some(Select {
+            selected,
+            make: Box::new(move |child, measure| Selectable::new(child, measure, slot, on_hit)),
+        });
+        self
+    }
+}
+
+/// `content` as one rich text, the bytes of `selected` on the selection's fill in its ink; the
+/// rest in the text's own colour (`None`: inherited).
+fn highlighted<'a, M: 'a>(
+    content: &str,
+    selected: &Range<usize>,
+    colour: Option<iced::Color>,
+    roles: Roles,
+) -> iced::widget::text::Rich<'a, (), M> {
+    let (fill, ink) = highlight(roles);
+    let floor = |mut i: usize| {
+        i = i.min(content.len());
+        while !content.is_char_boundary(i) {
+            i -= 1;
+        }
+        i
+    };
+    let selected = floor(selected.start)..floor(selected.end);
+    let pieces: Vec<iced::widget::text::Span<'a, (), Font>> =
+        split_at([0..content.len()], Some(&selected))
+            .into_iter()
+            .map(|(range, on)| {
+                let piece = span(content[range].to_owned());
+                match (on, colour) {
+                    (true, _) => piece
+                        .color(style::color(ink))
+                        .background(style::color(fill)),
+                    (false, Some(c)) => piece.color(c),
+                    (false, None) => piece,
+                }
+            })
+            .collect();
+    rich_text(pieces)
 }
 
 impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
-    fn from(t: Text<'a, M>) -> Self {
+    fn from(mut t: Text<'a, M>) -> Self {
+        let Some(select) = t.select.take() else {
+            return plain(t);
+        };
+        let font = if t.monospace {
+            Font::MONOSPACE
+        } else {
+            t.role.font()
+        };
+        let shape = Shape {
+            size: t.role.size(),
+            line_height: t.role.line_height(),
+            font,
+            wrapping: t.wrapping.unwrap_or_default(),
+            shaping: iced::advanced::text::Shaping::default(),
+        };
+        let measure = Measure::plain(&t.content, shape);
+        let child = match &select.selected {
+            None => plain(t),
+            Some(selected) => {
+                let colour = match t.emphasis {
+                    Emphasis::Inherited => None,
+                    Emphasis::Muted => Some(style::color(t.roles.on_surface_variant)),
+                    Emphasis::Tinted(c) => Some(style::color(c)),
+                    Emphasis::Disabled(c) => Some(style::disabled_color(c)),
+                };
+                let mut widget = highlighted(&t.content, selected, colour, t.roles)
+                    .size(t.role.size())
+                    .font(font)
+                    .line_height(t.role.line_height())
+                    .wrapping(shape.wrapping);
+                if let Some(width) = t.width {
+                    widget = widget.width(width);
+                }
+                if let Some(height) = t.height {
+                    widget = widget.height(height);
+                }
+                if let Some(align) = t.align_y {
+                    widget = widget.align_y(align);
+                }
+                widget.into()
+            }
+        };
+        (select.make)(child, measure).into()
+    }
+}
+
+/// The text as the rendering stack's text widget, as every caller without a selection draws it.
+fn plain<'a, M: 'a>(t: Text<'a, M>) -> Element<'a, M> {
+    {
         let mut widget = text(t.content)
             .size(t.role.size())
             .font(if t.monospace {
@@ -374,7 +486,7 @@ impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{roles, Mounted};
+    use super::super::test_support::{roles, rows_with, Mounted};
     use super::*;
 
     fn painted_font(t: Text<'static, String>) -> Font {
@@ -402,6 +514,48 @@ mod tests {
             painted[0].size,
             TypeRole::Body.size(),
             "the role still sizes it"
+        );
+    }
+
+    fn selectable(range: Option<std::ops::Range<usize>>) -> Text<'static, String> {
+        Text::new(WRAPPED, TypeRole::Body, roles())
+            .width(Length::Fill)
+            .selectable("t", range, |_: &str, hit| hit.offset.to_string())
+    }
+
+    /// Long enough to wrap in [`ROOM`].
+    const WRAPPED: &str = "the quick brown fox jumps over the lazy dog again and again";
+    const ROOM: iced::Size = iced::Size::new(160.0, 200.0);
+
+    fn drawn(t: Text<'static, String>) -> (Vec<u8>, u32) {
+        Mounted::new_in(t, ROOM).drawn(iced::Color::WHITE)
+    }
+
+    /// Feature 1550 T-4 (gate): selectable with nothing selected draws pixel-equal to the text
+    /// without `.selectable`.
+    #[test]
+    fn selectable_text_with_nothing_selected_draws_exactly_as_the_plain_text() {
+        let plain = Text::new(WRAPPED, TypeRole::Body, roles()).width(Length::Fill);
+        assert_eq!(drawn(selectable(None)), drawn(plain));
+    }
+
+    /// Feature 1550 T-4: a selected range is drawn on `primary_container`, on each wrapped row it
+    /// covers, and nothing outside it is.
+    #[test]
+    fn a_selected_range_is_drawn_on_the_selection_fill_across_wrapped_rows() {
+        let r = roles();
+        let (none, width) = drawn(selectable(None));
+        assert!(rows_with(&none, width, r.primary_container).is_empty());
+        let (some, width) = drawn(selectable(Some(4..WRAPPED.len() - 4)));
+        let rows = rows_with(&some, width, r.primary_container);
+        let row = TypeRole::Body.line_height_dp() as u32;
+        let first = rows.first().copied().unwrap_or(u32::MAX);
+        let last = rows.last().copied().unwrap_or(0);
+        assert!(first < row, "the fill starts on the first row: {rows:?}");
+        assert!(last >= 2 * row, "and runs onto the third: {rows:?}");
+        assert!(
+            !rows_with(&some, width, r.on_primary_container).is_empty(),
+            "the selected glyphs are drawn in on_primary_container"
         );
     }
 

@@ -269,7 +269,7 @@ showcase_completeness --test material_builder_api --lib ui::material`.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T024 [P] [US1] `SelectableText` tests by simulated events in the `tests` module of the new
+- [x] T024 [P] [US1] `SelectableText` tests by simulated events in the `tests` module of the new
   `crates/micold-material/src/selectable_text.rs` with `crates/micold-material/src/test_support.rs`
   (contracts/selectable-text.md *T-1*–*T-6*): a left press publishes `on_hit` with the grapheme
   boundary nearest the pointer as an offset into the whole text (line start + in-line index, on
@@ -278,14 +278,14 @@ showcase_completeness --test material_builder_api --lib ui::material`.
   text; a press on a link span publishes the link message and no `on_hit`; the widget operation
   reports `(slot, text)` equal to the drawn text; double and triple clicks carry `Click::Double`
   and `Click::Triple`
-- [ ] T025 [P] [US1] `SelectionArea` tests by simulated events in the `tests` module of the new
+- [x] T025 [P] [US1] `SelectionArea` tests by simulated events in the `tests` module of the new
   `crates/micold-material/src/selection_area.rs` (contracts/selectable-text.md *A-1*–*A-5*): a press
   a child captured publishes nothing; an uncaptured left press takes focus and publishes
   `on_press(clicks)`; while dragging with the cursor above (below) the bounds, children see the
   cursor clamped to the top (bottom) row and `on_edge(Up)` (`Down`) is published per requested
   frame; a right press, on text or a control, publishes `on_context(origin)` and no `on_press`; a
   left release publishes `on_release` only
-- [ ] T026 [US1] Leaf tests: `.selectable(slot, range, on_hit)` on `Text` and `LinkText` in the
+- [x] T026 [US1] Leaf tests: `.selectable(slot, range, on_hit)` on `Text` and `LinkText` in the
   `tests` modules of `crates/micold-material/src/text.rs` and `crates/micold-material/src/link_text.rs`,
   and on `CodeBlock` and `InlineDiff` in those of `crates/micold-client/src/ui/material/code_block.rs`
   and `crates/micold-client/src/ui/material/inline_diff.rs` (contracts/selectable-text.md *T-4*,
@@ -294,31 +294,31 @@ showcase_completeness --test material_builder_api --lib ui::material`.
   `on_primary_container`, wrapped rows included; `CodeBlock` reports and copies full lines while
   scrolled sideways; `InlineDiff` exposes the path, hunk labels and line text without gutter;
   callers that do not call `.selectable` are unchanged
-- [ ] T027 [P] [US1] Contrast gate in `crates/micold-client/src/ui/material/composition_contrast.rs`
+- [x] T027 [P] [US1] Contrast gate in `crates/micold-client/src/ui/material/composition_contrast.rs`
   (research R5 *Colours*, FR-020, SC-006): `on_primary_container` on `primary_container` ≥ 4.5:1 as
   composed on every transcript surface (prose, code surface, diff added and removed lines, failed
   card), light and dark, and the highlight fill differs from each of those surfaces
 
 ### Implementation
 
-- [ ] T028 [US1] Implement `SelectableText`'s layout and pointer in
+- [x] T028 [US1] Implement `SelectableText`'s layout and pointer in
   `crates/micold-material/src/selectable_text.rs` (one paragraph per hard line,
   `Paragraph::hit_test`, `Hit { offset, click, line }`, links as `LinkText`, the `(slot, text)`
   operation), exported from `crates/micold-material/src/lib.rs`; T024 passes
-- [ ] T029 [US1] Implement `SelectableText`'s highlight in
+- [x] T029 [US1] Implement `SelectableText`'s highlight in
   `crates/micold-material/src/selectable_text.rs`: spans split at the selection ends and cached in
   tree state against the range, `Paragraph::span_bounds` rectangles on `primary_container`, selected
   glyphs in `on_primary_container`, nothing extra drawn with `selected = None` (T-4)
-- [ ] T030 [US1] Implement `SelectionArea` (`operation::Focusable`, the clamped cursor, `on_edge`
+- [x] T030 [US1] Implement `SelectionArea` (`operation::Focusable`, the clamped cursor, `on_edge`
   per requested redraw, `on_context`, `on_release`, `on_focus_change`) in
   `crates/micold-material/src/selection_area.rs`, exported from `crates/micold-material/src/lib.rs`;
   T025 passes
-- [ ] T031 [US1] Implement `.selectable(slot, range, on_hit)` on `Text`
+- [x] T031 [US1] Implement `.selectable(slot, range, on_hit)` on `Text`
   (`crates/micold-material/src/text.rs`), `LinkText` (`crates/micold-material/src/link_text.rs`),
   `CodeBlock` (`crates/micold-client/src/ui/material/code_block.rs`, each line) and `InlineDiff`
   (`crates/micold-client/src/ui/material/inline_diff.rs`), swapping the paragraph for
   `SelectableText`; T026 and T027 pass
-- [ ] T032 [US1] Showcase entries for `SelectableText` (with a selected range) and `SelectionArea`
+- [x] T032 [US1] Showcase entries for `SelectableText` (with a selected range) and `SelectionArea`
   in `crates/micold-client/src/showcase/sections/atoms.rs` and
   `crates/micold-client/src/showcase/catalogue.rs`; `showcase_completeness` and
   `material_builder_api` pass (Constitution VIII)
