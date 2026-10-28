@@ -30,8 +30,12 @@ pub fn effort_label(choice: &EffortChoice) -> String {
 }
 
 /// What the view says when `choice` does not apply to a model with `support` (FR-003): `None`
-/// when it applies, or support is unknown and the choice is sent as is.
+/// when it applies, or support is unknown and the choice is sent as is. A model without effort is
+/// said whatever the choice, Default too (FR-003, ledger D4).
 pub fn availability_note(choice: &EffortChoice, support: Option<&EffortSupport>) -> Option<String> {
+    if support.is_some_and(|s| !s.supported) {
+        return Some(NO_EFFORT_NOTE.to_owned());
+    }
     match availability(choice, support) {
         EffortAvailability::Applies => None,
         EffortAvailability::ModelHasNoEffort => Some(NO_EFFORT_NOTE.to_owned()),
@@ -68,10 +72,18 @@ pub struct EffortPicker {
 }
 
 impl EffortPicker {
-    /// Default, then the offered levels, `current` marked and highlighted.
+    /// Default, then the offered levels, `current` marked and highlighted. A stored level the
+    /// model does not list comes last, still marked, so the choice is always a row (FR-002) and
+    /// `Enter` on the opening highlight keeps it.
     fn new(support: Option<&EffortSupport>, current: &EffortChoice) -> Self {
-        let rows: Vec<EffortRow> = std::iter::once(EffortChoice::Default)
+        let mut choices: Vec<EffortChoice> = std::iter::once(EffortChoice::Default)
             .chain(offered_levels(support).into_iter().map(EffortChoice::Level))
+            .collect();
+        if !choices.contains(current) {
+            choices.push(current.clone());
+        }
+        let rows: Vec<EffortRow> = choices
+            .into_iter()
             .map(|choice| EffortRow {
                 current: &choice == current,
                 choice,
@@ -141,6 +153,12 @@ impl State {
 }
 
 impl crate::app::State {
+    /// Whether `session`'s effort picker is open and drawn: it is not for a session that is no
+    /// longer a structured Claude Code one, whose view has no trigger to dismiss it.
+    pub fn effort_picker_shown(&self, session: SessionId) -> bool {
+        self.offers_effort(session) && self.effort_picker.picker(session).is_some()
+    }
+
     /// Whether `session` offers an effort picker: a structured Claude Code session (FR-012).
     pub fn offers_effort(&self, session: SessionId) -> bool {
         self.workspace.find_session(session).is_some_and(|(_, s)| {
@@ -201,13 +219,15 @@ impl crate::app::State {
 
     /// Take row `row` of `session`'s effort picker (the highlighted one when `None`), closing it:
     /// the choice to ask the service for, or `None` when nothing is open or the row already is
-    /// the session's choice.
+    /// the session's choice. While an earlier pick is `in_flight` the reported choice may be
+    /// stale, so every pick is asked for: the latest one wins.
     pub fn effort_picked(
         &mut self,
         session: SessionId,
         row: Option<usize>,
+        in_flight: bool,
     ) -> Option<EffortChoice> {
         let row = self.effort_picker.take(session, row)?;
-        (row.choice != self.effort_choice(session)).then_some(row.choice)
+        (in_flight || row.choice != self.effort_choice(session)).then_some(row.choice)
     }
 }

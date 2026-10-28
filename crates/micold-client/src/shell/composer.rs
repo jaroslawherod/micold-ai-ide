@@ -27,6 +27,7 @@ use crate::App;
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let session = session_of(&msg);
     let picker_was_open = app.core.composers.palette.picker(session).is_some();
+    let effort_was_open = app.core.effort_picker.picker(session).is_some();
     let mut follow = false;
     match msg {
         Msg::Key {
@@ -158,14 +159,20 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::EffortPickerToggled(session) => app.core.effort_picker_toggled(session),
         Msg::EffortPickerMoved { session, direction } => {
             app.core.effort_picker_moved(session, direction);
+            follow = true;
         }
         Msg::EffortPicked { session, row } => {
-            if let Some(choice) = app.core.effort_picked(session, row) {
+            if let Some(choice) =
+                app.core
+                    .effort_picked(session, row, effort_in_flight(app, session))
+            {
                 set_effort(app, session, choice);
             }
         }
         Msg::EffortPickerClosed(session) => app.core.effort_picker.close(session),
         Msg::SwitchRequested { session, to } => {
+            // A terminal session draws no effort list to dismiss (review A M4 F1).
+            app.core.effort_picker.close(session);
             if let Some(request) = app.core.switch_requested(session, to) {
                 switch_kind(app, request);
             }
@@ -202,10 +209,27 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             composer_field(session)
         });
     }
+    // So does the effort list closing, by a pick, Escape or its trigger (#1554, as FR-014).
+    if effort_list_closed(app, session, effort_was_open) {
+        return iced::widget::operation::focus(composer_field(session));
+    }
     if follow {
         return micold_client::ui::picker_highlight_into_view();
     }
     Task::none()
+}
+
+/// Whether `session`'s effort list, open before a message (`was_open`), is closed after it.
+fn effort_list_closed(app: &App, session: SessionId, was_open: bool) -> bool {
+    was_open && app.core.effort_picker.picker(session).is_none()
+}
+
+/// Whether a `SetSessionEffort` for `session` is still unanswered: the catalog's choice may then
+/// be stale (review A M4 F3).
+fn effort_in_flight(app: &App, session: SessionId) -> bool {
+    app.pending_ops
+        .values()
+        .any(|op| matches!(op, PendingOp::SessionEffort { session: s } if *s == session))
 }
 
 fn session_of(msg: &Msg) -> SessionId {
@@ -500,5 +524,67 @@ mod tests {
         );
         assert_eq!(app.core.effort_header(s), "Effort: Default");
         assert!(effort_requests(&mut rx).is_empty(), "nothing more asked");
+    }
+
+    #[test]
+    fn the_keyboard_goes_back_to_the_composer_when_the_effort_list_closes() {
+        // Review A M4 F5: as the model picker's does (#943 FR-014).
+        let (mut app, _rx, s) = app_with_session();
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        assert!(!effort_list_closed(&app, s, false), "opened, not closed");
+        let open = app.core.effort_picker.picker(s).is_some();
+        let _ = update(&mut app, Msg::EffortPickerClosed(s));
+        assert!(effort_list_closed(&app, s, open), "Escape");
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        let _ = update(
+            &mut app,
+            Msg::EffortPicked {
+                session: s,
+                row: Some(2),
+            },
+        );
+        assert!(effort_list_closed(&app, s, true), "a pick");
+    }
+
+    #[test]
+    fn a_switch_of_kind_closes_the_effort_list() {
+        // Review A M4 F1: a terminal session draws no list that could be dismissed.
+        let (mut app, _rx, s) = app_with_session();
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        let _ = update(
+            &mut app,
+            Msg::SwitchRequested {
+                session: s,
+                to: SessionKind::Terminal,
+            },
+        );
+        assert!(app.core.effort_picker.picker(s).is_none());
+    }
+
+    #[test]
+    fn a_pick_back_to_the_reported_choice_before_the_echo_is_sent() {
+        // Review A M4 F3: `high`, then Default while `high` is unanswered.
+        let (mut app, mut rx, s) = app_with_session();
+        for row in [3, 0] {
+            let _ = update(&mut app, Msg::EffortPickerToggled(s));
+            let _ = update(
+                &mut app,
+                Msg::EffortPicked {
+                    session: s,
+                    row: Some(row),
+                },
+            );
+        }
+        let sent: Vec<_> = effort_requests(&mut rx)
+            .into_iter()
+            .map(|(_, e)| e)
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                EffortChoice::Level(EffortLevel::parse("high").expect("a level")),
+                EffortChoice::Default
+            ]
+        );
     }
 }

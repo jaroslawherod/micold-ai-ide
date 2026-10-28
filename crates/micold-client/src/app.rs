@@ -655,10 +655,11 @@ impl State {
                 .active
                 .is_some_and(|id| self.composers.palette.picker(id).is_some())
             // #1554: so does the effort picker's list while it is open.
+            // Not once the session is no longer one with a trigger: nothing draws the list then.
             && !self
                 .session
                 .active
-                .is_some_and(|id| self.effort_picker.picker(id).is_some())
+                .is_some_and(|id| self.effort_picker_shown(id))
             // Settings is not a floating surface any more, so the registry cannot answer for it
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.

@@ -218,7 +218,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   applies from the next answer (a turn in progress keeps its level), that the choice is kept across
   restarts and a switch of kind, and that an effort change made inside the terminal screen is not
   seen (FR-014)
-- [ ] T026 [US1] [US3] Quickstart Part B 1–3, 6 and 7a in light and dark theme through the
+- [x] T026 [US1] [US3] Quickstart Part B 1–3, 6 and 7a in light and dark theme through the
   `visual-pass` skill, evidence in `specs/1554-structured-effort-switch/visual-pass/`
 
 ## Phase 6: `/effort` in the composer (M5; US2)

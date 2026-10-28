@@ -198,6 +198,30 @@ fn a_model_without_effort_still_offers_the_five_levels() {
     );
 }
 
+#[test]
+fn a_stored_level_the_model_does_not_list_is_still_a_row_marked_current() {
+    let (mut w, s) = window(Some(default_model(Some(support(true, &["low", "high"])))));
+    set_effort(&mut w, s, chosen("max"));
+    w.open_effort_picker(s);
+    assert_eq!(
+        choices(&w, s),
+        [
+            EffortChoice::Default,
+            chosen("low"),
+            chosen("high"),
+            chosen("max")
+        ],
+        "the stored level after the offered ones (FR-002)"
+    );
+    assert_eq!(current(&w, s), [chosen("max")], "marked current");
+    assert_eq!(
+        highlighted(&w, s),
+        Some(chosen("max")),
+        "Enter keeps the choice, not Default"
+    );
+    assert_eq!(w.effort_picked(s, None, false), None, "nothing to ask");
+}
+
 // ---- open, close, move and pick ----
 
 #[test]
@@ -222,7 +246,11 @@ fn the_arrows_move_the_highlight_and_enter_picks_it() {
     assert_eq!(highlighted(&w, s), Some(chosen("high")));
     w.effort_picker_moved(s, Direction::Prev);
     assert_eq!(highlighted(&w, s), Some(chosen("medium")));
-    assert_eq!(w.effort_picked(s, None), Some(chosen("medium")), "Enter");
+    assert_eq!(
+        w.effort_picked(s, None, false),
+        Some(chosen("medium")),
+        "Enter"
+    );
     assert!(w.effort_picker.picker(s).is_none(), "a pick closes it");
 }
 
@@ -232,13 +260,13 @@ fn a_pressed_row_is_the_choice_and_default_is_one() {
     set_effort(&mut w, s, chosen("high"));
     w.open_effort_picker(s);
     assert_eq!(
-        w.effort_picked(s, Some(0)),
+        w.effort_picked(s, Some(0), false),
         Some(EffortChoice::Default),
         "back to Claude Code's default (US1 scenario 6)"
     );
     w.open_effort_picker(s);
-    assert_eq!(w.effort_picked(s, Some(5)), Some(chosen("max")));
-    assert_eq!(w.effort_picked(s, Some(1)), None, "nothing open");
+    assert_eq!(w.effort_picked(s, Some(5), false), Some(chosen("max")));
+    assert_eq!(w.effort_picked(s, Some(1), false), None, "nothing open");
 }
 
 #[test]
@@ -246,8 +274,21 @@ fn picking_the_current_choice_closes_and_asks_nothing() {
     let (mut w, s) = window(None);
     set_effort(&mut w, s, chosen("high"));
     w.open_effort_picker(s);
-    assert_eq!(w.effort_picked(s, None), None, "already the choice");
+    assert_eq!(w.effort_picked(s, None, false), None, "already the choice");
     assert!(w.effort_picker.picker(s).is_none());
+}
+
+#[test]
+fn picking_the_reported_choice_while_a_pick_is_in_flight_is_sent() {
+    // `high` picked, then Default before the catalog echoes `high`: the catalog still says
+    // Default, which is stale (review A M4 F3).
+    let (mut w, s) = window(None);
+    w.open_effort_picker(s);
+    assert_eq!(
+        w.effort_picked(s, Some(0), true),
+        Some(EffortChoice::Default),
+        "the latest pick wins over one still unanswered"
+    );
 }
 
 #[test]
@@ -273,9 +314,14 @@ fn the_note_says_when_the_model_does_not_take_the_choice() {
         "unknown: sent as is"
     );
     assert_eq!(
-        availability_note(&EffortChoice::Default, Some(&support(false, &[]))),
+        availability_note(&EffortChoice::Default, Some(&support(false, &[]))).as_deref(),
+        Some(NO_EFFORT_NOTE),
+        "said whatever the choice, Default too (FR-003)"
+    );
+    assert_eq!(
+        availability_note(&EffortChoice::Default, Some(&support(true, &["low"]))),
         None,
-        "Default always applies"
+        "Default applies on a model that takes effort"
     );
     assert_eq!(
         availability_note(&chosen("high"), Some(&support(false, &[]))).as_deref(),
@@ -292,6 +338,32 @@ fn the_note_says_when_the_model_does_not_take_the_choice() {
     assert_eq!(
         availability_note(&chosen("low"), Some(&support(true, &["low", "medium"]))),
         None
+    );
+}
+
+#[test]
+fn a_model_without_effort_is_said_at_default_too() {
+    let (w, s) = window(Some(default_model(Some(support(false, &[])))));
+    assert_eq!(w.effort_choice(s), EffortChoice::Default);
+    assert_eq!(w.effort_note(s).as_deref(), Some(NO_EFFORT_NOTE));
+}
+
+#[test]
+fn an_open_picker_stops_taking_the_keyboard_once_the_session_is_a_terminal() {
+    let (mut w, s) = window(None);
+    w.session.active = Some(s);
+    w.open_effort_picker(s);
+    assert!(!w.terminal_focused(), "the open list has the keys");
+    let path = w.workspace.active.clone().expect("active");
+    w.workspace
+        .sessions
+        .get_mut(&path)
+        .and_then(|l| l.iter_mut().find(|x| x.id == s))
+        .expect("held")
+        .kind = SessionKind::Terminal;
+    assert!(
+        w.terminal_focused(),
+        "no list is drawn for a terminal session, so the terminal has the keys (review A M4 F1)"
     );
 }
 
