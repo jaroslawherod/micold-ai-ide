@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | #1597 | merged |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | #1601 | merged |
-| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | — | not started |
+| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | — | in progress (handover) |
 
 ## Decisions
 
@@ -125,7 +125,32 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M6 unit 1 (context over 150k after implementing). Done, committed locally (not pushed, no PR):
+- 607bd17b8 T052–T053: `shell::transcript::update` focuses the pane showing the session on a
+  `SelectMsg::Press` (new `shell::panes::focus_pane_showing`): the selection area captures the
+  press, so the pane's `mouse_area` FocusPane never fired and `session.active` stayed the other
+  pane's. `ui::composer::transcript_keys_session` split out of `transcript_keys` for the test.
+  Test: `tests::panes::a_drag_in_either_pane_of_a_split_gives_that_pane_the_copy_key`
+  (main_tests.rs; red on main for the reason: listener `None`).
+- 8bfc401d8 T054 + T055 code: root cause of the diff anchor is not the scrollable: iced_winit
+  hands every event of a batch `window.state.cursor()` (where the batch ended), so a fast drag's
+  press landed where the drag got to. `SelectionArea` now tracks the pointer from `CursorMoved`
+  and forwards each mouse event at its own place; `Selectable` answers a dragged pointer right of
+  one of its lines with that line's end. Tests in `ui/material/inline_diff.rs`:
+  `a_fast_drag_on_diff_lines_anchors_at_the_press`, `a_drag_right_of_a_short_diff_line_selects_to_its_end`
+  (both red without the fix). contracts/selectable-text.md T-2/A-2 updated. T052–T054 ticked;
+  T055 stays open until the visual pass is recorded.
+- Checked green locally: `cargo test -p micold-material`, `-p micold-client --lib`, `--bin micold-ai-ide`.
+
+Next: scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A (high) in its shadow; review B
+(conformance, sonnet); visual pass via the `visual-pass` skill in an autopilot-worker writing
+`visual-pass/m6-visual-pass.md` (quickstart Part B steps 1 and 9: split-pane Ctrl+C in both panes,
+a fast drag banana→fig on the edit-turn diff anchors at banana, a same-line drag right of a short
+diff line selects to its end; screenshots also to /mnt/project-files/issue-1550/); tick T055;
+full gate (`scripts/gate.sh`) after `git fetch origin && git merge origin/main`; push with
+`git push -u origin claude/project-thread-zj503u`; PR body to the scratchpad path the orchestrator
+gave (`pr-1550-m6-body.md`), title `#1550: Structured view: text and values cannot be selected or
+copied (M6)`, `Refs #1550`.
 
 ## Open escalation
 
