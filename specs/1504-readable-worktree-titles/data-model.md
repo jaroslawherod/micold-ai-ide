@@ -58,7 +58,7 @@ FR-001 order whose `first_line` (R7) is `Some`; `branch` and `display_name` are 
 ### `git::Git` trait (extended)
 
 `fn own_commit_subject(&self, dir: &Path) -> Option<String>` — `GitCli`: merge-base from
-`review_base(dir)`, then `git log -1 --format=%s <base>..HEAD` through the bounded review `read`;
+`review_base(dir)`, then `git log -1 --no-merges --format=%s <base>..HEAD` through the bounded review `read`;
 `None` on `Base::Unavailable`, empty output, error or timeout. `FakeGit`:
 `with_own_commit(dir, subject)`.
 

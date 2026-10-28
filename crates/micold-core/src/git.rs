@@ -240,8 +240,9 @@ pub trait Git {
     fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String>;
 
     /// The subject of the latest commit on the branch checked out in the worktree at `dir` that
-    /// is not on the default branch (feature 1504, FR-001 item 6, L7): `None` on a detached
-    /// `HEAD`, without a review base, with no commit of its own, on error or timeout. Read-only.
+    /// is not on the default branch and not a merge (feature 1504, FR-001 item 6, L7): `None` on
+    /// a detached `HEAD`, without a review base, with no commit of its own, on error or timeout.
+    /// Read-only.
     fn own_commit_subject(&self, dir: &Path) -> Option<String>;
 }
 
