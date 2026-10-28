@@ -23,6 +23,7 @@
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md)
 - [Tools for the AI in your sessions](user-guide/agent-tools.md)
 - [Settings](user-guide/settings.md)
+- [The daemon configuration file](user-guide/daemon-configuration.md)
 - [Running the session service in a container](user-guide/sandboxed-daemon.md)
 - [Running the session service on another computer over SSH](user-guide/remote-daemons.md)
 - [A cheap remote daemon on a private Tailscale network](user-guide/remote-daemon-tailscale.md)
