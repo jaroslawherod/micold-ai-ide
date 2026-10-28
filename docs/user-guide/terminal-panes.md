@@ -122,7 +122,8 @@ out; the panes keep their layout and their focused pane for when a session tab i
 Overview, quick-switcher, location and project chords work as always, and the review has keys of
 its own ([Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard)). A session
 chord (or any session you select) shows that session's terminal and keeps the Review tab in the
-strip.
+strip. The Review tab's shortcut sheet (`?`) lists Back and Forward too, with the single-key
+shortcuts on or off.
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. While a

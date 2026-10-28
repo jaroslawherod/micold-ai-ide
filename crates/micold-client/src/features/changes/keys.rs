@@ -471,7 +471,8 @@ pub fn composer_press(press: &Press, single_keys: bool) -> Option<Msg> {
 /// platform's form with its text, in table order, and the note shown while the single keys are off.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SheetModel {
-    /// `(key, what it does)`, in [`micold_core::review::keys::REVIEW_KEYS`]' order.
+    /// `(key, what it does)`, in [`micold_core::review::keys::REVIEW_KEYS`]' order, then Back and
+    /// Forward.
     pub rows: Vec<(String, &'static str)>,
     /// [`micold_core::review::keys::SINGLE_KEYS_OFF_NOTE`] while the single-key switch is off.
     pub note: Option<&'static str>,
@@ -491,9 +492,25 @@ pub fn sheet_model(single_keys: bool) -> SheetModel {
     SheetModel {
         rows: sheet_rows(single_keys)
             .map(|row| (platform_label(row), row.sheet))
+            .chain(history_rows())
             .collect(),
         note: (!single_keys).then_some(SINGLE_KEYS_OFF_NOTE),
     }
+}
+
+/// Back and Forward, which end the sheet whether or not the single keys are on (FR-014, U6).
+fn history_rows() -> [(String, &'static str); 2] {
+    use micold_core::history::Dir;
+    [
+        (
+            crate::keymap::history_key_label(Dir::Back),
+            "Back (also the mouse back button)",
+        ),
+        (
+            crate::keymap::history_key_label(Dir::Forward),
+            "Forward (also the mouse forward button)",
+        ),
+    ]
 }
 
 /// `row`'s key in the running platform's form (contract K4).

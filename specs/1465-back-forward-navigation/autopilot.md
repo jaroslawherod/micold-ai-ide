@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1465
-- **Worktree branch**: 1465-m4 (M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
+- **Worktree branch**: 1465-m5 (M5, stacked on 1465-m4; M4 on 1465-m4, stacked on 1465-m3; M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M4 review round 1 fixes in (A F1, F2, F4 fixed test-first, F3 accepted and pinned, TDD cycle 18; B F1, F2 rewrapped, prose only); full gate green (scripts/gate.sh at 35b176119); scoped round 2 of A and B pending on 27327176c..35b176119
-- **Next step**: scoped round 2 of review A (sonnet) and B (Verify re-run) on 27327176c..35b176119; then the M4 PR (pr-title-m4.md / pr-body-m4.md written)
+- **Phase**: M5 implemented (T034–T036 ticked, TDD cycle 18); gate running, then visual-pass and reviews A and B
+- **Next step**: full gate, visual-pass (review-shortcut-sheet, -single-keys-off; light and dark), review A and B on M5 range, pr-title-m5.md and pr-body-m5.md
 
 ## Pull requests
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
 | M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | round 1 fixes in (A CHANGES → F1, F2, F4 fixed, F3 accepted + pinned; B CLEAN, 2 rewraps); round 2 pending |
-| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | planned |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate green, reviews pending |
+| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | implemented, gate running |
 
 ## Decisions
 
