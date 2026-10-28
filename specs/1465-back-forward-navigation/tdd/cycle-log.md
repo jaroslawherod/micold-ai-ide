@@ -175,3 +175,20 @@ there.
 - test: `tests/keymap.rs` `the_user_guide_lists_back_and_forward_with_their_keys_and_buttons`.
 - red: FAILED — `Back row lists "Alt+←": | Back | Mouse back button | Mouse back button |`.
 - green: terminal-panes.md rows and intro → keymap 59 passed.
+
+### Cycle 14 — the Review tab's own Back first (T024, T025, FR-011, SC-005)
+
+- tests: `tests/history.rs` `back_in_a_browsing_review_tab_is_the_tabs_own_back` (Button and Key →
+  `Step::ReviewBack`, list untouched, `moving` unset, `apply_history` → `[Changes(BrowseBack)]`),
+  `main_tests` `history_tests::back_in_a_browsed_review_tab_returns_to_the_reading_then_leaves_the_tab`.
+- red (146392a08): both FAILED (`Show(Session feat-a)` where `ReviewBack` was expected; the bin
+  test: Back left the tab with the browse still open). The root declines `Message::Changes`, so
+  the history tests drive `changes::update` directly (test fixed before green; red re-confirmed
+  with the implementation stashed).
+- guards, passed on arrival: `back_in_a_review_tab_without_a_browse_frame_is_the_global_back`,
+  `forward_from_a_browsing_review_tab_is_the_global_forward`.
+- green: `resolve` returns `ReviewBack` for Back on a shown Review tab where
+  `changes::can_go_back`; `apply_history(ReviewBack)` → `[BrowseBack]`; allowlist entry
+  `history` → `changes` → history 28 passed, `feature_registration_cost` 7 passed, bin
+  `history_tests` 4 passed.
+- T026 is prose (guide sentence); no test.

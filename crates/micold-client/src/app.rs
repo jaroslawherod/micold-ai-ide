@@ -2103,8 +2103,12 @@ impl State {
         use crate::features::history::Step;
         use crate::features::{overview, runs, session, sidebar};
         use micold_core::history::View;
-        let Step::Show(place) = step else {
-            return Vec::new();
+        let place = match step {
+            Step::None => return Vec::new(),
+            Step::ReviewBack => {
+                return vec![Message::Changes(crate::features::changes::Msg::BrowseBack)];
+            }
+            Step::Show(place) => place,
         };
         let close_overview = self
             .overview

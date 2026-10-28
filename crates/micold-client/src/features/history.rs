@@ -57,6 +57,17 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg) -> Step {
         return Step::None;
     }
     let shown = app.shown_place();
+    // FR-011: a Review tab with a browse frame goes back inside itself first; the list is untouched.
+    if dir == Dir::Back
+        && matches!(shown.as_ref().map(|p| &p.view), Some(View::Review(_)))
+        && app
+            .changes
+            .tabs
+            .shown_view()
+            .is_some_and(crate::features::changes::can_go_back)
+    {
+        return Step::ReviewBack;
+    }
     let mut list = std::mem::take(&mut app.history.list);
     let found = list.step(dir, shown.as_ref(), |p| exists(app, p));
     app.history.list = list;

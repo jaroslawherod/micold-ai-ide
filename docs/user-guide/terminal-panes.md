@@ -91,7 +91,9 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 The mouse's side buttons go back and forward through the places you have been (sessions, Review
 tabs, the Overview and Compare) from anywhere in the window, over a terminal too; the terminal
 program never receives them. Places that are gone, such as a closed session or a removed worktree,
-are skipped. Back and Forward's keys are the exception to "the app takes every chord": a focused
+are skipped. In a Review tab, Back first does the tab's own **Back** (from a browsed file to what
+was being read) and leaves the tab only when that has nothing left; Forward always uses the app's
+history. Back and Forward's keys are the exception to "the app takes every chord": a focused
 text field or terminal keeps them (shells and fields use Alt+←/→ to move by word; on macOS
 Option+←/→ stays word movement and is not Back or Forward). Hold the key to keep stepping: a move
 made from the keyboard leaves the keyboard with the app, so click the terminal to type in it.
