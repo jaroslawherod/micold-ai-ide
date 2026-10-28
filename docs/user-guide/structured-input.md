@@ -19,7 +19,8 @@ out, and a notice names the file and the reason.
 
 ## When a drop is refused
 
-A session that is not accepting input, for example one that has ended, takes nothing from a drop.
+A session that is not accepting input, for example one that has ended or one that has not yet
+reported that it is running, takes nothing from a drop.
 The composer shows a notice such as `2 files not attached: the session is not accepting input`, and
 the draft stays as it was.
 
