@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn sending_slash_effort_asks_the_service_at_once_and_is_no_user_message() {
-        use crate::features::composer::InputState;
+        use micold_client::features::composer::InputState;
         use micold_core::protocol::messages::{InterruptAsk, TurnId, TurnPhase};
         for busy in [false, true] {
             let (mut app, mut rx, s) = app_with_session();
