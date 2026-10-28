@@ -325,19 +325,23 @@ fn the_note_says_when_the_model_does_not_take_the_choice() {
     );
     assert_eq!(
         availability_note(&chosen("high"), Some(&support(false, &[]))).as_deref(),
-        Some("This model does not support reasoning effort; Claude Code's default applies")
+        Some("This model does not support reasoning effort; Claude Code's default applies"),
+        "a level on a model without effort"
     );
     assert_eq!(
         NO_EFFORT_NOTE,
-        "This model does not support reasoning effort; Claude Code's default applies"
+        "This model does not support reasoning effort; Claude Code's default applies",
+        "the note's words"
     );
     assert_eq!(
         availability_note(&chosen("high"), Some(&support(true, &["low", "medium"]))).as_deref(),
-        Some("high is not available for this model; Claude Code's default applies")
+        Some("high is not available for this model; Claude Code's default applies"),
+        "a level the model does not list"
     );
     assert_eq!(
         availability_note(&chosen("low"), Some(&support(true, &["low", "medium"]))),
-        None
+        None,
+        "a level the model lists"
     );
 }
 

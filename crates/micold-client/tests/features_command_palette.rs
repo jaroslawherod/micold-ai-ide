@@ -619,7 +619,9 @@ fn models_taking(levels: &[&str]) -> Vec<ReportedModel> {
 
 #[test]
 fn sending_slash_effort_with_a_level_asks_for_it_and_keeps_the_draft_for_the_shell() {
-    // The intent reads no turn state: on a busy session too the request goes at once (SC-003).
+    // The intent reads no turn state, so a busy session's request goes at once too (SC-003). This
+    // test's session is idle; the busy case is in `shell::composer`'s
+    // `sending_slash_effort_asks_the_service_at_once_and_is_no_user_message`.
     let (mut w, s) = window(Some(started(vec![])));
     for (text, want) in [
         ("/effort max", level("max")),

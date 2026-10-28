@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-10-28 — shipped in PRs #1556, #1587, #1591, #1594, #1596, #1599, #1604 and the close PR
 
 **Input**: GitHub issue #1554 "Structured view: model reasoning effort cannot be changed". "The
 structured session view has no way to change the model's reasoning effort (low / medium / high /
