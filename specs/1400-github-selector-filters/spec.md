@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-10-28 — shipped in PRs #1558, #1564, #1569, #1570, #1573, #1577, #1578, #1583 and the close PR
 
 **Input**: User description: "Spec 1400" — issue #1400, *Filter the GitHub issue selector by GitHub search query, label and state*: the GitHub issue selector in the New worktree form only searches open issues by free text; the query is fixed to `repo:{repo} is:issue is:open {text}`. There is no way to hide issues that are blocked or already being worked on, so picking the next issue to start means scrolling past them. Bring the GitHub selector up to what the Jira selector has (#1185 basic filters, #1186 advanced JQL): (1) basic filters — pick from the repo's labels (include and exclude), state (open / closed / all), and optionally assignee, author and milestone, without writing a query; (2) an advanced GitHub search query, e.g. `-label:in-progress -label:blocked no:assignee sort:created-asc`, with `repo:` and `is:issue` fixed so results stay scoped to the project's repo; (3) free-text search still works on top of the active filter; (4) the filter is remembered per project, so a default like "exclude `in-progress` and `blocked`" applies every time the selector opens. Main use case: hide blocked issues and issues already in progress so the list shows only issues ready to start. Acceptance: with exclude-labels `in-progress`, `blocked` set, the list shows no issue carrying either label; a raw query like `-label:in-progress state:open` returns the same issues as the same search on github.com; when the query is invalid, the selector shows GitHub's error message instead of an empty list. Labels at entry: enhancement, flow:feature.
 

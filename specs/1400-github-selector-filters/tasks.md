@@ -215,7 +215,7 @@ milestone (no milestone, an open milestone).
 
 ## Phase 10: Polish
 
-- [ ] T061 Run quickstart §B B1–B18 with the `visual-pass` skill (B17 by hand with a real `gh` when available) and record the results in `specs/1400-github-selector-filters/visual/close.md`
+- [x] T061 Run quickstart §B B1–B18 with the `visual-pass` skill (B17 by hand with a real `gh` when available) and record the results in `specs/1400-github-selector-filters/visual/close.md`
 
 ---
 
