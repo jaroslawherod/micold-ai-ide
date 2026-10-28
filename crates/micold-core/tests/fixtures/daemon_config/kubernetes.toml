@@ -1,0 +1,46 @@
+# Written by Micold AI IDE for daemon "k8s-dev" (context dev, namespace micold).
+# Delivered as ConfigMap k8s-dev-config at /run/micold/config; secrets as directory Secret mounts.
+schema = 1
+
+[daemon]
+name = "k8s-dev"
+kind = "kubernetes"
+data_dir = "/var/lib/micold-ai-ide"
+home = "/data/home"
+image = "ghcr.io/jaroslawherod/micold-basic:5d9ed63715e43146"
+idle_stop = "off"
+
+[listen]
+tcp = "127.0.0.1:7000"
+
+[auth]
+client_token_file = "/run/micold/secrets/access/client-token"
+
+[ssh]
+dir = "/run/micold/ssh"
+
+[storage]
+clone_root = "/data/repos"
+
+[[projects]]
+path = "/data/repos/acme/api"
+remote = "https://github.com/acme/api"
+
+[[github.tokens]]
+name = "acme-org"
+token_file = "/run/micold/secrets/github/acme-org/token"   # Secret k8s-dev-github-acme-org
+repos = ["acme/*"]
+
+[[ai.cli]]
+id = "claude_code"
+token_file = "/run/micold/secrets/ai/claude_code/token"   # `claude setup-token`; nothing to refresh
+settings_file = "/run/micold/config/ai/claude_code/settings.json"
+
+[[ai.cli]]
+id = "opencode"
+enabled = false
+
+[startup]
+script_file = "/run/micold/config/startup.sh"
+run = "every_start"
+on_failure = "refuse"

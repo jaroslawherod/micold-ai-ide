@@ -1,0 +1,35 @@
+# Written by Micold AI IDE for daemon "build-box" (ssh jaro@build-box).
+schema = 1
+
+[daemon]
+name = "build-box"
+kind = "ssh"
+home = "/home/jaro"
+time_zone = "Europe/Warsaw"
+
+[listen]
+socket = "auto"
+
+[storage]
+clone_root = "/home/jaro/src"
+
+[[projects]]
+path = "/home/jaro/src/micold-ai-ide"
+remote = "https://github.com/jaroslawherod/micold-ai-ide"
+
+[[github.tokens]]
+name = "personal"
+token_file = "/home/jaro/.micold/remote/secrets/github/personal"
+
+[[ai.cli]]
+id = "claude_code"
+version = "2.1.247"
+api_key_file = "/home/jaro/.micold/remote/secrets/ai/anthropic_api_key"
+
+[session.env]
+RUST_LOG = "info"
+
+[startup]
+script_file = "/home/jaro/.micold/remote/config/startup.sh"
+run = "once_per_container"
+timeout_secs = 600

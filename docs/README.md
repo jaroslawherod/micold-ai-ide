@@ -55,6 +55,8 @@ follows describes the version you are reading it from (constitution, Principle V
   limit, environment-include (auto-picking up your shell environment for sessions, configuring or
   disabling it, and recovering from a failed script), and **Daemons** — the session services, where each
   runs, which credentials it may reach, and the resource limits it runs under.
+- [The daemon configuration file](user-guide/daemon-configuration.md) — every key of a daemon's
+  `daemon.toml`, its default per kind, the rules a file must meet, and `micold-daemon config check`.
 - [Running the session service in a container](user-guide/sandboxed-daemon.md) — turning the
   container placement on, which runtimes work (and how Podman differs), what the container can and
   cannot see, credentials, limits, network posture, working offline, what happens across restarts

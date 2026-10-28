@@ -2679,6 +2679,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util",
+ "toml",
  "unicode-segmentation",
  "uuid",
  "windows-sys 0.61.2",

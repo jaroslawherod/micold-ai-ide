@@ -1,0 +1,39 @@
+# Written by Micold AI IDE for daemon "This computer". Secrets are never in this file.
+schema = 1
+
+[daemon]
+name = "This computer"
+kind = "host"
+data_dir = "/home/jaro/.local/share/micold-ai-ide"
+home = "/home/jaro"
+log = "info"
+
+[listen]
+socket = "auto"
+
+[[projects]]
+path = "/home/jaro/workspaces/micold-ai-ide"
+
+[git]
+isolate_host_helpers = false       # the user's own helpers stay as the fallback
+
+[[github.tokens]]
+name = "acme-org"
+token_file = "/home/jaro/.local/share/micold-ai-ide/secrets/github-pat/acme-org"
+repos = ["acme/*"]
+
+[ai]
+default = "claude_code"
+
+[[ai.cli]]
+id = "claude_code"
+args = ["--permission-mode", "acceptEdits"]
+model = "claude-opus-5-5"
+use_machine_sign_in = true   # the machine's own ~/.claude sign-in, managed by the CLI
+
+[[ai.cli]]
+id = "codex"
+
+[startup]
+script_file = "/home/jaro/.local/share/micold-ai-ide/startup.sh"
+on_failure = "warn"

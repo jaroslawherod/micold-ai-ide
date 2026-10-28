@@ -150,6 +150,8 @@ dark-light = "3.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"
 alacritty_terminal = "0.26"
+# Feature 1521: the daemon configuration file (`daemon.toml`); spans give `file:line:col` errors.
+toml = "1.1.6"
 # --- shared dev deps ---
 tempfile = "3.27.0"
 ttf-parser = "0.25.1"
