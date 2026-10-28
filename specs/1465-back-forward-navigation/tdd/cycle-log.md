@@ -257,3 +257,12 @@ there.
   in `State::set_worktrees`; `exists` accepts another project's `Worktree(dir)` in
   `known[project]` or `lookup(project)`; `resolve` caches `lookup` per project for the press;
   `shown_place` reports Compare only while `compare.project` is active → history 39 passed.
+
+### Cycle 19 — the Review sheet lists Back and Forward (M5 T034, T035, U6)
+
+- tests: `review_keys` `the_sheet_ends_with_back_and_forward_with_single_keys_on_and_off`; the two
+  existing sheet tests now expect 14 rows (single keys on) and 4 (off), Back and Forward last.
+- red (d788de35b): all three FAILED (12 rows where 14 expected; 2 where 4).
+- green: `sheet_model` chains `history_rows()` (`history_key_label` + the U6 texts) after the
+  `REVIEW_KEYS` rows → review_keys passed. Layout fixture re-recorded for the two sheet states only.
+- T036 is prose (guide sentence); no test.

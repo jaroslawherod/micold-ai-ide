@@ -162,12 +162,12 @@ and Forward (quickstart B12).
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T034 [P] [US5] Write failing tests in `crates/micold-client/tests/review_keys.rs`: `sheet_model(true)` and `sheet_model(false)` end with `(history_key_label(Back), "Back (also the mouse back button)")` and `(history_key_label(Forward), "Forward (also the mouse forward button)")` (FR-014, contracts/ui.md U6)
+- [x] T034 [P] [US5] Write failing tests in `crates/micold-client/tests/review_keys.rs`: `sheet_model(true)` and `sheet_model(false)` end with `(history_key_label(Back), "Back (also the mouse back button)")` and `(history_key_label(Forward), "Forward (also the mouse forward button)")` (FR-014, contracts/ui.md U6)
 
 ### Implementation for User Story 5
 
-- [ ] T035 [US5] In `crates/micold-client/src/features/changes/keys.rs` `sheet_model` (line 500), append the two U6 rows after the `REVIEW_KEYS` rows, for `single_keys` on and off. T034 green
-- [ ] T036 [US5] In `docs/user-guide/terminal-panes.md` §Keyboard shortcuts, add that the Review tab's shortcut sheet (`?`) lists Back and Forward too
+- [x] T035 [US5] In `crates/micold-client/src/features/changes/keys.rs` `sheet_model` (line 500), append the two U6 rows after the `REVIEW_KEYS` rows, for `single_keys` on and off. T034 green
+- [x] T036 [US5] In `docs/user-guide/terminal-panes.md` §Keyboard shortcuts, add that the Review tab's shortcut sheet (`?`) lists Back and Forward too
 
 **Checkpoint**: every story works (quickstart §B).
 
