@@ -34,7 +34,7 @@ fn with_no_project_open_a_press_changes_nothing() {
     for dir in [Dir::Back, Dir::Forward] {
         for source in [Source::Button, Source::Key] {
             assert_eq!(
-                history::resolve(&mut state, Msg::Pressed { dir, source }),
+                history::resolve(&mut state, Msg::Pressed { dir, source }, &|_| None),
                 Step::None
             );
         }

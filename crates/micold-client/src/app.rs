@@ -2093,8 +2093,9 @@ impl State {
     pub fn press_history(
         &mut self,
         msg: crate::features::history::Msg,
+        lookup: crate::features::history::Lookup,
     ) -> crate::features::history::Step {
-        crate::features::history::resolve(self, msg)
+        crate::features::history::resolve(self, msg, lookup)
     }
 
     /// A move's follow-ups have run (feature 1465, research R2): observation is back on. A move made

@@ -4,32 +4,61 @@
 //! does; a press resolves, dispatches `apply_history`'s follow-ups the same way and finishes the
 //! move (U2).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use micold_client::app::{Message, State};
-use micold_client::features::history::{Msg, Source, Step};
-use micold_client::features::{navigation, overview, quick_switch, runs, session, sidebar};
+use micold_client::features::history::{Lookup, Msg, Source, Step};
+use micold_client::features::{
+    navigation, overview, project, quick_switch, runs, session, sidebar,
+};
 use micold_client::keymap::{NavAction, NavLevel};
 use micold_core::history::{Dir, Place, View};
+use micold_core::project::Availability;
 use micold_core::quick_switch::EntryKey;
-use micold_core::session::{SessionId, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionId, SessionLifecycle, SessionLocation};
 
 mod support;
 use support::sidebar_fixture::{
     arranged, deliver, listed, run_group, session_at, state_with_active, worktree,
 };
 
+/// No project other than the active one has worktrees.
+fn no_worktrees(_: &Path) -> Option<Vec<String>> {
+    Some(Vec::new())
+}
+
 /// A message as the binary sends it: the reducer, then the history observes.
 fn send(state: &mut State, message: Message) {
-    state.update(message);
+    send_with(state, message, &no_worktrees);
+}
+
+/// As [`send`]; a project switch (`Project(Reopened)`, the shell's) runs as
+/// `on_known_project_reopened` does, its worktrees read from `lookup`.
+fn send_with(state: &mut State, message: Message, lookup: Lookup) {
+    if let Message::Project(project::Msg::Reopened(path)) = &message {
+        let arrival = state.switch_active(path).expect("the switch is accepted");
+        micold_client::app::drain(arrival, |o| micold_client::app::interpret(state, o));
+        let worktrees = lookup(path)
+            .unwrap_or_default()
+            .iter()
+            .map(|dir| listed(dir))
+            .collect();
+        deliver(state, worktrees);
+    } else {
+        state.update(message);
+    }
     state.observe_place();
 }
 
 /// A press as the binary's `shell::history::update` runs it (U2).
 fn press(state: &mut State, dir: Dir, source: Source) -> Step {
-    let step = state.press_history(Msg::Pressed { dir, source });
+    press_with(state, dir, source, &no_worktrees)
+}
+
+fn press_with(state: &mut State, dir: Dir, source: Source, lookup: Lookup) -> Step {
+    let step = state.press_history(Msg::Pressed { dir, source }, lookup);
     for message in state.apply_history(step.clone()) {
-        send(state, message);
+        send_with(state, message, lookup);
     }
     if matches!(step, Step::Show(_)) {
         state.finish_history_move(source);
@@ -347,24 +376,240 @@ fn a_removed_worktrees_places_are_skipped_and_removed() {
     let _ = b;
 }
 
-#[test]
-fn another_projects_place_is_skipped_and_removed_until_cross_project_moves() {
+// ---- Across projects (US4, research R5) ---------------------------------------------------------
+
+fn other() -> PathBuf {
+    PathBuf::from("/other")
+}
+
+fn in_other(view: View) -> Place {
+    Place {
+        project: other(),
+        view,
+    }
+}
+
+/// [`three`] plus a known, available project `/other` with an idle session at its root (O) and one
+/// in its worktree `w1` (W), never shown.
+fn two_projects() -> (State, SessionId, SessionId, SessionId) {
     let (mut state, d, _, _) = three();
-    let other = Place {
-        project: PathBuf::from("/other"),
-        view: View::Overview,
-    };
+    state
+        .workspace
+        .projects
+        .push(support::sidebar_fixture::project(
+            "other",
+            Availability::Available,
+        ));
+    let mut sessions = Vec::new();
+    let mut ids = Vec::new();
+    for location in [SessionLocation::Default, worktree("w1")] {
+        let mut session = Session::start_new(location, AiCli::ClaudeCode);
+        session.lifecycle = SessionLifecycle::Idle;
+        ids.push(session.id);
+        sessions.push(session);
+    }
+    state.workspace.sessions.insert(other(), sessions);
+    (state, d, ids[0], ids[1])
+}
+
+/// `/other`'s worktrees: `w1` only.
+fn w1_only(project: &Path) -> Option<Vec<String>> {
+    (project == other()).then(|| vec!["w1".to_string()])
+}
+
+/// The list `places`, then the Overview of `/repo` shown and recorded last.
+fn walked_through(state: &mut State, places: &[Place]) {
     let mut list = micold_core::history::History::default();
-    list.record(at_session(SessionLocation::Default, d));
-    list.record(other.clone());
+    for place in places {
+        list.record(place.clone());
+    }
     list.record(at(View::Overview));
     state.history.list = list;
     state.overview.open = true;
+}
+
+#[test]
+fn back_reaches_another_projects_session_by_switching_project() {
+    let (mut state, d, o, _) = two_projects();
+    let target = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
+    walked_through(
+        &mut state,
+        &[at_session(SessionLocation::Default, d), target.clone()],
+    );
+    let before = entries(&state);
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(target.clone())
+    );
+    assert_eq!(state.workspace.active, Some(other()), "switched project");
+    assert_eq!(state.session.active, Some(o));
+    assert_eq!(entries(&state), before, "R2: nothing recorded on the way");
+    assert_eq!(state.history.list.position(), 1);
+    press_with(&mut state, Dir::Forward, Source::Button, &w1_only);
+    assert_eq!(state.workspace.active, Some(repo()));
+    assert!(state.overview.open, "Forward returns to /repo's Overview");
+    assert_eq!(entries(&state), before);
+}
+
+#[test]
+fn another_projects_listed_worktree_and_default_exist() {
+    let (mut state, _, o, w) = two_projects();
+    let at_w = in_other(View::Session {
+        location: worktree("w1"),
+        id: w,
+    });
+    walked_through(
+        &mut state,
+        &[
+            in_other(View::Session {
+                location: SessionLocation::Default,
+                id: o,
+            }),
+            at_w.clone(),
+        ],
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(at_w)
+    );
+    assert_eq!(state.session.active, Some(w));
+}
+
+#[test]
+fn another_projects_worktree_missing_from_its_lookup_is_skipped_and_removed() {
+    let (mut state, d, o, w) = two_projects();
+    let at_w = in_other(View::Session {
+        location: worktree("w1"),
+        id: w,
+    });
+    let at_o = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
+    // `w1` is gone from disk: the lookup lists no worktree of /other.
+    walked_through(
+        &mut state,
+        &[at_session(SessionLocation::Default, d), at_w.clone()],
+    );
     assert_eq!(
         back(&mut state),
+        Step::Show(at_session(SessionLocation::Default, d)),
+        "US4 AS2"
+    );
+    assert!(!entries(&state).contains(&at_w), "FR-007: removed");
+
+    // Unreadable (`None`): its worktree places are gone, its root is not.
+    let (mut state, _, _, _) = two_projects();
+    walked_through(&mut state, &[at_o.clone(), at_w.clone()]);
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &|_| None),
+        Step::Show(at_o),
+        "the Default of a known, available project always exists"
+    );
+    assert!(!entries(&state).contains(&at_w));
+    assert_eq!(state.workspace.active, Some(other()));
+}
+
+#[test]
+fn an_unavailable_or_unknown_projects_places_are_skipped_and_removed() {
+    let (mut state, d, o, _) = two_projects();
+    let at_o = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
+    let elsewhere = Place {
+        project: PathBuf::from("/forgotten"),
+        view: View::Overview,
+    };
+    state.workspace.projects[1].availability = Availability::Unavailable;
+    walked_through(
+        &mut state,
+        &[
+            at_session(SessionLocation::Default, d),
+            elsewhere.clone(),
+            at_o.clone(),
+        ],
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(at_session(SessionLocation::Default, d)),
+        "US4 AS2, AS3"
+    );
+    assert_eq!(state.workspace.active, Some(repo()), "never switched");
+    assert!(!entries(&state).contains(&at_o), "unavailable: removed");
+    assert!(!entries(&state).contains(&elsewhere), "unknown: removed");
+}
+
+#[test]
+fn compare_of_another_project_reopens_it_with_its_last_group_list() {
+    let (mut state, _, o, _) = two_projects();
+    let group = run_group(7, "g", &["feat-a", "feat-b"]);
+    let gid = group.id;
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::GroupsChanged(vec![group])),
+    );
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::CompareOpened {
+            group: gid,
+            project: repo(),
+        }),
+    );
+    // To /other through the switcher; its own group list (empty) arrives and closes Compare.
+    send(
+        &mut state,
+        Message::Project(project::Msg::Reopened(other())),
+    );
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::GroupsChanged(Vec::new())),
+    );
+    select(&mut state, o);
+    assert_eq!(state.workspace.active, Some(other()));
+    assert!(state.runs.compare.is_none());
+
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(at(View::Compare(gid)))
+    );
+    assert_eq!(state.workspace.active, Some(repo()), "FR-006");
+    assert_eq!(state.runs.compare.as_ref().map(|c| c.group), Some(gid));
+    let o_place = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
+    assert_eq!(
+        entries(&state).last(),
+        Some(&o_place),
+        "FR-007: the forward entries are kept"
+    );
+    press_with(&mut state, Dir::Forward, Source::Button, &w1_only);
+    assert_eq!(state.workspace.active, Some(other()));
+    assert_eq!(state.session.active, Some(o));
+    assert!(state.runs.compare.is_none());
+}
+
+#[test]
+fn compare_of_another_project_whose_group_is_gone_is_skipped_and_removed() {
+    let (mut state, d, _, _) = two_projects();
+    let gid = run_group(7, "g", &["feat-a", "feat-b"]).id;
+    // /other's last list holds no group 7 (it was dismissed there).
+    state.runs.known.insert(other(), Vec::new());
+    let gone = in_other(View::Compare(gid));
+    walked_through(
+        &mut state,
+        &[at_session(SessionLocation::Default, d), gone.clone()],
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
         Step::Show(at_session(SessionLocation::Default, d))
     );
-    assert!(!entries(&state).contains(&other), "removed");
+    assert!(!entries(&state).contains(&gone));
+    assert_eq!(state.workspace.active, Some(repo()));
 }
 
 // ---- U4: showing a target ----------------------------------------------------------------------
@@ -426,12 +671,48 @@ fn apply_history_sends_each_views_messages() {
 }
 
 #[test]
+fn apply_history_switches_project_first_for_another_projects_place() {
+    let (state, _, o, _) = two_projects();
+    let reopened = || Message::Project(project::Msg::Reopened(other()));
+    assert_eq!(
+        state.apply_history(Step::Show(in_other(View::Session {
+            location: SessionLocation::Default,
+            id: o,
+        }))),
+        vec![reopened(), Message::Session(session::Msg::Selected(o))]
+    );
+    assert_eq!(
+        state.apply_history(Step::Show(in_other(View::Overview))),
+        vec![
+            reopened(),
+            Message::Overview(overview::Msg::Opened {
+                settings_open: false
+            })
+        ]
+    );
+    let gid = run_group(7, "g", &["feat-a", "feat-b"]).id;
+    assert_eq!(
+        state.apply_history(Step::Show(in_other(View::Compare(gid)))),
+        vec![
+            reopened(),
+            Message::Runs(runs::Msg::CompareOpened {
+                group: gid,
+                project: other(),
+            })
+        ]
+    );
+}
+
+#[test]
 fn finishing_a_move_records_only_a_place_other_than_the_target() {
     let (mut state, d, a, _) = walked();
-    let step = state.press_history(Msg::Pressed {
-        dir: Dir::Back,
-        source: Source::Button,
-    });
+    let step = state.press_history(
+        Msg::Pressed {
+            dir: Dir::Back,
+            source: Source::Button,
+        },
+        &no_worktrees,
+    );
     assert_eq!(step, Step::Show(at_session(worktree("feat-a"), a)));
     assert!(state.history.moving);
     for message in state.apply_history(step) {
@@ -447,10 +728,13 @@ fn finishing_a_move_records_only_a_place_other_than_the_target() {
     assert_eq!(state.history.list.position(), 1);
 
     // A move that lands elsewhere than its target: the shown place is recorded.
-    let _ = state.press_history(Msg::Pressed {
-        dir: Dir::Back,
-        source: Source::Button,
-    });
+    let _ = state.press_history(
+        Msg::Pressed {
+            dir: Dir::Back,
+            source: Source::Button,
+        },
+        &no_worktrees,
+    );
     assert!(state.history.moving);
     state.finish_history_move(Source::Button);
     assert_eq!(
@@ -638,10 +922,13 @@ fn back_in_a_browsing_review_tab_is_the_tabs_own_back() {
         let (mut state, _) = in_review(true);
         let before = entries(&state);
         let position = state.history.list.position();
-        let step = state.press_history(Msg::Pressed {
-            dir: Dir::Back,
-            source,
-        });
+        let step = state.press_history(
+            Msg::Pressed {
+                dir: Dir::Back,
+                source,
+            },
+            &no_worktrees,
+        );
         assert_eq!(step, Step::ReviewBack, "{source:?}");
         assert_eq!(state.history.list.position(), position, "{source:?}");
         assert_eq!(entries(&state), before, "{source:?}");

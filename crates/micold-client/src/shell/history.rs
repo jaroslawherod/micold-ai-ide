@@ -14,7 +14,7 @@ use crate::App;
 /// Resolve and apply a Back/Forward press, then dispatch its follow-ups.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let Msg::Pressed { source, .. } = msg;
-    let step = app.core.press_history(msg);
+    let step = app.core.press_history(msg, &|_| None);
     let moved = matches!(step, Step::Show(_));
     let follow_ups = app.core.apply_history(step);
     let tasks: Vec<_> = follow_ups
