@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
 | #1589 | M1 | merged | 506cceb6986e4db6f8b78b4fe665d71a464a2165 |
-| #… | M2 | open | … |
+| #1603 | M2 | open | … |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
-| M2 | T010–T019 | full | Add attachment button and picker | #… | pr-open |
+| M2 | T010–T019 | full | Add attachment button and picker | #1603 | pr-open |
 | M3 | T020–T023 | full | Attach shortcut | #… | pending |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
 | M5 | T034–T039 | full | Drop-target cue | #… | pending |
