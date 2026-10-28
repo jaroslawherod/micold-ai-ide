@@ -900,7 +900,7 @@ worktree** on a project you last used in **Advanced** and it opens in **Advanced
 the input, and runs it once as soon as the GitHub source shows. A query you typed but did not run is
 not remembered; the form reopens with the last one you ran. If you never ran a query, the form
 opens in **Advanced** with the prompt and sends nothing. An empty **Run** sends nothing and is not
-remembered.
+remembered: the next time the form opens, it runs the last query that did run.
 
 **When a query is not run.** The app refuses a query before sending it, and says why in place of
 the list, when it names a repository, organization or user (`repo:`, `org:`, `user:` or `owner:`
