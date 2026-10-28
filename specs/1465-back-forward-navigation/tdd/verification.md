@@ -140,3 +140,27 @@ Untested criteria: none. Weakly tested: FR-013's focus-rule sentence, FR-006 For
 - The sandbox acceptance suite (`mise run test-sandbox`) and `mise run gate` (fmt, clippy, shell scripts) were not run; only `cargo test --workspace`.
 - PR #1574's newer M4 review fixes are not on this branch and were not assessed, as instructed.
 - No remediation tasks were appended to `tasks.md`: the audit was asked to leave the tree clean apart from this report. The tasks are listed in the hand-off message instead.
+
+## Re-verification after remediation (close unit, 2026-10-28)
+
+Added by the close unit, which wrote the remediation; the audit above is unchanged and its verdict
+was given at `9261978d5`. Remediation tasks T039–T047 in `tasks.md`; details and red runs in the
+cycle log's Cycle 20. Each surviving mutant was re-applied on top of the new tests, one at a time,
+run and restored (logs in the session scratchpad).
+
+| Finding | Remediation | Mutant re-run | Result |
+| --- | --- | --- | --- |
+| 1 HIGH | core `forward_passes_over_an_entry_equal_to_shown_and_keeps_it` (bounded by a thread timeout); client `forward_passes_over_the_shown_place_and_on_past_a_gone_one` | M10 | Killed: core test fails at its 10 s bound; client test hangs (killed by `timeout`) |
+| 2 HIGH | `tests/history.rs` `a_key_press_acts_over_a_session_fields_stale_focus_behind_the_review_tab`; `tests/review_keys.rs` `a_session_fields_stale_focus_behind_the_tab_leaves_the_keyboard_to_the_review` | A7 | Killed by both |
+| 3 MED | `the_shown_place_is_none_while_settings_is_open` | A3 | Killed |
+| 4 MED | Waiver recorded in the cycle log (M1 cycles 1–8 test-after; not repairable) | — | Waived |
+| 5 MED | Guide test checks the focus-rule, Review-tab-first, passed-over and Review-sheet sentences | each sentence altered in turn | Killed (4 of 4) |
+| 6 LOW | `mod panes::app_with_sessions` restored; no test needed `Idle` | — | Reverted; `panes::` and `history_tests` pass |
+| 7 LOW | Core sweeps assert an independently computed outcome (entry, position, kept entries); full-suite baseline recorded in the cycle log | — | Done |
+| 8 LOW | Cycle-log citations rewritten to the commits merged to `main` (all reachable) | — | Done |
+| 9 LOW | `history_rows()` writes the labels out; `let _ = b;` replaced by an entries assertion | `history_key_label` takes the other platform's label | Killed (2 sheet tests) |
+| 10 INFO | T037 quickstart §B GUI pass run: PASS (B12 covered by M5's pass); evidence `evidence/qs-B*.png` | — | Done |
+
+Survivors left: M8, C6 and A2, judged equivalent or redundant above. M8 was re-run and still
+survives, as expected. With findings 1–3 killed, 5 and 9 pinned, and 4 waived, no HIGH finding
+remains open; the test-after status of C1–C8 stands, under the waiver.

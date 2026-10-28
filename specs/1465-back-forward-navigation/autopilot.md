@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1465
-- **Worktree branch**: 1465-m5 (M5, stacked on 1465-m4; M4 on 1465-m4, stacked on 1465-m3; M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
+- **Worktree branch**: claude/project-thread-e4cve5 (origin/main with M1–M4 merged, M5 and the close restacked on it; earlier milestones ran on 1465-m1 … 1465-m5)
 - **Started**: 2026-10-27
-- **Phase**: close (M5 reviews and visual-pass done; T038 recorded; speckit-converge skipped: review B CLEAN for every milestone)
-- **Next step**: close — speckit-tdd-verify and T037 (quickstart §B B1–B13 visual-pass) by the orchestrator; then test-strength fixes, close-diff review, spec Status, full gate, pr-title-close.md / pr-body-close.md (M5 + close ship as one PR after #1574 merges and the branch is restacked on main)
+- **Phase**: done (close: TDD verification remediated T039–T047, spec Closed; T037 quickstart §B GUI pass PASS (B12 covered by the M5 visual pass))
+- **Next step**: handoff — close-diff review of the remediation range, then the orchestrator opens the M5 + close PR (title/body in the session scratchpad: pr-title-close.md, pr-body-close.md)
 
 ## Pull requests
 
@@ -19,8 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1559 | design | merged | ed945a97b54efe6e58c68c39a91c29f019c3741d |
 | #1567 | M1 | merged | ebd7090c556500a3b530604d4cde73f91b3b7ddc |
 | #1571 | M2 + M3 | merged | ad0f70293 |
-| #1574 | M4 | open (review A r1 CHANGES fixed; r2 A and B CLEAN — recorded in branch 1465-m4's ledger) | — |
-| (pending) | M5 + close (one PR) | branch 1465-m5, to be restacked on main after #1574 merges | — |
+| #1574 | M4 | merged (review A r1 CHANGES fixed; r2 A and B CLEAN) | 992b6168d8ffd3d391d5c9e143fbb0e9d1f272c4 |
+| (pending) | M5 + close (one PR, `Fixes #1465`) | to open from claude/project-thread-e4cve5 | — |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | #1571 | merged |
 | M3 | T024–T026 | light | The Review tab's own Back first | #1571 | merged |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | #1574 | open, reviews clean |
-| M5 | T034–T036 | light | The Review sheet lists Back and Forward | M5+close PR | reviews clean, visual-pass PASS |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | #1574 | merged |
+| M5 | T034–T036 | light | The Review sheet lists Back and Forward | M5+close PR | reviews clean, visual-pass PASS; ships with the close |
 
 ## Decisions
 
@@ -70,6 +70,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review) | 1 | range 27327176c..be9d666d3 | CLEAN (sheet_model rows, labels from history_key_label, layout_snapshot only two sheet states) |
 | Review B M5 (conformance) | 1 | range 27327176c..be9d666d3 | CLEAN |
 | Visual-pass M5 | 1 | review shortcut sheet, single keys on/off, light and dark | PASS, 1 MINOR (Alt+← / Alt+→ keycap arrows draw as thin lines with small arrowheads, readable when zoomed; nothing clipped; no fix). Evidence: evidence/m5-sheet-*.png |
+| Quickstart §B GUI pass (T037) | 1 | B1–B13, Linux | PASS: B1–B11, B13 pass; B12 skipped (M5 visual pass). B7 wording fixed (caret moves as before, prose only). Pre-existing "Start beside a running session?" dialog seen in B1/B2/B3/B6/B8, as for a click. Evidence: evidence/qs-B*.png |
+| speckit-tdd-verify (close) | 1 | range a3db2cf11^..9261978d5 | FAIL: 2 HIGH (Forward pass-over, stale session-field focus), 3 MED, 4 LOW, 1 INFO — remediated T039–T047 (finding 4 waived in the cycle log); surviving mutants M10, A7, A3 re-run and killed; re-verification note in tdd/verification.md |
+| Close-diff review | — | range c41a3b64d..HEAD (the remediation and close commits) | pending (orchestrator) |
 
 ## Declined review findings
 
@@ -86,4 +89,4 @@ None.
 
 ## Follow-ups not done
 
-- tdd/cycle-log.md has two "Cycle 18" entries across branches (M4 part 2 on 1465-m4, M5 here); renumber M5's to follow M4's when the branch is restacked on main.
+- None open. (Done: the duplicate Cycle 18 was renumbered on restack, M5's is Cycle 19.)
