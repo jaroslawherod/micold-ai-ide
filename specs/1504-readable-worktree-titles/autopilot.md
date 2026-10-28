@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1557 | design | merged | 24a2a839f |
 | #1566 | M1 | merged | 2104379be |
 | #1568 | M2 | merged | fb29142a7 |
-| — | M3 | pending (not opened; branch 1504-m3 at 2d4d8fb10) | — |
+| — | M3 | merged (rebase merge, no PR number recorded) | 6f67d1beb |
 | — | M4 | pending (not opened; branch 1504-m4, stacked on M3) | — |
 
 ## Milestones
