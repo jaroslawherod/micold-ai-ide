@@ -474,7 +474,7 @@ pane") and FR-001's anchor on diff lines.
   `crates/micold-client/src/ui/mod.rs`) off the session of `FieldId::Transcript(_)` when it is
   focused, not only `state.session.active`, or have `App::update_selection`'s press focus that
   pane (`shell::panes::focus_pane`) — whichever keeps K-1–K-11 and FR-019a; T052 passes
-- [ ] T054 [P] [US1] Test (renderer or component, `crates/micold-client/src/ui/material/inline_diff.rs`
+- [x] T054 [P] [US1] Test (renderer or component, `crates/micold-client/src/ui/material/inline_diff.rs`
   tests or `crates/micold-material`): a press on a diff line then a drag anchors the selection at
   the press, as prose and code do; a same-line drag ending right of a short diff line's end selects
   to that line's end. Fails on main

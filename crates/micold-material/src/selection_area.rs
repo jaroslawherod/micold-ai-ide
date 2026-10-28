@@ -7,7 +7,8 @@
 //!   nothing from the area: controls come first (FR-004).
 //! - **A-2**: an uncaptured left press inside takes keyboard focus and publishes `on_press` with
 //!   the click count, *before* whatever the children published for the same press, so the
-//!   gesture's first hit lands in a gesture already begun (FR-007).
+//!   gesture's first hit lands in a gesture already begun (FR-007). The children see each mouse
+//!   event where it happened, not where the runtime's batch of events ended (#1550 M6).
 //! - **A-3**: while `dragging` and the pointer is above (below) the bounds, the children see the
 //!   pointer clamped to the top (bottom) row, so the unit at the edge keeps answering, and the area
 //!   publishes `on_edge(Up)` (`Down`) on each frame it requests, a frame ahead through
@@ -122,6 +123,8 @@ struct State {
     /// A left press inside started a gesture that has not been released.
     pressed: bool,
     previous: Option<mouse::Click>,
+    /// Where the last move put the pointer, in the window's coordinates.
+    pointer: Option<Point>,
 }
 
 impl operation::Focusable for State {
@@ -245,6 +248,25 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+        // The runtime hands every event of a batch the cursor where the batch ended, so in a fast
+        // drag the press would land where the drag got to (#1550 M6). Each event is seen at its
+        // own place instead: a move where it went, a press or release where the last move left the
+        // pointer. The area is never inside a scrollable, so its coordinates are the window's.
+        let at = {
+            let state = tree.state.downcast_mut::<State>();
+            match event {
+                Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    state.pointer = Some(*position);
+                }
+                Event::Mouse(mouse::Event::CursorLeft) => state.pointer = None,
+                _ => {}
+            }
+            state.pointer
+        };
+        let cursor = match (cursor, at) {
+            (mouse::Cursor::Available(_), Some(p)) => mouse::Cursor::Available(p),
+            _ => cursor,
+        };
         let edge = cursor
             .position()
             .filter(|_| self.dragging)
