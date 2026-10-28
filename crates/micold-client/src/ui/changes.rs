@@ -710,7 +710,14 @@ fn sort_chips<'a>(
                 }
             }
         });
-    Row::with_children(chips).spacing(spacing::SM).wrap().into()
+    // Wrapped lines sit XS apart: the pane's column reserves its spacing before the tree, so at
+    // 640x480 two chip lines have 68 px, and lines SM apart (72) put the last chip out of its row
+    // (#1474).
+    Row::with_children(chips)
+        .spacing(spacing::SM)
+        .wrap()
+        .vertical_spacing(spacing::XS)
+        .into()
 }
 
 /// The list when the filter matches no changed file (FR-011, scenario 3.3): the line saying so and
