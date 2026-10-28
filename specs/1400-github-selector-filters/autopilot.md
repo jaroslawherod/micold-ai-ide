@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1400
 - **Worktree branch**: claude/project-thread-5zc5qk
 - **Started**: 2026-10-27
-- **Phase**: implement
-- **Next step**: M3: orchestrator pushes branch `1400-m3` and opens the M3 PR (title/body in the scratchpad `pr-title-m3.md`/`pr-body-m3.md`), waits for CI and merges; then M4. T061 (Polish, no code) left to the close unit.
+- **Phase**: done
+- **Next step**: handoff. The close PR (branch `1400-close`, stacked on M7 #1583; title/body in the scratchpad `pr-title-close.md`/`pr-body-close.md`) is opened after #1583 merges; the run ends when it merges.
 
 ## Pull requests
 
@@ -19,6 +19,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1558 | Design (spec, plan, tasks) | merged (rebase) | 1236152a3c3438f2bd27a213a897ec576ad397fd |
 | #1564 | M1 | merged (rebase) | 2f7426506b3510357d86c5df9eee9edd3901996c |
 | #1569 | M2 | merged (rebase) | 02bcea990d66b0b5cc6bddfb102073169d45912f |
+| #1570 | M3 | merged (rebase) | 42aea7bbc825ff62d9efe83657bfbd0183658f61 |
+| #1573 | M4 | merged (rebase) | cba99dc159c462cd507847dbd99491568ab0b10f |
+| #1577 | M5 | merged (rebase) | f1d0db998b73f3778f5a046834888fee75a81ccc |
+| #1578 | M6 | merged (rebase) | de7e59628b5dd501ed3db82d44f3d76ea7b25ea9 |
+| #1583 | M7 | open (head c573fbbdc) | |
+| pending | Close: tdd-verify, quickstart §B results (T061), Status closed | pending (branch `1400-close`, not pushed) | |
 
 ## Milestones
 
@@ -26,11 +32,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Core filter rules, filtered load, label choices, remembered format (no UI) | #1564 | merged 2f7426506 |
 | M2 | T019–T030 | full | Exclude and include labels in the selector (US1) | #1569 | merged 02bcea990 |
-| M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | pending (orchestrator pushes `1400-m3`, opens) | rebased on origin/main 02bcea990 (M2 merged; one main_tests.rs conflict with 1504, both kept); review round 1 done (A, B CLEAN; visual PASS; B F1 Verify filter fixed, prose only); full gate green at 2bb5da62d (`scripts/gate.sh`, 595 test results ok, scripts 0 failures); not pushed. Deviation: `remember_github_selector`/`forget_github_selector`/`remembered_selector` live in `shell/issues.rs` (as data-model §10 says, beside `remember_jira_query`), not `shell/github_filter.rs` (contract §4, T034): `issues_are_requested_only_on_named_events.rs` forbids `notify_` there. `shell::remembered` is declared by `shell::jira` via `#[path]` and re-exported from `shell`, so `jira_connection_shell.rs` stays unchanged |
-| M4 | T036–T039 | light | Filter by state, Closed chip (US5) | | implemented on `1400-m4` (stacked on M3 b032e94d5); scoped gate green; layout_snapshot.txt re-recorded (Filters panel +40px, new state `add-worktree-dialog-issue-list-closed`); review round 1 done (A CLEAN, B CLEAN, visual PASS; six MINORs fixed in deb5a6814, see Review rounds); full gate green at deb5a6814 (`scripts/gate.sh`, 595 test results ok, scripts 0 failures); not pushed; PR pending (orchestrator pushes `1400-m4` after #1570 merges, opens from `pr-title-m4.md`/`pr-body-m4.md`) |
-| M5 | T040–T049 | full | Advanced GitHub search query with its errors (US3, US4) | | implemented on `1400-m5` (stacked on M4 0fd79f84f); T040–T049 ticked; scoped gate green (262 test results ok); layout_snapshot.txt re-recorded (GitHub issue states: the switch joins the Filters row, no height change; new state `add-worktree-dialog-github-advanced`); fake_gh `reject` mode; review round 1 done (A, B CLEAN; visual PASS; A F1, A F3, visual empty-run fixed in 7e8fb40c1, decisions M5-D1–D5); full gate green at 7e8fb40c1 (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; PR pending (orchestrator pushes `1400-m5` after M4 merges, opens from `pr-title-m5.md`/`pr-body-m5.md`) |
-| M6 | T050–T052 | light | Remember advanced mode and last run query (US2 AS3, AS4) | | implemented on `1400-m6` (stacked on M5 22c2800be); T050–T052 ticked; red 6 failed / 56 passed, green 62 passed (tdd/cycle-log.md); no layout change, `layout_snapshot.txt` untouched; full gate green at 339986165 (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; no review round yet; PR pending (`pr-title-m6.md`/`pr-body-m6.md`) |
-| M7 | T053–T060 | full | Assignee, author, milestone (US6; provisional D1) | | implemented on `1400-m7` (stacked on M6 7d0eaa529); T053–T060 ticked; red/green in tdd/cycle-log.md §M7; `layout_snapshot.txt` re-recorded (only `add-worktree-dialog-github-filters-panel`: the Filters panel caps at 12 menu items, 320 → 512 px); full gate green at deb0ecaf7; review round 1 (A CLEAN 3 MINOR, B CHANGES 2 MINOR docs, visual PASS 2 MINOR) fixed in a6c5b40b6, 7bfa9418b, ff612556e, not yet re-reviewed; full gate green at ff612556e (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; PR pending (`pr-title-m7.md`/`pr-body-m7.md`) |
+| M3 | T031–T035 | full | Remember the basic filters per project (US2 AS1, AS2, AS5) | #1570 | merged 42aea7bbc. Earlier: rebased on origin/main 02bcea990 (M2 merged; one main_tests.rs conflict with 1504, both kept); review round 1 done (A, B CLEAN; visual PASS; B F1 Verify filter fixed, prose only); full gate green at 2bb5da62d (`scripts/gate.sh`, 595 test results ok, scripts 0 failures); not pushed. Deviation: `remember_github_selector`/`forget_github_selector`/`remembered_selector` live in `shell/issues.rs` (as data-model §10 says, beside `remember_jira_query`), not `shell/github_filter.rs` (contract §4, T034): `issues_are_requested_only_on_named_events.rs` forbids `notify_` there. `shell::remembered` is declared by `shell::jira` via `#[path]` and re-exported from `shell`, so `jira_connection_shell.rs` stays unchanged |
+| M4 | T036–T039 | light | Filter by state, Closed chip (US5) | #1573 | merged cba99dc15. Earlier: implemented on `1400-m4` (stacked on M3 b032e94d5); scoped gate green; layout_snapshot.txt re-recorded (Filters panel +40px, new state `add-worktree-dialog-issue-list-closed`); review round 1 done (A CLEAN, B CLEAN, visual PASS; six MINORs fixed in deb5a6814, see Review rounds); full gate green at deb5a6814 (`scripts/gate.sh`, 595 test results ok, scripts 0 failures); not pushed; PR pending (orchestrator pushes `1400-m4` after #1570 merges, opens from `pr-title-m4.md`/`pr-body-m4.md`) |
+| M5 | T040–T049 | full | Advanced GitHub search query with its errors (US3, US4) | #1577 | merged f1d0db998. Earlier: implemented on `1400-m5` (stacked on M4 0fd79f84f); T040–T049 ticked; scoped gate green (262 test results ok); layout_snapshot.txt re-recorded (GitHub issue states: the switch joins the Filters row, no height change; new state `add-worktree-dialog-github-advanced`); fake_gh `reject` mode; review round 1 done (A, B CLEAN; visual PASS; A F1, A F3, visual empty-run fixed in 7e8fb40c1, decisions M5-D1–D5); full gate green at 7e8fb40c1 (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; PR pending (orchestrator pushes `1400-m5` after M4 merges, opens from `pr-title-m5.md`/`pr-body-m5.md`) |
+| M6 | T050–T052 | light | Remember advanced mode and last run query (US2 AS3, AS4) | #1578 | merged de7e59628 (M6 review CLEAN, see Review rounds). Earlier: implemented on `1400-m6` (stacked on M5 22c2800be); T050–T052 ticked; red 6 failed / 56 passed, green 62 passed (tdd/cycle-log.md); no layout change, `layout_snapshot.txt` untouched; full gate green at 339986165 (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; no review round yet; PR pending (`pr-title-m6.md`/`pr-body-m6.md`) |
+| M7 | T053–T060 | full | Assignee, author, milestone (US6; provisional D1) | #1583 | open; round 1 fixes re-reviewed CLEAN; full gate green at c573fbbdc (`scripts/gate.sh`, 597 test results ok, scripts 0 failures). Earlier: implemented on `1400-m7` (stacked on M6 7d0eaa529); T053–T060 ticked; red/green in tdd/cycle-log.md §M7; `layout_snapshot.txt` re-recorded (only `add-worktree-dialog-github-filters-panel`: the Filters panel caps at 12 menu items, 320 → 512 px); full gate green at deb0ecaf7; review round 1 (A CLEAN 3 MINOR, B CHANGES 2 MINOR docs, visual PASS 2 MINOR) fixed in a6c5b40b6, 7bfa9418b, ff612556e, not yet re-reviewed; full gate green at ff612556e (`scripts/gate.sh`, 597 test results ok, scripts 0 failures); not pushed; PR pending (`pr-title-m7.md`/`pr-body-m7.md`) |
 
 ## Decisions
 
@@ -58,6 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7-D4 | Review A F3: extract the debounce and the US6 enum spellings | Done in full: all three debounces had the same shape (sleep `ISSUE_SEARCH_DEBOUNCE`, then one message), so one `after_debounce(msg)`; `qualifier`/`words`/`described` on the three enums | Proportionate: no part skipped |
 
 ## Review rounds
+
+- Close (2026-10-28, on M7 tip c573fbbdc): speckit-tdd-verify run inline (no Skill/Agent tool in the close unit): **PASS_WITH_GAPS** (`tdd/verification.md`): 49 behaviours, 34 PROVEN, 13 LIKELY (M1, M2 reds reconstructed), 0 test-after; no HIGH smell; no existing test weakened; 7/7 deliberate mutants caught; SC-002 untestable here. MED/LOW findings → tasks.md Phase 11 (T062–T064), not fixed (test style only, no behaviour). speckit-converge skipped: every milestone has a CLEAN review B or a CLEAN re-review after its fixes. Quickstart §B recorded in `visual/close.md` (T061): B1–B16 PASS (B11 reopen half and B5 restart half run at close, `close-*.png`) except B12 PARTIAL (no Jira site: New branch and back), B17 not run (no signed-in `gh`), B18 Linux only. Close diff is specs-only: no gate beyond the M7 gate at the same tree.
 
 - M7 re-review of the round 1 fixes (scoped, sonnet, fd36c527c:7fcbb124f): CLEAN; the refactor matched old strings and debounce timing exactly.
 
