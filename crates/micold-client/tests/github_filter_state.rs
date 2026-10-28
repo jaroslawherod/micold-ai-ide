@@ -21,8 +21,8 @@ use micold_client::features::Outcome;
 use micold_core::git::GitRemote;
 use micold_core::github::{FakeIssueSource, Issue, IssueLoadError, IssuePage, NamePage};
 use micold_core::github_filter::{
-    load_filtered, load_label_choices, BasicFilters, FilterFailure, LabelName, RememberedSelector,
-    SelectorChange, NOT_ACCEPTED,
+    load_filtered, load_label_choices, BasicFilters, FilterFailure, IssueState, LabelName,
+    RememberedSelector, SelectorChange, NOT_ACCEPTED,
 };
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
 use micold_core::typeahead::Direction;
@@ -1155,4 +1155,156 @@ fn a_label_in_another_case_or_beyond_a_partial_list_is_not_called_missing() {
     let selector = &form(&state).github_selector;
     assert_eq!(selector.chip_text(&label("UI")), "UI");
     assert_eq!(selector.chip_text(&label("zzz")), "zzz");
+}
+
+// --- T036: the state filter (US5) -----------------------------------------------------------
+
+const ONLY_CLOSED: &str = "repo:o/r is:issue is:closed sort:updated-desc";
+const ANY_STATE: &str = "repo:o/r is:issue sort:updated-desc";
+
+fn closed_issues() -> Vec<Issue> {
+    vec![
+        issue(31, "Old crash", &["bug"]).closed(true),
+        issue(12, "Done docs", &[]).closed(true),
+    ]
+}
+
+fn with_state(state: IssueState) -> BasicFilters {
+    let mut basic = BasicFilters::default();
+    basic.set_state(state);
+    basic
+}
+
+/// A shown form whose State row chose `chosen`, its listing answered with `issues`.
+fn stated(chosen: IssueState, issues: Vec<Issue>) -> State {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::StateChosen(chosen));
+    let total = issues.len() as u64;
+    let fake = FakeIssueSource::new().with_search_pages(vec![Ok(page(issues, total, None))]);
+    assert!(serve(&mut state, &fake));
+    state
+}
+
+/// US5 AS1: the State row offers Open, Closed and All, Open chosen by default.
+#[test]
+fn the_state_row_offers_open_closed_and_all_with_open_chosen() {
+    let state = shown(default_issues());
+    assert_eq!(
+        form(&state).github_selector.state_choices(),
+        vec![
+            (IssueState::Open, "Open", true),
+            (IssueState::Closed, "Closed", false),
+            (IssueState::All, "All", false),
+        ]
+    );
+}
+
+/// US5 AS2: Closed sends one listing with `is:closed`; every listed issue is closed.
+#[test]
+fn closed_lists_the_closed_issues_with_one_listing() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    let before = state.worktree_form.issue_request_seq;
+    filter(&mut state, GithubMsg::StateChosen(IssueState::Closed));
+    assert_eq!(state.worktree_form.issue_request_seq, before + 1);
+    let (_, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), ONLY_CLOSED);
+    assert_eq!(
+        form(&state).github_selector.state_choices()[1],
+        (IssueState::Closed, "Closed", true)
+    );
+
+    let state = stated(IssueState::Closed, closed_issues());
+    let held = form(&state).issues.held();
+    assert_eq!(held.len(), 2);
+    assert!(held.iter().all(|issue| issue.is_closed()));
+    assert_eq!(
+        form(&state).github_selector.active_line().as_deref(),
+        Some("Closed issues")
+    );
+}
+
+/// All sends no state term; going back to Open is 034's listing again.
+#[test]
+fn all_sends_no_state_term_and_open_is_the_default_listing() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::StateChosen(IssueState::All));
+    let (_, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), ANY_STATE);
+    assert_eq!(
+        form(&state).github_selector.active_line().as_deref(),
+        Some("Open and closed issues")
+    );
+    assert_eq!(form(&state).github_selector.basic.chosen_count(), 1);
+
+    filter(&mut state, GithubMsg::StateChosen(IssueState::Open));
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert!(state.worktree_form.awaited_issue_load().is_some());
+    assert_eq!(form(&state).github_selector.basic.chosen_count(), 0);
+}
+
+/// US5 AS3, FR-017: a closed issue picks like an open one.
+#[test]
+fn a_closed_issue_fills_the_form_as_an_open_one_does() {
+    let pick_issue = |closed: bool| {
+        let mut state = stated(
+            IssueState::All,
+            vec![issue(31, "Old crash", &["bug"]).closed(closed)],
+        );
+        send(
+            &mut state,
+            Msg::IssuePicked {
+                number: 31,
+                mapping: vec![],
+            },
+        );
+        let f = form(&state);
+        (
+            f.ticket.clone(),
+            f.name.clone(),
+            f.type_,
+            f.picked_issue,
+            f.issue_list_open,
+        )
+    };
+    let closed = pick_issue(true);
+    assert_eq!(closed.0, "31");
+    assert_eq!(closed.1, "Old crash");
+    assert_eq!(closed.3, Some(31));
+    assert_eq!(closed, pick_issue(false));
+}
+
+/// FR-021: each state change is remembered as a basic change; choosing the chosen state is not a
+/// change.
+#[test]
+fn each_state_change_is_remembered() {
+    let mut state = shown(default_issues());
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::StateChosen(IssueState::Closed)),
+        remembers(with_state(IssueState::Closed))
+    );
+    assert!(remembered_by(&mut state, GithubMsg::StateChosen(IssueState::Closed)).is_empty());
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::StateChosen(IssueState::All)),
+        remembers(with_state(IssueState::All))
+    );
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::StateChosen(IssueState::Open)),
+        remembers(BasicFilters::default())
+    );
+}
+
+/// FR-021, US2 AS1: a remembered Closed state reopens with one `is:closed` listing.
+#[test]
+fn a_remembered_closed_state_reopens_with_one_closed_listing() {
+    let before = State::default().worktree_form.issue_request_seq;
+    let state = reopened(remembering(with_state(IssueState::Closed)));
+    let (seq, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), ONLY_CLOSED);
+    assert_eq!(seq, before + 1);
+    assert_eq!(
+        form(&state).github_selector.state_choices()[1],
+        (IssueState::Closed, "Closed", true)
+    );
 }

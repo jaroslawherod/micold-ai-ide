@@ -29,8 +29,8 @@ use crate::features::worktree_form::{
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{Issue, IssueListing, IssueLoadError, NoticeSource};
 use micold_core::github_filter::{
-    BasicFilters, FilterFailure, GithubFilter, LabelChoices, LabelName, RememberedSelector,
-    SelectorChange, UserQuery, NOT_ACCEPTED,
+    BasicFilters, FilterFailure, GithubFilter, IssueState, LabelChoices, LabelName,
+    RememberedSelector, SelectorChange, UserQuery, NOT_ACCEPTED,
 };
 use micold_core::jira_query::QueryMode;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Query};
@@ -253,6 +253,19 @@ impl GithubSelector {
         }
     }
 
+    /// The State row's chips, in order: the state, its words and whether it is the chosen one.
+    pub fn state_choices(&self) -> Vec<(IssueState, &'static str, bool)> {
+        let chosen = self.basic.state();
+        [
+            (IssueState::Open, "Open"),
+            (IssueState::Closed, "Closed"),
+            (IssueState::All, "All"),
+        ]
+        .into_iter()
+        .map(|(state, words)| (state, words, state == chosen))
+        .collect()
+    }
+
     /// The labels chosen in `list`, in chosen order.
     pub fn chosen(&self, list: LabelList) -> &[LabelName] {
         match list {
@@ -435,6 +448,8 @@ pub enum Msg {
     Picked(LabelList, usize),
     /// A chosen label's chip was pressed: remove it from its list.
     Removed(LabelName),
+    /// A state chip of the State row was pressed (US5).
+    StateChosen(IssueState),
     /// **Clear filters**: the default filter.
     ClearedAll,
     /// The form opened: the project's remembered selector, read by the shell (FR-021).
@@ -566,6 +581,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             selector.basic.remove_label(&label);
             reload = selector.basic != before;
             selector.rematch_both();
+        }
+        Msg::StateChosen(state) => {
+            let selector = &mut form.github_selector;
+            reload = selector.basic.state() != state;
+            selector.basic.set_state(state);
         }
         Msg::ClearedAll => {
             let selector = &mut form.github_selector;

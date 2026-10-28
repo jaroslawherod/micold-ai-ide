@@ -52,8 +52,13 @@ const STATES: &[&str] = &[
     "add-worktree-dialog-issue-list-longest-titles",
     "add-worktree-dialog-issue-list-labels",
     "add-worktree-dialog-issue-list-mixed-heights",
+    CLOSED_ROWS,
     ADVANCED_RESULTS,
 ];
+
+/// The one of [`STATES`] with closed issues: each row paints its "Closed" chip whole, whatever
+/// other status the issue's listing carried (feature 1400, selector-ui §3).
+const CLOSED_ROWS: &str = "add-worktree-dialog-issue-list-closed";
 
 /// The one of [`STATES`] in advanced mode: a query's results, open (feature 1186, FR-006).
 const ADVANCED_RESULTS: &str = "add-worktree-dialog-jira-advanced-results";
@@ -285,6 +290,9 @@ fn findings(name: &str, window: Size) -> Vec<String> {
             ("reporter", issue.reporter()),
         ];
         wanted.extend(issue.labels().iter().map(|l| ("label", l.as_str())));
+        if issue.is_closed() {
+            wanted.push(("closed chip", "Closed"));
+        }
         for (what, expected) in wanted {
             if !joined.contains(expected) {
                 found.push(format!(
@@ -510,4 +518,68 @@ fn the_query_mode_switch_keeps_the_panel_placement() {
         }
     }
     assert!(found.is_empty(), "{}", found.join("\n  "));
+}
+
+/// A closed issue's row says "Closed", not the status its listing or the status board holds for it
+/// (feature 1400, selector-ui §3); an open one keeps that status.
+#[test]
+fn a_closed_row_shows_closed_not_a_stale_status() {
+    use micold_core::jira_status::{StatusBoard, StatusCategory, TicketStatus};
+    let in_progress = || TicketStatus {
+        name: "In Progress".to_string(),
+        category: Some(StatusCategory::InProgress),
+    };
+    let jira = |key: &str, number: u64| {
+        Issue::jira(
+            key,
+            number,
+            "A ticket".into(),
+            vec![],
+            "2026-09-29T00:00:00Z".into(),
+        )
+    };
+    let mut under = build(CLOSED_ROWS);
+    let form = under.state.worktree_form.form.as_mut().expect("a form");
+    form.issues = micold_client::features::worktree_form::IssueList::Loaded {
+        listing: micold_core::github::IssueListing {
+            issues: vec![
+                jira("ABC-1", 1).closed(true),
+                jira("ABC-2", 2).with_status(Some(in_progress())),
+            ],
+            total_open: 2,
+            complete: true,
+        },
+        gh: std::path::PathBuf::from("/usr/bin/gh"),
+        searched: Vec::new(),
+        search: micold_client::features::worktree_form::SearchState::Idle,
+        descriptions: Default::default(),
+    };
+    form.issue_matches = micold_core::typeahead::rank(
+        &form.issues.held().into_iter().cloned().collect::<Vec<_>>(),
+        |i| i.row_text(),
+        &micold_core::typeahead::Query::new(""),
+    );
+    let mut board = StatusBoard::default();
+    let asked = vec!["ABC-1".to_string(), "ABC-2".to_string()];
+    let (epoch, _) = board.begin(asked.clone()).expect("keys");
+    board.apply(
+        epoch,
+        &asked,
+        Ok(vec![
+            ("ABC-1".to_string(), Some(in_progress())),
+            ("ABC-2".to_string(), Some(in_progress())),
+        ]),
+        std::time::Duration::from_secs(1),
+    );
+    let (rows, _) = micold_client::ui::issue_rows_with(form, &board);
+    let names: Vec<_> = rows
+        .iter()
+        .map(|row| row.status.as_ref().map(|s| s.name.clone()))
+        .collect();
+    assert_eq!(
+        names,
+        vec![Some("Closed".to_string()), Some("In Progress".to_string())]
+    );
+    let stale: Vec<_> = rows.iter().map(|row| row.status_stale).collect();
+    assert_eq!(stale, vec![false, false]);
 }
