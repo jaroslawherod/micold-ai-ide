@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M3
-- **Next step**: M3 full gate on the merged tree, push, PR body (orchestrator opens the PR)
+- **Next step**: M3 PR — orchestrator opens it from the pushed branch (2ee973f6c, full gate green), then CI; M4a next after merge
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | merged |
-| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | implementing |
+| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | (pending: orchestrator opens) | review |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | — | todo |
