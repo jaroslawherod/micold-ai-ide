@@ -80,6 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 scoped gate (fix diff) | 2 | — | green but for the same two root-only daemon tests. fmt, clippy `-p micold-daemon --all-targets -D warnings` green; `cargo test -p micold-daemon --no-fail-fast` 104 binaries ok; `structured_effort` 26/26, `structured_model` 10/10, `structured_permission` 31/31, 3 more runs green |
 | A (code-review, high) M3 | 2 | e44e3df94b602489e795f3431c120239ce23dc28:6b469ff7e0d7deba34f905dc0cc22a089a4af3ea | CLEAN (scoped, on 0dcb153f1..6b469ff7e): round-1 findings verified fixed. 1 MINOR — F1 the idle pick cleared `EffortPicks.deferred`, dropping the revert record of a deferred pick written before it; with both refused the catalog kept the refused deferred choice. Fixed test-first (`a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both`, fails before): the idle pick keeps `deferred`, and a refused deferred pick is put back unless a later pick was *kept* (`kept`, not `latest`), so an unanswered idle pick decides by its own answer. No further round (MINOR only). Run by the orchestrator |
 | M3 scoped gate (fix diff) | 3 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`; `structured_effort` 27/27 (4 runs), `structured_model` 10/10, `structured_permission` 31/31, `structured_switch` 11/11 |
+| Full gate M3 | 1 | — | green: `scripts/gate.sh` at a5c9a9461 (origin/main 5b7a23904; `PROTOCOL_VERSION` there and on the branch 73) |
 
 ## Declined review findings
 
@@ -89,7 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 - **Done**: M3 T018–T021 (0dcb153f1); review A round 1 F1–F4 and B round 1 F1 fixed test-first (6b469ff7e); review A round 2 CLEAN, its MINOR F1 fixed test-first; scoped gate green (see *Review rounds*). Previous PR #1591 merged at 5b7a239045d5bcf99f644b75b63c13b7fb000d74.
-- **Next step**: full gate (`scripts/gate.sh`), push, PR.
+- **Next step**: PR open by the orchestrator (branch pushed; body in the session scratchpad `pr-1554-m3-body.md`), then CI and merge.
 - **Main paths**: `crates/micold-daemon/src/state.rs` (`EffortPicks.asking`, `pick_effort`, `finish_effort_pick`, `settle_effort_ask`, `reapply_effort`, `pick_model` busy branch), `crates/micold-daemon/src/structured.rs` (`ask_effort`, `defer_effort`), tests `crates/micold-daemon/tests/structured_effort.rs` (last four), `crates/micold-daemon/tests/structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`).
 - **Open findings**: none. PR: none yet.
 
