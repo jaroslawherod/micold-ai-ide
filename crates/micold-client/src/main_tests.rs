@@ -14286,6 +14286,116 @@ mod panes {
         assert!(inputs(&mut rx).is_empty(), "no terminal received input");
         assert!(app.pending_drops.is_empty());
     }
+
+    /// #1550 T052 (FR-008, *Multi-session*): in a split of two structured sessions, a drag in
+    /// the pane that is not focused focuses it, so the copy keys' listener is that session's and
+    /// Ctrl+C (Cmd+C on macOS) copies its selection and interrupts nothing; then the other pane.
+    #[test]
+    fn a_drag_in_either_pane_of_a_split_gives_that_pane_the_copy_key() {
+        use micold_client::features::structured_transcript::TranscriptMsg;
+        use micold_client::features::transcript_selection::{rows, Click, SelectMsg};
+        use micold_core::session::SessionKind;
+        use micold_core::structured::selection::{TextPath, TextPos};
+        use micold_core::structured::{SequencedEvent, StructuredEvent};
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let _ = two_running_panes(&mut app, &ids);
+        // Two running sessions in one location leave a blocked start's dialog open in this
+        // fixture; it is not what this checks, and it would hold the keyboard.
+        app.core.session.blocked_start = None;
+        for id in &ids {
+            let (_, s) = app.core.workspace.find_session_mut(*id).unwrap();
+            s.kind = SessionKind::Structured;
+            let _ = update(
+                &mut app,
+                Message::Connection(ConnectionMsg::Event(DaemonMsg::StructuredEvents {
+                    session: *id,
+                    omitted: 0,
+                    events: vec![SequencedEvent {
+                        seq: 0,
+                        event: StructuredEvent::UserSent {
+                            text: "hello world".into(),
+                            attachments: vec![],
+                        },
+                    }],
+                    live: false,
+                })),
+            );
+        }
+        let ctrl_c = micold_client::keymap::KeyInput {
+            key: micold_client::keymap::Key::Char('c'),
+            mods: micold_client::keymap::Mods {
+                ctrl: !cfg!(target_os = "macos"),
+                logo: cfg!(target_os = "macos"),
+                ..micold_client::keymap::Mods::NONE
+            },
+            text: None,
+            physical: micold_client::keymap::PhysicalKey::Other,
+        };
+        // The second pane is focused; drag in the first, then in the second.
+        assert_eq!(app.core.session.active, Some(ids[1]));
+        for session in [ids[0], ids[1]] {
+            let row = app
+                .core
+                .transcript_view(session)
+                .and_then(|view| rows(&view).into_iter().next())
+                .expect("a row");
+            let at = |offset| TextPos {
+                row,
+                path: TextPath::new(vec![0]),
+                offset,
+            };
+            let select = |app: &mut App, msg| {
+                update(
+                    app,
+                    Message::Session(SessionMsg::Transcript(TranscriptMsg::Select(msg))),
+                )
+            };
+            let _ = select(
+                &mut app,
+                SelectMsg::Press {
+                    session,
+                    clicks: Click::Single,
+                },
+            );
+            for offset in [0, 5] {
+                let _ = select(
+                    &mut app,
+                    SelectMsg::Hit {
+                        session,
+                        pos: at(offset),
+                        click: Click::Single,
+                        line: None,
+                    },
+                );
+            }
+            let _ = select(&mut app, SelectMsg::Release { session });
+            assert!(app.core.transcript_selection.selecting(session));
+            assert_eq!(
+                micold_client::ui::composer::transcript_keys_session(&app.core, false),
+                Some(session),
+                "the copy keys' listener is the pressed pane's"
+            );
+            let _ = drain(&mut rx);
+            let copy = update(
+                &mut app,
+                Message::Composer(micold_client::features::composer::Msg::TranscriptKey {
+                    session,
+                    press: ctrl_c.clone(),
+                }),
+            );
+            assert!(
+                copy.units() > 0,
+                "the selection is written to the clipboard"
+            );
+            assert!(
+                !drain(&mut rx)
+                    .iter()
+                    .any(|m| matches!(m, ClientMsg::TurnInterrupt { .. })),
+                "nothing is interrupted"
+            );
+            assert!(app.core.transcript_selection.selecting(session), "it stays");
+        }
+    }
 }
 
 /// Feature 491 (FR-004, FR-007): the binary routes an op to its binding's daemon only, and one

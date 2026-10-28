@@ -583,7 +583,18 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
             | Event::Window(iced::window::Event::RedrawRequested(_))
                 if state.down =>
             {
-                if let Some(p) = cursor.position_over(bounds) {
+                // Right of the text on one of its lines, a drag reaches that line's end (#1550 M6):
+                // a short line's unit ends before the row does.
+                let beside = |p: Point| {
+                    (p.x >= bounds.x + bounds.width
+                        && p.y >= bounds.y
+                        && p.y < bounds.y + bounds.height)
+                        .then(|| Point::new(bounds.x + (bounds.width - 0.5).max(0.0), p.y))
+                };
+                if let Some(p) = cursor
+                    .position_over(bounds)
+                    .or_else(|| cursor.position().and_then(beside))
+                {
                     self.publish(state, p - origin, shell);
                 }
             }

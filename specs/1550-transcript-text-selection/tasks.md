@@ -457,6 +457,34 @@ layout_snapshot`; quickstart Part B step 6.
 
 ---
 
+## Phase 12: User Stories 1 and 2 — split-pane copy key and diff anchors (close unit's findings)
+
+Found by M5's visual pass (quickstart Part B step 9) and cut by the close unit: the merged code
+misses US2 in a two-pane split (FR-008, *Multi-session*: "the copy key acts only on the focused
+pane") and FR-001's anchor on diff lines.
+
+- [x] T052 [P] [US2] App-level test in `crates/micold-client/tests/features_transcript_selection.rs`
+  (or the App tests beside `App::transcript_focused`, `crates/micold-client/src/app.rs`): two panes
+  of two structured sessions, a press and drag in the pane that is not `session.active`, then
+  Ctrl+C copies that pane's selection and interrupts nothing; the same with the other pane; the
+  subscription built by `ui::composer::transcript_keys` hears the key for the pressed pane's
+  session. Fails on main
+- [x] T053 [US2] Make the copy key act on the focused transcript's pane: key
+  `ui::composer::transcript_keys` (`crates/micold-client/src/ui/composer.rs`, wired in
+  `crates/micold-client/src/ui/mod.rs`) off the session of `FieldId::Transcript(_)` when it is
+  focused, not only `state.session.active`, or have `App::update_selection`'s press focus that
+  pane (`shell::panes::focus_pane`) — whichever keeps K-1–K-11 and FR-019a; T052 passes
+- [x] T054 [P] [US1] Test (renderer or component, `crates/micold-client/src/ui/material/inline_diff.rs`
+  tests or `crates/micold-material`): a press on a diff line then a drag anchors the selection at
+  the press, as prose and code do; a same-line drag ending right of a short diff line's end selects
+  to that line's end. Fails on main
+- [x] T055 [US1] Fix the diff line's press: the press inside the hunk's `sideways` viewport reaches
+  the selection area before the drag moves (suspect the scrollable taking the press), and a point
+  right of a line's end answers that line's end; T054 passes. Re-run quickstart Part B steps 1 and
+  9 with the `visual-pass` skill, recorded in `visual-pass/m6-visual-pass.md`
+
+---
+
 ## Phase 11: Polish (close unit; no code)
 
 - [ ] T050 Run quickstart Part A in full and the gate; record the results in the ledger
@@ -476,6 +504,7 @@ layout_snapshot`; quickstart Part B step 6.
 - **Transcript wiring (T039–T043)** needs T038, T021 and T030.
 - **Copy controls (T044–T049)** need T012 and T023; they edit the files T038 and T041 touch, so they
   run after them.
+- **Split-pane copy key and diff anchors (T052–T055)** need M4b and M5; T052 beside T054.
 
 ### Parallel opportunities
 
@@ -580,5 +609,20 @@ depends on nothing beyond `main` and the earlier milestones (research R13).
   quickstart Part B step 6; `specs/1550-transcript-text-selection/visual-pass/`
 - **Depends on**: M1, M2, M4b
 - **Tier**: full
+
+### M6 — Split-pane copy key and diff anchors
+
+- **Tasks**: T052–T055
+- **Deliverable**: in a two-pane split, Ctrl+C / Cmd+C after a drag in either pane copies that
+  pane's selection (as the menu's Copy already does), and a selection on a diff's lines starts
+  where the pointer was pressed
+- **Satisfies**: US2 scenarios 1–2 in a split (FR-008, *Multi-session*), US1 scenario 1 on diff
+  lines (FR-001); quickstart Part B step 9
+- **Verify**: `cargo test -p micold-client --test features_transcript_selection` and the T054 test;
+  quickstart Part B steps 1 and 9 in `visual-pass/m6-visual-pass.md`
+- **Depends on**: M4b, M5
+- **Tier**: full (key subscription and focus across panes; the diff press needs debugging)
+- **User guide**: none needed — it already says the copy keys copy a selection; M6 makes it true
+  in a split (label `docs-not-needed`)
 
 Polish (T050–T051) changes no code: the close unit does it in the close PR.

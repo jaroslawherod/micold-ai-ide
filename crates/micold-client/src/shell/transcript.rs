@@ -17,9 +17,11 @@ use micold_client::app::Message;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::structured_transcript::{Scroll, TranscriptMsg};
 use micold_client::features::transcript_rich::HighlightJob;
+use micold_client::features::transcript_selection::SelectMsg;
 use micold_client::features::Outcome;
 use micold_client::ui::syntax;
 use micold_client::ui::transcript::transcript_scroll_id;
+use micold_core::protocol::messages::{SessionProcess, TerminalRef};
 
 use crate::App;
 
@@ -30,6 +32,18 @@ const HIGHLIGHT_BUDGET: Duration = Duration::from_secs(5);
 /// Apply `msg` and perform what it asks for.
 pub fn update(app: &mut App, msg: TranscriptMsg) -> Task<Message> {
     let session = msg.session();
+    // #1550 M6 (FR-008, *Multi-session*): a press to select focuses its pane first, as a press on
+    // the pane's header does. The selection area takes the press, so the pane's own `mouse_area`
+    // never hears it, and the copy keys listen on the focused pane's transcript only.
+    if let TranscriptMsg::Select(SelectMsg::Press { session, .. }) = msg {
+        crate::shell::panes::focus_pane_showing(
+            app,
+            TerminalRef {
+                session,
+                process: SessionProcess::Primary,
+            },
+        );
+    }
     let effect = app.core.update_transcript(msg);
     let scroll = match (session, effect.scroll) {
         (Some(session), Some(Scroll::End)) => {
@@ -117,7 +131,7 @@ fn run(job: HighlightJob) -> Option<TranscriptMsg> {
 
 #[cfg(test)]
 mod tests {
-    use micold_client::features::transcript_selection::{Click, EdgeDir, SelectMsg};
+    use micold_client::features::transcript_selection::{Click, EdgeDir};
     use micold_core::session::SessionId;
 
     use super::*;

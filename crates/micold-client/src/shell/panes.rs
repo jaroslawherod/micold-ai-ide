@@ -387,6 +387,13 @@ pub fn focus_pane(app: &mut App, id: PaneId) {
     follow_focus(app);
 }
 
+/// Focus the pane showing `terminal`, when one does and it is not focused already.
+pub fn focus_pane_showing(app: &mut App, terminal: TerminalRef) {
+    if let Some(pane) = layout(app).and_then(|l| l.pane_showing(terminal)) {
+        focus_pane(app, pane);
+    }
+}
+
 /// Make the selection follow the focused pane's terminal.
 fn follow_focus(app: &mut App) {
     let target = layout(app).and_then(PaneLayout::focused_terminal);

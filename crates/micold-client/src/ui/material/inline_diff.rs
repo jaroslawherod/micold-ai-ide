@@ -306,6 +306,7 @@ mod tests {
     use super::*;
     use crate::features::transcript_rich::Ticket;
     use crate::icons::Icon;
+    use crate::ui::material::SelectionArea;
     use iced::advanced::mouse;
     use iced::keyboard::key::Named;
     use iced::Point;
@@ -464,6 +465,70 @@ mod tests {
             line.bounds.y + line.bounds.height / 2.0,
         );
         assert_eq!(m.press(at), vec!["Lines(0) 4".to_owned()]);
+    }
+
+    /// Two lines, `banana split` and a short `fig`, and where each is painted.
+    fn banana_fig() -> EditDiff {
+        edit_diff(
+            "Write",
+            r#"{"file_path":"f.txt","content":"banana split\nfig\n"}"#,
+        )
+        .expect("a Write")
+    }
+
+    /// The selectable diff in a selection area, which publishes `press` on a press.
+    fn in_area(diff: &EditDiff) -> Mounted<'_> {
+        Mounted::new(SelectionArea::new(selectable(diff)).on_press(|_| "press".to_owned()))
+    }
+
+    /// The painted bounds of the line starting with `start`.
+    fn line_at(m: &mut Mounted<'_>, start: &str) -> iced::Rectangle {
+        m.painted_text()
+            .into_iter()
+            .find(|p| p.content.starts_with(start))
+            .expect("the line is painted")
+            .bounds
+    }
+
+    /// #1550 T054 (FR-001): the runtime hands every event of a batch the cursor where the batch
+    /// ended, so a fast drag's press, its move and the move after it all come with the pointer
+    /// on `fig`; the selection still starts where the press was, on `banana`.
+    #[test]
+    fn a_fast_drag_on_diff_lines_anchors_at_the_press() {
+        let diff = banana_fig();
+        let mut m = in_area(&diff);
+        let (banana, fig) = (line_at(&mut m, "banana"), line_at(&mut m, "fig"));
+        let advance = banana.width / "banana split".len() as f32;
+        let mid = |r: iced::Rectangle| r.y + r.height / 2.0;
+        let press_at = Point::new(banana.x + 2.3 * advance, mid(banana));
+        let end_at = Point::new(fig.x + 1.3 * advance, mid(fig));
+        let last = mouse::Cursor::Available(end_at);
+        let moved = |p| iced::Event::Mouse(mouse::Event::CursorMoved { position: p });
+        let _ = m.send(moved(press_at), last);
+        let pressed = m.send(
+            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            last,
+        );
+        assert_eq!(pressed, vec!["press".to_owned(), "Lines(0) 2".to_owned()]);
+        assert_eq!(m.send(moved(end_at), last), vec!["Lines(0) 14".to_owned()]);
+    }
+
+    /// #1550 T054 (FR-001): a drag along a short line that ends right of the line's row reaches
+    /// that line's end.
+    #[test]
+    fn a_drag_right_of_a_short_diff_line_selects_to_its_end() {
+        let diff = banana_fig();
+        let mut m = in_area(&diff);
+        let fig = line_at(&mut m, "fig");
+        let y = fig.y + fig.height / 2.0;
+        let start = Point::new(fig.x + 1.0, y);
+        let _ = m.hover(start);
+        assert_eq!(
+            m.press(start),
+            vec!["press".to_owned(), "Lines(0) 13".to_owned()]
+        );
+        let past = Point::new(fig.x + fig.width + 40.0, y);
+        assert_eq!(m.hover(past), vec!["Lines(0) 16".to_owned()]);
     }
 
     fn with_copy(diff: &EditDiff, state: Option<CopyState>) -> InlineDiff<'_, String> {
