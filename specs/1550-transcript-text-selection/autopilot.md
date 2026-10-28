@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M4b
-- **Next step**: M4b gate, Review A, Review B, visual pass
+- **Next step**: M4b PR (pushed; orchestrator opens it from the body in its scratchpad), then M5
 
 ## Pull requests
 
@@ -53,6 +53,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 (agent-resolved): `Selectable` (micold-material) wraps the element each leaf already draws and only adds hit-testing over its own one-paragraph-per-hard-line `Measure`; with no range the child is the leaf's unchanged element, so T-4's pixel gate holds by construction, at the cost of shaping the text twice (once for drawing, once for hits; both cached). The highlight is the child's: spans split at the range ends drawn with a `primary_container` span background and `on_primary_container` ink (`selectable_text::highlight`). Code and diff lines are one `Selectable` per drawn line with a `base` (the line's start in the unit), measuring tabs-as-spaces and padding but answering in bytes of the unit's raw text; T-6 reports `Shown { slot, base, text }`. `InlineDiff::selectable(part, on_hit)` takes a `DiffPart -> (slot, range)` closure (path, captions, lines are separate units in M2), `CodeBlock::selectable(slot, range, on_hit)` one slot. The material crate has its own `Click` and `Edge` (the client's `Click`/`EdgeDir` sit above it; M4b maps them). The contrast gate's "visibly distinct" is CIE76 ΔE ≥ 10, not a luminance ratio: light `primary_container` is within 1.04–1.10:1 of the code surface and diff tints but ΔE-distinct by hue.
 
 - M4b (agent-resolved): the selection area's click count (`SelectMsg::Press.clicks`, counted over the whole transcript) decides a new selection's granularity, not the unit's `Hit.click` (M3 A F4). `SelectMsg::Edge` while dragging becomes `Effect.scroll = Scroll::By(±EDGE_SCROLL_STEP)` (12 px a frame), performed by the shell as `scroll_by` on `transcript_scroll_id`; without a drag it scrolls nothing. A `Press` gives `FieldId::Transcript(session)` the keyboard; the area's own focus changes join the same field through `TrackFocusAs` (`ui/focus.rs`) when the view has prompts (the window's view always has). The context menu floats on the window overlay (`ui/mod.rs`, built by `ui::transcript::context_menu`), because the area reports the right press in window pixels; anchor clamped into the window like the other menus.
+
+- M4b visual pass (real client, Xvfb, the daemon tests' `claude` stand-in replaying recorded fixtures): Part B 1–5 pass, and the folded summary highlight; record in `visual-pass/m4b-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`. Only one interrupt was sent in the whole pass (the no-selection Ctrl+C), none from the copies.
 
 ## Tasks-unit notes
 
