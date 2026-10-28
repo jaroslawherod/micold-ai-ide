@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1523_daemon-configuration-schema-and-micold-daemon
 - **Started**: 2026-10-27
 - **Phase**: milestone M1
-- **Next step**: gate, open the M1 PR (review A round 1 fixed, review B running)
+- **Next step**: full gate, open the M1 PR (reviews A r2 and B CLEAN)
 
 ## Pull requests
 
@@ -38,6 +38,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks 1523 | 1 | 71774ca9:09ee4cb1 | CHANGES: 1 BLOCKER, 3 MAJOR, all fixed (single milestone; T087 un-[P]'d and made implementation too); round 2 below |
 | Tasks 1523 | 2 | 18c87a47:982c1a9d | CHANGES: 1 MAJOR (T087 position, moved before T010 so types/rules precede T012), 1 MINOR (ledger row, fixed); prose-only reorder, no round 3 |
 | M1 A (code-review high) | 1 | c31afd77:2b633544 | 10 findings; fixed: V5 line, V7 api_key_file for copilot/pi, V8 element position, V18 normalisation + `.claude.json`, `idle_stop` message; rest declined below |
+| M1 A | 2 | b98bb4c1:53ad9c6b | CLEAN; 2 MINOR left as is (V18 `.`; idle_stop u64 overflow message) |
+| M1 B (conformance, sonnet) | 1 | - | cycle 20 lacked red; fixed (stub-red 10/10 fail, green 10/10), Verify observed: daemon test 10 pass, `config check host.toml` exit 0 |
+| M1 B | 2 | b98bb4c1:53ad9c6b | CLEAN |
 
 ## Declined review findings
 
@@ -51,15 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done: T005-T013 and T087 implemented and ticked; core tests 63 green; docs and ledger updated; review
-A round 1 fixed (see Review rounds, Declined). Nothing committed yet.
-Next: (1) read `$SCRATCHPAD/t3.log` (DAEMON_EXIT, `config_check` 10 tests; fix if red); (2) review B round 1
-returned CHANGES with F1-F2 MAJOR (cycle-log lacks red for cycle 20 and a green entry for it): add a
-stub-red run of `crates/micold-daemon/tests/config_check.rs` (stub `config_check::run` to return 0,
-record the failures, restore) and the green line, or decline F1 with reason; F3 (Verify not run) is
-cleared once the daemon test and `micold-daemon config check .../host.toml` (exit 0) are observed;
-(3) scoped gate, then full `mise run gate`, commit, push, open the M1 PR (pr.md). Builds queue
-behind other worktrees on the shared lock (30+ min waits).
+None.
 
 ## Open escalation
 

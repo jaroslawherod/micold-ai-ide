@@ -24,6 +24,7 @@ Append only. Newest last.
 - test: `crates/micold-daemon/tests/config_check.rs` (10 tests), written together with the thin
   `config_check::run` wrapper over the already-green core API; no separate red run (the logic under
   test is the core's, which had its red above; the wrapper is argument parsing and printing).
-- green: `scripts/build-lock.sh cargo test -p micold-daemon --test config_check` queued behind other
-  worktrees' builds for over 30 minutes at the time of the handover; result recorded in the ledger
-  Handover. Review B F1 (no red run for this cycle) stands unless a stub-red run is added.
+- red: with `config_check::run` stubbed to `return 0`, `cargo test -p micold-daemon --test config_check`
+  fails 10 of 10 (exit 101): every test asserts an exit status, a positioned error or the printed view.
+  Stub reverted.
+- green: the real `run`: `cargo test -p micold-daemon --test config_check` passes 10 of 10.
