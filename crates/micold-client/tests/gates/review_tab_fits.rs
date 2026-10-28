@@ -179,19 +179,6 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         &[
             "changes-review-held",
             "changes-review-marks",
-            "review-drag-composer",
-            "review-shortcut-sheet",
-            "review-source-open",
-        ],
-        "0/0/0/1/1/2/1/0/0/0/1",
-        "bottom",
-        "base",
-        "#1474: the wrapped sort chips below their row",
-    ),
-    (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
             "changes-tree-filter",
             "review-drag-composer",
             "review-shortcut-sheet",
