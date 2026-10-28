@@ -478,6 +478,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let header_before = app.core.changes.header.entry.clone();
     let titles_were_readable = shell::issues::titles_readable(app);
     let worktrees_before = shell::issues::worktrees_fingerprint(app);
+    let facts_before = shell::location_titles::facts_fingerprint(app);
     let project_before = app.core.workspace.active.clone();
     let task = update_inner(app, message);
     // Feature 1465 (U1): the history records the place shown after every message, the app's own
@@ -495,9 +496,10 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     if worktrees_changed || became_readable {
         shell::issues::on_worktrees_changed(app);
     }
-    // Feature 1504, L7: the spec and commit titles are read off the UI thread whenever the list or
-    // the active project changed, by whichever message.
-    let task = if worktrees_changed || app.core.workspace.active != project_before {
+    // Feature 1504, L7: the spec and commit titles are read off the UI thread whenever the list
+    // (including a worktree's status or path) or the active project changed, by whichever message.
+    let facts_changed = shell::location_titles::facts_fingerprint(app) != facts_before;
+    let task = if facts_changed || app.core.workspace.active != project_before {
         let dirs = shell::location_titles::listed_dirs(app);
         Task::batch([task, shell::location_titles::read_facts(app, &dirs)])
     } else {

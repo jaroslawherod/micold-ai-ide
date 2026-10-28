@@ -17252,6 +17252,29 @@ mod title_facts {
         assert_eq!(app.core.overview.facts_round, 1);
     }
 
+    /// L7 (review A F3): a worktree that turns valid, or moves, under the same folder and branch
+    /// is a changed list for its facts: it is read now that it can be (or read where it now is).
+    #[test]
+    fn title_facts_a_worktree_turning_valid_or_moving_is_asked_again() {
+        let mut app = app();
+        let mut wt = worktree("a");
+        wt.status = WorktreeStatus::Invalid;
+        let _ = crate::update(
+            &mut app,
+            Message::Worktree(WorktreeMsg::Loaded(vec![wt.clone()])),
+        );
+        assert_eq!(app.core.overview.facts_round, 1);
+        wt.status = WorktreeStatus::Valid;
+        let _ = crate::update(
+            &mut app,
+            Message::Worktree(WorktreeMsg::Loaded(vec![wt.clone()])),
+        );
+        assert_eq!(app.core.overview.facts_round, 2, "turned valid");
+        wt.path = PathBuf::from("/elsewhere/a");
+        let _ = crate::update(&mut app, Message::Worktree(WorktreeMsg::Loaded(vec![wt])));
+        assert_eq!(app.core.overview.facts_round, 3, "moved");
+    }
+
     /// FR-006, L7: without local git the worktrees are the daemon's, not this machine's: nothing
     /// is asked or read.
     #[test]

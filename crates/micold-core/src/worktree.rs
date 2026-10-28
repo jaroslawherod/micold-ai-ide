@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 /// Health of a discovered worktree on disk (FR-018a). Enum, not bools, so the sidebar can
 /// render an explicit state and block session-start at the type level (Principle V).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeStatus {
     /// Registered with git and its directory exists — fully usable.
     Valid,

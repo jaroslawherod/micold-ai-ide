@@ -96,6 +96,21 @@ async fn bounded(read: impl FnOnce() -> Option<String> + Send + 'static) -> Opti
     .flatten()
 }
 
+/// A fingerprint of the active project's worktree list for the facts (L7): by directory name and
+/// branch like the issue titles' fingerprint, and also by status and path, since the facts are
+/// read only for a valid worktree and from where it is: a worktree that turns valid or moves is a
+/// changed list here, though not for the issue titles.
+pub fn facts_fingerprint(app: &App) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    crate::shell::issues::worktrees_fingerprint(app).hash(&mut hasher);
+    for worktree in &app.core.worktree.worktrees {
+        worktree.status.hash(&mut hasher);
+        worktree.path.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 /// The directory names of the active project's listed worktrees.
 pub fn listed_dirs(app: &App) -> Vec<String> {
     app.core
