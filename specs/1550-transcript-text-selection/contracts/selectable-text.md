@@ -55,7 +55,8 @@ SelectionArea::new(content)
   release where the last move left the pointer), not where the runtime's batch of events ended,
   so a fast drag starts at the press (#1550 M6), in the area's own coordinates when a scrollable
   around it shifts them (the shift is learned from a frame's redraw whose cursor is where the last
-  batch of events ended, so moves still queued teach none).
+  batch of events ended, so moves still queued teach none, or, outside a gesture, from two redraws
+  in a row at one cursor, which a wheel scroll under a still pointer gives).
 - **A-3 Edge scroll**: while `dragging` and the cursor is above (below) the bounds, children see the
   cursor clamped to the top (bottom) row and the area publishes `on_edge(Up)` (`Down`) each frame it
   requests. FR-003.
