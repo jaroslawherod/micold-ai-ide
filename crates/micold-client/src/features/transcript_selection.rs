@@ -69,6 +69,17 @@ pub enum Click {
     Triple,
 }
 
+impl From<crate::ui::material::selectable_text::Click> for Click {
+    fn from(click: crate::ui::material::selectable_text::Click) -> Self {
+        use crate::ui::material::selectable_text::Click as Leaf;
+        match click {
+            Leaf::Single => Self::Single,
+            Leaf::Double => Self::Double,
+            Leaf::Triple => Self::Triple,
+        }
+    }
+}
+
 impl Click {
     fn granularity(self) -> Granularity {
         match self {
@@ -338,6 +349,14 @@ pub fn entry_units<'a>(
     body_units(entry, open, derived, Extras::default())
 }
 
+/// The units of an inline diff drawn at `prefix` (`large`: held back, its path only): what the
+/// diff renderer's selectable parts are measured against.
+pub fn diff_units(prefix: u16, diff: &EditDiff, large: bool) -> Vec<Unit<'_>> {
+    let mut u = Units::default();
+    u.diff(prefix, diff, large);
+    u.0
+}
+
 /// What the insights add to an entry's text: a footer's turn figures (#944 X2), and whether a
 /// sub-agent notice is drawn as thread placeholders rather than its line (X5).
 #[derive(Default)]
@@ -398,12 +417,17 @@ impl<'a> Units<'a> {
         });
     }
 
-    /// A card's header: its title at `[0]`, and its summary on the same line at `[1]` when it has
-    /// one.
-    fn header(&mut self, title: impl Into<Cow<'a, str>>, summary: impl Into<Cow<'a, str>>) {
+    /// A card's header: its title at `[0]`, and while folded its summary on the same line at
+    /// `[1]` when it has one (an open card draws no summary).
+    fn header(
+        &mut self,
+        title: impl Into<Cow<'a, str>>,
+        summary: impl Into<Cow<'a, str>>,
+        open: bool,
+    ) {
         self.line(vec![0], title);
         let summary = summary.into();
-        if !summary.is_empty() {
+        if !open && !summary.is_empty() {
             self.after(vec![1], summary, Joint::Space);
         }
     }
@@ -539,7 +563,7 @@ fn body_units<'a>(
             match command {
                 Some(chip) => {
                     let description = command_chip_description(chip);
-                    u.header(command_chip_title(chip), description.clone());
+                    u.header(command_chip_title(chip), description.clone(), open);
                     if open {
                         u.line(vec![2], description);
                     }
@@ -552,7 +576,7 @@ fn body_units<'a>(
         }
         EntryKind::AssistantText { text, .. } => u.text(0, text, derived),
         EntryKind::CommandOutput { text } => {
-            u.header(COMMAND_OUTPUT_TITLE, first_line(text));
+            u.header(COMMAND_OUTPUT_TITLE, first_line(text), open);
             if open {
                 u.text(2, text, derived);
             }
@@ -562,7 +586,7 @@ fn body_units<'a>(
             match summary {
                 None => u.line(vec![0], marker),
                 Some(summary) => {
-                    u.header(marker, first_line(summary));
+                    u.header(marker, first_line(summary), open);
                     if open {
                         u.text(2, summary, derived);
                     }
@@ -582,13 +606,13 @@ fn body_units<'a>(
             u.line(vec![1], marker.detail);
         }
         EntryKind::Thinking { text, .. } => {
-            u.header(THINKING_TITLE, first_line(text));
+            u.header(THINKING_TITLE, first_line(text), open);
             if open {
                 u.text(2, text, derived);
             }
         }
         EntryKind::ToolCall(card) => {
-            u.header(card.name.as_str(), card.summary.as_str());
+            u.header(card.name.as_str(), card.summary.as_str(), open);
             if open {
                 u.input(2, card, derived);
                 if let Some(result) = &card.result {

@@ -6,14 +6,20 @@
 //! miss). Its only messages are `TranscriptMsg::{OpenLink, CopyCode, ShowInFull}`: it changes no
 //! entry, order, fold, status, streaming or scroll behaviour.
 
-use super::blocks::{AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, ToolInput};
+use super::blocks::{
+    hit_msg, AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, RowCtx, ToolInput,
+};
 use super::blocks::{ThinkingText, ToolResult};
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyTarget, Derived, DerivedBody, Part};
-use crate::ui::material::{InlineDiff, MarkdownView};
+use crate::features::transcript_selection::diff_units;
+use crate::ui::material::{DiffPart, InlineDiff, MarkdownView};
 use iced::widget::Space;
 use micold_core::review::diff::{SchemeSpans, Spans};
+use micold_core::structured::edit_diff::EditDiff;
+use micold_core::structured::selection::TextPath;
 use micold_core::theme::ColorScheme;
+use std::collections::HashMap;
 
 pub use crate::features::transcript_rich::EDIT_TOOLS;
 
@@ -67,6 +73,15 @@ fn markdown(block: &BlockRef<'_>, muted: bool, ctx: &RenderCtx<'_>) -> Option<Bl
         .code_spans(|code| d.spans.get(&Part::Code(code)))
         .copy_state(|code| d.copy.get(&CopyTarget::Code(code)).copied())
         .full(|code| d.full.contains(&Part::Code(code)));
+    let view = match ctx.row {
+        Some(row) => view.selection(
+            row.pos,
+            vec![block.at],
+            row.part.cloned(),
+            move |slot, hit| hit_msg(session, slot, hit),
+        ),
+        None => view,
+    };
     Some(view.into())
 }
 
@@ -110,14 +125,55 @@ fn rich_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
     if let Some(spans) = d.spans.get(&Part::Diff) {
         view = view.spans(in_scheme(spans, ctx.scheme));
     }
-    if d.is_large(Part::Diff) {
+    let large = d.is_large(Part::Diff);
+    if large {
         view = view.large(TranscriptMsg::ShowInFull {
             session: block.block.session,
             key: block.block.key.clone(),
             part: Part::Diff,
         });
     }
+    if let Some(row) = ctx.row {
+        view = selectable_diff(view, row, block.block.at, diff, large);
+    }
     view.into()
+}
+
+/// `view` of `diff` drawn at `at` made selectable as its units (research R2): its path `[at, 0]`,
+/// hunk `h`'s caption `[at, h + 1, 0]` and its lines `[at, h + 1, 1]`.
+fn selectable_diff<'d>(
+    view: InlineDiff<'d, TranscriptMsg>,
+    row: RowCtx<'_>,
+    at: u16,
+    diff: &EditDiff,
+    large: bool,
+) -> InlineDiff<'d, TranscriptMsg> {
+    let lens: HashMap<TextPath, usize> = diff_units(at, diff, large)
+        .into_iter()
+        .map(|u| (u.path, u.text.len()))
+        .collect();
+    let (session, pos, part) = (row.session, row.pos, row.part.cloned());
+    let hunk = |h: usize| u16::try_from(h + 1).unwrap_or(u16::MAX);
+    view.selectable(
+        move |which| {
+            let path = match which {
+                DiffPart::Path => vec![at, 0],
+                DiffPart::Caption(h) => vec![at, hunk(h), 0],
+                DiffPart::Lines(h) => vec![at, hunk(h), 1],
+            };
+            let len = lens
+                .get(&TextPath::new(path.as_slice()))
+                .copied()
+                .unwrap_or(0);
+            RowCtx {
+                session,
+                pos,
+                part: part.as_ref(),
+            }
+            .slot(path, len)
+        },
+        move |slot, hit| hit_msg(session, slot, hit),
+    )
 }
 
 /// Tool results stay #939's (FR-021).

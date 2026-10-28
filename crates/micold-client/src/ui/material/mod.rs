@@ -131,7 +131,7 @@ pub use diff_view::{
     DiffLayout, DiffView, MARKER_WIDTH as DIFF_MARKER_WIDTH, ROW_HEIGHT as DIFF_ROW_HEIGHT,
 };
 pub use host_picker::HostPicker;
-pub use inline_diff::InlineDiff;
+pub use inline_diff::{DiffPart, InlineDiff};
 pub use markdown_view::MarkdownView;
 pub use menu_select::{MenuSelect, MenuSelectRow};
 pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};

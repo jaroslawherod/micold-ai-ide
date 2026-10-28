@@ -448,12 +448,12 @@ fn a_folded_card_copies_its_header_and_an_unfolded_one_its_input_and_result_part
     );
     held.open_all();
     let view = held.view();
+    // Open, the header draws no summary (M4a): the input holds the whole of it.
     let open = units(&held.body(0), &view);
     assert_eq!(
         listed(&open),
         vec![
             (vec![0], "Bash".to_owned()),
-            (vec![1], header.summary.clone()),
             (vec![2], input.to_owned()),
             (vec![3, 0], "a   b.txt".to_owned()),
             (vec![3, 1], unshown_caption("image")),
@@ -463,9 +463,10 @@ fn a_folded_card_copies_its_header_and_an_unfolded_one_its_input_and_result_part
         header.result.as_ref().unwrap().parts[1],
         ResultPart::Unshown { .. }
     ));
-    // The name and the summary share the header's line.
-    assert_eq!(open[1].joint, Joint::Space);
-    assert_eq!(open[2].joint, Joint::Line);
+    assert_eq!(open[1].joint, Joint::Line);
+    // Folded, the name and the summary share the header's line.
+    held.open.clear();
+    assert_eq!(units(&held.body(0), &held.view())[1].joint, Joint::Space);
 }
 
 /// R2: an inline diff copies its path, its hunks' labels and each line's text, without the
@@ -487,8 +488,8 @@ fn an_inline_diff_copies_its_path_hunk_labels_and_line_text() {
     held.open_all();
     let units = held.units_of(held.body(0));
     let texts: Vec<&str> = units.iter().map(|(_, t)| t.as_str()).collect();
-    assert_eq!(&texts[..2], ["MultiEdit", card(&held, 0).summary.as_str()]);
-    assert_eq!(texts[2], "src/a.rs");
+    // Open, the header is its title alone.
+    assert_eq!(&texts[..2], ["MultiEdit", "src/a.rs"]);
     assert!(texts.contains(&hunk_title(1, 2).as_str()), "{texts:?}");
     assert!(texts.contains(&"one\nuno"), "{texts:?}");
     assert!(texts.contains(&"two\ndos"), "{texts:?}");

@@ -132,6 +132,7 @@ fn block_ref(session: SessionId, entry: &Entry, streaming: bool) -> BlockRef<'_>
         key: entry.key(),
         revision: entry.revision(),
         streaming,
+        at: 0,
     }
 }
 

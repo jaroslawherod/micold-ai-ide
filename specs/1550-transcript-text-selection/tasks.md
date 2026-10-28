@@ -338,29 +338,29 @@ layout_snapshot` and `cargo test --release -p micold-client --test transcript_op
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T033 [P] [US1] Parity test in the new `crates/micold-client/tests/transcript_selection_parity.rs`
+- [X] T033 [P] [US1] Parity test in the new `crates/micold-client/tests/transcript_selection_parity.rs`
   (research R2, contracts/selectable-text.md *T-6*, FR-002, SC-001): every entry kind of the
   fixture transcripts, folded and unfolded, through `BlockRenderers::RICH` and `PLAIN`, plus the
   omitted notice and request/resolution rows: the `(TextPath, text)` list the widget operation
   collects from each row equals `units(row, view)`; a folded card yields its header units only
-- [ ] T034 [P] [US1] Budget variant in `crates/micold-client/tests/transcript_open_budget.rs`
+- [X] T034 [P] [US1] Budget variant in `crates/micold-client/tests/transcript_open_budget.rs`
   (research R12, SC-003): on a transcript at `MAX_EVENTS`, select-all plus `copy_text` under 1 s,
   and one drag step (`Hit` → `update` → `view` of the changed entries) under 100 ms, release build
 
 ### Implementation
 
-- [ ] T035 [US1] `RenderCtx.selection: Option<&RowSelection>` in
+- [X] T035 [US1] `RenderCtx.selection: Option<&RowSelection>` in
   `crates/micold-client/src/ui/transcript/blocks.rs` and the entry's `lazy` key in
   `crates/micold-client/src/ui/transcript/mod.rs` gaining `in_row(&RowPos::Entry(id, Under::Body))`
   (research R6); the `PLAIN` renderers in `blocks.rs` draw selectable with their `TextPath` slots
   and `range_in` ranges, their `on_hit` producing `TranscriptMsg::Select(SelectMsg::Hit { .. })`
-- [ ] T036 [US1] The `RICH` renderers in `crates/micold-client/src/ui/transcript/rich.rs` pass
+- [X] T036 [US1] The `RICH` renderers in `crates/micold-client/src/ui/transcript/rich.rs` pass
   slots and ranges to `MarkdownView` (`crates/micold-client/src/ui/material/markdown_view.rs`
   `.selection(..)`/`.on_hit(..)`: a `TextPath` per inline run, list marker and table cell),
   `CodeBlock` and `InlineDiff`
-- [ ] T037 [US1] Tool-card header labels, unfolded input and result, turn footer, notices, raw rows
+- [X] T037 [US1] Tool-card header labels, unfolded input and result, turn footer, notices, raw rows
   and user text selectable in `crates/micold-client/src/ui/transcript/entries.rs`
-- [ ] T038 [US1] The descriptive
+- [X] T038 [US1] The descriptive
   text of request blocks and resolution rows in `crates/micold-client/src/ui/transcript/permission.rs`
   (controls not); the omitted notice in `crates/micold-client/src/ui/transcript/mod.rs`, each taking
   `in_row` of its own `RowPos`; T033 and T034 pass and `layout_snapshot` is unchanged

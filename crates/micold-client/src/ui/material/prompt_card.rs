@@ -27,7 +27,13 @@ pub struct PromptCard<'a, M> {
     actions: Vec<Element<'a, M>>,
     note: Option<String>,
     error: Option<String>,
+    title_text: Option<TextStep<'a, M>>,
+    note_text: Option<TextStep<'a, M>>,
 }
+
+/// A step applied to one of the card's own texts as it is drawn: what makes it selectable
+/// (feature 1550).
+type TextStep<'a, M> = Box<dyn FnOnce(Text<'a, M>) -> Text<'a, M> + 'a>;
 
 impl<'a, M: 'a> PromptCard<'a, M> {
     /// A card headed `title`, themed by `roles`, with no body and no actions yet.
@@ -40,7 +46,21 @@ impl<'a, M: 'a> PromptCard<'a, M> {
             actions: Vec::new(),
             note: None,
             error: None,
+            title_text: None,
+            note_text: None,
         }
+    }
+
+    /// Apply `step` to the title's text as it is drawn — `Text::selectable` (feature 1550).
+    pub fn title_text(mut self, step: impl FnOnce(Text<'a, M>) -> Text<'a, M> + 'a) -> Self {
+        self.title_text = Some(Box::new(step));
+        self
+    }
+
+    /// Apply `step` to the note's text as it is drawn — `Text::selectable` (feature 1550).
+    pub fn note_text(mut self, step: impl FnOnce(Text<'a, M>) -> Text<'a, M> + 'a) -> Self {
+        self.note_text = Some(Box::new(step));
+        self
     }
 
     /// A glyph before the title.
@@ -81,11 +101,13 @@ impl<'a, M: 'a> From<PromptCard<'a, M>> for Element<'a, M> {
         if let Some(icon) = c.leading {
             header = header.push(Glyph::new(icon, TypeRole::Section, r).tint(r.on_surface_variant));
         }
-        header = header.push(
-            Text::new(c.title, TypeRole::Section, r)
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill),
-        );
+        let title = Text::new(c.title, TypeRole::Section, r)
+            .wrapping(Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+        header = header.push(match c.title_text {
+            Some(step) => step(title),
+            None => title,
+        });
         let mut parts: Column<'a, M> = column![header].spacing(spacing::SM).width(Length::Fill);
         for part in c.body {
             parts = parts.push(part);
@@ -105,7 +127,11 @@ impl<'a, M: 'a> From<PromptCard<'a, M>> for Element<'a, M> {
                 .width(Length::Fill)
         };
         if let Some(note) = c.note {
-            parts = parts.push(line(note).muted());
+            let note = line(note).muted();
+            parts = parts.push(match c.note_text {
+                Some(step) => step(note),
+                None => note,
+            });
         }
         if let Some(error) = c.error {
             parts = parts.push(line(error).tint(r.error));

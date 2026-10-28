@@ -70,6 +70,8 @@ pub fn ctx(cache: &BlockCache) -> RenderCtx<'_> {
         roles: tokens::roles(ColorScheme::Light),
         scheme: ColorScheme::Light,
         cache,
+        selected: None,
+        row: None,
     }
 }
 

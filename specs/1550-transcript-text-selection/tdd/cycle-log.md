@@ -62,3 +62,18 @@ restored by copy.
 | T027 (red) | contrast gate: `on_primary_container` on the fill ≥ 4.5:1 over six transcript surfaces, both schemes; the fill ΔE ≥ 10 from each | first run red on the design: a luminance margin (1.1:1) failed light code surface (1.06), diff added (1.10), diff removed (1.04) — a tint of another hue; the margin became CIE76 ΔE ≥ 10. Mutant (highlight = code fill): `selected_transcript_text_is_legible_on_the_highlight_over_every_surface` FAILED | same |
 | T032 | showcase entries `SelectableText`, `SelectionArea`; `Selectable` exempted like `TakesTheKeyboard` | `every_named_variant_has_an_instance` FAILED until the `Click`, `Edge` and `DiffPart` variants were named | `showcase_completeness` 46, `material_builder_api` 13 passed |
 | Review A M3 F1 | an empty markdown span no longer panics `LinkText` (`split_at` drops empty ranges) | unfixed `split_at`: `an_empty_span_draws_without_a_piece_of_its_own`, `split_at_cuts_pieces_at_the_selection_ends` FAILED | `micold-material` lib 441 passed |
+
+## M4a (T033–T038)
+
+T033 was written first, against `RenderCtx` with its new `selected`/`row` fields and no leaf wired,
+so it compiled and failed on behaviour. T034's budgets are new measurements of code that already
+existed after T038 (structural).
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T033 (red) | parity: every fixture, folded and open, `RICH` and `PLAIN`, notice and request/resolution rows — the leaves' `(TextPath, text)` per row equal `units(row, view)`; a highlighted view reports the same | first run: all 4 FAILED, every row `drawn []`; mutant after green (header summary at `[2]`): 3 FAILED, 19 mismatches | `transcript_selection_parity` 4 passed |
+| T035 | `RenderCtx { selected, row: RowCtx }`, `hit_msg`, the entry's lazy key holding `in_row(Entry(id, Body))`; `PLAIN` leaves at `[at]` / `[at, k]` (`BlockRef.at`) | T033 | same |
+| T036 | `MarkdownView::selection` (R3 paths, per-block lazy key with `RowSelection::clip`), `CodeBlock`/`InlineDiff::selectable` from `RICH` | T033; `clip_keeps_the_part_over_a_blocks_units` written with `clip` | `micold-core` selection 11 passed |
+| T037 | card headers (`AccordionSection`/`DisclosureCard::selectable`, `HeaderText`), `IconLabel::selectable`, captions, footer, raw rows, user text; `Units::header` drops an open card's summary | T033 (open cards drew no summary but units listed one); `a_selectable_header_reports_its_title_and_folded_summary` | `micold-material` lib 442 passed; `features_transcript_selection` 33 passed (2 M2 tests updated to the open header) |
+| T038 | request blocks (`PromptCard::title_text`/`note_text`) and resolution rows at `Entry(id, Prompt(k))` / `End(k)`, the omitted notice at `Omitted`; `Selectable` passes its child's node through | `layout_snapshot` FAILED (wrapper node added a level) until the pass-through; `showcase_completeness` FAILED until `HeaderText::Summary` was named | `layout_snapshot` 169 passed, unchanged fixture; `showcase_completeness` 46 passed |
+| T034 | select-all + `copy_text` < 1 s; one drag step (hit → update → view/layout) < 100 ms, release, `MAX_EVENTS` | structural | `transcript_open_budget` (release) 6 passed: copy 0.85 ms, slowest drag step 27 ms |
