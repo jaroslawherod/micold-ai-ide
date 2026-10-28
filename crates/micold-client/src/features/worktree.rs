@@ -105,6 +105,12 @@ pub struct State {
     /// Transient and never persisted: a refresh that was in flight when the app closed did not
     /// happen, and the next start re-reads on attach anyway.
     pub refreshing: bool,
+    /// Each project's last worktree list this launch, by `dir_name` (feature 1465, research R5):
+    /// written for the active project by every `State::set_worktrees`, so it holds the daemon's
+    /// list (included worktrees and all) once that arrives. A Back to another project's worktree
+    /// reads it with that project's local discovery, which never lists an included worktree and
+    /// reads nothing for a remote project. Not pruned when a project is removed (data-model.md).
+    pub known: std::collections::BTreeMap<std::path::PathBuf, Vec<String>>,
 }
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open
