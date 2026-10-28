@@ -81,6 +81,15 @@ impl From<crate::ui::material::selectable_text::Click> for Click {
 }
 
 impl Click {
+    /// The click a selection area's press count (1 to 3) is; a count past three is a triple.
+    pub fn from_count(count: u8) -> Self {
+        match count {
+            0 | 1 => Self::Single,
+            2 => Self::Double,
+            _ => Self::Triple,
+        }
+    }
+
     fn granularity(self) -> Granularity {
         match self {
             Self::Single => Granularity::Char,
@@ -89,6 +98,10 @@ impl Click {
         }
     }
 }
+
+/// How far one frame of a selection drag held past the transcript's edge scrolls it, in pixels
+/// (FR-003): about a line every two frames, so the selection grows at reading pace.
+pub const EDGE_SCROLL_STEP: i32 = 12;
 
 /// Which edge of the transcript a drag holds the pointer past (FR-003).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -103,7 +116,8 @@ pub enum EdgeDir {
 pub enum SelectMsg {
     /// The pointer is over `pos` with its button down: the gesture's first hit starts the
     /// selection, the next ones move its focus. `line` is the visual line under the pointer in
-    /// wrapped prose, which a triple click selects.
+    /// wrapped prose, which a triple click selects. `click` is the unit's own count; the
+    /// granularity follows the area's (`Press::clicks`), which sees every press of the gesture.
     Hit {
         session: SessionId,
         pos: TextPos,
@@ -112,7 +126,7 @@ pub enum SelectMsg {
     },
     /// A press in the transcript that no control took: a new gesture.
     Press { session: SessionId, clicks: Click },
-    /// A drag holds the pointer past an edge (the view scrolls; M4b).
+    /// A drag holds the pointer past an edge: the view scrolls that way (FR-003).
     Edge { session: SessionId, dir: EdgeDir },
     /// The button was released: the gesture ends, and the clipboard is not touched (FR-012).
     Release { session: SessionId },
@@ -142,6 +156,39 @@ impl SelectMsg {
             | Self::CopySelection { session }
             | Self::SelectAll { session } => *session,
         }
+    }
+}
+
+/// A transcript's right-click menu, as a floating surface (FR-013, M-4): registered like every
+/// other menu, so Escape closes it (and does not reach the transcript's interrupt), it holds the
+/// keyboard while open, and the window's dismissal rules apply to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TranscriptContextMenu(pub SessionId);
+
+impl crate::overlay::FloatingSurface for TranscriptContextMenu {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("transcript_context_menu")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        use crate::features::structured_transcript::TranscriptMsg;
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::ContextMenu)
+            .cancelled_by(crate::app::Message::Session(
+                crate::features::session::Msg::Transcript(TranscriptMsg::Select(
+                    SelectMsg::MenuDismissed { session: self.0 },
+                )),
+            ))
+    }
+}
+
+impl crate::overlay::registry::Registered for TranscriptContextMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        let (session, _) = state.transcript_selection.open_menu()?;
+        Some(Self(session))
     }
 }
 
@@ -878,6 +925,33 @@ impl State {
         self.sessions.get(&session)?.menu
     }
 
+    /// The session whose context menu is open, and where (window pixels): at most one is, since
+    /// a press anywhere else dismisses it.
+    pub fn open_menu(&self) -> Option<(SessionId, (u16, u16))> {
+        self.sessions
+            .iter()
+            .find_map(|(session, s)| Some((*session, s.menu?)))
+    }
+
+    /// How far a drag held past `dir`'s edge scrolls `session`'s transcript this frame, in pixels,
+    /// negative upward; nothing without a drag in progress (FR-003, contracts/selectable-text.md
+    /// A-3).
+    pub fn edge_scroll(&self, session: SessionId, dir: EdgeDir) -> Option<i32> {
+        self.dragging(session).then_some(match dir {
+            EdgeDir::Up => -EDGE_SCROLL_STEP,
+            EdgeDir::Down => EDGE_SCROLL_STEP,
+        })
+    }
+
+    /// Whether a selection drag in `session`'s transcript is in progress: the button is down and
+    /// the selection follows the pointer, which an edge scroll then extends (FR-003).
+    pub fn dragging(&self, session: SessionId) -> bool {
+        self.sessions
+            .get(&session)
+            .and_then(|s| s.selection.as_ref())
+            .is_some_and(Selection::dragging)
+    }
+
     /// Apply a selection message of the transcript `view` draws (`None`: the window holds no
     /// transcript of the session). Returns the text to copy for a `CopySelection` of a non-empty
     /// selection (S-12); nothing else writes the clipboard (S-8, FR-012).
@@ -891,10 +965,8 @@ impl State {
                 s.armed = Some(clicks);
                 None
             }
-            SelectMsg::Hit {
-                pos, click, line, ..
-            } => {
-                self.hit(view?, pos, click, line);
+            SelectMsg::Hit { pos, line, .. } => {
+                self.hit(view?, pos, line);
                 None
             }
             SelectMsg::Release { .. } => {
@@ -908,8 +980,14 @@ impl State {
                 }
                 None
             }
+            // The scroll is the shell's, asked for through `edge_scroll`; the edge itself
+            // changes no selection (the hits at the clamped pointer extend it).
             SelectMsg::Edge { .. } => None,
             SelectMsg::Context { origin, .. } => {
+                // One menu in the window: opening one closes another session's.
+                for s in self.sessions.values_mut() {
+                    s.menu = None;
+                }
                 self.sessions.entry(session).or_default().menu = Some(origin);
                 None
             }
@@ -936,15 +1014,9 @@ impl State {
     }
 
     /// A hit at `pos`: the gesture's first starts the selection there, expanded to the word or
-    /// line the click count asks for (S-11); a later one moves its focus, expanded by the
+    /// line the press's click count asks for (S-11); a later one moves its focus, expanded by the
     /// selection's granularity.
-    fn hit(
-        &mut self,
-        view: &TranscriptView<'_>,
-        pos: TextPos,
-        click: Click,
-        line: Option<Range<usize>>,
-    ) {
+    fn hit(&mut self, view: &TranscriptView<'_>, pos: TextPos, line: Option<Range<usize>>) {
         let Some(s) = self.sessions.get_mut(&view.session) else {
             return;
         };
@@ -968,10 +1040,13 @@ impl State {
                 selection.extend(pos, range);
             }
             _ => {
-                if s.armed.take().is_none() {
+                // The click count is the area's, which sees every press of the gesture; a unit
+                // counts only the presses on itself, so a double click whose presses land in two
+                // units is a double click (M3 Review A F4).
+                let Some(clicks) = s.armed.take() else {
                     return;
-                }
-                let granularity = click.granularity();
+                };
+                let granularity = clicks.granularity();
                 let range = expand(granularity);
                 s.prints.clear();
                 s.selection = Some(Selection::start(pos, granularity, range));

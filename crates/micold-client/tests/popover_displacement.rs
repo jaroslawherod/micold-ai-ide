@@ -122,6 +122,9 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // Feature 1270's review bar overflow menu, on the shown Review tab: it closes nothing, and no
     // other popover closes it (R8).
     ("review_overflow", &[]),
+    // Feature 1550's transcript menu (Copy, Select all): like the terminal's own right-click menu,
+    // it closes nothing and no other popover closes it (FR-013).
+    ("transcript_context_menu", &[]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -159,6 +162,14 @@ fn opener(id: &str) -> Message {
         "review_overflow" => {
             Message::Changes(micold_client::features::changes::Msg::OverflowToggled)
         }
+        "transcript_context_menu" => Message::Session(SessionMsg::Transcript(
+            micold_client::features::structured_transcript::TranscriptMsg::Select(
+                micold_client::features::transcript_selection::SelectMsg::Context {
+                    session: SessionId::new(),
+                    origin: (50, 50),
+                },
+            ),
+        )),
         other => panic!("no opener for `{other}`"),
     }
 }

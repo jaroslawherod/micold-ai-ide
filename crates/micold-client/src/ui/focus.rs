@@ -90,6 +90,20 @@ impl<'a, M: Clone + 'a> TrackFocusAs<M> for TextField<'a, M> {
     }
 }
 
+/// The transcript's selection area (feature 1550, FR-007, FR-019a) reports its focus on the same
+/// route: a press in it takes the keyboard. Like a text area it draws no focus of its own, so it is
+/// not told (`focused` unused).
+impl<'a, M: Clone + 'a> TrackFocusAs<M> for crate::ui::material::SelectionArea<'a, M> {
+    fn track_focus(
+        self,
+        id: FieldId,
+        _focused: Option<FieldId>,
+        report: fn(FieldId, bool) -> M,
+    ) -> Self {
+        self.on_focus_change(move |focused| report(id, focused))
+    }
+}
+
 /// A select joins the one blur route (feature 937, contract C4, research R3): leaving it reports
 /// `FieldFocusChanged(id, false)` like a text field's blur does, so the owning draft can mark it.
 ///

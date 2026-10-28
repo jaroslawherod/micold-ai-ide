@@ -32,9 +32,13 @@ pub use rich::EDIT_TOOLS;
 
 use crate::features::permission_prompts::Placement;
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
+use crate::features::transcript_selection::{Click, EdgeDir, SelectMsg};
+use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::cdk::Keyed;
-use crate::ui::material::{Button, Scrollable};
+use crate::ui::focus::TrackFocusAs;
+use crate::ui::material::selection_area::Edge;
+use crate::ui::material::{Button, ContextMenu, MenuItem, Scrollable, SelectionArea};
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::protocol::messages::PromptId;
@@ -387,8 +391,101 @@ fn build<'a, M: Clone + 'a>(
         .padding(spacing::MD)
         .into(),
     };
-    stack![scrollable, jump]
+    let body = stack![scrollable, jump]
         .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        .height(Length::Fill);
+    // Feature 1550: the region a selection is made in (contracts/selectable-text.md A-1–A-5). A
+    // press no control took starts a gesture and gives the transcript the keyboard, a drag held
+    // past an edge scrolls it, a right press anywhere opens its menu, and the release only ends
+    // the gesture (FR-001, FR-003, FR-007, FR-012, FR-013).
+    let select = move |msg| on_transcript(TranscriptMsg::Select(msg));
+    let area = SelectionArea::new(body)
+        .id(transcript_area_id(session))
+        .dragging(ctx.selected.is_some_and(|s| s.dragging()))
+        .on_press(move |clicks| {
+            select(SelectMsg::Press {
+                session,
+                clicks: Click::from_count(clicks),
+            })
+        })
+        .on_edge(move |edge| {
+            select(SelectMsg::Edge {
+                session,
+                dir: match edge {
+                    Edge::Up => EdgeDir::Up,
+                    Edge::Down => EdgeDir::Down,
+                },
+            })
+        })
+        .on_release(select(SelectMsg::Release { session }))
+        .on_context(move |origin| select(SelectMsg::Context { session, origin }));
+    // Its focus is the window's focused field `Transcript(session)`, the one route every field's
+    // focus takes, so the copy keys and select-all follow it (FR-007, FR-019a).
+    match prompts.as_ref() {
+        Some(p) => area
+            .track_focus(FieldId::Transcript(session), p.focused, p.on_focus)
+            .into(),
+        None => area.into(),
+    }
+}
+
+/// The transcript's selection area's id for `session`: the focus target a press in it takes.
+pub fn transcript_area_id(session: SessionId) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(format!("transcript-area-{session}"))
+}
+
+/// The label of the context menu's item that copies the selection (FR-013).
+pub const MENU_COPY: &str = "Copy";
+/// The label of the context menu's item that selects all of the transcript (FR-013).
+pub const MENU_SELECT_ALL: &str = "Select all";
+
+/// The items of `session`'s transcript context menu, in order, with what each sends (contracts/
+/// keys-menu-copy.md M-1, M-2): **Copy**, with no message while nothing is selected, and **Select
+/// all**. The menu is drawn from this list, so tests read what the user sees.
+pub fn context_menu_items(
+    selection: &crate::features::transcript_selection::State,
+    session: SessionId,
+) -> Vec<(&'static str, Option<SelectMsg>)> {
+    vec![
+        (
+            MENU_COPY,
+            selection
+                .selecting(session)
+                .then_some(SelectMsg::CopySelection { session }),
+        ),
+        (MENU_SELECT_ALL, Some(SelectMsg::SelectAll { session })),
+    ]
+}
+
+/// The open transcript context menu, if any, at the right press's window point, kept inside the
+/// window (M-1); Escape or a click elsewhere closes it (M-4). It floats on the window's overlay
+/// because the press point is in window space.
+pub fn context_menu<'a, M: Clone + 'a>(
+    selection: &crate::features::transcript_selection::State,
+    window: (u16, u16),
+    on_select: fn(SelectMsg) -> M,
+    roles: micold_core::tokens::Roles,
+) -> Option<crate::ui::cdk::overlay::Surface<'a, M>> {
+    let (session, origin) = selection.open_menu()?;
+    let items: Vec<MenuItem<M>> = context_menu_items(selection, session)
+        .into_iter()
+        .map(|(label, message)| MenuItem {
+            message: message.map(on_select),
+            ..MenuItem::labeled(label, on_select(SelectMsg::MenuDismissed { session }))
+        })
+        .collect();
+    let origin = crate::features::project::clamp_menu_anchor(
+        origin,
+        crate::ui::material::menu_panel_size(items.len()),
+        window,
+    );
+    Some(
+        ContextMenu::new(
+            items,
+            origin,
+            on_select(SelectMsg::MenuDismissed { session }),
+            roles,
+        )
+        .into(),
+    )
 }

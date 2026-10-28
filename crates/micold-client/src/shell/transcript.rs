@@ -42,6 +42,13 @@ pub fn update(app: &mut App, msg: TranscriptMsg) -> Task<Message> {
                 y: y as f32,
             },
         ),
+        (Some(session), Some(Scroll::By(dy))) => iced::widget::operation::scroll_by(
+            transcript_scroll_id(session),
+            AbsoluteOffset {
+                x: 0.0,
+                y: dy as f32,
+            },
+        ),
         _ => Task::none(),
     };
     let outcomes = effect
@@ -106,4 +113,75 @@ fn run(job: HighlightJob) -> Option<TranscriptMsg> {
         part: job.part,
         spans,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use micold_client::features::transcript_selection::{Click, EdgeDir, SelectMsg};
+    use micold_core::session::SessionId;
+
+    use super::*;
+
+    fn select(app: &mut App, msg: SelectMsg) -> Task<Message> {
+        update(app, TranscriptMsg::Select(msg))
+    }
+
+    /// T039, A-3, FR-003: an edge during a drag asks for one scroll task (the `scroll_by` on that
+    /// session's transcript); without a drag, or for another session, none.
+    #[test]
+    fn an_edge_during_a_drag_scrolls_and_otherwise_nothing() {
+        let mut app = crate::tests::base_app();
+        let (a, b) = (SessionId::new(), SessionId::new());
+        let edge = |session| SelectMsg::Edge {
+            session,
+            dir: EdgeDir::Down,
+        };
+        assert_eq!(select(&mut app, edge(a)).units(), 0, "no drag");
+        let _ = app.core.structured_events(
+            a,
+            0,
+            &[micold_core::structured::SequencedEvent {
+                seq: 0,
+                event: micold_core::structured::StructuredEvent::UserSent {
+                    text: "hello".into(),
+                    attachments: vec![],
+                },
+            }],
+            false,
+            &micold_client::ui::syntax::GRAMMAR,
+        );
+        let _ = select(
+            &mut app,
+            SelectMsg::Press {
+                session: a,
+                clicks: Click::Single,
+            },
+        );
+        let row = app
+            .core
+            .transcript_view(a)
+            .and_then(|view| {
+                micold_client::features::transcript_selection::rows(&view)
+                    .into_iter()
+                    .next()
+            })
+            .expect("a row");
+        let pos = micold_core::structured::selection::TextPos {
+            row,
+            path: micold_core::structured::selection::TextPath::new(vec![0]),
+            offset: 1,
+        };
+        let _ = select(
+            &mut app,
+            SelectMsg::Hit {
+                session: a,
+                pos,
+                click: Click::Single,
+                line: None,
+            },
+        );
+        assert!(app.core.transcript_selection.dragging(a));
+        assert_eq!(select(&mut app, edge(a)).units(), 1, "scrolls");
+        assert_eq!(select(&mut app, edge(b)).units(), 0, "not b's drag");
+    }
 }

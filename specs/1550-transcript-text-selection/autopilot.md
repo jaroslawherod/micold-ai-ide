@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M4a
-- **Next step**: M4a PR (pushed; orchestrator opens it from the body in its scratchpad), then M4b
+- **Phase**: M4b
+- **Next step**: M4b PR (pushed; orchestrator opens it from the body in its scratchpad), then M5
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1586 | M1: selection model, shown text and work_value in core | merged | f7c34e9d579bc65daea4a1bd7ca865d0ac9253ea |
 | #1590 | M2: window selection state, copy text and copy keys | merged | 94519d3b85af68358495aa1eae645edf53174dc1 |
 | #1593 | M3: SelectableText and SelectionArea components | merged | ffad78647cb67b85f478dc80617db267f9cdeddc |
+| #1595 | M4a: selectable leaves in the transcript, parity and budget | merged | 9df69fa710e866a99c1f1d3c2d5b9027181f595c |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | merged |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | #1593 | merged |
-| M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | in progress |
-| M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
+| M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
+| M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | in progress |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | — | todo |
 
 ## Decisions
@@ -50,6 +51,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2 red CI (#1590, `fmt + clippy`): main gained `EntryKind::EffortChanged` (#1554) after our merge, so `body_units`' exhaustive match broke. Merged origin/main (b18b611d1); the effort note copies nothing, matching the transcript, which draws an empty `Space` for it until #1554 M4 draws its marker (then give it that text). Test: `an_effort_note_copies_nothing`. The only other `EntryKind` matches in M1/M2 code have a `_` arm.
 
 - M3 (agent-resolved): `Selectable` (micold-material) wraps the element each leaf already draws and only adds hit-testing over its own one-paragraph-per-hard-line `Measure`; with no range the child is the leaf's unchanged element, so T-4's pixel gate holds by construction, at the cost of shaping the text twice (once for drawing, once for hits; both cached). The highlight is the child's: spans split at the range ends drawn with a `primary_container` span background and `on_primary_container` ink (`selectable_text::highlight`). Code and diff lines are one `Selectable` per drawn line with a `base` (the line's start in the unit), measuring tabs-as-spaces and padding but answering in bytes of the unit's raw text; T-6 reports `Shown { slot, base, text }`. `InlineDiff::selectable(part, on_hit)` takes a `DiffPart -> (slot, range)` closure (path, captions, lines are separate units in M2), `CodeBlock::selectable(slot, range, on_hit)` one slot. The material crate has its own `Click` and `Edge` (the client's `Click`/`EdgeDir` sit above it; M4b maps them). The contrast gate's "visibly distinct" is CIE76 ΔE ≥ 10, not a luminance ratio: light `primary_container` is within 1.04–1.10:1 of the code surface and diff tints but ΔE-distinct by hue.
+
+- M4b (agent-resolved): the selection area's click count (`SelectMsg::Press.clicks`, counted over the whole transcript) decides a new selection's granularity, not the unit's `Hit.click` (M3 A F4). `SelectMsg::Edge` while dragging becomes `Effect.scroll = Scroll::By(±EDGE_SCROLL_STEP)` (12 px a frame), performed by the shell as `scroll_by` on `transcript_scroll_id`; without a drag it scrolls nothing. A `Press` gives `FieldId::Transcript(session)` the keyboard; the area's own focus changes join the same field through `TrackFocusAs` (`ui/focus.rs`) when the view has prompts (the window's view always has). The context menu floats on the window overlay (`ui/mod.rs`, built by `ui::transcript::context_menu`), because the area reports the right press in window pixels; anchor clamped into the window like the other menus.
+
+- M4b visual pass (real client, Xvfb, the daemon tests' `claude` stand-in replaying recorded fixtures): Part B 1–5 pass, and the folded summary highlight; record in `visual-pass/m4b-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`. Only one interrupt was sent in the whole pass (the no-selection Ctrl+C), none from the copies.
+
+- M4b gate: `scripts/gate.sh` green at 2787890f0 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`). Its first two runs were red on `feature_registration_cost` (the menu surface names `TranscriptMsg`: allowed with its reason) and `popover_displacement` (the new popover's row: closes nothing, closed by nothing).
 
 ## Tasks-unit notes
 
@@ -77,6 +84,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M3 (headless render) | 1 | 4de2424fc | pass: `visual/m3-visual-pass.md`, `visual/m3-selectable-leaves.png` |
 | Review A M4a (code-review high, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN: 3 MINOR, all declined or deferred (below); the five handover deviations raised nothing |
 | Review B M4a (sonnet, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN; Verify pass (parity 4, layout_snapshot 169, transcript_open_budget 6 release) |
+| Review A M4b (code-review high) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | 2 real (fixed: F1 menu not a registered surface, Escape interrupted under it; F7 summary highlight could slice off a char boundary), F2 fixed in part (one menu per window), 5 declined MINOR |
+| Review B M4b (conformance, sonnet) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | CHANGES: F1 MAJOR no M4b TDD log (fixed: cycle-log M4b with a mutant red run, 8 of 40 FAILED); F2 MINOR summary highlight not under a task (fixed, prose: noted under T041); F3 MINOR view wiring untested (visual pass covers it) |
 
 ## Declined review findings
 
@@ -96,6 +105,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | A F1 | `MarkdownView` holds a large code block back only with `on_show`, but drops its selectability on `large` alone | MINOR: the units side (`Units::markdown`, `derived.is_large`) also drops a large block on `large` alone, so view and copy agree (parity test); the transcript always sets `on_show`. |
 | M4a | A F2 | `thread_body` draws subagent thread cards with `row: None` (not selectable, not copied) | MINOR, deliberate per the M4a parity decision on #944's threads (X3, X5); kept in *Follow-ups not done* for M4b/M5. |
 | M4a | A F3 | `selectable_diff` rebuilds `diff_units` per draw for byte lengths | MINOR, performance: T034's slowest drag step is 27 ms against the 100 ms budget. |
+| M4b | A F2 (rest) | the menu draws for whichever session holds it, not only the active one | MINOR: now one menu per window (opening one closes the other); a session switch while it is open is rare and the registered surface's dismissal rules apply. |
+| M4b | A F3 | edge scroll is a fixed 12 px per frame, so its speed follows the frame rate | MINOR: frames are the area's own `motion::FRAME` wakes, not the display's refresh. |
+| M4b | A F4 | `SelectMsg::Hit.click` is no longer read | MINOR: kept as the widget's report (contract shape); the doc says the press's count decides. |
+| M4b | A F5 | edge gating split between root and `State` | fixed: `State::edge_scroll` holds the rule; the root maps it to `Scroll::By`. |
+| M4b | A F6 | a release the area never sees leaves the drag on | MINOR: X11/winit deliver the release of a press begun in the window (implicit grab); a modal opening mid-drag is not a path the UI offers. |
+| M4b | A F8 | `dragging` lags the press by one message | MINOR: the press's own hit (T-1) arrives in the same event as `on_press`, so the drag starts before any frame past the edge. |
 
 ## Handover
 
@@ -109,7 +124,7 @@ None.
 
 - T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
-- M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`).
+- M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`). **M4b: done**, the area's count (`Press.clicks`) decides the granularity (see M4b note).
 - M3 A F3 residual: a selected proportional `Text` is drawn as rich text (Advanced shaping, kerning) while an unselected one is the text widget (Auto shaping), so selecting kerned text can shift glyphs by subpixels, and in a rare case re-wrap a line. The measure follows the drawn child in both states. The visual pass of M4b/M5 should look for it.
-- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a draws them with `row: None` (neither selectable nor copied; M4a Review A F2). M4b/M5 decide whether they become units.
-- M4a: a folded card's summary (Ellipsized) answers hits but draws no highlight (M4b).
+- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a draws them with `row: None` (neither selectable nor copied; M4a Review A F2). M4b/M5 decide whether they become units. **M4b: left as they are** (a thread's rows would need their own `RowPos` and units; nothing in the spec's FRs names threads). Open for M5 or a follow-up issue.
+- M4a: a folded card's summary (Ellipsized) answers hits but draws no highlight (M4b: done, `Ellipsized::highlighted` draws the shown part of the range, the ellipsis standing for a selected cut tail).

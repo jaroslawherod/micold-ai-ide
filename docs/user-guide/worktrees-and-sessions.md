@@ -1609,6 +1609,45 @@ the background service keeps the events it reports. It is Claude Code only.
   kept across a restart of the background service; with it off they live in the service's memory
   only.
 
+#### Selecting and copying transcript text
+
+Text in a structured session's transcript can be selected and copied as in most applications:
+
+- **Drag** across text to select it: within a line, across lines, and across entries, from a reply
+  through a tool card into the next reply. The selection stays highlighted after you let go. Drag
+  past the top or bottom edge of the transcript and hold: it scrolls that way and the selection
+  keeps growing.
+- **Double-click** selects a word; **triple-click** selects a line (one wrapped line of a reply, or
+  one source line of a code block or diff, including any part scrolled sideways out of sight).
+- **Select all**: with the transcript focused, Ctrl+A (Cmd+A on macOS) selects all of its text. The
+  composer's text is not part of it.
+- **A single click** without dragging clears the selection. Pressing a control (a fold toggle, a
+  copy control, a link, **Jump to latest**, a permission request's buttons) works the control and
+  starts no selection.
+- **Releasing never copies.** Unlike the [terminal view](#interacting-with-the-terminal), which copies
+  when you let go, the transcript copies only when you ask:
+  - **Copy keys**: Ctrl+C or Ctrl+Shift+C on Linux and Windows, Cmd+C on macOS. With text selected
+    and the transcript focused (pressing in it to select focuses it), Ctrl+C copies the selection
+    and **never interrupts** Claude, even while it works; the selection stays. With nothing
+    selected, Ctrl+C interrupts a busy turn as before, and does nothing while the session is idle.
+    Cmd+C and Ctrl+Shift+C never interrupt.
+  - **Right-click** anywhere in the transcript, on text or on a control, for a menu with **Copy**
+    (available only while text is selected) and **Select all**. Right-clicking does not change the
+    selection. Use the arrow keys and Enter in the menu; Escape or a click elsewhere closes it.
+- **Moving to the composer keeps the selection.** Click into the composer (or Tab away) and the
+  selection stays highlighted, but the keys act on what now has focus: Ctrl+C acts on the composer
+  (copy its selected text, or interrupt a busy turn when it has none) and Ctrl+A selects the
+  composer's text. The menu's **Copy** still copies the transcript selection, and focuses the
+  transcript again.
+- **What is copied is what is shown**: a reply's text without its markdown punctuation, a link's
+  shown text, table cells separated by tabs, a line break between lines and between entries, and
+  no control labels. A folded tool card gives only its header (the tool and its summary), never its
+  hidden input or result.
+- **Copy failed.** When the system clipboard does not take the text, the composer says **Copy
+  failed** and the clipboard is unchanged.
+
+Each pane and each window keeps its own selection; the copy keys act on the focused one only.
+
 #### Writing to a structured session
 
 Under the transcript sits the **composer**: a text area beside **Send**, with the session's state
