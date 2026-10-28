@@ -223,7 +223,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 6: `/effort` in the composer (M5; US2)
 
-- [ ] T027 [P] [US2] Tests in `client/tests/features_command_palette.rs`: sending `/effort max` or
+- [x] T027 [P] [US2] Tests in `client/tests/features_command_palette.rs`: sending `/effort max` or
   `/effort Max` → `SendIntent::SetEffort(Level(max))` and no user message; `/effort default` and
   `/effort auto` → `SetEffort(Default)`; `/effort` and `/effort   ` → the effort picker opens,
   `SendIntent::Nothing`; `/effort extreme` and `/effort ultracode` → `SendIntent::Nothing`, the
@@ -231,18 +231,18 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `/effort max` refused naming `default, low, high`; on a busy session `/effort high` sends
   `SetSessionEffort` at once and queues nothing (FR-007, FR-008, SC-003); `/eff` lists one
   `/effort` row under "In this app" (FR-009)
-- [ ] T028 [US2] Tests in `daemon/tests/structured_effort.rs`: `SessionUserMessage` with
+- [x] T028 [US2] Tests in `daemon/tests/structured_effort.rs`: `SessionUserMessage` with
   `/effort high`, `/effort`, `/effort extreme` or `/effort default`, idle and busy →
   `OperationError` ("/effort is handled by the app"), nothing written to stdin, nothing queued
   (SC-003, contracts/wire.md *Changed behaviour (M5)*)
-- [ ] T029 Implement T027–T028: `SendIntent::SetEffort` and the `DraftCommand::Effort` arms
+- [x] T029 Implement T027–T028: `SendIntent::SetEffort` and the `DraftCommand::Effort` arms
   (replacing M1's `Classified::Message`) in `client/src/features/command_palette.rs`, routed to
   `set_effort` in `client/src/shell/composer.rs`; `UserMessageRefusal` for `Effort(_)` (replacing
   M1's `Send`) in `daemon/src/state.rs`
-- [ ] T030 [US2] User guide `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and
+- [x] T030 [US2] User guide `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and
   effort*: `/effort <level>`, `/effort default` and `auto`, `/effort` alone opening the picker, a
   wrong value naming the accepted ones, acted on at once while busy (FR-014)
-- [ ] T031 [US2] Quickstart Part B 4–5 and 7b in light and dark theme through the `visual-pass` skill,
+- [x] T031 [US2] Quickstart Part B 4–5 and 7b in light and dark theme through the `visual-pass` skill,
   evidence in `specs/1554-structured-effort-switch/visual-pass/`
 
 ## Phase 7: Polish (close unit)

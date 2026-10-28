@@ -1754,6 +1754,14 @@ instructions Claude Code expanded it into.
   - **high** — thinks harder before answering, for design questions and tricky bugs.
   - **xhigh** — more thinking still, for hard problems; slower replies.
   - **max** — the most thinking Claude Code allows: the slowest replies and the most usage.
+- **`/effort` in the message box.** Type `/effort high` (any of the levels, in any letter case) and
+  send: the session runs at that level from the next answer, and nothing is sent to Claude Code as
+  a message. `/effort default` or `/effort auto` goes back to Claude Code's default, and `/effort`
+  alone opens the effort picker. Anything else, such as `/effort extreme`, or a level the session's
+  model does not offer, is refused with "Use /effort with one of: default, low, …" naming what is
+  accepted, and your text stays in the box to correct. While Claude Code is answering, `/effort`
+  is acted on at once like a pick in the picker: it is not queued behind your messages, and the
+  turn in hand finishes at its level.
 - **When the model does not take the level.** When Claude Code reports that the session's model
   does not support reasoning effort, the picker and the trigger's tooltip say "This model does not
   support reasoning effort; Claude Code's default applies"; for a level the model does not offer,

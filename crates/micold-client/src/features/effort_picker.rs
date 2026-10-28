@@ -12,7 +12,8 @@ use std::collections::HashMap;
 
 use micold_core::session::{AiCli, SessionId, SessionKind};
 use micold_core::structured::effort::{
-    availability, effort_support, offered_levels, EffortAvailability, EffortChoice, EffortSupport,
+    availability, effort_support, offered_levels, EffortAvailability, EffortChoice, EffortLevel,
+    EffortSupport,
 };
 use micold_core::typeahead::{move_highlight, Direction};
 
@@ -178,6 +179,11 @@ impl crate::app::State {
     fn effort_support_of(&self, session: SessionId) -> Option<EffortSupport> {
         let transcript = self.structured_transcript.transcript(session)?;
         effort_support(transcript.reported_models(), &self.model_choice(session)).cloned()
+    }
+
+    /// The levels `session`'s model takes, which `/effort` accepts beside `default` (FR-007).
+    pub(crate) fn effort_offered(&self, session: SessionId) -> Vec<EffortLevel> {
+        offered_levels(self.effort_support_of(session).as_ref())
     }
 
     /// `session`'s effort trigger text (FR-001).
