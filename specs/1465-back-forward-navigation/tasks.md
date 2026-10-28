@@ -162,12 +162,12 @@ and Forward (quickstart B12).
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T034 [P] [US5] Write failing tests in `crates/micold-client/tests/review_keys.rs`: `sheet_model(true)` and `sheet_model(false)` end with `(history_key_label(Back), "Back (also the mouse back button)")` and `(history_key_label(Forward), "Forward (also the mouse forward button)")` (FR-014, contracts/ui.md U6)
+- [x] T034 [P] [US5] Write failing tests in `crates/micold-client/tests/review_keys.rs`: `sheet_model(true)` and `sheet_model(false)` end with `(history_key_label(Back), "Back (also the mouse back button)")` and `(history_key_label(Forward), "Forward (also the mouse forward button)")` (FR-014, contracts/ui.md U6)
 
 ### Implementation for User Story 5
 
-- [ ] T035 [US5] In `crates/micold-client/src/features/changes/keys.rs` `sheet_model` (line 500), append the two U6 rows after the `REVIEW_KEYS` rows, for `single_keys` on and off. T034 green
-- [ ] T036 [US5] In `docs/user-guide/terminal-panes.md` §Keyboard shortcuts, add that the Review tab's shortcut sheet (`?`) lists Back and Forward too
+- [x] T035 [US5] In `crates/micold-client/src/features/changes/keys.rs` `sheet_model` (line 500), append the two U6 rows after the `REVIEW_KEYS` rows, for `single_keys` on and off. T034 green
+- [x] T036 [US5] In `docs/user-guide/terminal-panes.md` §Keyboard shortcuts, add that the Review tab's shortcut sheet (`?`) lists Back and Forward too
 
 **Checkpoint**: every story works (quickstart §B).
 
@@ -177,8 +177,22 @@ and Forward (quickstart B12).
 
 No code. Done by the close unit in the close PR.
 
-- [ ] T037 Run quickstart §B (B1–B13) with the `visual-pass` skill and save the evidence under `specs/1465-back-forward-navigation/`
-- [ ] T038 Record quickstart §C (C1–C4, macOS and Windows) results or the CI evidence in `specs/1465-back-forward-navigation/quickstart.md`
+- [x] T037 Run quickstart §B (B1–B13) with the `visual-pass` skill and save the evidence under `specs/1465-back-forward-navigation/`
+- [x] T038 Record quickstart §C (C1–C4, macOS and Windows) results or the CI evidence in `specs/1465-back-forward-navigation/quickstart.md`
+
+### TDD verification remediation (close unit; `tdd/verification.md` findings, cycle-log Cycle 20)
+
+Test strength and records only; no production code changes.
+
+- [x] T039 [US4] Finding 1: pin Forward passing over an entry equal to the shown place — core `history::tests::forward_passes_over_an_entry_equal_to_shown_and_keeps_it` (bounded by a thread timeout, so the never-advancing mutant fails instead of hanging) and client `tests/history.rs` `forward_passes_over_the_shown_place_and_on_past_a_gone_one`
+- [x] T040 [US2] Finding 2: pin research R8's session-field rule — `tests/history.rs` `a_key_press_acts_over_a_session_fields_stale_focus_behind_the_review_tab` and `tests/review_keys.rs` `a_session_fields_stale_focus_behind_the_tab_leaves_the_keyboard_to_the_review` (Composer and QueuedMessage)
+- [x] T041 Finding 3: `tests/history.rs` `the_shown_place_is_none_while_settings_is_open`
+- [x] T042 Finding 4: record the waiver for M1's test-after cycles 1–8 in `tdd/cycle-log.md`
+- [x] T043 Finding 5: `tests/keymap.rs` guide test also checks the focus-rule (FR-013), Review-tab-first (T026), passed-over (T033) and Review-sheet (T036) sentences
+- [x] T044 Finding 6: restore `main_tests.rs` `mod panes::app_with_sessions` (no test needs its sessions `Idle`)
+- [x] T045 Finding 7: the core sweeps assert an independently computed outcome (landing entry, position, kept entries) instead of branching on the result; the cycle log records the full-suite baseline
+- [x] T046 Finding 8: cycle-log citations point at the commits reachable from `main`
+- [x] T047 Finding 9: `tests/review_keys.rs` `history_rows()` writes its labels out; `tests/history.rs` drops `let _ = b;` and asserts the remaining entries
 
 ---
 

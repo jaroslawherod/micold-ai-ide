@@ -33,9 +33,19 @@ pub enum TitleLookup {
     Pending,
     /// The title.
     Known(String),
-    /// Could not be read (offline, no such issue, no tooling): the card shows its branch.
-    Unavailable,
+    /// The number is no issue (missing, or a pull request), or the project has no GitHub
+    /// repository: never asked again in a run (feature 1504, FR-009).
+    NoIssue,
+    /// The read failed (offline, timeout, tooling): asked again on the next occasion at least
+    /// [`TITLE_RETRY_AFTER`] seconds after `at` (Unix seconds, feature 1504, FR-009, R3).
+    Failed {
+        /// When the read failed, in Unix seconds.
+        at: u64,
+    },
 }
+
+/// How long a failed title read waits before it is asked again, in seconds (feature 1504, FR-009).
+pub const TITLE_RETRY_AFTER: u64 = 300;
 
 /// A title is the user's text and is never logged (FR-020), so a debug dump leaves it out.
 impl std::fmt::Debug for TitleLookup {
@@ -43,7 +53,8 @@ impl std::fmt::Debug for TitleLookup {
         match self {
             Self::Pending => f.write_str("Pending"),
             Self::Known(_) => f.write_str("Known(..)"),
-            Self::Unavailable => f.write_str("Unavailable"),
+            Self::NoIssue => f.write_str("NoIssue"),
+            Self::Failed { at } => write!(f, "Failed({at})"),
         }
     }
 }
@@ -282,7 +293,8 @@ pub enum Msg {
     },
     /// These tickets' titles are being fetched: each without an entry is pending (R8).
     TitlesRequested(Vec<u64>),
-    /// A ticket's title was read: [`TitleLookup::Known`] or [`TitleLookup::Unavailable`].
+    /// A ticket's title was read: [`TitleLookup::Known`], [`TitleLookup::NoIssue`] or
+    /// [`TitleLookup::Failed`].
     TitleRead {
         /// The project the read was started in; dropped when it is no longer the active one.
         project: PathBuf,
@@ -443,7 +455,14 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         }
         Msg::TitlesRequested(numbers) => {
             for number in numbers {
-                state.titles.entry(number).or_default();
+                // A failed read asked again is pending again, so a second occasion before the
+                // answer does not ask twice (feature 1504, FR-009); a known title stays.
+                match state.titles.get(&number) {
+                    None | Some(TitleLookup::Failed { .. }) => {
+                        state.titles.insert(number, TitleLookup::Pending);
+                    }
+                    Some(_) => {}
+                }
             }
         }
         Msg::TitleRead { number, result, .. } => {
@@ -662,10 +681,16 @@ pub fn pr_signal(
     }
 }
 
-/// The titles to fetch on opening: each GitHub title ticket in `tickets` with no entry yet, once,
-/// in order. None unless the project's issue tooling is GitHub and available (R8, FR-019; feature
-/// 1504, FR-003).
-pub fn titles_to_fetch(state: &State, tickets: &[TitleTicket], github_available: bool) -> Vec<u64> {
+/// The titles to fetch on an occasion: each GitHub title ticket in `tickets` with no entry yet, or
+/// whose read failed at least [`TITLE_RETRY_AFTER`] seconds before `now`, once, in order. A pending,
+/// known or no-issue title is never asked again. None unless the project's issue tooling is GitHub
+/// and available (R8, FR-019; feature 1504, FR-003, FR-009).
+pub fn titles_to_fetch(
+    state: &State,
+    tickets: &[TitleTicket],
+    github_available: bool,
+    now: u64,
+) -> Vec<u64> {
     let mut wanted = Vec::new();
     if !github_available {
         return wanted;
@@ -674,7 +699,13 @@ pub fn titles_to_fetch(state: &State, tickets: &[TitleTicket], github_available:
         let TitleTicket::Github(number) = ticket else {
             continue;
         };
-        if !state.titles.contains_key(number) && !wanted.contains(number) {
+        let due = match state.titles.get(number) {
+            None => true,
+            // A clock that went back (`now < at`) would otherwise never be due again.
+            Some(TitleLookup::Failed { at }) => now < *at || now - *at >= TITLE_RETRY_AFTER,
+            Some(_) => false,
+        };
+        if due && !wanted.contains(number) {
             wanted.push(*number);
         }
     }

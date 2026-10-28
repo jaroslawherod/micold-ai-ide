@@ -1285,7 +1285,7 @@ fn the_title_is_the_known_issue_title_else_the_branch() {
     );
     title_read(&mut state, 813, TitleLookup::Pending);
     assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
-    title_read(&mut state, 813, TitleLookup::Unavailable);
+    title_read(&mut state, 813, TitleLookup::NoIssue);
     assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
     title_read(
         &mut state,
@@ -1312,16 +1312,16 @@ fn the_title_is_the_known_issue_title_else_the_branch() {
     );
 }
 
-/// R8: a read moves a pending ticket to Known or Unavailable.
+/// R8: a read moves a pending ticket to Known, NoIssue or Failed.
 #[test]
 fn a_title_read_moves_pending_to_known_or_unavailable() {
     let mut state = ticketed();
     state.update(Message::Overview(Msg::TitlesRequested(vec![813, 7])));
     assert_eq!(state.overview.titles[&813], TitleLookup::Pending);
     title_read(&mut state, 813, TitleLookup::Known("T".into()));
-    title_read(&mut state, 7, TitleLookup::Unavailable);
+    title_read(&mut state, 7, TitleLookup::NoIssue);
     assert_eq!(state.overview.titles[&813], TitleLookup::Known("T".into()));
-    assert_eq!(state.overview.titles[&7], TitleLookup::Unavailable);
+    assert_eq!(state.overview.titles[&7], TitleLookup::NoIssue);
 }
 
 /// FR-020: a title never shows in a debug dump, which is what a log of a message would print.
@@ -1341,7 +1341,7 @@ fn a_title_does_not_show_in_a_debug_dump() {
 #[test]
 fn titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github() {
     let mut state = State::default();
-    state.overview.titles.insert(7, TitleLookup::Unavailable);
+    state.overview.titles.insert(7, TitleLookup::NoIssue);
     let worktrees = [
         ("feat-813_a", None),
         ("fix-7_b", None),
@@ -1355,10 +1355,10 @@ fn titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github
     ];
     let tickets = tickets_of(&worktrees);
     assert_eq!(
-        titles_to_fetch(&state.overview, &tickets, true),
+        titles_to_fetch(&state.overview, &tickets, true, 1_000),
         vec![813, 1504, 815]
     );
-    assert!(titles_to_fetch(&state.overview, &tickets, false).is_empty());
+    assert!(titles_to_fetch(&state.overview, &tickets, false, 1_000).is_empty());
 }
 
 fn tickets_of(worktrees: &[(&str, Option<&str>)]) -> Vec<TitleTicket> {
@@ -2539,4 +2539,52 @@ fn a_locations_card_state_is_the_one_its_card_shows() {
         let shown = card(&all, &location);
         assert_eq!((shown.state, shown.reason), (got, reason), "{location:?}");
     }
+}
+
+/// US3.1-US3.3, FR-009, L5: a failed read is asked again once 300 s have passed, never before; a
+/// pending, known or no-issue title is never asked again.
+#[test]
+fn titles_to_fetch_re_asks_a_failed_read_only_after_the_retry_interval() {
+    let mut state = State::default();
+    state
+        .overview
+        .titles
+        .insert(1, TitleLookup::Failed { at: 1_000 });
+    state.overview.titles.insert(2, TitleLookup::NoIssue);
+    state
+        .overview
+        .titles
+        .insert(3, TitleLookup::Known("T".into()));
+    state.overview.titles.insert(4, TitleLookup::Pending);
+    let tickets: Vec<TitleTicket> = (1..=4).map(TitleTicket::Github).collect();
+    let at = |now| titles_to_fetch(&state.overview, &tickets, true, now);
+    assert!(at(1_000).is_empty(), "just failed");
+    assert!(at(1_299).is_empty(), "one second short");
+    assert_eq!(at(1_300), vec![1], "due at exactly 300 s");
+    assert_eq!(at(9_999), vec![1], "and ever after, never the others");
+    assert!(
+        titles_to_fetch(&state.overview, &tickets, false, 9_999).is_empty(),
+        "no GitHub, no retry"
+    );
+    assert_eq!(at(500), vec![1], "a clock that went back is due, not stuck");
+}
+
+/// FR-009: asking again moves a failed read to pending, so a second occasion before the answer
+/// does not ask twice; a failed or pending read shows the next source's title, not a loading text.
+#[test]
+fn a_retried_title_is_pending_and_the_card_never_shows_loading() {
+    let mut state = ticketed();
+    title_read(&mut state, 813, TitleLookup::Failed { at: 10 });
+    assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
+    state.update(Message::Overview(Msg::TitlesRequested(vec![813])));
+    assert_eq!(state.overview.titles[&813], TitleLookup::Pending);
+    assert_eq!(ticketed_card(&state).title, "feat/813-worktree-overview");
+    title_read(&mut state, 813, TitleLookup::Known("Back".into()));
+    state.update(Message::Overview(Msg::TitlesRequested(vec![813])));
+    assert_eq!(
+        state.overview.titles[&813],
+        TitleLookup::Known("Back".into()),
+        "a known title is not reset"
+    );
+    assert_eq!(ticketed_card(&state).title, "Back");
 }

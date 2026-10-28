@@ -1518,4 +1518,32 @@ fn the_user_guide_lists_back_and_forward_with_their_keys_and_buttons() {
             "{action} row names the {button}: {row}"
         );
     }
+    // FR-013 and the prose tasks T026, T033, T036 (TDD audit finding 5): the sentences, with the
+    // page's line wrapping folded away.
+    let prose = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for (what, sentence) in [
+        (
+            "the focus rule (FR-013)",
+            "Back and Forward's keys are the exception to \"the app takes every chord\": a focused \
+             text field or terminal keeps them",
+        ),
+        (
+            "the Review tab's own Back first (T026)",
+            "In a Review tab, Back first does the tab's own **Back**",
+        ),
+        (
+            "gone places passed over (T033)",
+            "are passed over without an error, and a place in another project switches to that \
+             project",
+        ),
+        (
+            "the Review sheet (T036)",
+            "The Review tab's shortcut sheet (`?`) lists Back and Forward too",
+        ),
+    ] {
+        assert!(
+            prose.contains(sentence),
+            "terminal-panes.md states {what}: {sentence:?}"
+        );
+    }
 }

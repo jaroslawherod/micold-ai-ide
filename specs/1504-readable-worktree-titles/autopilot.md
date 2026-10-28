@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
+- **Phase**: M5 implemented on 1504-m5 (T042–T046), full gate green, reviews A/B pending; earlier: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
 - **Next step**: orchestrator runs scoped M4 review A round 2 (sonnet) on fix range `6abaeabc2..5c220dc75`, and the M4 visual pass; then fill REVIEW_A2/VISUAL_PASS in scratchpad pr-body-m4.md and open the M4 PR after M3's
 
 ## Pull requests
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1568 | M2 | merged | fb29142a7 |
 | — | M3 | #1572, merged | 6f67d1beb |
 | — | M4 | pending (not opened; branch 1504-m4, stacked on M3) | — |
+| — | M5 | pending (not opened; branch 1504-m5, stacked on M4) | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T024, T049 | full | Jira title ticket shows its summary; branch-only key gets no chip | #1568 | merged |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | implemented on 1504-m3, reviews pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | implemented on 1504-m4, gate and reviews pending |
-| M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
+| M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | implemented on 1504-m5 (stacked on M4 05897a571), gate and reviews pending |
 
 ## Decisions
 
@@ -74,6 +75,43 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
 | M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
+
+## Red runs (M5)
+
+Reducer (`titles_to_fetch`, `TitleLookup`) was written with the shell mapping stubbed to
+`Failed { at: 0 }`; every red is a failing assertion:
+
+- `cargo test -p micold-client --test overview a_retried_title_is_pending_and_the_card_never_shows_loading`
+  (T042): exit 101, `left: Failed(10)  right: Pending` (a retried title stayed `Failed`; fixed by
+  making `TitlesRequested` reset `Failed` to `Pending`).
+- `cargo test -p micold-client --bin micold-ai-ide title_answer` (T043): 5 failed —
+  `..._no_github_remote_is_no_issue` and `..._number_that_is_no_issue_is_no_issue` with
+  `left: Failed(0)  right: NoIssue`; `..._lost_remotes_read_is_failed`,
+  `..._failed_read_is_failed_with_the_time` and `..._no_gh_is_failed` failing "stamped 0, not now".
+- Green after T044/T045: overview 96 passed, `title` bin tests 21 passed.
+- Full gate (`scripts/gate.sh`) green on the third rerun: the first two runs hit flakes unrelated to
+  this diff while the M4 gate ran concurrently on the shared target (`capture-harness` private X
+  display; `guide-own-image` libpq check; then daemon `structured_permission`
+  `a_pending_request_marks_its_session_waiting...` Unknown vs AwaitingInput), each passing alone.
+- Review round 1 fix (B1), red run taken after the fact by stubbing `titles_to_fetch` so a `Failed`
+  entry is never due: `cargo test -p micold-client --test overview titles_to_fetch` exit 101,
+  `titles_to_fetch_re_asks_a_failed_read_only_after_the_retry_interval` failed at "due at exactly
+  300 s" (`left: []  right: [1]`); stub then restored. The other T042 test
+  (`a_retried_title_is_pending_...`) and the five `title_answer_*` tests have the genuine reds
+  above. The round 1 fix tests (A1 switch-off drops pending, A2 clock back, A3 seed from Failed,
+  A4 outage short-circuit, B2 NotOpenIssue/overflow) were written together with the fix, with no
+  separate red run; stated plainly. The feature records no tdd/cycle-log file.
+- Full gate green after the round 1 fixes (GATE_EXIT=0).
+- Round 2 (combined A+B, scoped, sonnet): CLEAN, 1 MINOR (a 107-column comment in `request_titles`),
+  fixed. M4 merged as 0045f46e6 (#1575); M5's five commits plus the rewrap were rebased with
+  `git rebase --onto origin/main 05897a571` (the merged M4 commits dropped, no conflicts) and the full
+  gate (`scripts/gate.sh`) is green on the rebased head (GATE_EXIT=0).
+- Round 1: review A CHANGES (7 MINOR, all fixed: A1 switch-off removes Pending, A2 `now < at`
+  due, A3 seed Failed from the form, A4 outage stops the batch, A5 rig helper, A6 comments, A7 docs);
+  review B CHANGES (1 MAJOR, 3 MINOR, all fixed). Round 2 pending (scoped, sonnet).
+- Reviews pending (round 1, superseded): review A (`code-review` high) and review B (conformance rubric
+  `.claude/skills/speckit-autopilot/rubrics/conformance.md`) on `05897a571..HEAD`; no visual pass
+  (no UI change: only which titles are asked and when).
 
 ## Red runs (M4)
 

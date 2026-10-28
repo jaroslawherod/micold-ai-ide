@@ -181,6 +181,23 @@ fn the_open_focused_comment_box_holds_the_keyboard() {
     assert_eq!(review_holder(&app), Holder::Review);
 }
 
+/// Feature 1465 research R8 (TDD audit finding 2): a session's composer or queued message left
+/// focused when the Review tab replaced it is stale, so the review keeps the keyboard.
+#[test]
+fn a_session_fields_stale_focus_behind_the_tab_leaves_the_keyboard_to_the_review() {
+    let id = micold_core::session::SessionId::new();
+    for field in [FieldId::Composer(id), FieldId::QueuedMessage(id)] {
+        let mut app = app_with(&["a.rs"]);
+        app.window.focused_field = Some(field);
+        assert_eq!(review_holder(&app), Holder::Review, "{field:?}");
+        assert_eq!(
+            key_pressed(&app, &press('j')),
+            Some(Msg::ReviewKey(ReviewAction::NextFile)),
+            "{field:?}"
+        );
+    }
+}
+
 /// FR-002, SC-002: a focused field, Settings, the Overview, the quick switcher or a dialog on top
 /// keep the keys.
 #[test]
@@ -1031,7 +1048,11 @@ fn question_mark_opens_the_sheet_which_holds_the_keyboard_until_closed() {
     );
     assert_eq!(app.changes, before, "`j` does not move the selection");
     let model = shortcut_sheet(&app).expect("drawn while open");
-    assert_eq!(model.rows.len(), 12, "every row of the table");
+    assert_eq!(
+        model.rows.len(),
+        14,
+        "every row of the table, then Back and Forward"
+    );
     assert_eq!(model.note, None);
 
     app.update_changes(Msg::KeyPressed(press('?')));
@@ -1044,6 +1065,33 @@ fn question_mark_opens_the_sheet_which_holds_the_keyboard_until_closed() {
     app.update(escape);
     assert!(!sheet_open(&app));
     assert_eq!(review_holder(&app), Holder::Review);
+}
+
+/// Back and Forward as the sheet ends with them (FR-014, contracts/ui.md U6). The labels are
+/// written out, not taken from the code under test.
+fn history_rows() -> [(String, &'static str); 2] {
+    let (back, forward) = if cfg!(target_os = "macos") {
+        ("Cmd+[", "Cmd+]")
+    } else {
+        ("Alt+←", "Alt+→")
+    };
+    [
+        (back.to_string(), "Back (also the mouse back button)"),
+        (
+            forward.to_string(),
+            "Forward (also the mouse forward button)",
+        ),
+    ]
+}
+
+/// US5 s1–s2, FR-014: the sheet ends with Back and Forward, with the single keys on and off.
+#[test]
+fn the_sheet_ends_with_back_and_forward_with_single_keys_on_and_off() {
+    for single_keys in [true, false] {
+        let rows = changes::sheet_model(single_keys).rows;
+        let tail = &rows[rows.len() - 2..];
+        assert_eq!(tail, history_rows(), "single keys {single_keys}");
+    }
 }
 
 /// US5 s4: the overflow menu's **Keyboard shortcuts** opens the same sheet, closing the menu.
@@ -1071,14 +1119,19 @@ fn with_the_switch_off_the_sheet_lists_only_the_chords() {
     app.update_changes(Msg::ShortcutsOpened);
     let model = shortcut_sheet(&app).expect("open");
     let mac = cfg!(target_os = "macos");
-    let want: Vec<(String, &str)> = sheet_rows(false)
+    let mut want: Vec<(String, &str)> = sheet_rows(false)
         .map(|row| {
             let (other, macos) = row.labels();
             (if mac { macos } else { other }, row.sheet)
         })
         .collect();
+    want.extend(history_rows());
     assert_eq!(model.rows, want);
-    assert_eq!(model.rows.len(), 2, "the send and save-comment chords");
+    assert_eq!(
+        model.rows.len(),
+        4,
+        "the send and save-comment chords, Back and Forward"
+    );
     assert_eq!(model.note, Some(SINGLE_KEYS_OFF_NOTE));
     assert_eq!(
         app.update_changes(Msg::KeyPressed(press('?'))),

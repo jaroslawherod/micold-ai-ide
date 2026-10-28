@@ -372,8 +372,57 @@ fn a_removed_worktrees_places_are_skipped_and_removed() {
         Step::Show(at_session(SessionLocation::Default, d)),
         "US4 AS2"
     );
-    assert_eq!(entries(&state).len(), 2);
-    let _ = b;
+    assert_eq!(
+        entries(&state),
+        vec![
+            at_session(SessionLocation::Default, d),
+            at_session(worktree("feat-b"), b)
+        ],
+        "FR-007: feat-a's place removed"
+    );
+}
+
+#[test]
+fn forward_passes_over_the_shown_place_and_on_past_a_gone_one() {
+    // TDD audit finding 1: D → A → D → B, Back three times to the first D, A archived. Forward
+    // removes A, passes over the second D (the place shown) and lands on B.
+    let (mut state, d, a, b) = three();
+    for id in [a, d, b] {
+        select(&mut state, id);
+    }
+    for _ in 0..3 {
+        assert!(matches!(back(&mut state), Step::Show(_)));
+    }
+    assert_eq!(state.history.list.position(), 0, "on the first D");
+    state
+        .workspace
+        .sessions
+        .get_mut(&repo())
+        .and_then(|list| list.iter_mut().find(|s| s.id == a))
+        .expect("A")
+        .archive();
+    assert_eq!(
+        press(&mut state, Dir::Forward, Source::Button),
+        Step::Show(at_session(worktree("feat-b"), b)),
+        "FR-006, FR-007"
+    );
+    assert_eq!(
+        entries(&state),
+        vec![
+            at_session(SessionLocation::Default, d),
+            at_session(worktree("feat-b"), b)
+        ],
+        "A removed and the two Ds merged"
+    );
+}
+
+#[test]
+fn the_shown_place_is_none_while_settings_is_open() {
+    // TDD audit finding 3: Settings is not a place (FR-010, spec Assumptions).
+    let (mut state, _, _, b) = walked();
+    assert_eq!(state.shown_place(), Some(at_session(worktree("feat-b"), b)));
+    state.settings.settings_draft = Some(Default::default());
+    assert_eq!(state.shown_place(), None, "Settings shows no place");
 }
 
 // ---- Across projects (US4, research R5) ---------------------------------------------------------
@@ -1042,6 +1091,33 @@ fn a_key_press_acts_over_a_closed_comment_boxs_stale_focus() {
         key_back(&mut state),
         Step::Show(at_session(worktree("feat-a"), a))
     );
+}
+
+#[test]
+fn a_key_press_acts_over_a_session_fields_stale_focus_behind_the_review_tab() {
+    // TDD audit finding 2 (research R8): a session's composer or queued message left focused when
+    // the Review tab replaced it never reports the blur; the keys are the app's again.
+    use micold_client::features::window::FieldId;
+    for field in [FieldId::Composer, FieldId::QueuedMessage] {
+        let (mut state, _, _, b) = walked_released();
+        send(
+            &mut state,
+            Message::Sidebar(sidebar::Msg::ReviewChangesRequested(worktree("feat-b"))),
+        );
+        assert!(state.review_shown().is_some(), "the Review tab is shown");
+        assert!(!state.terminal_focused(), "precondition");
+        state.window.focused_field = Some(field(b));
+        assert_eq!(
+            state.live_focused_field(),
+            None,
+            "the field is behind the tab"
+        );
+        assert_eq!(
+            key_back(&mut state),
+            Step::Show(at_session(worktree("feat-b"), b)),
+            "Back leaves the Review tab for B (US2 AS2 boundary, FR-009)"
+        );
+    }
 }
 
 #[test]

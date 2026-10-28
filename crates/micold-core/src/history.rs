@@ -320,6 +320,49 @@ mod tests {
         assert_eq!(h.position(), 0);
     }
 
+    /// Runs `step` on its own thread: a walk that never advances fails the test instead of hanging it.
+    fn step_bounded(
+        mut h: History<u32>,
+        dir: Dir,
+        shown: u32,
+        exists: fn(&u32) -> bool,
+    ) -> (History<u32>, Option<u32>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let got = h.step(dir, Some(&shown), exists);
+            let _ = tx.send((h, got));
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("step returns: a walk past an entry equal to the shown one advances")
+    }
+
+    #[test]
+    fn forward_passes_over_an_entry_equal_to_shown_and_keeps_it() {
+        // The Forward twin of US4 AS4: [1, 2, 3] at 0, shown 2 (not recorded yet).
+        let mut h = filled(&[1, 2, 3]);
+        h.step(Dir::Back, Some(&3), all);
+        h.step(Dir::Back, Some(&2), all);
+        let (h, got) = step_bounded(h, Dir::Forward, 2, all);
+        assert_eq!(got, Some(3), "Forward passes over the shown 2");
+        assert_eq!(h.entries(), &[1, 2, 3], "the shown entry kept");
+        assert_eq!(h.position(), 2);
+        // [1, 2, 1, 3] at 0, 2 gone: Forward removes 2, passes over the second 1 (shown), lands
+        // on 3, and the two 1s merge.
+        let mut h = filled(&[1, 2, 1, 3]);
+        for shown in [3, 1, 2] {
+            h.step(Dir::Back, Some(&shown), all);
+        }
+        assert_eq!(h.position(), 0);
+        let (h, got) = step_bounded(h, Dir::Forward, 1, |p| *p != 2);
+        assert_eq!(
+            got,
+            Some(3),
+            "FR-006, FR-007: past the gone 2 and the shown 1"
+        );
+        assert_eq!(h.entries(), &[1, 3], "2 removed and the 1s merged");
+        assert_eq!(h.position(), 1, "the position on 3");
+    }
+
     #[test]
     fn back_with_nothing_shown_returns_to_the_current_entry() {
         // Review A M1 F1: nothing shown (a stop with no session, a removed session nothing
@@ -345,27 +388,41 @@ mod tests {
         let mut h = filled(&[1, 2]);
         h.step(Dir::Back, Some(&2), all);
         assert_eq!(h.step(Dir::Forward, None, all), Some(2));
-        // Every subset of gone entries, every position: an existing entry or nothing.
+        // Every subset of gone entries, every position: the nearest existing entry at or before
+        // the current one; the gone entries walked over removed, the rest kept.
         for gone_mask in 0u32..32 {
-            for start in 0..5usize {
-                let mut h = filled(&[0, 1, 2, 3, 4]);
-                for _ in start..4 {
-                    let shown = *h.current().unwrap();
-                    h.step(Dir::Back, Some(&shown), all);
-                }
+            for start in 0..5u32 {
+                let mut h = at_start(start);
                 let exists = |p: &u32| gone_mask & (1 << p) == 0;
-                let current = *h.current().unwrap();
+                let want = (0..=start).rev().find(exists);
                 let got = h.step(Dir::Back, None, exists);
-                if exists(&current) {
-                    assert_eq!(got, Some(current), "the existing current entry");
-                }
-                if let Some(p) = got {
-                    assert!(exists(&p), "lands on an existing entry");
-                    assert_eq!(h.current(), Some(&p), "the position is on it");
+                let case = format!("gone {gone_mask:05b}, at {start}");
+                assert_eq!(got, want, "{case}");
+                let kept: Vec<u32> = (0..5)
+                    .filter(|&i| want.is_some_and(|p| i <= p) || i > start)
+                    .collect();
+                assert_eq!(
+                    h.entries(),
+                    kept.as_slice(),
+                    "{case}: walked-over gone removed"
+                );
+                if let Some(p) = want {
+                    assert_eq!(h.current(), Some(&p), "{case}: the position is on it");
                 }
                 assert_invariants(&h);
             }
         }
+    }
+
+    /// `[0, 1, 2, 3, 4]` stepped back to position `start`.
+    fn at_start(start: u32) -> History<u32> {
+        let mut h = filled(&[0, 1, 2, 3, 4]);
+        for _ in start..4 {
+            let shown = *h.current().unwrap();
+            h.step(Dir::Back, Some(&shown), all);
+        }
+        assert_eq!(h.position(), start as usize);
+        h
     }
 
     #[test]
@@ -396,25 +453,45 @@ mod tests {
     #[test]
     fn every_step_lands_on_an_existing_other_entry_or_does_nothing() {
         // SC-002: every subset of gone entries in a five-entry list, every position, both ways.
+        // Each outcome is computed independently: the nearest existing entry that way, the gone
+        // entries between it (or the end) and the start removed, everything else kept.
         for gone_mask in 0u32..32 {
-            for start in 0..5usize {
+            for start in 0..5u32 {
                 for dir in [Dir::Back, Dir::Forward] {
-                    let mut h = filled(&[0, 1, 2, 3, 4]);
-                    for _ in start..4 {
-                        let shown = *h.current().unwrap();
-                        h.step(Dir::Back, Some(&shown), all);
-                    }
-                    assert_eq!(h.position(), start);
-                    let shown = *h.current().unwrap();
+                    let mut h = at_start(start);
                     let exists = |p: &u32| gone_mask & (1 << p) == 0;
-                    let got = h.step(dir, Some(&shown), exists);
-                    if let Some(p) = got {
-                        assert!(exists(&p), "lands on an existing entry");
-                        assert_ne!(p, shown, "never on the place shown");
-                        assert_eq!(h.current(), Some(&p), "the position is on it");
-                    } else {
-                        assert_eq!(h.current(), Some(&shown), "nothing moved");
-                    }
+                    let (want, kept): (Option<u32>, Vec<u32>) = match dir {
+                        Dir::Back => {
+                            let want = (0..start).rev().find(exists);
+                            let kept = (0..5)
+                                .filter(|&i| want.is_some_and(|p| i <= p) || i >= start)
+                                .collect();
+                            (want, kept)
+                        }
+                        Dir::Forward => {
+                            let want = (start + 1..5).find(exists);
+                            let kept = (0..5)
+                                .filter(|&i| i <= start || want.is_some_and(|p| i >= p))
+                                .collect();
+                            (want, kept)
+                        }
+                    };
+                    let got = h.step(dir, Some(&start), exists);
+                    let case = format!("{dir:?} from {start}, gone {gone_mask:05b}");
+                    assert_eq!(
+                        got, want,
+                        "{case}: the nearest existing entry, never the shown"
+                    );
+                    assert_eq!(
+                        h.current(),
+                        Some(&want.unwrap_or(start)),
+                        "{case}: position"
+                    );
+                    assert_eq!(
+                        h.entries(),
+                        kept.as_slice(),
+                        "{case}: walked-over gone removed"
+                    );
                     assert_invariants(&h);
                 }
             }

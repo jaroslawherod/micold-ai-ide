@@ -155,3 +155,11 @@ reworded: an empty run is not a run.
 
 - F1 core: `RememberedSelector::with_change(Query(empty))` set `ran = true`. Test `each_change_sets_one_field` flipped to "an empty run is not a run" and "an empty run leaves the last run query". Red: `cargo test -p micold-core --test github_filter` 47 passed, 1 failed (`each_change_sets_one_field`, line 855). Green after the guard: 48 passed.
 - F2 spec: the Edge case "Empty advanced query" wrongly said 1186's Jira query behaves the same; it now says Jira runs an empty query. Prose only.
+
+## M6 — remember the advanced mode and last run query (T050–T052)
+
+| Task | Behaviour | Red (before the code) | Green |
+|---|---|---|---|
+| T050 (`tests/github_filter_state.rs`) | a project last used in Advanced reopens in Advanced with the last run query in the input and lists it once as the source shows (US2 AS3, FR-013); Advanced with no query ever run, or a remembered empty query, shows the prompt and sends nothing; an empty run hands back nothing to remember; a draft typed and not run is not remembered and the form reopens on the last run query (AS4); `Remembered(Mode)` at each switch that changes the mode (none for a repeat), `Remembered(Query)` at each accepted run with the query as cleaned, none for a draft, a refused run or an empty run; a session's outcomes written as the shell writes them reopen the same form | `cargo test -p micold-client --test github_filter_state`: 6 FAILED (`reopening_in_advanced_runs_the_last_run_query_once`, `reopening_in_advanced_with_no_query_run_shows_the_prompt_and_sends_nothing`, `an_empty_run_is_not_remembered_as_run`, `a_draft_typed_and_not_run_is_not_remembered`, `the_mode_and_each_accepted_run_are_remembered_and_nothing_else_is`, `what_a_session_remembers_reopens_the_same_form`), 56 passed | 62 passed (one test expectation corrected: `query_text::clean` only trims, so the remembered query keeps inner spacing) |
+| T051 | `GithubSelector::from_remembered` takes `mode`, `last_run` (only when `ran` and non-empty) and `draft`; `update` hands back `SelectorChange::Mode` on a mode change and `SelectorChange::Query` on an accepted run. The source-shown branch and the prompt (`ui::github_filter::prompt`) came with M5 and are unchanged | above | above; `github_selector_shell` 7, `jira_query_state` 34 passed |
+| T052 | docs | — | — |

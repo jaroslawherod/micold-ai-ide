@@ -1853,3 +1853,203 @@ fn an_empty_run_sends_nothing_and_keeps_the_prompt() {
     filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
     assert!(state.worktree_form.awaited_issue_load().is_some());
 }
+
+// --- T050: the remembered advanced mode and last run query (US2 AS3, AS4) -------------------------
+
+/// What the project remembers after `mode` and the query `ran` (if any) were written, as the shell
+/// writes them: one field per change.
+fn remembered_advanced(ran: Option<&str>) -> RememberedSelector {
+    let mut remembered =
+        RememberedSelector::default().with_change(&SelectorChange::Mode(QueryMode::Advanced));
+    if let Some(query) = ran {
+        remembered = remembered.with_change(&SelectorChange::Query(query.into()));
+    }
+    remembered
+}
+
+fn remembers_change(change: SelectorChange) -> Vec<Outcome> {
+    vec![Outcome::GithubSelectorRemembered {
+        project: project(),
+        change,
+    }]
+}
+
+/// Write what a session handed back into `remembered`, as the shell does.
+fn persist(remembered: RememberedSelector, outcomes: Vec<Outcome>) -> RememberedSelector {
+    outcomes
+        .into_iter()
+        .fold(remembered, |held, outcome| match outcome {
+            Outcome::GithubSelectorRemembered { change, .. } => held.with_change(&change),
+            _ => held,
+        })
+}
+
+/// US2 AS3, FR-013: a project last used in Advanced reopens in Advanced with its last run query in
+/// the input, and runs it once as soon as the GitHub source shows, with no interaction.
+#[test]
+fn reopening_in_advanced_runs_the_last_run_query_once() {
+    let before = State::default().worktree_form.issue_request_seq;
+    let mut state = reopened(remembered_advanced(Some("label:bug")));
+    let selector = &form(&state).github_selector;
+    assert_eq!(selector.mode, QueryMode::Advanced);
+    assert_eq!(selector.draft, "label:bug");
+    assert_eq!(
+        selector.last_run.as_ref().map(|q| q.as_str()),
+        Some("label:bug")
+    );
+    assert!(form(&state).shows_github_advanced());
+    let (seq, _, search) = state
+        .worktree_form
+        .github_filtered_load()
+        .expect("the last run query is listed");
+    assert_eq!(search.as_str(), advanced("label:bug"));
+    assert_eq!(seq, before + 1, "one listing, no other request");
+
+    let asked = answer_with(
+        &mut state,
+        Ok(page(vec![issue(42, "Crash", &["bug"])], 1, None)),
+    );
+    assert_eq!(asked, vec![advanced("label:bug")]);
+    assert_eq!(held_numbers(&state), vec![42]);
+    assert_eq!(state.worktree_form.github_filtered_load(), None, "run once");
+    assert_eq!(form(&state).github_selector.active_line(), None);
+}
+
+/// FR-013: Advanced remembered but no query ever run: the prompt shows and nothing is sent.
+#[test]
+fn reopening_in_advanced_with_no_query_run_shows_the_prompt_and_sends_nothing() {
+    let state = reopened(remembered_advanced(None));
+    assert_eq!(form(&state).github_selector.mode, QueryMode::Advanced);
+    assert_eq!(form(&state).github_selector.draft, "");
+    assert_eq!(form(&state).github_selector.last_run, None);
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert!(form(&state).shows_github_advanced(), "the prompt shows");
+}
+
+/// M5 review (D5): an empty run is not a run, so a file holding one reopens on the prompt.
+#[test]
+fn an_empty_run_is_not_remembered_as_run() {
+    // The empty run hands back nothing to remember.
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    for text in ["", "   "] {
+        filter(&mut state, GithubMsg::DraftChanged(text.into()));
+        assert!(
+            remembered_by(&mut state, GithubMsg::Run).is_empty(),
+            "{text:?}"
+        );
+    }
+    // A remembered empty query, ran or not, reopens on the prompt with nothing sent.
+    for ran in [Some(""), None] {
+        let state = reopened(remembered_advanced(ran));
+        assert_eq!(state.worktree_form.github_filtered_load(), None);
+        assert_eq!(state.worktree_form.awaited_issue_load(), None);
+        assert_eq!(form(&state).issues, IssueList::NotRequested);
+        assert_eq!(form(&state).github_selector.last_run, None);
+        assert!(form(&state).shows_github_advanced());
+    }
+    // A remembered query the checks now refuse (a file from before a rule) reopens on the prompt.
+    let refused = RememberedSelector {
+        query: "repo:other/x".into(),
+        ..remembered_advanced(Some("label:bug"))
+    };
+    let state = reopened(refused);
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(form(&state).github_selector.last_run, None);
+}
+
+/// US2 AS4: Q2 typed and not run is not remembered: the form reopens showing Q, running Q.
+#[test]
+fn a_draft_typed_and_not_run_is_not_remembered() {
+    let mut state = reopened(remembered_advanced(Some("label:bug")));
+    answer_with(
+        &mut state,
+        Ok(page(vec![issue(42, "Crash", &["bug"])], 1, None)),
+    );
+    let typed = remembered_by(&mut state, GithubMsg::DraftChanged("label:ui".into()));
+    assert!(typed.is_empty(), "a draft is never remembered");
+    assert_eq!(form(&state).github_selector.draft, "label:ui");
+
+    // Closing the form with the draft unrun leaves the file as it was.
+    let held = remembered_advanced(Some("label:bug"));
+    let again = reopened(persist(held.clone(), typed));
+    assert_eq!(form(&again).github_selector.draft, "label:bug");
+    let (_, _, search) = again.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), advanced("label:bug"));
+}
+
+/// FR-021: `Remembered(Mode)` at each switch that changes the mode, `Remembered(Query)` at each
+/// accepted run with the query as cleaned; never for a draft, a refused run or an empty run.
+#[test]
+fn the_mode_and_each_accepted_run_are_remembered_and_nothing_else_is() {
+    let mut state = shown(default_issues());
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced)),
+        remembers_change(SelectorChange::Mode(QueryMode::Advanced))
+    );
+    assert!(
+        remembered_by(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced)).is_empty(),
+        "no switch, nothing remembered"
+    );
+    assert!(remembered_by(&mut state, GithubMsg::DraftChanged("label:bug".into())).is_empty());
+
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::Run),
+        remembers_change(SelectorChange::Query("label:bug".into()))
+    );
+    answer_with(
+        &mut state,
+        Ok(page(vec![issue(42, "Crash", &["bug"])], 1, None)),
+    );
+
+    // A run the checks refuse: shown, not remembered.
+    filter(&mut state, GithubMsg::DraftChanged("repo:other/x".into()));
+    assert!(remembered_by(&mut state, GithubMsg::Run).is_empty());
+    assert!(matches!(form(&state).issues, IssueList::Refused(_)));
+
+    // An empty run: not remembered.
+    filter(&mut state, GithubMsg::DraftChanged("  ".into()));
+    assert!(remembered_by(&mut state, GithubMsg::Run).is_empty());
+
+    // A second accepted run is remembered, trimmed (the text as the input shows it).
+    filter(
+        &mut state,
+        GithubMsg::DraftChanged("  label:ui   state:open ".into()),
+    );
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::Run),
+        remembers_change(SelectorChange::Query("label:ui   state:open".into()))
+    );
+
+    // The switch back to Basic is remembered as a mode change alone (the basic filters did not
+    // change), and a Run in basic mode is nothing.
+    assert_eq!(
+        remembered_by(&mut state, GithubMsg::ModeChanged(QueryMode::Basic)),
+        remembers_change(SelectorChange::Mode(QueryMode::Basic))
+    );
+    assert!(remembered_by(&mut state, GithubMsg::Run).is_empty());
+}
+
+/// The whole round trip: what a session hands back, written as the shell writes it, reopens the
+/// same form.
+#[test]
+fn what_a_session_remembers_reopens_the_same_form() {
+    let mut state = shown(default_issues());
+    let mut held = RememberedSelector::default();
+    held = persist(
+        held,
+        remembered_by(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced)),
+    );
+    filter(&mut state, GithubMsg::DraftChanged("label:bug".into()));
+    held = persist(held, remembered_by(&mut state, GithubMsg::Run));
+    filter(&mut state, GithubMsg::DraftChanged("not run".into()));
+
+    let again = reopened(held);
+    assert_eq!(form(&again).github_selector.mode, QueryMode::Advanced);
+    assert_eq!(form(&again).github_selector.draft, "label:bug");
+    let (_, _, search) = again.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), advanced("label:bug"));
+}

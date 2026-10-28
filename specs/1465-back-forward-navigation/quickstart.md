@@ -34,13 +34,24 @@ Project P (active) with Default (session A), worktree `feat-1` (sessions B and B
 | B4 | In a terminal running `cat -v`, press Alt+← with the terminal focused. | `^[[1;3D` printed; the history did not move (FR-009). |
 | B5 | Release the terminal (Ctrl+Shift+E), press Alt+←, then Alt+→. | Back, then Forward. Hold Alt+←: steps back once per repeat until the oldest entry. |
 | B6 | Open the Review tab of `feat-1`, follow a link into a browsed file. Alt+← | The diff as it was (same file, scroll, expansion); press again: the place before the Review tab (US3). |
-| B7 | Type in the review's comment box; press Alt+← / Alt+→. | The caret moves by word; the history does not move. Mouse back: the history moves (FR-008). |
+| B7 | Type in the review's comment box; press Alt+← / Alt+→. | The caret moves as before (one character on Linux, the editor's existing behaviour FR-009 keeps); the history does not move. Mouse back: the history moves (FR-008). |
 | B8 | Show A, B, C; close session B. From C, Back. Then show C, then B2, remove worktree `fix-2` from its menu, and from B2 press Back. | First: A, with no notification (US4 AS1). Then: the entry before C is shown, C's entry passed over and gone (AS2). |
 | B9 | Open the Overview, Back. Open Compare of G, Back. | The previous session, Overview closed; the place before Compare. |
 | B10 | Show Q1 (project switcher), Back. Then in P open Compare of G, show Q1, Back, Forward. | P with the place shown before, without an intermediate P place recorded: Forward returns to Q1. Then P with Compare of G open (its runs' counts read), and Forward returns to Q1. |
 | B11 | Open the quick switcher (Ctrl+Shift+P); mouse back and Alt+←. Same with Settings open and with the Review sheet (`?`) open. | Nothing moves (FR-010). |
 | B12 | Open the Review sheet with single-key shortcuts on, then off. | Both list *Back* (Alt+←) and *Forward* (Alt+→) (FR-014). |
 | B13 | Read `docs/user-guide/terminal-panes.md` §Keyboard shortcuts. | Back and Forward rows with mouse buttons, Alt+←/→ and Cmd+[ / Cmd+], and the focused-field/terminal rule (FR-013). |
+
+### §B results (2026-10-28, Linux, visual-pass)
+
+GUI pass: **PASS**. B1–B11 and B13 passed; B12 was skipped here, covered by the M5 visual pass
+(`evidence/m5-sheet-*.png`). Screenshots: `evidence/qs-B*.png`.
+
+- B1, B2, B3, B6, B8: selecting a session in a worktree with two live sessions opened the app's
+  existing "Start beside a running session?" dialog, as a click does (behaviour from before this
+  feature; Back/Forward select as the sidebar does).
+- B7: on Linux the comment box moves the caret one character for Alt+←/→ (its existing
+  behaviour, which FR-009 keeps); the row's wording was corrected from "by word".
 
 ## §C — Platforms (Principle VI)
 
@@ -52,3 +63,19 @@ On macOS and on Windows, with a mouse that has side buttons:
 | C2 | macOS: Cmd+[ / Cmd+] with no field focused; then in the review's comment box; then Option+← in that box. | Back / Forward; in the box nothing moves the history and Option+← moves the caret by word. |
 | C3 | Windows: Alt+← / Alt+→ with no field focused, then in a terminal running `cat -v`. | Back / Forward; in the terminal `^[[1;3D` and no move. |
 | C4 | B3 on each platform. | The terminal program receives nothing for a side-button press. |
+
+### §C results (2026-10-28)
+
+Not run by hand: the autopilot run had no macOS or Windows machine and no mouse with side
+buttons. The evidence instead:
+
+- **C1, C4**: side buttons arrive as iced's `mouse::Button::Back` / `Forward` on every platform,
+  and the routing that keeps a press from the terminal program is platform-independent; it is
+  covered on Linux by `side_button` and the terminal pane tests (§A) and by §B B1/B3.
+- **C2**: the Cmd+[ / Cmd+] arm of `keymap::history_key` and `history_key_label` is behind
+  `cfg(target_os = "macos")`. CI's `build + test (macos-latest)` leg compiles it (`cargo build
+  --workspace`) and runs the core suite; the client tests that drive the arm run on Linux only.
+- **C3**: Windows uses the same Alt+←/→ arm as Linux (no `cfg` difference), tested in §A; CI's
+  `build + test (windows-latest)` leg compiles the workspace.
+
+Hand-check C1–C4 on the first macOS and Windows build that ships this feature.
