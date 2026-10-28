@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B (conformance) M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | CLEAN: 1 MINOR — T016 named `ops.rs` `start_with_prompt` for `LaunchSpec.effort`; both sites are in state.rs: fixed, prose only. Verify passed (`structured_effort` 13/13; `session_store`, `protocol_roundtrip`, `schema_hash` green). Run by the orchestrator |
 | M2 scoped gate (fix diff) | 2 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`, `structured_effort` 16/16 |
 | Full gate M2 | 1 | — | red: `a_stored_level_the_model_does_not_take_launches_with_none` asserted the session runs as soon as the stand-in recorded its argv, before the daemon registered the process (a race in this milestone's test). Now waits for it (`eventually`); 3/3 runs green |
+| Full gate M2 | 2 | — | green: `scripts/gate.sh` at 33f5bc8e8 (origin/main b18b611d1; `PROTOCOL_VERSION` there still 72, branch 73) |
 
 ## Declined review findings
 
