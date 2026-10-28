@@ -57,11 +57,7 @@ pub struct LabelName(String);
 impl LabelName {
     /// `name` as a label, kept exactly as given; `None` when it cannot be quoted.
     pub fn parse(name: &str) -> Option<LabelName> {
-        let quotable = !name.is_empty()
-            && !name
-                .chars()
-                .any(|c| matches!(c, '"' | '\\') || c.is_control());
-        quotable.then(|| LabelName(name.to_string()))
+        quotable(name).then(|| LabelName(name.to_string()))
     }
 
     /// The name as GitHub spells it.
@@ -73,6 +69,143 @@ impl LabelName {
 impl fmt::Debug for LabelName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(REDACTED)
+    }
+}
+
+/// `true` when `text` is non-empty and holds no `"`, `\` or control character: what can stand
+/// inside `"…"` in a search (FR-006, research R6).
+fn quotable(text: &str) -> bool {
+    !text.is_empty()
+        && !text
+            .chars()
+            .any(|c| matches!(c, '"' | '\\') || c.is_control())
+}
+
+/// A GitHub login (US6, data-model §1), sent bare. Constructed only by [`Login::parse`]: 1–39
+/// ASCII letters, digits and single inner hyphens, so it can hold no space, colon or quote.
+#[derive(Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct Login(String);
+
+impl Login {
+    /// The longest login GitHub allows.
+    pub const MAX_CHARS: usize = 39;
+
+    /// `text` as a login; `None` when GitHub would not accept it as one.
+    pub fn parse(text: &str) -> Option<Login> {
+        let valid = (1..=Login::MAX_CHARS).contains(&text.len())
+            && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            && !text.starts_with('-')
+            && !text.ends_with('-')
+            && !text.contains("--");
+        valid.then(|| Login(text.to_string()))
+    }
+
+    /// The login as typed or as GitHub spells it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for Login {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(REDACTED)
+    }
+}
+
+/// Whom the listed issues are assigned to (US6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Assignee {
+    /// The signed-in user: `assignee:@me`.
+    Me,
+    /// No one: `no:assignee`.
+    Nobody,
+    /// This person: `assignee:<login>`.
+    User(Login),
+}
+
+/// Who opened the listed issues (US6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Author {
+    /// The signed-in user: `author:@me`.
+    Me,
+    /// This person: `author:<login>`.
+    User(Login),
+}
+
+/// A milestone title that can be sent as `milestone:"<title>"` (US6, data-model §1). Constructed
+/// only by [`MilestoneTitle::parse`]: the rule of [`LabelName`] (no `"`, `\` or control character).
+#[derive(Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct MilestoneTitle(String);
+
+impl MilestoneTitle {
+    /// `title` as a milestone title, kept exactly as given; `None` when it cannot be quoted.
+    pub fn parse(title: &str) -> Option<MilestoneTitle> {
+        quotable(title).then(|| MilestoneTitle(title.to_string()))
+    }
+
+    /// The title as GitHub spells it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for MilestoneTitle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(REDACTED)
+    }
+}
+
+/// Which milestone the listed issues are in (US6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Milestone {
+    /// None: `no:milestone`.
+    Nobody,
+    /// This open milestone: `milestone:"<title>"`.
+    Titled(MilestoneTitle),
+}
+
+/// The login under `key` of a remembered `{"<key>": "<login>"}`, when valid.
+fn login_under(value: &serde_json::Value, key: &str) -> Option<Login> {
+    value.get(key)?.as_str().and_then(Login::parse)
+}
+
+impl Assignee {
+    fn from_value(value: &serde_json::Value) -> Option<Assignee> {
+        match value.as_str() {
+            Some("me") => Some(Assignee::Me),
+            Some("nobody") => Some(Assignee::Nobody),
+            Some(_) => None,
+            None => login_under(value, "user").map(Assignee::User),
+        }
+    }
+}
+
+impl Author {
+    fn from_value(value: &serde_json::Value) -> Option<Author> {
+        match value.as_str() {
+            Some("me") => Some(Author::Me),
+            Some(_) => None,
+            None => login_under(value, "user").map(Author::User),
+        }
+    }
+}
+
+impl Milestone {
+    fn from_value(value: &serde_json::Value) -> Option<Milestone> {
+        match value.as_str() {
+            Some("nobody") => Some(Milestone::Nobody),
+            Some(_) => None,
+            None => value
+                .get("titled")?
+                .as_str()
+                .and_then(MilestoneTitle::parse)
+                .map(Milestone::Titled),
+        }
     }
 }
 
@@ -98,6 +231,14 @@ pub struct BasicFilters {
     include: Vec<LabelName>,
     exclude: Vec<LabelName>,
     state: IssueState,
+    // US6: absent from files written before it, which read as unset (`from_value`); unset is not
+    // written, so the default filter's file is as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    assignee: Option<Assignee>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    author: Option<Author>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    milestone: Option<Milestone>,
 }
 
 impl BasicFilters {
@@ -128,6 +269,43 @@ impl BasicFilters {
         self.state = state;
     }
 
+    /// List issues assigned as `assignee` says; `None` for any assignee (US6).
+    pub fn set_assignee(&mut self, assignee: Option<Assignee>) {
+        self.assignee = assignee;
+    }
+
+    /// List issues opened by `author`; `None` for any author (US6).
+    pub fn set_author(&mut self, author: Option<Author>) {
+        self.author = author;
+    }
+
+    /// List issues in `milestone`; `None` for any milestone (US6).
+    pub fn set_milestone(&mut self, milestone: Option<Milestone>) {
+        self.milestone = milestone;
+    }
+
+    /// The chosen assignee, if any.
+    pub fn assignee(&self) -> Option<&Assignee> {
+        self.assignee.as_ref()
+    }
+
+    /// The chosen author, if any.
+    pub fn author(&self) -> Option<&Author> {
+        self.author.as_ref()
+    }
+
+    /// The chosen milestone, if any.
+    pub fn milestone(&self) -> Option<&Milestone> {
+        self.milestone.as_ref()
+    }
+
+    /// How many of the US6 values are set.
+    fn values_set(&self) -> usize {
+        usize::from(self.assignee.is_some())
+            + usize::from(self.author.is_some())
+            + usize::from(self.milestone.is_some())
+    }
+
     /// The default filter, as **Clear filters** leaves it.
     pub fn cleared(&self) -> BasicFilters {
         BasicFilters::default()
@@ -148,14 +326,18 @@ impl BasicFilters {
         self.state
     }
 
-    /// No label and open issues: today's listing (FR-009).
+    /// No label, assignee, author or milestone, and open issues: today's listing (FR-009).
     pub fn is_default(&self) -> bool {
-        self.include.is_empty() && self.exclude.is_empty() && self.state == IssueState::Open
+        self.chosen_count() == 0
     }
 
-    /// What the **Filters** control counts: one per label, one for a state other than open.
+    /// What the **Filters** control counts: one per label, one for a state other than open, one
+    /// per assignee, author and milestone set.
     pub fn chosen_count(&self) -> usize {
-        self.include.len() + self.exclude.len() + usize::from(self.state != IssueState::Open)
+        self.include.len()
+            + self.exclude.len()
+            + usize::from(self.state != IssueState::Open)
+            + self.values_set()
     }
 
     /// The active line (FR-007); `None` for the default filter.
@@ -179,11 +361,26 @@ impl BasicFilters {
             IssueState::Closed => parts.push("Closed issues".to_string()),
             IssueState::All => parts.push("Open and closed issues".to_string()),
         }
+        parts.extend(self.assignee.as_ref().map(|assignee| match assignee {
+            Assignee::Me => "Assigned to me".to_string(),
+            Assignee::Nobody => "No assignee".to_string(),
+            Assignee::User(login) => format!("Assigned to {}", login.as_str()),
+        }));
+        parts.extend(self.author.as_ref().map(|author| match author {
+            Author::Me => "By me".to_string(),
+            Author::User(login) => format!("By {}", login.as_str()),
+        }));
+        parts.extend(self.milestone.as_ref().map(|milestone| match milestone {
+            Milestone::Nobody => "No milestone".to_string(),
+            Milestone::Titled(title) => format!("Milestone {}", title.as_str()),
+        }));
         (!parts.is_empty()).then(|| parts.join("; "))
     }
 
     /// Read leniently (data-model §2): an entry that is not a quotable label is dropped, a
-    /// duplicate kept once, a label in both lists kept in `include` only, an unknown state is open.
+    /// duplicate kept once, a label in both lists kept in `include` only, an unknown state is open;
+    /// an invalid or missing assignee, author or milestone is unset (US6: files written before it
+    /// read unchanged).
     fn from_value(value: &serde_json::Value) -> BasicFilters {
         let labels = |key: &str| {
             value[key]
@@ -202,6 +399,9 @@ impl BasicFilters {
             filters.include_label(label);
         }
         filters.state = IssueState::deserialize(&value["state"]).unwrap_or_default();
+        filters.assignee = Assignee::from_value(&value["assignee"]);
+        filters.author = Author::from_value(&value["author"]);
+        filters.milestone = Milestone::from_value(&value["milestone"]);
         filters
     }
 }
@@ -219,6 +419,9 @@ impl fmt::Debug for BasicFilters {
             .field("include", &self.include)
             .field("exclude", &self.exclude)
             .field("state", &self.state)
+            .field("assignee", &self.assignee)
+            .field("author", &self.author)
+            .field("milestone", &self.milestone)
             .finish()
     }
 }
@@ -473,6 +676,27 @@ fn scope(repo: &GithubRepo, filter: &GithubFilter) -> String {
             }
             for label in &filters.exclude {
                 text.push_str(&format!(" -label:\"{}\"", label.as_str()));
+            }
+            // US6: a login is validated to hold no space, colon or quote, so it goes bare.
+            match &filters.assignee {
+                None => {}
+                Some(Assignee::Me) => text.push_str(" assignee:@me"),
+                Some(Assignee::Nobody) => text.push_str(" no:assignee"),
+                Some(Assignee::User(login)) => {
+                    text.push_str(&format!(" assignee:{}", login.as_str()));
+                }
+            }
+            match &filters.author {
+                None => {}
+                Some(Author::Me) => text.push_str(" author:@me"),
+                Some(Author::User(login)) => text.push_str(&format!(" author:{}", login.as_str())),
+            }
+            match &filters.milestone {
+                None => {}
+                Some(Milestone::Nobody) => text.push_str(" no:milestone"),
+                Some(Milestone::Titled(title)) => {
+                    text.push_str(&format!(" milestone:\"{}\"", title.as_str()));
+                }
             }
         }
         GithubFilter::Advanced(query) => {
@@ -730,17 +954,17 @@ pub struct LabelChoices {
     pub partial: bool,
 }
 
-/// The repository's labels, up to [`LABEL_PAGE_CAP`] pages (research R10). The first failure
-/// aborts. A page that adds nothing or hands back the cursor it was asked with ends the load.
-pub fn load_label_choices(
-    source: &dyn IssueSource,
-    repo: &GithubRepo,
-) -> Result<LabelChoices, IssueLoadError> {
+/// Every name of a paged connection, up to [`LABEL_PAGE_CAP`] pages, and whether GitHub had more
+/// (research R10). The first failure aborts. A page that adds nothing or hands back the cursor it
+/// was asked with ends the load.
+fn load_names(
+    mut page_of: impl FnMut(Option<&str>) -> Result<NamePage, IssueLoadError>,
+) -> Result<(Vec<String>, bool), IssueLoadError> {
     let mut names = Vec::new();
     let mut cursor: Option<String> = None;
     let mut pages = 0;
     let partial = loop {
-        let page = source.labels_page(repo, cursor.as_deref())?;
+        let page = page_of(cursor.as_deref())?;
         pages += 1;
         let stalled = page.names.is_empty() || page.next_cursor == cursor;
         names.extend(page.names);
@@ -750,20 +974,114 @@ pub fn load_label_choices(
             next => cursor = next,
         }
     };
-    let mut labels: Vec<LabelName> = names.iter().filter_map(|n| LabelName::parse(n)).collect();
-    let not_offered = names.len() - labels.len();
-    labels.sort_by(|a, b| {
-        a.as_str()
+    Ok((names, partial))
+}
+
+/// The names that `parse` accepts, sorted case-insensitively (then exactly) and each held once,
+/// with how many it refused.
+fn offered_names<T: PartialEq>(
+    names: &[String],
+    parse: impl Fn(&str) -> Option<T>,
+    text: impl Fn(&T) -> &str,
+) -> (Vec<T>, usize) {
+    let mut offered: Vec<T> = names.iter().filter_map(|n| parse(n)).collect();
+    let not_offered = names.len() - offered.len();
+    offered.sort_by(|a, b| {
+        text(a)
             .to_lowercase()
-            .cmp(&b.as_str().to_lowercase())
-            .then_with(|| a.as_str().cmp(b.as_str()))
+            .cmp(&text(b).to_lowercase())
+            .then_with(|| text(a).cmp(text(b)))
     });
-    labels.dedup();
+    offered.dedup();
+    (offered, not_offered)
+}
+
+/// The repository's labels, up to [`LABEL_PAGE_CAP`] pages (research R10). The first failure
+/// aborts.
+pub fn load_label_choices(
+    source: &dyn IssueSource,
+    repo: &GithubRepo,
+) -> Result<LabelChoices, IssueLoadError> {
+    let (names, partial) = load_names(|cursor| source.labels_page(repo, cursor))?;
+    let (labels, not_offered) = offered_names(&names, LabelName::parse, LabelName::as_str);
     Ok(LabelChoices {
         labels,
         not_offered,
         partial,
     })
+}
+
+/// Parse `gh api graphql` stdout for [`crate::github::MILESTONES_QUERY`] (US6).
+pub fn parse_milestones_page(stdout: &[u8]) -> Result<NamePage, IssueLoadError> {
+    parse_names_page(stdout, &["repository", "milestones"], "title")
+}
+
+/// The open milestones the milestone field offers (US6, data-model §6).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MilestoneChoices {
+    /// Sorted by title (case-insensitively), each once.
+    pub milestones: Vec<MilestoneTitle>,
+    /// Titles GitHub listed that cannot be quoted, so are not offered.
+    pub not_offered: usize,
+}
+
+/// The repository's open milestones, up to [`LABEL_PAGE_CAP`] pages (research R10). The first
+/// failure aborts.
+pub fn load_milestone_choices(
+    source: &dyn IssueSource,
+    repo: &GithubRepo,
+) -> Result<MilestoneChoices, IssueLoadError> {
+    let (names, _) = load_names(|cursor| source.milestones_page(repo, cursor))?;
+    let (milestones, not_offered) =
+        offered_names(&names, MilestoneTitle::parse, MilestoneTitle::as_str);
+    Ok(MilestoneChoices {
+        milestones,
+        not_offered,
+    })
+}
+
+/// One of the repository's assignable users (US6, data-model §6). `Debug` prints neither the
+/// login nor the name.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Person {
+    /// The login, as GitHub spells it.
+    pub login: Login,
+    /// The display name, when the person set one.
+    pub name: Option<String>,
+}
+
+impl fmt::Debug for Person {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Person")
+            .field("login", &self.login)
+            .field("name", &self.name.as_ref().map(|_| REDACTED))
+            .finish()
+    }
+}
+
+/// Parse `gh api graphql` stdout for [`crate::github::ASSIGNABLE_USERS_QUERY`]: the people in
+/// GitHub's order, those whose login [`Login::parse`] refuses skipped; an empty name is none.
+/// Errors are classified as the default listing classifies them.
+pub fn parse_people(stdout: &[u8]) -> Result<Vec<Person>, IssueLoadError> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
+    if let Some(error) = graphql_error(&json) {
+        return Err(error);
+    }
+    let nodes = json["data"]["repository"]["assignableUsers"]["nodes"]
+        .as_array()
+        .ok_or_else(|| IssueLoadError::Other("GitHub's answer had no list".into()))?;
+    Ok(nodes
+        .iter()
+        .filter_map(|node| {
+            let login = node["login"].as_str().and_then(Login::parse)?;
+            let name = node["name"]
+                .as_str()
+                .filter(|name| !name.trim().is_empty())
+                .map(str::to_string);
+            Some(Person { login, name })
+        })
+        .collect())
 }
 
 // Data-model §7: the remembered selector

@@ -138,7 +138,7 @@ track.
 ## R6 — Basic filter values are quoted and constructed only by validation
 
 **Decision.** `LabelName::parse` and `MilestoneTitle::parse` (US6) refuse an empty name and any
-name holding `"` or a control character (`LabelName` also `\`, as typed words drop it: if GitHub
+name holding `"` or a control character (both also `\`, as typed words drop it: if GitHub
 read `\"` as an escape the quote would stay open; M1 review A F1); every accepted value is sent as `label:"<name>"`. `Login`
 (US6) accepts 1–39 ASCII letters, digits and single inner hyphens (no leading, trailing or double
 hyphen), sent bare. `Assignee::Me`/`Author::Me` send `@me`. A label GitHub returns that fails
