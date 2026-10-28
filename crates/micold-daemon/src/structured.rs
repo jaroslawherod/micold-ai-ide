@@ -930,7 +930,9 @@ impl StructuredSession {
     /// user's `choice` (#1554 R1, R5, FR-004, FR-006): write one `apply_flag_settings` control
     /// request now, and hand back its id and the receiver of its answer, for
     /// [`Self::effort_answer`]. Its `success` also becomes an `EffortChanged` note naming `choice`.
-    /// A write that fails leaves nothing waiting.
+    /// A model or an effort deferred past the turn just ended and not written yet goes first, as
+    /// before a user message: this pick is the later one, so the CLI ends on it. A write that
+    /// fails leaves nothing waiting.
     pub fn ask_effort(
         &self,
         choice: &EffortChoice,
@@ -941,8 +943,10 @@ impl StructuredSession {
             .control
             .wait_for(&request_id)
             .ok_or(ControlFailed::Stopped)?;
+        let mut stdin = lock(&self.stdin);
+        self.write_deferred(&mut stdin);
         self.note_effort_ask(&request_id, Some(choice.clone()), level.cloned(), false);
-        if let Err(err) = self.write_line(&encode_apply_effort(&request_id, level)) {
+        if let Err(err) = write_whole(&mut stdin, &encode_apply_effort(&request_id, level)) {
             self.forget_effort_ask(&request_id);
             return Err(ControlFailed::Unsent(err));
         }
@@ -996,12 +1000,15 @@ impl StructuredSession {
 
     /// Ask the CLI for effort `level` for the user's `choice` once the turn in progress is over
     /// (#1554 R1, FR-004): after the deferred model, before the next user message or at the turn's
-    /// `result` ([`Self::flush_deferred`]). Replaces a change deferred before and not written yet.
-    pub fn defer_effort(&self, choice: &EffortChoice, level: Option<&EffortLevel>) {
-        *lock(&self.deferred_effort) = Some(PendingEffort {
-            choice: Some(choice.clone()),
-            level: level.cloned(),
-        });
+    /// `result` ([`Self::flush_deferred`]). Replaces a change deferred before and not written yet;
+    /// whether that was a user's pick, which the CLI then never saw.
+    pub fn defer_effort(&self, choice: &EffortChoice, level: Option<&EffortLevel>) -> bool {
+        lock(&self.deferred_effort)
+            .replace(PendingEffort {
+                choice: Some(choice.clone()),
+                level: level.cloned(),
+            })
+            .is_some_and(|replaced| replaced.choice.is_some())
     }
 
     /// Make `level` the effort the CLI is asked for once no turn is open, with no note (#1554 R4:

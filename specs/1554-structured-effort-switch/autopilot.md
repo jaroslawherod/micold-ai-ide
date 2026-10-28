@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
 - **Phase**: M3
-- **Next step**: M3 reviews A and B (round 1), then full gate and PR.
+- **Next step**: M3 review A round 2, then full gate and PR.
 
 ## Pull requests
 
@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D16 | M3 | A model picked during a turn: re-apply at its answer (then the next turn may already run) or at once after the `set_model`? | A busy model pick also defers the level for the new model (`defer_effort_level`), so the turn-end hook writes `set_model`, then `apply_flag_settings`, before the next message; the answer's re-apply then finds nothing to change | agent-resolved | test `a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end` |
 | D17 | M3 | "unless another pick came since" (FR-005) for effort | Counted by pick number: `DeferredEffort.pick` must still be `EffortPicks.latest` (any later pick, stored, idle or busy, bumps it) | agent-resolved | test `a_refused_deferred_pick_is_not_put_back_over_a_later_pick` |
 | D18 | M3 | Where does T018's "pick while a permission request is pending" test live? | `structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`), beside #943's model twin: it needs that suite's tool-server rig | agent-resolved | — |
+| D19 | M3 | Review A F1–F4: which level does the CLI end on when picks race the turn's end and model answers? | One rule: the latest pick is the choice to send. Every write to the CLI goes after the deferred model and effort (user message, idle effort ask); an idle pick supersedes a deferred one; while the latest idle pick is unanswered nothing is re-applied from the catalog, and its answer re-applies; a refused busy pick goes back to the choice the CLI was last asked for | agent-resolved | the four review tests in `structured_effort.rs` |
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
@@ -74,6 +75,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M2 | 1 | — | red: `a_stored_level_the_model_does_not_take_launches_with_none` asserted the session runs as soon as the stand-in recorded its argv, before the daemon registered the process (a race in this milestone's test). Now waits for it (`eventually`); 3/3 runs green |
 | Full gate M2 | 2 | — | green: `scripts/gate.sh` at 33f5bc8e8 (origin/main b18b611d1; `PROTOCOL_VERSION` there still 72, branch 73) |
 | M3 scoped gate | 1 | — | green but for the two root-only daemon tests (as M2: `sessions` `worktree_delete_blocked_by_an_unremovable_path…`, `settings` `a_service_write_over_an_unreadable_settings_file…`). fmt, clippy `-p micold-daemon --all-targets -D warnings` green; `cargo test -p micold-daemon --no-fail-fast` 104 binaries ok; `structured_effort` 22/22 (3 more runs green), `structured_model`, `structured_permission`, `structured_switch`, `structured_input`, `structured_commands` green |
+| A (code-review, high) M3 | 1 | ac16d784e736a09f0c149c09183edba84f17b755:0dcb153f18ef0d4e621843356211dc7f5a3b409b | CHANGES: F1 MAJOR an idle pick after a turn's `result`, before the driver's flush, was written before the older deferred pick (`ask_effort` now writes the deferred model and effort first under the stdin lock, as a user message does; an idle pick drops `EffortPicks.deferred`); F2 MAJOR a model answer while an idle effort ask was unanswered re-applied the catalog's older choice (`EffortPicks.asking`: while the latest idle pick is unanswered neither `reapply_effort` nor the busy `pick_model` re-applies; its answer, or its failed send, re-applies via `settle_effort_ask`); F3 MINOR a busy pick chained `previous` from a deferred pick already written (`defer_effort` returns whether it replaced an unwritten user pick; only then is `previous` chained); F4 MINOR a stale `EffortPicks.deferred` from an ended process was chained and blocked the busy shortcut (chaining now comes from the child's own pending change, the shortcut checks `asking`, an idle pick clears `deferred`) — all fixed test-first (`an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_one`, `a_model_change_while_an_idle_pick_is_unanswered_keeps_that_pick`, `a_refused_pick_goes_back_to_a_written_one_not_to_the_choice_before_it`, `a_pick_left_unwritten_by_an_ended_process_is_not_carried_into_the_next`; all four fail on 0dcb153f1). Run by the orchestrator |
+| B (conformance) M3 | 1 | ac16d784e736a09f0c149c09183edba84f17b755:0dcb153f18ef0d4e621843356211dc7f5a3b409b | CLEAN: 1 MINOR — `an_effort_pick_leaves_a_pending_request_alone` did not check the level applies from the next turn: now the pick is made in an open turn, no `apply_flag_settings` is written before the turn ends, exactly one `high` after. Verify passed (`structured_effort` 22/22, `structured_model` 10/10). Run by the orchestrator |
+| M3 scoped gate (fix diff) | 2 | — | green but for the same two root-only daemon tests. fmt, clippy `-p micold-daemon --all-targets -D warnings` green; `cargo test -p micold-daemon --no-fail-fast` 104 binaries ok; `structured_effort` 26/26, `structured_model` 10/10, `structured_permission` 31/31, 3 more runs green |
 
 ## Declined review findings
 
@@ -82,9 +86,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M3 T018–T021 implemented test-first and committed (0dcb153f1), scoped gate green (see *Review rounds*).
-- **Next step**: reviews A (code-review, high) and B (conformance) round 1 on `origin/main...HEAD` (5b7a23904..0dcb153f1), snapshot `ac16d784e736a09f0c149c09183edba84f17b755:0dcb153f18ef0d4e621843356211dc7f5a3b409b`; then fix findings, full gate (`scripts/gate.sh`), push, PR body.
-- **Main paths**: `crates/micold-daemon/src/structured.rs` (`EffortAsk`, `PendingEffort`, `defer_effort`, `defer_effort_level`, `reapply_effort`, `flush_deferred`, `write_deferred_effort`, `effort_sent`/`cli_model`), `crates/micold-daemon/src/state.rs` (`pick_effort` busy branch, `EffortPicks.deferred`, `DeferredEffort`, `EffortAnswer`, `follow_effort_answer`, `effort_level`, `reapply_effort`, `follow_model_answer`, `pick_model` busy branch, turn-end `flush_deferred`), `crates/micold-daemon/src/server.rs` (`spawn_effort_answers`), tests `crates/micold-daemon/tests/structured_effort.rs`, `structured_permission.rs`, `docs/daemon.md`.
+- **Done**: M3 T018–T021 (0dcb153f1); review A round 1 F1–F4 and B round 1 F1 fixed test-first (fix commit after f8c9c8fb3); scoped gate green (see *Review rounds*).
+- **Next step**: review A round 2 (scoped, on the fix diff from snapshot `ac16d784e736a09f0c149c09183edba84f17b755:0dcb153f18ef0d4e621843356211dc7f5a3b409b`); B needs no new round (MINOR only). Then full gate (`scripts/gate.sh`), push, PR.
+- **Main paths**: `crates/micold-daemon/src/state.rs` (`EffortPicks.asking`, `pick_effort`, `finish_effort_pick`, `settle_effort_ask`, `reapply_effort`, `pick_model` busy branch), `crates/micold-daemon/src/structured.rs` (`ask_effort`, `defer_effort`), tests `crates/micold-daemon/tests/structured_effort.rs` (last four), `crates/micold-daemon/tests/structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`).
 - **Open findings**: none. PR: none yet.
 
 ## Open escalation

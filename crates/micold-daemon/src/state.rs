@@ -1035,6 +1035,10 @@ struct EffortPicks {
     kept: u64,
     /// A pick deferred past a turn and not answered yet, with the choice it replaced.
     deferred: Option<DeferredEffort>,
+    /// The number of the latest idle pick whose answer is awaited. Until it comes, the catalog
+    /// does not hold the choice the CLI was last asked for, so no level is re-applied from it
+    /// (#1554 R4); the answer re-applies it ([`DaemonState::finish_effort_pick`]).
+    asking: Option<u64>,
 }
 
 /// An effort pick deferred past a turn (#1554 FR-005): put back to `previous` when the CLI refuses
@@ -4143,8 +4147,17 @@ impl DaemonState {
                 picks.kept = picks.latest;
                 child.defer_model(model.clone());
                 // #1554 R4: the level the effort choice gives on the new model goes right after it.
+                // While an idle effort pick is unanswered, its answer re-applies it instead.
+                let asking = inner
+                    .effort_picks
+                    .get(&session)
+                    .is_some_and(|picks| picks.asking.is_some());
                 if let Some((_, s)) = inner.catalog.workspace().find_session(session) {
-                    child.defer_effort_level(Self::effort_level(inner, session, &model, &s.effort));
+                    if !asking {
+                        child.defer_effort_level(Self::effort_level(
+                            inner, session, &model, &s.effort,
+                        ));
+                    }
                 }
                 drop(guard);
                 return ModelPick::Answered(self.keep_model(session, &model));
@@ -4454,10 +4467,18 @@ impl DaemonState {
 
     /// Ask `session`'s running CLI again for the level its effort choice gives on the model it runs
     /// now, when that is not the level last sent (#1554 R4): after a model change it accepted, or
-    /// a deferred one it refused. At once when idle, else at the turn's end; never noted.
+    /// a deferred one it refused, or an idle effort pick's answer. At once when idle, else at the
+    /// turn's end; never noted. Not while an idle effort pick is unanswered: its answer does it.
     fn reapply_effort(&self, session: SessionId) {
         let (child, level) = {
             let inner = self.lock();
+            if inner
+                .effort_picks
+                .get(&session)
+                .is_some_and(|picks| picks.asking.is_some())
+            {
+                return;
+            }
             let Some(child) = Self::structured_primary(&inner, session)
                 .filter(|child| child.is_running())
                 .cloned()
@@ -4609,25 +4630,35 @@ impl DaemonState {
             let picks = inner.effort_picks.entry(session).or_default();
             if busy {
                 // FR-004: the turn in progress keeps its level; the pick is written at its end.
-                if effort == current && picks.deferred.is_none() {
+                // The CLI ends on the stored choice unless an idle pick is still unanswered.
+                if effort == current && picks.asking.is_none() {
                     return EffortPick::Answered(Ok(()));
                 }
                 picks.latest += 1;
                 picks.kept = picks.latest;
-                let previous = picks.deferred.take().map_or(current, |d| d.previous);
+                // FR-005: a refusal puts back the choice the CLI was last asked for: the one before
+                // a pick this one replaces unwritten, else the stored one.
+                let replaced = child.defer_effort(&effort, level.as_ref());
+                let previous = match picks.deferred.take() {
+                    Some(unwritten) if replaced => unwritten.previous,
+                    _ => current,
+                };
                 picks.deferred = Some(DeferredEffort {
                     chosen: effort.clone(),
                     previous,
                     pick: picks.latest,
                 });
-                child.defer_effort(&effort, level.as_ref());
                 drop(guard);
                 return match self.keep_effort(session, &effort) {
                     Ok(_) => EffortPick::Answered(Ok(())),
                     Err(why) => refused(ErrorKind::Refused, why),
                 };
             }
+            // An idle pick supersedes a deferred one (`ask_effort` writes it first), and is the
+            // choice the CLI ends on until its answer.
             picks.latest += 1;
+            picks.deferred = None;
+            picks.asking = Some(picks.latest);
             (child, picks.latest, level)
         };
         match child.ask_effort(&effort, level.as_ref()) {
@@ -4639,17 +4670,42 @@ impl DaemonState {
                 request_id,
                 answer,
             }),
-            Err(failed) => refused(
-                ErrorKind::Refused,
-                crate::structured::effort_change_failed(&failed),
-            ),
+            Err(failed) => {
+                self.settle_effort_ask(session, pick);
+                refused(
+                    ErrorKind::Refused,
+                    crate::structured::effort_change_failed(&failed),
+                )
+            }
         }
     }
 
     /// Wait for the CLI's answer to an idle session's effort pick (FR-004, FR-005): accepted, the
     /// choice is kept and broadcast, unless a later pick was kept first; refused or unanswered,
-    /// the error is the reason and the choice stays as it was.
+    /// the error is the reason and the choice stays as it was. The answer to the latest idle pick
+    /// then re-applies the level for the model the CLI runs (R4), held back while it was awaited.
     pub async fn finish_effort_pick(&self, asked: AskedEffort) -> Result<(), EffortRefused> {
+        let (session, pick) = (asked.session, asked.pick);
+        let picked = self.keep_answered_effort(asked).await;
+        self.settle_effort_ask(session, pick);
+        picked
+    }
+
+    /// Idle effort pick number `pick` is answered, or was never sent: when it is the latest, the
+    /// level held back for it is re-applied for the choice the catalog holds now (#1554 R4).
+    fn settle_effort_ask(&self, session: SessionId, pick: u64) {
+        let settled = self
+            .lock()
+            .effort_picks
+            .get_mut(&session)
+            .is_some_and(|picks| picks.asking.take_if(|asking| *asking == pick).is_some());
+        if settled {
+            self.reapply_effort(session);
+        }
+    }
+
+    /// [`Self::finish_effort_pick`] up to keeping the choice.
+    async fn keep_answered_effort(&self, asked: AskedEffort) -> Result<(), EffortRefused> {
         let AskedEffort {
             session,
             pick,

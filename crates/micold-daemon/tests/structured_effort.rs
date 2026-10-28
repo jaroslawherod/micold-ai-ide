@@ -224,9 +224,15 @@ fn load_catalog(store: &Path) -> Catalog {
 
 /// A daemon over the catalog saved in `store`, saving histories in `history`.
 fn daemon(store: &Path, history: &Path) -> Arc<DaemonState> {
+    let state = undriven(store, history);
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    state
+}
+
+/// [`daemon`] with no input driver: the test takes the turn ends and hands them on.
+fn undriven(store: &Path, history: &Path) -> Arc<DaemonState> {
     let state = Arc::new(DaemonState::new(load_catalog(store)));
     state.set_history_store(HistoryStore::new(history.to_path_buf(), true));
-    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
     micold_daemon::server::spawn_model_answers(Arc::clone(&state));
     micold_daemon::server::spawn_effort_answers(Arc::clone(&state));
     state
@@ -313,6 +319,20 @@ struct Rig {
 impl Rig {
     /// Sessions of `cli` and `kind`, one in each of `n` projects.
     fn new(n: usize, cli: AiCli, kind: SessionKind) -> Self {
+        Self::build(n, cli, kind, daemon)
+    }
+
+    /// One structured session over [`undriven`].
+    fn undriven() -> Self {
+        Self::build(1, AiCli::ClaudeCode, SessionKind::Structured, undriven)
+    }
+
+    fn build(
+        n: usize,
+        cli: AiCli,
+        kind: SessionKind,
+        daemon: fn(&Path, &Path) -> Arc<DaemonState>,
+    ) -> Self {
         setup();
         let store = tempfile::tempdir().unwrap();
         let history = tempfile::tempdir().unwrap();
@@ -1016,4 +1036,128 @@ async fn a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end() {
     assert_eq!(effort_notes(&rig.history(0)), [level("high")], "no note");
     assert_eq!(rig.effort(0), level("high"));
     std::fs::write(dir.join("turn-2"), "").unwrap();
+}
+
+/// M3 review (FR-004): an idle pick made after a turn's `result` and before the turn's end is
+/// handed on goes out after the pick deferred past that turn, so the CLI ends on the later pick,
+/// which the catalog holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_one() {
+    use micold_daemon::structured::ClosedBy;
+    let rig = Rig::undriven();
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    let mut ends = rig
+        .state
+        .input_feed()
+        .take_receiver()
+        .expect("the turn ends");
+    rig.start_turns(0, "efforts low high\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    let mut held = Vec::new();
+    loop {
+        let closed = tokio::time::timeout(Duration::from_secs(15), ends.recv())
+            .await
+            .expect("the turn ends")
+            .expect("the feed is open");
+        let result = closed.by == ClosedBy::Result;
+        held.push(closed);
+        if result {
+            break;
+        }
+    }
+    assert_ok(&window.request(pick(3, id, &level("high")), 3).await);
+    let state = Arc::clone(&rig.state);
+    tokio::task::spawn_blocking(move || held.into_iter().for_each(|c| state.turn_closed(c)))
+        .await
+        .unwrap();
+    eventually("both notes", || effort_notes(&rig.history(0)).len() == 2);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        efforts_asked(dir),
+        [Some("low".to_owned()), Some("high".to_owned())]
+    );
+    assert_eq!(effort_notes(&rig.history(0)), [level("low"), level("high")]);
+    assert_eq!(rig.effort(0), level("high"));
+}
+
+/// M3 review (research R4): a model change answered while an idle pick's answer is awaited
+/// re-applies that pick's level, not the stored choice before it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_while_an_idle_pick_is_unanswered_keeps_that_pick() {
+    use micold_daemon::state::EffortPick;
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_reported(0, "models sonnet opus\nefforts high low\n")
+        .await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(pick(1, id, &level("high")), 1).await);
+    eventually("the note", || rig.noted(0, &level("high")));
+    let EffortPick::Asked(asked) = rig.state.pick_effort(id, level("low")) else {
+        panic!("an idle running session's CLI is asked");
+    };
+    assert_ok(&window.request(pick_model(2, id, "opus"), 2).await);
+    eventually("the ModelChanged note", || {
+        rig.history(0).iter().any(model_changed)
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(rig.state.finish_effort_pick(asked).await.is_ok());
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        efforts_asked(dir),
+        [Some("high".to_owned()), Some("low".to_owned())]
+    );
+    assert_eq!(rig.effort(0), level("low"));
+}
+
+/// M3 review (FR-005): a refused pick goes back to a deferred pick already written, not to the
+/// choice before that one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_pick_goes_back_to_a_written_one_not_to_the_choice_before_it() {
+    use micold_daemon::state::EffortAnswer;
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    assert_ok(&window.request(say(3, id, "two"), 3).await);
+    eventually("the next message delivered", || stdin_lines(dir).len() == 3);
+    assert_eq!(stdin_kinds(dir), ["one", "apply_flag_settings", "two"]);
+    assert_ok(&window.request(pick(4, id, &level("high")), 4).await);
+    rig.state
+        .follow_effort_answer(id, EffortAnswer::Refused(level("high")));
+    assert_eq!(rig.effort(0), level("low"));
+    std::fs::write(dir.join("turn-2"), "").unwrap();
+}
+
+/// M3 review (FR-004, FR-005): a pick deferred in a process that ended unwritten is not carried
+/// into the next: there a busy pick of the stored choice writes nothing, and a refused one goes
+/// back to the stored choice.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pick_left_unwritten_by_an_ended_process_is_not_carried_into_the_next() {
+    use micold_daemon::state::EffortAnswer;
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    rig.state.stop_session(id);
+
+    rig.start_turns(0, "").await;
+    assert_eq!(launched_effort(&argv(dir)).as_deref(), Some("low"));
+    assert_ok(&window.request(say(3, id, "two"), 3).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(4, id, &level("low")), 4).await);
+    assert_ok(&window.request(pick(5, id, &level("high")), 5).await);
+    rig.state
+        .follow_effort_answer(id, EffortAnswer::Refused(level("high")));
+    assert_eq!(rig.effort(0), level("low"));
 }

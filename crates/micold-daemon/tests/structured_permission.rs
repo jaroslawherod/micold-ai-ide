@@ -1478,19 +1478,25 @@ async fn a_model_pick_leaves_a_pending_request_alone() {
 }
 
 /// #1554 T018 (Edge Case "Level picked while a permission request is pending"): an effort pick
-/// while a request is pending leaves it pending; it is decided as before.
+/// while a turn's request is pending leaves it pending; it is decided as before, and the level is
+/// written once, after the turn, not before.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_effort_pick_leaves_a_pending_request_alone() {
     use micold_core::structured::effort::{EffortChoice, EffortLevel};
     let daemon = Daemon::new(1).await;
+    micold_daemon::server::spawn_input_driver(Arc::clone(&daemon.state));
     let mut a = window(&daemon.state).await;
     let dir = daemon.dir(0);
-    let script = [
-        "efforts high\n".to_string(),
-        prompt_async(dir, "p1", "Bash", bash("ls")),
-    ]
-    .concat();
+    let result = fixture_lines("text-turn.jsonl")
+        .into_iter()
+        .find(|line| line.contains(r#""type":"result""#))
+        .expect("the fixture ends its turn");
+    let script = format!(
+        "efforts high\nawait-stdin\n{}await-file decided\n{result}\n",
+        prompt_async(dir, "p1", "Bash", bash("ls"))
+    );
     daemon.start(0, &script).await;
+    daemon.say(0, "go").await;
     let request = requested(&mut a).await;
     a.send(ClientMsg::SetSessionEffort {
         req: 1,
@@ -1504,6 +1510,26 @@ async fn an_effort_pick_leaves_a_pending_request_alone() {
     assert_eq!(prompt_answer_count(dir), 0, "unanswered");
     assert_ok(&decide(&mut a, 2, request.session, request.id, PromptChoice::Allow).await);
     assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
+    let efforts = || {
+        stdin_lines(dir)
+            .into_iter()
+            .filter(|line| line.contains(r#""subtype":"apply_flag_settings""#))
+            .collect::<Vec<_>>()
+    };
+    assert!(efforts().is_empty(), "none during the turn");
+    std::fs::write(dir.join("decided"), "").unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while efforts().is_empty() {
+        assert!(std::time::Instant::now() < deadline, "never written");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let written = efforts();
+    assert_eq!(written.len(), 1, "exactly one: {written:?}");
+    assert!(
+        written[0].contains(r#""effortLevel":"high""#),
+        "{written:?}"
+    );
 }
 
 /// T044 (SC-005): after a mode change the next tool request still reaches the daemon and is
