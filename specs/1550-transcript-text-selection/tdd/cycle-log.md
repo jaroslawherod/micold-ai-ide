@@ -26,3 +26,23 @@ their red runs were recovered after the fact (review B M1 F1), two ways, on `75c
 | T007 (red), T008 | `markdown::shown_text`, `list_marker`; `markdown_view` draws `list_marker` | `error[E0432]: unresolved imports super::list_marker, super::shown_text` | `markdown::tests` passed |
 | T009 (red), T010 | `word_at`, `source_line_at`, granularity in `start`/`extend`/`bounds` | mutant (runs never joined): `word_at_selects_a_word_a_space_run_or_a_punctuation_run` FAILED; mutant (granularity ignores `expand`): `a_selection_by_word_or_line_extends_by_whole_units`, `a_selection_is_empty_iff_its_expanded_start_is_its_end` FAILED | same |
 | T011 (red), T012 | `summary::work_value` | `error[E0425]: cannot find function work_value in this scope` | `summary::tests` passed |
+
+## M2 (T013–T023)
+
+Every test task was written before its code and ran red as a compile failure
+(`unresolved imports micold_client::features::transcript_selection::{copy_text, rows, units, …}`,
+`no variant … CopySelection found for enum KeyIntent`, `this function takes 2 arguments but 5
+arguments were supplied`, `no method named copy_selection`, `no field transcript_selection`).
+After green, four mutants applied together (`applied` never compares a changed entry's print,
+every unit joined by a line break, `transcript_key` ignores `focused`, `toggled` clears outside the
+range) failed six tests, each its own task's; the files were restored by copy.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T013 (red), T014 | `rows`, `units`, `entry_units`, `copy_text`; shown text moved to `features/transcript_selection/shown.rs` | structural; mutant (joints all `\n`): `markdown_copies_its_shown_text_markers_cells_and_code` FAILED | `features_transcript_selection` 28 passed |
+| T015 (red), T016 | `State`, `SelectMsg`, gesture, granularity, select-all, menu | structural | same |
+| T015 (red), T017 | clearing: rebuild, eviction, notice, changed text, prompts, toggle, forget | structural; mutants (no print compare, toggle inverted): `growth_past_the_focus_keeps_it_and_replaced_text_in_range_clears_it`, `a_toggle_in_range_clears_it_and_one_outside_keeps_it` FAILED | same |
+| T018 (red), T019 | `retain_shown` from `shell/panes.rs::sync` through `transcript_selection_sync` | structural | same |
+| T020 (red), T021 | `transcript_key(press, phase, selecting, focused, mac)`, `KeyIntent::{CopySelection, SelectAll}`, `FieldId::Transcript`, `transcript_keys` | E0061 on the old signature; mutant (`focused` ignored): `k11_…`, `k5_k6_…`, `k7_…` FAILED | `features_composer` 40 passed |
+| T022 (red), T023 | `CopyTarget`, `Checked`, `copy_selection`, the copy outcome and "Copy failed" notice | E0432 `Checked`, `CopyTarget`; E0599 `copy_selection` | `features_transcript_rich` 18 passed |
+| Review A M2 fixes | empty copy text writes nothing; menu Copy/Select all focus the transcript without a selection; Show in full in range clears; `transcript_focused` gates the unfocused transcript listener | stash of the `src` fix: `a_selection_that_covers_no_text_copies_nothing`, `the_menus_copy_and_select_all_focus_the_transcript_without_a_selection`, `show_in_full_in_range_clears_it_and_one_outside_keeps_it` FAILED; `the_transcript_holds_the_keyboard_only_while_nothing_replaces_it` E0599 (`transcript_focused`) | `features_transcript_selection` 32 passed |

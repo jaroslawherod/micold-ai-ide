@@ -25,7 +25,7 @@ use micold_core::structured::transcript::Transcript;
 
 use crate::features::command_palette::{classify, Classified, PaletteKey, Picked, SendIntent};
 use crate::features::session::{SwitchOffer, SwitchRequest, LOGIN_COMMAND, LOGIN_REASON};
-use crate::keymap::{Key, KeyInput, NamedKey};
+use crate::keymap::{Key, KeyInput, Mods, NamedKey};
 use micold_core::session::SessionKind;
 use micold_core::structured::model::ModelChoice;
 use micold_core::typeahead::Direction;
@@ -62,6 +62,10 @@ pub enum KeyIntent {
     Interrupt,
     /// Not the composer's: the editor has it (typing, caret moves, an IME composition).
     Edit,
+    /// Copy the focused transcript's selection (feature 1550, FR-008).
+    CopySelection,
+    /// Select all of the focused transcript (feature 1550, FR-006).
+    SelectAll,
 }
 
 fn is_busy(phase: TurnPhase) -> bool {
@@ -117,9 +121,54 @@ pub fn composer_key(
     }
 }
 
-/// What `press` means on a focused transcript: Escape and Ctrl+C interrupt a busy session
-/// (FR-012, FR-012a). The transcript selects no text, so Ctrl+C has nothing to copy there.
-pub fn transcript_key(press: &KeyInput, phase: TurnPhase) -> KeyIntent {
+/// `c`/`C` (or `a`/`A`) with exactly the modifiers `mods`.
+fn is_char(press: &KeyInput, c: char, mods: Mods) -> bool {
+    press.mods == mods && matches!(press.key, Key::Char(k) if k.eq_ignore_ascii_case(&c))
+}
+
+const CTRL: Mods = Mods {
+    ctrl: true,
+    ..Mods::NONE
+};
+
+const CTRL_SHIFT: Mods = Mods {
+    ctrl: true,
+    shift: true,
+    ..Mods::NONE
+};
+
+const CMD: Mods = Mods {
+    logo: true,
+    ..Mods::NONE
+};
+
+/// A copy key (spec *Terms*): Ctrl+C and Ctrl+Shift+C off macOS; Cmd+C, and Ctrl+C, on macOS.
+fn is_copy_key(press: &KeyInput, mac: bool) -> bool {
+    if mac {
+        is_char(press, 'c', CMD) || is_char(press, 'c', CTRL)
+    } else {
+        is_char(press, 'c', CTRL) || is_char(press, 'c', CTRL_SHIFT)
+    }
+}
+
+/// What `press` means on a session's transcript (contracts/keys-menu-copy.md K-1–K-11, research
+/// R8): with the transcript `focused` and a non-empty selection (`selecting`) a copy key copies
+/// it, busy or idle, and never interrupts (FR-008); Ctrl+A (Cmd+A on macOS, `mac`) selects all of
+/// a focused transcript (FR-006). Otherwise Escape and Ctrl+C interrupt a busy session as #941
+/// FR-012/FR-012a say (FR-009); Ctrl+Shift+C and Cmd+C never interrupt.
+pub fn transcript_key(
+    press: &KeyInput,
+    phase: TurnPhase,
+    selecting: bool,
+    focused: bool,
+    mac: bool,
+) -> KeyIntent {
+    if focused && selecting && is_copy_key(press, mac) {
+        return KeyIntent::CopySelection;
+    }
+    if focused && is_char(press, 'a', if mac { CMD } else { CTRL }) {
+        return KeyIntent::SelectAll;
+    }
     if is_ctrl_c(press) && is_busy(phase) {
         return KeyIntent::Interrupt;
     }

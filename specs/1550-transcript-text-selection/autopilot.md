@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M1
-- **Next step**: M1 PR (pushed; orchestrator opens it), then milestone M2
+- **Phase**: M2
+- **Next step**: M2 PR #1590 CI (red fmt+clippy fixed: merged main, `EffortChanged` handled; pushed)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1582 | design (spec, plan, tasks) | merged | 5ce410f219e38800d89f0936dbf9f48a96041cb1 |
+| #1586 | M1: selection model, shown text and work_value in core | merged | f7c34e9d579bc65daea4a1bd7ca865d0ac9253ea |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — (pushed, orchestrator opens) | review-ready |
-| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | todo |
+| M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
+| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | review |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
@@ -39,6 +40,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | spec | Platform behaviour? | Identical on Linux/macOS/Windows; only Cmd vs Ctrl differs; LF line breaks everywhere | agent-resolved | spec.md Terms (Copy keys), Edge Cases (Cross-platform) |
 | D5 | clarify | FR-011: copy rendered markdown as visible text or source? | Visible rendered text as drawn; links copy shown text; no emphasis/heading/fence markup | agent-resolved | spec.md FR-010 ("as shown"), SC-001; user guide code-block copy "no fences, no tag" (#940 FR-011) |
 | D6 | clarify | FR-012: copy to clipboard on drag release, like the terminal view? | No: copy only on request (copy key, context menu Copy, copy control); release never writes the clipboard | decided by user | user answer 2026-10-28 ("No, copy only on request"); spec.md FR-012 |
+
+## Milestone notes
+
+- M2 (agent-resolved): units are joined by what separates them on screen (`Joint`): a line break between lines and rows, a tab between table cells, a space between texts drawn on one line (list marker and item, a card's title and summary, a footer's status and figures). FR-010 makes only real line breaks into line breaks; research R2's "one `\n` whatever their kind" would put a marker and its item on two lines. `Unit` is a struct (`path`, `text`, `joint`, `source`) rather than the contract's `(TextPath, Cow<str>)` pair, and `TranscriptView` takes the window's `RichCache` (`rich`) and the insights rather than one entry's `Derived`.
+
+- M2 red CI (#1590, `fmt + clippy`): main gained `EntryKind::EffortChanged` (#1554) after our merge, so `body_units`' exhaustive match broke. Merged origin/main (b18b611d1); the effort note copies nothing, matching the transcript, which draws an empty `Space` for it until #1554 M4 draws its marker (then give it that text). Test: `an_effort_note_copies_nothing`. The only other `EntryKind` matches in M1/M2 code have a `_` arm.
 
 ## Tasks-unit notes
 
@@ -58,6 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 91e2a3d9cf7b87ce83bcc7e5e0c7510556892560:12b46edb6afe9910d2dcd96175cf67c05102539a | CLEAN (3 MINOR fixed, prose only: checklist ticked, CopySelection stub noted in T016, M4b Verify records Part B 1–5 visual pass) |
 | Review A M1 (code-review high) | 1 | no snapshot (HEAD 350eb1157) | 10 findings: 6 fixed in 75cbb5030 (word_at inside its line, snap via GraphemeCursor, full-width punctuation, unsnapped test offset, list marker arms merged, shared work_str), 4 declined (below) |
 | Review B M1 | 1 | 55ede43b68b9972806d53205fc373e5003804172:75cbb5030640e4bb0c886ec779d3a90794010ddf | CLEAN (1 MINOR fixed: tdd/cycle-log.md written from recovered red evidence) |
+| Review A M2 (code-review high) | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | 1 BLOCKER, 1 MAJOR, 8 MINOR: fixed BLOCKER (unfocused transcript listener heard a busy turn's Escape/Ctrl+C over dialogs and views: `transcript_keys(state, interrupt)` + `State::transcript_focused`), MAJOR (empty copy text no longer written), MINOR F6 (Show in full clears like a toggle), F7 (menu Copy/Select all refocus), F10 (T021/T023 wording, prose only); 5 MINOR declined (below). No re-review: no BLOCKER/MAJOR left open, fixes tested red→green |
+| Review B M2 | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | CLEAN; Verify pass (28/40/18/2); 1 MINOR fixed, prose only (T021 focus.rs join named as T041's) |
 
 ## Declined review findings
 
@@ -69,6 +78,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M1 #8 (S-5 test holds by construction): it checks that entry ids by key stay put while every recorded fixture streams (a transcript property, not the selection's) and that the selected text of a growing entry is unchanged; `copy_text` stability needs `units()`, which is M2's.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A F3 | `Press { clicks }` vs `Hit { click }` granularity | MINOR, contract shape for M4b's wiring: `armed` only records that the area saw the press; `Hit.click` is the gesture's count as the widget reports it. Revisit when M3/M4b wire the widget. |
+| M2 | A F4, F5 | `noted`/`prompt_rows` per hit and per message; `placed()` per row | MINOR, performance: M4a's budget test (T033–T038) measures it and caches if it shows. |
+| M2 | A F8 | empty plain-text unit for an empty underived entry | MINOR: units mirror what is drawn; whether the plain renderer draws an empty line is checked by M4a's parity test. |
+| M2 | A F9 | `clear()` keeps `menu` | MINOR: the menu's Select all stays valid over a cleared selection and its Copy writes nothing; M4b's menu closes on outside clicks (`MenuDismissed`). |
 
 ## Handover
 
@@ -80,4 +93,6 @@ None.
 
 ## Follow-ups not done
 
-None.
+- T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
+- `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
+- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a's parity test decides whether they become selectable.

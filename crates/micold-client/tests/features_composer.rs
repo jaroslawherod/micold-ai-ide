@@ -235,7 +235,12 @@ fn ctrl_c_interrupts_a_busy_session_without_a_selection() {
             composer_key(&press, (0, 0), 1, false, false, phase),
             KeyIntent::Interrupt
         );
-        assert_eq!(transcript_key(&press, phase), KeyIntent::Interrupt);
+        for mac in [false, true] {
+            assert_eq!(
+                transcript_key(&press, phase, false, false, mac),
+                KeyIntent::Interrupt
+            );
+        }
     }
 }
 
@@ -258,7 +263,12 @@ fn ctrl_c_stays_the_editors_when_it_must_not_interrupt() {
             composer_key(&press, (0, 0), 1, false, false, phase),
             KeyIntent::Edit
         );
-        assert_eq!(transcript_key(&press, phase), KeyIntent::Edit);
+        for mac in [false, true] {
+            assert_eq!(
+                transcript_key(&press, phase, false, false, mac),
+                KeyIntent::Edit
+            );
+        }
     }
     // Another modifier beside Ctrl, or none (a plain `c` is typing).
     for mods in [
@@ -280,7 +290,13 @@ fn ctrl_c_stays_the_editors_when_it_must_not_interrupt() {
             KeyIntent::Edit,
             "{mods:?}"
         );
-        assert_eq!(transcript_key(&press, busy()), KeyIntent::Edit, "{mods:?}");
+        for mac in [false, true] {
+            assert_eq!(
+                transcript_key(&press, busy(), false, false, mac),
+                KeyIntent::Edit,
+                "{mods:?}"
+            );
+        }
     }
 }
 
@@ -330,16 +346,178 @@ fn other_keys_are_the_editors() {
 #[test]
 fn escape_on_a_focused_transcript_interrupts_only_a_busy_session() {
     let escape = plain(NamedKey::Escape);
-    assert_eq!(transcript_key(&escape, busy()), KeyIntent::Interrupt);
-    assert_eq!(transcript_key(&escape, TurnPhase::Idle), KeyIntent::Edit);
-    assert_eq!(
-        transcript_key(&escape, TurnPhase::NotRunning),
-        KeyIntent::Edit
-    );
-    assert_eq!(
-        transcript_key(&plain(NamedKey::Enter), busy()),
-        KeyIntent::Edit
-    );
+    for (selecting, focused, mac) in flags() {
+        let key = |press: &KeyInput, phase| transcript_key(press, phase, selecting, focused, mac);
+        assert_eq!(key(&escape, busy()), KeyIntent::Interrupt);
+        assert_eq!(key(&escape, TurnPhase::Idle), KeyIntent::Edit);
+        assert_eq!(key(&escape, TurnPhase::NotRunning), KeyIntent::Edit);
+        assert_eq!(key(&plain(NamedKey::Enter), busy()), KeyIntent::Edit);
+    }
+}
+
+// ---- #1550 T020: copy keys and select-all on a focused transcript (contracts/keys-menu-copy.md) ----
+
+/// Every combination of `(selecting, focused, mac)`.
+fn flags() -> Vec<(bool, bool, bool)> {
+    let both = [false, true];
+    both.iter()
+        .flat_map(|&s| both.iter().flat_map(move |&f| both.map(move |m| (s, f, m))))
+        .collect()
+}
+
+fn char_key(c: char, mods: Mods) -> KeyInput {
+    KeyInput {
+        key: Key::Char(c),
+        mods,
+        text: Some(c.to_string()),
+        physical: PhysicalKey::Other,
+    }
+}
+
+const CTRL_SHIFT: Mods = Mods {
+    ctrl: true,
+    shift: true,
+    ..Mods::NONE
+};
+
+const CMD: Mods = Mods {
+    logo: true,
+    ..Mods::NONE
+};
+
+fn phases() -> [TurnPhase; 3] {
+    [busy(), TurnPhase::Idle, TurnPhase::NotRunning]
+}
+
+/// K-1, K-2: Ctrl+C and Ctrl+Shift+C copy a selection of a focused transcript on Linux and
+/// Windows, busy or idle, and never interrupt (FR-008, SC-002).
+#[test]
+fn k1_k2_ctrl_c_and_ctrl_shift_c_copy_a_selection_off_macos() {
+    for phase in phases() {
+        for mods in [CTRL, CTRL_SHIFT] {
+            assert_eq!(
+                transcript_key(&char_key('c', mods), phase, true, true, false),
+                KeyIntent::CopySelection,
+                "{mods:?} {phase:?}"
+            );
+        }
+        // Shift makes the character upper case on some layouts.
+        assert_eq!(
+            transcript_key(&char_key('C', CTRL_SHIFT), phase, true, true, false),
+            KeyIntent::CopySelection
+        );
+        // Cmd+C is not a copy key off macOS.
+        assert_ne!(
+            transcript_key(&char_key('c', CMD), phase, true, true, false),
+            KeyIntent::CopySelection
+        );
+    }
+}
+
+/// K-3, K-4: Cmd+C, and Ctrl+C while a selection exists, copy on macOS (FR-008, US2 scenario 5).
+#[test]
+fn k3_k4_cmd_c_and_ctrl_c_copy_a_selection_on_macos() {
+    for phase in phases() {
+        for mods in [CMD, CTRL] {
+            assert_eq!(
+                transcript_key(&char_key('c', mods), phase, true, true, true),
+                KeyIntent::CopySelection,
+                "{mods:?} {phase:?}"
+            );
+        }
+    }
+}
+
+/// K-5, K-6: with no selection, or the transcript not focused, Ctrl+C is #941 FR-012a's:
+/// interrupt a busy turn, nothing while idle (FR-009, SC-002, US2 scenarios 2 and 3).
+#[test]
+fn k5_k6_ctrl_c_without_a_focused_selection_interrupts_only_a_busy_turn() {
+    for (selecting, focused, mac) in flags() {
+        if selecting && focused {
+            continue;
+        }
+        let press = char_key('c', CTRL);
+        assert_eq!(
+            transcript_key(&press, busy(), selecting, focused, mac),
+            KeyIntent::Interrupt,
+            "{selecting} {focused} {mac}"
+        );
+        for phase in [TurnPhase::Idle, TurnPhase::NotRunning] {
+            assert_eq!(
+                transcript_key(&press, phase, selecting, focused, mac),
+                KeyIntent::Edit,
+                "{selecting} {focused} {mac}"
+            );
+        }
+    }
+}
+
+/// K-7: Ctrl+Shift+C and Cmd+C never interrupt; with nothing to copy they do nothing (FR-009).
+#[test]
+fn k7_ctrl_shift_c_and_cmd_c_never_interrupt() {
+    for (selecting, focused, mac) in flags() {
+        for mods in [CTRL_SHIFT, CMD] {
+            for phase in phases() {
+                let intent = transcript_key(&char_key('c', mods), phase, selecting, focused, mac);
+                assert_ne!(
+                    intent,
+                    KeyIntent::Interrupt,
+                    "{mods:?} {selecting} {focused} {mac}"
+                );
+                if !(selecting && focused) {
+                    assert_eq!(
+                        intent,
+                        KeyIntent::Edit,
+                        "{mods:?} {selecting} {focused} {mac}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// K-8, K-11: Ctrl+A (Cmd+A on macOS) selects all of a focused transcript, with or without a
+/// selection, busy or idle; with focus elsewhere it is not the transcript's (FR-006, FR-019a).
+#[test]
+fn k8_k11_select_all_needs_the_transcript_focused() {
+    for (selecting, focused, mac) in flags() {
+        let (own, other) = if mac { (CMD, CTRL) } else { (CTRL, CMD) };
+        for phase in phases() {
+            let intent = transcript_key(&char_key('a', own), phase, selecting, focused, mac);
+            let expected = if focused {
+                KeyIntent::SelectAll
+            } else {
+                KeyIntent::Edit
+            };
+            assert_eq!(intent, expected, "{selecting} {focused} {mac} {phase:?}");
+            assert_eq!(
+                transcript_key(&char_key('a', other), phase, selecting, focused, mac),
+                KeyIntent::Edit,
+                "the other platform's modifier: {selecting} {focused} {mac}"
+            );
+        }
+    }
+}
+
+/// K-11: with focus elsewhere, a copy key does nothing to the transcript selection even when one
+/// exists: Ctrl+C follows K-5/K-6 on both platforms (FR-019a, US2 scenario 4).
+#[test]
+fn k11_a_selection_is_not_copied_while_the_transcript_is_not_focused() {
+    for mac in [false, true] {
+        for mods in [CTRL, CTRL_SHIFT, CMD] {
+            for phase in phases() {
+                assert_ne!(
+                    transcript_key(&char_key('c', mods), phase, true, false, mac),
+                    KeyIntent::CopySelection,
+                    "{mods:?} {mac} {phase:?}"
+                );
+            }
+        }
+        assert_eq!(
+            transcript_key(&char_key('c', CTRL), busy(), true, false, mac),
+            KeyIntent::Interrupt
+        );
+    }
 }
 
 fn window_with(sessions: Vec<Session>) -> Window {

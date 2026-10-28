@@ -355,6 +355,16 @@ impl State {
             .copied()
     }
 
+    /// The tool calls of `session` whose request ended in this window run, and how each ended:
+    /// the resolution rows the transcript draws under their cards (feature 1550 reads them as rows
+    /// of selectable text).
+    pub fn resolutions(&self, session: SessionId) -> impl Iterator<Item = (&str, Resolution)> {
+        self.sessions
+            .get(&session)
+            .into_iter()
+            .flat_map(|s| s.resolved.iter().map(|(id, r)| (id.as_str(), *r)))
+    }
+
     /// Whether `session` waits for the user: a request of it is pending (FR-009).
     pub fn waiting(&self, session: SessionId) -> bool {
         self.sessions

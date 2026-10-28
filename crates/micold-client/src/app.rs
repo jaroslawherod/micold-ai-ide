@@ -475,6 +475,9 @@ pub struct State {
     /// The structured sessions' permission prompts in this window (#942) -- see
     /// [`crate::features::permission_prompts::State`].
     pub permission_prompts: crate::features::permission_prompts::State,
+    /// The structured transcripts' text selections in this window (feature 1550) -- see
+    /// [`crate::features::transcript_selection::State`].
+    pub transcript_selection: crate::features::transcript_selection::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
     /// Each location's setup run (feature 1289) -- see [`crate::features::setup::State`].
@@ -626,7 +629,22 @@ impl State {
         self.session.active.is_some()
             && !self.session.terminal_released
             && self.window.focused_field.is_none()
-            && !self.any_surface_takes_keyboard()
+            && self.session_view_has_keyboard()
+    }
+
+    /// Whether the active session's transcript holds the keyboard (feature 1550, FR-019a): it is
+    /// the focused field and nothing floats over it or replaces it on screen, so its copy keys,
+    /// select-all and Escape are its own and not a dialog's or a view's.
+    pub fn transcript_focused(&self) -> bool {
+        self.session.active.is_some_and(|id| {
+            self.window.focused_field == Some(crate::features::window::FieldId::Transcript(id))
+        }) && self.session_view_has_keyboard()
+    }
+
+    /// Nothing takes the keyboard from the active session's pane: no floating surface, picker,
+    /// Settings, Changes, Compare or Overview over it or in its place.
+    fn session_view_has_keyboard(&self) -> bool {
+        !self.any_surface_takes_keyboard()
             // #943: the model picker's field takes the keyboard from the composer, whose text
             // area then reports no focus; while it is open the keys are the picker's.
             && !self
@@ -1056,9 +1074,18 @@ impl State {
         live: bool,
         grammar: &crate::features::transcript_rich::Grammar,
     ) -> Vec<crate::features::transcript_rich::HighlightJob> {
+        if let Some(view) = transcript_view_of(
+            &self.structured_transcript,
+            &self.transcript_rich,
+            &self.permission_prompts,
+            &self.structured_insights,
+            session,
+        ) {
+            self.transcript_selection.before_apply(&view);
+        }
         self.structured_transcript
             .apply(session, omitted, events, live);
-        match self.structured_transcript.transcript(session) {
+        let jobs = match self.structured_transcript.transcript(session) {
             Some(transcript) => {
                 self.structured_insights
                     .apply(session, omitted, events, live, transcript);
@@ -1070,6 +1097,69 @@ impl State {
                 )
             }
             None => Vec::new(),
+        };
+        // Feature 1550: what the events changed may clear the session's selection (research R7).
+        if let Some(view) = transcript_view_of(
+            &self.structured_transcript,
+            &self.transcript_rich,
+            &self.permission_prompts,
+            &self.structured_insights,
+            session,
+        ) {
+            self.transcript_selection.applied(&view);
+        }
+        jobs
+    }
+
+    /// What `session`'s transcript draws, render-free (feature 1550, data-model.md
+    /// *TranscriptView*): `None` while this window holds no transcript of it.
+    pub fn transcript_view(
+        &self,
+        session: micold_core::session::SessionId,
+    ) -> Option<crate::features::transcript_selection::TranscriptView<'_>> {
+        transcript_view_of(
+            &self.structured_transcript,
+            &self.transcript_rich,
+            &self.permission_prompts,
+            &self.structured_insights,
+            session,
+        )
+    }
+
+    /// Keep the transcript selections of `sessions`, the displayed project's, only while a pane
+    /// shows the session's transcript (`shown`, the layout's terminals), and check the shown ones
+    /// against their placed permission prompts (feature 1550, FR-019, research R7). Called after
+    /// every message by `shell/panes.rs::sync`, which covers every way a pane changes session.
+    pub fn transcript_selection_sync(
+        &mut self,
+        sessions: &[micold_core::session::SessionId],
+        shown: &[micold_core::protocol::messages::TerminalRef],
+    ) {
+        self.transcript_selection.retain_shown(sessions, shown);
+        for &session in sessions {
+            if self.transcript_selection.selection(session).is_none() {
+                continue;
+            }
+            if let Some(view) = transcript_view_of(
+                &self.structured_transcript,
+                &self.transcript_rich,
+                &self.permission_prompts,
+                &self.structured_insights,
+                session,
+            ) {
+                self.transcript_selection.prompts_changed(&view);
+            }
+        }
+        if let Some(crate::features::window::FieldId::Transcript(session)) =
+            self.window.focused_field
+        {
+            let primary = micold_core::protocol::messages::TerminalRef {
+                session,
+                process: micold_core::protocol::messages::SessionProcess::Primary,
+            };
+            if sessions.contains(&session) && !shown.contains(&primary) {
+                self.window.focused_field = None;
+            }
         }
     }
 
@@ -1081,7 +1171,12 @@ impl State {
         self.composers.forget(session);
         self.structured_insights.forget(session);
         self.permission_prompts.forget(session);
+        self.transcript_selection.forget(session);
         self.release_ended_prompt_focus();
+        if self.window.focused_field == Some(crate::features::window::FieldId::Transcript(session))
+        {
+            self.window.focused_field = None;
+        }
     }
 
     /// Apply a message of the insights shown with a structured session's transcript (feature
@@ -1117,8 +1212,73 @@ impl State {
         &mut self,
         msg: crate::features::structured_transcript::TranscriptMsg,
     ) -> crate::features::structured_transcript::Effect {
-        self.structured_transcript
-            .update(&mut self.transcript_rich, msg)
+        use crate::features::structured_transcript::TranscriptMsg;
+        match msg {
+            TranscriptMsg::Select(msg) => return self.update_selection(msg),
+            // Feature 1550: folding or unfolding a card a selection holds part of clears it, and so
+            // does showing a part of it in full, which changes the text it draws there (FR-019).
+            TranscriptMsg::Toggle { session, ref key }
+            | TranscriptMsg::ShowInFull {
+                session, ref key, ..
+            } => {
+                let id = self
+                    .structured_transcript
+                    .transcript(session)
+                    .and_then(|t| t.entry(key))
+                    .map(|e| e.id());
+                if let Some(id) = id {
+                    self.transcript_selection.toggled(session, id);
+                }
+            }
+            _ => {}
+        }
+        let effect = self
+            .structured_transcript
+            .update(&mut self.transcript_rich, msg);
+        // Feature 1550, FR-014: a refused copy of a selection is said in its pane.
+        if let Some(session) = effect.copy_failed {
+            self.composers.notice(
+                session,
+                crate::features::transcript_selection::COPY_FAILED.to_owned(),
+            );
+        }
+        effect
+    }
+
+    /// Apply a selection message of `session`'s transcript (feature 1550): a copy of a non-empty
+    /// selection is a checked clipboard write with a selection ticket (research R9), and gives the
+    /// transcript the keyboard, as the context menu's Copy does (FR-019a).
+    fn update_selection(
+        &mut self,
+        msg: crate::features::transcript_selection::SelectMsg,
+    ) -> crate::features::structured_transcript::Effect {
+        let session = msg.session();
+        // The menu's Copy and Select all give the transcript the keyboard again (FR-019a), even
+        // when there is nothing to copy; a copy key or Ctrl+A already comes from it.
+        let refocus = matches!(
+            msg,
+            crate::features::transcript_selection::SelectMsg::CopySelection { .. }
+                | crate::features::transcript_selection::SelectMsg::SelectAll { .. }
+        );
+        let view = transcript_view_of(
+            &self.structured_transcript,
+            &self.transcript_rich,
+            &self.permission_prompts,
+            &self.structured_insights,
+            session,
+        );
+        let copy = self.transcript_selection.update(msg, view.as_ref());
+        if refocus || copy.is_some() {
+            self.window.focused_field = Some(crate::features::window::FieldId::Transcript(session));
+        }
+        let Some(text) = copy else {
+            return crate::features::structured_transcript::Effect::default();
+        };
+        let ticket = self.transcript_rich.copy_selection(session, text.clone());
+        crate::features::structured_transcript::Effect {
+            outcomes: vec![crate::features::Outcome::ClipboardWriteChecked { text, ticket }],
+            ..crate::features::structured_transcript::Effect::default()
+        }
     }
 
     /// The read an outcome started while the root interpreted it (opening the view from the
@@ -2356,6 +2516,25 @@ fn field_blurred(state: &mut State, id: crate::features::window::FieldId) {
         // Not a required field of any form: nothing to mark.
         _ => {}
     }
+}
+
+/// What `session`'s transcript draws, from the window's parts: the root's borrow of each, so a
+/// caller can still change the selection state beside it (feature 1550).
+fn transcript_view_of<'a>(
+    transcripts: &'a crate::features::structured_transcript::State,
+    rich: &'a crate::features::transcript_rich::RichCache,
+    prompts: &'a crate::features::permission_prompts::State,
+    insights: &'a crate::features::structured_insights::State,
+    session: micold_core::session::SessionId,
+) -> Option<crate::features::transcript_selection::TranscriptView<'a>> {
+    Some(crate::features::transcript_selection::TranscriptView {
+        session,
+        transcript: transcripts.transcript(session)?,
+        open: transcripts.open_cards(session)?,
+        rich,
+        prompts: Some(prompts),
+        insights: Some(insights),
+    })
 }
 
 #[cfg(test)]

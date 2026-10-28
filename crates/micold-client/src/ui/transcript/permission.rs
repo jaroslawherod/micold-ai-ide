@@ -22,6 +22,10 @@ use micold_core::structured::permission::request::{Question, RequestKind};
 use micold_core::structured::transcript::{input_summary, Entry, EntryKind};
 use micold_core::tokens::{spacing, Roles};
 
+pub use crate::features::transcript_selection::shown::{
+    always_allow_note, resolution_label, structured_input, INPUT_CUT, PLAN_TITLE, QUESTION_TITLE,
+};
+
 pub use crate::ui::material::{CHOICE_OTHER as OTHER, OTHER_PLACEHOLDER};
 
 /// A tool request's **Allow**.
@@ -34,10 +38,6 @@ pub const ALWAYS_ALLOW: &str = "Always allow";
 pub const DENY_PLACEHOLDER: &str = "Tell Claude why (optional)";
 /// The control that fetches a cut input whole.
 pub const SHOW_ALL: &str = "Show all";
-/// What a cut input says under its preview.
-pub const INPUT_CUT: &str = "Only the start of the input is shown";
-/// A plan approval's title.
-pub const PLAN_TITLE: &str = "Claude's plan";
 /// A plan approval's **Approve and accept edits**.
 pub const APPROVE_ACCEPT_EDITS: &str = "Approve and accept edits";
 /// A plan approval's **Approve**.
@@ -46,8 +46,6 @@ pub const APPROVE: &str = "Approve";
 pub const KEEP_PLANNING: &str = "Keep planning";
 /// What the keep-planning note field prompts with.
 pub const NOTE_PLACEHOLDER: &str = "Note for Claude (optional)";
-/// A question request's title.
-pub const QUESTION_TITLE: &str = "Claude asks";
 /// A question request's **Submit**.
 pub const SUBMIT: &str = "Submit";
 /// A question request's **Decline**.
@@ -75,25 +73,6 @@ pub(super) struct Draw<'a, M> {
     pub on_focus: fn(FieldId, bool) -> M,
 }
 
-/// The label a request leaves on its card once it has ended (research R11).
-pub fn resolution_label(resolution: Resolution) -> &'static str {
-    match resolution {
-        Resolution::Allowed => "Allowed",
-        Resolution::AllowedAlways => "Always allowed",
-        Resolution::Denied => "Denied",
-        Resolution::PlanApproved { .. } => "Plan approved",
-        Resolution::KeptPlanning => "Kept planning",
-        Resolution::Answered => "Answered",
-        Resolution::Declined => "Declined",
-        Resolution::Withdrawn { .. } => "Withdrawn",
-    }
-}
-
-/// What a tool request's note says Always allow does: it names the rule it adds.
-pub fn always_allow_note(rule: &str) -> String {
-    format!("Always allow also allows {rule} for the rest of this session")
-}
-
 /// How a tool request shows its input (FR-006).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputForm {
@@ -110,14 +89,6 @@ pub fn input_form(tool: &str, card_held: bool) -> InputForm {
     } else {
         InputForm::Structured
     }
-}
-
-/// `text` as structured text: indented JSON when it parses, else as it came (a cut preview).
-pub fn structured_input(text: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(text)
-        .ok()
-        .and_then(|value| serde_json::to_string_pretty(&value).ok())
-        .unwrap_or_else(|| text.to_owned())
 }
 
 /// The ended request's label under its card.

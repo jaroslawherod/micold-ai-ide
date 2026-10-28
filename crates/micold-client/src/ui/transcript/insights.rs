@@ -2,17 +2,17 @@
 //! X1–X5): every figure, label and state comes from a pure function here, over the core insights,
 //! and the tests read them; the drawing only lays them out (E-1).
 
-use super::entries::{footer_view, FooterView, Status, Tone};
+use super::entries::{Status, Tone};
 use crate::icons::Icon;
 use micold_core::structured::insights::figures::{
     context_details, context_label, task_label, thread_summary_line, totals_details, totals_line,
-    turn_details, turn_figures, ESTIMATE_NOTE,
 };
 use micold_core::structured::insights::{
-    ContextState, SessionInsights, SubagentState, Task, TaskKind, TaskState, ThreadView, TurnUsage,
+    ContextState, SessionInsights, SubagentState, Task, TaskKind, TaskState, ThreadView,
 };
-use micold_core::structured::transcript::TurnFooter;
 use micold_core::task_progress::Ratio;
+
+pub use crate::features::transcript_selection::shown::footer_view_with;
 
 /// The background-task list's title (FR-020).
 pub const BACKGROUND_TASKS: &str = "Background tasks";
@@ -184,23 +184,4 @@ pub fn thread_header(view: &ThreadView<'_>) -> ThreadHeader {
 /// What heads the thread of a parent tool call the session does not hold (X5, FR-017).
 pub fn placeholder_title(parent: &str) -> String {
     format!("Subagent of an earlier step ({parent})")
-}
-
-/// `footer`'s view with the turn's own figures after #939's (X2, FR-006): its cost and tokens,
-/// and in its details the cached input, the per-model rows and the estimate note (FR-026). A turn
-/// without figures adds nothing but the note, when #939's session total is a cost.
-pub fn footer_view_with(footer: &TurnFooter, turn: Option<&TurnUsage>) -> FooterView {
-    let mut view = footer_view(footer);
-    let Some(turn) = turn else {
-        if footer.cost_usd.is_some() {
-            view.details.push(ESTIMATE_NOTE.to_owned());
-        }
-        return view;
-    };
-    view.figures.extend(turn_figures(turn));
-    view.details = turn_details(turn);
-    if footer.cost_usd.is_some() && !view.details.iter().any(|l| l == ESTIMATE_NOTE) {
-        view.details.push(ESTIMATE_NOTE.to_owned());
-    }
-    view
 }

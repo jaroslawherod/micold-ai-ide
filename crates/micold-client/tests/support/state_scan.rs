@@ -103,6 +103,16 @@ pub const MUTATORS: &[&str] = &[
     // `transcript_rich.refresh_all` does so from its transcript and its open subagent threads
     // (feature 944, D18 c).
     "refresh_all",
+    // Feature 1550: `transcript_rich.copy_selection` issues a selection copy's ticket;
+    // `transcript_selection.before_apply` fingerprints the selected text before events apply,
+    // `applied`, `prompts_changed` and `toggled` clear a selection they changed, and
+    // `retain_shown` drops the selections no pane shows.
+    "copy_selection",
+    "before_apply",
+    "applied",
+    "prompts_changed",
+    "toggled",
+    "retain_shown",
     "push",
     "push_str",
     "remove",
@@ -145,6 +155,8 @@ pub const READERS: &[&str] = &[
     // `structured_insights.open_threads` lends a session's open subagent threads, which the render
     // cache is refreshed from (feature 944, D18 c).
     "open_threads",
+    // Feature 1550: `transcript_selection.selection` names a session's selection.
+    "selection",
     "all",
     "and_then",
     // `session.answer_in_use` hands back the answer a row's list is drawn from, which the store

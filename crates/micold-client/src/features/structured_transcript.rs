@@ -6,7 +6,10 @@
 //! shell turns a [`Scroll`] into a scroll operation on `ui::transcript::transcript_scroll_id`
 //! (research R9).
 
-use crate::features::transcript_rich::{HighlightJob, Part, RichCache, Ticket, COPY_CONFIRM};
+use crate::features::transcript_rich::{
+    Checked, HighlightJob, Part, RichCache, Ticket, COPY_CONFIRM,
+};
+use crate::features::transcript_selection::SelectMsg;
 use crate::features::{OpenRequest, Outcome};
 use micold_core::link::address::{classify, Address};
 use micold_core::markdown::CodeId;
@@ -136,6 +139,11 @@ pub enum TranscriptMsg {
     /// background-task list): the insights feature's, which the window's view hands to it as
     /// `session::Msg::Insights`; this feature does nothing with it.
     Insights(crate::features::structured_insights::InsightsMsg),
+    /// A selection gesture, the context menu or a copy of the selection (feature 1550,
+    /// data-model.md *Messages*): the selection feature's, which the root applies with the
+    /// session's [`TranscriptView`](crate::features::transcript_selection::TranscriptView); this
+    /// feature does nothing with it.
+    Select(SelectMsg),
 }
 
 impl TranscriptMsg {
@@ -150,6 +158,7 @@ impl TranscriptMsg {
             | Self::ShowInFull { session, .. }
             | Self::Highlighted { session, .. } => Some(*session),
             Self::Insights(msg) => Some(msg.session()),
+            Self::Select(msg) => Some(msg.session()),
             Self::OpenLink { .. } | Self::CopyChecked { .. } | Self::CopyExpired { .. } => None,
         }
     }
@@ -162,6 +171,9 @@ pub struct Effect {
     pub scroll: Option<Scroll>,
     pub outcomes: Vec<Outcome>,
     pub jobs: Vec<HighlightJob>,
+    /// The session whose transcript selection's copy failed: its pane says so (feature 1550,
+    /// FR-014).
+    pub copy_failed: Option<SessionId>,
 }
 
 impl Effect {
@@ -256,6 +268,11 @@ impl State {
         }
     }
 
+    /// The unfolded cards of `session`'s transcript, when this window has heard of it.
+    pub fn open_cards(&self, session: SessionId) -> Option<&HashSet<EntryKey>> {
+        self.sessions.get(&session).map(|s| &s.open)
+    }
+
     /// Whether the card `key` is unfolded.
     pub fn is_open(&self, session: SessionId, key: &EntryKey) -> bool {
         self.sessions
@@ -336,13 +353,20 @@ impl State {
                 rich.copy(session, &key, code)
                     .map(|(text, ticket)| Outcome::ClipboardWriteChecked { text, ticket }),
             ),
-            TranscriptMsg::CopyChecked { ticket, read } => Effect::outcome(
-                rich.copy_checked(ticket, read)
-                    .then_some(Outcome::CopyConfirmTimer {
-                        ticket,
-                        after: COPY_CONFIRM,
-                    }),
-            ),
+            TranscriptMsg::CopyChecked { ticket, read } => match rich.copy_checked(ticket, read) {
+                Checked::Control => Effect::outcome(Some(Outcome::CopyConfirmTimer {
+                    ticket,
+                    after: COPY_CONFIRM,
+                })),
+                Checked::Selection {
+                    session,
+                    held: false,
+                } => Effect {
+                    copy_failed: Some(session),
+                    ..Effect::default()
+                },
+                Checked::Selection { held: true, .. } | Checked::Stale => Effect::default(),
+            },
             TranscriptMsg::CopyExpired { ticket } => {
                 rich.copy_expired(ticket);
                 Effect::default()
@@ -360,7 +384,7 @@ impl State {
                 rich.highlighted(session, &key, part, spans);
                 Effect::default()
             }
-            TranscriptMsg::Insights(_) => Effect::default(),
+            TranscriptMsg::Insights(_) | TranscriptMsg::Select(_) => Effect::default(),
         }
     }
 }

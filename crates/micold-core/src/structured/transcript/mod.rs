@@ -205,6 +205,12 @@ impl Transcript {
         self.rebuilds
     }
 
+    /// The entry `id` of this build, while it is held (feature 1550: a selection's ends are
+    /// entry ids, research R1).
+    pub fn entry_by_id(&self, id: EntryId) -> Option<&Entry> {
+        self.get(id)
+    }
+
     /// The entry keyed `key`.
     pub fn entry(&self, key: &EntryKey) -> Option<&Entry> {
         match key {

@@ -19,57 +19,18 @@ use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::{
-    footer_figures, CommandChip, Entry, EntryKind, Outcome, ToolCard, ToolStatus, Transcript,
-    TurnFooter,
-};
+use micold_core::structured::transcript::{Entry, EntryKind, ToolCard, ToolStatus, Transcript};
 use micold_core::tokens::{spacing, Roles};
 use std::hash::{Hash, Hasher};
 
-/// What an empty transcript says (FR-006).
-pub const NO_OUTPUT: &str = "No output yet";
-/// The label a raw row leads with (research R4), so it reads apart from the conversation.
-pub const RAW_LABEL: &str = "Raw event";
-/// A thinking card's title.
-pub const THINKING_TITLE: &str = "Thinking";
-/// What a user message is headed with.
-pub const USER_LABEL: &str = "You";
-/// What stands where a turn's footer would, when the process ended mid-turn (FR-004).
-pub const ENDED_WITHOUT_RESULT: &str = "The turn ended without a result";
-/// What stands where a turn's footer would, when the user interrupted it (feature 941, FR-014).
-pub const INTERRUPTED: &str = "You interrupted this turn";
-/// What a message sent with pictures names them under (feature 941, FR-030).
-pub const ATTACHED: &str = "Attached";
-/// What heads a result whose call is not in the transcript (FR-020): shown, never as an error.
-pub const ORPHAN_RESULT: &str = "Result of a tool call not shown";
-
-/// Which colour role a status takes beside its icon and label (FR-012).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tone {
-    /// Supporting: the muted foreground.
-    Muted,
-    /// A failure: the error role, on the icon and the label.
-    Error,
-}
-
-/// A status as an icon, a label and a tone: failure never rests on colour alone (FR-012).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Status {
-    pub icon: Icon,
-    pub label: &'static str,
-    pub tone: Tone,
-}
-
-/// A tool card's status.
-pub fn tool_status(status: ToolStatus) -> Status {
-    let (icon, label, tone) = match status {
-        ToolStatus::Running => (Icon::ToolRunning, "Running", Tone::Muted),
-        ToolStatus::Done => (Icon::ToolDone, "Done", Tone::Muted),
-        ToolStatus::Failed => (Icon::ToolFailed, "Failed", Tone::Error),
-        ToolStatus::NoResult => (Icon::ToolNoResult, "No result", Tone::Muted),
-    };
-    Status { icon, label, tone }
-}
+use crate::features::transcript_selection::shown::first_line;
+pub use crate::features::transcript_selection::shown::{
+    attachments_line, command_chip_description, command_chip_title, compacted_text, era_tag,
+    footer_view, model_changed_text, omitted_text, oversized_text, subagent_count,
+    subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
+    COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL,
+    THINKING_TITLE, USER_LABEL,
+};
 
 /// A tool card's header: what it says folded and open.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,136 +75,6 @@ pub fn edit_meta(added: u32, removed: u32) -> String {
     format!("+{added} \u{2212}{removed}")
 }
 
-/// `"1 sub-agent message"`, `"3 sub-agent messages"`.
-pub fn subagent_count(n: u64) -> String {
-    if n == 1 {
-        "1 sub-agent message".to_owned()
-    } else {
-        format!("{n} sub-agent messages")
-    }
-}
-
-/// A turn footer as it is drawn (FR-005, FR-012).
-#[derive(Debug, Clone, PartialEq)]
-pub struct FooterView {
-    pub status: Status,
-    /// Duration, the session's running cost, turns: each only when the result reports it.
-    pub figures: Vec<String>,
-    /// An error turn's text.
-    pub error_text: Option<String>,
-    /// What its tooltip says, one line each (feature 944, FR-006, FR-026); none: no tooltip.
-    pub details: Vec<String>,
-}
-
-/// `footer`'s view.
-pub fn footer_view(footer: &TurnFooter) -> FooterView {
-    let status = match footer.outcome {
-        Outcome::Success => Status {
-            icon: Icon::ToolDone,
-            label: "Done",
-            tone: Tone::Muted,
-        },
-        Outcome::Error => Status {
-            icon: Icon::ToolFailed,
-            label: "Failed",
-            tone: Tone::Error,
-        },
-    };
-    FooterView {
-        status,
-        figures: footer_figures(footer),
-        error_text: footer.error_text.clone(),
-        details: Vec::new(),
-    }
-}
-
-/// `"1 earlier event not shown"`, `"40 earlier events not shown"` (FR-004).
-pub fn omitted_text(n: u64) -> String {
-    if n == 1 {
-        "1 earlier event not shown".to_owned()
-    } else {
-        format!("{n} earlier events not shown")
-    }
-}
-
-/// What an event too large to send says (FR-004).
-pub fn oversized_text(original_bytes: u64) -> String {
-    format!("An event of {original_bytes} bytes was too large to show")
-}
-
-/// What a `/clear` marker says (#943 FR-005).
-pub const CLEARED: &str = "Conversation cleared: the turns above are from before the clear";
-
-/// What a compaction marker says (#943 FR-004).
-pub fn compacted_text(trigger: Option<&str>) -> String {
-    match trigger {
-        Some("auto") => "Conversation compacted automatically".to_owned(),
-        _ => "Conversation compacted".to_owned(),
-    }
-}
-
-/// What a model marker says (#943 FR-015, FR-016).
-pub fn model_changed_text(model: &str, refused: Option<&str>) -> String {
-    match refused {
-        None => format!("Model changed to {model}"),
-        Some(reason) => format!("Model {model} was refused: {reason}"),
-    }
-}
-
-/// What a turn from before a `/clear` is marked with (#943 FR-005, US1 scenario 5).
-pub const BEFORE_THE_CLEAR: &str = "Before the clear";
-
-/// What heads a built-in command's answer (#943 FR-006).
-pub const COMMAND_OUTPUT_TITLE: &str = "Command output";
-
-/// What a command chip says with no description behind it (#943 FR-003).
-pub const NO_COMMAND_DESCRIPTION: &str = "The session's command list gave no description";
-
-/// [`BEFORE_THE_CLEAR`] for an entry of an earlier conversation than the transcript's latest
-/// (#943 FR-005): the turns above a `/clear` stay, marked.
-pub fn era_tag(entry_era: u32, latest_era: u32) -> Option<&'static str> {
-    (entry_era < latest_era).then_some(BEFORE_THE_CLEAR)
-}
-
-/// A command chip's header: the command as the user typed it (#943 FR-003), never the
-/// instructions the CLI expanded it into.
-pub fn command_chip_title(chip: &CommandChip) -> String {
-    let args = chip.invocation.args.trim();
-    if args.is_empty() {
-        format!("/{}", chip.invocation.name)
-    } else {
-        format!("/{} {args}", chip.invocation.name)
-    }
-}
-
-/// What stands behind a command chip: the description the session's command list gave when the
-/// command was sent, with its argument hint (#943 FR-003, decision 4).
-pub fn command_chip_description(chip: &CommandChip) -> String {
-    let mut parts: Vec<&str> = Vec::new();
-    parts.extend(
-        chip.description
-            .as_deref()
-            .map(str::trim)
-            .filter(|d| !d.is_empty()),
-    );
-    parts.extend(
-        chip.argument_hint
-            .as_deref()
-            .map(str::trim)
-            .filter(|h| !h.is_empty()),
-    );
-    if parts.is_empty() {
-        NO_COMMAND_DESCRIPTION.to_owned()
-    } else {
-        parts.join(" · ")
-    }
-}
-
-/// What a notice of sub-agent messages naming no card says (FR-024).
-pub fn subagent_notice_text(count: u64) -> String {
-    format!("{} not shown", subagent_count(count))
-}
-
 /// One row of the transcript view, in order.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Row<'a> {
@@ -277,7 +108,7 @@ fn status_label(status: Status, roles: Roles) -> IconLabel<'static, TranscriptMs
     }
 }
 
-/// What heads a user turn: [`USER_LABEL`], and [`BEFORE_THE_CLEAR`] for a turn from before a
+/// What heads a user turn: [`USER_LABEL`], and `BEFORE_THE_CLEAR` for a turn from before a
 /// `/clear` (#943 FR-005).
 fn user_label(entry: &Entry, scope: Scope<'_>) -> String {
     match era_tag(entry.era(), scope.latest_era) {
@@ -303,14 +134,6 @@ pub fn omitted_notice(n: u64, roles: Roles) -> Element<'static, TranscriptMsg> {
 /// "No output yet".
 pub fn no_output(roles: Roles) -> Element<'static, TranscriptMsg> {
     caption(NO_OUTPUT, roles)
-}
-
-/// The first line of `text` that holds anything: a folded thinking card's summary.
-fn first_line(text: &str) -> &str {
-    text.lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .unwrap_or("")
 }
 
 /// What feature 944 draws with a session's transcript (contracts/transcript-extensions.md): the
@@ -845,11 +668,6 @@ pub fn with_trailing<'a, M: 'a>(
     }
 }
 
-/// The line naming a user message's pictures, in order (FR-030); `None` without any.
-pub fn attachments_line(names: &[String]) -> Option<String> {
-    (!names.is_empty()).then(|| format!("{ATTACHED}: {}", names.join(", ")))
-}
-
 /// A footer: its status, then its figures as one caption line, then an error turn's text.
 fn footer_row(view: &FooterView, roles: Roles) -> Block {
     let mut line = row![status_label(view.status, roles)]
@@ -878,6 +696,8 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::transcript_selection::shown::{BEFORE_THE_CLEAR, NO_COMMAND_DESCRIPTION};
+    use micold_core::structured::transcript::CommandChip;
 
     #[test]
     fn a_message_with_pictures_names_them_in_order() {

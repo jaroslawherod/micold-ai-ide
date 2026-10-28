@@ -213,6 +213,9 @@ pub enum FieldId {
         micold_core::session::SessionId,
         micold_core::protocol::messages::PromptId,
     ),
+    /// A structured session's transcript (feature 1550, research R8): its selection area holds the
+    /// keyboard, so the copy keys and Ctrl+A / Cmd+A act on its selection (FR-019a).
+    Transcript(micold_core::session::SessionId),
     /// Settings → Daemons: the form's keep-running-after-sign-out checkbox (feature 804).
     DaemonSurviveLogout,
     /// Settings → Daemons: the form's processor limit (feature 804).

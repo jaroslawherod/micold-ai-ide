@@ -42,6 +42,27 @@ pub enum Part {
     Diff,
 }
 
+/// What a copy is of (feature 1550, data-model.md *CopyTarget*): a code block's control (#940),
+/// or the session's transcript selection, whose state no control draws (research R9). The tool and
+/// diff controls' targets follow with the copy controls (T044).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CopyTarget {
+    Code(CodeId),
+    Selection,
+}
+
+/// What a copy's read-back changed ([`State::copy_checked`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Checked {
+    /// The ticket answers nothing any more: a newer copy, or its entry or session went.
+    Stale,
+    /// A control's state changed, which now wants its confirmation timer.
+    Control,
+    /// A transcript selection's copy held (`held`) or failed: no control shows it; a failure is
+    /// said in the session's pane (FR-014).
+    Selection { session: SessionId, held: bool },
+}
+
 /// A code block's copy control; absent from [`Derived::copy`] is idle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyState {
@@ -75,7 +96,7 @@ pub struct Derived {
     /// Highlight results in both schemes, by part: the part's lines in [`Spans`]' `new` side, in
     /// the order of its [`HighlightJob::lines`].
     pub spans: HashMap<Part, Spans>,
-    pub copy: HashMap<CodeId, CopyState>,
+    pub copy: HashMap<CopyTarget, CopyState>,
     /// Parts the user chose to show in full (FR-019).
     pub full: HashSet<Part>,
     known: HashMap<Part, Known>,
@@ -329,7 +350,10 @@ impl Derived {
         let (body, known) = (&self.body, &self.known);
         self.spans.retain(|part, _| known.contains_key(part));
         self.full.retain(|part| body.holds(*part));
-        self.copy.retain(|id, _| body.holds(Part::Code(*id)));
+        self.copy.retain(|target, _| match target {
+            CopyTarget::Code(id) => body.holds(Part::Code(*id)),
+            CopyTarget::Selection => false,
+        });
     }
 
     /// `part`'s job, when it is due: colourable, not asked yet and not over the limits.
@@ -366,12 +390,13 @@ impl CopyState {
     }
 }
 
-/// Where a ticket's copy is, and the text it wrote until the read-back answers.
+/// Where a ticket's copy is, and the text it wrote until the read-back answers. A selection's copy
+/// has no entry (`key: None`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Copying {
     session: SessionId,
-    key: EntryKey,
-    code: CodeId,
+    key: Option<EntryKey>,
+    target: CopyTarget,
     text: Option<String>,
 }
 
@@ -424,10 +449,14 @@ impl State {
         // A ticket whose copy state went with its entry or block answers nothing any more.
         let entries = &s.entries;
         self.tickets.retain(|ticket, c| {
+            let Some(key) = &c.key else {
+                // A selection's copy belongs to no entry: it waits for its read-back.
+                return true;
+            };
             c.session != session
                 || entries
-                    .get(&c.key)
-                    .and_then(|d| d.copy.get(&c.code))
+                    .get(key)
+                    .and_then(|d| d.copy.get(&c.target))
                     .is_some_and(|state| state.ticket() == *ticket)
         });
         jobs
@@ -472,7 +501,8 @@ impl State {
         let text = doc.code(code)?.code.clone();
         self.next_ticket += 1;
         let ticket = Ticket(self.next_ticket);
-        if let Some(old) = derived.copy.insert(code, CopyState::Pending(ticket)) {
+        let target = CopyTarget::Code(code);
+        if let Some(old) = derived.copy.insert(target, CopyState::Pending(ticket)) {
             self.tickets.remove(&old.ticket());
         }
         derived.stamp += 1;
@@ -480,33 +510,57 @@ impl State {
             ticket,
             Copying {
                 session,
-                key: key.clone(),
-                code,
+                key: Some(key.clone()),
+                target,
                 text: Some(text.clone()),
             },
         );
         Some((text, ticket))
     }
 
-    /// The clipboard read back after `ticket`'s write (FR-012): `Copied` when it holds the code,
-    /// else `Failed`. Whether it changed the control, which then wants its confirmation timer.
-    pub fn copy_checked(&mut self, ticket: Ticket, read: Option<String>) -> bool {
+    /// Start a copy of `session`'s transcript selection, whose copy text is `text` (feature 1550,
+    /// research R9): its ticket, answered once by [`Self::copy_checked`].
+    pub fn copy_selection(&mut self, session: SessionId, text: String) -> Ticket {
+        self.next_ticket += 1;
+        let ticket = Ticket(self.next_ticket);
+        self.tickets.insert(
+            ticket,
+            Copying {
+                session,
+                key: None,
+                target: CopyTarget::Selection,
+                text: Some(text),
+            },
+        );
+        ticket
+    }
+
+    /// The clipboard read back after `ticket`'s write (FR-012): a code block's control becomes
+    /// `Copied` when it holds the code, else `Failed`, and then wants its confirmation timer; a
+    /// selection's copy is answered as held or failed and forgotten.
+    pub fn copy_checked(&mut self, ticket: Ticket, read: Option<String>) -> Checked {
         let Some(copying) = self.tickets.get_mut(&ticket) else {
-            return false;
+            return Checked::Stale;
+        };
+        let Some(key) = copying.key.clone() else {
+            let session = copying.session;
+            let written = self.tickets.remove(&ticket).and_then(|c| c.text);
+            let held = read.is_some() && read == written;
+            return Checked::Selection { session, held };
         };
         let Some(derived) = self
             .sessions
             .get_mut(&copying.session)
-            .and_then(|s| s.entries.get_mut(&copying.key))
+            .and_then(|s| s.entries.get_mut(&key))
         else {
-            return false;
+            return Checked::Stale;
         };
         let Some(state) = derived
             .copy
-            .get_mut(&copying.code)
+            .get_mut(&copying.target)
             .filter(|state| **state == CopyState::Pending(ticket))
         else {
-            return false;
+            return Checked::Stale;
         };
         let written = copying.text.take();
         *state = if read.is_some() && read == written {
@@ -515,7 +569,7 @@ impl State {
             CopyState::Failed(ticket)
         };
         derived.stamp += 1;
-        true
+        Checked::Control
     }
 
     /// `ticket`'s confirmation is over: the control is idle again, unless a newer copy of the
@@ -524,14 +578,18 @@ impl State {
         let Some(copying) = self.tickets.get(&ticket) else {
             return false;
         };
-        let (session, key, code) = (copying.session, copying.key.clone(), copying.code);
+        let (session, target) = (copying.session, copying.target);
+        let Some(key) = copying.key.clone() else {
+            self.tickets.remove(&ticket);
+            return false;
+        };
         let Some(derived) = self.entry_mut(session, &key) else {
             self.tickets.remove(&ticket);
             return false;
         };
-        match derived.copy.get(&code) {
+        match derived.copy.get(&target) {
             Some(CopyState::Copied(t) | CopyState::Failed(t)) if *t == ticket => {
-                derived.copy.remove(&code);
+                derived.copy.remove(&target);
                 derived.stamp += 1;
                 self.tickets.remove(&ticket);
                 true
