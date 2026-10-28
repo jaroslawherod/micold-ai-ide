@@ -53,6 +53,10 @@ pub struct State {
     /// The request the root left for the shell while it interpreted an outcome (opening the
     /// dialog), taken once right after the message that caused it.
     pub pending: Option<Effect>,
+    /// Each project's last group list this launch (feature 1465, research R5): a Back to a
+    /// Compare of another project opens it from here before that project's own list arrives.
+    /// Not pruned when a project is removed (data-model.md).
+    pub known: BTreeMap<PathBuf, Vec<RunGroup>>,
 }
 
 /// The open Compare view: which group, and each run's change counts as last read (data-model §
