@@ -381,6 +381,20 @@ fn ack_or_refused(req: u64, outcome: Result<(), String>) -> DaemonMsg {
     }
 }
 
+/// The answer to a `SetSessionEffort` (#1554 contracts/wire.md): `OperationOk`, or an
+/// `OperationError` of the refusal's kind.
+fn effort_answer(req: u64, outcome: Result<(), crate::state::EffortRefused>) -> DaemonMsg {
+    match outcome {
+        Ok(()) => ack_or_refused(req, Ok(())),
+        Err((kind, message)) => DaemonMsg::OperationError {
+            req,
+            kind,
+            message,
+            detail: None,
+        },
+    }
+}
+
 /// Spawn the task that applies the permission modes structured sessions' CLIs report (#942
 /// FR-016). Once per service: a second call finds the feed taken and does nothing.
 pub fn spawn_mode_reports(state: Arc<DaemonState>) {
@@ -877,6 +891,35 @@ where
                     tokio::spawn(async move {
                         let picked = state.finish_model_pick(asked).await;
                         state.send(id, ack_or_refused(req, picked));
+                    });
+                }
+            },
+            // #1554 R5: as `SetSessionModel`; a stopped session's note reads a saved history, off
+            // the connection loop.
+            ClientMsg::SetSessionEffort {
+                req,
+                session,
+                effort,
+            } => match state.pick_effort(session, effort) {
+                crate::state::EffortPick::Answered(result) => {
+                    state.send(id, effort_answer(req, result))
+                }
+                crate::state::EffortPick::Stored(effort) => {
+                    let state = Arc::clone(state);
+                    tokio::spawn(async move {
+                        let noted = Arc::clone(&state);
+                        let _ = tokio::task::spawn_blocking(move || {
+                            noted.note_effort_changed(session, effort)
+                        })
+                        .await;
+                        state.send(id, effort_answer(req, Ok(())));
+                    });
+                }
+                crate::state::EffortPick::Asked(asked) => {
+                    let state = Arc::clone(state);
+                    tokio::spawn(async move {
+                        let picked = state.finish_effort_pick(asked).await;
+                        state.send(id, effort_answer(req, picked));
                     });
                 }
             },

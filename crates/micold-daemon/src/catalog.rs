@@ -881,6 +881,17 @@ impl Catalog {
         self.change_session(id, model.clone(), |session| &mut session.model)
     }
 
+    /// Set session `id`'s effort choice and persist it (#1554, FR-010), in either kind: `Ok(true)`
+    /// when it changed, `Ok(false)` when it already was `effort` (nothing written). A failed write
+    /// leaves the earlier choice in place.
+    pub fn set_effort(
+        &mut self,
+        id: SessionId,
+        effort: &micold_core::structured::effort::EffortChoice,
+    ) -> Result<bool, SetModeError> {
+        self.change_session(id, effort.clone(), |session| &mut session.effort)
+    }
+
     /// Switch session `id` to `kind` and persist it (#943 FR-019, FR-020): the one place a kind
     /// changes (replaces 938 FR-002). `Ok(true)` when it changed, `Ok(false)` when it already was
     /// `kind` (nothing written). A failed write leaves the earlier kind in place.
@@ -2220,6 +2231,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         kind: session.kind,
         permission_mode: session.permission_mode,
         model: session.model.clone(),
+        effort: session.effort.clone(),
         lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,

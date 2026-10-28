@@ -65,6 +65,15 @@ const STAND_IN: &str = "claude.exe";
 ///   name refuses all. Each accepted model is reported in every later `init` line the stand-in
 ///   writes (`replay`, `on-message`), in place of the recorded one. A `set_model` request is
 ///   recorded like every stdin line but, once `models` ran, reaches no other directive;
+/// - `efforts <level>…` answers every later `apply_flag_settings` control request on stdin (#1554
+///   T013), from the stdin reader, whatever the script is doing: an `effortLevel` in the list, or
+///   `null`, gets P-1's `success` with no `response` body; any other level an `error`
+///   (`apply_flag_settings: unknown effort level '<level>'`); `efforts` with no level refuses all.
+///   Once `efforts` ran, such a request is recorded like every stdin line but reaches no other
+///   directive;
+/// - `initialize-effort <value> <none|level,…>` rewrites model `<value>`'s effort fields in the
+///   answer a later `initialize` directive gives (#1554 T013): `none` → `supportsEffort: false`
+///   and no levels, else `supportsEffort: true` and those levels, in order;
 /// - after an `on-message` user message whose text is exactly `/clear` (#943 T040), the next `init`
 ///   line written that names a conversation id (as `command-clear.jsonl`'s post-clear `init` does;
 ///   the recorded `<SESSION_ID>` placeholder is none) is that conversation's start: the stand-in
@@ -94,6 +103,54 @@ static MODELS: Models = Models {
     accept: Mutex::new(None),
     accepted: Mutex::new(None),
 };
+
+/// The `efforts` directive's accept list (`None` until it ran, #1554 T013).
+static EFFORTS: Mutex<Option<Vec<String>>> = Mutex::new(None);
+
+/// The `initialize-effort` directives so far: a model's value and its effort fields' JSON.
+static INITIALIZE_EFFORTS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+/// Answer an `apply_flag_settings` request when the `efforts` directive ran; `false` leaves it to
+/// the script.
+fn answer_apply_effort(line: &str) -> bool {
+    if !line.contains("\"control_request\"") || !line.contains("\"subtype\":\"apply_flag_settings\"") {
+        return false;
+    }
+    let accept = EFFORTS.lock().unwrap().clone();
+    let Some(accept) = accept else { return false };
+    let id = string_after(line, "request_id").unwrap_or_default();
+    let level = if line.contains("\"effortLevel\":null") {
+        None
+    } else {
+        string_after(line, "effortLevel")
+    };
+    let answer = match level {
+        Some(level) if !accept.contains(&level) => format!(
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"error\",\"request_id\":\"{id}\",\"error\":\"apply_flag_settings: unknown effort level '{level}'\"}}}}"
+        ),
+        _ => format!(
+            "{{\"type\":\"control_response\",\"response\":{{\"subtype\":\"success\",\"request_id\":\"{id}\"}}}}"
+        ),
+    };
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{answer}");
+    let _ = out.flush();
+    true
+}
+
+/// `answer`, the recorded `initialize` answer, with each `initialize-effort` directive's model's
+/// `supportsEffort` and `supportedEffortLevels` replaced.
+fn with_initialize_efforts(mut answer: String) -> String {
+    for (value, fields) in INITIALIZE_EFFORTS.lock().unwrap().iter() {
+        let Some(start) = answer.find(&format!("{{\"value\":\"{value}\"")) else { continue };
+        let end = start + answer[start..].find('}').expect("a model object ends");
+        let model = &answer[start..end];
+        let from = model.find(",\"supportsEffort\"").expect("the model reports effort");
+        let to = model.find(",\"supportsAdaptiveThinking\"").expect("the next field");
+        answer.replace_range(start + from..start + to, fields);
+    }
+    answer
+}
 
 /// Set by a `/clear` user message: the next `init` naming a conversation starts it (#943 T040).
 static CLEARED: Mutex<bool> = Mutex::new(false);
@@ -212,7 +269,7 @@ fn main() {
                 let _ = init_tx.send(line);
                 continue;
             }
-            if answer_set_model(&line) {
+            if answer_set_model(&line) || answer_apply_effort(&line) {
                 continue;
             }
             let _ = lines_tx.send(line);
@@ -251,6 +308,20 @@ fn main() {
             "models" => {
                 *MODELS.accept.lock().unwrap() =
                     Some(arg.split_whitespace().map(str::to_string).collect());
+            }
+            "efforts" => {
+                *EFFORTS.lock().unwrap() = Some(arg.split_whitespace().map(str::to_string).collect());
+            }
+            "initialize-effort" => {
+                let (value, levels) = arg.split_once(' ').unwrap_or((arg, "none"));
+                let fields = match levels {
+                    "none" => ",\"supportsEffort\":false,\"supportedEffortLevels\":[]".to_string(),
+                    levels => format!(
+                        ",\"supportsEffort\":true,\"supportedEffortLevels\":[{}]",
+                        levels.split(',').map(|l| format!("\"{l}\"")).collect::<Vec<_>>().join(",")
+                    ),
+                };
+                INITIALIZE_EFFORTS.lock().unwrap().push((value.to_string(), fields));
             }
             "initialize" => initialize(&init_rx, &mut out, arg),
             "reply" => {
@@ -401,6 +472,7 @@ fn initialize(requests: &mpsc::Receiver<String>, out: &mut impl Write, how: &str
                 .replace("\"request_id\":\"micold-1\"", &format!("\"request_id\":\"{id}\""))
         }
     };
+    let answer = with_initialize_efforts(answer);
     let _ = writeln!(out, "{answer}");
 }
 

@@ -64,3 +64,39 @@ the implementation it covers.
   `effort_fields_that_are_missing_or_unusable_give_unknown_support_or_are_dropped` (a model with
   `supportsEffort: false` and no list read `None`) failed.
 - green: `/effort` takes the app's argument hint; `supportsEffort: false` alone gives no effort.
+
+## M2 — daemon: keep the choice, launch with it, apply it to an idle session (T011–T017)
+
+- Method: the types, fields and the wire variant were added with their tests, so the core tests'
+  red is a compile failure, except the store's lenient read, which got a real red. The daemon
+  tests were written beside the implementation; their red is shown by mutation instead: the
+  implementation changed so that the behaviour each covers is missing, the suite run, the change
+  undone.
+- runs: `cargo test -p micold-core --test session_store --test protocol_roundtrip --test
+  schema_hash --test terminal_backend`, `cargo test -p micold-core --lib`; `cargo test -p
+  micold-daemon --test structured_effort`.
+
+### Cycle 7 — the choice in core: session, store, wire, launch argv (T011, T012)
+
+- red: `session_store` without the lenient read (`deserialize_with` removed):
+  `a_record_without_an_effort_or_with_a_bad_level_loads_default` failed (a stored level the app
+  refuses failed the whole record). The rest did not compile before `Session.effort`,
+  `LaunchSpec.effort`, `AiCliProvider::effort_args`, `SessionSummary.effort` and
+  `ClientMsg::SetSessionEffort` existed.
+- green: all pass. `PROTOCOL_VERSION` 72 → 73, `the_protocol_version_is_73` and
+  `FEATURE_026_PROTOCOL_VERSION` re-pinned.
+
+### Cycle 8 — the stand-in and the daemon (T013–T016)
+
+- red (mutations of the implementation):
+  - `launch_effort` names no level: `a_stored_level_is_launched_with_at_every_start_restart_and_restore`
+    and `a_switch_of_kind_launches_both_kinds_with_the_stored_level` failed;
+  - reported support ignored at launch and at a pick, and no `EffortChanged` note from the CLI's
+    answer: `a_stored_level_the_model_does_not_take_launches_with_none`,
+    `a_pick_for_a_model_without_effort_is_stored_and_sent_as_the_default` and
+    `an_idle_pick_is_one_line_to_the_same_process_and_every_window_shows_it` failed.
+- green: all 13 pass.
+
+### Cycle 9 — docs (T017)
+
+- `docs/daemon.md`: `SetSessionEffort` beside `SetSessionModel`. No test.

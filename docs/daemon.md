@@ -295,6 +295,38 @@ Of two picks sent one after the other, the second wins: it is written to the CLI
 earlier pick accepted after it does not replace it in the catalog. A model name is one word of at
 most 128 bytes that does not start with `-`. A frame with any other name does not decode.
 
+A Claude Code session's reasoning effort is chosen with `SetSessionEffort { req, session, effort }`,
+where `effort` is `Default` (Claude Code's own default, and the user's own Claude Code settings) or a
+level such as `low`, `medium`, `high`, `xhigh` or `max`. A level is one word of at most 16
+lowercase letters, never `default`, `auto` or `ultracode`; a frame with any other level does not
+decode. The choice is saved with the session and listed in its summary (`SessionSummary.effort`),
+so every window shows it within a second. Every later launch of the session, structured or
+terminal, after a restart, a daemon restart or a switch of kind, starts the CLI with
+`--effort <level>` after `--model`. A launch names no level for `Default`, and none when the models
+the CLI last reported for the session (in `CommandsReported`, kept in the event history) say the
+session's model does not support effort or does not list the level. Claude Code's default applies
+then, and a stored choice never stops a launch. What happens depends on the session:
+
+- **Running and idle.** The daemon writes one `apply_flag_settings` control request,
+  `{"settings":{"effortLevel":"<level>"}}`, or `null` for `Default` or a level the model does not
+  take, and waits up to 10 seconds for the answer. The process keeps running and keeps the
+  conversation. If the CLI accepts, the choice is saved, every window gets the new catalog, an
+  `EffortChanged` note goes into the event history, and the request is answered `OperationOk`. If
+  the CLI refuses, does not answer, or ends first, the request is answered `OperationError` with
+  the reason, and the choice stays as it was.
+- **Running a turn.** For now the request is answered `OperationError` (`Busy`, "The session is
+  busy; the effort can be changed when the turn ends"). Nothing is saved or written.
+- **Not running.** The choice is saved, an `EffortChanged` note goes into the event history, and the
+  request is answered `OperationOk`. The next launch uses it.
+- **A terminal session.** The choice is saved for the next launch and the request is answered
+  `OperationError` (`Refused`, "Effort is changed from the structured view; the choice is used at
+  the next launch").
+- **Another CLI.** The request is answered `OperationError` (`Refused`, "Reasoning effort is for
+  Claude Code sessions"). Nothing is saved. An unknown session is `NotFound`.
+
+As with models, of two picks sent one after the other the second wins. Each session has its own
+choice: a pick never reaches another session's CLI.
+
 After a `/clear` in a structured session, the CLI starts a new conversation and names it in its
 next session init. The daemon saves that conversation with the session, and every later launch
 resumes it, after a restart and after a daemon restart. The session keeps its
