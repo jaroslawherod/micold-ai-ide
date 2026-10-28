@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | #1593 | merged |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | #1597 | merged |
-| M5 | T044–T049 | full | Copy controls, docs, visual pass | — | in progress |
+| M5 | T044–T049 | full | Copy controls, docs, visual pass | — | pushed, PR to open (gate green) |
 
 ## Decisions
 
