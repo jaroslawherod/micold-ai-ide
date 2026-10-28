@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M3
-- **Next step**: M3 PR — orchestrator opens it from the pushed branch (2ee973f6c, full gate green), then CI; M4a next after merge
+- **Phase**: M4a
+- **Next step**: M4a implement (T033–T038), continuing the Handover
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1582 | design (spec, plan, tasks) | merged | 5ce410f219e38800d89f0936dbf9f48a96041cb1 |
 | #1586 | M1: selection model, shown text and work_value in core | merged | f7c34e9d579bc65daea4a1bd7ca865d0ac9253ea |
 | #1590 | M2: window selection state, copy text and copy keys | merged | 94519d3b85af68358495aa1eae645edf53174dc1 |
+| #1593 | M3: SelectableText and SelectionArea components | merged | ffad78647cb67b85f478dc80617db267f9cdeddc |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | merged |
-| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | (pending: orchestrator opens) | review |
-| M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
+| M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | #1593 | merged |
+| M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | in progress |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | — | todo |
 
@@ -93,7 +94,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4a unit 1 (2026-10-28) hit the 150k context cap during exploration; no code written yet. Done: M3 #1593 recorded. Next: implement T033–T038 from these findings (all verified by reading the code):
+
+- **Wiring**: `RenderCtx` (blocks.rs) has 5 literal constructors (ui/terminal.rs:589, showcase prompts.rs:143, surfaces.rs:491/515, tests/support/transcript.rs:69); `BlockRef` 3 (entries.rs, permission.rs, tests/transcript_rich_renderers.rs). Plan: add `RenderCtx.selected: Option<&Selection>` (session-wide, terminal.rs passes `app.transcript_selection.selection(session)`), plus per-row `row: Option<RowPos>` and `selection: Option<&RowSelection>` set by mod.rs `build`; the entry `lazy` closure gets `&dep`, so put `selected.in_row(&RowPos::Entry(id, Under::Body))` in the lazy key tuple and borrow it in the closure. `row: None` = not selectable (subagent thread entries in entries.rs `thread_body`: they are not units, X3/X5 → keep them unselectable). The block's first path segment differs per call (assistant text 0, command output/compaction/thinking 2, tool input 2, tool result 3 in a card / 1 in an orphan) → pass it per block (e.g. `&RenderCtx { at: 2, ..*ctx }` or a BlockRef field).
+- **Hit message**: `SelectMsg::Hit { session, pos: TextPos { row, path, offset: hit.offset }, click, line: Some(hit.line) }`; `State::hit` re-snaps with `TextPos::in_text` and ignores hits until `armed` (Press, M4b), so nothing selects before M4b. Map `micold_material::Click` → client `Click` (no From yet).
+- **Leaves**: `.selectable(slot, range, on_hit)` exists on `Text`, `LinkText` (micold-material), `CodeBlock::selectable`, `InlineDiff::selectable(part_fn, on_hit)` (client ui/material). Not on `IconLabel` (footer status [0], TerminalPeriod title [0], TurnEnded/Interrupted [0] are IconLabels) nor `DisclosureCard`/`AccordionSection` (title via `Text`, summary via `Ellipsized`, summary not drawn when open) — those need a selectable hook added in micold-material.
+- **Parity mismatches to resolve**: `Units::header` adds summary `[1]` even when the card is open, but an open `AccordionSection` draws no summary → drop `[1]` when open (features/transcript_selection.rs `header`, all callers pass `open`). Folded summary is `Ellipsized` (drawn cut, unit is whole): accept the whole text as the measured text.
+- **MarkdownView** (ui/material/markdown_view.rs) has no selection API: add `.selection(prefix, Option<RowSelection>)`/`.on_hit(Fn(TextPath, Hit))`, path per R3 as `Units::blocks` builds it (block b → `[p,b]`; list item k marker `[..,k,0]`, item blocks `[..,k,1,..]`; quote children inline at `[..,b,i]`; table cell `[..,b,r,j]`), and add each settled block's clipped selection to its inner `lazy` key, or highlights go stale.
+- **T-6 operation**: `micold_material::test_support::ShownTexts<K>` collects `(slot, base, text)`; code/diff lines report `base` per line, so the parity test must join a slot's lines.
+- Budget test file: tests/transcript_open_budget.rs; layout_snapshot must stay unchanged.
 
 ## Open escalation
 
