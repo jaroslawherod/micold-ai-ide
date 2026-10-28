@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M2
-- **Next step**: M2 PR (pushed; the orchestrator opens it, waits on CI and merges); then M3.
+- **Phase**: M3
+- **Next step**: M3 reviews A and B (round 1), then full gate and PR.
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
 | #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
+| #1591 | M2: keep the choice, launch with `--effort`, idle and stopped picks | merged | 5b7a239045d5bcf99f644b75b63c13b7fb000d74 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
-| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | pending | reviews done, full gate green, pushed |
-| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
+| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | #1591 | merged |
+| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | implemented, reviews due |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
 
@@ -46,7 +47,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D11 | M2 | `OperationError` kind of the interim busy refusal (contracts/wire.md names only the sentence) | `Busy`; unknown session `NotFound`, every other refusal `Refused` | agent-resolved | crates/micold-daemon/src/state.rs `pick_effort`, test `a_busy_sessions_pick_is_refused_for_now` |
 | D12 | M2 | When is an idle pick's `EffortChanged` note written? | From the CLI's `success`, in its answer's place in the history (as `ModelChanged`); a stopped session's pick from the daemon, once stored (`note_effort_changed`, off the connection loop: it may read a saved history) | agent-resolved | data-model *State transitions*; structured.rs `effort_note` |
 | D13 | M2 | Effective level at a launch after a daemon restart, before the history is loaded | `launch_effort` reads the latest `CommandsReported` from the saved history when none is in memory, so FR-010a holds after a restore too | agent-resolved | test `a_stored_level_the_model_does_not_take_launches_with_none` |
-
+| D14 | M3 | data-model names `deferred_effort: Mutex<Option<Option<EffortLevel>>>`; the turn-end note needs the choice | `Mutex<Option<PendingEffort { choice: Option<EffortChoice>, level }>>`: `choice` is the user's pick, noted `EffortChanged`/`EffortRefused`; `None` is a re-apply after a model change, never noted (R4) | agent-resolved | structured.rs `PendingEffort`, `effort_note` |
+| D15 | M3 | How does the re-apply (R4) know the old and the new effective level? The catalog's model is kept at a busy pick's time and an idle pick's after its answer, racing the note | The session keeps the level last sent (`effort_sent`: launch level, then each request written; put back when refused) and the model the CLI runs (`cli_model`: launch model, then each accepted `set_model`, set by the reader before its note). `follow_model_answer` (accepted, or a deferred one refused) writes the level for `cli_model` when it differs from `effort_sent` | agent-resolved | test `a_model_change_reapplies_the_effective_level_without_a_note` |
+| D16 | M3 | A model picked during a turn: re-apply at its answer (then the next turn may already run) or at once after the `set_model`? | A busy model pick also defers the level for the new model (`defer_effort_level`), so the turn-end hook writes `set_model`, then `apply_flag_settings`, before the next message; the answer's re-apply then finds nothing to change | agent-resolved | test `a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end` |
+| D17 | M3 | "unless another pick came since" (FR-005) for effort | Counted by pick number: `DeferredEffort.pick` must still be `EffortPicks.latest` (any later pick, stored, idle or busy, bumps it) | agent-resolved | test `a_refused_deferred_pick_is_not_put_back_over_a_later_pick` |
+| D18 | M3 | Where does T018's "pick while a permission request is pending" test live? | `structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`), beside #943's model twin: it needs that suite's tool-server rig | agent-resolved | — |
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |

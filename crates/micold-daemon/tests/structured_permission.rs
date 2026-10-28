@@ -1477,6 +1477,35 @@ async fn a_model_pick_leaves_a_pending_request_alone() {
     assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
 }
 
+/// #1554 T018 (Edge Case "Level picked while a permission request is pending"): an effort pick
+/// while a request is pending leaves it pending; it is decided as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_effort_pick_leaves_a_pending_request_alone() {
+    use micold_core::structured::effort::{EffortChoice, EffortLevel};
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let dir = daemon.dir(0);
+    let script = [
+        "efforts high\n".to_string(),
+        prompt_async(dir, "p1", "Bash", bash("ls")),
+    ]
+    .concat();
+    daemon.start(0, &script).await;
+    let request = requested(&mut a).await;
+    a.send(ClientMsg::SetSessionEffort {
+        req: 1,
+        session: daemon.ids[0],
+        effort: EffortChoice::Level(EffortLevel::parse("high").unwrap()),
+    })
+    .await;
+    assert_ok(&a.answer(1).await);
+    let shown = permission_messages_within(&mut a, Duration::from_millis(300)).await;
+    assert!(shown.is_empty(), "still pending: {shown:?}");
+    assert_eq!(prompt_answer_count(dir), 0, "unanswered");
+    assert_ok(&decide(&mut a, 2, request.session, request.id, PromptChoice::Allow).await);
+    assert_eq!(prompt_answers(dir, 1), [allow(bash("ls"))]);
+}
+
 /// T044 (SC-005): after a mode change the next tool request still reaches the daemon and is
 /// answered as before (that the CLI applies the mode is the `mode-change` fixture's evidence).
 #[tokio::test(flavor = "multi_thread")]

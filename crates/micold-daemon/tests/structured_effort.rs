@@ -5,6 +5,10 @@
 //! is told it applies at the next launch; another CLI's is refused (FR-012). Every later launch, in
 //! either kind, carries the effective level as `--effort` (FR-010, FR-010a, FR-011, SC-004).
 //!
+//! Milestone M3 (T018, T019): a busy session's pick is answered at once and written at the turn's
+//! end, after a model picked in the same turn; a refused one is put back with an `EffortRefused`
+//! note (FR-005); a model change re-applies the effective level, never noted (research R4).
+//!
 //! Every case runs the stand-in of `support/structured.rs`; its `efforts` directive answers
 //! `apply_flag_settings` and `initialize-effort` rewrites what a model supports (#1554 T013).
 // unix-only: the stand-in CLI of support/structured.rs is a POSIX shell script on PATH.
@@ -24,6 +28,7 @@ use micold_core::session::{AiCli, PermissionMode, SessionId, SessionKind};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::structured::effort::{EffortChoice, EffortLevel};
+use micold_core::structured::model::{ModelChoice, ModelName};
 use micold_core::structured::StructuredEvent;
 use micold_core::terminal::LaunchMode;
 use micold_core::terminal_history::HistoryStore;
@@ -45,7 +50,6 @@ use structured::{
 const NOT_CLAUDE: &str = "Reasoning effort is for Claude Code sessions";
 const TERMINAL_REFUSAL: &str =
     "Effort is changed from the structured view; the choice is used at the next launch";
-const BUSY_REFUSAL: &str = "The session is busy; the effort can be changed when the turn ends";
 
 /// What a terminal stand-in prints.
 const TERMINAL: &str = "ready>\n";
@@ -163,6 +167,31 @@ fn pick(req: u64, session: SessionId, effort: &EffortChoice) -> ClientMsg {
     }
 }
 
+fn pick_model(req: u64, session: SessionId, name: &str) -> ClientMsg {
+    ClientMsg::SetSessionModel {
+        req,
+        session,
+        model: ModelChoice::Named(ModelName::parse(name).unwrap()),
+    }
+}
+
+/// The stand-in's script for held turns: `setup`, the `initialize` answer, then one turn per
+/// message, each held until the test writes `turn-<n>`.
+fn turns(setup: &str) -> String {
+    format!(
+        "{setup}initialize\non-message-gated {}\n",
+        fixture("text-turn.jsonl").display()
+    )
+}
+
+/// Where in `history` the first event `is` holds for is.
+fn position(history: &[StructuredEvent], is: impl Fn(&StructuredEvent) -> bool) -> usize {
+    history
+        .iter()
+        .position(is)
+        .unwrap_or_else(|| panic!("not in {history:#?}"))
+}
+
 fn say(req: u64, session: SessionId, text: &str) -> ClientMsg {
     ClientMsg::SessionUserMessage {
         req,
@@ -198,6 +227,8 @@ fn daemon(store: &Path, history: &Path) -> Arc<DaemonState> {
     let state = Arc::new(DaemonState::new(load_catalog(store)));
     state.set_history_store(HistoryStore::new(history.to_path_buf(), true));
     micold_daemon::server::spawn_input_driver(Arc::clone(&state));
+    micold_daemon::server::spawn_model_answers(Arc::clone(&state));
+    micold_daemon::server::spawn_effort_answers(Arc::clone(&state));
     state
 }
 
@@ -345,7 +376,17 @@ impl Rig {
 
     /// Start session `n` with `script` after an `initialize` answer, and wait for its note.
     async fn start_reported(&self, n: usize, script: &str) {
-        self.start(n, &format!("{script}initialize\n")).await;
+        self.start_until_reported(n, &format!("{script}initialize\n"))
+            .await;
+    }
+
+    /// Start session `n` with [`turns`]`(setup)`, and wait for the `initialize` answer's note.
+    async fn start_turns(&self, n: usize, setup: &str) {
+        self.start_until_reported(n, &turns(setup)).await;
+    }
+
+    async fn start_until_reported(&self, n: usize, script: &str) {
+        self.start(n, script).await;
         eventually("the CommandsReported note", || {
             self.history(n)
                 .iter()
@@ -661,29 +702,6 @@ async fn one_sessions_pick_never_touches_another() {
         .any(|e| matches!(e, StructuredEvent::EffortChanged { .. })));
 }
 
-/// M2 (interim, replaced by M3): a busy session's pick is refused; nothing is stored or written.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_busy_sessions_pick_is_refused_for_now() {
-    let rig = Rig::structured(1);
-    let (id, dir) = (rig.ids[0], rig.dir(0));
-    rig.start(
-        0,
-        &format!(
-            "efforts high\non-message-gated {}\n",
-            fixture("text-turn.jsonl").display()
-        ),
-    )
-    .await;
-    let mut window = Window::connect(&rig.state).await;
-    assert_ok(&window.request(say(1, id, "one"), 1).await);
-    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
-    let answer = window.request(pick(2, id, &level("high")), 2).await;
-    assert_eq!(refused(&answer), (ErrorKind::Busy, BUSY_REFUSAL));
-    assert!(efforts_asked(dir).is_empty());
-    assert_eq!(rig.effort(0), EffortChoice::Default);
-    std::fs::write(dir.join("turn-1"), "").unwrap();
-}
-
 /// US3 s1, s3, FR-010, FR-011, SC-004: a new session launches with no `--effort`; a level stored
 /// while not running is launched with, at a restart (resuming the conversation) and in a second
 /// daemon that restored the session.
@@ -778,4 +796,224 @@ async fn a_stored_level_the_model_does_not_take_launches_with_none() {
     assert_eq!(launched_effort(&restored), None, "{restored:#?}");
     eventually("the session runs", || runs(&restarted, rig.dir(0), id));
     restarted.stop_session(id);
+}
+
+/// Whether `event` is a `ModelChanged` note.
+fn model_changed(event: &StructuredEvent) -> bool {
+    matches!(event, StructuredEvent::ModelChanged { .. })
+}
+
+/// The `apply_flag_settings` or `set_model` request `line` is, or the user message's text.
+fn kind_of(line: &str) -> String {
+    let value: serde_json::Value = serde_json::from_str(line).expect("a JSON line");
+    match value["request"]["subtype"].as_str() {
+        Some(subtype) => subtype.to_owned(),
+        None => value["message"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+    }
+}
+
+/// Every line the stand-in in `dir` read, by [`kind_of`].
+fn stdin_kinds(dir: &Path) -> Vec<String> {
+    stdin_lines(dir).iter().map(|l| kind_of(l)).collect()
+}
+
+/// M3 T018 (US1 s4, FR-004, SC-001): a busy session's pick is answered at once and shown, and
+/// nothing is written while the turn runs; at its `result` exactly one `apply_flag_settings` line
+/// goes out, after a `set_model` picked in the same turn and before the next message; the
+/// `EffortChanged` note follows the turn, which was never interrupted.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_busy_pick_is_answered_at_once_and_written_at_the_turns_end() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "models haiku\nefforts low\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick_model(2, id, "haiku"), 2).await);
+    assert_ok(&window.request(pick(3, id, &level("low")), 3).await);
+    window.shown(id, &level("low")).await;
+    assert_ok(&window.request(say(4, id, "two"), 4).await);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(stdin_kinds(dir), ["one"], "nothing during the turn");
+
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    eventually("the next message delivered", || stdin_lines(dir).len() == 4);
+    assert_eq!(
+        stdin_kinds(dir),
+        ["one", "set_model", "apply_flag_settings", "two"]
+    );
+    eventually("the notes", || {
+        rig.noted(0, &level("low")) && rig.history(0).iter().any(model_changed)
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(efforts_asked(dir), [Some("low".to_owned())], "exactly one");
+    let history = rig.history(0);
+    let result = position(&history, |e| matches!(e, StructuredEvent::Result { .. }));
+    let noted = position(
+        &history,
+        |e| matches!(e, StructuredEvent::EffortChanged { effort } if *effort == level("low")),
+    );
+    assert!(result < noted, "after the turn: {history:#?}");
+    assert!(
+        !history
+            .iter()
+            .any(|e| matches!(e, StructuredEvent::InterruptAsked)),
+        "the turn was not interrupted"
+    );
+    assert_eq!(rig.effort(0), level("low"));
+    std::fs::write(dir.join("turn-2"), "").unwrap();
+}
+
+/// M3 T018 (Edge Cases "two windows"): of two picks in one turn only the last is written, and
+/// noted.
+#[tokio::test(flavor = "multi_thread")]
+async fn of_two_picks_in_one_turn_only_the_last_is_written() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "efforts high low\n").await;
+    let mut a = Window::connect(&rig.state).await;
+    let mut b = Window::connect(&rig.state).await;
+    assert_ok(&a.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&a.request(pick(2, id, &level("high")), 2).await);
+    assert_ok(&b.request(pick(2, id, &level("low")), 2).await);
+    for window in [&mut a, &mut b] {
+        window.shown(id, &level("low")).await;
+    }
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    eventually("the note", || rig.noted(0, &level("low")));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(efforts_asked(dir), [Some("low".to_owned())]);
+    assert_eq!(effort_notes(&rig.history(0)), [level("low")]);
+    assert_eq!(rig.effort(0), level("low"));
+}
+
+/// M3 T018 (US1 s7, FR-005): a deferred pick the CLI refuses becomes an `EffortRefused` note with
+/// its reason; the choice goes back to the one before and the session keeps running.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_deferred_pick_claude_refuses_is_a_note_and_the_choice_goes_back() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "efforts high\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    window.shown(id, &level("low")).await;
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    eventually("the EffortRefused note", || {
+        rig.history(0).iter().any(|e| {
+            matches!(e, StructuredEvent::EffortRefused { effort, message }
+                if *effort == level("low")
+                    && message == "apply_flag_settings: unknown effort level 'low'")
+        })
+    });
+    window.shown(id, &EffortChoice::Default).await;
+    assert_eq!(rig.effort(0), EffortChoice::Default);
+    assert!(effort_notes(&rig.history(0)).is_empty());
+    assert!(runs(&rig.state, dir, id), "the session keeps running");
+}
+
+/// M3 T018 (FR-005): a refused deferred pick is not put back over a pick made since.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_deferred_pick_is_not_put_back_over_a_later_pick() {
+    use micold_daemon::state::EffortAnswer;
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "efforts\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    rig.state.stop_session(id);
+    assert_ok(&window.request(pick(3, id, &level("high")), 3).await);
+    rig.state
+        .follow_effort_answer(id, EffortAnswer::Refused(level("low")));
+    assert_eq!(rig.effort(0), level("high"));
+}
+
+/// M3 T019 (research R4, FR-003): with a level chosen, an accepted change to a model that does
+/// not take it writes `null`, and a change back to one that does writes the level again; neither
+/// is noted.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_reapplies_the_effective_level_without_a_note() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_reported(
+        0,
+        "models sonnet opus\nefforts high\ninitialize-effort sonnet low,medium\n",
+    )
+    .await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(pick(1, id, &level("high")), 1).await);
+    eventually("the note", || rig.noted(0, &level("high")));
+    assert_ok(&window.request(pick_model(2, id, "sonnet"), 2).await);
+    eventually("the null line", || {
+        efforts_asked(dir) == [Some("high".to_owned()), None]
+    });
+    assert_ok(&window.request(pick_model(3, id, "opus"), 3).await);
+    eventually("the high line", || efforts_asked(dir).len() == 3);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        efforts_asked(dir),
+        [Some("high".to_owned()), None, Some("high".to_owned())]
+    );
+    assert_eq!(effort_notes(&rig.history(0)), [level("high")], "no note");
+    assert_eq!(rig.effort(0), level("high"));
+}
+
+/// M3 T019 (research R4): with the choice `Default`, a model change writes no effort line.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_the_default_choice_a_model_change_writes_no_effort() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_reported(0, "models sonnet\ninitialize-effort sonnet low,medium\n")
+        .await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(pick_model(1, id, "sonnet"), 1).await);
+    eventually("the ModelChanged note", || {
+        rig.history(0).iter().any(model_changed)
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(efforts_asked(dir).is_empty());
+}
+
+/// M3 T019 (research R4, FR-004): a model change during a turn writes the re-applied level at the
+/// turn's end, after the `set_model` line and before the next message.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(pick(1, id, &level("high")), 1).await);
+    rig.start_turns(
+        0,
+        "models sonnet\nefforts high\ninitialize-effort sonnet low,medium\n",
+    )
+    .await;
+    assert_eq!(launched_effort(&argv(dir)).as_deref(), Some("high"));
+    assert_ok(&window.request(say(2, id, "one"), 2).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick_model(3, id, "sonnet"), 3).await);
+    assert_ok(&window.request(say(4, id, "two"), 4).await);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(stdin_kinds(dir), ["one"], "nothing during the turn");
+
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    eventually("the next message delivered", || stdin_lines(dir).len() == 4);
+    assert_eq!(
+        stdin_kinds(dir),
+        ["one", "set_model", "apply_flag_settings", "two"]
+    );
+    eventually("the ModelChanged note", || {
+        rig.history(0).iter().any(model_changed)
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(efforts_asked(dir), [None]);
+    assert_eq!(effort_notes(&rig.history(0)), [level("high")], "no note");
+    assert_eq!(rig.effort(0), level("high"));
+    std::fs::write(dir.join("turn-2"), "").unwrap();
 }

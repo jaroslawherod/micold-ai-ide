@@ -165,7 +165,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 4: Daemon — a pick during a turn, and a model change (M3; US1 scenario 4, FR-003)
 
-- [ ] T018 [US1] Tests in `daemon/tests/structured_effort.rs`: a pick `low` during a turn →
+- [x] T018 [US1] Tests in `daemon/tests/structured_effort.rs`: a pick `low` during a turn →
   `OperationOk` at once, the summary shows `low`, no `apply_flag_settings` line until the turn's
   `result`, then exactly one, written after a `set_model` deferred in the same turn, and an
   `EffortChanged` note after the turn (US1 scenario 4, SC-001); two picks in one turn → only the
@@ -173,18 +173,18 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `EffortRefused` note with the reason and the choice put back to the one before, unless another
   pick came since (FR-005); a pick while a permission request is pending → the request stays
   pending, the level applies from the next turn (Edge Case); the M2 interim busy refusal is gone
-- [ ] T019 [US1] Tests in `daemon/tests/structured_effort.rs` (research R4): choice `high`, an
+- [x] T019 [US1] Tests in `daemon/tests/structured_effort.rs` (research R4): choice `high`, an
   accepted model change to a model without `high` (`initialize-effort <value> low,medium`) → an
   `apply_flag_settings` `null` line, no note; a change back to a model that lists `high` → a `high`
   line; with choice `Default`, a model change writes nothing; a model change during a turn defers
   the effort line to the turn's end after the `set_model` line (FR-003, Edge Case "Model change to
   one that does not support the chosen level")
-- [ ] T020 Implement T018–T019: `StructuredSession::defer_effort` and `deferred_effort:
+- [x] T020 Implement T018–T019: `StructuredSession::defer_effort` and `deferred_effort:
   Mutex<Option<Option<EffortLevel>>>` in `daemon/src/structured.rs`, the turn-end hook writing the
   deferred model first, then the deferred effort, before the input driver's next delivery;
   `EffortPicks.deferred: Option<DeferredEffort { chosen, previous }>`, `finish_effort_pick`,
   `follow_effort_answer` and the re-apply on `ModelAnswer::Accepted` in `daemon/src/state.rs`
-- [ ] T021 [P] Describe the turn-end write of a deferred effort (after a deferred model), the
+- [x] T021 [P] Describe the turn-end write of a deferred effort (after a deferred model), the
   `EffortRefused` note and the re-apply after a model change in `docs/daemon.md`
 
 ## Phase 5: Window — the effort picker and the marker (M4; US1, US3 visible)
