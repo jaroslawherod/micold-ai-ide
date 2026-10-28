@@ -21,6 +21,13 @@ pub(super) fn lf(text: &str) -> String {
     }
 }
 
+/// The text `inlines` draw (feature 1550 FR-011): each span's text, so no emphasis marker,
+/// backtick or link target; a soft break is the space and a hard break the line break the view
+/// draws.
+pub fn shown_text(inlines: &Inlines) -> String {
+    inlines.iter().map(|span| span.text.as_str()).collect()
+}
+
 /// Whether `tag` is an inline (span-level) one.
 pub(super) fn is_inline(tag: &Tag<'_>) -> bool {
     matches!(

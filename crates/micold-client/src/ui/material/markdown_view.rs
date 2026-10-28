@@ -25,7 +25,9 @@ use std::rc::Rc;
 use iced::alignment::Horizontal;
 use iced::widget::{column, container, lazy, row, table, text::Wrapping, Space};
 use iced::{Element, Length};
-use micold_core::markdown::{Align, Block, CodeBlock as Code, CodeId, Document, Inlines, ListItem};
+use micold_core::markdown::{
+    list_marker, Align, Block, CodeBlock as Code, CodeId, Document, Inlines, ListItem,
+};
 use micold_core::review::diff::{SchemeSpans, Spans};
 use micold_core::review::limits;
 use micold_core::theme::ColorScheme;
@@ -225,11 +227,13 @@ impl<M: Clone + 'static> Draw<M> {
                     let glyph = if done { Icon::TaskDone } else { Icon::TaskOpen };
                     icon(glyph, TypeRole::Body.size(), tint)
                 }
-                (None, Some(n)) => Text::new(format!("{}.", n + k), TypeRole::Body, r)
+                (None, Some(_)) => Text::new(list_marker(start, k), TypeRole::Body, r)
                     .tint(tint)
                     .wrapping(Wrapping::None)
                     .into(),
-                (None, None) => Text::new("\u{2022}", TypeRole::Body, r).tint(tint).into(),
+                (None, None) => Text::new(list_marker(None, k), TypeRole::Body, r)
+                    .tint(tint)
+                    .into(),
             };
             row![
                 container(gutter)

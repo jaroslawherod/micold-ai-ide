@@ -13,18 +13,12 @@ use std::collections::HashSet;
 #[path = "support/stream_json.rs"]
 mod stream_json;
 use stream_json::{
-    assistant_block, assistant_blocks, block_delta, block_start, events_of, input_json_delta,
-    lines_of, message_start, sequenced, stream_event, stream_marker, text_delta, thinking_block,
-    thinking_delta, tool_result, tool_use, turn_result, user_sent, user_text, with_message_id,
-    with_parent, without_stream_events, COMMAND_RECORDED, PROMPT_RECORDED, RECORDED,
+    assistant_block, assistant_blocks, block_delta, block_start, built, events_of,
+    input_json_delta, lines_of, message_start, replayed, sequenced, stream_event, stream_marker,
+    text_delta, thinking_block, thinking_delta, tool_result, tool_use, turn_result, user_sent,
+    user_text, with_message_id, with_parent, without_stream_events, COMMAND_RECORDED,
+    PROMPT_RECORDED, RECORDED,
 };
-
-/// A transcript built from `events` in one history message.
-fn built(events: &[SequencedEvent]) -> Transcript {
-    let mut transcript = Transcript::new();
-    transcript.apply(0, events, false);
-    transcript
-}
 
 /// The fixture's events without its partial-message lines, numbered from `0`.
 fn finished_events_of(name: &str) -> Vec<SequencedEvent> {
@@ -718,15 +712,6 @@ fn a_message_of_several_blocks_is_one_entry_per_block() {
 // ---------------------------------------------------------------------------------------
 // T016 — US3 at the model: streamed entries grow in place, the finished message supersedes
 // them (G2, SC-002), and every recorded event is accounted for (G1, SC-001).
-
-/// Applies `events` one live message each.
-fn replayed(events: &[SequencedEvent]) -> Transcript {
-    let mut transcript = Transcript::new();
-    for event in events {
-        transcript.apply(0, std::slice::from_ref(event), true);
-    }
-    transcript
-}
 
 /// `kind` with its `streaming` flags cleared.
 fn settled(kind: &EntryKind) -> EntryKind {

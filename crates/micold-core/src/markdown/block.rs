@@ -48,6 +48,15 @@ pub enum Block {
     },
 }
 
+/// The marker drawn before item `k` (from `0`) of a list: a bullet for a bullet list
+/// (`start: None`), the item's number and a dot for an ordered one (feature 1550 FR-011).
+pub fn list_marker(start: Option<u64>, k: u64) -> String {
+    match start {
+        Some(n) => format!("{}.", n.saturating_add(k)),
+        None => "\u{2022}".to_string(),
+    }
+}
+
 /// One list item. `task` is a task-list mark: `Some(true)` checked, `Some(false)` unchecked.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListItem {

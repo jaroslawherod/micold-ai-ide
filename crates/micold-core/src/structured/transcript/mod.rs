@@ -17,7 +17,7 @@ pub use entry::{
 };
 pub use figures::{footer_figures, format_cost, format_duration, format_turns};
 pub use result::result_parts;
-pub use summary::{input_summary, SUMMARY_MAX_CHARS};
+pub use summary::{input_summary, work_value, SUMMARY_MAX_CHARS};
 
 use crate::structured::commands::CommandList;
 use crate::structured::sync::Continuity;
