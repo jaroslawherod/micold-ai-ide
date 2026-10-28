@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1523_daemon-configuration-schema-and-micold-daemon
 - **Started**: 2026-10-27
 - **Phase**: milestone M1
-- **Next step**: full gate, open the M1 PR (reviews A r2 and B CLEAN)
+- **Next step**: wait for CI on the M1 PR, merge (orchestrator)
 
 ## Pull requests
 
