@@ -111,6 +111,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 after review fixes | 1 | — | `structured_effort` 30/30, the whole binary 100 runs in a loop with no failure (Verify); full gate `scripts/gate.sh` green on the fix tree (parent f348ed298) |
 | Close: quickstart Part A (T032) | 2 | — | all green on main 946232f2c (results in quickstart.md); `structured_effort` 30/30 plus 60 runs in a loop with no failure |
 | speckit-tdd-verify | 1 | f2b9dd525..946232f2c | FAIL: 2 HIGH (20 tests with no logged red), 6 MED, 3 LOW. Run by the orchestrator. Remediated in the close unit (D22): 19 of 20 shown red by mutants, 4 strength mutants killed, findings 6, 9, 10 fixed |
+| Close review | 1 | 2a207f2c9737953a8c01a555fa8115748c312d3e:558ccaeb220b301dbd8719c58d89c16d09b297ad | pending (orchestrator) |
 
 ## Declined review findings
 
