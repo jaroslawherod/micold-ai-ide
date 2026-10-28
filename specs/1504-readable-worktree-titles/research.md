@@ -122,7 +122,7 @@ valid worktree starts one `spawn_blocking` read (bounded by the review reads' gi
   number of the worktree's GitHub title ticket (R2), so a ticket only in the branch finds its spec
   folder too; then the heading of its `spec.md` via `location_title::spec_title(text)`;
 - **commit**: new `Git::own_commit_subject(dir) -> Option<String>`: `review_base(dir)`'s merge-base
-  with the default branch, then `git log -1 --format=%s <base>..HEAD`; `None` when the base is
+  with the default branch, then `git log -1 --no-merges --format=%s <base>..HEAD`; `None` when the base is
   unavailable or the range is empty (branch with no commits of its own), or on any error/timeout.
 
 Skipped (no title, nothing read) when the worktree has no branch (detached; commit only), or the

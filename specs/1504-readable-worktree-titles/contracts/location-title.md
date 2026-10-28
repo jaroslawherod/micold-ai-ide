@@ -76,7 +76,7 @@ name). The folder name stays on each (row `Name:`/`Folder:` lines; header and ca
   `excluded`), and the Overview opened. No timer.
 - Spec: the feature folder of `.specify/feature.json`, else the one `specs/<n>-*` for the GitHub
   title ticket `n` (folder or branch).
-- Commit: merge-base with the default branch (`review_base`), `log -1 --format=%s base..HEAD`;
+- Commit: merge-base with the default branch (`review_base`), `log -1 --no-merges --format=%s base..HEAD` (a merge from the default branch is not the branch's own work);
   none without a branch, without a base, with an empty range, on error or timeout.
 - Spec and commit are read independently: a failing, missing or timed-out `git` loses only the
   commit.

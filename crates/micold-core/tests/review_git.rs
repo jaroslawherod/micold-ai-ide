@@ -1301,6 +1301,32 @@ fn the_own_commit_subject_is_the_branchs_latest_commit_the_default_branch_lacks(
     assert_eq!(cli.own_commit_subject(&f.wt), None, "a detached HEAD");
 }
 
+/// Feature 1504 (L7, review A F1): syncing the branch with `main` makes a merge commit the latest
+/// one main lacks; the title skips it and stays the branch's own work.
+#[test]
+fn a_merge_from_the_default_branch_is_not_the_own_commit_subject() {
+    let f = fixture();
+    let cli = GitCli::new();
+    write(&f.root, "old.rs", "one\ntwo\nthree\nfour\nfive\n");
+    commit_all(&f.root, "main moves on");
+    git(
+        &f.wt,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "--no-edit",
+            "-m",
+            "Merge branch 'main' into feature",
+            "main",
+        ],
+    );
+    assert_eq!(
+        cli.own_commit_subject(&f.wt).as_deref(),
+        Some("feature work")
+    );
+}
+
 #[test]
 fn without_a_default_branch_or_a_repository_there_is_no_own_commit_subject() {
     let f = fixture_on("trunk");

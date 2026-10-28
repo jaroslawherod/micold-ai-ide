@@ -527,7 +527,12 @@ impl GitCli {
             return None;
         };
         let range = format!("{commit}..HEAD");
-        let subject = read(dir, &["log", "-1", "--format=%s", &range, "--"], None).ok()?;
+        let subject = read(
+            dir,
+            &["log", "-1", "--no-merges", "--format=%s", &range, "--"],
+            None,
+        )
+        .ok()?;
         crate::location_title::first_line(&subject).map(str::to_owned)
     }
 
