@@ -51,10 +51,13 @@ Platforms: run the table on Linux, macOS and Windows (a branch with `\`-free non
 ## Results (close unit, 2026-10-28)
 
 **Part A**: passed. `scripts/gate.sh` (fmt, clippy core and workspace, `cargo test --workspace`,
-script tests) exited 0 at `1e4021a18` plus the close docs. `issues_are_requested_only_on_named_events`
-and `jira_is_requested_only_on_named_events` ran in it with caller counts unchanged (L8, SC-004).
+script tests) exited 0 on the stacked tree (ledger, *Review rounds*, row "Close gate"). Its run
+included `issues_are_requested_only_on_named_events` and `jira_is_requested_only_on_named_events`,
+with caller counts unchanged (L8, SC-004). The close PR's own diff is docs and specs only; its
+script tests and criteria check are in the same ledger row.
 
-**Part B**: no GUI in the cloud container. Per-milestone visual passes: M1 rows A, B and rename PASS
-(light and dark); M2 rows C and D PASS (stub Jira request asks status and summary, incl. ABC-43).
-M3 (rows E, G, I, folder-titled, renamed), M4 (rows F, H, Refresh) and M5 (Retry) passes are run by
-the orchestrator on a machine with the app; evidence is kept in `/mnt/project-files/issue-1504/`.
+**Part B**: passed milestone by milestone, with screenshots in `/mnt/project-files/issue-1504/`:
+M1 rows A, B and rename (light and dark), M2 rows C and D (the stub Jira request asks status and
+summary, including ABC-43), M3 7 of 7 (prefix `m3-`), M4 rows F and H with Refresh (prefix `m4-`).
+M5 needed no visual pass because it changed no UI; its Retry row is covered by the reducer and
+mapping tests (`titles_to_fetch_*`, `title_answer_*`, `title_tests`).

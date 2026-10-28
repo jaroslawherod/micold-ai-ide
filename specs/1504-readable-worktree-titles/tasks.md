@@ -294,7 +294,7 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
   unchanged (L8, SC-004)
 - [x] T048 (ships in M1) Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
   `specs/1120-overview-card-readability/spec.md` US2 scenarios 1–2 (FR-013, plan D8)
-- [ ] T050 Run quickstart.md Part A and Part B (visual pass) and record the result in
+- [x] T050 Run quickstart.md Part A and Part B (visual pass) and record the result in
   `specs/1504-readable-worktree-titles/quickstart.md`
 
 ---
