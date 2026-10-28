@@ -17,6 +17,7 @@ use micold_client::keymap::{Key, KeyInput, Mods, NamedKey, PhysicalKey};
 use micold_core::protocol::messages::TurnPhase;
 use micold_core::session::{AiCli, Session, SessionId, SessionKind, SessionLocation};
 use micold_core::structured::commands::CommandKind;
+use micold_core::structured::effort::{EffortChoice, EffortLevel, EffortSupport};
 use micold_core::structured::model::{ModelChoice, ModelName, MODEL_SHORTCUTS};
 use micold_core::structured::{
     parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
@@ -592,4 +593,99 @@ fn the_picker_rows_end_with_the_typed_name_and_enter_takes_the_highlight_or_it()
         "the arrows reach the typed row too"
     );
     assert_eq!(w.model_picked(s, None), Some(named("claude-opus-4-1")));
+}
+
+// ---- #1554 T027: `/effort` in the composer (US2; FR-007–FR-009, SC-003) ----
+
+fn level(name: &str) -> EffortChoice {
+    EffortChoice::Level(EffortLevel::parse(name).expect("a level"))
+}
+
+/// The default model reporting `levels` as the ones it takes.
+fn models_taking(levels: &[&str]) -> Vec<ReportedModel> {
+    vec![ReportedModel {
+        value: "default".into(),
+        display_name: None,
+        description: None,
+        effort: Some(EffortSupport {
+            supported: true,
+            levels: levels
+                .iter()
+                .map(|l| EffortLevel::parse(l).expect("a level"))
+                .collect(),
+        }),
+    }]
+}
+
+#[test]
+fn sending_slash_effort_with_a_level_asks_for_it_and_keeps_the_draft_for_the_shell() {
+    // The intent reads no turn state: on a busy session too the request goes at once (SC-003).
+    let (mut w, s) = window(Some(started(vec![])));
+    for (text, want) in [
+        ("/effort max", level("max")),
+        ("/effort Max", level("max")),
+        ("/effort default", EffortChoice::Default),
+        ("/effort auto", EffortChoice::Default),
+    ] {
+        typed(&mut w, s, text);
+        assert_eq!(w.send_intent(s), SendIntent::SetEffort(want), "{text}");
+        assert_eq!(draft(&w, s).0, text, "kept until the request went out");
+    }
+}
+
+#[test]
+fn slash_effort_alone_opens_the_picker_and_sends_nothing() {
+    let (mut w, s) = window(Some(started(vec![])));
+    for text in ["/effort", "/effort   "] {
+        typed(&mut w, s, text);
+        assert_eq!(w.send_intent(s), SendIntent::Nothing, "{text:?}");
+        assert!(w.effort_picker.picker(s).is_some(), "the picker opened");
+        assert_eq!(draft(&w, s).0, "", "the command is used up");
+        w.effort_picker.close(s);
+        // A refusal said earlier is gone once the picker opens.
+        typed(&mut w, s, "/effort extreme");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        assert!(w.composers.composer(s).is_some_and(|c| c.notice.is_some()));
+        typed(&mut w, s, "/effort");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        assert_eq!(w.composers.composer(s).and_then(|c| c.notice.clone()), None);
+        w.effort_picker.close(s);
+    }
+}
+
+#[test]
+fn a_wrong_effort_is_refused_naming_the_accepted_ones_and_the_draft_stays() {
+    let (mut w, s) = window(Some(started(vec![])));
+    for text in ["/effort extreme", "/effort ultracode"] {
+        typed(&mut w, s, text);
+        assert_eq!(w.send_intent(s), SendIntent::Nothing, "{text}");
+        assert_eq!(draft(&w, s).0, text, "kept");
+        assert_eq!(
+            w.composers.composer(s).and_then(|c| c.notice.as_deref()),
+            Some("Use /effort with one of: default, low, medium, high, xhigh, max"),
+        );
+    }
+}
+
+#[test]
+fn a_level_the_model_does_not_take_is_refused_naming_the_levels_it_takes() {
+    let (mut w, s) = window(Some(started(models_taking(&["low", "high"]))));
+    typed(&mut w, s, "/effort max");
+    assert_eq!(w.send_intent(s), SendIntent::Nothing);
+    assert_eq!(
+        w.composers.composer(s).and_then(|c| c.notice.as_deref()),
+        Some("Use /effort with one of: default, low, high"),
+    );
+    typed(&mut w, s, "/effort high");
+    assert_eq!(w.send_intent(s), SendIntent::SetEffort(level("high")));
+}
+
+#[test]
+fn the_palette_lists_one_effort_row_in_this_app() {
+    let (mut w, s) = window(Some(started(vec![])));
+    typed(&mut w, s, "/eff");
+    let palette = w.composers.palette.palette(s).expect("open");
+    let efforts: Vec<_> = palette.rows().filter(|c| c.name == "effort").collect();
+    assert_eq!(efforts.len(), 1, "one /effort row");
+    assert_eq!(group_title(efforts[0].kind), "In this app");
 }

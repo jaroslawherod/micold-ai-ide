@@ -8420,7 +8420,7 @@ impl DaemonState {
         )
     }
 
-    /// `/model` and the terminal-only commands, by `session`'s command list as its history holds it,
+    /// `/model`, `/effort` and the terminal-only commands, by `session`'s command list as its history holds it,
     /// never reach the CLI, idle or busy (#943 R3, FR-010, FR-018); anything else may.
     fn refuse_app_handled(
         inner: &Inner,
@@ -8432,8 +8432,8 @@ impl DaemonState {
             return Ok(());
         }
         match classify_draft(text, &Self::command_list_of(inner, session)) {
-            // `/effort` is still sent as typed until #1554 M5 makes the daemon refuse it.
-            DraftCommand::Send | DraftCommand::Effort(_) => Ok(()),
+            DraftCommand::Send => Ok(()),
+            DraftCommand::Effort(_) => Err(UserMessageRefusal::EffortIsTheApps),
             DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
             DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),
         }
