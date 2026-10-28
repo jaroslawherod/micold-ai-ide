@@ -422,7 +422,7 @@ layout_snapshot`; quickstart Part B step 6.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T044 [P] [US3] Copy-target tests in `crates/micold-client/tests/features_transcript_rich.rs`
+- [x] T044 [P] [US3] Copy-target tests in `crates/micold-client/tests/features_transcript_rich.rs`
   (contracts/keys-menu-copy.md *C-1*–*C-6*, data-model.md *Copyable value*, FR-015–FR-018,
   SC-004): `ToolValue` copies `work_value` byte for byte and exists iff it is `Some`; `ToolInput`
   copies `ToolCard::input` as held, the text so far while streaming; `ToolResult` copies the
@@ -430,7 +430,7 @@ layout_snapshot`; quickstart Part B step 6.
   result exists; `DiffPath` copies `EditDiff::path`; an empty value copies `""`; the confirmation is
   keyed by `(session, key, target)` per window and shows only on the activated control, expiring
   after `COPY_CONFIRM`; #940's `Code(CodeId)` behaviour is unchanged
-- [ ] T045 [P] [US3] Control tests in the `tests` module of
+- [x] T045 [P] [US3] Control tests in the `tests` module of
   `crates/micold-client/src/ui/material/inline_diff.rs` and in
   `crates/micold-client/tests/layout_snapshot.rs` (C-3, C-4, FR-017, FR-018): the `DiffPath`
   control fits beside the path at the narrowest pane width; each copy control is an `IconButton`
@@ -438,15 +438,15 @@ layout_snapshot`; quickstart Part B step 6.
 
 ### Implementation
 
-- [ ] T046 [US3] Add `CopyTarget::{ToolValue, ToolInput, ToolResult, DiffPath}` and their values in
+- [x] T046 [US3] Add `CopyTarget::{ToolValue, ToolInput, ToolResult, DiffPath}` and their values in
   `crates/micold-client/src/features/transcript_rich.rs`; `TranscriptMsg::CopyCode` becomes
   `TranscriptMsg::Copy { session, key, target }` in
   `crates/micold-client/src/features/structured_transcript.rs`, callers updated; T044 passes
-- [ ] T047 [US3] Draw the controls, reusing `CodeBlock::copy`'s `IconButton`: `ToolValue` on the
+- [x] T047 [US3] Draw the controls, reusing `CodeBlock::copy`'s `IconButton`: `ToolValue` on the
   tool card's `DisclosureCard` header and `ToolInput`/`ToolResult` above the unfolded input and
   result in `crates/micold-client/src/ui/transcript/entries.rs`; `DiffPath` beside the path in
   `crates/micold-client/src/ui/material/inline_diff.rs`; T045 passes
-- [ ] T048 [US3] Docs: `docs/user-guide/worktrees-and-sessions.md` *Structured sessions* describes
+- [x] T048 [US3] Docs: `docs/user-guide/worktrees-and-sessions.md` *Structured sessions* describes
   the copy controls (header value, input, result, diff path; keyboard; Copied/failed
   confirmation); the out-of-scope note on copying in
   `specs/939-structured-transcript-view/spec.md` says #1550 delivers it (FR-021)

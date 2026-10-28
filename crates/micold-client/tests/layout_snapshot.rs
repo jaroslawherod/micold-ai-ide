@@ -202,6 +202,11 @@ mod code_block_wheel;
 #[path = "gates/inline_diff_marker_fits.rs"]
 mod inline_diff_marker_fits;
 
+// An inline diff's path copy control fits beside the path at the narrowest pane, both schemes
+// (feature 1550, C-3, FR-017).
+#[path = "gates/inline_diff_path_copy_fits.rs"]
+mod inline_diff_path_copy_fits;
+
 // --- The composer's shared parts hold their content (feature 941, T048) -------------------------
 
 // The showcase's text area grows to its height limit and then holds it; a busy indicator draws its

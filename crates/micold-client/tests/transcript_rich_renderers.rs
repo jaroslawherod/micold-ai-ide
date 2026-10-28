@@ -11,7 +11,7 @@ use std::cell::Cell;
 
 use iced::Size;
 use micold_client::features::structured_transcript::State;
-use micold_client::features::transcript_rich::DerivedBody;
+use micold_client::features::transcript_rich::{CopyTarget, DerivedBody};
 use micold_client::ui::syntax::GRAMMAR;
 use micold_client::ui::transcript::{
     edit_meta, tool_header_counted, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
@@ -497,16 +497,17 @@ fn the_lazy_key_changes_with_the_stamp_and_only_then() {
     assert!(frame(&cache) > 0, "the first frame draws the reply");
     assert_eq!(frame(&cache), 0, "nothing changed: no entry is rebuilt");
 
-    let (key, code) = entries(&state, session)
+    let (entry, code) = entries(&state, session)
         .into_iter()
         .find_map(|e| match cache.get(session, e.key()).map(|d| &d.body) {
-            Some(DerivedBody::Text(doc)) => doc.code_blocks().next().map(|(id, ..)| (e.key(), id)),
+            Some(DerivedBody::Text(doc)) => doc.code_blocks().next().map(|(id, ..)| (e, id)),
             _ => None,
         })
         .expect("markdown-turn's reply holds a code block");
+    let key = entry.key();
     let stamp = cache.get(session, key).unwrap().stamp;
     cache
-        .copy(session, key, code)
+        .copy(session, entry, CopyTarget::Code(code))
         .expect("the code block copies");
     assert_ne!(
         cache.get(session, key).unwrap().stamp,

@@ -1240,6 +1240,32 @@ impl State {
                     self.transcript_selection.toggled(session, id);
                 }
             }
+            // A copy control on a card in a subagent's thread (feature 944): its entry is the
+            // thread's, which the transcript feature does not hold.
+            TranscriptMsg::Copy {
+                session,
+                ref key,
+                target,
+            } if self
+                .structured_transcript
+                .transcript(session)
+                .and_then(|t| t.entry(key))
+                .is_none() =>
+            {
+                let entry = self
+                    .structured_insights
+                    .open_threads(session)
+                    .find_map(|t| t.entry(key));
+                return match entry {
+                    Some(entry) => crate::features::structured_transcript::Effect::copy(
+                        &mut self.transcript_rich,
+                        session,
+                        entry,
+                        target,
+                    ),
+                    None => crate::features::structured_transcript::Effect::default(),
+                };
+            }
             _ => {}
         }
         let effect = self

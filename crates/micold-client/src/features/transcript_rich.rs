@@ -16,7 +16,11 @@ use micold_core::review::diff::Spans;
 use micold_core::review::limits;
 use micold_core::session::SessionId;
 use micold_core::structured::edit_diff::{edit_diff, EditDiff};
-use micold_core::structured::transcript::{EntryKey, EntryKind, Transcript};
+use micold_core::structured::transcript::{
+    work_value, Entry, EntryKey, EntryKind, ResultPart, Transcript,
+};
+
+use crate::features::transcript_selection::shown::unshown_caption;
 
 /// How long a copy control shows "Copied" or "Copy failed" before it is idle again (FR-012).
 pub const COPY_CONFIRM: Duration = Duration::from_secs(2);
@@ -42,12 +46,20 @@ pub enum Part {
     Diff,
 }
 
-/// What a copy is of (feature 1550, data-model.md *CopyTarget*): a code block's control (#940),
-/// or the session's transcript selection, whose state no control draws (research R9). The tool and
-/// diff controls' targets follow with the copy controls (T044).
+/// What a copy is of (feature 1550, data-model.md *CopyTarget*): a code block's control (#940), a
+/// tool card's or a diff's control (research R10, data-model.md *Copyable value*), or the
+/// session's transcript selection, whose state no control draws (research R9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CopyTarget {
     Code(CodeId),
+    /// A tool card header's identifying value, uncut (`summary::work_value`, FR-015).
+    ToolValue,
+    /// A tool card's input as held, the text so far while it streams (FR-016).
+    ToolInput,
+    /// A tool card's result parts' text, `\n`-joined, unshown parts as their caption (FR-016).
+    ToolResult,
+    /// An Edit/MultiEdit/Write diff's file path (FR-017).
+    DiffPath,
     Selection,
 }
 
@@ -63,7 +75,7 @@ pub enum Checked {
     Selection { session: SessionId, held: bool },
 }
 
-/// A code block's copy control; absent from [`Derived::copy`] is idle.
+/// A copy control's state; absent from [`Derived::copy`] is idle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyState {
     /// Written; the read-back has not answered yet.
@@ -82,6 +94,9 @@ pub enum DerivedBody {
     /// An Edit/MultiEdit/Write card's change; `None` while its input streams or when it is
     /// malformed, and the card shows #939's plain input (FR-018).
     Diff(Option<EditDiff>),
+    /// Any other tool card: nothing is derived from it, but its copy controls' state lives here
+    /// (feature 1550, research R10).
+    Tool,
 }
 
 /// One entry's derived drawing state.
@@ -153,6 +168,8 @@ enum Source<'a> {
         input: &'a str,
         streaming: bool,
     },
+    /// Another tool card: held for its copy controls only (feature 1550).
+    Tool,
 }
 
 impl<'a> Source<'a> {
@@ -181,6 +198,7 @@ impl<'a> Source<'a> {
                     streaming: card.streaming,
                 })
             }
+            EntryKind::ToolCall(_) => Some(Self::Tool),
             _ => None,
         }
     }
@@ -197,6 +215,7 @@ impl DerivedBody {
                 streaming: true, ..
             } => Self::Diff(None),
             Source::Edit { tool, input, .. } => Self::Diff(edit_diff(tool, input)),
+            Source::Tool => Self::Tool,
         }
     }
 
@@ -253,7 +272,7 @@ impl DerivedBody {
                     Vec::new()
                 }
             }
-            Self::Diff(None) => Vec::new(),
+            Self::Diff(None) | Self::Tool => Vec::new(),
         }
     }
 
@@ -352,6 +371,10 @@ impl Derived {
         self.full.retain(|part| body.holds(*part));
         self.copy.retain(|target, _| match target {
             CopyTarget::Code(id) => body.holds(Part::Code(*id)),
+            CopyTarget::DiffPath => body.holds(Part::Diff),
+            CopyTarget::ToolValue | CopyTarget::ToolInput | CopyTarget::ToolResult => {
+                matches!(body, DerivedBody::Tool | DerivedBody::Diff(_))
+            }
             CopyTarget::Selection => false,
         });
     }
@@ -486,22 +509,21 @@ impl State {
         true
     }
 
-    /// Start a copy of code block `code` (FR-011): its code exactly, the code so far while it
-    /// streams, and the copy's ticket; the block's control is `Pending` until the read-back.
+    /// Start a copy of `entry`'s control `target` (#940 FR-011, feature 1550 FR-015–FR-017): its
+    /// value exactly as held ([`copy_value`]), the value so far while it streams, and the copy's
+    /// ticket; the control is `Pending` until the read-back. `None` when the entry has no such
+    /// value, or the cache holds nothing for it.
     pub fn copy(
         &mut self,
         session: SessionId,
-        key: &EntryKey,
-        code: CodeId,
+        entry: &Entry,
+        target: CopyTarget,
     ) -> Option<(String, Ticket)> {
+        let key = entry.key();
         let derived = self.sessions.get_mut(&session)?.entries.get_mut(key)?;
-        let DerivedBody::Text(doc) = &derived.body else {
-            return None;
-        };
-        let text = doc.code(code)?.code.clone();
+        let text = copy_value(entry.kind(), &derived.body, target)?;
         self.next_ticket += 1;
         let ticket = Ticket(self.next_ticket);
-        let target = CopyTarget::Code(code);
         if let Some(old) = derived.copy.insert(target, CopyState::Pending(ticket)) {
             self.tickets.remove(&old.ticket());
         }
@@ -535,8 +557,8 @@ impl State {
         ticket
     }
 
-    /// The clipboard read back after `ticket`'s write (FR-012): a code block's control becomes
-    /// `Copied` when it holds the code, else `Failed`, and then wants its confirmation timer; a
+    /// The clipboard read back after `ticket`'s write (FR-012): a control becomes `Copied` when
+    /// it holds the value, else `Failed`, and then wants its confirmation timer; a
     /// selection's copy is answered as held or failed and forgotten.
     pub fn copy_checked(&mut self, ticket: Ticket, read: Option<String>) -> Checked {
         let Some(copying) = self.tickets.get_mut(&ticket) else {
@@ -641,5 +663,30 @@ impl State {
 
     fn entry_mut(&mut self, session: SessionId, key: &EntryKey) -> Option<&mut Derived> {
         self.sessions.get_mut(&session)?.entries.get_mut(key)
+    }
+}
+
+/// What `target`'s control copies from an entry of `kind` whose derived body is `body`
+/// (data-model.md *Copyable value*, SC-004: byte for byte as held), or `None` when it has none: a
+/// code block's code, a tool card's uncut work value, its input, its result's parts' text joined
+/// with `\n` (an unshown part as its caption), or its diff's path.
+pub fn copy_value(kind: &EntryKind, body: &DerivedBody, target: CopyTarget) -> Option<String> {
+    let card = match kind {
+        EntryKind::ToolCall(card) => Some(card),
+        _ => None,
+    };
+    match (target, body) {
+        (CopyTarget::Code(id), DerivedBody::Text(doc)) => Some(doc.code(id)?.code.clone()),
+        (CopyTarget::DiffPath, DerivedBody::Diff(Some(diff))) => Some(diff.path.clone()),
+        (CopyTarget::ToolValue, _) => card.and_then(|c| work_value(&c.name, &c.input)),
+        (CopyTarget::ToolInput, _) => card.map(|c| c.input.clone()),
+        (CopyTarget::ToolResult, _) => {
+            let parts = card?.result.as_ref()?.parts.iter().map(|part| match part {
+                ResultPart::Text(text) => text.clone(),
+                ResultPart::Unshown { kind } => unshown_caption(kind),
+            });
+            Some(parts.collect::<Vec<_>>().join("\n"))
+        }
+        _ => None,
     }
 }

@@ -7,15 +7,14 @@
 //! (research R9).
 
 use crate::features::transcript_rich::{
-    Checked, HighlightJob, Part, RichCache, Ticket, COPY_CONFIRM,
+    Checked, CopyTarget, HighlightJob, Part, RichCache, Ticket, COPY_CONFIRM,
 };
 use crate::features::transcript_selection::SelectMsg;
 use crate::features::{OpenRequest, Outcome};
 use micold_core::link::address::{classify, Address};
-use micold_core::markdown::CodeId;
 use micold_core::review::diff::Spans;
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::{EntryKey, Transcript};
+use micold_core::structured::transcript::{Entry, EntryKey, Transcript};
 use micold_core::structured::{SequencedEvent, MAX_EVENTS};
 use std::collections::{HashMap, HashSet};
 
@@ -111,11 +110,12 @@ pub enum TranscriptMsg {
         /// Its address, re-classified before anything opens.
         url: String,
     },
-    /// A code block's copy control was activated (feature 940, FR-011).
-    CopyCode {
+    /// A copy control was activated: a code block's (feature 940, FR-011), a tool card's or a
+    /// diff's (feature 1550, FR-015–FR-017).
+    Copy {
         session: SessionId,
         key: EntryKey,
-        code: CodeId,
+        target: CopyTarget,
     },
     /// The clipboard read back after a copy's write (feature 940, FR-012, research R5).
     CopyChecked {
@@ -157,7 +157,7 @@ impl TranscriptMsg {
             | Self::Scrolled { session, .. }
             | Self::JumpToLatest { session }
             | Self::Shown { session }
-            | Self::CopyCode { session, .. }
+            | Self::Copy { session, .. }
             | Self::ShowInFull { session, .. }
             | Self::Highlighted { session, .. } => Some(*session),
             Self::Insights(msg) => Some(msg.session()),
@@ -192,6 +192,21 @@ impl Effect {
             outcomes: outcome.into_iter().collect(),
             ..Self::default()
         }
+    }
+
+    /// A copy of `entry`'s control `target` in `rich` (feature 940 FR-011, feature 1550 FR-018):
+    /// a checked clipboard write of its value, or nothing when it has none. The root calls it for
+    /// a card in a subagent's thread, which the main transcript does not hold.
+    pub fn copy(
+        rich: &mut RichCache,
+        session: SessionId,
+        entry: &Entry,
+        target: CopyTarget,
+    ) -> Self {
+        Self::outcome(
+            rich.copy(session, entry, target)
+                .map(|(text, ticket)| Outcome::ClipboardWriteChecked { text, ticket }),
+        )
     }
 }
 
@@ -352,10 +367,14 @@ impl State {
                 }
                 Address::File { .. } | Address::NotFollowable => None,
             }),
-            TranscriptMsg::CopyCode { session, key, code } => Effect::outcome(
-                rich.copy(session, &key, code)
-                    .map(|(text, ticket)| Outcome::ClipboardWriteChecked { text, ticket }),
-            ),
+            TranscriptMsg::Copy {
+                session,
+                key,
+                target,
+            } => match self.transcript(session).and_then(|t| t.entry(&key)) {
+                Some(entry) => Effect::copy(rich, session, entry, target),
+                None => Effect::default(),
+            },
             TranscriptMsg::CopyChecked { ticket, read } => match rich.copy_checked(ticket, read) {
                 Checked::Control => Effect::outcome(Some(Outcome::CopyConfirmTimer {
                     ticket,

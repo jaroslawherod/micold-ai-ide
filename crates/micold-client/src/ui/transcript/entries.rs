@@ -13,13 +13,16 @@ use super::insights::{
 };
 use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
+use crate::features::transcript_rich::CopyTarget;
 use crate::icons::Icon;
-use crate::ui::material::{DisclosureCard, IconLabel, Text, Tooltip, TypeRole};
+use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, Tooltip, TypeRole};
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::{Entry, EntryKind, ToolCard, ToolStatus, Transcript};
+use micold_core::structured::transcript::{
+    work_value, Entry, EntryKind, ToolCard, ToolStatus, Transcript,
+};
 use micold_core::tokens::{spacing, Roles};
 use std::hash::{Hash, Hasher};
 
@@ -485,6 +488,12 @@ fn tool_card(
     if let Some(task) = task {
         status = status.push(task_label_view(task, roles));
     }
+    // Feature 1550 (FR-015, C-1): the header copies the uncut value its summary is drawn from,
+    // for a tool whose summary shows one.
+    let control = |target| copy_control_of(target, block, ctx);
+    if work_value(&card.name, &card.input).is_some() {
+        status = status.push(control(CopyTarget::ToolValue));
+    }
     let (title, summary) = (header.title.len(), header.summary.len());
     let shell = DisclosureCard::new(header.title, on_toggle, roles)
         .leading(Icon::ToolCall)
@@ -502,17 +511,23 @@ fn tool_card(
     if !open {
         return with_thread(shell.into());
     }
-    let mut body = column![(renderers.tool_input)(
-        &ToolInput {
-            block,
-            tool: &card.name,
-            input_json: &card.input,
-        },
-        ctx,
-    )]
+    // Feature 1550 (FR-016, C-2): the input's and, once one exists, the result's copy control,
+    // each above what it copies.
+    let mut body = column![
+        control(CopyTarget::ToolInput),
+        (renderers.tool_input)(
+            &ToolInput {
+                block,
+                tool: &card.name,
+                input_json: &card.input,
+            },
+            ctx,
+        )
+    ]
     .spacing(spacing::SM)
     .width(Length::Fill);
     if let Some(result) = &card.result {
+        body = body.push(control(CopyTarget::ToolResult));
         body = body.push((renderers.tool_result)(
             &ToolResult {
                 block: BlockRef { at: 3, ..block },
@@ -524,6 +539,27 @@ fn tool_card(
         ));
     }
     with_thread(shell.body(body).into())
+}
+
+/// `block`'s copy control for `target` (feature 1550, contracts/keys-menu-copy.md C-4): the code
+/// block's control, its state the window's for this entry and target, at the end of its line.
+fn copy_control_of(
+    target: CopyTarget,
+    block: BlockRef<'_>,
+    ctx: &RenderCtx<'_>,
+) -> Element<'static, TranscriptMsg> {
+    let state = ctx
+        .cache
+        .get(block.session, block.key)
+        .and_then(|d| d.copy.get(&target).copied());
+    let on_copy = TranscriptMsg::Copy {
+        session: block.session,
+        key: block.key.clone(),
+        target,
+    };
+    container(copy_control(state, on_copy, ctx.roles))
+        .align_right(Length::Fill)
+        .into()
 }
 
 /// The background task the tool call `tool_use_id` started (X4, FR-021); a foreground

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M4b
-- **Next step**: M4b PR (pushed; orchestrator opens it from the body in its scratchpad), then M5
+- **Phase**: M5
+- **Next step**: M5 verify (scoped gate + Review A, Review B, T049 visual pass, full gate, PR body); see *Handover*
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1590 | M2: window selection state, copy text and copy keys | merged | 94519d3b85af68358495aa1eae645edf53174dc1 |
 | #1593 | M3: SelectableText and SelectionArea components | merged | ffad78647cb67b85f478dc80617db267f9cdeddc |
 | #1595 | M4a: selectable leaves in the transcript, parity and budget | merged | 9df69fa710e866a99c1f1d3c2d5b9027181f595c |
+| #1597 | M4b: selection, edge scroll, menu and copy keys in the transcript | merged | 84bca0374abaa1b9891b471c0c63546cea6474f7 |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | #1590 | merged |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | #1593 | merged |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
-| M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | in progress |
-| M5 | T044–T049 | full | Copy controls, docs, visual pass | — | todo |
+| M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | #1597 | merged |
+| M5 | T044–T049 | full | Copy controls, docs, visual pass | — | in progress |
 
 ## Decisions
 
@@ -57,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M4b visual pass (real client, Xvfb, the daemon tests' `claude` stand-in replaying recorded fixtures): Part B 1–5 pass, and the folded summary highlight; record in `visual-pass/m4b-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`. Only one interrupt was sent in the whole pass (the no-selection Ctrl+C), none from the copies.
 
 - M4b gate: `scripts/gate.sh` green at 2787890f0 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`). Its first two runs were red on `feature_registration_cost` (the menu surface names `TranscriptMsg`: allowed with its reason) and `popover_displacement` (the new popover's row: closes nothing, closed by nothing).
+
+- M5 (agent-resolved): every tool card now has a `Derived` (`DerivedBody::Tool` for non-edit tools) so its copy controls' state lives in `Derived::copy` and the entry's lazy key picks up the stamp; `RichCache::copy(session, &Entry, CopyTarget)` computes the value with `copy_value` (pub). `TranscriptMsg::CopyCode` → `Copy { session, key, target }`; the transcript feature copies main-transcript entries, the root (`App::update_transcript`) copies a card in an open subagent thread (`Effect::copy`). All controls are `code_block::copy_control` (now `pub(crate)`): `ToolValue` in the header's trailing row (iff `work_value` is `Some`), `ToolInput`/`ToolResult` right-aligned above the input/result, `DiffPath` via `InlineDiff::copy_path`. The showcase's diffs show the idle control and the MultiEdit pose has a long path (layout fixture re-accepted). `transcript_rich` → `transcript_selection::shown::unshown_caption` allowed in `feature_registration_cost`.
 
 ## Tasks-unit notes
 
@@ -114,7 +117,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 unit 1 handed over at the context cap (195k) after implementing. Done: T044–T048 (code, tests,
+docs), committed. Green locally: `features_transcript_rich` 24, `ui::material::inline_diff` 9,
+`layout_snapshot` 171 (incl. new `inline_diff_path_copy_fits`), the whole `cargo test -p
+micold-client` run (its one red, `feature_registration_cost`, fixed after). Not yet run: clippy,
+`scripts/gate.sh`. Next: scoped gate with Review A (code-review high) on `origin/main...HEAD`;
+Review B (sonnet, conformance); T049 visual pass (quickstart Part B 1–9, M5's new steps 6–9: header,
+input, result and diff-path controls by pointer and Tab+Enter, "Copied" only on itself; streaming;
+light/dark, CJK; panes/windows) in the real client under Xvfb as M4b did, evidence in
+`visual-pass/m5-*.png` + `m5-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`; tick T049;
+full gate; PR body at the orchestrator's scratchpad path. Thread follow-up: thread cards stay
+unselectable (record for a separate issue); their copy controls do work (root fallback), untested
+at the App level.
 
 ## Open escalation
 
@@ -126,5 +140,5 @@ None.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
 - M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`). **M4b: done**, the area's count (`Press.clicks`) decides the granularity (see M4b note).
 - M3 A F3 residual: a selected proportional `Text` is drawn as rich text (Advanced shaping, kerning) while an unselected one is the text widget (Auto shaping), so selecting kerned text can shift glyphs by subpixels, and in a rare case re-wrap a line. The measure follows the drawn child in both states. The visual pass of M4b/M5 should look for it.
-- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a draws them with `row: None` (neither selectable nor copied; M4a Review A F2). M4b/M5 decide whether they become units. **M4b: left as they are** (a thread's rows would need their own `RowPos` and units; nothing in the spec's FRs names threads). Open for M5 or a follow-up issue.
+- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a draws them with `row: None` (neither selectable nor copied; M4a Review A F2). M4b/M5 decide whether they become units. **M4b: left as they are** (a thread's rows would need their own `RowPos` and units; nothing in the spec's FRs names threads). Open for M5 or a follow-up issue. **M5: left for a separate issue** (spec FRs name no threads; a thread's rows need their own `RowPos` and units). Copy controls on a thread's cards do work.
 - M4a: a folded card's summary (Ellipsized) answers hits but draws no highlight (M4b: done, `Ellipsized::highlighted` draws the shown part of the range, the ellipsis standing for a selected cut tail).

@@ -178,8 +178,9 @@ pub(super) fn copy_look(state: Option<CopyState>, r: Roles) -> (Icon, Rgb, Optio
     }
 }
 
-/// The copy control: the icon button in a keyboard focus, then the state's words.
-fn copy_control<M: Clone + 'static>(
+/// The copy control: the icon button in a keyboard focus, then the state's words. Every copy
+/// control of the transcript is this one (feature 1550, contracts/keys-menu-copy.md C-4).
+pub(crate) fn copy_control<M: Clone + 'static>(
     state: Option<CopyState>,
     on_copy: M,
     r: Roles,
@@ -342,7 +343,7 @@ impl<'b, M: Clone + 'static> From<CodeBlock<M>> for Element<'b, M> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::super::test_support::{
         dark_roles, named_key, roles, rows_with, Focusables, Mounted, ShownTexts,
     };
@@ -360,7 +361,7 @@ mod tests {
     }
 
     /// Where `glyph` was painted: the copy control's icon.
-    fn glyph_at(m: &mut Mounted<'_>, glyph: Icon) -> Point {
+    pub(in crate::ui::material) fn glyph_at(m: &mut Mounted<'_>, glyph: Icon) -> Point {
         let painted = m.painted_text();
         let p = painted
             .iter()
@@ -372,7 +373,7 @@ mod tests {
         )
     }
 
-    fn release(m: &mut Mounted<'_>, at: Point) -> Vec<String> {
+    pub(in crate::ui::material) fn release(m: &mut Mounted<'_>, at: Point) -> Vec<String> {
         m.send(
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
             mouse::Cursor::Available(at),

@@ -3,7 +3,7 @@
 //!
 //! Each reads what the window's [`RichCache`](super::BlockCache) derived for its entry at its
 //! revision, and draws [`BlockRenderers::PLAIN`]'s block when the cache holds nothing for it (a
-//! miss). Its only messages are `TranscriptMsg::{OpenLink, CopyCode, ShowInFull}`: it changes no
+//! miss). Its only messages are `TranscriptMsg::{OpenLink, Copy, ShowInFull}`: it changes no
 //! entry, order, fold, status, streaming or scroll behaviour.
 
 use super::blocks::{
@@ -60,10 +60,10 @@ fn markdown(block: &BlockRef<'_>, muted: bool, ctx: &RenderCtx<'_>) -> Option<Bl
         .muted(muted)
         .stamp(d.stamp)
         .on_link(|url| TranscriptMsg::OpenLink { url })
-        .on_copy(move |code| TranscriptMsg::CopyCode {
+        .on_copy(move |code| TranscriptMsg::Copy {
             session,
             key: key.clone(),
-            code,
+            target: CopyTarget::Code(code),
         })
         .on_show(move |code| TranscriptMsg::ShowInFull {
             session,
@@ -121,7 +121,15 @@ fn rich_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
     let Some((d, diff)) = diff else {
         return (BlockRenderers::PLAIN.tool_input)(block, ctx);
     };
-    let mut view = InlineDiff::new(diff, ctx.roles);
+    // Feature 1550 (FR-017, C-3): the path's copy control.
+    let mut view = InlineDiff::new(diff, ctx.roles).copy_path(
+        d.copy.get(&CopyTarget::DiffPath).copied(),
+        TranscriptMsg::Copy {
+            session: block.block.session,
+            key: block.block.key.clone(),
+            target: CopyTarget::DiffPath,
+        },
+    );
     if let Some(spans) = d.spans.get(&Part::Diff) {
         view = view.spans(in_scheme(spans, ctx.scheme));
     }
