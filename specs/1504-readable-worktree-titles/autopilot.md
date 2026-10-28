@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1568 | M2 | merged | fb29142a7 |
 | — | M3 | #1572, merged | 6f67d1beb |
 | — | M4 | pending (not opened; branch 1504-m4, stacked on M3) | — |
+| — | M5 | pending (not opened; branch 1504-m5, stacked on M4) | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T024, T049 | full | Jira title ticket shows its summary; branch-only key gets no chip | #1568 | merged |
 | M3 | T025–T032 | full | PR and main-session titles; source named in row/header/expanded-card tooltip | — | implemented on 1504-m3, reviews pending |
 | M4 | T033–T041 | full | Spec heading and own-commit titles, read off-thread on list change / Overview open | — | implemented on 1504-m4, gate and reviews pending |
-| M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | pending |
+| M5 | T042–T046 | light | Failed GitHub title reads retried after 5 min; NoIssue never re-asked | — | implemented on 1504-m5 (stacked on M4 05897a571), gate and reviews pending |
 
 ## Decisions
 
@@ -74,6 +75,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
 | M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
+
+## Red runs (M5)
+
+Reducer (`titles_to_fetch`, `TitleLookup`) was written with the shell mapping stubbed to
+`Failed { at: 0 }`; every red is a failing assertion:
+
+- `cargo test -p micold-client --test overview a_retried_title_is_pending_and_the_card_never_shows_loading`
+  (T042): exit 101, `left: Failed(10)  right: Pending` (a retried title stayed `Failed`; fixed by
+  making `TitlesRequested` reset `Failed` to `Pending`).
+- `cargo test -p micold-client --bin micold-ai-ide title_answer` (T043): 5 failed —
+  `..._no_github_remote_is_no_issue` and `..._number_that_is_no_issue_is_no_issue` with
+  `left: Failed(0)  right: NoIssue`; `..._lost_remotes_read_is_failed`,
+  `..._failed_read_is_failed_with_the_time` and `..._no_gh_is_failed` failing "stamped 0, not now".
+- Green after T044/T045: overview 96 passed, `title` bin tests 21 passed.
 
 ## Red runs (M4)
 
