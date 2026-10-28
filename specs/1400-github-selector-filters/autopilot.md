@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- M6 review (combined A+B, sonnet): CLEAN, 3 MINORs. F1 (no test for a remembered query now refused) added to `an_empty_run_is_not_remembered_as_run`; F2 (user guide did not say a reopen after an empty Run runs the last run query) one sentence added; F3 (no shell-level Mode/Query write test) declined: `with_change` and the shell write path are covered by core and M3 tests.
+
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec review | 1 | a81cb29b681279bab9bac6fd165413021a0bd717:1132114243bde1ea489deb6c3c5ea3032f754e6f | CHANGES: F1 MAJOR (FR-002 vs Jira-and-back edge case: draft) fixed, draft kept; F2 MINOR (FR-013 empty last run query) fixed, a run empty query re-runs, prompt only when none ever run; F3 MINOR (FR-007 advanced mode) fixed, FR-007 and US1 s6 basic mode only |

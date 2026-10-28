@@ -1950,6 +1950,15 @@ fn an_empty_run_is_not_remembered_as_run() {
         assert_eq!(form(&state).github_selector.last_run, None);
         assert!(form(&state).shows_github_advanced());
     }
+    // A remembered query the checks now refuse (a file from before a rule) reopens on the prompt.
+    let refused = RememberedSelector {
+        query: "repo:other/x".into(),
+        ..remembered_advanced(Some("label:bug"))
+    };
+    let state = reopened(refused);
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(form(&state).github_selector.last_run, None);
 }
 
 /// US2 AS4: Q2 typed and not run is not remembered: the form reopens showing Q, running Q.
