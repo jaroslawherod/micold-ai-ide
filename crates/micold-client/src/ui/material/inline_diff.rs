@@ -401,7 +401,7 @@ mod tests {
         let shown = m
             .drive(ShownTexts::<DiffPart>(Vec::new()))
             .expect("reported");
-        let expected = vec![
+        let expected = [
             (DiffPart::Path, 0, "src/a.rs".to_owned()),
             (
                 DiffPart::Caption(0),

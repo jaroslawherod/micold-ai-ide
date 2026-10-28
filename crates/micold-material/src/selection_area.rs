@@ -10,7 +10,8 @@
 //!   gesture's first hit lands in a gesture already begun (FR-007).
 //! - **A-3**: while `dragging` and the pointer is above (below) the bounds, the children see the
 //!   pointer clamped to the top (bottom) row, so the unit at the edge keeps answering, and the area
-//!   publishes `on_edge(Up)` (`Down`) on each frame it requests (FR-003).
+//!   publishes `on_edge(Up)` (`Down`) on each frame it requests, a frame ahead through
+//!   `motion::wake_at`, and only while it is past the edge (FR-003).
 //! - **A-4**: a right press anywhere inside, on text or on a control, publishes `on_context` with
 //!   where it was and no `on_press` (FR-013).
 //! - **A-5**: a left release after a press in the area, or during a drag, publishes `on_release`
@@ -27,6 +28,7 @@ use iced::advanced::widget::{operation, tree, Id, Operation, Tree, Widget};
 use iced::advanced::{mouse, Clipboard, Shell};
 use iced::{Element, Event, Point, Rectangle, Size, Vector};
 
+use super::cdk::motion;
 use super::selectable_text::Click;
 
 /// Which edge of the area a drag holds the pointer past.
@@ -35,6 +37,9 @@ pub enum Edge {
     Up,
     Down,
 }
+
+/// What a right press sends, from where it was in the window.
+type OnContext<'a, M> = Rc<dyn Fn((u16, u16)) -> M + 'a>;
 
 /// The region a selection is made in. Builder form (Principle VIII):
 /// `SelectionArea::new(content).id(id).dragging(true).on_press(f).on_edge(g).on_release(m)
@@ -46,7 +51,7 @@ pub struct SelectionArea<'a, M> {
     on_press: Option<Rc<dyn Fn(u8) -> M + 'a>>,
     on_edge: Option<Rc<dyn Fn(Edge) -> M + 'a>>,
     on_release: Option<M>,
-    on_context: Option<Rc<dyn Fn((u16, u16)) -> M + 'a>>,
+    on_context: Option<OnContext<'a, M>>,
     on_focus_change: Option<Rc<dyn Fn(bool) -> M + 'a>>,
 }
 
@@ -299,13 +304,19 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
             Event::Window(iced::window::Event::RedrawRequested(_)) => {
                 if let (Some(edge), Some(on_edge)) = (edge, &self.on_edge) {
                     shell.publish(on_edge(edge));
-                    shell.request_redraw();
                 }
             }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) if edge.is_some() => {
-                shell.request_redraw();
-            }
             _ => {}
+        }
+        // Past an edge during a drag, the next frame is asked for a frame ahead, and only then:
+        // the edge scroll stops asking once the pointer comes back or the button is released.
+        let frames = matches!(
+            event,
+            Event::Window(iced::window::Event::RedrawRequested(_))
+                | Event::Mouse(mouse::Event::CursorMoved { .. })
+        );
+        if frames && edge.is_some() && self.on_edge.is_some() {
+            motion::wake_at(shell, std::time::Instant::now() + motion::FRAME);
         }
         if state.focused != state.reported {
             state.reported = state.focused;

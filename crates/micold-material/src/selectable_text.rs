@@ -97,13 +97,14 @@ pub fn highlight(r: Roles) -> (Rgb, Rgb) {
 }
 
 /// The pieces `ranges` (in order, over one text) cut at the ends of `selected`, each with whether
-/// it is selected. Empty pieces are dropped; with no selection the pieces are returned whole.
+/// it is selected. Empty pieces are dropped, empty ranges included; with no selection the other
+/// pieces are returned whole.
 pub fn split_at(
     ranges: impl IntoIterator<Item = Range<usize>>,
     selected: Option<&Range<usize>>,
 ) -> Vec<(Range<usize>, bool)> {
     let mut out = Vec::new();
-    for range in ranges {
+    for range in ranges.into_iter().filter(|r| !r.is_empty()) {
         let Some(sel) = selected.filter(|s| s.start < range.end && range.start < s.end) else {
             out.push((range, false));
             continue;
@@ -928,7 +929,12 @@ mod tests {
             split_at([0..4, 4..9], Some(&(2..6))),
             vec![(0..2, false), (2..4, true), (4..6, true), (6..9, false)]
         );
-        assert_eq!(split_at([0..4], None), vec![(0..4, false)]);
+        assert_eq!(split_at(std::iter::once(0..4), None), vec![(0..4, false)]);
+        assert_eq!(
+            split_at([0..1, 1..1, 1..3, 3..3], Some(&(2..3))),
+            vec![(0..1, false), (1..2, false), (2..3, true)],
+            "an empty range is no piece"
+        );
     }
 
     #[test]

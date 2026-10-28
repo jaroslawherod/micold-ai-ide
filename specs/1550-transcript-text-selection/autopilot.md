@@ -70,6 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 | 1 | 55ede43b68b9972806d53205fc373e5003804172:75cbb5030640e4bb0c886ec779d3a90794010ddf | CLEAN (1 MINOR fixed: tdd/cycle-log.md written from recovered red evidence) |
 | Review A M2 (code-review high) | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | 1 BLOCKER, 1 MAJOR, 8 MINOR: fixed BLOCKER (unfocused transcript listener heard a busy turn's Escape/Ctrl+C over dialogs and views: `transcript_keys(state, interrupt)` + `State::transcript_focused`), MAJOR (empty copy text no longer written), MINOR F6 (Show in full clears like a toggle), F7 (menu Copy/Select all refocus), F10 (T021/T023 wording, prose only); 5 MINOR declined (below). No re-review: no BLOCKER/MAJOR left open, fixes tested red→green |
 | Review B M2 | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | CLEAN; Verify pass (28/40/18/2); 1 MINOR fixed, prose only (T021 focus.rs join named as T041's) |
+| Review A M3 (code-review high, headless) | 1 | c1645efc0134e397e126b86897deccd6f8b41a91:14636211796c477bf6dc6dcc2d0f4feda20206a9 | CHANGES: 1 MAJOR, 3 MINOR: fixed F1 (empty span panicked `cut_at_selection`: `split_at` drops empty ranges; test red→green), F2 (`link_regions` takes the text's wrapping), F3 (selected `Text` measures with Advanced shaping, as its rich-text child draws); F4 declined (below) |
 
 ## Declined review findings
 
@@ -85,6 +86,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A F4, F5 | `noted`/`prompt_rows` per hit and per message; `placed()` per row | MINOR, performance: M4a's budget test (T033–T038) measures it and caches if it shows. |
 | M2 | A F8 | empty plain-text unit for an empty underived entry | MINOR: units mirror what is drawn; whether the plain renderer draws an empty line is checked by M4a's parity test. |
 | M2 | A F9 | `clear()` keeps `menu` | MINOR: the menu's Select all stays valid over a cleared selection and its Copy writes nothing; M4b's menu closes on outside clicks (`MenuDismissed`). |
+| M3 | A F4 | `SelectionArea` and each `Selectable` count clicks separately: a second click in an adjacent unit within 300 ms gives `on_press(2)` but `Hit.click: Single` | MINOR, same question as M2 A F3: the contract gives both counts (`on_press(clicks)`, `Hit.click`); which one the model trusts is M4b's wiring (M2's `hit` could start from `armed`'s count). Noted in *Follow-ups not done*. |
 
 ## Handover
 
@@ -98,4 +100,6 @@ None.
 
 - T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
+- M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`).
+- M3 A F3 residual: a selected proportional `Text` is drawn as rich text (Advanced shaping, kerning) while an unselected one is the text widget (Auto shaping), so selecting kerned text can shift glyphs by subpixels, and in a rare case re-wrap a line. The measure follows the drawn child in both states. The visual pass of M4b/M5 should look for it.
 - #944's subagent threads drawn inside entries (X3, X5) are not units: M4a's parity test decides whether they become selectable.

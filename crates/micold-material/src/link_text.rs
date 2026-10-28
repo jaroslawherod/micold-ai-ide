@@ -273,6 +273,7 @@ fn link_regions(
     size: f32,
     line_height: iced::widget::text::LineHeight,
     font: Font,
+    wrapping: Wrapping,
 ) -> Vec<Rectangle> {
     let paragraph = <iced::Renderer as iced::advanced::text::Renderer>::Paragraph::with_spans(
         iced::advanced::text::Text {
@@ -284,7 +285,7 @@ fn link_regions(
             align_x: Alignment::Default,
             align_y: alignment::Vertical::Top,
             shaping: Shaping::Advanced,
-            wrapping: Wrapping::WordOrGlyph,
+            wrapping,
         },
     );
     let mut out: Vec<Rectangle> = Vec::new();
@@ -375,11 +376,12 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
             previous = Some(link);
         }
         let shown: Rc<Vec<TextSpan<'static, String, Font>>> = Rc::new(shown);
-        let (size, line_height, font) = (t.role.size(), t.role.line_height(), base);
+        let (size, line_height, font, wrapping) =
+            (t.role.size(), t.role.line_height(), base, t.wrapping);
         for (target, run) in targets.into_iter().rev() {
             let shown = Rc::clone(&shown);
             let regions: Regions = Rc::new(move |room| {
-                link_regions(&shown, run.clone(), room, size, line_height, font)
+                link_regions(&shown, run.clone(), room, size, line_height, font, wrapping)
             });
             let message = on_link(target.to_owned());
             element = TakesTheKeyboard::new(element, true)
@@ -435,6 +437,22 @@ mod tests {
             link("mail", "mailto:dev@example.com", true),
             plain("."),
         ]
+    }
+
+    /// Review A M3 F1: an empty span (a markdown run with no text) is no piece, selected or not.
+    #[test]
+    fn an_empty_span_draws_without_a_piece_of_its_own() {
+        let spans = vec![plain(""), plain("a"), plain(""), plain("bc"), plain("")];
+        let hit = |_: &str, h: Hit| h.offset.to_string();
+        for selected in [None, Some(0..2)] {
+            let text = LinkText::new(&spans, roles()).selectable("u", selected, hit);
+            let painted: String = Mounted::new(text)
+                .painted_text()
+                .into_iter()
+                .map(|p| p.content)
+                .collect();
+            assert_eq!(painted, "abc");
+        }
     }
 
     /// Feature 1550 T-4 (gate): selectable with nothing selected draws pixel-equal to the link
@@ -676,6 +694,7 @@ mod tests {
             TypeRole::Body.size(),
             TypeRole::Body.line_height(),
             TypeRole::Body.font(),
+            Wrapping::WordOrGlyph,
         );
         assert_eq!(regions.len(), 1);
     }
@@ -697,6 +716,7 @@ mod tests {
                 TypeRole::Body.size(),
                 TypeRole::Body.line_height(),
                 TypeRole::Body.font(),
+                Wrapping::WordOrGlyph,
             )
         };
         assert_eq!(regions(2000.0).len(), 1);

@@ -384,7 +384,7 @@ fn highlighted<'a, M: 'a>(
     };
     let selected = floor(selected.start)..floor(selected.end);
     let pieces: Vec<iced::widget::text::Span<'a, (), Font>> =
-        split_at([0..content.len()], Some(&selected))
+        split_at(std::iter::once(0..content.len()), Some(&selected))
             .into_iter()
             .map(|(range, on)| {
                 let piece = span(content[range].to_owned());
@@ -415,7 +415,13 @@ impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
             line_height: t.role.line_height(),
             font,
             wrapping: t.wrapping.unwrap_or_default(),
-            shaping: iced::advanced::text::Shaping::default(),
+            // As the child draws it: the text widget's default shaping, or the rich text's
+            // advanced shaping once something is selected.
+            shaping: if select.selected.is_some() {
+                iced::advanced::text::Shaping::Advanced
+            } else {
+                iced::advanced::text::Shaping::default()
+            },
         };
         let measure = Measure::plain(&t.content, shape);
         let child = match &select.selected {
