@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,6 +31,5 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers are left for the clarify unit: FR-011 (copy rendered markdown
-  as visible text or as markdown source) and FR-012 (copy automatically on drag release, as the
-  terminal view does, or only on an explicit copy).
+- FR-011 and FR-012 resolved in spec.md *Clarifications* (D5, D6); no marker remains (confirmed by
+  the tasks review, 2026-10-28).

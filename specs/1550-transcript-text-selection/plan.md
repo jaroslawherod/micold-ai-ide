@@ -115,11 +115,14 @@ crates/micold-material/src/
 └── lib.rs                               # exports
 
 crates/micold-client/src/
+├── app.rs                               # applies TranscriptMsg::Select, builds TranscriptView
+├── features/mod.rs                      # + pub mod transcript_selection
 ├── features/transcript_selection.rs     # new: per-window SessionSelection, units(), copy_text, update/applied
 ├── features/structured_transcript.rs    # TranscriptMsg::Select(..), CopyCode → Copy{target}; fold toggle informs selection
 ├── features/transcript_rich.rs          # CopyTarget generalises CodeId copy state
 ├── features/composer.rs                 # transcript_key(press, phase, selecting, focused, mac): CopySelection, SelectAll
 ├── features/window.rs                   # FieldId::Transcript(SessionId)
+├── ui/focus.rs                          # joins FieldId::Transcript to the SelectionArea's focus
 ├── ui/composer.rs                       # transcript_interrupt → transcript_keys subscription
 ├── ui/transcript/mod.rs                 # SelectionArea around the scrollable; lazy key + RowSelection; context menu
 ├── ui/transcript/blocks.rs              # RenderCtx.selection; PLAIN renderers selectable
@@ -131,7 +134,7 @@ crates/micold-client/src/
 ├── ui/material/inline_diff.rs           # selectable path/labels/lines; DiffPath copy control
 ├── shell/panes.rs                      # sync: retain_shown(&sessions, &now) drops selections no pane shows
 ├── shell/transcript.rs                  # Edge → scroll_by on transcript_scroll_id; copy outcome
-└── showcase/                            # entries for the two components
+└── showcase/                            # entries for the two components (sections/atoms.rs, catalogue.rs)
 crates/micold-client/tests/
 ├── features_transcript_selection.rs     # new
 ├── transcript_selection_parity.rs       # new
@@ -191,7 +194,8 @@ Six milestones, each one PR, cut in tasks.md (each fits one session, constitutio
 
 - **M1 — selection model (core)**: `structured::selection`, `markdown::shown_text`,
   `markdown::list_marker` (and `markdown_view.rs` calling it), `summary::work_value`; S-1–S-5,
-  S-11. *Satisfies*: FR-002, FR-005 (text part), FR-010, FR-011, FR-019 (stability) at the model;
+  S-11. *Satisfies*: FR-002, FR-005 (text part), FR-010, FR-011, FR-015 (value), FR-019
+  (stability) at the model;
   SC-001, SC-005 at the model.
 - **M2 — window state and keys (client, render-free)**: `features/transcript_selection.rs`
   (`units` for every `RowPos`, `copy_text`, clearing, menu state), `TranscriptMsg::Select`,
@@ -213,7 +217,7 @@ Six milestones, each one PR, cut in tasks.md (each fits one session, constitutio
   routing to `TranscriptMsg::Select`, edge scroll in the shell (`scroll_by` on
   `transcript_scroll_id`), the context menu, focus to `FieldId::Transcript`; the user guide's
   selection, copy-key and menu text, where it becomes visible (Principle VII). *Satisfies*:
-  FR-001, FR-003–FR-009, FR-012, FR-013, FR-019a end to end.
+  FR-001, FR-003–FR-009, FR-012, FR-013, FR-019a end to end; FR-021 (selection part).
 - **M5 — copy controls and docs**: `CopyTarget`, `TranscriptMsg::Copy`, header/input/result/diff
   path controls, the user guide's copy-controls text, #939's out-of-scope note, quickstart Part B.
   *Satisfies*: FR-015–FR-018, FR-021; SC-004.

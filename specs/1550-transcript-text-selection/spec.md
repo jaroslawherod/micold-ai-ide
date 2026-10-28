@@ -28,8 +28,9 @@ is selected; BUG-1403).
   messages, assistant text (as rendered by #940), unfolded thinking text, tool-call card headers
   (tool name and input summary), unfolded tool input and result text, diff lines and their file
   path, code block code, turn footers, notices and raw rows. Not selectable: the labels and icons of
-  controls (fold toggles, copy controls, "jump to latest", permission-prompt buttons), images, and
-  text hidden by a folded card.
+  controls (fold toggles, copy controls, "jump to latest", permission-prompt buttons), images
+  (their drawn "[image not shown]" caption is text and is selectable), and text hidden by a folded
+  card.
 - **Selection**: one contiguous range of selectable text in reading order (top to bottom, then left
   to right within a line), from the point where a drag started (the anchor) to where it is now or
   ended (the focus). A selection may start and end in different entries.
@@ -264,7 +265,8 @@ highlighted; right-click and choose Copy, and check the clipboard.
 - **FR-011**: Rendered markdown MUST be copied as its visible rendered text: no emphasis markers
   (`*`, `_`, `` ` ``), heading `#`s, code fences or link targets; a link copies its shown text. List
   bullets and numbers, block-quote marks and table cells are copied as the characters the view
-  draws for them, so the pasted text matches what is shown (FR-010, SC-001).
+  draws for them, so the pasted text matches what is shown (FR-010, SC-001); the cells of one
+  table row are separated by one tab, and its rows by line breaks.
 - **FR-012**: Releasing the pointer at the end of a drag (or a double- or triple-click selection)
   MUST NOT change the clipboard. The selection is copied only on request: a copy key (FR-008), the
   context menu's **Copy** (FR-013) or a copy control (FR-015–FR-018). This differs from the
