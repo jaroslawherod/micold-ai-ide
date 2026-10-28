@@ -6,11 +6,18 @@ exist yet; every other path and type was checked against `main` at the plan's ba
 ## R1. Where the selection lives, and what a position is (FR-001, FR-002, FR-019, Principle II)
 
 **Decision**: A render-free core module `micold_core::structured::selection` *(new)* owns the model:
-a `TextPos { entry: EntryId, path: TextPath, offset: usize }` (`offset` a byte offset into the
-unit's shown text, always on a grapheme boundary), a `TextPath` *(new)* (a short `Vec<u16>` whose
-lexicographic order is drawing order inside the entry), and `Selection { anchor, focus, dragging }`.
-`TextPos` derives `Ord` field by field, so reading order is the order of `(EntryId, TextPath,
-offset)`. The window keeps one `Selection` per session it shows, in a render-free client module
+a `TextPos { row: RowPos, path: TextPath, offset: usize }` (`offset` a byte offset into the
+unit's shown text, always on a grapheme boundary), a `RowPos` *(new)* naming the transcript row
+(`Omitted | Entry(EntryId, Under { Body | Prompt(k) }) | End(k)`, data-model.md), a `TextPath`
+*(new)* (a short `Vec<u16>` whose lexicographic order is drawing order inside the row), and
+`Selection { anchor, focus, dragging }`. `TextPos` derives `Ord` field by field, so reading order
+is the order of `(RowPos, TextPath, offset)`. `RowPos` exists because not every drawn row has an
+`EntryId` (`ui/transcript/mod.rs:55-61` `RowKey::Omitted`, `RowKey::Prompt(PromptId)`, and request
+blocks drawn under an entry by `entries::with_trailing`), yet the spec makes notices and the
+descriptive text of permission prompts selectable (*Terms*, Edge Cases *Permission prompts*). Its
+variant order is the drawing order: the omitted notice first, each entry's body then the rows under
+it, then the request blocks at the end, those by their index as drawn (a `PromptId`'s order is not
+drawing order). The window keeps one `Selection` per session it shows, in a render-free client module
 `features/transcript_selection.rs` *(new)*, beside `features/structured_transcript.rs`'s per-session
 view state (fold set, follow).
 
@@ -173,12 +180,14 @@ iced's; one paragraph per hard line needs neither.
 
 ## R6. Highlight per entry inside `lazy` (SC-003, FR-019)
 
-**Decision**: `RenderCtx` gains `selection: Option<&EntrySelection>` *(new)*: the part of the
-selection that falls in this entry (`Whole`, or `From(path, offset)` / `To(path, offset)` /
+**Decision**: `RenderCtx` gains `selection: Option<&RowSelection>` *(new)*: the part of the
+selection that falls in this entry's body row (`in_row(&RowPos::Entry(id, Under::Body))`) (`Whole`, or `From(path, offset)` / `To(path, offset)` /
 `Within(start, end)`). The entry's `lazy` dependency (`ui/transcript/mod.rs`, keyed today by key,
 revision, fold state, scheme and cache stamp) adds it, so a drag rebuilds only the entries whose
 selected part changed — the first and last entry of the range, and entries entering or leaving it.
-Each renderer passes each unit `range_in(entry_selection, path, text_len)`.
+Each renderer passes each unit `range_in(row_selection, path, text_len)`. The rows outside `lazy`
+(the omitted notice, request blocks and resolution rows) are cheap and redrawn each frame already;
+they take `in_row` of their own `RowPos` directly.
 
 **Rationale**: The transcript's performance rests on per-entry `lazy` (#939 research R12). A
 selection moving inside one entry must not rebuild the others.
@@ -190,9 +199,14 @@ screen rectangles from the tree each frame, the very coupling R5 avoids).
 
 **Decision**: `features/transcript_selection.rs` clears a session's selection when: the transcript
 rebuilds (`Transcript::rebuilds()` changed), the anchor or focus entry is evicted from the front
-(FR-020 bound), a card holding part of the range is folded or unfolded (`TranscriptMsg::Toggle` on an
-entry in range), the pane shows another session (the selection is keyed by session, and the pane's
-switch drops it), or the window forgets the session. After each applied `StructuredEvents` message,
+(FR-020 bound), an endpoint lies in the omitted notice and the omitted count changes (its text
+changed), the placed request list changes while a prompt row (`Under::Prompt`, `End`) is in range
+(their indices shifted), a card holding part of the range is folded or unfolded (`TranscriptMsg::Toggle` on an
+entry in range), no pane of the project's layout shows the session any more (`shell/panes.rs::sync`, run after
+every message, already computes the shown terminals as `now`; it calls
+`transcript_selection.retain_shown(project, &now)` *(new)*, which covers `show_or_focus`,
+`PaneMsg::Show`, `close` and `prune` in one place; `swap` keeps the session shown and its
+selection), or the window forgets the session. After each applied `StructuredEvents` message,
 for each entry **in range whose revision changed**, it compares the selected substring of that entry
 before and after; a difference (a partial entry replaced by different text, #939 FR-015) clears the
 selection. Entries outside the range and growth past the focus are not looked at.
@@ -207,7 +221,12 @@ delta); clearing on any change in range (would clear on every streamed delta int
 ## R8. Copy keys and the interrupt (FR-008, FR-009, FR-019a, D2)
 
 **Decision**: `features/composer.rs::transcript_key(press, phase)` becomes `transcript_key(press,
-phase, selecting, mac) -> KeyIntent`, with two new intents `CopySelection` and `SelectAll`:
+phase, selecting, focused, mac) -> KeyIntent`, with two new intents `CopySelection` and
+`SelectAll`. `selecting` = the session has a non-empty selection; `focused` = `focused_field ==
+Some(FieldId::Transcript(session))`. Copy and select-all need `focused` (the table's rows are all
+"transcript focused"); with `focused` false the function returns today's result (Ctrl+C
+interrupts a busy turn, else nothing), so the arbitration stays in this one pure function rather
+than split between it and `update`:
 
 | Press (transcript focused) | selection | busy | Intent |
 |---|---|---|---|
@@ -266,7 +285,8 @@ of each target, computed in core:
 - `ToolInput`: the input JSON text as held (`ToolCard::input`), including while streaming.
 - `ToolResult`: the result parts' text as held, joined with `\n`, `[kind not shown]` for unshown
   parts.
-- `DiffPath`: the edit diff's `path`.
+- `DiffPath`: `EditDiff::path` (`crates/micold-core/src/structured/edit_diff.rs:20`, the call's
+  `file_path`).
 
 The controls are the existing `IconButton` copy control `CodeBlock::copy` uses, focusable with
 `TakesTheKeyboard` (FR-018 keyboard), on `DisclosureCard`'s header (ToolValue), above the input and
@@ -310,5 +330,6 @@ select-all and copy on a transcript at its event bound in under 1 s, and a drag 
 
 **Decision**: No feature this plan builds on is unmerged: #939, #940, #941 (with BUG-1403) and #944
 are on `main`. The code milestones (plan.md *Delivery*) go core → render-free client state → shared
-widgets → transcript wiring → copy controls and docs, each mergeable on its own: nothing becomes
-visible to the user until M4 swaps the transcript's leaves to their selectable form.
+widgets → selectable leaves → transcript wiring → copy controls and docs, each mergeable on its own: nothing becomes
+visible to the user until M4b wraps the transcript in `SelectionArea` (M4a makes the leaves
+selectable but nothing yet starts a selection).

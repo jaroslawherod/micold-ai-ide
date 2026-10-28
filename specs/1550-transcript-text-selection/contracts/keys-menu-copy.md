@@ -1,28 +1,31 @@
 # Contract: copy keys, context menu and copy controls
 
-## Keys (`features/composer.rs::transcript_key(press, phase, selecting, mac) -> KeyIntent`)
+## Keys (`features/composer.rs::transcript_key(press, phase, selecting, focused, mac) -> KeyIntent`)
 
 Reached only for key presses no widget captured, while `transcript_keys` is subscribed (the active
 session shows a transcript and its turn can be interrupted, or `focused_field ==
-FieldId::Transcript(session)`). `selecting` = the session has a non-empty selection **and** the
-transcript holds focus.
+FieldId::Transcript(session)`). `selecting` = the session has a non-empty selection; `focused` =
+`focused_field == Some(FieldId::Transcript(session))`. Rows K-1–K-4 and K-8 need `focused`;
+with `focused` false the function returns what it returns today (K-5, K-6, K-9), so `update`
+does not gate again.
 
-| ID | Platform | Press | selecting | busy | Intent |
-|---|---|---|---|---|---|
-| K-1 | Linux, Windows | Ctrl+C | yes | any | `CopySelection` |
-| K-2 | Linux, Windows | Ctrl+Shift+C | yes | any | `CopySelection` |
-| K-3 | macOS | Cmd+C | yes | any | `CopySelection` |
-| K-4 | macOS | Ctrl+C | yes | any | `CopySelection` |
-| K-5 | all | Ctrl+C | no | yes | `Interrupt` (#941 FR-012a, unchanged) |
-| K-6 | all | Ctrl+C | no | no | `Edit` (nothing) |
-| K-7 | all | Ctrl+Shift+C, Cmd+C | no | any | `Edit`; never `Interrupt` |
-| K-8 | Linux, Windows / macOS | Ctrl+A / Cmd+A, transcript focused | any | any | `SelectAll` |
-| K-9 | all | Escape | — | yes | `Interrupt` (unchanged) |
+| ID | Platform | Press | selecting | focused | busy | Intent |
+|---|---|---|---|---|---|---|
+| K-1 | Linux, Windows | Ctrl+C | yes | yes | any | `CopySelection` |
+| K-2 | Linux, Windows | Ctrl+Shift+C | yes | yes | any | `CopySelection` |
+| K-3 | macOS | Cmd+C | yes | yes | any | `CopySelection` |
+| K-4 | macOS | Ctrl+C | yes | yes | any | `CopySelection` |
+| K-5 | all | Ctrl+C | no, or not focused | any | yes | `Interrupt` (#941 FR-012a, unchanged) |
+| K-6 | all | Ctrl+C | no, or not focused | any | no | `Edit` (nothing) |
+| K-7 | all | Ctrl+Shift+C, Cmd+C | no, or not focused | any | any | `Edit`; never `Interrupt` |
+| K-8 | Linux, Windows / macOS | Ctrl+A / Cmd+A | any | yes | any | `SelectAll` |
+| K-9 | all | Escape | — | any | yes | `Interrupt` (unchanged) |
 
 - **K-10 Composer focused**: the composer's `composer_key` decides (#941 FR-012a); the transcript
   selection is neither copied nor cleared. US2 scenarios 4 and 6.
-- **K-11 Other focus**: with focus elsewhere, copy and select-all do nothing to the transcript.
-  FR-019a.
+- **K-11 Other focus**: with focus elsewhere (`focused` false), copy and select-all do nothing to
+  the transcript, even with a non-empty selection: Ctrl+C then follows K-5/K-6, Ctrl+A is `Edit`.
+  Tests: K-8 and K-11 each with `focused` true and false, `mac` both ways. FR-019a.
 
 ## Context menu (`micold_material::ContextMenu`)
 

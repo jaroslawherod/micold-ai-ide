@@ -27,8 +27,8 @@ spans shaped one paragraph per hard line, so iced 0.14's line-relative `hit_test
 highlight in `primary_container`/`on_primary_container`) adopted by `Text`, `LinkText`, `CodeBlock`
 and `InlineDiff` through a `.selectable(...)` builder; and `SelectionArea`, the transcript's focus
 target, gesture owner, edge-scroller and right-click origin (R5). Copy keys are arbitrated in the
-existing `features/composer.rs::transcript_key`, which gains the selection and the platform as
-inputs so a selection is copied and never interrupts (#1403), and no selection keeps #941 FR-012a
+existing `features/composer.rs::transcript_key`, which gains the selection, the transcript's focus and the
+platform as inputs so a selection is copied and never interrupts (#1403), and no selection keeps #941 FR-012a
 (R8). The context menu reuses `micold_material::ContextMenu` (R11). Copy controls generalise #940's
 code-block copy state from `CodeId` to a `CopyTarget` (tool value, input, result, diff path), so
 tickets, read-back and confirmation are reused unchanged (R10). Details: [research.md](research.md),
@@ -74,9 +74,9 @@ all PASS, no deviation.
 | **II. Multi-Session** | PASS | Selection and menu state are `HashMap<SessionId, _>` per window; a pane shows a session at most once (`pane_layout.rs:478`), so per session is per pane; S-7 isolation test drives two sessions and two windows; copy-control state stays per window (#940). Nothing persisted. |
 | **III. Worktree Integration** | PASS | No file or VCS operation. |
 | **IV. Local-First** | PASS | Only the local system clipboard through iced; no network, nothing leaves the device. |
-| **V. Rust + iced** | PASS | iced only. `TextPos` ordering is structural; `CopyTarget`, `Granularity`, `EntrySelection`, `KeyIntent` are closed enums; an empty selection is a value (`is_empty`), not a flag pair; offsets are snapped at construction. |
+| **V. Rust + iced** | PASS | iced only. `TextPos` ordering is structural; `CopyTarget`, `Granularity`, `RowPos`, `RowSelection`, `KeyIntent` are closed enums; an empty selection is a value (`is_empty`), not a flag pair; offsets are snapped at construction. |
 | **VI. Cross-Platform** | PASS | One implementation; the only platform difference (Cmd vs Ctrl) is a `mac` parameter tested both ways on every host (R8); LF everywhere; clipboard via iced with read-back (#940 R5); Part B on all three CI-built clients. |
-| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` *Structured sessions* gains selecting, copy keys and their interrupt arbitration per platform, the menu and copy controls, in the milestone that makes them visible (M5); #939's out-of-scope note is updated (FR-021). |
+| **VII. Documentation** | PASS | `docs/user-guide/worktrees-and-sessions.md` *Structured sessions* gains selecting, copy keys and their interrupt arbitration per platform, the menu and copy controls, in the milestones that make them visible (selection, copy keys and menu in M4b; copy controls in M5); #939's out-of-scope note is updated (FR-021). |
 | **VIII. Reusable UI** | PASS | `SelectableText` and `SelectionArea` are new shared components in `micold-material` with builders, showcase entries and gates; `Text`, `LinkText`, `CodeBlock`, `InlineDiff` adopt them by a builder method rather than forking; `ContextMenu`, `IconButton`, `TakesTheKeyboard` reused. |
 
 ## Project Structure
@@ -102,7 +102,7 @@ specs/1550-transcript-text-selection/
 
 ```text
 crates/micold-core/src/
-├── structured/selection.rs              # new: TextPath, TextPos, Selection, EntrySelection, snap, word_at, source_line_at, range_in
+├── structured/selection.rs              # new: RowPos, TextPath, TextPos, Selection, RowSelection, snap, word_at, source_line_at, range_in
 ├── structured/mod.rs                    # + pub mod selection
 ├── structured/transcript/summary.rs     # + work_value (uncut work field)
 └── markdown/                            # + shown_text(&Inlines), list_marker
@@ -118,10 +118,10 @@ crates/micold-client/src/
 ├── features/transcript_selection.rs     # new: per-window SessionSelection, units(), copy_text, update/applied
 ├── features/structured_transcript.rs    # TranscriptMsg::Select(..), CopyCode → Copy{target}; fold toggle informs selection
 ├── features/transcript_rich.rs          # CopyTarget generalises CodeId copy state
-├── features/composer.rs                 # transcript_key(press, phase, selecting, mac): CopySelection, SelectAll
+├── features/composer.rs                 # transcript_key(press, phase, selecting, focused, mac): CopySelection, SelectAll
 ├── features/window.rs                   # FieldId::Transcript(SessionId)
 ├── ui/composer.rs                       # transcript_interrupt → transcript_keys subscription
-├── ui/transcript/mod.rs                 # SelectionArea around the scrollable; lazy key + EntrySelection; context menu
+├── ui/transcript/mod.rs                 # SelectionArea around the scrollable; lazy key + RowSelection; context menu
 ├── ui/transcript/blocks.rs              # RenderCtx.selection; PLAIN renderers selectable
 ├── ui/transcript/rich.rs                # RICH renderers pass slots/ranges to MarkdownView, InlineDiff
 ├── ui/transcript/entries.rs             # header/footer/notice/user text selectable; header + body copy controls
@@ -129,6 +129,7 @@ crates/micold-client/src/
 ├── ui/material/markdown_view.rs         # .selection(..)/.on_hit(..): TextPath per inline run, marker, cell
 ├── ui/material/code_block.rs            # selectable lines (full line text)
 ├── ui/material/inline_diff.rs           # selectable path/labels/lines; DiffPath copy control
+├── shell/panes.rs                      # sync: retain_shown(project, &now) drops selections no pane shows
 ├── shell/transcript.rs                  # Edge → scroll_by on transcript_scroll_id; copy outcome
 └── showcase/                            # entries for the two components
 crates/micold-client/tests/
@@ -186,24 +187,33 @@ review of the user guide.
 
 ## Delivery
 
-Five milestones, each one PR, cut in tasks.md (each fits one session, constitution task-size gate):
+Six milestones, each one PR, cut in tasks.md (each fits one session, constitution task-size gate):
 
 - **M1 — selection model (core)**: `structured::selection`, `markdown::shown_text`,
   `markdown::list_marker` (and `markdown_view.rs` calling it), `summary::work_value`; S-1–S-5,
   S-11. *Satisfies*: FR-002, FR-005 (text part), FR-010, FR-011, FR-019 (stability) at the model;
   SC-001, SC-005 at the model.
 - **M2 — window state and keys (client, render-free)**: `features/transcript_selection.rs`
-  (`units`, `copy_text`, clearing, menu state), `TranscriptMsg::Select`, `FieldId::Transcript`,
-  `transcript_key` K-1–K-11, `transcript_keys` subscription, copy outcome and failure notice.
+  (`units` for every `RowPos`, `copy_text`, clearing, menu state), `TranscriptMsg::Select`,
+  `FieldId::Transcript`, `transcript_key` K-1–K-11 (with `focused`), `transcript_keys`
+  subscription, copy outcome and failure notice, and `retain_shown` called from
+  `shell/panes.rs::sync` with its two-pane test (S-6).
   *Satisfies*: FR-006, FR-008, FR-009, FR-012, FR-014, FR-019, FR-019a at the state; SC-002.
 - **M3 — shared components**: `SelectableText`, `SelectionArea`, `.selectable` on `Text`,
   `LinkText`, `CodeBlock`, `InlineDiff`; showcase; contrast and pixel-equality gates. *Satisfies*:
   Principle VIII; FR-001, FR-003, FR-004, FR-005 (visual line), FR-007, FR-020 (component); SC-006.
-- **M4 — selection in the transcript**: `RenderCtx.selection` and the lazy key, `SelectionArea`
-  around the scrollable, every renderer and entry view passing slots and ranges, edge scroll in the
-  shell, the context menu, the parity test, the budget variant. *Satisfies*: FR-001–FR-013 end to
-  end; SC-001, SC-003. The user guide's selection and copy-key text lands here, where it becomes
-  visible (Principle VII).
+- **M4a — selectable leaves (not yet user-visible)**: `RenderCtx.selection` and the entry's lazy
+  key; every renderer and entry view (blocks, rich, entries, permission, omitted notice) passing
+  `TextPath` slots and `range_in` ranges to the M3 components; the parity test
+  (`transcript_selection_parity`: what each row draws equals `units`) and the
+  `transcript_open_budget` select-all variant. With no `SelectionArea` yet nothing starts a
+  selection, so the transcript looks and behaves as before (T-4 pixel-equality holds). *Satisfies*:
+  FR-002, FR-010, FR-011 in the view; SC-001 (parity), SC-003 (budget).
+- **M4b — selection in the transcript**: `SelectionArea` around the scrollable, hit/press/release
+  routing to `TranscriptMsg::Select`, edge scroll in the shell (`scroll_by` on
+  `transcript_scroll_id`), the context menu, focus to `FieldId::Transcript`; the user guide's
+  selection, copy-key and menu text, where it becomes visible (Principle VII). *Satisfies*:
+  FR-001, FR-003–FR-009, FR-012, FR-013, FR-019a end to end.
 - **M5 — copy controls and docs**: `CopyTarget`, `TranscriptMsg::Copy`, header/input/result/diff
   path controls, the user guide's copy-controls text, #939's out-of-scope note, quickstart Part B.
   *Satisfies*: FR-015–FR-018, FR-021; SC-004.
