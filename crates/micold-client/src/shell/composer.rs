@@ -17,6 +17,7 @@ use micold_client::features::window::FieldId;
 use micold_client::ui::composer::{composer_field, model_picker_field};
 use micold_core::protocol::messages::{ClientMsg, TurnPhase};
 use micold_core::session::SessionId;
+use micold_core::structured::effort::EffortChoice;
 use micold_core::structured::model::ModelChoice;
 
 use crate::shell::daemon_sync::{send_op_bound, send_op_bound_req, PendingOp};
@@ -154,6 +155,16 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             follow = true;
         }
         Msg::ModelPickerClosed(session) => app.core.composers.palette.close_picker(session),
+        Msg::EffortPickerToggled(session) => app.core.effort_picker_toggled(session),
+        Msg::EffortPickerMoved { session, direction } => {
+            app.core.effort_picker_moved(session, direction);
+        }
+        Msg::EffortPicked { session, row } => {
+            if let Some(choice) = app.core.effort_picked(session, row) {
+                set_effort(app, session, choice);
+            }
+        }
+        Msg::EffortPickerClosed(session) => app.core.composers.effort.close(session),
         Msg::SwitchRequested { session, to } => {
             if let Some(request) = app.core.switch_requested(session, to) {
                 switch_kind(app, request);
@@ -213,6 +224,8 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::ModelPickerTyped { session, .. }
         | Msg::ModelPickerMoved { session, .. }
         | Msg::ModelPicked { session, .. }
+        | Msg::EffortPickerMoved { session, .. }
+        | Msg::EffortPicked { session, .. }
         | Msg::SwitchRequested { session, .. } => *session,
         Msg::SendRequested(session)
         | Msg::StopRequested(session)
@@ -222,6 +235,8 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::QueueEditCancelled(session)
         | Msg::ModelPickerRequested(session)
         | Msg::ModelPickerClosed(session)
+        | Msg::EffortPickerToggled(session)
+        | Msg::EffortPickerClosed(session)
         | Msg::SwitchConfirmed(session)
         | Msg::SwitchDismissed(session)
         | Msg::LoginOffered(session) => *session,
@@ -354,6 +369,26 @@ fn set_model(app: &mut App, session: SessionId, choice: ModelChoice) -> bool {
     sent.is_some()
 }
 
+/// Ask the service to run `session` with the effort `choice` (#1554 FR-004, FR-005); a refusal
+/// is the composer's notice, and the choice stays what the catalog says. `false` when nothing
+/// could be sent.
+fn set_effort(app: &mut App, session: SessionId, choice: EffortChoice) -> bool {
+    let binding = app.session_binding_of(session);
+    let sent = send_op_bound_req(app, binding, PendingOp::SessionEffort { session }, |req| {
+        ClientMsg::SetSessionEffort {
+            req,
+            session,
+            effort: choice,
+        }
+    });
+    if sent.is_none() {
+        app.core
+            .composers
+            .notice(session, NOT_CONNECTED.to_string());
+    }
+    sent.is_some()
+}
+
 /// Ask the service to switch a session's kind (#943 FR-019–FR-022); a `NeedsConfirmation`
 /// answer asks the user (`shell::daemon_sync`).
 fn switch_kind(app: &mut App, request: SwitchRequest) {
@@ -373,5 +408,97 @@ fn switch_kind(app: &mut App, request: SwitchRequest) {
         app.core
             .composers
             .notice(session, NOT_CONNECTED.to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! #1554 T022: a pick from the effort picker asks the service once, and a refusal is said
+    //! with the choice left as the catalog holds it (FR-004, FR-005; US1 scenario 7).
+
+    use super::*;
+    use crate::tests::base_app;
+    use iced::futures::channel::mpsc::{unbounded, UnboundedReceiver};
+    use micold_core::protocol::messages::{DaemonMsg, ErrorKind};
+    use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
+    use micold_core::structured::effort::EffortLevel;
+
+    /// A connected window holding one structured Claude Code session, and the wire's far end.
+    fn app_with_session() -> (App, UnboundedReceiver<ClientMsg>, SessionId) {
+        let (tx, rx) = unbounded();
+        let mut app = base_app();
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+        let session = Session::start_new_of_kind(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        let id = session.id;
+        let path = std::path::PathBuf::from("/repo/effort");
+        app.core
+            .workspace
+            .sessions
+            .insert(path.clone(), vec![session]);
+        app.core.workspace.active = Some(path);
+        (app, rx, id)
+    }
+
+    fn effort_requests(rx: &mut UnboundedReceiver<ClientMsg>) -> Vec<(u64, EffortChoice)> {
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::SetSessionEffort { req, effort, .. } = msg {
+                sent.push((req, effort));
+            }
+        }
+        sent
+    }
+
+    #[test]
+    fn a_pick_asks_the_service_once_and_a_refusal_is_said_with_the_choice_unchanged() {
+        let (mut app, mut rx, s) = app_with_session();
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        assert!(app.core.composers.effort.picker(s).is_some(), "opened");
+        // Default, low, medium, high: the fourth row.
+        let _ = update(
+            &mut app,
+            Msg::EffortPicked {
+                session: s,
+                row: Some(3),
+            },
+        );
+        let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+        let sent = effort_requests(&mut rx);
+        assert_eq!(
+            sent.iter().map(|(_, e)| e.clone()).collect::<Vec<_>>(),
+            [high],
+            "one request, for the picked level"
+        );
+        assert!(app.core.composers.effort.picker(s).is_none(), "closed");
+
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::OperationError {
+                req: sent[0].0,
+                kind: ErrorKind::Refused,
+                message: "Claude Code did not accept the level".into(),
+                detail: None,
+            },
+        );
+        assert_eq!(
+            app.core
+                .composers
+                .composer(s)
+                .and_then(|c| c.notice.as_deref()),
+            Some("Claude Code did not accept the level"),
+            "the reason, in words"
+        );
+        assert_eq!(
+            app.core.effort_choice(s),
+            EffortChoice::Default,
+            "unchanged"
+        );
+        assert_eq!(app.core.effort_header(s), "Effort: Default");
+        assert!(effort_requests(&mut rx).is_empty(), "nothing more asked");
     }
 }

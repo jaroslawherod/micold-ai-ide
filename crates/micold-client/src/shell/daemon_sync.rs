@@ -135,6 +135,10 @@ pub enum PendingOp {
     SessionModel {
         session: SessionId,
     },
+    /// A `SetSessionEffort` (#1554 FR-005): a refusal is `session`'s composer notice.
+    SessionEffort {
+        session: SessionId,
+    },
     /// A `SessionSwitchKind` (#943 FR-019–FR-021): a `NeedsConfirmation` answer asks the user
     /// to confirm `request`; another refusal is the composer's notice.
     SwitchKind {
@@ -316,6 +320,7 @@ impl PendingOp {
             PendingOp::PermissionInput { .. } => "show the whole input".into(),
             PendingOp::SetPermissionMode { .. } => "change the permission mode".into(),
             PendingOp::SessionModel { .. } => "change the session's model".into(),
+            PendingOp::SessionEffort { .. } => "change the session's reasoning effort".into(),
             PendingOp::SwitchKind { .. } => "switch the session's kind".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
@@ -684,7 +689,8 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
             | PendingOp::QueueTake { session }
-            | PendingOp::SessionModel { session } => app.core.composers.notice(session, text),
+            | PendingOp::SessionModel { session }
+            | PendingOp::SessionEffort { session } => app.core.composers.notice(session, text),
             PendingOp::SwitchKind { request } => {
                 app.core.composers.notice(request.session, text);
             }
@@ -1413,7 +1419,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             }
             // #943: the model and the kind arrive on the catalog snapshot and in the events; a
             // switch's command is used up once the switch is done (US4 scenario 2).
-            Some(PendingOp::SessionModel { .. }) => {}
+            Some(PendingOp::SessionModel { .. } | PendingOp::SessionEffort { .. }) => {}
             Some(PendingOp::SwitchKind { request }) => {
                 app.core.switch_completed(&request);
             }
@@ -1871,7 +1877,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     PendingOp::QueueOp { session }
                     | PendingOp::QueueEdit { session }
                     | PendingOp::QueueTake { session }
-                    | PendingOp::SessionModel { session },
+                    | PendingOp::SessionModel { session }
+                    | PendingOp::SessionEffort { session },
                 ) => app.core.composers.notice(session, message),
                 // #942: a refused answer or input request shows on the request (FR-012); a
                 // refused mode change is the session's notice (FR-017).
@@ -3151,7 +3158,8 @@ pub(crate) fn forget_composer(app: &mut App, id: SessionId) {
             | PendingOp::QueueOp { session }
             | PendingOp::QueueEdit { session }
             | PendingOp::QueueTake { session }
-            | PendingOp::SessionModel { session } if *session == id
+            | PendingOp::SessionModel { session }
+            | PendingOp::SessionEffort { session } if *session == id
         ) && !matches!(op, PendingOp::SwitchKind { request } if request.session == id)
     });
 }

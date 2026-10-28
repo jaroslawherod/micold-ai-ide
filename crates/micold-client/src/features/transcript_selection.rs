@@ -52,10 +52,10 @@ use crate::features::structured_insights::State as InsightsState;
 use crate::features::transcript_rich::{Derived, DerivedBody, Part, RichCache, EDIT_TOOLS};
 use shown::{
     always_allow_note, attachments_line, command_chip_description, command_chip_title,
-    compacted_text, first_line, footer_view_with, hunk_title, model_changed_text, note_text,
-    omitted_text, oversized_text, plain_text, resolution_label, structured_input,
-    subagent_notice_text, unshown_caption, CLEARED, COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT,
-    INPUT_CUT, INTERRUPTED, PLAN_TITLE, QUESTION_TITLE, THINKING_TITLE,
+    compacted_text, effort_changed_text, first_line, footer_view_with, hunk_title,
+    model_changed_text, note_text, omitted_text, oversized_text, plain_text, resolution_label,
+    structured_input, subagent_notice_text, unshown_caption, CLEARED, COMMAND_OUTPUT_TITLE,
+    ENDED_WITHOUT_RESULT, INPUT_CUT, INTERRUPTED, PLAN_TITLE, QUESTION_TITLE, THINKING_TITLE,
 };
 
 /// What a pane says when the clipboard refused a copy of its transcript selection (FR-014).
@@ -573,8 +573,9 @@ fn body_units<'a>(
         EntryKind::ModelChanged { model, refused } => {
             u.line(vec![0], model_changed_text(model, refused.as_deref()));
         }
-        // The transcript draws no text for an effort note yet (#1554), so it copies none.
-        EntryKind::EffortChanged { .. } => {}
+        EntryKind::EffortChanged { effort, refused } => {
+            u.line(vec![0], effort_changed_text(effort, refused.as_deref()));
+        }
         EntryKind::TerminalPeriod => {
             let marker = crate::features::session::terminal_period_marker();
             u.line(vec![0], marker.title);

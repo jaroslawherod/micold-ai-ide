@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M3
-- **Next step**: M3 review A round 2, then full gate and PR.
+- **Phase**: M4
+- **Next step**: M4 implement T022–T026.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
 | #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 | #1591 | M2: keep the choice, launch with `--effort`, idle and stopped picks | merged | 5b7a239045d5bcf99f644b75b63c13b7fb000d74 |
+| #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | #1591 | merged |
-| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | implemented, reviews due |
-| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
+| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
+| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | in progress |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
 
 ## Decisions
@@ -89,10 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M3 T018–T021 (0dcb153f1); review A round 1 F1–F4 and B round 1 F1 fixed test-first (6b469ff7e); review A round 2 CLEAN, its MINOR F1 fixed test-first; scoped gate green (see *Review rounds*). Previous PR #1591 merged at 5b7a239045d5bcf99f644b75b63c13b7fb000d74.
-- **Next step**: PR open by the orchestrator (branch pushed; body in the session scratchpad `pr-1554-m3-body.md`), then CI and merge.
-- **Main paths**: `crates/micold-daemon/src/state.rs` (`EffortPicks.asking`, `pick_effort`, `finish_effort_pick`, `settle_effort_ask`, `reapply_effort`, `pick_model` busy branch), `crates/micold-daemon/src/structured.rs` (`ask_effort`, `defer_effort`), tests `crates/micold-daemon/tests/structured_effort.rs` (last four), `crates/micold-daemon/tests/structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`).
-- **Open findings**: none. PR: none yet.
+None.
 
 ## Open escalation
 

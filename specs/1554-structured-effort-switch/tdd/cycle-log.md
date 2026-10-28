@@ -132,3 +132,22 @@ the implementation it covers.
 ### Cycle 12 — docs (T021)
 
 - `docs/daemon.md`: a busy pick, `EffortRefused`, the re-apply after a model change. No test.
+
+### Cycle 13 — the effort picker, the marker (T022–T024)
+
+- red: `tests/features_effort_picker.rs` (12 tests), `entries.rs`
+  `an_effort_marker_names_the_choice_or_the_refusal` and `shell/composer.rs`
+  `a_pick_asks_the_service_once_and_a_refusal_is_said_with_the_choice_unchanged` written first;
+  they did not compile (no `features::effort_picker`, no `composer::Msg::Effort*`, no
+  `effort_changed_text`, no `PendingOp::SessionEffort`).
+- green: `features/effort_picker.rs` (`effort_label`, `availability_note`, `EffortPickerState`
+  in `composers.effort`, the `State` methods), the four `Msg::Effort*` and `set_effort` in
+  `shell/composer.rs`, `PendingOp::SessionEffort` routed as `SessionModel` in
+  `shell/daemon_sync.rs`, `effort_changed_text` beside `model_changed_text` (`shown.rs`, which
+  `entries.rs` re-exports; the copy path uses it too). 12/12, 1/1, 1/1.
+- draw (GUI exception): `effort_control` on `MenuSelect` beside `model_control`; the marker shares
+  the model marker's `change_marker`.
+
+### Cycle 14 — guide (T025)
+
+- `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and effort*. No test.

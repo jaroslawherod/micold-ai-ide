@@ -131,6 +131,17 @@ pub fn model_changed_text(model: &str, refused: Option<&str>) -> String {
     }
 }
 
+/// What an effort marker says (#1554 FR-004, FR-005; US1 scenario 5).
+pub fn effort_changed_text(
+    effort: &micold_core::structured::effort::EffortChoice,
+    refused: Option<&str>,
+) -> String {
+    match refused {
+        None => format!("Reasoning effort: {effort} from here on"),
+        Some(reason) => format!("Reasoning effort {effort} was not applied: {reason}"),
+    }
+}
+
 /// What a turn from before a `/clear` is marked with (#943 FR-005, US1 scenario 5).
 pub const BEFORE_THE_CLEAR: &str = "Before the clear";
 

@@ -25,9 +25,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::features::transcript_selection::shown::first_line;
 pub use crate::features::transcript_selection::shown::{
-    attachments_line, command_chip_description, command_chip_title, compacted_text, era_tag,
-    footer_view, model_changed_text, omitted_text, oversized_text, subagent_count,
-    subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
+    attachments_line, command_chip_description, command_chip_title, compacted_text,
+    effort_changed_text, era_tag, footer_view, model_changed_text, omitted_text, oversized_text,
+    subagent_count, subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
     COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL,
     THINKING_TITLE, USER_LABEL,
 };
@@ -124,6 +124,19 @@ fn caption(text: impl Into<String>, roles: Roles) -> Element<'static, Transcript
         .wrapping(Wrapping::WordOrGlyph)
         .width(Length::Fill)
         .into()
+}
+
+/// A model or effort marker: its words in a caption, tinted as an error when the change was
+/// refused, since a refusal is said in words and the role only adds to them (#943 FR-012).
+fn change_marker(text: String, refused: bool, roles: Roles) -> Element<'static, TranscriptMsg> {
+    let text = Text::new(text, TypeRole::Caption, roles)
+        .wrapping(Wrapping::WordOrGlyph)
+        .width(Length::Fill);
+    if refused {
+        text.tint(roles.error).into()
+    } else {
+        text.muted().into()
+    }
 }
 
 /// The omitted notice.
@@ -273,23 +286,17 @@ pub(super) fn entry(
             }
         }
         EntryKind::Cleared => caption(CLEARED, roles),
-        // A refusal is said in words; the error role only adds to them (FR-012).
-        EntryKind::ModelChanged { model, refused } => {
-            let text = Text::new(
-                model_changed_text(model, refused.as_deref()),
-                TypeRole::Caption,
-                roles,
-            )
-            .wrapping(Wrapping::WordOrGlyph)
-            .width(Length::Fill);
-            match refused {
-                Some(_) => text.tint(roles.error).into(),
-                None => text.muted().into(),
-            }
-        }
-        // No daemon writes an effort note before #1554 M2, and no window draws its marker before
-        // M4.
-        EntryKind::EffortChanged { .. } => iced::widget::Space::new().into(),
+        EntryKind::ModelChanged { model, refused } => change_marker(
+            model_changed_text(model, refused.as_deref()),
+            refused.is_some(),
+            roles,
+        ),
+        // The effort marker, laid out as the model's (#1554 FR-004, FR-005, research R8).
+        EntryKind::EffortChanged { effort, refused } => change_marker(
+            effort_changed_text(effort, refused.as_deref()),
+            refused.is_some(),
+            roles,
+        ),
         // The terminal period: where the conversation went, and where its turns are (#943 FR-023,
         // US5 scenario 2).
         EntryKind::TerminalPeriod => {
@@ -715,6 +722,24 @@ mod tests {
         assert_eq!(
             compacted_text(Some("auto")),
             "Conversation compacted automatically"
+        );
+    }
+
+    #[test]
+    fn an_effort_marker_names_the_choice_or_the_refusal() {
+        use micold_core::structured::effort::{EffortChoice, EffortLevel};
+        let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+        assert_eq!(
+            effort_changed_text(&high, None),
+            "Reasoning effort: high from here on"
+        );
+        assert_eq!(
+            effort_changed_text(&EffortChoice::Default, None),
+            "Reasoning effort: Default from here on"
+        );
+        assert_eq!(
+            effort_changed_text(&high, Some("Unknown effort level")),
+            "Reasoning effort high was not applied: Unknown effort level"
         );
     }
 

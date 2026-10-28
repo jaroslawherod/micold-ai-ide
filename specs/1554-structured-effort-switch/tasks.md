@@ -189,7 +189,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 5: Window — the effort picker and the marker (M4; US1, US3 visible)
 
-- [ ] T022 [P] [US1] Tests in `client/tests/features_effort_picker.rs` (new): `effort_label` →
+- [x] T022 [P] [US1] Tests in `client/tests/features_effort_picker.rs` (new): `effort_label` →
   `Effort: Default` / `Effort: high`; `EffortPickerState` rows are Default then `offered_levels`
   in order (five when none reported; the reported ones when the session's latest `CommandsReported`
   lists some), the current choice marked; open, close, highlight move and pick; `availability_note`
@@ -202,17 +202,17 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   effort high was not applied: <reason>"; a pick sends
   `SetSessionEffort` once, and an `OperationError` answer shows its message as text with the choice
   unchanged (FR-001–FR-003, FR-005)
-- [ ] T023 [US1] Implement T022: `client/src/features/effort_picker.rs` (new) exported from
+- [x] T023 [US1] Implement T022: `client/src/features/effort_picker.rs` (new) exported from
   `client/src/features/mod.rs`; `set_effort` and the picker open/close/highlight/pick messages in
   `client/src/shell/composer.rs` beside `set_model`; the `SetSessionEffort` answers in
   `client/src/shell/daemon_sync.rs`
-- [ ] T024 [US1] Draw (GUI exception): the effort trigger beside `model_control` in
+- [x] T024 [US1] Draw (GUI exception): the effort trigger beside `model_control` in
   `client/src/ui/composer.rs` on the shared `MenuSelect` (`ui/material/menu_select.rs`) with
   caller-held openness and highlight, the rows' "current" mark in words, the availability note line
   and tooltip; the marker in `client/src/ui/transcript/entries.rs` with the model marker's layout, its text from
   `effort_changed_text` (tested in T022), defined in `entries.rs` beside `model_changed_text`
   (research R7, R8)
-- [ ] T025 [US1] [US3] User guide `docs/user-guide/worktrees-and-sessions.md`: rename *Commands and
+- [x] T025 [US1] [US3] User guide `docs/user-guide/worktrees-and-sessions.md`: rename *Commands and
   the model* to *Commands, the model and effort*; describe the effort picker beside the model, one
   sentence per level (`low` … `max`) and Default, the unsupported-model wording, that a change
   applies from the next answer (a turn in progress keeps its level), that the choice is kept across
