@@ -77,7 +77,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: M2 implemented and committed (`fc6e5ebb9`): T013–T023 ticked, `tdd/cycle-log.md` M2 rows written (compile-fail red, four mutants caught). Verify tests green: `features_transcript_selection` 28, `features_composer` 40, `features_transcript_rich` 18, `features_are_render_free` 2; guards `feature_registration_cost`, `feature_write_isolation` (allowlist and MUTATORS/READERS entries added), `field_focus_call_sites`, `features_structured_transcript`, `transcript_pane` green.
+- **In flight**: a full gate (`scripts/gate.sh`) was started detached on `fc6e5ebb9`, log `/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/gate-m2-fc6e5eb.log` (ends `GATE_EXIT=<n>`); disk had 8.2 GB free when it started — if it died of `No space left`, wipe `target-shared/` and rerun.
+- **Next**: verify.md from step 1: review A (`code-review` high) on `origin/main...HEAD`, review B (conformance, sonnet), fixes, full gate green on the final tree, then pr.md up to the push (`git push -u origin claude/project-thread-zj503u`, no PR: body to `/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/pr-1550-m2-body.md`, `Refs #1550`). No visual pass: nothing draws the selection in M2.
+- **Open findings**: none yet (no review has run).
+- **PR**: none.
 
 ## Open escalation
 
