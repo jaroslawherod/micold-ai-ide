@@ -183,6 +183,12 @@ pub fn name_taken(
     }
 }
 
+/// Whether the JSON file at `path` defines a server `micold` under `mcpServers`: a file that, placed
+/// as a CLI's MCP config, would make the tool server skip binding (daemon config rule V17).
+pub fn file_names_micold(path: &Path) -> bool {
+    read_json(path).is_some_and(|doc| names_micold(&doc))
+}
+
 /// Whether `object.mcpServers` has a key `micold`.
 fn names_micold(object: &Value) -> bool {
     object

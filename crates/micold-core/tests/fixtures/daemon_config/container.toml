@@ -1,0 +1,72 @@
+# Written by Micold AI IDE for daemon "podman-sandbox". Read by micold-daemon at start and on change.
+# Secrets are never in this file: every *_file names a file that holds one.
+schema = 1
+
+[daemon]
+name = "podman-sandbox"
+kind = "container"
+data_dir = "/var/lib/micold-ai-ide"
+home = "/home/micold"
+time_zone = "Europe/Warsaw"
+image = "ghcr.io/jaroslawherod/micold-basic:5d9ed63715e43146"
+idle_stop = "default"
+log = "info"
+
+[listen]
+tcp = "127.0.0.1:7000"
+
+[auth]
+client_token_file = "/run/micold/secrets/client-token"
+
+[ssh]
+dir = "/run/micold/ssh"
+
+[[projects]]
+path = "/home/jaro/workspaces/micold-ai-ide"   # bind-mounted at the same path
+
+[git]
+isolate_host_helpers = true
+ssh_to_https = true
+
+[[github.tokens]]
+name = "acme-org"
+token_file = "/run/micold/secrets/github/acme-org"
+repos = ["acme/*"]
+
+[[github.tokens]]
+name = "personal"
+token_file = "/run/micold/secrets/github/personal"
+
+[ai]
+default = "claude_code"
+
+[[ai.cli]]
+id = "claude_code"
+enabled = true
+version = "2.1.247"
+args = ["--permission-mode", "acceptEdits"]
+model = "claude-opus-5-5"
+sign_in_file = "/run/micold/secrets/ai/claude_code/.credentials.json"   # relayed by the app, read-only
+settings_file = "/run/micold/config/ai/claude_code/settings.json"
+env = { CLAUDE_CODE_DISABLE_TELEMETRY = "1" }
+
+[[ai.cli]]
+id = "codex"
+api_key_file = "/run/micold/secrets/ai/openai_api_key"
+settings_file = "/run/micold/config/ai/codex/config.toml"
+place = [{ file = "/run/micold/config/ai/codex/AGENTS.md", as = "AGENTS.md" }]
+
+[session.env]
+RUST_LOG = "info"
+
+[session.secret_env]
+NPM_TOKEN = "/run/micold/secrets/env/NPM_TOKEN"
+
+[startup]
+script_file = "/run/micold/config/startup.sh"
+shell = "/bin/sh"
+timeout_secs = 300
+on_failure = "refuse"
+run = "once_per_container"
+env_file = "/run/micold/secrets/startup.env"
+export_env = true

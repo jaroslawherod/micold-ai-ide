@@ -18,6 +18,7 @@ pub mod cli_reason;
 pub mod clock;
 pub mod connect;
 pub mod context_header;
+pub mod daemon_config;
 pub mod daemon_resources;
 pub mod daemons;
 pub mod endpoint;

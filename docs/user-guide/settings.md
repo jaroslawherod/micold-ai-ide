@@ -605,6 +605,10 @@ user and port is refused, naming the existing one. A daemon can also run in a cl
 Each container daemon keeps its own settings, and they are kept if you switch it to the host and
 back. A change to a running daemon asks before it restarts it.
 
+Every daemon is described by a configuration file; its keys, defaults and the
+`micold-daemon config check` command that validates one are in [The daemon configuration
+file](daemon-configuration.md).
+
 #### Container
 
 - **Container runtime** — Docker (the default) or Podman.

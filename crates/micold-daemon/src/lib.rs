@@ -10,6 +10,7 @@
 pub mod activity;
 pub mod attention;
 pub mod catalog;
+pub mod config_check;
 /// Tailing a provider's own append-only event log for busy/idle evidence (feature 026, T064).
 pub mod event_log;
 pub mod framer;
