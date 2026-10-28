@@ -835,7 +835,7 @@ retry.
 ### Filtering GitHub issues
 
 With the GitHub source showing, a **Filters** button sits beside **Issue**. It opens a panel with
-two fields and a **State** row:
+two label fields, a **State** row and three single-value fields:
 
 - **Include labels**: only issues carrying every label you add are listed.
 - **Exclude labels**: no issue carrying any label you add is listed. Add `in-progress` and
@@ -844,6 +844,18 @@ two fields and a **State** row:
   recently closed issue, or **All** to see both. A closed issue's row carries a **Closed** chip
   (ahead of any status shown for it), and you pick it like an open one: the ticket, name and type
   are filled the same way.
+- **Assignee**: **Me** (the account `gh` is signed in as), **No assignee**, or a person. Type part
+  of a login or name to find the repository's assignable users; the search is sent to GitHub once
+  you pause typing.
+- **Author**: **Me**, or a person found the same way. If the person you want isn't offered, type
+  their GitHub login (letters, digits and single hyphens, up to 39 characters) and pick
+  **Use login** *login*.
+- **Milestone**: **No milestone**, or one of the repository's open milestones, by title, read
+  from GitHub the first time you open the field. Type to narrow them.
+
+Each of these three holds one value, shown in its field; its first row, **Any assignee**, **Any
+author** or **Any milestone**, clears it. A milestone whose title holds a quote (`"`) or a
+backslash (`\`) can't be sent as a filter, so it is not offered.
 
 The labels are the repository's, alphabetically, read from GitHub the first time you open one of the
 fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It then
@@ -855,8 +867,9 @@ is not offered, and the field says how many were left out. If the labels can't b
 says why and offers **Retry**; the list and the search keep working.
 
 The button names how many filters you chose ("Filters · 2"). Each change reloads the list from
-GitHub with the filters, most recently updated first, and a line under the search names them, for
-example "Excluding labels in-progress, blocked" or "Closed issues". The statement under the source
+GitHub with the filters, all of them together (an issue must match every one), most recently
+updated first, and a line under the search names them, for example "Excluding labels in-progress,
+blocked", "Closed issues" or "No assignee; By me; Milestone v2.4". The statement under the source
 then reads "Reads issues of <repository> from GitHub, sending the filter and the search text."
 **Clear filters**, above the statement, removes every filter and brings back the usual list of open
 issues. With no filter chosen, the picker reads and sends exactly what it did before. Switching the
