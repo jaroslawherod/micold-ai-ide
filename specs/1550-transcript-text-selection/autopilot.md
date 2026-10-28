@@ -101,7 +101,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | A F1 | `MarkdownView` holds a large code block back only with `on_show`, but drops its selectability on `large` alone | MINOR: the units side (`Units::markdown`, `derived.is_large`) also drops a large block on `large` alone, so view and copy agree (parity test); the transcript always sets `on_show`. |
 | M4a | A F2 | `thread_body` draws subagent thread cards with `row: None` (not selectable, not copied) | MINOR, deliberate per the M4a parity decision on #944's threads (X3, X5); kept in *Follow-ups not done* for M4b/M5. |
 | M4a | A F3 | `selectable_diff` rebuilds `diff_units` per draw for byte lengths | MINOR, performance: T034's slowest drag step is 27 ms against the 100 ms budget. |
-
 | M4b | A F2 (rest) | the menu draws for whichever session holds it, not only the active one | MINOR: now one menu per window (opening one closes the other); a session switch while it is open is rare and the registered surface's dismissal rules apply. |
 | M4b | A F3 | edge scroll is a fixed 12 px per frame, so its speed follows the frame rate | MINOR: frames are the area's own `motion::FRAME` wakes, not the display's refresh. |
 | M4b | A F4 | `SelectMsg::Hit.click` is no longer read | MINOR: kept as the widget's report (contract shape); the doc says the press's count decides. |
