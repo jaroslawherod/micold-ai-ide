@@ -62,6 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN: 2 MINOR — F1 `/effort` kept the CLI's argument hint (lists `ultracode`, `auto`): app hint set, D10 updated; F2 `supportsEffort: false` without a level list read as unknown: now no effort — both fixed test-first. Run by the orchestrator in a fresh context |
 | Full gate M1 | 1 | — | green: `scripts/gate.sh` at 023f35c86 (rebased onto origin/main ff9557a57; `PROTOCOL_VERSION` there still 71, branch 72) |
 | B (conformance) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN, no findings. Verify passed: core lib + the five integration test binaries; daemon/client `cargo check --tests` clean. Run by the orchestrator |
+| M2 scoped gate | 1 | — | green but for six root-only permission tests (an unreadable or unremovable file is readable and removable as root): core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2); daemon `sessions` `worktree_delete_blocked_by_an_unremovable_path…`, `settings` `a_service_write_over_an_unreadable_settings_file…`. fmt, clippy (core, workspace) green; `structured_effort` 13/13, `structured_model`, `structured_switch`, `session_store`, `protocol_roundtrip` green. Built from a clean target with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0` |
+| A + B M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | due: run by the orchestrator |
 
 ## Declined review findings
 
@@ -70,12 +72,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: M1 T001–T010 implemented (TDD log `tdd/cycle-log.md`); reviews A and B CLEAN, A's two
-  MINORs fixed test-first (D10 updated); rebased onto origin/main ff9557a57; full gate green at
-  023f35c86; branch pushed.
-- Next: open the M1 PR — title `#1554: Structured view: model reasoning effort cannot be changed
-  (M1)`, body in the session scratchpad `pr-1554-m1-body.md`, label docs-not-needed; record its
-  number here; wait on CI; merge; then M2.
+- Done: M2 T011–T017 implemented and committed (df1d83cc5, on origin/main b18b611d1); TDD log
+  cycles 7–9; decisions D11–D13; scoped gate green but for the six root-only tests (Review rounds).
+- Next: reviews A (code-review, high) and B (conformance) of `origin/main...HEAD`, snapshot
+  `a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654`, run by the
+  orchestrator; then fix findings, the full gate (`scripts/gate.sh`), push, PR body
+  `pr-1554-m2-body.md` in the session scratchpad.
+- No PR open for M2.
 
 ## Open escalation
 
