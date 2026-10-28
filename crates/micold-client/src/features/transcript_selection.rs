@@ -155,6 +155,39 @@ impl SelectMsg {
     }
 }
 
+/// A transcript's right-click menu, as a floating surface (FR-013, M-4): registered like every
+/// other menu, so Escape closes it (and does not reach the transcript's interrupt), it holds the
+/// keyboard while open, and the window's dismissal rules apply to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TranscriptContextMenu(pub SessionId);
+
+impl crate::overlay::FloatingSurface for TranscriptContextMenu {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("transcript_context_menu")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        use crate::features::structured_transcript::TranscriptMsg;
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::ContextMenu)
+            .cancelled_by(crate::app::Message::Session(
+                crate::features::session::Msg::Transcript(TranscriptMsg::Select(
+                    SelectMsg::MenuDismissed { session: self.0 },
+                )),
+            ))
+    }
+}
+
+impl crate::overlay::registry::Registered for TranscriptContextMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        let (session, _) = state.transcript_selection.open_menu()?;
+        Some(Self(session))
+    }
+}
+
 /// What separates a unit from the one before it in its row (the first unit of a row follows the
 /// previous row's last after a line break, FR-010).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -895,6 +928,17 @@ impl State {
             .find_map(|(session, s)| Some((*session, s.menu?)))
     }
 
+    /// How far a drag held past `dir`'s edge scrolls `session`'s transcript this frame, in pixels,
+    /// negative upward; nothing without a drag in progress (FR-003, contracts/selectable-text.md
+    /// A-3).
+    pub fn edge_scroll(&self, session: SessionId, dir: EdgeDir) -> Option<i32> {
+        use crate::features::structured_transcript::EDGE_SCROLL_STEP;
+        self.dragging(session).then_some(match dir {
+            EdgeDir::Up => -EDGE_SCROLL_STEP,
+            EdgeDir::Down => EDGE_SCROLL_STEP,
+        })
+    }
+
     /// Whether a selection drag in `session`'s transcript is in progress: the button is down and
     /// the selection follows the pointer, which an edge scroll then extends (FR-003).
     pub fn dragging(&self, session: SessionId) -> bool {
@@ -932,8 +976,14 @@ impl State {
                 }
                 None
             }
+            // The scroll is the shell's, asked for through `edge_scroll`; the edge itself
+            // changes no selection (the hits at the clamped pointer extend it).
             SelectMsg::Edge { .. } => None,
             SelectMsg::Context { origin, .. } => {
+                // One menu in the window: opening one closes another session's.
+                for s in self.sessions.values_mut() {
+                    s.menu = None;
+                }
                 self.sessions.entry(session).or_default().menu = Some(origin);
                 None
             }

@@ -157,7 +157,9 @@ fn shown_selection(content: &str, fitted: &str, selected: &Range<usize>) -> Opti
     } else {
         selected.end
     };
-    (start < end).then_some(start..end)
+    // A range off the text's character boundaries (stale against a changed text) draws none.
+    let on_boundaries = fitted.is_char_boundary(start) && fitted.is_char_boundary(end);
+    (start < end && on_boundaries).then_some(start..end)
 }
 
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
@@ -434,6 +436,11 @@ mod tests {
         );
         assert_eq!(shown_selection(content, fitted, &(3..3)), None);
         assert_eq!(shown_selection(content, "…a/b.rs", &(0..2)), None, "a path");
+        assert_eq!(
+            shown_selection("é and more", "é and more", &(1..4)),
+            None,
+            "off a character boundary"
+        );
     }
 
     /// A stand-in for the renderer's shaper: one unit per character, so the arithmetic is

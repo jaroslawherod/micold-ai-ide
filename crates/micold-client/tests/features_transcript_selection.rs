@@ -1334,3 +1334,40 @@ fn an_empty_transcript_shows_copy_disabled() {
     assert!(!app.transcript_selection.selecting(s));
     assert_eq!(menu_of(&app, s)[0], (MENU_COPY, None));
 }
+
+/// M-4, FR-013 (Review A M4b F1): the open menu is a registered surface, so Escape closes it
+/// rather than reaching the transcript's interrupt, and it holds the keyboard while open.
+#[test]
+fn escape_closes_the_menu_and_the_menu_holds_the_keyboard() {
+    let (mut app, s) = app_with([user("hello world")]);
+    app.session.active = Some(s);
+    app.window.focused_field = Some(FieldId::Transcript(s));
+    send(
+        &mut app,
+        SelectMsg::Context {
+            session: s,
+            origin: (5, 6),
+        },
+    );
+    assert!(!app.transcript_focused(), "the menu holds the keyboard");
+    assert_eq!(
+        micold_client::overlay::registry::escape(&app),
+        Some(micold_client::app::Message::Session(
+            micold_client::features::session::Msg::Transcript(TranscriptMsg::Select(
+                SelectMsg::MenuDismissed { session: s }
+            ))
+        ))
+    );
+}
+
+/// One menu in the window: opening a second session's closes the first's (Review A M4b F2).
+#[test]
+fn opening_a_menu_closes_another_sessions() {
+    let (mut app, a) = app_with([user("hello")]);
+    let b = SessionId::new();
+    for (session, origin) in [(a, (1, 1)), (b, (2, 2))] {
+        send(&mut app, SelectMsg::Context { session, origin });
+    }
+    assert_eq!(app.transcript_selection.menu(a), None);
+    assert_eq!(app.transcript_selection.open_menu(), Some((b, (2, 2))));
+}

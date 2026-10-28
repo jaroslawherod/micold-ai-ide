@@ -1252,21 +1252,17 @@ impl State {
         &mut self,
         msg: crate::features::transcript_selection::SelectMsg,
     ) -> crate::features::structured_transcript::Effect {
-        use crate::features::structured_transcript::{Effect, Scroll, EDGE_SCROLL_STEP};
-        use crate::features::transcript_selection::{EdgeDir, SelectMsg};
+        use crate::features::structured_transcript::{Effect, Scroll};
+        use crate::features::transcript_selection::SelectMsg;
         let session = msg.session();
         // A drag held past an edge scrolls that session's transcript, and only while a drag is
         // in progress (FR-003, contracts/selectable-text.md A-3).
         if let SelectMsg::Edge { dir, .. } = msg {
-            if !self.transcript_selection.dragging(session) {
-                return Effect::default();
-            }
-            let step = match dir {
-                EdgeDir::Up => -EDGE_SCROLL_STEP,
-                EdgeDir::Down => EDGE_SCROLL_STEP,
-            };
             return Effect {
-                scroll: Some(Scroll::By(step)),
+                scroll: self
+                    .transcript_selection
+                    .edge_scroll(session, dir)
+                    .map(Scroll::By),
                 ..Effect::default()
             };
         }
