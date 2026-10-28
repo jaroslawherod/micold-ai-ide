@@ -940,8 +940,9 @@ fn request_titles(app: &mut App, tickets: &[TitleTicket]) -> bool {
         }
     }
     // Feature 1102: with the switch off no title is read, and none is recorded as failed or
-    // missing, so turning it back on reads them on the next open. The repository is read all the same: the
-    // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
+    // missing, so turning it back on reads them on the next open. The repository is read all the
+    // same: the issue links need it, and remotes are a git read, not a GitHub one (feature 1122,
+    // R2).
     let routed = has_route(app);
     let wanted = if app.core.settings.github_issues_enabled {
         titles_to_fetch(
