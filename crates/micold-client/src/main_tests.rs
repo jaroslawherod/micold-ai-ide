@@ -11861,7 +11861,7 @@ mod pr_status {
     // ---- Feature 1003, T010: the list read asks for the worktree's branch set ----------------
 
     /// Run `git -C dir args` as if at Unix second `time`, so the reflog's seconds are the test's.
-    fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
+    pub(super) fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
         use std::process::Command;
         let date = format!("@{time} +0000");
         let out = micold_core::process::no_window(&mut Command::new("git"))
@@ -16650,6 +16650,36 @@ mod history_tests {
             .collect()
     }
 
+    /// A run group `id` with two runs, no worktree yet.
+    fn run_group(id: u128) -> micold_core::runs::RunGroup {
+        micold_core::runs::RunGroup::new(micold_core::runs::NewGroup {
+            id: micold_core::runs::GroupId(uuid::Uuid::from_u128(id)),
+            name: "g".into(),
+            naming: micold_core::naming::WorktreeNaming {
+                type_: Some(micold_core::naming::ConventionalType::Feat),
+                ticket: None,
+                name: "g".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs: (1u8..=2)
+                .map(|number| micold_core::runs::Run {
+                    number,
+                    provider: AiCli::ClaudeCode,
+                    names: micold_core::naming::DerivedNames {
+                        dir_name: format!("g-{number}"),
+                        branch: format!("feat/g-{number}"),
+                    },
+                    session: None,
+                    status: micold_core::runs::RunStatus::Creating,
+                })
+                .collect(),
+        })
+        .expect("valid group")
+    }
+
     /// US1 AS1–AS3: A → B → C, Back, Back, select D: forward does nothing and the entries are A, D.
     #[test]
     fn back_twice_then_a_new_selection_drops_the_forward_entries() {
@@ -16701,32 +16731,7 @@ mod history_tests {
     fn back_from_compare_shows_the_review_tab() {
         let (mut app, ids, _rx) = app_with_sessions(1);
         select(&mut app, ids[0]);
-        let group = micold_core::runs::RunGroup::new(micold_core::runs::NewGroup {
-            id: micold_core::runs::GroupId(uuid::Uuid::from_u128(7)),
-            name: "g".into(),
-            naming: micold_core::naming::WorktreeNaming {
-                type_: Some(micold_core::naming::ConventionalType::Feat),
-                ticket: None,
-                name: "g".into(),
-            },
-            prompt: "p".into(),
-            base_branch: "main".into(),
-            base_commit: "abc".into(),
-            created: std::time::SystemTime::UNIX_EPOCH,
-            runs: (1u8..=2)
-                .map(|number| micold_core::runs::Run {
-                    number,
-                    provider: AiCli::ClaudeCode,
-                    names: micold_core::naming::DerivedNames {
-                        dir_name: format!("g-{number}"),
-                        branch: format!("feat/g-{number}"),
-                    },
-                    session: None,
-                    status: micold_core::runs::RunStatus::Creating,
-                })
-                .collect(),
-        })
-        .expect("valid group");
+        let group = run_group(7);
         let gid = group.id;
         app.core.runs.groups = vec![group];
         let _ = update(
@@ -16791,6 +16796,149 @@ mod history_tests {
             "the next press leaves the tab"
         );
         assert_eq!(app.core.session.active, Some(ids[0]));
+    }
+
+    // ---- Across projects (M4, US4, research R2, R5) ----------------------------------------------
+
+    /// Two known projects P and Q in temporary folders, Q active; P is a git repository with the
+    /// worktree `w`. Each folder holds idle sessions at the given locations.
+    struct TwoProjects {
+        app: App,
+        p: tempfile::TempDir,
+        q: tempfile::TempDir,
+        _rx: SentRx,
+    }
+
+    fn idle_at(location: SessionLocation) -> Session {
+        let mut session = Session::start_new(location, AiCli::ClaudeCode);
+        session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+        session
+    }
+
+    fn two_projects(p_sessions: Vec<Session>, q_sessions: Vec<Session>) -> TwoProjects {
+        let p = tempfile::tempdir().unwrap();
+        let q = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| super::pr_status::git_at(p.path(), 1_000, args);
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t.test"]);
+        git(&["config", "user.name", "T"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "root"]);
+        let w = p.path().join(".claude/worktrees/w");
+        git(&["worktree", "add", "-q", "-b", "feat/w", w.to_str().unwrap()]);
+        let (mut app, rx) = connected_app();
+        let scanner = micold_core::fs_scan::FakeFolderScanner::new();
+        for folder in [&p, &q] {
+            app.core
+                .workspace
+                .open_or_activate(folder.path().to_path_buf(), &scanner);
+        }
+        app.core
+            .workspace
+            .sessions
+            .insert(p.path().to_path_buf(), p_sessions);
+        app.core
+            .workspace
+            .sessions
+            .insert(q.path().to_path_buf(), q_sessions);
+        TwoProjects { app, p, q, _rx: rx }
+    }
+
+    fn reopen(app: &mut App, path: &std::path::Path) {
+        let _ = update(
+            app,
+            Message::Project(ProjectMsg::Reopened(path.to_path_buf())),
+        );
+    }
+
+    /// Cross-project Back: the project switches and the target session is shown; nothing between
+    /// was recorded, so Forward returns to Q's session and Back again to P's (R2). P's session is
+    /// in its worktree, read from disk for the press (R5).
+    #[test]
+    fn back_across_projects_switches_project_and_records_nothing_between() {
+        let pw_session = idle_at(SessionLocation::Worktree("w".into()));
+        let q1 = idle_at(SessionLocation::Default);
+        let (pw, q1_id) = (pw_session.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(
+            vec![idle_at(SessionLocation::Default), pw_session],
+            vec![q1],
+        );
+        reopen(&mut app, p.path());
+        select(&mut app, pw);
+        reopen(&mut app, q.path());
+        select(&mut app, q1_id);
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(p.path()));
+        assert_eq!(app.core.session.active, Some(pw), "P's worktree session");
+        press(&mut app, Dir::Forward);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(
+            app.core.session.active,
+            Some(q1_id),
+            "the forward entry was kept"
+        );
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(pw));
+    }
+
+    /// A project whose folder went away is passed over: its availability is read before the press
+    /// resolves (U2 step 0), so Back changes nothing rather than moving to a refused switch.
+    #[test]
+    fn back_passes_over_a_project_whose_folder_went_away() {
+        let p1 = idle_at(SessionLocation::Default);
+        let q1 = idle_at(SessionLocation::Default);
+        let (p1_id, q1_id) = (p1.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(vec![p1], vec![q1]);
+        reopen(&mut app, p.path());
+        select(&mut app, p1_id);
+        reopen(&mut app, q.path());
+        select(&mut app, q1_id);
+        let p_path = p.path().to_path_buf();
+        p.close().unwrap();
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(app.core.session.active, Some(q1_id), "nothing changes");
+        assert!(
+            app.core.workspace.sessions.contains_key(&p_path),
+            "P stays known"
+        );
+    }
+
+    /// Compare of G in P, show Q1, Back → P with Compare of G open, Forward → Q1.
+    #[test]
+    fn back_to_another_projects_compare_reopens_it_and_forward_returns() {
+        let p1 = idle_at(SessionLocation::Default);
+        let q1 = idle_at(SessionLocation::Default);
+        let (p1_id, q1_id) = (p1.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(vec![p1], vec![q1]);
+        reopen(&mut app, p.path());
+        select(&mut app, p1_id);
+        let group = run_group(7);
+        let gid = group.id;
+        let groups = |list| Message::Runs(micold_client::features::runs::Msg::GroupsChanged(list));
+        let _ = update(&mut app, groups(vec![group]));
+        let _ = update(
+            &mut app,
+            Message::Runs(micold_client::features::runs::Msg::CompareOpened {
+                group: gid,
+                project: p.path().to_path_buf(),
+            }),
+        );
+        assert!(app.core.runs.compare.is_some());
+        reopen(&mut app, q.path());
+        let _ = update(&mut app, groups(Vec::new()));
+        select(&mut app, q1_id);
+        assert!(app.core.runs.compare.is_none());
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(p.path()));
+        assert_eq!(
+            app.core.runs.compare.as_ref().map(|c| c.group),
+            Some(gid),
+            "Compare of G open in P"
+        );
+        press(&mut app, Dir::Forward);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(app.core.session.active, Some(q1_id));
+        assert!(app.core.runs.compare.is_none());
     }
 }
 
