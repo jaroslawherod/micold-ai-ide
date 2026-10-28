@@ -289,7 +289,8 @@ into one function both call. No new widget.
 
 **Why.** Principle VIII: the panel, fields, chips and status chip exist; multi-value labels are
 chips under a typeahead, a pattern `ToggleChip` already supports with `trailing_icon`. The panel
-floats (1185 D15), so chips cost the tallest dialog no height.
+floats (1185 D15), so chips cost the tallest dialog no height. Its list caps at 12 menu items
+(`FILTERS_PANEL_HEIGHT`, shared with Jira's Filters panel, M7); taller content scrolls inside it.
 
 **Rejected.** (a) A new multi-select widget: one use, and `Typeahead` + `ToggleChip` already
 compose it. (b) A "Closed" word in the details line: the row already has a status slot built for

@@ -154,7 +154,8 @@ Both are reset like `Failed`. `held()` is empty for both.
 | `include_field`, `exclude_field` | `FilterField` | Reuses 1185's typeahead field state. |
 | `panel_open` | `bool` | |
 | **US6** `milestones` | `ChoiceLoad<MilestoneChoices>` | |
-| **US6** `people` | `ChoiceLoad<Person>` + `people_pending: Option<u64>` | Debounced search (1185). |
+| **US6** `people` | `ChoiceLoad<Person>` + `people_pending: Option<u64>` | Debounced search (1185), only for typed text: none on focus. |
+| **US6** `people_for` | `Option<ValueField>` | The person field (Assignee or Author) the search was typed in: its people show in that field only; leaving it or choosing in it drops them. |
 | **US6** `assignee_field`, `author_field`, `milestone_field` | `FilterField` | |
 
 - `active_filter(&self) -> GithubFilter`: by the mode the list shown was asked in (`listed_for`,
