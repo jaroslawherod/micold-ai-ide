@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
+- **Phase**: M5 implemented on 1504-m5 (T042–T046), full gate green, reviews A/B pending; earlier: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
 - **Next step**: orchestrator runs scoped M4 review A round 2 (sonnet) on fix range `6abaeabc2..5c220dc75`, and the M4 visual pass; then fill REVIEW_A2/VISUAL_PASS in scratchpad pr-body-m4.md and open the M4 PR after M3's
 
 ## Pull requests
@@ -89,6 +89,13 @@ Reducer (`titles_to_fetch`, `TitleLookup`) was written with the shell mapping st
   `left: Failed(0)  right: NoIssue`; `..._lost_remotes_read_is_failed`,
   `..._failed_read_is_failed_with_the_time` and `..._no_gh_is_failed` failing "stamped 0, not now".
 - Green after T044/T045: overview 96 passed, `title` bin tests 21 passed.
+- Full gate (`scripts/gate.sh`) green on the third rerun: the first two runs hit flakes unrelated to
+  this diff while the M4 gate ran concurrently on the shared target (`capture-harness` private X
+  display; `guide-own-image` libpq check; then daemon `structured_permission`
+  `a_pending_request_marks_its_session_waiting...` Unknown vs AwaitingInput), each passing alone.
+- Reviews pending: review A (`code-review` high) and review B (conformance rubric
+  `.claude/skills/speckit-autopilot/rubrics/conformance.md`) on `05897a571..HEAD`; no visual pass
+  (no UI change: only which titles are asked and when).
 
 ## Red runs (M4)
 
