@@ -615,6 +615,208 @@ fn compare_of_another_project_whose_group_is_gone_is_skipped_and_removed() {
     assert_eq!(state.workspace.active, Some(repo()));
 }
 
+/// [`two_projects`] plus a session in `/other`'s included worktree `w1-2`, a `dir_name` `reconcile`
+/// uniquified (decision 7): only the daemon's list names it, never this machine's discovery.
+fn with_included(state: &mut State) -> SessionId {
+    let mut session = Session::start_new(worktree("w1-2"), AiCli::ClaudeCode);
+    session.lifecycle = SessionLifecycle::Idle;
+    let id = session.id;
+    state
+        .workspace
+        .sessions
+        .get_mut(&other())
+        .expect("two_projects lists /other's sessions")
+        .push(session);
+    id
+}
+
+/// `/other` was active once and its authoritative list (the daemon's push) named `w1` and the
+/// included `w1-2`; then the user went back to `/repo`'s Overview.
+fn visited_other_with_included(state: &mut State) {
+    send_with(
+        state,
+        Message::Project(project::Msg::Reopened(other())),
+        &|_| Some(vec!["w1".to_string(), "w1-2".to_string()]),
+    );
+    send_with(
+        state,
+        Message::Project(project::Msg::Reopened(repo())),
+        &|_| Some(vec!["feat-a".to_string(), "feat-b".to_string()]),
+    );
+}
+
+#[test]
+fn another_projects_included_worktree_from_its_last_list_exists() {
+    // Review A M4 F1: the local discovery (`w1_only`) never lists an included worktree.
+    let (mut state, d, _, _) = two_projects();
+    let i = with_included(&mut state);
+    visited_other_with_included(&mut state);
+    let at_i = in_other(View::Session {
+        location: worktree("w1-2"),
+        id: i,
+    });
+    walked_through(
+        &mut state,
+        &[at_session(SessionLocation::Default, d), at_i.clone()],
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(at_i.clone()),
+        "FR-006: switching to /other shows it once the daemon's list arrives"
+    );
+    assert!(entries(&state).contains(&at_i), "FR-007: not removed");
+    assert_eq!(state.workspace.active, Some(other()));
+}
+
+#[test]
+fn a_remote_projects_worktree_from_its_last_list_exists() {
+    // Review A M4 F1: a remote project (or no local git) reads nothing locally: `None`.
+    let (mut state, d, _, w) = two_projects();
+    visited_other_with_included(&mut state);
+    let at_w = in_other(View::Review(worktree("w1")));
+    let at_ws = in_other(View::Session {
+        location: worktree("w1"),
+        id: w,
+    });
+    walked_through(
+        &mut state,
+        &[
+            at_session(SessionLocation::Default, d),
+            at_ws.clone(),
+            at_w.clone(),
+        ],
+    );
+    let unreadable = |_: &Path| None;
+    assert_eq!(
+        state.press_history(
+            Msg::Pressed {
+                dir: Dir::Back,
+                source: Source::Button
+            },
+            &unreadable
+        ),
+        Step::Show(at_w.clone())
+    );
+    assert!(entries(&state).contains(&at_ws), "FR-007: nothing removed");
+}
+
+#[test]
+fn a_press_reads_each_projects_worktrees_once() {
+    // Review A M4 F2: the lookup is a `git worktree list` on the UI thread.
+    let (mut state, d, _, w) = two_projects();
+    walked_through(
+        &mut state,
+        &[
+            at_session(SessionLocation::Default, d),
+            in_other(View::Session {
+                location: worktree("w1"),
+                id: w,
+            }),
+            in_other(View::Review(worktree("w1"))),
+            in_other(View::Review(worktree("w9"))),
+        ],
+    );
+    let calls = std::cell::Cell::new(0);
+    let counting = |_: &Path| {
+        calls.set(calls.get() + 1);
+        Some(Vec::new())
+    };
+    assert_eq!(
+        state.press_history(
+            Msg::Pressed {
+                dir: Dir::Back,
+                source: Source::Button
+            },
+            &counting
+        ),
+        Step::Show(at_session(SessionLocation::Default, d)),
+        "all three of /other's worktree places are gone"
+    );
+    assert_eq!(calls.get(), 1, "one read of /other for the press");
+}
+
+#[test]
+fn compare_left_open_across_a_switch_is_not_recorded_under_the_new_project() {
+    // Review A M4 F4: until /other's list arrives, Compare still shows /repo's group.
+    let (mut state, _, _, _) = two_projects();
+    let group = run_group(7, "g", &["feat-a", "feat-b"]);
+    let gid = group.id;
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::GroupsChanged(vec![group])),
+    );
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::CompareOpened {
+            group: gid,
+            project: repo(),
+        }),
+    );
+    send_with(
+        &mut state,
+        Message::Project(project::Msg::Reopened(other())),
+        &w1_only,
+    );
+    assert!(
+        state.runs.compare.is_some(),
+        "still open: /other's list has not arrived"
+    );
+    assert_ne!(
+        state.shown_place().map(|p| p.view),
+        Some(View::Compare(gid)),
+        "/repo's group is not a place of /other"
+    );
+    assert!(!entries(&state).contains(&in_other(View::Compare(gid))));
+}
+
+#[test]
+fn a_compare_dismissed_in_the_background_is_reopened_then_closed_by_its_list() {
+    // Review A M4 F3, accepted (data-model.md): `known[P]` updates only while P is active, so a
+    // group dismissed while P was in the background still counts as existing. Back opens it from
+    // the stale list; P's own list closes it; the place shown then is recorded and cuts the
+    // forward entries off, as any new place does.
+    let (mut state, d, o, _) = two_projects();
+    let gid = run_group(7, "g", &["feat-a", "feat-b"]).id;
+    state
+        .runs
+        .known
+        .insert(other(), vec![run_group(7, "g", &["w1", "w2"])]);
+    let stale = in_other(View::Compare(gid));
+    let at_o = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
+    walked_through(
+        &mut state,
+        &[
+            at_o.clone(),
+            stale.clone(),
+            at_session(SessionLocation::Default, d),
+        ],
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(at_session(SessionLocation::Default, d))
+    );
+    assert_eq!(
+        press_with(&mut state, Dir::Back, Source::Button, &w1_only),
+        Step::Show(stale.clone())
+    );
+    assert_eq!(state.runs.compare.as_ref().map(|c| c.group), Some(gid));
+    // /other's own list arrives without the group (dismissed in the background).
+    send(
+        &mut state,
+        Message::Runs(runs::Msg::GroupsChanged(Vec::new())),
+    );
+    assert!(state.runs.compare.is_none(), "closed by its project's list");
+    select(&mut state, o);
+    assert_eq!(
+        entries(&state),
+        vec![at_o.clone(), stale, at_o],
+        "the place shown next is recorded; the forward entries are cut off"
+    );
+}
+
 // ---- U4: showing a target ----------------------------------------------------------------------
 
 #[test]

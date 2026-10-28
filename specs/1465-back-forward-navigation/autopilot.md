@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code-review high) + Review B M2 (conformance) | 1 | 637f832282d1952c56e904236b76cf62167ffc9e:ac1817bca4303fa68d3693bbf688cf878c2ae420 | A: CLEAN, no findings; B: CLEAN, no findings (range c359a7871..fa3e7bf39) |
 | Review A M3 (code-review high) | 1 | range fa3e7bf39..7e775ab64 | CLEAN, no findings |
 | Review B M3 (conformance) | 1 | range fa3e7bf39..7e775ab64 | CLEAN, 1 MINOR (tests/history.rs:637: nothing checks 'list untouched' after BrowseBack is applied and observe_place runs — fixed in M4: the test applies BrowseBack, observes, and asserts entries and position again) |
+| Review A M4 (code-review high) | 1 | range 9b3e348bb..27327176c (snapshot 5fb76795f85b2c0114f83b6245805dab20a57b40:75974ce8725a33caed3f0dc316e755deed529399) | CHANGES: 1 MAJOR, 3 MINOR (F1 another project's worktrees read only by local discovery: included (uniquified) worktrees, remote projects and no-git clients counted as gone and removed — fix: `worktree.known` per-project `dir_name`s written in `set_worktrees`, lookup = known ∪ discover; F2 lookup not memoized per press — fix: cached per project in `resolve`; F3 `runs.known[P]` stale for a group dismissed in the background — accepted, test pins it, data-model.md; F4 `shown_place` reports Compare under a project it does not belong to — fix: Compare only when `compare.project == active`) |
+| Review B M4 (conformance) | 1 | range 9b3e348bb..27327176c | CLEAN, 2 MINOR (F1 guide paragraph not rewrapped; F2 shell/history.rs module doc line over-long — both fixed, prose only) |
 
 ## Declined review findings
 
