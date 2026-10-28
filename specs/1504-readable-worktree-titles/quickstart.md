@@ -53,8 +53,7 @@ Platforms: run the table on Linux, macOS and Windows (a branch with `\`-free non
 **Part A**: passed. `scripts/gate.sh` (fmt, clippy core and workspace, `cargo test --workspace`,
 script tests) exited 0 on the stacked tree (ledger, *Review rounds*, row "Close gate"). Its run
 included `issues_are_requested_only_on_named_events` and `jira_is_requested_only_on_named_events`,
-with caller counts unchanged (L8, SC-004). The close PR's own diff is docs and specs only; its
-script tests and criteria check are in the same ledger row.
+with caller counts unchanged (L8, SC-004). The close PR adds two tests (mutation survivors), and the full gate ran again with them.
 
 **Part B**: passed milestone by milestone, with screenshots in `/mnt/project-files/issue-1504/`:
 M1 rows A, B and rename (light and dark), M2 rows C and D (the stub Jira request asks status and

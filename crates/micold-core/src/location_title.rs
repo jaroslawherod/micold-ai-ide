@@ -359,6 +359,19 @@ mod tests {
         );
     }
 
+    /// L1: a branch that is empty names nothing, as a missing one does: the folder is the title.
+    #[test]
+    fn an_empty_branch_falls_through_to_the_folder() {
+        let title = choose(&TitleInputs {
+            branch: Some(""),
+            ..TitleInputs::named("wt-b")
+        });
+        assert_eq!(
+            (title.source, title.text.as_str()),
+            (TitleSource::Folder, "wt-b")
+        );
+    }
+
     #[test]
     fn with_neither_the_display_name_is_used() {
         let title = choose(&TitleInputs::named("Default"));
