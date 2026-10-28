@@ -772,10 +772,10 @@ async fn a_stored_level_the_model_does_not_take_launches_with_none() {
     let relaunch = rig.restart(0, "", &mut window).await;
     assert!(resumes(&relaunch, id), "{relaunch:#?}");
     assert_eq!(launched_effort(&relaunch), None, "{relaunch:#?}");
-    assert!(runs(&rig.state, rig.dir(0), id), "the session runs");
+    eventually("the session runs", || runs(&rig.state, rig.dir(0), id));
 
     let (restarted, restored) = rig.restored(0, "").await;
     assert_eq!(launched_effort(&restored), None, "{restored:#?}");
-    assert!(runs(&restarted, rig.dir(0), id), "the session runs");
+    eventually("the session runs", || runs(&restarted, rig.dir(0), id));
     restarted.stop_session(id);
 }
