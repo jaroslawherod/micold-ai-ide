@@ -13,7 +13,7 @@ use super::insights::{
 };
 use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
-use crate::features::transcript_rich::CopyTarget;
+use crate::features::transcript_rich::{CopyState, CopyTarget};
 use crate::icons::Icon;
 use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, Tooltip, TypeRole};
 use iced::widget::text::Wrapping;
@@ -490,10 +490,12 @@ fn tool_card(
     }
     // Feature 1550 (FR-015, C-1): the header copies the uncut value its summary is drawn from,
     // for a tool whose summary shows one.
-    let control = |target| copy_control_of(target, block, ctx);
+    // Bare, not right-aligned: a Fill-width control would split the header with the summary.
     if work_value(&card.name, &card.input).is_some() {
-        status = status.push(control(CopyTarget::ToolValue));
+        let (state, on_copy) = copy_of(CopyTarget::ToolValue, block, ctx);
+        status = status.push(copy_control(state, on_copy, roles));
     }
+    let control = |target| copy_control_of(target, block, ctx);
     let (title, summary) = (header.title.len(), header.summary.len());
     let shell = DisclosureCard::new(header.title, on_toggle, roles)
         .leading(Icon::ToolCall)
@@ -541,13 +543,13 @@ fn tool_card(
     with_thread(shell.body(body).into())
 }
 
-/// `block`'s copy control for `target` (feature 1550, contracts/keys-menu-copy.md C-4): the code
-/// block's control, its state the window's for this entry and target, at the end of its line.
-fn copy_control_of(
+/// `block`'s copy state for `target`, the window's for this entry and target, and the message its
+/// control publishes (feature 1550, contracts/keys-menu-copy.md C-4).
+pub(super) fn copy_of(
     target: CopyTarget,
     block: BlockRef<'_>,
     ctx: &RenderCtx<'_>,
-) -> Element<'static, TranscriptMsg> {
+) -> (Option<CopyState>, TranscriptMsg) {
     let state = ctx
         .cache
         .get(block.session, block.key)
@@ -557,6 +559,17 @@ fn copy_control_of(
         key: block.key.clone(),
         target,
     };
+    (state, on_copy)
+}
+
+/// `block`'s copy control for `target` on a line of its own: the code block's control, at the end
+/// of its line.
+fn copy_control_of(
+    target: CopyTarget,
+    block: BlockRef<'_>,
+    ctx: &RenderCtx<'_>,
+) -> Element<'static, TranscriptMsg> {
+    let (state, on_copy) = copy_of(target, block, ctx);
     container(copy_control(state, on_copy, ctx.roles))
         .align_right(Length::Fill)
         .into()

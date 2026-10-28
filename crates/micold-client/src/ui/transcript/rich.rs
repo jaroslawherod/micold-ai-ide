@@ -10,6 +10,7 @@ use super::blocks::{
     hit_msg, AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, RowCtx, ToolInput,
 };
 use super::blocks::{ThinkingText, ToolResult};
+use super::entries::copy_of;
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyTarget, Derived, DerivedBody, Part};
 use crate::features::transcript_selection::diff_units;
@@ -122,14 +123,8 @@ fn rich_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
         return (BlockRenderers::PLAIN.tool_input)(block, ctx);
     };
     // Feature 1550 (FR-017, C-3): the path's copy control.
-    let mut view = InlineDiff::new(diff, ctx.roles).copy_path(
-        d.copy.get(&CopyTarget::DiffPath).copied(),
-        TranscriptMsg::Copy {
-            session: block.block.session,
-            key: block.block.key.clone(),
-            target: CopyTarget::DiffPath,
-        },
-    );
+    let (state, on_copy) = copy_of(CopyTarget::DiffPath, block.block, ctx);
+    let mut view = InlineDiff::new(diff, ctx.roles).copy_path(state, on_copy);
     if let Some(spans) = d.spans.get(&Part::Diff) {
         view = view.spans(in_scheme(spans, ctx.scheme));
     }

@@ -89,8 +89,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4a (sonnet, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN; Verify pass (parity 4, layout_snapshot 169, transcript_open_budget 6 release) |
 | Review A M4b (code-review high) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | 2 real (fixed: F1 menu not a registered surface, Escape interrupted under it; F7 summary highlight could slice off a char boundary), F2 fixed in part (one menu per window), 5 declined MINOR |
 | Review B M4b (conformance, sonnet) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | CHANGES: F1 MAJOR no M4b TDD log (fixed: cycle-log M4b with a mutant red run, 8 of 40 FAILED); F2 MINOR summary highlight not under a task (fixed, prose: noted under T041); F3 MINOR view wiring untested (visual pass covers it) |
+| Review A M5 (code-review high, headless) | 1 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f | CHANGES: F1 MAJOR header control `align_right(Fill)` halved the summary (fixed: bare control in the header, snapshot summary 804.3 of 834.3); F4 MINOR duplicated copy lookup (fixed: `entries::copy_of`); F2, F3 MINOR declined |
+| Review A M5 (sonnet, fix diff) | 2 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f → working tree | CLEAN |
+| Review B M5 (conformance, sonnet, headless) | 1 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f | CHANGES: F1 MAJOR the three tool-card controls untested through the view (fixed: two renderer tests, press/Enter/Space); F2 MAJOR root thread-copy arm untested (fixed: App-level test); F3 MINOR (fixed: mutant red runs logged). Verify: features_transcript_rich 24, layout_snapshot 171 passed. Fixes were tests only: no re-run needed beyond the scoped gate |
 
 ## Declined review findings
+
+- Review A M5 F2 (MINOR): `work_value` re-parses a card's input JSON on each rebuild of that card to decide the header control. A rebuild happens only when the entry's revision changes (cached elsewhere), and the summary needs the same parse; a `has_work_value` in core would change core's `ToolCard`, outside M5. Follow-up if a profile shows it.
+- Review A M5 F3 (MINOR): `transcript_rich` → `transcript_selection::shown::unshown_caption` is allowlisted in `feature_registration_cost` with its reason: one caption shared by what is shown and what is copied, so they cannot drift.
 
 - M1 gate: `scripts/gate.sh` green at 341ed42d1 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`: the container's disk filled at 0 MB with the default profile). No visual pass: nothing visible changed (list markers draw the same glyphs).
 
