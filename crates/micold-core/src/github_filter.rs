@@ -777,7 +777,7 @@ pub struct RememberedSelector {
     pub mode: QueryMode,
     /// The basic filters last chosen.
     pub basic: BasicFilters,
-    /// The last run query, cleaned; empty when none ran, or when the empty query ran.
+    /// The last run query, cleaned; empty only when none ran (an empty run is not a run).
     pub query: String,
     /// Whether any query ever ran on the project (FR-013).
     pub ran: bool,
@@ -837,6 +837,7 @@ impl RememberedSelector {
                 ..self
             },
             SelectorChange::Query(text) => match UserQuery::parse(text) {
+                Ok(query) if query.as_str().is_empty() => self,
                 Ok(query) => RememberedSelector {
                     query: query.as_str().to_string(),
                     ran: true,

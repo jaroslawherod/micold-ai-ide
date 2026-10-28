@@ -852,7 +852,11 @@ fn each_change_sets_one_field() {
 
     let fresh = RememberedSelector::default().with_change(&SelectorChange::Query("  ".into()));
     assert_eq!(fresh.query, "");
-    assert!(fresh.ran, "the empty query ran");
+    assert!(!fresh.ran, "an empty run is not a run");
+    let kept = start
+        .clone()
+        .with_change(&SelectorChange::Query("  ".into()));
+    assert_eq!(kept, start, "an empty run leaves the last run query");
 
     let refused = start
         .clone()
