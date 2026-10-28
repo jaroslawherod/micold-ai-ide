@@ -1146,8 +1146,9 @@ async fn a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level
         rig.effort(0) == EffortChoice::Default
     });
     std::thread::sleep(Duration::from_millis(200));
-    // By the order the two answers are handled in, the CLI is asked once more for the level
-    // before both, or not at all: never another level, never twice.
+    // The CLI is asked once more for the level before both when the stand-in's refusal of the
+    // deferred `low` is read (undoing the last level sent) before the idle `high` is written, else
+    // not at all: never another level, never twice.
     let asked = efforts_asked(dir);
     let both = [Some("low".to_owned()), Some("high".to_owned())];
     assert!(

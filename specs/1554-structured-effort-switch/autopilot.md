@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: close
-- **Next step**: close unit 2: T032 (quickstart Part A on main 946232f2c), speckit-tdd-verify (converge skipped: every milestone has a CLEAN review B), close review, gate, close PR.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e73f88e639035794414eb651ada04dfe |
 | #1599 | M5: `/effort` in the composer, daemon backstop, guide | merged | 5a109a9617e2bd48578b77236d51ae1ec3ba1a86 |
 | #1604 | M6: a refused deferred pick is never asked again; stand-in start race | merged | 946232f2cd4d214b68a2f9f5c4d50a41b81b67c7 |
+| close PR (opened by the orchestrator) | Close: Part A results, TDD verification remediation, spec closed | open | — |
 
 ## Milestones
 
@@ -111,7 +112,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 after review fixes | 1 | — | `structured_effort` 30/30, the whole binary 100 runs in a loop with no failure (Verify); full gate `scripts/gate.sh` green on the fix tree (parent f348ed298) |
 | Close: quickstart Part A (T032) | 2 | — | all green on main 946232f2c (results in quickstart.md); `structured_effort` 30/30 plus 60 runs in a loop with no failure |
 | speckit-tdd-verify | 1 | f2b9dd525..946232f2c | FAIL: 2 HIGH (20 tests with no logged red), 6 MED, 3 LOW. Run by the orchestrator. Remediated in the close unit (D22): 19 of 20 shown red by mutants, 4 strength mutants killed, findings 6, 9, 10 fixed |
-| Close review | 1 | 2a207f2c9737953a8c01a555fa8115748c312d3e:558ccaeb220b301dbd8719c58d89c16d09b297ad | pending (orchestrator) |
+| Close review | 1 | 2a207f2c9737953a8c01a555fa8115748c312d3e:558ccaeb220b301dbd8719c58d89c16d09b297ad | CLEAN, 3 MINOR — F1 the trailing-null cause in the test comment and verification.md (the stand-in's refusal read before the idle write), F2 cycle 18 rows given failing lines and names, D9 row added, F3 quickstart gate row and spec Status worded true — all fixed, prose only. Run by the orchestrator |
+| Full gate close | 1 | — | green: `scripts/gate.sh` on e2c0f51c8 (run by the orchestrator after a container restart killed the unit's run); after it only comments, docs and the ledger changed |
 
 ## Declined review findings
 

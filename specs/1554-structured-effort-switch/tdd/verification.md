@@ -111,7 +111,7 @@ The verdict above is the audit's, on 946232f2c. What the close unit did with eac
 | 1, 2, 3 | Each of the 20 tests shown red after the fact against a one-line mutant of the code it guards (`cycle-log.md` cycle 18), except `one_sessions_pick_never_touches_another`: no one-line mutant crosses sessions. They stay `TEST_AFTER`, as the rubric classes them; the reds show only that each test fails without its behaviour |
 | 4 | The four planned mutants run and killed (cycle 18) |
 | 5 | Kept: those tests force an interleaving (a late answer, an answer handled out of order) the wire cannot order; noted as a follow-up |
-| 6 | `structured_effort.rs`: the M6 test asserts the exact list `[low, high]`; the M3 one accepts exactly `[low, high]` or `[low, high, None]` (the handling order decides; a repeated null write fails). 100 runs each, and the whole binary 40 more, no failure |
+| 6 | `structured_effort.rs`: the M6 test asserts the exact list `[low, high]`; the M3 one accepts exactly `[low, high]` or `[low, high, None]` (the null re-apply is written or not by whether the stand-in's refusal of the deferred `low` is read, undoing the last level sent, before the idle `high` is written; a repeated null write fails). 100 runs each, and the whole binary 40 more, no failure |
 | 7 | Kept: each sleep waits for something not to happen; the rig has no event to wait on instead. Noted as a follow-up |
 | 8 | Not added: the traceability table above is the record (ledger D22) |
 | 9 | Comment corrected: the test's session is idle, the busy case is in `shell::composer` |

@@ -22,7 +22,7 @@
 | Store, argv, wire | `session_store` 47, `protocol_roundtrip` 22, `schema_hash` 14 passed |
 | Daemon against the stand-in | `structured_effort` 30 passed; the binary 60 more runs in a loop, no failure (the first close run caught the M6 race, fixed in #1604) |
 | Window state | `features_command_palette` 23, `features_effort_picker` 16 passed |
-| Everything else unchanged | `scripts/gate.sh` (see the close PR) |
+| Everything else unchanged | `scripts/gate.sh` passed on e2c0f51c8 (the close branch: these tests plus the close unit's test changes) |
 
 ## Part B — manual / visual pass (GUI exception)
 

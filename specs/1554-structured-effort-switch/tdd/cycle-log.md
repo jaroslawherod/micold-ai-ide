@@ -214,16 +214,17 @@ known to fail without its behaviour. `TEST_AFTER` stays the honest class for the
 | D3 `pick_effort`: an unchanged stored pick answered `Stored` | `a_pick_that_changes_nothing_writes_no_note` (`left: [Default, Level("high")]`) |
 | D4 `structured.rs` `push_effort_note`: a repeat of the last note not skipped | `the_notes_of_quick_picks_end_with_the_choice_held` (`left: [low, low]`) |
 | D5 `keep_answered_effort`: every answer counts as the latest | `a_late_answer_never_replaces_a_later_stored_choice` (`left: high, right: low`) |
-| D6 `pick_effort`: a terminal pick answered `Ok` | `a_terminal_sessions_pick_is_stored_and_refused_with_the_sentence` |
-| D7 `pick_effort`: the not-Claude guard off | `another_clis_pick_is_refused_and_an_unknown_sessions_is_not_found` |
-| D8 `keep_effort`: no catalog broadcast | `of_picks_from_two_windows_the_last_is_held_and_shown_by_both` (`max shown: never happened`) and five others |
+| D6 `pick_effort`: a terminal pick answered `Ok` | `a_terminal_sessions_pick_is_stored_and_refused_with_the_sentence` (`refused: OperationOk { req: 1, result: Ack }`) |
+| D7 `pick_effort`: the not-Claude guard off | `another_clis_pick_is_refused_and_an_unknown_sessions_is_not_found` (`left: (Refused, "Effort is changed from the structured view; …")`: the terminal sentence, not the not-Claude one) |
+| D8 `keep_effort`: no catalog broadcast | `of_picks_from_two_windows_the_last_is_held_and_shown_by_both` (`max shown: never happened`); also `a_busy_pick_is_answered_at_once_and_written_at_the_turns_end`, `a_deferred_pick_claude_refuses_is_a_note_and_the_choice_goes_back`, `a_pick_for_a_session_not_running_is_stored_and_noted`, `an_idle_pick_is_one_line_to_the_same_process_and_every_window_shows_it`, `of_two_picks_in_one_turn_only_the_last_is_written` (each `<level> shown: never happened`) |
+| D9 (none) | `one_sessions_pick_never_touches_another`: see below |
 | D10 `reapply_effort`: the unanswered-idle-pick hold off | `a_model_change_while_an_idle_pick_is_unanswered_keeps_that_pick` (`left: [high, low, high, low]`) |
 | D11 `pick_effort`: `previous` always chained | `a_refused_pick_goes_back_to_a_written_one_not_to_the_choice_before_it`, `a_pick_left_unwritten_by_an_ended_process_is_not_carried_into_the_next` (`left: Default, right: low`) |
 | D12 `structured.rs` `ask_effort`: the deferred write first dropped | `an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_one` (`left: [high, high]`), `a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both` (`left: [high, low]`) |
-| D13 `follow_effort_answer`: a refused deferred pick never put back | `a_refused_idle_pick_after_a_refused_deferred_one…` (`the choice back to the one before both never happened`) and four others |
+| D13 `follow_effort_answer`: a refused deferred pick never put back | `a_refused_idle_pick_after_a_refused_deferred_one…` (`the choice back to the one before both never happened`); also `a_refused_pick_goes_back_to_a_written_one_not_to_the_choice_before_it` and `a_pick_left_unwritten_by_an_ended_process_is_not_carried_into_the_next` (`left: high, right: low`), `a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_never_asks_it_again` (`left: low, right: Default`), `a_deferred_pick_claude_refuses_is_a_note_and_the_choice_goes_back` (`Default shown: never happened`) |
 | C1 `effort_picker.rs` `effort_picked`: `in_flight` ignored | `picking_the_reported_choice_while_a_pick_is_in_flight_is_sent` (`left: None, right: Some(Default)`), `shell::composer::…a_pick_back_to_the_reported_choice_before_the_echo_is_sent` (`left: [high]`) |
-| C2 `effort_picker_shown`: `offers_effort` dropped | `an_open_picker_stops_taking_the_keyboard_once_the_session_is_a_terminal` |
-| C3 `shell/composer.rs` `SwitchRequested`: the list not closed | `shell::composer::…a_switch_of_kind_closes_the_effort_list` |
+| C2 `effort_picker_shown`: `offers_effort` dropped | `an_open_picker_stops_taking_the_keyboard_once_the_session_is_a_terminal` (`no list is drawn for a terminal session, so the terminal has the keys`) |
+| C3 `shell/composer.rs` `SwitchRequested`: the list not closed | `shell::composer::…a_switch_of_kind_closes_the_effort_list` (`assertion failed: app.core.effort_picker.picker(s).is_none()`) |
 | C4 `shell/composer.rs` `effort_list_closed` always `false` | `shell::composer::…the_keyboard_goes_back_to_the_composer_when_the_effort_list_closes` (`Escape`) |
 
 No mutant: `one_sessions_pick_never_touches_another` (US3 s4). Every effort structure is keyed by
