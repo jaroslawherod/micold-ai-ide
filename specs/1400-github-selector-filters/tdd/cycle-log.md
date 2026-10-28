@@ -115,3 +115,14 @@ Seam first, so the tests fail on behaviour: `Msg::StateChosen(IssueState)` accep
 | T039 | docs | — | — |
 
 `layout_snapshot.txt` re-recorded: the new covered state, and the Filters panel is 40px taller (the State row).
+
+### M4 review round 1 fixes (MINORs, test first)
+
+| Finding | Behaviour | Red (before the code) | Green |
+|---|---|---|---|
+| A F1 (`tests/github_filter_state.rs::the_cap_caption_names_the_chosen_state`) | the cap caption's count is "open issues", "closed issues" or "issues" by the chosen state | `cargo test -p micold-client --test github_filter_state -- the_cap`: FAILED (Closed said "1,234 open issues") | 40 passed |
+| Visual F2 (`the_pre_source_hint_names_the_remembered_state`) | the statement before the source is chosen reads open / closed / open and closed issues from the remembered state | FAILED (Closed said "reads open issues") | 40 passed |
+| Visual F1 (`ui/github_filter.rs::clear_filters_coming_and_going_keeps_the_filters_control_in_its_slot`) | the row ahead of the Filters control has the same slots with and without **Clear filters**, so focus (kept by tree position) stays on the chosen state chip or label field; label picks that toggle Clear filters shared the defect and share the fix | `cargo test -p micold-client --lib clear_filters_coming`: FAILED (2 slots against 3) | passed |
+
+B F1 (Verify split into two commands) and B F2 (docs re-wrap) are prose only. `fake_gh` now answers the
+single-issue details query (checked by parsing its answer with `parse_details`).

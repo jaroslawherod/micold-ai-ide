@@ -38,6 +38,7 @@ use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
     GithubRepo, Issue, IssueListing, IssueLoadError, NoticeSource, RemoteChoice,
 };
+use micold_core::github_filter::IssueState;
 use micold_core::issue_details::IssueDetails;
 use micold_core::issue_types::LabelTypeEntry;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
@@ -860,9 +861,16 @@ impl WorktreeForm {
             GithubAvailability::Checking => Some("Checking for a GitHub remote…".to_string()),
             GithubAvailability::Unavailable(reason) => Some(reason.clone()),
             GithubAvailability::Available(_) if self.source == BranchSource::Issue => None,
-            GithubAvailability::Available(repo) => Some(format!(
-                "GitHub issue reads open issues of {repo} from GitHub."
-            )),
+            GithubAvailability::Available(repo) => {
+                // Feature 1400: the state the project remembers is the one choosing the source reads.
+                let words = match self.github_selector.listed_state() {
+                    Some(IssueState::Closed) => "closed issues",
+                    Some(IssueState::All) => "open and closed issues",
+                    Some(IssueState::Open) => "open issues",
+                    None => "issues",
+                };
+                Some(format!("GitHub issue reads {words} of {repo} from GitHub."))
+            }
         }
     }
 
@@ -1001,11 +1009,19 @@ impl WorktreeForm {
                     format!("Showing the {shown} most recently updated.")
                 })
             }
-            IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
-                "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
-                group_digits(listing.issues.len() as u64),
-                group_digits(listing.total_open)
-            )),
+            IssueList::Loaded { listing, .. } if !listing.complete => {
+                // Feature 1400: the count is of the issues the chosen state lists, not always open ones.
+                let noun = match self.github_selector.listed_state() {
+                    Some(IssueState::Closed) => "closed issues",
+                    Some(IssueState::Open) => "open issues",
+                    Some(IssueState::All) | None => "issues",
+                };
+                Some(format!(
+                    "Showing the {} most recently updated of {} {noun} — search also looks on GitHub.",
+                    group_digits(listing.issues.len() as u64),
+                    group_digits(listing.total_open)
+                ))
+            }
             _ => None,
         }
     }

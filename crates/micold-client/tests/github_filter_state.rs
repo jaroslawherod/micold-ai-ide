@@ -1308,3 +1308,66 @@ fn a_remembered_closed_state_reopens_with_one_closed_listing() {
         (IssueState::Closed, "Closed", true)
     );
 }
+
+/// A form restored with `chosen` and a label excluded (so the filtered listing is asked even for
+/// Open), its listing capped: two of 1,234 held.
+fn capped(chosen: IssueState) -> State {
+    let mut basic = excluding_labels(&["wontfix"]);
+    basic.set_state(chosen);
+    let mut state = reopened(remembering(basic));
+    let (seq, _, _) = state.worktree_form.github_filtered_load().unwrap();
+    filter(
+        &mut state,
+        GithubMsg::Loaded {
+            seq,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: vec![issue(2, "Two", &[]), issue(1, "One", &[])],
+                    total_open: 1_234,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    state
+}
+
+/// FR-004, selector-ui §3: the cap caption names the state the count is of; it never says "open"
+/// of closed issues.
+#[test]
+fn the_cap_caption_names_the_chosen_state() {
+    for (chosen, count) in [
+        (IssueState::Open, "1,234 open issues"),
+        (IssueState::Closed, "1,234 closed issues"),
+        (IssueState::All, "1,234 issues"),
+    ] {
+        assert_eq!(
+            form(&capped(chosen)).issue_cap_caption(),
+            Some(format!(
+                "Showing the 2 most recently updated of {count} — search also looks on GitHub."
+            )),
+            "{chosen:?}"
+        );
+    }
+}
+
+/// FR-025: the statement before the source is chosen says which issues choosing it reads, from the
+/// remembered state.
+#[test]
+fn the_pre_source_hint_names_the_remembered_state() {
+    for (chosen, words) in [
+        (IssueState::Open, "open issues"),
+        (IssueState::Closed, "closed issues"),
+        (IssueState::All, "open and closed issues"),
+    ] {
+        let mut state = reopened(remembering(with_state(chosen)));
+        send(&mut state, Msg::SourceChanged(BranchSource::New));
+        assert_eq!(
+            form(&state).source_caption(),
+            Some(format!("GitHub issue reads {words} of o/r from GitHub.")),
+            "{chosen:?}"
+        );
+    }
+}

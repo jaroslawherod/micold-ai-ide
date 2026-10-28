@@ -253,6 +253,15 @@ impl GithubSelector {
         }
     }
 
+    /// The state the list shows: the chosen one in basic mode, none in advanced mode, where the
+    /// query says it.
+    pub fn listed_state(&self) -> Option<IssueState> {
+        match self.mode {
+            QueryMode::Basic => Some(self.basic.state()),
+            QueryMode::Advanced => None,
+        }
+    }
+
     /// The State row's chips, in order: the state, its words and whether it is the chosen one.
     pub fn state_choices(&self) -> Vec<(IssueState, &'static str, bool)> {
         let chosen = self.basic.state();
