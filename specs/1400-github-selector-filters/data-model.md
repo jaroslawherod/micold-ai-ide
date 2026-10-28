@@ -21,7 +21,7 @@ function or test names them (plan §US6 separability).
 | **US6** `Login` | `struct(String)` | Only from `Login::parse`: 1–39 ASCII letters, digits and single inner hyphens. |
 | **US6** `Assignee` | `enum { Me, Nobody, User(Login) }` | |
 | **US6** `Author` | `enum { Me, User(Login) }` | |
-| **US6** `MilestoneTitle` | `struct(String)` | Only from `MilestoneTitle::parse`: non-empty, no `"`, no control character. |
+| **US6** `MilestoneTitle` | `struct(String)` | Only from `MilestoneTitle::parse`: non-empty, no `"`, no `\`, no control character (`LabelName`'s rule, M7). |
 | **US6** `Milestone` | `enum { Nobody, Titled(MilestoneTitle) }` | |
 
 ## 2. `BasicFilters` (core) — the basic filter set (FR-003, FR-004)
