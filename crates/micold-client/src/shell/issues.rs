@@ -297,10 +297,16 @@ pub fn on_issue_query_changed(app: &mut App, text: String) -> Task<Message> {
 
 /// Wait out the debounce, then say the search pending under `seq` is due.
 pub(crate) fn search_after_pause(seq: u64) -> Task<Message> {
+    after_debounce(Message::WorktreeForm(FormMsg::IssueSearchDue { seq }))
+}
+
+/// Wait out the typing debounce, then send `due`: every debounced search (the issue search, the
+/// Jira and GitHub people searches) says it is due this way.
+pub(crate) fn after_debounce(due: Message) -> Task<Message> {
     // Built inside the future: the timer needs the runtime the task runs on.
     Task::perform(
         async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
-        move |()| Message::WorktreeForm(FormMsg::IssueSearchDue { seq }),
+        move |()| due,
     )
 }
 

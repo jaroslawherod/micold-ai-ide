@@ -183,6 +183,34 @@ impl Assignee {
             None => login_under(value, "user").map(Assignee::User),
         }
     }
+
+    /// The search term it adds (search-rules §4): a login holds no space, colon or quote, so it
+    /// goes bare.
+    pub fn qualifier(&self) -> String {
+        match self {
+            Assignee::Me => "assignee:@me".to_string(),
+            Assignee::Nobody => "no:assignee".to_string(),
+            Assignee::User(login) => format!("assignee:{}", login.as_str()),
+        }
+    }
+
+    /// What its field shows: "Me", "No assignee" or the login.
+    pub fn words(&self) -> &str {
+        match self {
+            Assignee::Me => "Me",
+            Assignee::Nobody => "No assignee",
+            Assignee::User(login) => login.as_str(),
+        }
+    }
+
+    /// Its part of the active filters line.
+    fn described(&self) -> String {
+        match self {
+            Assignee::Me => "Assigned to me".to_string(),
+            Assignee::Nobody => "No assignee".to_string(),
+            Assignee::User(login) => format!("Assigned to {}", login.as_str()),
+        }
+    }
 }
 
 impl Author {
@@ -191,6 +219,30 @@ impl Author {
             Some("me") => Some(Author::Me),
             Some(_) => None,
             None => login_under(value, "user").map(Author::User),
+        }
+    }
+
+    /// The search term it adds (search-rules §4).
+    pub fn qualifier(&self) -> String {
+        match self {
+            Author::Me => "author:@me".to_string(),
+            Author::User(login) => format!("author:{}", login.as_str()),
+        }
+    }
+
+    /// What its field shows: "Me" or the login.
+    pub fn words(&self) -> &str {
+        match self {
+            Author::Me => "Me",
+            Author::User(login) => login.as_str(),
+        }
+    }
+
+    /// Its part of the active filters line.
+    fn described(&self) -> String {
+        match self {
+            Author::Me => "By me".to_string(),
+            Author::User(login) => format!("By {}", login.as_str()),
         }
     }
 }
@@ -205,6 +257,30 @@ impl Milestone {
                 .as_str()
                 .and_then(MilestoneTitle::parse)
                 .map(Milestone::Titled),
+        }
+    }
+
+    /// The search term it adds (search-rules §4): the title quoted.
+    pub fn qualifier(&self) -> String {
+        match self {
+            Milestone::Nobody => "no:milestone".to_string(),
+            Milestone::Titled(title) => format!("milestone:\"{}\"", title.as_str()),
+        }
+    }
+
+    /// What its field shows: "No milestone" or the title.
+    pub fn words(&self) -> &str {
+        match self {
+            Milestone::Nobody => "No milestone",
+            Milestone::Titled(title) => title.as_str(),
+        }
+    }
+
+    /// Its part of the active filters line.
+    fn described(&self) -> String {
+        match self {
+            Milestone::Nobody => "No milestone".to_string(),
+            Milestone::Titled(title) => format!("Milestone {}", title.as_str()),
         }
     }
 }
@@ -361,19 +437,9 @@ impl BasicFilters {
             IssueState::Closed => parts.push("Closed issues".to_string()),
             IssueState::All => parts.push("Open and closed issues".to_string()),
         }
-        parts.extend(self.assignee.as_ref().map(|assignee| match assignee {
-            Assignee::Me => "Assigned to me".to_string(),
-            Assignee::Nobody => "No assignee".to_string(),
-            Assignee::User(login) => format!("Assigned to {}", login.as_str()),
-        }));
-        parts.extend(self.author.as_ref().map(|author| match author {
-            Author::Me => "By me".to_string(),
-            Author::User(login) => format!("By {}", login.as_str()),
-        }));
-        parts.extend(self.milestone.as_ref().map(|milestone| match milestone {
-            Milestone::Nobody => "No milestone".to_string(),
-            Milestone::Titled(title) => format!("Milestone {}", title.as_str()),
-        }));
+        parts.extend(self.assignee.as_ref().map(Assignee::described));
+        parts.extend(self.author.as_ref().map(Author::described));
+        parts.extend(self.milestone.as_ref().map(Milestone::described));
         (!parts.is_empty()).then(|| parts.join("; "))
     }
 
@@ -677,26 +743,15 @@ fn scope(repo: &GithubRepo, filter: &GithubFilter) -> String {
             for label in &filters.exclude {
                 text.push_str(&format!(" -label:\"{}\"", label.as_str()));
             }
-            // US6: a login is validated to hold no space, colon or quote, so it goes bare.
-            match &filters.assignee {
-                None => {}
-                Some(Assignee::Me) => text.push_str(" assignee:@me"),
-                Some(Assignee::Nobody) => text.push_str(" no:assignee"),
-                Some(Assignee::User(login)) => {
-                    text.push_str(&format!(" assignee:{}", login.as_str()));
-                }
-            }
-            match &filters.author {
-                None => {}
-                Some(Author::Me) => text.push_str(" author:@me"),
-                Some(Author::User(login)) => text.push_str(&format!(" author:{}", login.as_str())),
-            }
-            match &filters.milestone {
-                None => {}
-                Some(Milestone::Nobody) => text.push_str(" no:milestone"),
-                Some(Milestone::Titled(title)) => {
-                    text.push_str(&format!(" milestone:\"{}\"", title.as_str()));
-                }
+            // US6: the assignee, the author, then the milestone, after the labels.
+            let values = [
+                filters.assignee.as_ref().map(Assignee::qualifier),
+                filters.author.as_ref().map(Author::qualifier),
+                filters.milestone.as_ref().map(Milestone::qualifier),
+            ];
+            for qualifier in values.into_iter().flatten() {
+                text.push(' ');
+                text.push_str(&qualifier);
             }
         }
         GithubFilter::Advanced(query) => {
