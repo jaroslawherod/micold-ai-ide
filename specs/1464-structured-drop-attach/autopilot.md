@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
+| #1589 | M1 | open | … |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Drop admission guard and delivery | PR_M1 | pr-open |
+| M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | pr-open |
 | M2 | T010–T019 | full | Add attachment button and picker | #… | pending |
 | M3 | T020–T023 | full | Attach shortcut | #… | pending |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
