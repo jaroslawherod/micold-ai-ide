@@ -95,6 +95,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M5 | 1 | 196125f1e:09d3654e6 | CLEAN: 2 MINOR — A1 no queue-edit case (`a_queued_message_edited_into_slash_effort_is_refused`), A2/B2 only idle sessions (the shell test now runs idle and busy) — fixed test-first. Run by the orchestrator |
 | B (conformance) M5 | 1 | 196125f1e:09d3654e6 | CHANGES: B1 MAJOR no M5 red→green entries in `tdd/cycle-log.md` (cycle 16 added, red observed against the pre-change arms); B2 MINOR as A2 — fixed |
 | Visual pass M5 (T031) | 1 | 09d3654e6 | PASS light and dark (`visual-pass/m5/report.md`); unoffered-level case not runnable (the CLI offers all levels), unit tests cover it. V1 (treated MAJOR): the refusal notice outlived a later successful `/effort`, an opened picker — `Composers::clear_notice` on both, test-first |
+| Full gate M5 | 1 | — | green: `scripts/gate.sh` at 9e609d687 (earlier runs: shell test import, `clear_notice` unclassified in the isolation guard — fixed; disk filled twice without the low-debug env vars) |
 | Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
 
 ## Declined review findings
