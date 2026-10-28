@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M1
-- **Next step**: M1 reviews and gate, then M1 PR (orchestrator opens it)
+- **Next step**: M1 PR (pushed; orchestrator opens it), then milestone M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — | in progress |
+| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — (pushed, orchestrator opens) | review-ready |
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | todo |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
@@ -60,6 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 | 1 | 55ede43b68b9972806d53205fc373e5003804172:75cbb5030640e4bb0c886ec779d3a90794010ddf | CLEAN (1 MINOR fixed: tdd/cycle-log.md written from recovered red evidence) |
 
 ## Declined review findings
+
+- M1 gate: `scripts/gate.sh` green at 341ed42d1 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`: the container's disk filled at 0 MB with the default profile). No visual pass: nothing visible changed (list markers draw the same glyphs).
 
 - Review A M1 #1 (Selection does not snap; TextPos fields public): the contract fixes `pub` fields and `start(at, granularity, expand)` without the text; snapping happens where the text is known, `TextPos::in_text` (doc now says so). The hit mapper (M3) builds positions with it.
 - Review A M1 #3 (`u16` path segments overflow past 65,535 lines): data-model.md fixes `Vec<u16>`; a code block or tool output is one unit (R2), so lines are not path segments; diffs are capped by `review::limits`.
