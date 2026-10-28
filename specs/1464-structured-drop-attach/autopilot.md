@@ -62,7 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 (T010-T019) is implemented, ticked and committed locally (not pushed, no PR yet). Review A: CLEAN (fmt MINOR fixed). Layout snapshot fixture regenerated. Gate 1 failed on `composer_tab` (Tab now lands on Add attachment first); the test was updated to expect that, and a new full gate runs detached, log `gate2.log` in the session scratchpad of the previous unit (rerun `mise run gate` if it is gone). Review B (sonnet, snapshot 8eb86d60...) was dispatched and its result is unknown: re-dispatch it per tasks/review.md. Other tests may also fail on the new focusable button; fix them as `composer_tab` was. Next: green full gate, Review B, visual pass of the button (showcase entry AddAttachmentButton), then PR per tasks/pr.md (title `feat(1464): add the Add attachment button and picker (#1464)`, body per template, Refs #1464). Set the ledger PR row for M2 after opening.
+None.
 
 ## Open escalation
 
