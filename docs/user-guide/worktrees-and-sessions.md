@@ -176,9 +176,11 @@ changed, press it.
 
 Each location in the sidebar is a row of **two lines**:
 
-- The **first line** is the worktree's **title**: the title of its GitHub issue when the app knows
-  it (the same title its [Overview](overview.md) card shows), else its branch, else its name. The
-  *Default* entry reads **Default**.
+- The **first line** is the worktree's **title**, the same title its [Overview](overview.md#title)
+  card shows: the title of its GitHub issue or the summary of its Jira issue when the app knows
+  it, else the title of the branch's open pull request, else its feature spec's heading, else the
+  title of its main session, else the subject of the branch's latest commit of its own, else its
+  branch, else its name. The *Default* entry reads **Default**.
 - The **second line** is the **short branch** and the **sessions**, such as
   `fix/1117 · 1 session running` or `main · no sessions`. A Conventional-Commits branch like
   `fix/1117_ci-red` is shortened to its type and issue number, `fix/1117`, so the type and the issue
@@ -187,8 +189,13 @@ Each location in the sidebar is a row of **two lines**:
   `project root · ` and its sessions.
 
 A line that does not fit the sidebar's width ends in an ellipsis. Hover the row for its tooltip,
-which begins with the full title and holds the full branch on its `Branch` line, then the name, the
-folder, the location and the rest it always showed.
+which begins with the full title, then says where the title came from (*From GitHub issue #1504*,
+*From Jira ABC-42*, *From pull request #1520*, *From the feature spec*, *From the session title*,
+*From the latest commit*, *Branch name*), then holds
+the full branch on its `Branch` line, the name, the folder, the location and the rest it always
+showed. A title that is the branch or the name is not repeated above its `Branch` or `Name` line; a
+title from the branch still says *Branch name*, and a title that is the worktree's name says nothing
+more. A worktree you renamed shows your name first, with no line saying where a title came from.
 
 Small **chips** follow the second line's text:
 
@@ -696,8 +703,10 @@ GitHub remote." or "Couldn't read this repository's remotes: …".
 
 **What is sent to GitHub, and when.** Opening the form contacts nothing but the app's own session
 service. Before you choose the chip, the line under the chips names the repository it would read:
-"GitHub issue reads open issues of *owner/name* from GitHub." Only choosing the chip, or pressing
-**Retry** after a failure, asks GitHub for the repository's open issues. The request carries the
+"GitHub issue reads open issues of *owner/name* from GitHub." (with a state filter remembered for
+the project, it names that state instead: closed issues, or open and closed issues; see [Filtering
+GitHub issues](#filtering-github-issues)). Only choosing the chip, or pressing **Retry** after a
+failure, asks GitHub for the repository's issues. The request carries the
 repository's owner and name and nothing else from your project. When more than 1,000 issues are
 open, typing in **Issue** also searches GitHub (see below); that request carries the text you typed
 as well. Picking an issue asks GitHub once more, for that issue's relationships (see below); that
@@ -822,6 +831,81 @@ If the search fails, the loaded matches stay, and the line under the list says "
 loaded issues failed —" followed by one of the reasons above, with a **Retry** button that runs the
 same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
 retry.
+
+### Filtering GitHub issues
+
+With the GitHub source showing, a **Filters** button sits beside **Issue**. It opens a panel with
+two fields and a **State** row:
+
+- **Include labels**: only issues carrying every label you add are listed.
+- **Exclude labels**: no issue carrying any label you add is listed. Add `in-progress` and
+  `blocked`, for example, to see only the issues nobody has taken.
+- **State**: **Open** (the default), **Closed** or **All**. Choose **Closed** to restart work on a
+  recently closed issue, or **All** to see both. A closed issue's row carries a **Closed** chip
+  (ahead of any status shown for it), and you pick it like an open one: the ticket, name and type
+  are filled the same way.
+
+The labels are the repository's, alphabetically, read from GitHub the first time you open one of the
+fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It then
+shows as a chip under its field; pressing the chip removes it. A label already in a list is not
+offered in that list again; picking one the other list holds moves it, since a label can't be both
+included and excluded. Up to 1,000 labels are offered; a repository with more says "Only the first
+1,000 labels are offered". A label whose name holds a quote (`"`) can't be sent as a filter, so it
+is not offered, and the field says how many were left out. If the labels can't be read, the field
+says why and offers **Retry**; the list and the search keep working.
+
+The button names how many filters you chose ("Filters · 2"). Each change reloads the list from
+GitHub with the filters, most recently updated first, and a line under the search names them, for
+example "Excluding labels in-progress, blocked" or "Closed issues". The statement under the source
+then reads "Reads issues of <repository> from GitHub, sending the filter and the search text."
+**Clear filters**, above the statement, removes every filter and brings back the usual list of open
+issues. With no filter chosen, the picker reads and sends exactly what it did before. Switching the
+source to Jira (or to a branch) and back keeps the filters and clears the search text. With GitHub
+issues turned off in Settings, there is no Filters button and nothing is sent.
+
+What you type in **Issue** narrows the filtered list the usual way. When more issues match the
+filters than the list holds, your words are also sent to GitHub's search together with the filters,
+each as a plain word, so they can only narrow the list, never widen it. If nothing matches the
+filters, the list says "No issue matches these filters."; if GitHub refuses the filter, its
+messages are shown in place of the list. If GitHub refuses the search beyond the list, the line
+under the list says so with its messages, and the issues already listed stay.
+
+The filters are remembered per project, on this computer only: the next time you open **Add
+worktree** on the project, in this or a later run of the app, the list loads with them already
+applied. Another project keeps its own filters, or none. **Clear filters** is remembered too. A
+remembered label the repository no longer has still applies, and its chip adds "· not in this
+repository" after the name so you can remove it. Turning GitHub issues off, or switching the project
+to Jira, keeps what was remembered; the remembered filters are deleted when the project is removed
+from the app.
+
+**Advanced mode.** For anything the filters can't express (linked pull requests, dates, `OR`,
+another order), switch the selector from **Basic** to **Advanced**, at the head of the picker. The
+**Filters** button and the line naming the filters give way to a **Query** input and a **Run**
+button; the search text stays, and so does the list until a query runs. Type a query in the syntax
+of github.com's issue search, for example
+`state:open no:assignee -linked:pr -label:blocked sort:created-asc`, and press Enter or **Run**.
+Nothing is sent while you type. The query always runs within this repository's issues: the app adds
+`repo:` and `is:issue` around it, and adds no state term, so the query decides whether closed issues
+are listed (a closed one is marked **Closed**). Without a `sort:` qualifier the list is most
+recently updated first; with one, it is in GitHub's order for it, and a list cut at 1,000 says
+"Showing the first 1,000 of *N* issues". What you type in **Issue** then narrows the query's
+results, and searches GitHub with the query when more match than the list holds. A query that
+matches nothing says "No issue matches this query." Switching back to **Basic** brings back the
+basic filters and their list (reloaded if a query's results were showing); the query you typed is
+kept for the next switch while the form stays open. Switching the source to Jira and back runs the
+last query you ran again, not one you typed and did not run.
+
+**When a query is not run.** The app refuses a query before sending it, and says why in place of
+the list, when it names a repository, organization or user (`repo:`, `org:`, `user:` or `owner:`
+outside quotes: the selector already searches this repository), leaves a quote open, has
+parentheses that don't match, or is longer than 1,000 characters. If GitHub refuses the query, for
+example for a misspelled qualifier, its own messages are shown in place of the list, in GitHub's
+order (or "GitHub did not accept the search query." when it gives none), and the query stays in
+the input for you to fix and run again. Any other failure (no `gh`, not signed in, offline, rate
+limited) shows the same notice and **Retry** as the usual list; **Retry** runs the same query again.
+
+GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
+still show under its old labels. Change a filter, or clear them, to ask again.
 
 ### A ticket's status
 

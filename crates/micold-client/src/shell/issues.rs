@@ -42,6 +42,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
+use micold_client::features::worktree_form::github_filter::Msg as GithubMsg;
 use micold_client::features::worktree_form::jira_query::Msg as QueryMsg;
 use micold_client::features::worktree_form::{
     BranchSource, DescriptionRequest, DetailsRequest, JiraAvailability, Msg as FormMsg,
@@ -51,11 +52,13 @@ use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
+use micold_core::github_filter::RememberedSelector;
 use micold_core::issue_details::DETAILS_BOUND;
 use micold_core::jira::{connection_key, ApiToken, IssueProvider};
 use micold_core::jira_query::RememberedQuery;
+use micold_core::location_title::{title_ticket, TitleTicket};
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::store::jira_token_path;
+use micold_core::store::{github_selector_file_name, github_selector_path, jira_token_path};
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -74,6 +77,11 @@ pub(crate) const NOT_CONNECTED: &str = "not connected to the session service";
 /// modal's scrim, unseen, and would call a read "a request that may not have taken effect".
 pub fn on_form_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    if let Some(remembered) = remembered_selector(app) {
+        app.core.update(Message::WorktreeForm(FormMsg::GithubFilter(
+            GithubMsg::Restored(remembered),
+        )));
+    }
     if let Some(remembered) = remembered_query(app) {
         app.core.update(Message::WorktreeForm(FormMsg::JiraQuery(
             QueryMsg::Restored(remembered),
@@ -130,6 +138,57 @@ pub(crate) fn remember_jira_query(app: &mut App, outcomes: Vec<Outcome>) {
                     .notify_error(crate::shell::jira::remember_failed(&error));
             }
         }
+    }
+}
+
+/// The active project's remembered selector, read as the form opens (FR-021): missing or
+/// unreadable, it is the default. Read whatever the GitHub availability (FR-022), so turning
+/// GitHub issues back on finds it; `None` without a project or a data directory.
+pub(crate) fn remembered_selector(app: &App) -> Option<RememberedSelector> {
+    let project = app.core.workspace.active.as_deref()?;
+    let dir = app.caps.github_selector_dir()?;
+    Some(crate::shell::remembered::read(&github_selector_path(
+        dir, project,
+    )))
+}
+
+/// Write what the GitHub selector asked its project to remember (FR-021), each change a
+/// read-modify-write of one field. A failure is a notification naming the OS error, never a filter
+/// value (FR-024). Without a data directory there is nowhere to keep it, and nothing to say.
+pub(crate) fn remember_github_selector(app: &mut App, outcomes: Vec<Outcome>) {
+    let Some(dir) = app
+        .caps
+        .github_selector_dir()
+        .map(std::path::Path::to_path_buf)
+    else {
+        return;
+    };
+    for outcome in outcomes {
+        if let Outcome::GithubSelectorRemembered { project, change } = outcome {
+            let written = crate::shell::remembered::remember(
+                &dir,
+                &github_selector_file_name(&project),
+                |held: RememberedSelector| held.with_change(&change),
+            );
+            if let Err(error) = written {
+                app.core.notify_error(format!(
+                    "Couldn't remember the GitHub issue filter: {error}"
+                ));
+            }
+        }
+    }
+}
+
+/// Delete what `project` remembers of its selector, as the project is forgotten (FR-022). A
+/// missing file is success; a failure is a notification naming the OS error.
+pub(crate) fn forget_github_selector(app: &mut App, project: &std::path::Path) {
+    let Some(dir) = app.caps.github_selector_dir() else {
+        return;
+    };
+    if let Err(error) = crate::shell::remembered::remove(&github_selector_path(dir, project)) {
+        app.core.notify_error(format!(
+            "Couldn't delete the remembered GitHub issue filter: {error}"
+        ));
     }
 }
 
@@ -237,7 +296,7 @@ pub fn on_issue_query_changed(app: &mut App, text: String) -> Task<Message> {
 }
 
 /// Wait out the debounce, then say the search pending under `seq` is due.
-fn search_after_pause(seq: u64) -> Task<Message> {
+pub(crate) fn search_after_pause(seq: u64) -> Task<Message> {
     // Built inside the future: the timer needs the runtime the task runs on.
     Task::perform(
         async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
@@ -325,8 +384,8 @@ pub fn on_issues_loaded(
             resolved_env: None,
         },
     );
-    // Feature 1185 (FR-009): a Jira list reloaded with text typed searches beyond it again; the
-    // reducer left that search pending under the load's seq.
+    // Features 1185 (FR-009) and 1400 (FR-016): a list reloaded with text typed searches beyond
+    // it again; the reducer left that search pending under the load's seq.
     match app.core.worktree_form.pending_issue_search() {
         Some(pending) if pending == seq => Task::batch([work, search_after_pause(seq)]),
         _ => work,
@@ -562,7 +621,10 @@ fn start_jira_search(
 }
 
 /// Locate `gh` and read the open issues on a blocking thread, answering `IssuesLoaded { seq }`.
-fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
+///
+/// Feature 1400 (contracts/source-and-storage.md §4): while the form's GitHub filter is not the
+/// default, the listing is the filtered one, through the same `gh` lookup ([`GhJob`]).
+pub(crate) fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     if app
         .core
         .worktree_form
@@ -571,6 +633,9 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
         .is_some_and(|form| form.jira_site().is_some())
     {
         return start_jira_load(app, seq);
+    }
+    if let Some((seq, repo, search)) = app.core.worktree_form.github_filtered_load() {
+        return crate::shell::github_filter::start_filtered_load(app, seq, repo, search);
     }
     let Some(repo) = app
         .core
@@ -581,43 +646,11 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     else {
         return Task::none();
     };
-    let tooling = app.caps.issue_tooling();
-    // The project root: the directory the include script is resolved in for this project.
-    let cwd = app
-        .core
-        .workspace
-        .active
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("."));
-    let cached = app.env_include_cache.get(&cwd).cloned();
-    let resolver = app.caps.env_include_shared();
-    let enabled = app.env_include_enabled;
-    let script = app.env_include_script_path.clone();
-    let timeout_secs = app.env_include_timeout_secs;
     Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let resolved = match cached {
-                    Some(_) => None,
-                    None => {
-                        let snapshot =
-                            resolve_env_include(&*resolver, enabled, &script, timeout_secs, &cwd);
-                        Some((cwd, snapshot))
-                    }
-                };
-                let snapshot = cached.as_ref().or(resolved.as_ref().map(|(_, s)| s));
-                let include_path = snapshot.and_then(|s| env_include_path(&s.vars));
-                let result = match (tooling.locate_gh)(include_path) {
-                    None => Err(IssueLoadError::ToolMissing),
-                    Some(gh) => {
-                        let source = (tooling.source)(gh.clone());
-                        load_listing(&*source, &repo).map(|listing| (listing, gh))
-                    }
-                };
-                (result, resolved)
-            })
-            .await
-        },
+        GhJob::of(app).run(move |located| match located {
+            None => Err(IssueLoadError::ToolMissing),
+            Some((source, gh)) => load_listing(&*source, &repo).map(|listing| (listing, gh)),
+        }),
         move |joined| {
             let (result, resolved_env) = joined.unwrap_or_else(|stopped| {
                 (
@@ -636,12 +669,93 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
     )
 }
 
+/// What locating `gh` needs, taken on the update thread: the tooling, the project root the
+/// environment include is resolved in, and the include's cached snapshot or what resolving it takes
+/// (research R3). Every request that has to find `gh` itself goes through [`GhJob::run`], so the
+/// lookup is written once (feature 1400, contracts/source-and-storage.md §4).
+pub(crate) struct GhJob {
+    tooling: crate::shell::capabilities::IssueTooling,
+    cwd: PathBuf,
+    cached: Option<EnvIncludeSnapshot>,
+    resolver: std::sync::Arc<dyn micold_core::env_include::EnvIncludeResolver + Send + Sync>,
+    enabled: bool,
+    script: String,
+    timeout_secs: u64,
+}
+
+/// The issue source running a located `gh`, and that `gh`'s path.
+pub(crate) type LocatedGh = (
+    std::sync::Arc<dyn micold_core::github::IssueSource + Send + Sync>,
+    PathBuf,
+);
+
+impl GhJob {
+    /// Take what the lookup needs from `app`.
+    pub(crate) fn of(app: &App) -> GhJob {
+        let tooling = app.caps.issue_tooling();
+        // The project root: the directory the include script is resolved in for this project.
+        let cwd = app
+            .core
+            .workspace
+            .active
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+        GhJob {
+            tooling,
+            cached: app.env_include_cache.get(&cwd).cloned(),
+            cwd,
+            resolver: app.caps.env_include_shared(),
+            enabled: app.env_include_enabled,
+            script: app.env_include_script_path.clone(),
+            timeout_secs: app.env_include_timeout_secs,
+        }
+    }
+
+    /// On a blocking thread: resolve the include on a cache miss, locate `gh`, and run `ask` with
+    /// its source (`None` when `gh` is not found). Hands back what `ask` answered and the snapshot
+    /// resolved here, for the shell to cache.
+    pub(crate) async fn run<T: Send + 'static>(
+        self,
+        ask: impl FnOnce(Option<LocatedGh>) -> T + Send + 'static,
+    ) -> Result<(T, Option<(PathBuf, EnvIncludeSnapshot)>), tokio::task::JoinError> {
+        tokio::task::spawn_blocking(move || {
+            let GhJob {
+                tooling,
+                cwd,
+                cached,
+                resolver,
+                enabled,
+                script,
+                timeout_secs,
+            } = self;
+            let resolved = match cached {
+                Some(_) => None,
+                None => {
+                    let snapshot =
+                        resolve_env_include(&*resolver, enabled, &script, timeout_secs, &cwd);
+                    Some((cwd, snapshot))
+                }
+            };
+            let snapshot = cached.as_ref().or(resolved.as_ref().map(|(_, s)| s));
+            let include_path = snapshot.and_then(|s| env_include_path(&s.vars));
+            let located =
+                (tooling.locate_gh)(include_path).map(|gh| ((tooling.source)(gh.clone()), gh));
+            (ask(located), resolved)
+        })
+        .await
+    }
+}
+
 /// Search GitHub beyond the loaded issues on a blocking thread, answering `IssueSearched { seq }`.
 ///
 /// The source runs the `gh` the load located: a search never looks for `gh` again (research R3).
 fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
     if let Some((text, filters)) = app.core.worktree_form.jira_search_request() {
         return start_jira_search(app, seq, text, filters);
+    }
+    // Feature 1400 (FR-016): with a GitHub filter active, the search beyond carries it.
+    if let Some((seq, repo, search, gh)) = app.core.worktree_form.github_filtered_search() {
+        return crate::shell::github_filter::start_filtered_search(app, seq, repo, search, gh);
     }
     let Some((repo, text, gh)) = app.core.worktree_form.issue_search_request() else {
         return Task::none();
@@ -733,59 +847,77 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
 
 // ---- The Overview's issue titles (feature 813, research R8) ----
 
-/// The Overview opened: read the title of every worktree's issue ([`request_titles`]).
+/// The Overview opened: read the title of every worktree's issue ([`request_titles`]), and every
+/// worktree's spec and commit facts, so a spec written or a commit made since shows (feature 1504,
+/// L7).
 pub fn on_overview_opened(app: &mut App) -> Task<Message> {
-    let dirs = worktree_dirs(app);
+    let tickets = worktree_tickets(app);
     // The issue links need the repository even when no title is read (feature 1122, R2).
-    if !request_titles(app, &dirs) {
+    if !request_titles(app, &tickets) {
         read_repo(app);
     }
-    Task::none()
+    let dirs = crate::shell::location_titles::listed_dirs(app);
+    crate::shell::location_titles::read_facts(app, &dirs)
 }
 
 /// The worktree list changed, or titles became readable (feature 1125, FR-011): a sidebar row's
 /// first line is its issue's title, so every worktree's title is read as the Overview would read
 /// it, without the Overview having opened. Each title is read once ([`request_titles`]).
 pub fn on_worktrees_changed(app: &mut App) {
-    let dirs = worktree_dirs(app);
-    request_titles(app, &dirs);
+    let tickets = worktree_tickets(app);
+    request_titles(app, &tickets);
 }
 
-/// A fingerprint of the active project's worktree list, by directory name, so the shell can tell
-/// that a message changed it without keeping a copy.
+/// A fingerprint of the active project's worktree list, by directory name and branch (a branch
+/// carries a title ticket too, feature 1504 D2), so the shell can tell that a message changed it
+/// without keeping a copy.
 pub fn worktrees_fingerprint(app: &App) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for worktree in &app.core.worktree.worktrees {
         worktree.dir_name.hash(&mut hasher);
+        worktree.branch.hash(&mut hasher);
     }
     hasher.finish()
 }
 
-fn worktree_dirs(app: &App) -> Vec<String> {
+/// The title tickets of the active project's worktrees, from folder and branch (feature 1504,
+/// FR-002).
+fn worktree_tickets(app: &App) -> Vec<TitleTicket> {
     app.core
         .worktree
         .worktrees
         .iter()
-        .map(|worktree| worktree.dir_name.clone())
+        .filter_map(|worktree| title_ticket(&worktree.dir_name, worktree.branch.as_deref()))
         .collect()
 }
 
 /// The session area's header followed the worktree `dir` (feature 1126, R3): read its issue's
 /// title, as an Overview card would, so the header shows it without the Overview having opened.
 pub fn on_header_followed(app: &mut App, dir: &str) {
-    request_titles(app, &[dir.to_string()]);
+    let branch = app
+        .core
+        .worktree
+        .worktrees
+        .iter()
+        .find(|worktree| worktree.dir_name == dir)
+        .and_then(|worktree| worktree.branch.as_deref());
+    let tickets: Vec<TitleTicket> = title_ticket(dir, branch).into_iter().collect();
+    request_titles(app, &tickets);
 }
 
-/// Seed titles of `dirs`' issues from the issues the New-worktree form already holds, then read
-/// each numeric ticket still without an entry, once. The remotes come first (the repository is
+/// Seed titles of `tickets`' GitHub issues from the issues the New-worktree form already holds,
+/// then read each one still without an entry, once. The remotes come first (the repository is
 /// whatever the daemon says); a window with no route to a daemon reads nothing (FR-019). Whether a
 /// read was sent.
-fn request_titles(app: &mut App, dirs: &[String]) -> bool {
-    use micold_client::features::overview::{numeric_ticket, titles_to_fetch, Msg, TitleLookup};
-    let seeds: Vec<(u64, String)> = dirs
+fn request_titles(app: &mut App, tickets: &[TitleTicket]) -> bool {
+    use micold_client::features::overview::{titles_to_fetch, Msg, TitleLookup};
+    let seeds: Vec<(u64, String)> = tickets
         .iter()
-        .filter_map(|dir| numeric_ticket(dir))
+        .filter_map(|ticket| match ticket {
+            TitleTicket::Github(number) => Some(*number),
+            TitleTicket::Jira(_) => None,
+        })
         .filter(|number| !app.core.overview.titles.contains_key(number))
         .filter_map(|number| {
             let held = app.core.worktree_form.form.as_ref()?.issues.held();
@@ -807,7 +939,7 @@ fn request_titles(app: &mut App, dirs: &[String]) -> bool {
     // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
     let routed = has_route(app);
     let wanted = if app.core.settings.github_issues_enabled {
-        titles_to_fetch(&app.core.overview, dirs, routed)
+        titles_to_fetch(&app.core.overview, tickets, routed)
     } else {
         Vec::new()
     };

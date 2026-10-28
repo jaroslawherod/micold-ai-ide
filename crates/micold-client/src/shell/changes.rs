@@ -619,7 +619,7 @@ pub(crate) fn local(
 
 /// The most a whole read may take before the pane shows an error with a retry (#771): each git
 /// command has its own, shorter deadline, but nothing a read does may leave the view waiting.
-const READ_DEADLINE: Duration = Duration::from_secs(45);
+pub(crate) const READ_DEADLINE: Duration = Duration::from_secs(45);
 
 /// How long a diff may spend being syntax-coloured before it shows plain.
 const HIGHLIGHT_BUDGET: Duration = Duration::from_secs(5);

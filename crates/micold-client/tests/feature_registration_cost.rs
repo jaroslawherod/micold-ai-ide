@@ -165,6 +165,20 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          nothing of the sidebar's (it returns a `Step`; feature 803, contracts/ui.md U2)",
     ),
     (
+        "history",
+        "navigation",
+        "blocked — Back and Forward are refused under the same surfaces and Settings as the \
+         navigation chords, from the one rule both read; a pure read, nothing of navigation's is \
+         changed (feature 1465, FR-010, research R10)",
+    ),
+    (
+        "history",
+        "changes",
+        "can_go_back — Back in a Review tab first does the tab's own Back while it has somewhere \
+         to return to, from the one rule the tab's Back button reads; a pure read, nothing of \
+         changes' is changed (feature 1465, FR-011)",
+    ),
+    (
         "runs",
         "changes",
         "Load — Compare's per-run counts use the Changes view's loading value (idle, loading with \

@@ -85,6 +85,12 @@ const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
         "src/ui/sidebar.rs",
         "SidebarMsg::FilterOpenToggled",
     ),
+    // BUG-1555's dismissed restore-sessions offers are written by the sidebar banner's Dismiss.
+    (
+        "dismissed_offers",
+        "src/ui/sidebar.rs",
+        "Msg::OfferDismissed",
+    ),
     // Feature 551's folded origins are toggled on a session row in the sidebar.
     (
         "folded_origins",

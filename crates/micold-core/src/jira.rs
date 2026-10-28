@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
 use crate::jira_filter::{JiraFilters, JiraUser, VersionChoice};
 use crate::jira_query::{QueryFailure, ScopedQuery};
-use crate::jira_status::{KeyedStatus, TicketStatus};
+use crate::jira_status::{KeyedIssue, TicketStatus};
 use crate::settings::Settings;
 
 /// Which field of a connection a [`FieldProblem`] is about.
@@ -626,14 +626,15 @@ pub trait JiraSource: Send + Sync {
         text: &str,
     ) -> Result<Vec<Issue>, IssueLoadError>;
 
-    /// The status of each of `keys` (at most 100) of the connected project; a key Jira does not
-    /// return is absent from the answer (not found or not visible). Done tickets are read too.
+    /// The status and summary of each of `keys` (at most 100) of the connected project; a key Jira
+    /// does not return is absent from the answer (not found or not visible). Done tickets are read
+    /// too.
     fn statuses(
         &self,
         _conn: &JiraConnection,
         _token: &ApiToken,
         _keys: &[String],
-    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+    ) -> Result<Vec<KeyedIssue>, IssueLoadError> {
         Ok(Vec::new())
     }
 
@@ -796,7 +797,7 @@ pub struct FakeJiraSource {
     calls: std::sync::Mutex<Vec<Option<String>>>,
     searches: Script<Vec<Issue>>,
     search_calls: std::sync::Mutex<Vec<String>>,
-    statuses: Script<Vec<KeyedStatus>>,
+    statuses: Script<Vec<KeyedIssue>>,
     status_calls: std::sync::Mutex<Vec<Vec<String>>>,
     queries: Script<IssuePage, QueryFailure>,
     query_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
@@ -834,13 +835,13 @@ impl FakeJiraSource {
 
     /// Answer the next unanswered `statuses` call with `result`. With none scripted left, the last
     /// answer scripted is not repeated: a call then answers an empty list.
-    pub fn with_statuses(self, result: Result<Vec<KeyedStatus>, IssueLoadError>) -> Self {
+    pub fn with_statuses(self, result: Result<Vec<KeyedIssue>, IssueLoadError>) -> Self {
         locked(&self.statuses).push_back(result);
         self
     }
 
     /// Answer the next unanswered `statuses` call, after construction (a test changes a ticket).
-    pub fn script_statuses(&self, result: Result<Vec<KeyedStatus>, IssueLoadError>) {
+    pub fn script_statuses(&self, result: Result<Vec<KeyedIssue>, IssueLoadError>) {
         locked(&self.statuses).push_back(result);
     }
 
@@ -960,7 +961,7 @@ impl JiraSource for FakeJiraSource {
         _conn: &JiraConnection,
         _token: &ApiToken,
         keys: &[String],
-    ) -> Result<Vec<KeyedStatus>, IssueLoadError> {
+    ) -> Result<Vec<KeyedIssue>, IssueLoadError> {
         locked(&self.status_calls).push(keys.to_vec());
         locked(&self.statuses).pop_front().unwrap_or(Ok(Vec::new()))
     }

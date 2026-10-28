@@ -102,6 +102,7 @@ pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
 pub use material::theme;
 /// The Jira selector's advanced mode (feature 1186): the Basic/Advanced switch and the query field.
+pub(crate) mod github_filter;
 pub(crate) mod jira_query;
 pub(crate) mod parallel_dialog;
 /// Syntax colours for the Changes view's diff (feature 482, R10): highlighted off the update thread
@@ -1547,12 +1548,23 @@ fn overview_arrow_listener() -> Subscription<Message> {
 }
 
 /// The Overview's step to the next or previous card for an arrow key, and nothing for any other
-/// key: a card step, not [`Message::FocusMoved`], so the arrows never stop on an issue link
+/// key or for Back/Forward's key (feature 1465): a card step, not [`Message::FocusMoved`], so the arrows never stop on an issue link
 /// (feature 1122, R9). A named function for the same `TypeId` reason as [`escape_message`].
 fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
-    let iced::keyboard::Event::KeyPressed { key, .. } = event else {
+    let iced::keyboard::Event::KeyPressed {
+        key,
+        modifiers,
+        physical_key,
+        ..
+    } = event
+    else {
         return None;
     };
+    // Feature 1465 (contracts/keys.md H3): Back/Forward's key is Back or Forward only.
+    let input = crate::ui::composer::key_input(&key, &physical_key, modifiers, None);
+    if input.is_some_and(|input| crate::keymap::history_key(&input).is_some()) {
+        return None;
+    }
     crate::ui::overview::arrow_focus(&key)
         .map(|forward| Message::Overview(crate::features::overview::Msg::CardStepped { forward }))
 }
@@ -1598,7 +1610,8 @@ fn app_chord_listener() -> Subscription<Message> {
 
 /// The message for an app chord — [`crate::features::overview::Msg::Toggled`] for the Overview
 /// chord, [`crate::features::quick_switch::Msg::Toggled`] for the switcher's,
-/// `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other key.
+/// `features::navigation::Msg::Pressed` for a navigation chord, `features::history::Msg::Pressed`
+/// for Back/Forward's key (feature 1465) — and nothing for any other key.
 /// A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
 fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
     let iced::keyboard::Event::KeyPressed {
@@ -1633,6 +1646,15 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
     }
     crate::keymap::nav_chord(&input)
         .map(|action| Message::Navigation(crate::features::navigation::Msg::Pressed(action)))
+        // Feature 1465 (contracts/keys.md H3): after every other chord; each repeat is a press too.
+        .or_else(|| {
+            crate::keymap::history_key(&input).map(|dir| {
+                Message::History(crate::features::history::Msg::Pressed {
+                    dir,
+                    source: crate::features::history::Source::Key,
+                })
+            })
+        })
 }
 
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.

@@ -35,13 +35,14 @@ fn env_or(name: &str, default: &str) -> String {
 }
 
 /// Where this daemon keeps credential files, or `None` when it is not sandboxed (#1002): the test
-/// override [`ROOT_ENV`], else the default root in a container or when the runtime mounted an
-/// authentication token. A host-process daemon holds no credential and refuses every grant.
+/// override [`ROOT_ENV`], else the default root in a container, in a pod (`POD_ENV`) or when the
+/// runtime mounted an authentication token. A host-process daemon holds no credential and refuses every grant.
 pub fn credential_root() -> Option<PathBuf> {
     if let Some(root) = std::env::var_os(ROOT_ENV).filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(root));
     }
     let sandboxed = !crate::state::image_reference().is_empty()
+        || std::env::var_os(micold_core::kube::credentials::POD_ENV).is_some()
         || std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV).is_some();
     sandboxed.then(|| PathBuf::from(GIT_CREDENTIAL_ROOT))
 }

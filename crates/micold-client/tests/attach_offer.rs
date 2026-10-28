@@ -2,7 +2,7 @@
 //!
 //! `offer_visible = !report.is_empty() && !dismissed && readable`: the offer fires on stored
 //! provider sessions the catalog lacks. Nothing is attached without a user action; a dismissal is
-//! per project, held in memory only, and does not survive a restart.
+//! per project and covers the sessions it was shown for, and the shell persists it (BUG-1555).
 
 use micold_client::app::State;
 use micold_client::features::attach::{self, offer_visible, Msg};
@@ -133,12 +133,11 @@ fn dismissing_hides_the_offer_for_this_project_only() {
 }
 
 #[test]
-fn a_dismissal_lives_in_memory_and_is_not_persisted() {
+fn a_fresh_offer_without_the_restored_dismissal_offers_again() {
     let mut state = state_with(found());
     attach::update(&mut state, Msg::OfferDismissed);
-    assert!(state.attach.offer.dismissed.contains(&project()));
-    // The workspace is what is persisted: a dismissal leaves it as it was, so a restart (a fresh
-    // `Offer`) offers again.
+    assert!(state.attach.offer.dismissed.contains_key(&project()));
+    // The workspace is untouched: the dismissal is persisted in the settings by the shell.
     let persisted_before = state_with(found()).workspace;
     assert_eq!(state.workspace, persisted_before);
     state.attach.offer = Default::default();
@@ -316,6 +315,21 @@ mod bug_1164 {
         assert!(state.attach.offer.in_flight.is_empty());
     }
 
+    /// BUG-1555: a session hidden by its worktree's open session at dismissal stays dismissed
+    /// once that session is gone.
+    #[test]
+    fn a_dismissal_covers_sessions_of_occupied_worktrees() {
+        let mut state = state_with(report(vec![at(1, "w1", 5), at(2, "w2", 4)]));
+        catalogued(&mut state, &["w1"]);
+        attach::update(&mut state, Msg::OfferDismissed);
+        assert!(!offer_visible(&state));
+        state.workspace.sessions.remove(&project());
+        assert!(
+            !offer_visible(&state),
+            "the freed worktree's session was dismissed too"
+        );
+    }
+
     #[test]
     fn resume_all_sends_only_the_newest_session_of_each_free_worktree() {
         let mut state = state_with(report(vec![
@@ -344,4 +358,59 @@ mod bug_1164 {
         );
         assert_eq!(state.attach.dialog.as_ref().unwrap().resumable().len(), 1);
     }
+}
+
+fn unresumable(n: u128, reason: UnresumableReason) -> ResumableSession {
+    ResumableSession {
+        target: AttachTarget::Worktree {
+            dir_name: format!("gone{n}"),
+        },
+        ..session(n, ResumableStatus::Unresumable(reason))
+    }
+}
+
+/// BUG-1555: sessions of deleted worktrees never make the offer appear.
+#[test]
+fn sessions_of_deleted_worktrees_do_not_fire_the_offer() {
+    let report = DiscoveryReport {
+        sessions: vec![
+            unresumable(1, UnresumableReason::NoLocation),
+            unresumable(2, UnresumableReason::WorktreeMissing),
+        ],
+        ..Default::default()
+    };
+    let state = state_with(report);
+    assert_eq!(state.attach.offer.session_count(state.active_sessions()), 0);
+    assert!(!offer_visible(&state));
+}
+
+/// BUG-1555: a dismissal restored after a restart covers the sessions it showed, not newer ones.
+#[test]
+fn a_restored_dismissal_hides_its_sessions_but_not_a_new_one() {
+    let mut state = state_with(found());
+    attach::update(&mut state, Msg::OfferDismissed);
+    let restored = state.attach.offer.dismissed.clone();
+
+    let mut restarted = State::default();
+    restarted.workspace.active = Some(project());
+    restarted.attach.offer.dismissed = restored;
+    attach::update(
+        &mut restarted,
+        Msg::OfferListed {
+            project: project(),
+            report: found(),
+        },
+    );
+    assert!(!offer_visible(&restarted), "same sessions stay dismissed");
+
+    let mut more = found();
+    more.sessions.push(session(3, ResumableStatus::Resumable));
+    attach::update(
+        &mut restarted,
+        Msg::OfferListed {
+            project: project(),
+            report: more,
+        },
+    );
+    assert!(offer_visible(&restarted), "a new resumable session offers");
 }

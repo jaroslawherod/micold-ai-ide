@@ -283,6 +283,28 @@ pub fn grid() -> GridCache {
     cache
 }
 
+/// An Overview card's title from each source (feature 1504, FR-001, FR-008): the title and where it
+/// came from, for the expanded cards that name the source beside the display name.
+pub fn title_sources() -> Vec<(&'static str, micold_core::location_title::TitleSource)> {
+    use micold_core::location_title::TitleSource;
+    vec![
+        ("Readable worktree titles", TitleSource::GithubIssue(1504)),
+        (
+            "Login page times out",
+            TitleSource::JiraIssue("ABC-42".into()),
+        ),
+        ("Add readable titles", TitleSource::PullRequest(1520)),
+        (
+            "Overview cards, readable layout and content",
+            TitleSource::Spec,
+        ),
+        ("Fix the flaky resize test", TitleSource::Session),
+        ("fix(overview): wrap long titles", TitleSource::Commit),
+        ("claude/project-thread-7041o6", TitleSource::Branch),
+        ("project-thread-7041o6", TitleSource::Folder),
+    ]
+}
+
 /// A project directory, for a sentence that names one (the start list's note, 037). A worktree's,
 /// and so wider than a menu panel: the note has to break inside it, which a short path never shows.
 pub const PROJECT_DIR: &str = "/home/dev/projects/atlas/.worktrees/feat-availability-notes";

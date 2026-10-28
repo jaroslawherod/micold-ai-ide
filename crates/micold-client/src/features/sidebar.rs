@@ -62,6 +62,7 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::location_state::{location_state, LocationState};
+use micold_core::location_title::LocationTitle;
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
@@ -1469,27 +1470,39 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
 /// `tooltip` with the row's full title as its first line (feature 1125, FR-012): the first line of
 /// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full. A title that
 /// is the row's name or its branch is already on the tooltip's `Name` or `Branch` line, so it is not
-/// added a second time.
-pub fn with_title_line(node: &WorktreeNode, title: &str, tooltip: String) -> String {
-    if title == node.display_name || node.worktree.branch.as_deref() == Some(title) {
-        tooltip
-    } else {
-        format!("{title}\n{tooltip}")
-    }
+/// added a second time. Feature 1504 (FR-008, L3): the next line names the title's source (*From
+/// pull request #1520*, *Branch name*); a title from the folder names none. A rename is the row's
+/// first line and has no source, so it leads alone, as the rename did before 1504.
+pub fn with_title_line(
+    node: &WorktreeNode,
+    title: &LocationTitle,
+    renamed: Option<&str>,
+    tooltip: String,
+) -> String {
+    let (text, words) = match rename(renamed) {
+        Some(name) => (name, None),
+        None => (title.text.as_str(), title.source.words()),
+    };
+    let repeated = text == node.display_name || node.worktree.branch.as_deref() == Some(text);
+    [(!repeated).then(|| text.to_string()), words, Some(tooltip)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The user's rename of a worktree (feature 008, FR-014), when it is not blank.
+fn rename(renamed: Option<&str>) -> Option<&str> {
+    renamed.map(str::trim).filter(|name| !name.is_empty())
 }
 
 /// A worktree row's first line (feature 1125, data-model *Row text*): the user's rename of the
-/// worktree when there is one (it wins over everything the app derives), else the known issue
-/// title, else the branch, else the display name, as the Overview's card reads it (feature 1120,
-/// FR-006).
-pub fn row_title(node: &WorktreeNode, issue_title: Option<&str>, renamed: Option<&str>) -> String {
-    match renamed.map(str::trim).filter(|name| !name.is_empty()) {
+/// worktree when there is one (it wins over everything the app derives), else its location title,
+/// as the Overview's card reads it (feature 1504, FR-007).
+pub fn row_title(title: &LocationTitle, renamed: Option<&str>) -> String {
+    match rename(renamed) {
         Some(name) => name.to_string(),
-        None => micold_core::overview_text::card_title(
-            issue_title,
-            node.worktree.branch.as_deref(),
-            &node.display_name,
-        ),
+        None => title.text.clone(),
     }
 }
 

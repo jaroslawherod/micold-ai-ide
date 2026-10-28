@@ -50,19 +50,9 @@ pub fn review_holder(app: &crate::app::State) -> Holder {
             Holder::Other
         };
     }
-    let composer_open = app
-        .changes
-        .tabs
-        .shown_view()
-        .is_some_and(|view| view.composer.is_some());
-    match app.window.focused_field {
+    match app.live_focused_field() {
         None => Holder::Review,
-        Some(FieldId::ReviewComposer) if composer_open => Holder::Composer,
-        // A closed comment box, or the session's own composer and queued message, which the Review
-        // tab replaces on screen: their text areas never report losing the keyboard as they go.
-        Some(FieldId::ReviewComposer | FieldId::Composer(_) | FieldId::QueuedMessage(_)) => {
-            Holder::Review
-        }
+        Some(FieldId::ReviewComposer) => Holder::Composer,
         Some(_) => Holder::Other,
     }
 }

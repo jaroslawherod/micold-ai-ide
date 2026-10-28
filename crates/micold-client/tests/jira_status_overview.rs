@@ -15,7 +15,7 @@ use micold_client::ui::overview;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, FakeJiraSource, JiraConnection};
-use micold_core::jira_status::{read_statuses, KeyedStatus, TicketStatus, Trigger};
+use micold_core::jira_status::{read_statuses, KeyedIssue, TicketStatus, Trigger};
 use support::layout as lay;
 use support::sidebar_fixture::{deliver, listed, state_with_active};
 
@@ -23,15 +23,16 @@ fn conn() -> JiraConnection {
     JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap()
 }
 
-fn read(key: &str, name: &str, category: &str) -> KeyedStatus {
-    (
-        key.to_string(),
-        TicketStatus::from_jira(Some(name), Some(category)),
-    )
+fn read(key: &str, name: &str, category: &str) -> KeyedIssue {
+    KeyedIssue {
+        key: key.to_string(),
+        status: TicketStatus::from_jira(Some(name), Some(category)),
+        summary: None,
+    }
 }
 
 /// A state with worktrees for `dirs` and `statuses` read into the board.
-fn state_with(dirs: &[&str], statuses: Vec<KeyedStatus>) -> State {
+fn state_with(dirs: &[&str], statuses: Vec<KeyedIssue>) -> State {
     let mut state = state_with_active();
     deliver(&mut state, dirs.iter().map(|d| listed(d)).collect());
     refresh(&mut state, Ok(statuses), Duration::ZERO, Trigger::Open);
@@ -40,7 +41,7 @@ fn state_with(dirs: &[&str], statuses: Vec<KeyedStatus>) -> State {
 
 fn refresh(
     state: &mut State,
-    answer: Result<Vec<KeyedStatus>, IssueLoadError>,
+    answer: Result<Vec<KeyedIssue>, IssueLoadError>,
     now: Duration,
     trigger: Trigger,
 ) {

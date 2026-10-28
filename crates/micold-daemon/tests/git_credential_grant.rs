@@ -309,6 +309,7 @@ async fn a_host_process_daemon_refuses_grants_and_sends_no_targets() {
     let _env = Env::set(&[
         (ROOT_ENV, None),
         ("MICOLD_IMAGE_REFERENCE", None),
+        (micold_core::kube::credentials::POD_ENV, None),
         ("MICOLD_TOKEN_PATH", None),
     ]);
     let a = project(dir.path(), "a", Some("https://github.com/o/r"));
@@ -342,6 +343,28 @@ async fn a_host_process_daemon_refuses_grants_and_sends_no_targets() {
     .await
     .expect("refused");
     assert_eq!(refused, ErrorKind::Refused);
+}
+
+/// #1522: the daemon of a pod has only the env `daemon_env` gives it, and must still take grants.
+#[tokio::test]
+async fn a_daemon_run_with_only_the_pods_env_announces_targets() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let pod = micold_core::kube::credentials::daemon_env();
+    let pod_setting = micold_core::kube::credentials::POD_ENV;
+    let flag = pod.get(pod_setting).expect("the pod's env names the pod");
+    let _env = Env::set(&[
+        (ROOT_ENV, None),
+        ("MICOLD_IMAGE_REFERENCE", None),
+        (pod_setting, Some(flag.into())),
+        ("MICOLD_TOKEN_PATH", None),
+    ]);
+    assert!(micold_daemon::git_credential::credential_root().is_some());
+    let a = project(dir.path(), "a", Some("https://github.com/o/r"));
+    let state = state_with(&[&a]);
+    let mut client = connect_and_attach(&state, &a).await;
+    let (found, _) = targets(&mut client).await;
+    assert_eq!(found.len(), 1, "{found:?}");
 }
 
 #[tokio::test]

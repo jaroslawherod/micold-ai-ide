@@ -169,6 +169,7 @@ pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toolbar::Toolbar;
 pub use unread_mark::UnreadMark;
 pub use virtual_rows::VirtualRows;
+pub use wide_content::{within_pane, PaneWidth};
 
 /// The application's theme, derived from the active colour scheme.
 ///

@@ -29,7 +29,7 @@ use micold_core::attach::{
 use micold_core::notify::{Level, Notification};
 use micold_core::occupancy::{occupancy, ExistingSession, Occupancy};
 use micold_core::session::{Session, SessionLocation};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 /// What this feature remembers.
@@ -42,13 +42,14 @@ pub struct State {
 }
 
 /// The start-up offer: what discovery found when a project opened, and what the user did with it.
-/// In memory only; a dismissal lasts until the app restarts (research R5).
+/// A dismissal is kept per project as the session ids it showed, and is persisted by the shell
+/// (BUG-1555), so it holds across restarts for those sessions only.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Offer {
     /// The latest report for one project, as asked at project open.
     pub report: Option<(PathBuf, DiscoveryReport)>,
-    /// Projects whose offer was dismissed this run.
-    pub dismissed: BTreeSet<PathBuf>,
+    /// The sessions each project's dismissed offer showed. Restored from the settings at start.
+    pub dismissed: BTreeMap<PathBuf, BTreeSet<uuid::Uuid>>,
     /// The targets of an `AttachApply` sent from the banner and not yet answered.
     pub in_flight: Vec<AttachItem>,
 }
@@ -57,12 +58,7 @@ impl Offer {
     /// The report's stored sessions that "Resume all" can catalogue, as apply targets: the newest
     /// resumable session of each worktree that has none (feature 776, FR-012; BUG-1164).
     pub fn targets(&self, catalog: &[Session]) -> Vec<AttachItem> {
-        let resumable: Vec<&ResumableSession> = self
-            .offerable(catalog)
-            .into_iter()
-            .filter(|s| can_resume(s))
-            .collect();
-        cap_per_location(resumable, &BTreeSet::new(), |s| {
+        cap_per_location(self.offerable(catalog), &BTreeSet::new(), |s| {
             (s.target.clone(), s.last_activity)
         })
         .into_iter()
@@ -76,11 +72,14 @@ impl Offer {
 
     /// The report's stored sessions the offer shows: those whose worktree has no session in
     /// `catalog`. A session of an occupied worktree is resumed from "Attach existing…", which
-    /// asks replace or keep both (776 FR-008b/c); "Resume all" could only be refused for it.
+    /// asks replace or keep both (776 FR-008b/c); "Resume all" could only be refused for it. A
+    /// session that cannot be resumed (its worktree was deleted) is never offered: it stays in
+    /// "Attach existing…" (BUG-1555).
     pub fn offerable(&self, catalog: &[Session]) -> Vec<&ResumableSession> {
         self.report
             .iter()
             .flat_map(|(_, r)| r.sessions.iter())
+            .filter(|s| can_resume(s))
             .filter(|s| {
                 let location = match &s.target {
                     AttachTarget::Default => SessionLocation::Default,
@@ -97,10 +96,18 @@ impl Offer {
     pub fn session_count(&self, catalog: &[Session]) -> usize {
         self.offerable(catalog).len()
     }
+
+    /// Whether `project`'s offer has a session its dismissal did not cover.
+    pub fn has_undismissed(&self, project: &PathBuf, catalog: &[Session]) -> bool {
+        let seen = self.dismissed.get(project);
+        self.offerable(catalog)
+            .iter()
+            .any(|s| !seen.is_some_and(|ids| ids.contains(&s.id)))
+    }
 }
 
 /// Whether the banner is shown for the active project: discovery found stored provider sessions
-/// the catalog lacks, and the offer was not dismissed this run (FR-009). A project whose records
+/// the catalog lacks, and the offer's sessions were not all dismissed (FR-009, BUG-1555). A project whose records
 /// could not be read is never offered.
 pub fn offer_visible(state: &crate::app::State) -> bool {
     let Some(project) = state.workspace.active.as_ref() else {
@@ -111,8 +118,10 @@ pub fn offer_visible(state: &crate::app::State) -> bool {
     };
     asked == project
         && !report.is_empty()
-        && state.attach.offer.session_count(state.active_sessions()) > 0
-        && !state.attach.offer.dismissed.contains(project)
+        && state
+            .attach
+            .offer
+            .has_undismissed(project, state.active_sessions())
         && !state.workspace.unreadable_projects.contains(project)
 }
 
@@ -396,7 +405,19 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::OfferDismissed => {
             if let Some(project) = state.workspace.active.clone() {
-                state.attach.offer.dismissed.insert(project);
+                // Every resumable session of the report, also those hidden now because their
+                // worktree has a session: they must not bring the offer back once it closes.
+                let shown = state
+                    .attach
+                    .offer
+                    .report
+                    .iter()
+                    .filter(|(asked, _)| *asked == project)
+                    .flat_map(|(_, r)| r.sessions.iter())
+                    .filter(|s| can_resume(s))
+                    .map(|s| s.id)
+                    .collect();
+                state.attach.offer.dismissed.insert(project, shown);
             }
             Vec::new()
         }

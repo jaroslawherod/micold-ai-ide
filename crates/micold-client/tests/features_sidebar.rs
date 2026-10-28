@@ -1897,9 +1897,25 @@ mod two_line_rows {
     use micold_client::features::sidebar::{
         default_second_line, row_chips, row_second_line, row_title, with_title_line, RowChip,
     };
+    use micold_core::location_title::{
+        choose, LocationTitle, TitleInputs, TitleSource, TitleTicket,
+    };
     use micold_core::session::SessionLifecycle;
 
     const TITLE: &str = "CI red on main";
+    const TICKET: TitleTicket = TitleTicket::Github(1117);
+
+    /// The row's location title, as `features::overview::location_title` builds it: the issue's
+    /// title when one is known, else the branch, else the display name (feature 1504, FR-001).
+    fn titled(node: &WorktreeNode, issue_title: Option<&str>) -> LocationTitle {
+        let ticket = TICKET;
+        choose(&TitleInputs {
+            ticket: Some(&ticket),
+            issue_title,
+            branch: node.worktree.branch.as_deref(),
+            ..TitleInputs::named(&node.display_name)
+        })
+    }
     const BRANCH: &str = "fix/1117_ci-red";
 
     fn node(tags: Vec<Tag>, sessions: Vec<Session>) -> WorktreeNode {
@@ -1926,7 +1942,7 @@ mod two_line_rows {
     #[test]
     fn a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions() {
         let node = node(vec![], vec![session(here())]);
-        let title = row_title(&node, Some(TITLE), None);
+        let title = row_title(&titled(&node, Some(TITLE)), None);
         assert_eq!(title, TITLE);
         assert_eq!(
             row_second_line(&node, &title),
@@ -1938,7 +1954,7 @@ mod two_line_rows {
     #[test]
     fn a_branch_only_worktree_reads_the_branch_then_the_sessions_alone() {
         let node = node(vec![], vec![idle(here())]);
-        let title = row_title(&node, None, None);
+        let title = row_title(&titled(&node, None), None);
         assert_eq!(title, BRANCH);
         assert_eq!(row_second_line(&node, &title), "1 session");
     }
@@ -1967,7 +1983,7 @@ mod two_line_rows {
         let empty_worktree = node(vec![], vec![]);
         assert!(row_second_line(
             &empty_worktree,
-            &row_title(&empty_worktree, Some(TITLE), None)
+            &row_title(&titled(&empty_worktree, Some(TITLE)), None)
         )
         .ends_with("no sessions"));
     }
@@ -2024,11 +2040,52 @@ mod two_line_rows {
             &node.display_name,
             None,
         );
-        let tip = with_title_line(&node, TITLE, today.clone());
+        let tip = with_title_line(&node, &titled(&node, Some(TITLE)), None, today.clone());
         let mut lines = tip.lines();
         assert_eq!(lines.next(), Some(TITLE));
+        assert_eq!(lines.next(), Some("From GitHub issue #1117"));
         assert_eq!(line(&tip, "Branch").as_deref(), Some(BRANCH));
         assert_eq!(lines.collect::<Vec<_>>().join("\n"), today);
+    }
+
+    /// Feature 1504 (T027, FR-008, US2.6, L3): the line after the title names its source, for
+    /// each source but the folder. A title from the branch is not repeated (the `Branch:` line
+    /// holds it), but its source line still says *Branch name*; a title from the folder keeps
+    /// today's tooltip.
+    #[test]
+    fn the_tooltip_names_the_titles_source_after_the_title() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
+        let rows = [
+            (TitleSource::PullRequest(1520), "From pull request #1520"),
+            (TitleSource::JiraIssue("ABC-42".into()), "From Jira ABC-42"),
+            (TitleSource::Spec, "From the feature spec"),
+            (TitleSource::Session, "From the session title"),
+            (TitleSource::Commit, "From the latest commit"),
+        ];
+        for (source, words) in rows {
+            let title = LocationTitle {
+                text: "Add readable titles".into(),
+                source,
+            };
+            assert_eq!(
+                with_title_line(&node, &title, None, today.clone()),
+                format!("Add readable titles\n{words}\n{today}"),
+                "{:?}",
+                title.source
+            );
+        }
+        let branch = titled(&node, None);
+        assert_eq!(branch.source, TitleSource::Branch);
+        assert_eq!(
+            with_title_line(&node, &branch, None, today.clone()),
+            format!("Branch name\n{today}")
+        );
+        let mut folder = node.clone();
+        folder.worktree.branch = None;
+        let folder = titled(&folder, None);
+        assert_eq!(folder.source, TitleSource::Folder);
+        assert_eq!(with_title_line(&node, &folder, None, today.clone()), today);
     }
 
     /// A title the tooltip already names (the row's name or its branch) is not repeated above it.
@@ -2036,8 +2093,35 @@ mod two_line_rows {
     fn the_tooltip_does_not_repeat_a_title_that_is_the_name_or_the_branch() {
         let node = node(vec![], vec![]);
         let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
-        assert_eq!(with_title_line(&node, BRANCH, today.clone()), today);
-        assert_eq!(with_title_line(&node, "ci-red", today.clone()), today);
+        let tip = with_title_line(&node, &titled(&node, None), None, today.clone());
+        assert!(!tip.lines().any(|line| line == BRANCH), "{tip}");
+        let mut folder = node.clone();
+        folder.worktree.branch = None;
+        assert_eq!(
+            with_title_line(&node, &titled(&folder, None), None, today.clone()),
+            today
+        );
+    }
+
+    /// Feature 1125 (FR-012) with 1504: a renamed row's tooltip leads with the rename, the row's
+    /// first line, not a pull request title the row does not show, and names no source; a blank
+    /// rename does not count.
+    #[test]
+    fn a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
+        let title = LocationTitle {
+            text: "Add readable titles".into(),
+            source: TitleSource::PullRequest(1520),
+        };
+        assert_eq!(
+            with_title_line(&node, &title, Some("my pet name"), today.clone()),
+            format!("my pet name\n{today}")
+        );
+        assert_eq!(
+            with_title_line(&node, &title, Some("  "), today.clone()),
+            format!("Add readable titles\nFrom pull request #1520\n{today}")
+        );
     }
 
     /// A user's rename of the worktree (feature 008, FR-014) wins the first line over the issue
@@ -2045,13 +2129,28 @@ mod two_line_rows {
     #[test]
     fn a_users_rename_wins_the_first_line_over_the_issue_title_and_the_branch() {
         let node = node(vec![], vec![session(here())]);
-        let title = row_title(&node, Some(TITLE), Some("my pet name"));
+        let title = row_title(&titled(&node, Some(TITLE)), Some("my pet name"));
         assert_eq!(title, "my pet name");
         assert_eq!(
             row_second_line(&node, &title),
             "fix/1117 \u{b7} 1 session running"
         );
-        assert_eq!(row_title(&node, Some(TITLE), Some("  ")), TITLE);
+        assert_eq!(row_title(&titled(&node, Some(TITLE)), Some("  ")), TITLE);
+    }
+
+    /// Feature 1504 (T005, FR-007): the row's first line is the location title whatever its source
+    /// (an issue, the branch, the folder), and a rename (feature 1125) still wins over each.
+    #[test]
+    fn the_row_shows_the_location_title_of_every_source_and_a_rename_wins() {
+        let mut node = node(vec![], vec![]);
+        assert_eq!(row_title(&titled(&node, Some(TITLE)), None), TITLE);
+        assert_eq!(row_title(&titled(&node, None), None), BRANCH);
+        node.worktree.branch = None;
+        let folder = titled(&node, None);
+        assert_eq!(row_title(&folder, None), "ci-red");
+        for title in [titled(&node, Some(TITLE)), folder] {
+            assert_eq!(row_title(&title, Some("my pet name")), "my pet name");
+        }
     }
 }
 

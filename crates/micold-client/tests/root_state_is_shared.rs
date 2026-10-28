@@ -108,6 +108,18 @@ const SHARED: &[(&str, &str)] = &[(
 /// so it has a reader outside its feature and its view.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
+        "history.list",
+        "tests/history.rs::two_windows_keep_independent_histories — the window's Back/Forward \
+         history is recorded after every message from the place shown, whatever view is on \
+         screen, so no component exists to hold it (feature 1465, FR-001)",
+    ),
+    (
+        "history.moving",
+        "tests/history.rs::nothing_is_observed_while_a_move_is_under_way — a press's move spans \
+         the follow-up messages it dispatches through the root `update`, so the flag outlives any \
+         view (feature 1465, research R2)",
+    ),
+    (
         "agent_confirm.held",
         "tests/agent_confirm_waits_behind_dialogs.rs::a_held_prompt_that_is_withdrawn_is_gone — \
          whether an agent's prompt waits behind another dialog is decided while its own dialog \

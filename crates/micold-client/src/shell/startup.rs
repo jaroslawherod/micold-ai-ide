@@ -210,6 +210,7 @@ fn restore_from_disk(
 fn restore_folds(core: &mut State, settings: &Settings) {
     core.sidebar.folded = settings.folded_origins.clone();
     core.sidebar.filter_open = settings.filter_open;
+    core.attach.offer.dismissed = settings.dismissed_offers.clone();
 }
 
 fn boot() -> (App, Task<Message>) {

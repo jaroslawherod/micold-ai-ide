@@ -390,6 +390,67 @@ fn is_primary_shift(mods: Mods) -> bool {
     }
 }
 
+/// The Back or Forward key the press is, if any (feature 1465, contracts/keys.md H1): the one
+/// place the keys are chosen. macOS: Cmd alone on the physical `[` / `]` (by the logical key when
+/// the platform gave no code, as [`nav_chord`]'s fallback); elsewhere: Alt alone on ← / →. Not a
+/// terminal chord: [`encode`] never consults it, so a focused terminal keeps the keys (H2).
+pub fn history_key(input: &KeyInput) -> Option<micold_core::history::Dir> {
+    use micold_core::history::Dir;
+    let Mods {
+        shift,
+        ctrl,
+        alt,
+        logo,
+    } = input.mods;
+    #[cfg(target_os = "macos")]
+    {
+        if !(logo && !shift && !ctrl && !alt) {
+            return None;
+        }
+        let physical = match input.physical {
+            PhysicalKey::Other => logical_physical(&input.key),
+            known => known,
+        };
+        match physical {
+            PhysicalKey::BracketLeft => Some(Dir::Back),
+            PhysicalKey::BracketRight => Some(Dir::Forward),
+            _ => None,
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if !(alt && !shift && !ctrl && !logo) {
+            return None;
+        }
+        match input.key {
+            Key::Named(NamedKey::ArrowLeft) => Some(Dir::Back),
+            Key::Named(NamedKey::ArrowRight) => Some(Dir::Forward),
+            _ => None,
+        }
+    }
+}
+
+/// Back's or Forward's key as Linux/Windows and macOS write it (contracts/keys.md H1), for the
+/// user guide and the Review sheet.
+pub fn history_key_labels(dir: micold_core::history::Dir) -> (String, String) {
+    use micold_core::history::Dir;
+    let (other, mac) = match dir {
+        Dir::Back => ("Alt+←", "Cmd+["),
+        Dir::Forward => ("Alt+→", "Cmd+]"),
+    };
+    (other.to_string(), mac.to_string())
+}
+
+/// Back's or Forward's key as the running platform writes it.
+pub fn history_key_label(dir: micold_core::history::Dir) -> String {
+    let (other, mac) = history_key_labels(dir);
+    if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    }
+}
+
 /// Whether the press is the reserved focus-out chord (macOS `Cmd+Shift+E`, else `Ctrl+Shift+E`).
 fn is_release_chord(key: &Key, mods: Mods) -> bool {
     is_primary_shift_chord(key, mods, 'e')

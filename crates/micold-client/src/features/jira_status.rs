@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use micold_core::github::IssueLoadError;
 use micold_core::jira::{JiraConnection, ProjectKey};
-use micold_core::jira_status::{statuses_jql, KeyedStatus, StatusBoard, Trigger};
+use micold_core::jira_status::{statuses_jql, KeyedIssue, StatusBoard, Trigger};
+use micold_core::location_title::{title_ticket, TitleTicket};
 use micold_core::naming::Tag;
 use micold_core::worktree::Worktree;
 
@@ -49,6 +50,26 @@ pub fn linked_keys(worktrees: &[Worktree], project: &ProjectKey) -> Vec<String> 
         })
         .collect();
     statuses_jql(project, &labels)
+        .into_iter()
+        .flat_map(|query| query.keys)
+        .collect()
+}
+
+/// The Jira title tickets of `project` found only in a branch (feature 1504, FR-002, FR-004): of
+/// each worktree whose folder names no ticket, its branch's Jira key, uppercased, kept when it is
+/// `<PROJECT>-<digits>`, each once. They are read for their summary only: no status chip.
+pub fn branch_title_keys(worktrees: &[Worktree], project: &ProjectKey) -> Vec<String> {
+    let keys: Vec<String> = worktrees
+        .iter()
+        .filter(|worktree| title_ticket(&worktree.dir_name, None).is_none())
+        .filter_map(
+            |worktree| match title_ticket(&worktree.dir_name, worktree.branch.as_deref()) {
+                Some(TitleTicket::Jira(key)) => Some(key),
+                _ => None,
+            },
+        )
+        .collect();
+    statuses_jql(project, &keys)
         .into_iter()
         .flat_map(|query| query.keys)
         .collect()
@@ -93,7 +114,9 @@ impl State {
     }
 
     /// Begin a read for `trigger`, or `None` when it is not due (one is out; the last read is
-    /// recent) or no worktree is linked to a ticket of `project`.
+    /// recent) or no worktree is linked to a ticket of `project` or titled by one in its branch.
+    /// Linked keys are read for their status and summary; branch-only title keys for their summary
+    /// only (feature 1504, FR-004).
     pub fn plan(
         &mut self,
         trigger: Trigger,
@@ -104,7 +127,10 @@ impl State {
         if !self.board.due(now, trigger) {
             return None;
         }
-        let (epoch, keys) = self.board.begin(linked_keys(worktrees, project))?;
+        let (epoch, keys) = self.board.begin(
+            linked_keys(worktrees, project),
+            branch_title_keys(worktrees, project),
+        )?;
         Some(Read { epoch, keys })
     }
 
@@ -113,7 +139,7 @@ impl State {
         &mut self,
         epoch: u64,
         keys: &[String],
-        result: Result<Vec<KeyedStatus>, IssueLoadError>,
+        result: Result<Vec<KeyedIssue>, IssueLoadError>,
         at: Duration,
     ) {
         self.board.apply(epoch, keys, result, at);

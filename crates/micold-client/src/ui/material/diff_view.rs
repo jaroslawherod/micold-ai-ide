@@ -55,7 +55,7 @@ use micold_core::review::{LineRange, RelPath, Side};
 pub use micold_core::settings::DiffLayout;
 use micold_core::tokens::{spacing, Rgb, Roles};
 
-use super::{Button, Text, TypeRole, VirtualRows};
+use super::{within_pane, Button, PaneWidth, Text, TypeRole, VirtualRows};
 
 /// One row's height, hunk header or line: fixed, which is what lets `VirtualRows` build only the
 /// visible rows.
@@ -1093,6 +1093,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             ),
             _ => 0.0,
         };
+        let pane = PaneWidth::default();
         let slots = Slots {
             rows: hung,
             measured: view.slot_heights,
@@ -1100,6 +1101,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
             on_measured: view.on_slot_measured,
             // A diff wide enough to scroll sideways must not stretch its comments to its width.
             cap: (least > SLOT_CAP).then_some(SLOT_CAP),
+            pane: pane.clone(),
         };
         let mut gutters = view.gutters;
         gutters.links = view
@@ -1109,6 +1111,7 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
         let list = |len, build: Box<dyn Fn(usize) -> Element<'a, M> + 'a>| {
             let mut list = VirtualRows::new(len, ROW_HEIGHT, build, r)
                 .least_width(least)
+                .pane(&pane)
                 .offset(view.offset)
                 .viewport(view.viewport)
                 .extras(extras);
@@ -1184,6 +1187,9 @@ struct Slots<'a, M> {
     elements: RefCell<BTreeMap<Anchor, Vec<Element<'a, M>>>>,
     on_measured: Option<OnMeasured<'a, M>>,
     cap: Option<f32>,
+    /// The width of the pane the rows scroll in: a slot is no wider, so its actions are in view
+    /// while the rows are wider than the pane (#1519).
+    pane: PaneWidth,
 }
 
 impl<'a, M: 'a> Slots<'a, M> {
@@ -1202,17 +1208,17 @@ impl<'a, M: 'a> Slots<'a, M> {
             if let Some(cap) = self.cap {
                 slot = container(slot).max_width(cap).into();
             }
-            stack = stack.push(match &self.on_measured {
-                Some(f) => {
-                    let (shown, resized) = (Rc::clone(f), Rc::clone(f));
-                    Sensor::new(slot)
-                        .key(sensor_key((side, line), &self.measured))
-                        .on_show(move |size| shown(side, line, size.height))
-                        .on_resize(move |size| resized(side, line, size.height))
-                        .into()
-                }
-                None => slot,
-            });
+            // The sensor inside the pane, not around it: the pane's wrapper spans the rows, so
+            // its width changes as wider rows are built, which is no change to the slot's height.
+            if let Some(f) = &self.on_measured {
+                let (shown, resized) = (Rc::clone(f), Rc::clone(f));
+                slot = Sensor::new(slot)
+                    .key(sensor_key((side, line), &self.measured))
+                    .on_show(move |size| shown(side, line, size.height))
+                    .on_resize(move |size| resized(side, line, size.height))
+                    .into();
+            }
+            stack = stack.push(within_pane(&self.pane, slot));
         }
         stack.into()
     }
@@ -1903,6 +1909,18 @@ mod tests {
             out.push((node.size().width, node.size().height));
             node.children().iter().for_each(|c| walk(c, out));
         }
+        let mut out = Vec::new();
+        walk(&laid_out_with(text, layout, None), &mut out);
+        out
+    }
+
+    /// A one-line diff of `text` in `layout`, with `slot` (if any) hung under the line, laid out
+    /// in 800 x 600 px.
+    fn laid_out_with(
+        text: &str,
+        layout: DiffLayout,
+        slot: Option<Element<'static, ()>>,
+    ) -> layout::Node {
         let diff = FileDiff::Text(vec![Hunk {
             old_start: 1,
             old_len: 1,
@@ -1913,17 +1931,18 @@ mod tests {
             old_no_newline: false,
             new_no_newline: false,
         }]);
-        let mut element: Element<'_, ()> = DiffView::<()>::new(&diff, layout, LIGHT).into();
+        let mut view = DiffView::<()>::new(&diff, layout, LIGHT);
+        if let Some(slot) = slot {
+            view = view.slot(Side::New, 1, slot);
+        }
+        let mut element: Element<'_, ()> = view.into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
+        element.as_widget_mut().layout(
             &mut tree,
             &renderer,
             &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
-        );
-        let mut out = Vec::new();
-        walk(&node, &mut out);
-        out
+        )
     }
 
     /// #1466: a line wider than the pane is laid out at its full width, to be scrolled to, and
@@ -1959,6 +1978,98 @@ mod tests {
                 .fold(0.0, f32::max);
             assert!(widest <= 800.0, "{layout:?}: {widest}");
         }
+    }
+
+    /// #1519: a slot (a comment card, the composer) under a row of a diff that scrolls sideways
+    /// ends inside the pane, so its actions show without scrolling, whether the diff is wider than
+    /// the pane only (100 characters) or wider than the slot cap too (400).
+    #[test]
+    fn a_slot_is_no_wider_than_the_pane_when_the_diff_scrolls_sideways() {
+        const SLOT_HEIGHT: f32 = 37.0;
+        for chars in [100, 400] {
+            let long = "x".repeat(chars);
+            for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
+                let slot = Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Fixed(SLOT_HEIGHT));
+                let node = laid_out_with(&long, layout, Some(slot.into()));
+                let leaves = super::super::test_support::leaves(&node);
+                let widest = leaves.iter().map(|b| b.x + b.width).fold(0.0, f32::max);
+                assert!(
+                    widest > 800.0,
+                    "{chars} {layout:?}: the diff scrolls ({widest} px)"
+                );
+                let slots: Vec<_> = leaves.iter().filter(|b| b.height == SLOT_HEIGHT).collect();
+                assert_eq!(slots.len(), 1, "{chars} {layout:?}: the slot is laid out");
+                // What holds it spans the rows, so a column drawing only what is in view still
+                // draws the slot once it is shifted along with the scroll.
+                let holder = super::super::test_support::all_bounds(&node)
+                    .into_iter()
+                    .find(|b| b.height == SLOT_HEIGHT)
+                    .expect("the slot's holder");
+                assert_eq!(
+                    holder.width, widest,
+                    "{chars} {layout:?}: the holder spans the rows"
+                );
+                for b in slots {
+                    assert!(
+                        b.width > 0.0 && b.x >= 0.0 && b.x + b.width <= 800.0,
+                        "{chars} {layout:?}: the slot spans {}..{} px of an 800 px pane",
+                        b.x,
+                        b.x + b.width
+                    );
+                }
+            }
+        }
+    }
+
+    /// #1519 review: a slot reports its height once, not again each time a wider row is built and
+    /// widens what holds it (each report is a rebuild of the view).
+    #[test]
+    fn a_slot_is_not_measured_again_when_the_rows_get_wider() {
+        let renderer = super::super::test_support::renderer();
+        let mut tree: Option<Tree> = None;
+        let mut reports = Vec::new();
+        for chars in [100, 400] {
+            let diff = FileDiff::Text(vec![Hunk {
+                old_start: 1,
+                old_len: 1,
+                new_start: 1,
+                new_len: 1,
+                section: String::new(),
+                lines: vec![line(LineKind::Added, None, Some(1), &"x".repeat(chars))],
+                old_no_newline: false,
+                new_no_newline: false,
+            }]);
+            let slot = Space::new().width(Length::Fill).height(Length::Fixed(37.0));
+            let mut element: Element<'_, f32> =
+                DiffView::<f32>::new(&diff, DiffLayout::Unified, LIGHT)
+                    .slot(Side::New, 1, slot)
+                    .on_slot_measured(|_, _, height| height)
+                    .into();
+            let tree = tree.get_or_insert_with(|| Tree::new(element.as_widget()));
+            tree.diff(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(800.0, 600.0)),
+            );
+            let mut messages = Vec::new();
+            element.as_widget_mut().update(
+                tree,
+                &Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now(),
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut Shell::new(&mut messages),
+                &Rectangle::new(iced::Point::ORIGIN, Size::new(800.0, 600.0)),
+            );
+            reports.push(messages);
+        }
+        assert_eq!(reports, vec![vec![37.0], vec![]]);
     }
 
     /// A long line is scrolled to, not wrapped, so no row changes its height and the rows'

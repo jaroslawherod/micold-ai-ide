@@ -27,6 +27,8 @@ pub mod daemons;
 pub mod desktop_notify;
 pub mod drops;
 pub mod env_include;
+pub mod github_filter;
+pub mod history;
 pub mod issues;
 pub mod jira;
 pub mod jira_filters;
@@ -36,6 +38,7 @@ pub mod jira_refresh;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;
+pub mod location_titles;
 pub mod navigation;
 pub mod os_theme;
 pub mod overview_watch;
@@ -62,3 +65,6 @@ pub mod time_zone;
 pub mod transcript;
 pub mod window_raise;
 pub mod workspace;
+
+/// Declared by `jira`, which its path-including shell test needs (`remembered.rs`'s header).
+pub use jira::remembered;

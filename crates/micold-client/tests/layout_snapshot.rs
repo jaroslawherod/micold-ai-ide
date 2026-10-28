@@ -159,6 +159,13 @@ mod issue_rows_show_all_text;
 #[path = "gates/jira_filters_fit.rs"]
 mod jira_filters_fit;
 
+// --- The GitHub filters fit gate (1400, T027) -----------------------------------------------------
+
+// Here because it reads covered states, the filtered GitHub form and its open Filters panel, and
+// asks where the Filters button, the chips, Clear filters and the active line were painted.
+#[path = "gates/github_filters_fit.rs"]
+mod github_filters_fit;
+
 // --- The notification-kind rows gate (613, T075) -------------------------------------------------
 
 // Here because it reads a covered state, the Environment page, from the shared record cache, and

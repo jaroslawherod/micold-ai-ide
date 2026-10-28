@@ -85,9 +85,20 @@ the pane. Selecting and scrolling belong to the focused pane.
 
 ## Keyboard shortcuts
 
-With the terminal focused, the pane chords act on the focused pane. The app takes every chord
-below: the terminal never receives them, so they shadow the same keys with Shift in a terminal
-program. The Overview, quick-switcher and location chords work whether or not a terminal is focused.
+With the terminal focused, the pane chords act on the focused pane. The app takes every chord below:
+the terminal never receives them, so they shadow the same keys with Shift in a terminal program. The
+Overview, quick-switcher and location chords work whether or not a terminal is focused. The mouse's
+side buttons go back and forward through the places you have been (sessions, Review tabs, the
+Overview and Compare) from anywhere in the window, over a terminal too; the terminal program never
+receives them. Places that no longer exist, such as a closed session, a removed worktree or a
+project that was closed or is unavailable, are passed over without an error, and a place in another
+project switches to that project as the project switcher does. In a Review tab, Back first does the
+tab's own **Back** (from a browsed file to what was being read) and leaves the tab only when that
+has nothing left; Forward always uses the app's history. Back and Forward's keys are the exception
+to "the app takes every chord": a focused text field or terminal keeps them (shells and fields use
+Alt+←/→ to move by word; on macOS Option+←/→ stays word movement and is not Back or Forward). Hold
+the key to keep stepping: a move made from the keyboard leaves the keyboard with the app, so click
+the terminal to type in it.
 
 | Action | Linux / Windows | macOS |
 |---|---|---|
@@ -101,6 +112,8 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
+| Back | Alt+← or the mouse back button | Cmd+[ or the mouse back button |
+| Forward | Alt+→ or the mouse forward button | Cmd+] or the mouse forward button |
 | Send the review (only in the **Review** tab, and from its comment box; not taken from a focused terminal) — see [Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard) | Ctrl+Shift+Enter | Cmd+Shift+Enter |
 
 While the **Review** tab is shown no terminal has the keyboard, so the pane chords, which act on

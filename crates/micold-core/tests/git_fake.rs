@@ -374,3 +374,15 @@ fn add_tracking_branch_leaves_the_local_branch_behind_on_a_primed_failure() {
     // Created before the checkout failed — rollback is what cleans it up.
     assert!(git.branch_exists(&repo(), "feat/x").unwrap());
 }
+
+/// Feature 1504 (L7): a scripted own-commit subject for one dir, none for any other.
+#[test]
+fn own_commit_subject_answers_what_was_scripted_for_the_dir() {
+    let wt = PathBuf::from("/repo/wt");
+    let git = FakeGit::new().with_own_commit(&wt, "fix(overview): wrap long titles");
+    assert_eq!(
+        git.own_commit_subject(&wt).as_deref(),
+        Some("fix(overview): wrap long titles")
+    );
+    assert_eq!(git.own_commit_subject(Path::new("/repo/other")), None);
+}

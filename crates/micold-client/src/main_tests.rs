@@ -11861,7 +11861,7 @@ mod pr_status {
     // ---- Feature 1003, T010: the list read asks for the worktree's branch set ----------------
 
     /// Run `git -C dir args` as if at Unix second `time`, so the reflog's seconds are the test's.
-    fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
+    pub(super) fn git_at(dir: &std::path::Path, time: u64, args: &[&str]) {
         use std::process::Command;
         let date = format!("@{time} +0000");
         let out = micold_core::process::no_window(&mut Command::new("git"))
@@ -13039,7 +13039,12 @@ mod panes {
         ));
         app.core.workspace.active = Some(project.clone());
         let sessions: Vec<Session> = (0..n)
-            .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
+            .map(|_| {
+                // Idle, so selecting one asks nothing (a session that is not running yet would).
+                let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+                session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+                session
+            })
             .collect();
         let ids: Vec<SessionId> = sessions.iter().map(|s| s.id).collect();
         app.core.workspace.sessions.insert(project, sessions);
@@ -15750,15 +15755,16 @@ mod jira_status_driver {
 
     /// Switch on, connected, token stored, a worktree linked to `ABC-1`, the project just opened.
     fn rig() -> Rig {
-        rig_answering(Ok(vec![(
-            "ABC-1".to_string(),
-            TicketStatus::from_jira(Some("In Progress"), Some("indeterminate")),
-        )]))
+        rig_answering(Ok(vec![micold_core::jira_status::KeyedIssue {
+            key: "ABC-1".to_string(),
+            status: TicketStatus::from_jira(Some("In Progress"), Some("indeterminate")),
+            summary: None,
+        }]))
     }
 
     fn rig_answering(
         answer: Result<
-            Vec<micold_core::jira_status::KeyedStatus>,
+            Vec<micold_core::jira_status::KeyedIssue>,
             micold_core::github::IssueLoadError,
         >,
     ) -> Rig {
@@ -15823,6 +15829,32 @@ mod jira_status_driver {
             on_focus(&mut rig);
             assert!(rig.source.status_calls().is_empty());
             assert!(!chip(&rig));
+        }
+    }
+
+    /// Feature 1504 (T018, FR-004, L6): a Jira key only in a branch is asked under the same gate
+    /// as the statuses; with the switch off or no connection nothing goes to Jira.
+    #[test]
+    fn a_branch_only_jira_key_is_asked_only_through_the_gate() {
+        let branch_only = |app: &mut App| {
+            let worktree = &mut app.core.worktree.worktrees[0];
+            worktree.dir_name = "project-thread-t2a600".into();
+            worktree.branch = Some("feat/ABC-42_login".into());
+        };
+        let mut on = rig();
+        branch_only(&mut on.app);
+        after_update(&mut on);
+        assert_eq!(on.source.status_calls(), vec![vec!["ABC-42".to_string()]]);
+        for off in [
+            |app: &mut App| app.core.settings.jira_enabled = false,
+            |app: &mut App| app.core.settings.jira_connections.clear(),
+        ] {
+            let mut rig = rig();
+            branch_only(&mut rig.app);
+            off(&mut rig.app);
+            after_update(&mut rig);
+            on_focus(&mut rig);
+            assert!(rig.source.status_calls().is_empty());
         }
     }
 
@@ -16541,4 +16573,744 @@ fn the_jump_field_opens_the_quick_switcher_with_its_input_focused() {
         focuses(work, &QUICK_SWITCHER_FIELD_ID),
         "the switcher's input takes the keyboard"
     );
+}
+
+/// Feature 1504 (plan D2, T011): a branch carries a title ticket, so a worktree whose branch alone
+/// changed counts as a changed list and its title is asked for again.
+#[test]
+fn worktrees_fingerprint_follows_the_branch() {
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+
+    let mut app = base_app();
+    app.core.worktree.worktrees = vec![Worktree {
+        dir_name: "project-thread-t2a600".to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees/project-thread-t2a600"),
+        branch: Some("claude/project-thread-t2a600".to_string()),
+        status: WorktreeStatus::Valid,
+        included: false,
+    }];
+    let before = shell::issues::worktrees_fingerprint(&app);
+    app.core.worktree.worktrees[0].branch = Some("feat/1504-readable-titles".to_string());
+    assert_ne!(shell::issues::worktrees_fingerprint(&app), before);
+}
+
+// --- Feature 1465: Back/Forward through the real root `update` (T011) ---
+
+mod history_tests {
+    use super::*;
+    use micold_client::features::history::{Msg as HistoryMsg, Source};
+    use micold_core::history::{Dir, View};
+    use micold_core::session::{Session, SessionLocation};
+
+    fn project() -> std::path::PathBuf {
+        std::path::PathBuf::from("/tmp/project")
+    }
+
+    /// A connected app on `/tmp/project` with `n` sessions at its root, none shown.
+    fn app_with_sessions(n: usize) -> (App, Vec<SessionId>, SentRx) {
+        let (mut app, rx) = connected_app();
+        app.core.workspace.active = Some(project());
+        let sessions: Vec<Session> = (0..n)
+            .map(|_| {
+                // Idle, so selecting one asks nothing (a session that is not running yet would).
+                let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+                session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+                session
+            })
+            .collect();
+        let ids = sessions.iter().map(|s| s.id).collect();
+        app.core.workspace.sessions.insert(project(), sessions);
+        (app, ids, rx)
+    }
+
+    fn select(app: &mut App, id: SessionId) {
+        let _ = update(app, Message::Session(SessionMsg::Selected(id)));
+    }
+
+    fn press(app: &mut App, dir: Dir) {
+        let _ = update(
+            app,
+            Message::History(HistoryMsg::Pressed {
+                dir,
+                source: Source::Button,
+            }),
+        );
+    }
+
+    fn shown_session_ids(app: &App) -> Vec<SessionId> {
+        app.core
+            .history
+            .list
+            .entries()
+            .iter()
+            .filter_map(|p| match p.view {
+                View::Session { id, .. } => Some(id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A run group `id` with two runs, no worktree yet.
+    fn run_group(id: u128) -> micold_core::runs::RunGroup {
+        micold_core::runs::RunGroup::new(micold_core::runs::NewGroup {
+            id: micold_core::runs::GroupId(uuid::Uuid::from_u128(id)),
+            name: "g".into(),
+            naming: micold_core::naming::WorktreeNaming {
+                type_: Some(micold_core::naming::ConventionalType::Feat),
+                ticket: None,
+                name: "g".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs: (1u8..=2)
+                .map(|number| micold_core::runs::Run {
+                    number,
+                    provider: AiCli::ClaudeCode,
+                    names: micold_core::naming::DerivedNames {
+                        dir_name: format!("g-{number}"),
+                        branch: format!("feat/g-{number}"),
+                    },
+                    session: None,
+                    status: micold_core::runs::RunStatus::Creating,
+                })
+                .collect(),
+        })
+        .expect("valid group")
+    }
+
+    /// US1 AS1–AS3: A → B → C, Back, Back, select D: forward does nothing and the entries are A, D.
+    #[test]
+    fn back_twice_then_a_new_selection_drops_the_forward_entries() {
+        let (mut app, ids, _rx) = app_with_sessions(4);
+        let [a, b, c, d] = [ids[0], ids[1], ids[2], ids[3]];
+        for id in [a, b, c] {
+            select(&mut app, id);
+        }
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(b), "US1 AS1");
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(a));
+        assert_eq!(
+            shown_session_ids(&app),
+            vec![a, b, c],
+            "moving records nothing"
+        );
+        select(&mut app, d);
+        press(&mut app, Dir::Forward);
+        assert_eq!(
+            app.core.session.active,
+            Some(d),
+            "US1 AS3: forward does nothing"
+        );
+        assert_eq!(shown_session_ids(&app), vec![a, d]);
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(a), "back returns to A");
+    }
+
+    #[test]
+    fn back_from_the_overview_shows_the_previous_session_with_the_overview_closed() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let _ = update(
+            &mut app,
+            Message::Overview(micold_client::features::overview::Msg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(app.core.overview.open);
+        press(&mut app, Dir::Back);
+        assert!(!app.core.overview.open, "the Overview closed");
+        assert_eq!(app.core.session.active, Some(ids[0]));
+        press(&mut app, Dir::Forward);
+        assert!(app.core.overview.open, "Forward opens it again");
+    }
+
+    #[test]
+    fn back_from_compare_shows_the_review_tab() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let group = run_group(7);
+        let gid = group.id;
+        app.core.runs.groups = vec![group];
+        let _ = update(
+            &mut app,
+            Message::Sidebar(
+                micold_client::features::sidebar::Msg::ReviewChangesRequested(
+                    SessionLocation::Default,
+                ),
+            ),
+        );
+        assert!(app.core.review_shown().is_some());
+        let _ = update(
+            &mut app,
+            Message::Runs(micold_client::features::runs::Msg::CompareOpened {
+                group: gid,
+                project: project(),
+            }),
+        );
+        assert!(app.core.runs.compare.is_some());
+        press(&mut app, Dir::Back);
+        assert!(app.core.runs.compare.is_none(), "Compare closed");
+        assert_eq!(
+            app.core.shown_place().map(|p| p.view),
+            Some(View::Review(SessionLocation::Default)),
+            "the Review tab is shown"
+        );
+    }
+
+    /// SC-005: from a browsed file, Back returns to what was being read in one press and the next
+    /// Back leaves the tab.
+    #[test]
+    fn back_in_a_browsed_review_tab_returns_to_the_reading_then_leaves_the_tab() {
+        let (mut app, ids, _rx) = app_with_sessions(1);
+        select(&mut app, ids[0]);
+        let _ = update(
+            &mut app,
+            Message::Sidebar(
+                micold_client::features::sidebar::Msg::ReviewChangesRequested(
+                    SessionLocation::Default,
+                ),
+            ),
+        );
+        let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
+        let _ = update(
+            &mut app,
+            Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
+        );
+        let browsing = |app: &App| {
+            app.core
+                .changes
+                .tabs
+                .shown_view()
+                .is_some_and(|v| v.browse.is_some())
+        };
+        assert!(browsing(&app));
+        press(&mut app, Dir::Back);
+        assert!(!browsing(&app), "one press returns to the previous reading");
+        assert!(app.core.review_shown().is_some(), "the tab stays shown");
+        press(&mut app, Dir::Back);
+        assert!(
+            app.core.review_shown().is_none(),
+            "the next press leaves the tab"
+        );
+        assert_eq!(app.core.session.active, Some(ids[0]));
+    }
+
+    // ---- Across projects (M4, US4, research R2, R5) ----------------------------------------------
+
+    /// Two known projects P and Q in temporary folders, Q active; P is a git repository with the
+    /// worktree `w`. Each folder holds idle sessions at the given locations.
+    struct TwoProjects {
+        app: App,
+        p: tempfile::TempDir,
+        q: tempfile::TempDir,
+        _rx: SentRx,
+    }
+
+    fn idle_at(location: SessionLocation) -> Session {
+        let mut session = Session::start_new(location, AiCli::ClaudeCode);
+        session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+        session
+    }
+
+    fn two_projects(p_sessions: Vec<Session>, q_sessions: Vec<Session>) -> TwoProjects {
+        let p = tempfile::tempdir().unwrap();
+        let q = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| super::pr_status::git_at(p.path(), 1_000, args);
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t.test"]);
+        git(&["config", "user.name", "T"]);
+        git(&["commit", "-q", "--allow-empty", "-m", "root"]);
+        let w = p.path().join(".claude/worktrees/w");
+        git(&["worktree", "add", "-q", "-b", "feat/w", w.to_str().unwrap()]);
+        let (mut app, rx) = connected_app();
+        let scanner = micold_core::fs_scan::FakeFolderScanner::new();
+        for folder in [&p, &q] {
+            app.core
+                .workspace
+                .open_or_activate(folder.path().to_path_buf(), &scanner);
+        }
+        app.core
+            .workspace
+            .sessions
+            .insert(p.path().to_path_buf(), p_sessions);
+        app.core
+            .workspace
+            .sessions
+            .insert(q.path().to_path_buf(), q_sessions);
+        TwoProjects { app, p, q, _rx: rx }
+    }
+
+    fn reopen(app: &mut App, path: &std::path::Path) {
+        let _ = update(
+            app,
+            Message::Project(ProjectMsg::Reopened(path.to_path_buf())),
+        );
+    }
+
+    /// Cross-project Back: the project switches and the target session is shown; nothing between
+    /// was recorded, so Forward returns to Q's session and Back again to P's (R2). P's session is
+    /// in its worktree, read from disk for the press (R5).
+    #[test]
+    fn back_across_projects_switches_project_and_records_nothing_between() {
+        let pw_session = idle_at(SessionLocation::Worktree("w".into()));
+        let q1 = idle_at(SessionLocation::Default);
+        let (pw, q1_id) = (pw_session.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(
+            vec![idle_at(SessionLocation::Default), pw_session],
+            vec![q1],
+        );
+        reopen(&mut app, p.path());
+        select(&mut app, pw);
+        reopen(&mut app, q.path());
+        select(&mut app, q1_id);
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(p.path()));
+        assert_eq!(app.core.session.active, Some(pw), "P's worktree session");
+        press(&mut app, Dir::Forward);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(
+            app.core.session.active,
+            Some(q1_id),
+            "the forward entry was kept"
+        );
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.session.active, Some(pw));
+    }
+
+    /// A project whose folder went away is passed over: its availability is read before the press
+    /// resolves (U2 step 0), so Back changes nothing rather than moving to a refused switch.
+    #[test]
+    fn back_passes_over_a_project_whose_folder_went_away() {
+        let p1 = idle_at(SessionLocation::Default);
+        let q1 = idle_at(SessionLocation::Default);
+        let (p1_id, q1_id) = (p1.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(vec![p1], vec![q1]);
+        reopen(&mut app, p.path());
+        select(&mut app, p1_id);
+        reopen(&mut app, q.path());
+        select(&mut app, q1_id);
+        let p_path = p.path().to_path_buf();
+        p.close().unwrap();
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(app.core.session.active, Some(q1_id), "nothing changes");
+        assert!(
+            app.core.workspace.sessions.contains_key(&p_path),
+            "P stays known"
+        );
+    }
+
+    /// Compare of G in P, show Q1, Back → P with Compare of G open, Forward → Q1.
+    #[test]
+    fn back_to_another_projects_compare_reopens_it_and_forward_returns() {
+        let p1 = idle_at(SessionLocation::Default);
+        let q1 = idle_at(SessionLocation::Default);
+        let (p1_id, q1_id) = (p1.id, q1.id);
+        let TwoProjects { mut app, p, q, .. } = two_projects(vec![p1], vec![q1]);
+        reopen(&mut app, p.path());
+        select(&mut app, p1_id);
+        let group = run_group(7);
+        let gid = group.id;
+        let groups = |list| Message::Runs(micold_client::features::runs::Msg::GroupsChanged(list));
+        let _ = update(&mut app, groups(vec![group]));
+        let _ = update(
+            &mut app,
+            Message::Runs(micold_client::features::runs::Msg::CompareOpened {
+                group: gid,
+                project: p.path().to_path_buf(),
+            }),
+        );
+        assert!(app.core.runs.compare.is_some());
+        reopen(&mut app, q.path());
+        let _ = update(&mut app, groups(Vec::new()));
+        select(&mut app, q1_id);
+        assert!(app.core.runs.compare.is_none());
+        press(&mut app, Dir::Back);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(p.path()));
+        assert_eq!(
+            app.core.runs.compare.as_ref().map(|c| c.group),
+            Some(gid),
+            "Compare of G open in P"
+        );
+        press(&mut app, Dir::Forward);
+        assert_eq!(app.core.workspace.active.as_deref(), Some(q.path()));
+        assert_eq!(app.core.session.active, Some(q1_id));
+        assert!(app.core.runs.compare.is_none());
+    }
+}
+
+// ---- Feature 1400, US2: the remembered GitHub selector's shell paths (T031) ----
+
+mod github_selector_remembered {
+    use super::*;
+    use micold_client::features::worktree_form::github_filter::Msg as GithubMsg;
+    use micold_client::features::worktree_form::{BranchSource, Msg as FormMsg};
+    use micold_core::git::GitRemote;
+    use micold_core::github_filter::{BasicFilters, LabelName, RememberedSelector, SelectorChange};
+    use micold_core::store::github_selector_path;
+
+    const PROJECT: &str = "/repo/demo";
+
+    fn label(name: &str) -> LabelName {
+        LabelName::parse(name).unwrap()
+    }
+
+    fn excluding(names: &[&str]) -> BasicFilters {
+        let mut basic = BasicFilters::default();
+        for name in names {
+            basic.exclude_label(label(name));
+        }
+        basic
+    }
+
+    fn file(dir: &std::path::Path, project: &str) -> PathBuf {
+        github_selector_path(dir, std::path::Path::new(project))
+    }
+
+    fn write(dir: &std::path::Path, project: &str, basic: BasicFilters) {
+        std::fs::create_dir_all(dir).unwrap();
+        let held = RememberedSelector::default().with_change(&SelectorChange::Basic(basic));
+        std::fs::write(file(dir, project), held.to_json()).unwrap();
+    }
+
+    fn held(dir: &std::path::Path) -> BasicFilters {
+        let bytes = std::fs::read(file(dir, PROJECT)).unwrap_or_default();
+        RememberedSelector::from_json(&bytes).basic
+    }
+
+    /// An app on `PROJECT` whose selector files live in `dir`.
+    fn app_in(dir: &std::path::Path) -> App {
+        let mut app = base_app();
+        app.caps = app.caps.clone().with_github_selector_dir(dir.to_path_buf());
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        app
+    }
+
+    fn send(app: &mut App, msg: Message) {
+        let work = update_inner(app, msg);
+        settle(app, work);
+    }
+
+    fn form(app: &mut App, msg: FormMsg) {
+        send(app, Message::WorktreeForm(msg));
+    }
+
+    fn filter(app: &mut App, msg: GithubMsg) {
+        form(app, FormMsg::GithubFilter(msg));
+    }
+
+    /// Open the form with an `o/r` remote and the GitHub source showing.
+    fn open(app: &mut App) {
+        form(app, FormMsg::Opened);
+        form(
+            app,
+            FormMsg::RemotesListed(Ok(vec![GitRemote {
+                name: "origin".into(),
+                url: "git@github.com:o/r.git".into(),
+            }])),
+        );
+        form(app, FormMsg::SourceChanged(BranchSource::Issue));
+    }
+
+    fn shown(app: &App) -> BasicFilters {
+        app.core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("the form is open")
+            .github_selector
+            .basic
+            .clone()
+    }
+
+    fn notifications(app: &mut App) -> Vec<String> {
+        std::iter::from_fn(|| {
+            let visible = app.core.notifications.queue.visible().cloned()?;
+            app.core.notifications.queue.dismiss();
+            Some(visible.message)
+        })
+        .collect()
+    }
+
+    /// Whether any notification raised speaks of the remembered filter.
+    fn about_the_filter(app: &mut App) -> bool {
+        notifications(app)
+            .iter()
+            .any(|m| m.contains("GitHub issue filter"))
+    }
+
+    /// FR-021, FR-022: the form opens with the project's remembered filters, whether GitHub issues
+    /// are on or off and whatever source the project last chose.
+    #[test]
+    fn opening_restores_the_projects_filters_whatever_the_availability() {
+        for github_on in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+            let mut app = app_in(dir.path());
+            app.core.settings.github_issues_enabled = github_on;
+            form(&mut app, FormMsg::Opened);
+            assert_eq!(
+                shown(&app),
+                excluding(&["in-progress", "blocked"]),
+                "GitHub issues on: {github_on}"
+            );
+        }
+    }
+
+    /// US2 AS2, SC-005: another project's file is never read; a missing or unreadable file is the
+    /// default.
+    #[test]
+    fn another_project_or_an_unreadable_file_opens_on_the_default() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "/repo/other", excluding(&["blocked"]));
+        let mut app = app_in(dir.path());
+        form(&mut app, FormMsg::Opened);
+        assert!(shown(&app).is_default());
+        form(&mut app, FormMsg::Cancelled);
+        std::fs::write(file(dir.path(), PROJECT), b"{ not json").unwrap();
+        form(&mut app, FormMsg::Opened);
+        assert!(shown(&app).is_default());
+    }
+
+    /// FR-021: a change is written as it is made, and the next open restores it.
+    #[test]
+    fn a_change_is_written_and_restored_at_the_next_open() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+        let mut app = app_in(dir.path());
+        open(&mut app);
+        filter(&mut app, GithubMsg::Removed(label("blocked")));
+        assert_eq!(held(dir.path()), excluding(&["in-progress"]));
+        form(&mut app, FormMsg::Cancelled);
+        form(&mut app, FormMsg::Opened);
+        assert_eq!(shown(&app), excluding(&["in-progress"]));
+        // US2 AS5: Clear filters is remembered as the default.
+        open(&mut app);
+        filter(&mut app, GithubMsg::ClearedAll);
+        assert!(held(dir.path()).is_default());
+        assert!(!about_the_filter(&mut app));
+    }
+
+    /// FR-021 "with two windows the latest write wins", and an open form is not changed by the
+    /// other's write.
+    #[test]
+    fn with_two_windows_the_last_write_wins_and_an_open_form_stays() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["in-progress", "blocked"]));
+        let mut one = app_in(dir.path());
+        let mut two = app_in(dir.path());
+        open(&mut one);
+        open(&mut two);
+        filter(&mut one, GithubMsg::Removed(label("blocked")));
+        assert_eq!(held(dir.path()), excluding(&["in-progress"]));
+        assert_eq!(shown(&two), excluding(&["in-progress", "blocked"]));
+        filter(&mut two, GithubMsg::Removed(label("in-progress")));
+        assert_eq!(held(dir.path()), excluding(&["blocked"]));
+        assert_eq!(shown(&one), excluding(&["in-progress"]));
+    }
+
+    /// FR-024: a failed write is a notification naming the OS error, never a filter value.
+    #[test]
+    fn a_failed_write_is_reported_without_the_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["secret-label", "blocked"]));
+        let mut app = app_in(dir.path());
+        open(&mut app);
+        // A non-empty directory where the file goes: the rename onto it fails.
+        let blocker = file(dir.path(), PROJECT);
+        std::fs::remove_file(&blocker).unwrap();
+        std::fs::create_dir_all(blocker.join("in-the-way")).unwrap();
+        filter(&mut app, GithubMsg::Removed(label("blocked")));
+        let shown = notifications(&mut app);
+        assert!(
+            shown
+                .iter()
+                .any(|m| m.starts_with("Couldn't remember the GitHub issue filter: ")),
+            "{shown:?}"
+        );
+        assert!(
+            shown.iter().all(|m| !m.contains("secret-label")),
+            "{shown:?}"
+        );
+    }
+
+    /// FR-022, quickstart B15: forgetting the project deletes its file and no other; a missing
+    /// file is success, a failure a notification.
+    #[test]
+    fn forgetting_the_project_deletes_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), PROJECT, excluding(&["blocked"]));
+        write(dir.path(), "/repo/other", excluding(&["blocked"]));
+        let mut app = app_in(dir.path());
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        assert!(!file(dir.path(), PROJECT).exists());
+        assert!(file(dir.path(), "/repo/other").exists());
+
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        assert!(!about_the_filter(&mut app), "a missing file is success");
+
+        std::fs::create_dir_all(file(dir.path(), PROJECT).join("in-the-way")).unwrap();
+        app.core.project.forget_target = Some(PathBuf::from(PROJECT));
+        send(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+        let shown = notifications(&mut app);
+        assert!(
+            shown
+                .iter()
+                .any(|m| m.starts_with("Couldn't delete the remembered GitHub issue filter: ")),
+            "{shown:?}"
+        );
+    }
+}
+
+// --- 1504 (T036, FR-006, L7): the spec and commit facts are asked on every list change -----
+
+mod title_facts {
+    use super::*;
+    use micold_client::features::overview::Msg as OverviewMsg;
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    use micold_client::features::worktree_form::Msg as FormMsg;
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+
+    fn project() -> PathBuf {
+        PathBuf::from("/repo")
+    }
+
+    fn worktree_at(dir: &str, path: PathBuf) -> Worktree {
+        Worktree {
+            dir_name: dir.into(),
+            path,
+            branch: Some(format!("claude/{dir}")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }
+    }
+
+    fn worktree(dir: &str) -> Worktree {
+        worktree_at(dir, project().join(".claude/worktrees").join(dir))
+    }
+
+    fn app() -> App {
+        let mut app = base_app();
+        app.core.workspace.active = Some(project());
+        app
+    }
+
+    fn asked(app: &App) -> Vec<&str> {
+        app.core
+            .overview
+            .facts_asked
+            .keys()
+            .map(String::as_str)
+            .collect()
+    }
+
+    fn listed(app: &mut App, dirs: &[&str]) {
+        let list = dirs.iter().map(|dir| worktree(dir)).collect();
+        let _ = crate::update(app, Message::Worktree(WorktreeMsg::Loaded(list)));
+    }
+
+    #[test]
+    fn title_facts_a_listing_asks_for_every_listed_dir() {
+        let mut app = app();
+        listed(&mut app, &["a", "b"]);
+        assert_eq!(asked(&app), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn title_facts_a_created_or_included_worktree_is_asked_for() {
+        let mut app = app();
+        listed(&mut app, &["a"]);
+        let _ = crate::update(
+            &mut app,
+            Message::WorktreeForm(FormMsg::Created(worktree("b"))),
+        );
+        assert_eq!(asked(&app), vec!["a", "b"], "created");
+        let mut included = worktree("c");
+        included.included = true;
+        included.path = PathBuf::from("/elsewhere/c");
+        let _ = crate::update(&mut app, Message::Worktree(WorktreeMsg::Included(included)));
+        assert_eq!(asked(&app), vec!["a", "b", "c"], "included");
+    }
+
+    #[test]
+    fn title_facts_opening_the_overview_asks_again() {
+        let mut app = app();
+        app.core.worktree.worktrees = vec![worktree("a")];
+        let _ = crate::update(
+            &mut app,
+            Message::Overview(OverviewMsg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(app.core.overview.open);
+        assert_eq!(asked(&app), vec!["a"]);
+        assert_eq!(app.core.overview.facts_round, 1);
+    }
+
+    /// L7 (review A F3): a worktree that turns valid, or moves, under the same folder and branch
+    /// is a changed list for its facts: it is read now that it can be (or read where it now is).
+    #[test]
+    fn title_facts_a_worktree_turning_valid_or_moving_is_asked_again() {
+        let mut app = app();
+        let mut wt = worktree("a");
+        wt.status = WorktreeStatus::Invalid;
+        let _ = crate::update(
+            &mut app,
+            Message::Worktree(WorktreeMsg::Loaded(vec![wt.clone()])),
+        );
+        assert_eq!(app.core.overview.facts_round, 1);
+        wt.status = WorktreeStatus::Valid;
+        let _ = crate::update(
+            &mut app,
+            Message::Worktree(WorktreeMsg::Loaded(vec![wt.clone()])),
+        );
+        assert_eq!(app.core.overview.facts_round, 2, "turned valid");
+        wt.path = PathBuf::from("/elsewhere/a");
+        let _ = crate::update(&mut app, Message::Worktree(WorktreeMsg::Loaded(vec![wt])));
+        assert_eq!(app.core.overview.facts_round, 3, "moved");
+    }
+
+    /// FR-006, L7: without local git the worktrees are the daemon's, not this machine's: nothing
+    /// is asked or read.
+    #[test]
+    fn title_facts_without_local_git_nothing_is_asked() {
+        let mut app = app();
+        app.caps = app.caps.clone().without_local_git();
+        listed(&mut app, &["a"]);
+        let _ = crate::update(
+            &mut app,
+            Message::Overview(OverviewMsg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(asked(&app).is_empty());
+        assert_eq!(app.core.overview.facts_round, 0);
+    }
+
+    /// L7, US2.2: the read runs to its answer: a worktree's spec heading is stored; its folder is
+    /// no git repository, so the commit read fails and loses only the commit.
+    #[test]
+    fn title_facts_a_listed_worktrees_spec_heading_is_read_and_stored() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("wt-überblick");
+        let spec = root.join("specs/1504-readable/spec.md");
+        std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+        std::fs::write(&spec, "# Feature Specification: Readable titles\n").unwrap();
+        let mut app = app();
+        let mut wt = worktree_at("wt-überblick", root);
+        wt.branch = Some("feat/1504_readable".into());
+        let work = crate::update(&mut app, Message::Worktree(WorktreeMsg::Loaded(vec![wt])));
+        settle(&mut app, work);
+        let facts = app.core.overview.facts.get("wt-überblick").cloned();
+        assert_eq!(
+            facts.as_ref().and_then(|f| f.spec.as_deref()),
+            Some("Readable titles")
+        );
+        assert_eq!(facts.and_then(|f| f.commit), None);
+    }
 }

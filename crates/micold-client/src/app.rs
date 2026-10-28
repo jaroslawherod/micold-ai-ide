@@ -252,6 +252,10 @@ pub enum Message {
     /// `features::navigation::update` and applied by [`State::apply_navigation`] in the binary,
     /// which dispatches the follow-ups. See [`crate::features::navigation::Msg`].
     Navigation(crate::features::navigation::Msg),
+    /// Back/Forward (feature 1465): a side button or key was pressed, resolved by
+    /// [`State::press_history`] and applied by [`State::apply_history`] in the binary, which
+    /// dispatches the follow-ups. See [`crate::features::history::Msg`].
+    History(crate::features::history::Msg),
     /// The quick switcher (feature 968): handled by `features::quick_switch::update` in the
     /// binary, which applies a choice through the navigation apply path. See
     /// [`crate::features::quick_switch::Msg`].
@@ -269,7 +273,7 @@ pub enum Message {
         keys: Vec<String>,
         /// What Jira answered.
         result:
-            Result<Vec<micold_core::jira_status::KeyedStatus>, micold_core::github::IssueLoadError>,
+            Result<Vec<micold_core::jira_status::KeyedIssue>, micold_core::github::IssueLoadError>,
         /// Time on the refresh clock when the read ended.
         at: std::time::Duration,
     },
@@ -479,6 +483,9 @@ pub struct State {
     pub overview: crate::features::overview::State,
     /// What the quick switcher holds (feature 968) -- see [`crate::features::quick_switch::State`].
     pub quick_switch: crate::features::quick_switch::State,
+    /// The window's Back/Forward history (feature 1465) -- see
+    /// [`crate::features::history::State`].
+    pub history: crate::features::history::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -1145,7 +1152,8 @@ impl State {
     }
 
     /// Apply a form message and hand back what it asks the project to remember (feature 1186,
-    /// FR-013): the shell owns that file, so it performs `JiraQueryRemembered` itself. Every other
+    /// FR-013; feature 1400, FR-021): the shell owns those files, so it performs
+    /// `JiraQueryRemembered` and `GithubSelectorRemembered` itself. Every other
     /// outcome is drained exactly as [`Self::update`] drains it.
     pub fn update_worktree_form_for_effects(
         &mut self,
@@ -1155,7 +1163,13 @@ impl State {
         let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
             crate::features::worktree_form::update(self, msg)
                 .into_iter()
-                .partition(|o| matches!(o, Outcome::JiraQueryRemembered { .. }));
+                .partition(|o| {
+                    matches!(
+                        o,
+                        Outcome::JiraQueryRemembered { .. }
+                            | Outcome::GithubSelectorRemembered { .. }
+                    )
+                });
         drain(rest, |outcome| interpret(self, outcome));
         effects
     }
@@ -1347,6 +1361,8 @@ impl State {
             // The binary resolves and applies a navigation press, dispatching its follow-ups
             // through its own `update` (feature 803, contracts/ui.md U3).
             | Message::Navigation(_)
+            // So does a Back/Forward press (feature 1465, contracts/ui.md U2).
+            | Message::History(_)
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
@@ -1483,6 +1499,25 @@ impl State {
         let covered = self.review_covered();
         let effect = crate::features::changes::show_if_present(&mut self.changes, &key, covered);
         self.queue_changes_effect(effect);
+    }
+
+    /// The field that holds the keyboard (feature 1465, research R8): `window.focused_field`,
+    /// except a review comment box that is closed, and a session's composer or queued message
+    /// while the Review tab replaces them on screen. Their text areas never report losing the
+    /// keyboard as they go, so the focus they left behind is stale.
+    pub fn live_focused_field(&self) -> Option<crate::features::window::FieldId> {
+        use crate::features::window::FieldId;
+        let field = self.window.focused_field?;
+        let stale = match field {
+            FieldId::ReviewComposer => !self
+                .changes
+                .tabs
+                .shown_view()
+                .is_some_and(|view| view.composer.is_some()),
+            FieldId::Composer(_) | FieldId::QueuedMessage(_) => self.review_shown().is_some(),
+            _ => false,
+        };
+        (!stale).then_some(field)
     }
 
     /// The shown Review tab's location, when its project is the active one (feature 1269, U10):
@@ -1668,6 +1703,12 @@ impl State {
             // left to reset.
             self.worktree.delete_target = None;
         }
+        // The active project's last list (feature 1465, research R5).
+        if let Some(active) = self.workspace.active.clone() {
+            self.worktree
+                .known
+                .insert(active, names.iter().cloned().collect());
+        }
         // Prune rename overrides for the active project's worktrees that are gone (FR-015).
         if let Some(active) = self.workspace.active.clone() {
             if let Some(map) = self.workspace.worktree_names.get_mut(&active) {
@@ -1802,6 +1843,11 @@ pub fn interpret(
             let canonical = micold_core::project::canonicalize_best_effort(&path);
             state.changes.tabs.drop_project(&canonical);
             state.changes.tabs.drop_project(&path);
+            // Bug 1538: so does what each daemon last listed there.
+            for projects in state.settings.listed_sessions.values_mut() {
+                projects.remove(&canonical);
+                projects.remove(&path);
+            }
         }
         Outcome::RunInParallelRequested => return crate::features::runs::requested(state),
         Outcome::WorktreeCreated(worktree) => {
@@ -1829,6 +1875,10 @@ pub fn interpret(
         // The shell's: it writes the project's remembered file (`shell::jira_query::remember`),
         // reached through `State::update_worktree_form_for_effects`.
         Outcome::JiraQueryRemembered { .. } => {}
+        // The shell's: it writes the project's remembered selector file
+        // (`shell::github_filter::remember_github_selector`), reached through
+        // `State::update_worktree_form_for_effects`.
+        Outcome::GithubSelectorRemembered { .. } => {}
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // Feature 940: the transcript's, handed to the shell in its `Effect`, never drained here.
         Outcome::ClipboardWriteChecked { .. } | Outcome::CopyConfirmTimer { .. } => {}
@@ -2013,6 +2063,120 @@ pub enum KeyRouting {
 }
 
 impl State {
+    /// The place the main area shows (feature 1465, research R3), in the order it draws: none
+    /// while Settings is open or no project is active; else the Overview, Compare, the shown
+    /// Review tab, the current session; else none.
+    pub fn shown_place(&self) -> Option<micold_core::history::Place> {
+        use micold_core::history::{Place, View};
+        if self.settings.settings_draft.is_some() {
+            return None;
+        }
+        let project = self.workspace.active.clone()?;
+        let view = if self.overview.open {
+            View::Overview
+        } else if let Some(compare) = self
+            .runs
+            .compare
+            .as_ref()
+            .filter(|compare| compare.project == project)
+        {
+            // Left open across a switch until the new project's list closes it: not a place of
+            // the new project (review A M4 F4).
+            View::Compare(compare.group)
+        } else if let Some((_, location)) = self.review_shown() {
+            View::Review(location.clone())
+        } else {
+            View::Session {
+                id: self.session.active?,
+                location: self.current_session_location()?,
+            }
+        };
+        Some(Place { project, view })
+    }
+
+    /// Records the shown place in the history after a message (feature 1465, U1); the binary
+    /// calls it after every message.
+    pub fn observe_place(&mut self) {
+        let shown = self.shown_place();
+        crate::features::history::observe(&mut self.history, shown);
+    }
+
+    /// What a Back/Forward press resolves to (feature 1465, U3), `lookup` listing the worktrees of a
+    /// project that is not active (research R5); a move turns observation off
+    /// until [`Self::finish_history_move`].
+    pub fn press_history(
+        &mut self,
+        msg: crate::features::history::Msg,
+        lookup: crate::features::history::Lookup,
+    ) -> crate::features::history::Step {
+        crate::features::history::resolve(self, msg, lookup)
+    }
+
+    /// A move's follow-ups have run (feature 1465, research R2): observation is back on. A move made
+    /// by a key leaves the keyboard with the app (US2 AS4, FR-012): the next press or repeat steps
+    /// again instead of reaching the terminal the move showed.
+    pub fn finish_history_move(&mut self, source: crate::features::history::Source) {
+        if source == crate::features::history::Source::Key && self.terminal_focused() {
+            self.release_terminal();
+        }
+        let shown = self.shown_place();
+        crate::features::history::finish(&mut self.history, shown);
+    }
+
+    /// The messages that show a resolved press's target (feature 1465, U4, research R6), for the
+    /// caller to dispatch through the root `update`, as a click on that place would.
+    pub fn apply_history(&self, step: crate::features::history::Step) -> Vec<Message> {
+        use crate::features::history::Step;
+        use crate::features::{overview, runs, session, sidebar};
+        use micold_core::history::View;
+        let place = match step {
+            Step::None => return Vec::new(),
+            Step::ReviewBack => {
+                return vec![Message::Changes(crate::features::changes::Msg::BrowseBack)];
+            }
+            Step::Show(place) => place,
+        };
+        // Another project's place: switch to it first, as the project switcher does (U4).
+        let switch = (self.workspace.active.as_ref() != Some(&place.project)).then(|| {
+            Message::Project(crate::features::project::Msg::Reopened(
+                place.project.clone(),
+            ))
+        });
+        let close_overview = self
+            .overview
+            .open
+            .then_some(Message::Overview(overview::Msg::Closed));
+        let close_compare = self
+            .runs
+            .compare
+            .is_some()
+            .then_some(Message::Runs(runs::Msg::CompareClosed));
+        let show: Vec<Message> = match place.view {
+            View::Session { id, .. } => vec![Message::Session(session::Msg::Selected(id))],
+            View::Review(location) => close_overview
+                .into_iter()
+                .chain(close_compare)
+                .chain([Message::Sidebar(sidebar::Msg::ReviewChangesRequested(
+                    location,
+                ))])
+                .collect(),
+            View::Overview => close_compare
+                .into_iter()
+                .chain([Message::Overview(overview::Msg::Opened {
+                    settings_open: false,
+                })])
+                .collect(),
+            View::Compare(group) => close_overview
+                .into_iter()
+                .chain([Message::Runs(runs::Msg::CompareOpened {
+                    group,
+                    project: place.project,
+                })])
+                .collect(),
+        };
+        switch.into_iter().chain(show).collect()
+    }
+
     /// Apply a resolved navigation press (feature 803, contracts/ui.md U3) and return the
     /// follow-up messages the caller dispatches, so a `Selected` runs its full path.
     ///

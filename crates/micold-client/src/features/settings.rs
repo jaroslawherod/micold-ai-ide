@@ -88,6 +88,16 @@ pub struct State {
     /// Live sessions their daemon did not list when the client reconnected (feature 489, FR-019):
     /// kept, and shown as `lost to daemon <name>`. Filled by `catalog_sync::note_lost_sessions`.
     pub lost_sessions: std::collections::BTreeSet<micold_core::session::SessionId>,
+    /// The sessions each daemon's latest snapshot listed, per project it held (bug 1538). A session
+    /// some daemon lists is that daemon's to keep and to drop, wherever its location's binding
+    /// points; `catalog_sync` falls back to the location's owner only for one no daemon lists.
+    pub listed_sessions: std::collections::BTreeMap<
+        micold_core::daemons::DaemonId,
+        std::collections::HashMap<
+            std::path::PathBuf,
+            std::collections::HashSet<micold_core::session::SessionId>,
+        >,
+    >,
     /// The container runtime is not installed on this machine (set by the sandbox probe).
     pub runtime_missing: bool,
     /// The container daemon that runs the released image as the sandbox adopted it (FR-017); set by
@@ -173,6 +183,7 @@ impl Default for State {
         Self {
             links: Default::default(),
             lost_sessions: Default::default(),
+            listed_sessions: Default::default(),
             runtime_missing: false,
             legacy_container: None,
             settings_draft: None,
@@ -923,6 +934,7 @@ impl ValidSettings {
             // Not in the form (feature 551): the sidebar writes it on a toggle, a save keeps it.
             folded_origins: Default::default(),
             filter_open: false,
+            dismissed_offers: Default::default(),
         }
     }
 }

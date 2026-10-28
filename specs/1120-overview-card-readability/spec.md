@@ -114,6 +114,8 @@ pull requests, and check each card's title, branch, sessions line and which rows
 2. **Given** a worktree with a branch but no known issue title, **When** its card is shown, **Then**
    the title is the branch; **given** a location with neither (an orphan folder, the project root
    without a branch), **then** the title is the display name.
+
+   Scenarios 1 and 2: *(Amended by [1504](../1504-readable-worktree-titles/spec.md) FR-001 and FR-008: the title is the first source in 1504's order (the title ticket's issue title, read from the folder name or else the branch name, then the Jira summary, the pull request, the spec heading, the session title, the latest own commit, the branch and the display name), and its tooltip names that source.)*
 3. **Given** a card with a branch named `fix/1115_container-daemon-fails-to-start` (or
    `feat-813_worktree-overview`), **When** it is shown, **Then** the branch line reads `fix/1115`
    (or `feat/813`), with the full branch name in the line's tooltip.

@@ -17,7 +17,7 @@ use micold_core::jira_query::{
 };
 use micold_core::typeahead::{move_highlight, Direction};
 
-use super::{BranchSource, IssueList, JiraSite, SearchState, WorktreeForm};
+use super::{BranchSource, IssueList, JiraSite, WorktreeForm};
 
 /// The selector's advanced state (data-model §6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -94,7 +94,7 @@ pub enum Msg {
 /// §4). It names the query, never its text.
 pub fn notice(site: &JiraSite) -> String {
     format!(
-        "Reads issues of project {} matching your query from {}. Sends the project key, your query and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to, to show their status.",
+        "Reads issues of project {} matching your query from {}. Sends the project key, your query and your credentials, and, with this dialog closed, the keys of the tickets your worktrees are linked to or named in their branch, to show their status and title.",
         site.key, site.origin
     )
 }
@@ -389,19 +389,7 @@ impl WorktreeForm {
         match mode {
             QueryMode::Advanced => {
                 self.jira_filters.close_lists();
-                if let IssueList::Loaded { search, .. } = &mut self.issues {
-                    if matches!(
-                        search,
-                        SearchState::Pending { .. } | SearchState::Searching { .. }
-                    ) {
-                        *search = SearchState::Idle;
-                    }
-                }
-                let loading = matches!(self.issues, IssueList::Loading { .. });
-                if loading {
-                    self.issues = IssueList::NotRequested;
-                }
-                loading
+                self.stop_basic_work()
             }
             QueryMode::Basic => {
                 let running = self.jira_query.running().is_some();

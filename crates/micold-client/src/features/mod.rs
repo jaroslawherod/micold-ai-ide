@@ -77,7 +77,8 @@ pub enum Outcome {
     /// root hides the shown Review tab, kept. `session` owns the selection, `changes` the tabs.
     ReviewHidden,
     /// A project was forgotten (feature 1269, U9): the root drops its Review tabs, which are
-    /// `changes`'s; `project` owns the catalog.
+    /// `changes`'s, and each daemon's listing there (bug 1538), which is `settings`'s; `project`
+    /// owns the catalog.
     ProjectForgotten(std::path::PathBuf),
     /// The current session went (closed, removed, ended, or gone from the catalog), its records
     /// already updated (feature 1269, U8, R8): when it was the last live session of its location
@@ -274,6 +275,16 @@ pub enum Outcome {
         /// The one field to change.
         change: micold_core::jira_query::RememberChange,
     },
+    /// The add-worktree form's GitHub selector has something for `project` to remember (feature
+    /// 1400, FR-021): the basic filters at each change. The shell reads the project's remembered
+    /// file, applies the change and writes it back (`shell::github_filter::remember_github_selector`);
+    /// the root does nothing with it.
+    GithubSelectorRemembered {
+        /// The project the dialog is open in.
+        project: std::path::PathBuf,
+        /// The one field to change.
+        change: micold_core::github_filter::SelectorChange,
+    },
     /// A repository on a remote daemon's host was named (feature 489, FR-012): the shell asks that
     /// daemon whether it is one and opens it as a project when it is.
     RemoteRepositoryRequested {
@@ -349,6 +360,7 @@ pub mod daemon_sections;
 pub mod daemons;
 pub mod daemons_kube;
 pub mod help;
+pub mod history;
 pub mod jira_status;
 pub mod kube_clone;
 pub mod navigation;

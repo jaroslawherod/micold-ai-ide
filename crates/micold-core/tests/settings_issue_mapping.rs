@@ -185,6 +185,7 @@ fn other_writers_preserve_the_mapping() {
             "default_prompt_template",
             "desktop_notifications",
             "diff_layout",
+            "dismissed_offers",
             "env_include_enabled",
             "env_include_script_path",
             "env_include_timeout_secs",

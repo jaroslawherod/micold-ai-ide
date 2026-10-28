@@ -202,6 +202,7 @@ impl App {
         for id in stale {
             self.core.settings.links.remove(id);
             self.daemon_catalogs.remove(&id);
+            self.core.settings.listed_sessions.remove(&id);
         }
     }
 

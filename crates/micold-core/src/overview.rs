@@ -393,9 +393,11 @@ pub struct CardModel {
     pub state: CardState,
     /// Why it is in that state.
     pub reason: CardReason,
-    /// The card's title: the issue title, else the branch, else the display name (FR-006,
-    /// [`card_title`](crate::overview_text::card_title)).
+    /// The card's location title (feature 1504, FR-001,
+    /// [`choose`](crate::location_title::choose)).
     pub title: String,
+    /// Where [`title`](Self::title) came from (feature 1504).
+    pub title_source: crate::location_title::TitleSource,
     /// Its pull request counts, or why there are none.
     pub prs: PrDisplay,
     /// The pull requests its rows show: `Some` exactly when `prs` shows counts (feature 1123, R5).
@@ -1103,6 +1105,7 @@ mod tests {
             state,
             reason: CardReason::Idle,
             title: name.into(),
+            title_source: crate::location_title::TitleSource::Folder,
             prs: PrDisplay::Hidden,
             pull_requests: None,
             progress: Default::default(),

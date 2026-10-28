@@ -519,6 +519,23 @@ impl GitCli {
         read(dir, &args, None)
     }
 
+    /// The subject of the latest commit on the checked-out branch of `dir` that the default branch
+    /// lacks (feature 1504, L7). See [`crate::git::Git::own_commit_subject`].
+    pub fn own_commit_subject(&self, dir: &Path) -> Option<String> {
+        self.checked_out_branch(dir)?;
+        let Base::MergeBase { commit, .. } = self.review_base(dir) else {
+            return None;
+        };
+        let range = format!("{commit}..HEAD");
+        let subject = read(
+            dir,
+            &["log", "-1", "--no-merges", "--format=%s", &range, "--"],
+            None,
+        )
+        .ok()?;
+        crate::location_title::first_line(&subject).map(str::to_owned)
+    }
+
     /// The base of the worktree at `dir` (R7): the merge-base of `HEAD` and the default branch.
     pub fn review_base(&self, dir: &Path) -> Base {
         let origin_head = read(

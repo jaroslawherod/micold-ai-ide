@@ -23,6 +23,7 @@
 //! struct is where that claim becomes checkable: everything the form accumulates between opening
 //! and submitting is inside `form`, and nothing outside this module names any of it.
 
+pub mod github_filter;
 pub mod jira_filters;
 
 use crate::app::Message;
@@ -37,6 +38,7 @@ use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
     GithubRepo, Issue, IssueListing, IssueLoadError, NoticeSource, RemoteChoice,
 };
+use micold_core::github_filter::{GithubFilter, IssueState};
 use micold_core::issue_details::IssueDetails;
 use micold_core::issue_types::LabelTypeEntry;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
@@ -133,7 +135,8 @@ impl State {
     /// What a running search asks: the repository, the text and the `gh` the list was read with.
     pub fn issue_search_request(&self) -> Option<(GithubRepo, String, PathBuf)> {
         let form = self.form.as_ref()?;
-        if form.jira_site().is_some() {
+        // Feature 1400 (FR-009): 034's unfiltered search only while the filter is the default.
+        if form.jira_site().is_some() || form.github_filter().is_some() {
             return None;
         }
         match &form.issues {
@@ -178,6 +181,59 @@ impl State {
             .as_ref()
             .map(|form| form.jira_filters.chosen.clone())
             .unwrap_or_default()
+    }
+
+    /// The filtered GitHub listing the open form awaits (feature 1400, contracts/source-and-storage.md
+    /// §3): its seq, the repository and the scoped search text. `None` while the filter is the
+    /// default (034's listing is awaited instead, FR-009), Jira is the provider or GitHub issues are
+    /// off.
+    pub fn github_filtered_load(
+        &self,
+    ) -> Option<(u64, GithubRepo, micold_core::github_filter::ScopedSearch)> {
+        let form = self.form.as_ref()?;
+        let IssueList::Loading { seq } = form.issues else {
+            return None;
+        };
+        let filter = form.github_filter()?;
+        let repo = form.github_repo()?.clone();
+        let search = micold_core::github_filter::ScopedSearch::listing(&repo, &filter);
+        Some((seq, repo, search))
+    }
+
+    /// The filtered search beyond the loaded issues now running (feature 1400, FR-016): its seq,
+    /// the repository, the scoped text (the filter and the typed words) and the `gh` the list was
+    /// read with.
+    pub fn github_filtered_search(
+        &self,
+    ) -> Option<(
+        u64,
+        GithubRepo,
+        micold_core::github_filter::ScopedSearch,
+        PathBuf,
+    )> {
+        let form = self.form.as_ref()?;
+        let IssueList::Loaded {
+            gh,
+            search: SearchState::Searching { seq },
+            ..
+        } = &form.issues
+        else {
+            return None;
+        };
+        let filter = form.github_filter()?;
+        let repo = form.github_repo()?.clone();
+        let search =
+            micold_core::github_filter::ScopedSearch::beyond(&repo, &filter, &form.issue_query)?;
+        Some((*seq, repo, search, gh.clone()))
+    }
+
+    /// The seq the GitHub label choices are awaited under, while in flight (feature 1400, FR-005).
+    pub fn awaited_label_choices(&self) -> Option<u64> {
+        let form = self.form.as_ref()?;
+        if !form.shows_github_filters() {
+            return None;
+        }
+        form.github_selector.awaited_labels()
     }
 
     /// The filter-choice request the open form awaits, with its filter (feature 1185).
@@ -423,6 +479,12 @@ pub enum IssueList {
     Loading { seq: u64 },
     /// The load failed; Retry starts another.
     Failed { error: IssueLoadError },
+    /// GitHub refused the filter (feature 1400, FR-018): its messages, in its order, shown in place
+    /// of the list. Reset like `Failed`; it holds no issue.
+    Rejected(Vec<String>),
+    /// The advanced query was not sent (feature 1400, FR-012): why, shown in place of the list.
+    /// Reset like `Failed`; it holds no issue.
+    Refused(micold_core::github_filter::QueryRefusal),
     /// The open issues, and the `gh` that read them (kept for the search beyond the cap, M3).
     Loaded {
         listing: IssueListing,
@@ -461,6 +523,9 @@ pub enum SearchState {
     Searching { seq: u64 },
     /// The search failed; the loaded matches stay shown and Retry searches again.
     Failed { error: IssueLoadError },
+    /// GitHub refused the filtered search beyond the list (feature 1400): its messages, in its
+    /// order. The loaded matches stay shown; no Retry, the same search would be refused again.
+    Rejected(Vec<String>),
 }
 
 /// The conflict-resolution sub-state of the add-worktree form (feature 016, contract
@@ -658,6 +723,9 @@ pub struct WorktreeForm {
     pub jira_query: jira_query::JiraQuery,
     /// The Jira filters of the issue picker (feature 1185): reset with the issues.
     pub jira_filters: FilterState,
+    /// The GitHub selector's filters (feature 1400, data-model §10): kept while the form is open,
+    /// whatever the source shows; only its fields and panel close with the issues.
+    pub github_selector: github_filter::GithubSelector,
 }
 
 impl WorktreeForm {
@@ -796,9 +864,16 @@ impl WorktreeForm {
             GithubAvailability::Checking => Some("Checking for a GitHub remote…".to_string()),
             GithubAvailability::Unavailable(reason) => Some(reason.clone()),
             GithubAvailability::Available(_) if self.source == BranchSource::Issue => None,
-            GithubAvailability::Available(repo) => Some(format!(
-                "GitHub issue reads open issues of {repo} from GitHub."
-            )),
+            GithubAvailability::Available(repo) => {
+                // Feature 1400: the state the project remembers is the one choosing the source reads.
+                let words = match self.github_selector.listed_state() {
+                    Some(IssueState::Closed) => "closed issues",
+                    Some(IssueState::All) => "open and closed issues",
+                    Some(IssueState::Open) => "open issues",
+                    None => "issues",
+                };
+                Some(format!("GitHub issue reads {words} of {repo} from GitHub."))
+            }
         }
     }
 
@@ -811,6 +886,10 @@ impl WorktreeForm {
             };
         }
         match (self.github_repo(), self.source) {
+            // Feature 1400 (FR-023): the statement says the filter is sent while one is active.
+            (Some(repo), BranchSource::Issue) if self.github_filter().is_some() => Some(format!(
+                "Reads issues of {repo} from GitHub, sending the filter and the search text."
+            )),
             (Some(repo), BranchSource::Issue) => {
                 Some(format!("Reads open issues of {repo} from GitHub."))
             }
@@ -827,7 +906,7 @@ impl WorktreeForm {
             return Some(jira_query::notice(site));
         }
         let notice = format!(
-            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials, and, with this dialog closed, linked tickets' keys, to show their status.",
+            "Reads open issues of project {} from {}. Sends the project key, your search text, the filters you choose, a name typed to find a reporter and your credentials, and, with this dialog closed, the keys of tickets linked to or named in a worktree's branch, to show their status and title.",
             site.key, site.origin
         );
         // Feature 1185 (FR-014): the values sent are named by the active line under the picker's
@@ -843,12 +922,28 @@ impl WorktreeForm {
     /// What an empty list says when filters chose nothing (feature 1185, FR-011); `None` without
     /// a filter.
     pub fn filtered_empty_text(&self) -> Option<&'static str> {
+        // Feature 1400 (FR-020): a filtered GitHub list that came back empty: a query's says so
+        // of the query (US3 AS5).
+        match self.github_filter() {
+            Some(GithubFilter::Advanced(_)) => return Some("No issue matches this query."),
+            Some(GithubFilter::Basic(_)) => return Some("No issue matches these filters."),
+            None => {}
+        }
         self.jira_filtered()
             .then_some("No open issue matches the filters.")
     }
 
     /// What the issue list says when nothing matches the search (feature 1185, filter-ui §3).
     pub fn issue_no_match_text(&self) -> &'static str {
+        // Feature 1400 (Edge "Typed issue number with a filter"): the issue may be outside it.
+        if self.github_filter().is_some() {
+            return match &self.issues {
+                IssueList::Loaded { listing, .. } if !listing.complete => {
+                    "No loaded issue matches. The issue may be outside the filter."
+                }
+                _ => "No issue matches; a filter is active.",
+            };
+        }
         if self.jira_filtered() {
             "No open issue matches the search and filters."
         } else {
@@ -920,11 +1015,30 @@ impl WorktreeForm {
                     format!("Showing the {shown} most recently updated.")
                 })
             }
-            IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
-                "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
-                group_digits(listing.issues.len() as u64),
-                group_digits(listing.total_open)
-            )),
+            // Feature 1400 (FR-014): a query's own sort lists its first issues, not the most
+            // recently updated.
+            IssueList::Loaded { listing, .. }
+                if !listing.complete && self.github_selector.sorted_by_query() =>
+            {
+                Some(format!(
+                    "Showing the first {} of {} issues — search also looks on GitHub.",
+                    group_digits(listing.issues.len() as u64),
+                    group_digits(listing.total_open)
+                ))
+            }
+            IssueList::Loaded { listing, .. } if !listing.complete => {
+                // Feature 1400: the count is of the issues the chosen state lists, not always open ones.
+                let noun = match self.github_selector.listed_state() {
+                    Some(IssueState::Closed) => "closed issues",
+                    Some(IssueState::Open) => "open issues",
+                    Some(IssueState::All) | None => "issues",
+                };
+                Some(format!(
+                    "Showing the {} most recently updated of {} {noun} — search also looks on GitHub.",
+                    group_digits(listing.issues.len() as u64),
+                    group_digits(listing.total_open)
+                ))
+            }
             _ => None,
         }
     }
@@ -944,8 +1058,23 @@ impl WorktreeForm {
                 "Search beyond the loaded issues failed — {}",
                 error.message(self.notice_source()?)
             )),
+            IssueList::Loaded {
+                search: SearchState::Rejected(messages),
+                ..
+            } => Some(github_filter::refusal_line(messages)),
             _ => None,
         }
+    }
+
+    /// Whether the search beyond the loaded issues failed in a way Retry can mend (FR-005a).
+    pub fn issue_search_retries(&self) -> bool {
+        matches!(
+            self.issues,
+            IssueList::Loaded {
+                search: SearchState::Failed { .. },
+                ..
+            }
+        )
     }
 
     /// What the provider is called in a status line.
@@ -986,6 +1115,109 @@ impl WorktreeForm {
         };
     }
 
+    /// Take the awaited listing `seq` as the list (feature 034; 1185 and 1400 add the reload rules).
+    ///
+    /// A list reloaded with text typed and capped searches beyond it again, after the usual pause:
+    /// Jira's (1185), a filtered GitHub list's (1400, FR-016), and 034's after **Clear filters**.
+    /// The descriptions of 034's GitHub listing follow under this load's seq, so a later load's
+    /// pass can never take this one's pages (038 FR-024); a filtered listing carries them already
+    /// (research R9).
+    fn take_listing(&mut self, seq: u64, listing: IssueListing, gh: PathBuf) {
+        let filtered = self.github_filter();
+        let searchable = match (&filtered, self.github_repo()) {
+            (Some(filter), Some(repo)) => {
+                micold_core::github_filter::ScopedSearch::beyond(repo, filter, &self.issue_query)
+                    .is_some()
+            }
+            _ => !self.issue_query.trim().is_empty(),
+        };
+        let search = if !listing.complete && searchable {
+            SearchState::Pending { seq }
+        } else {
+            SearchState::Idle
+        };
+        let descriptions = if listing.issues.is_empty()
+            || self.provider == IssueProvider::Jira
+            || filtered.is_some()
+        {
+            DescriptionPass::Done
+        } else {
+            DescriptionPass::Loading {
+                seq,
+                cursor: None,
+                pages: 0,
+            }
+        };
+        self.issues = IssueList::Loaded {
+            listing,
+            gh,
+            searched: Vec::new(),
+            search,
+            descriptions,
+        };
+        // Not under an open Filters panel (features 1185, 1400): the panel floats over it.
+        self.issue_list_open = !(self.jira_filters.panel_open || self.github_selector.panel_open);
+        self.rematch_issues();
+        self.refresh_default_prompt();
+    }
+
+    /// A switch to advanced mode (Jira's 1186, GitHub's 1400) leaves the basic list's work: a search
+    /// beyond it pending or running stops, and a list still loading is dropped. `true` when a load
+    /// was dropped (the list is then `NotRequested`).
+    fn stop_basic_work(&mut self) -> bool {
+        if let IssueList::Loaded { search, .. } = &mut self.issues {
+            if matches!(
+                search,
+                SearchState::Pending { .. } | SearchState::Searching { .. }
+            ) {
+                *search = SearchState::Idle;
+            }
+        }
+        let loading = matches!(self.issues, IssueList::Loading { .. });
+        if loading {
+            self.issues = IssueList::NotRequested;
+        }
+        loading
+    }
+
+    /// The search beyond the loaded issues answered. Only the awaited answer applies (FR-007a); its
+    /// issues replace the previous search's, less any already loaded (invariant 4), and are ranked
+    /// with the loaded ones, so one that does not match the query is not shown (invariant 5). A
+    /// failure, the `SearchState` it leaves, keeps the loaded matches in place.
+    fn take_search_answer(&mut self, seq: u64, result: Result<Vec<Issue>, SearchState>) {
+        let IssueList::Loaded {
+            listing,
+            searched,
+            search,
+            ..
+        } = &mut self.issues
+        else {
+            return;
+        };
+        if *search != (SearchState::Searching { seq }) {
+            return;
+        }
+        match result {
+            Ok(found) => {
+                *searched = merge_searched(&listing.issues, found);
+                *search = SearchState::Idle;
+            }
+            Err(failed) => *search = failed,
+        }
+        // The answer re-ranks the list under the keyboard: keep the highlight on its issue, so
+        // Enter picks what the user is looking at (review A #1).
+        let highlighted = self
+            .issue_highlight
+            .and_then(|row| self.issue_number_at(row));
+        self.rematch_issues();
+        // An issue the answer dropped takes the highlight with it: a row the user never chose must
+        // not be under Enter.
+        if let Some(number) = highlighted {
+            self.issue_highlight = (0..self.issue_matches.len())
+                .find(|row| self.issue_number_at(*row) == Some(number));
+        }
+    }
+
     /// Forget the issues and their search: the source was left, so any load in flight is stale.
     fn reset_issues(&mut self) {
         self.issues = IssueList::NotRequested;
@@ -997,6 +1229,9 @@ impl WorktreeForm {
         self.jira_query.reset();
         // Feature 1185 (FR-016): leaving the source, the provider or Jira drops the filters.
         self.jira_filters = FilterState::default();
+        // Feature 1400 (Edge "Switching source to Jira and back"): the GitHub filters stay; only
+        // their fields and panel close.
+        self.github_selector.close_lists();
         self.refresh_default_prompt();
     }
 
@@ -1415,7 +1650,8 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
         form.reset_branch_search();
         form.reset_issues();
         if source == BranchSource::Issue {
-            if !form.jira_query_shown(next_seq) {
+            // Advanced mode with no query run takes the GitHub source's list (feature 1400).
+            if !form.jira_query_shown(next_seq) && !form.github_source_shown() {
                 form.issues = IssueList::Loading { seq: next_seq };
             }
             started = true;
@@ -1447,7 +1683,10 @@ pub fn issue_provider_changed(
         form.provider = provider;
         form.remembered_provider = Some(provider);
         form.reset_issues();
-        if form.source == BranchSource::Issue && !form.jira_query_shown(next_seq) {
+        if form.source == BranchSource::Issue
+            && !form.jira_query_shown(next_seq)
+            && !form.github_source_shown()
+        {
             form.issues = IssueList::Loading { seq: next_seq };
         }
         changed = true;
@@ -1568,41 +1807,7 @@ pub fn issues_loaded(
             return;
         }
         match result {
-            Ok((listing, gh)) => {
-                // Feature 1185 (FR-009): a Jira list reloaded under new filters with text typed and
-                // the list capped searches beyond it again, after the usual pause.
-                let search = if form.provider == IssueProvider::Jira
-                    && !listing.complete
-                    && !form.issue_query.trim().is_empty()
-                {
-                    SearchState::Pending { seq }
-                } else {
-                    SearchState::Idle
-                };
-                // The list arrived without descriptions; they follow under this load's seq, so
-                // a later load's pass can never take this one's pages (038 FR-024).
-                let descriptions =
-                    if listing.issues.is_empty() || form.provider == IssueProvider::Jira {
-                        DescriptionPass::Done
-                    } else {
-                        DescriptionPass::Loading {
-                            seq,
-                            cursor: None,
-                            pages: 0,
-                        }
-                    };
-                form.issues = IssueList::Loaded {
-                    listing,
-                    gh,
-                    searched: Vec::new(),
-                    search,
-                    descriptions,
-                };
-                // Not under the open Filters panel (feature 1185): the panel floats over it.
-                form.issue_list_open = !form.jira_filters.panel_open;
-                form.rematch_issues();
-                form.refresh_default_prompt();
-            }
+            Ok((listing, gh)) => form.take_listing(seq, listing, gh),
             Err(error) => form.issues = IssueList::Failed { error },
         }
     });
@@ -1701,6 +1906,15 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
         form.issue_query = text;
         form.issue_list_open = true;
         let typed = !form.issue_query.trim().is_empty();
+        // Feature 1400 (FR-016): with a GitHub filter, only typed words are sent; text of quotes
+        // and backslashes alone leaves nothing to search beyond the list for.
+        let searchable = match (form.github_filter(), form.github_repo()) {
+            (Some(filter), Some(repo)) => {
+                micold_core::github_filter::ScopedSearch::beyond(repo, &filter, &form.issue_query)
+                    .is_some()
+            }
+            _ => true,
+        };
         if let IssueList::Loaded {
             listing,
             searched,
@@ -1708,8 +1922,9 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
             ..
         } = &mut form.issues
         {
-            if !typed {
-                // Nothing typed: the list is the loaded issues alone again.
+            if !typed || !searchable {
+                // Nothing typed, or nothing GitHub could be asked (quotes alone): the list is the
+                // loaded issues alone again, and a search left pending could never start.
                 searched.clear();
                 *search = SearchState::Idle;
             } else if !listing.complete && !same_search {
@@ -1747,37 +1962,7 @@ pub fn issue_searched(
     result: Result<Vec<Issue>, IssueLoadError>,
 ) {
     with_form(state, |form| {
-        let IssueList::Loaded {
-            listing,
-            searched,
-            search,
-            ..
-        } = &mut form.issues
-        else {
-            return;
-        };
-        if *search != (SearchState::Searching { seq }) {
-            return;
-        }
-        match result {
-            Ok(found) => {
-                *searched = merge_searched(&listing.issues, found);
-                *search = SearchState::Idle;
-            }
-            Err(error) => *search = SearchState::Failed { error },
-        }
-        // The answer re-ranks the list under the keyboard: keep the highlight on its issue, so
-        // Enter picks what the user is looking at (review A #1).
-        let highlighted = form
-            .issue_highlight
-            .and_then(|row| form.issue_number_at(row));
-        form.rematch_issues();
-        // An issue the answer dropped takes the highlight with it: a row the user never chose must
-        // not be under Enter.
-        if let Some(number) = highlighted {
-            form.issue_highlight = (0..form.issue_matches.len())
-                .find(|row| form.issue_number_at(*row) == Some(number));
-        }
+        form.take_search_answer(seq, result.map_err(|error| SearchState::Failed { error }));
     });
 }
 
@@ -2267,6 +2452,8 @@ pub enum Msg {
     JiraQuery(jira_query::Msg),
     /// A message of the Jira filters (feature 1185).
     JiraFilter(FilterMsg),
+    /// A message of the GitHub filters (feature 1400).
+    GithubFilter(github_filter::Msg),
 }
 
 /// The form's own reducer: one entry point, thirty-five answers (FR-004a).
@@ -2334,6 +2521,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         } => issue_details_loaded(state, seq, number, result),
         Msg::JiraQuery(msg) => return jira_query_changed(state, msg),
         Msg::JiraFilter(msg) => crate::features::worktree_form::jira_filters::update(state, msg),
+        Msg::GithubFilter(msg) => return github_filter::update(state, msg),
     }
     Vec::new()
 }

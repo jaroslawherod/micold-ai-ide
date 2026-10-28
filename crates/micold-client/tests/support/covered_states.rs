@@ -38,6 +38,7 @@ use micold_core::issue_details::{
 };
 use micold_core::jira::{IssueProvider, JiraConnection, ProjectKey};
 use micold_core::jira_query::{QueryFailure, QueryMode, QueryRefusal, ScopedQuery, UserQuery};
+use micold_core::jira_status::{StatusCategory, TicketStatus};
 use micold_core::project::Availability;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
@@ -1364,6 +1365,29 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || StateUnderTest::new(super::jira_picker::jira_filters_panel(with_project())),
             anchors: ADD_WORKTREE_ANCHORS,
         },
+        // Feature 1400: `in-progress` and `blocked` excluded over a capped GitHub list: the Filters
+        // button, Clear filters, the active line and the cap caption, the tallest GitHub form.
+        CoveredState {
+            name: "add-worktree-dialog-github-filtered",
+            build: || StateUnderTest::new(super::github_picker::github_filtered(with_project())),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 1400: the GitHub Filters panel open, six labels excluded: their chips wrap
+        // inside the panel and the panel fits the window.
+        CoveredState {
+            name: "add-worktree-dialog-github-filters-panel",
+            build: || {
+                StateUnderTest::new(super::github_picker::github_filters_panel(with_project()))
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 1400 (US3): advanced mode over a capped list of a sorted query: the switch, the
+        // Query input with Run, the search and the cap caption.
+        CoveredState {
+            name: "add-worktree-dialog-github-advanced",
+            build: || StateUnderTest::new(super::github_picker::github_advanced(with_project())),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         // Rows, a long title, and the cap caption: more open issues than the load holds.
         CoveredState {
             name: "add-worktree-dialog-issue-loaded",
@@ -1467,6 +1491,25 @@ pub fn covered_states() -> &'static [CoveredState] {
                     ),
                     reported_issue(42, "Crash when opening empty project", &["bug"], "hubot"),
                     reported_issue(7, "Sidebar flickers on resize", &[], "monalisa"),
+                ])
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Closed issues (feature 1400, US5): the "Closed" chip beside the first line, on a row whose
+        // listing carried another status ("In Progress") too: the closed mark wins (selector-ui §3).
+        CoveredState {
+            name: "add-worktree-dialog-issue-list-closed",
+            build: || {
+                issue_list_state(vec![
+                    reported_issue(21, "Sidebar flickers on resize", &["bug"], "monalisa")
+                        .closed(true),
+                    reported_issue(22, "Open one for contrast", &[], "octocat"),
+                    reported_issue(23, "Crash when opening empty project", &["bug"], "hubot")
+                        .closed(true)
+                        .with_status(Some(TicketStatus {
+                            name: "In Progress".to_string(),
+                            category: Some(StatusCategory::InProgress),
+                        })),
                 ])
             },
             anchors: ADD_WORKTREE_ANCHORS,

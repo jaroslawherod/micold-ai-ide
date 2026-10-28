@@ -1187,7 +1187,9 @@ fn a_card_whose_worktree_sits_in_a_collapsed_group_has_its_row_drawn_once_activa
 
 // ---- US4 (T052): the summary line and the progress row ----
 
-use micold_client::features::overview::{titles_to_fetch, TitleLookup};
+use micold_client::features::overview::{location_title, titles_to_fetch, TitleLookup};
+use micold_client::features::sidebar::row_title;
+use micold_core::location_title::{title_ticket, TitleSource, TitleTicket};
 use micold_core::task_progress::{FileProgress, Phase, Progress, Ratio, Source};
 
 fn ticketed() -> State {
@@ -1335,22 +1337,243 @@ fn a_title_does_not_show_in_a_debug_dump() {
     assert!(!format!("{msg:?}").contains("Secret"));
 }
 
-/// R8, FR-019: only numeric tickets with no entry are fetched, and only with GitHub tooling.
+/// R8, FR-019: only GitHub title tickets with no entry are fetched, and only with GitHub tooling.
 #[test]
 fn titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github() {
     let mut state = State::default();
     state.overview.titles.insert(7, TitleLookup::Unavailable);
-    let dirs = [
-        "feat-813_a",
-        "fix-7_b",
-        "feat-ABC-12_c",
-        "chore-x",
-        "feat-813_d",
-    ]
-    .map(String::from)
-    .to_vec();
-    assert_eq!(titles_to_fetch(&state.overview, &dirs, true), vec![813]);
-    assert!(titles_to_fetch(&state.overview, &dirs, false).is_empty());
+    let worktrees = [
+        ("feat-813_a", None),
+        ("fix-7_b", None),
+        ("feat-ABC-12_c", None),
+        ("chore-x", None),
+        ("feat-813_d", None),
+        // Feature 1504 (T010): a branch carries the ticket when the folder has none, and the
+        // folder's ticket wins over the branch's (US1.1, US1.3, FR-003).
+        ("project-thread-t2a600", Some("feat/1504-readable-titles")),
+        ("feat-815_x", Some("feat/900_y")),
+    ];
+    let tickets = tickets_of(&worktrees);
+    assert_eq!(
+        titles_to_fetch(&state.overview, &tickets, true),
+        vec![813, 1504, 815]
+    );
+    assert!(titles_to_fetch(&state.overview, &tickets, false).is_empty());
+}
+
+fn tickets_of(worktrees: &[(&str, Option<&str>)]) -> Vec<TitleTicket> {
+    worktrees
+        .iter()
+        .filter_map(|(dir, branch)| title_ticket(dir, *branch))
+        .collect()
+}
+
+// ---- Feature 1504 (US1): a ticket in the branch titles the worktree ----
+
+const BRANCH_ONLY: &str = "project-thread-t2a600";
+
+fn branch_ticketed() -> State {
+    project_with(vec![
+        worktree(
+            BRANCH_ONLY,
+            Some("feat/1504-readable-titles"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+        worktree(
+            "feat-813_x",
+            Some("feat/900_y"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+        worktree("plain", Some("main-work"), WorktreeStatus::Valid, false),
+        worktree("orphan", None, WorktreeStatus::Invalid, false),
+    ])
+}
+
+/// The card's title and the sidebar row's first line for `dir`: both from the one chooser.
+fn card_and_row(state: &State, dir: &str, renamed: Option<&str>) -> (String, String) {
+    let all = cards(state);
+    let card = card(&all, &wt(dir));
+    let worktree = state
+        .worktree
+        .worktrees
+        .iter()
+        .find(|w| w.dir_name == dir)
+        .unwrap();
+    let row = row_title(
+        &location_title(state, worktree, &card.display_name),
+        renamed,
+    );
+    (card.title.clone(), row)
+}
+
+/// US1.1, SC-002, FR-007 (T010, T012): the issue a branch names titles the card and the row alike,
+/// and `issue_title` answers for the branch's ticket.
+#[test]
+fn a_ticket_only_in_the_branch_titles_the_card_and_the_row() {
+    let mut state = branch_ticketed();
+    let ticket = title_ticket(BRANCH_ONLY, Some("feat/1504-readable-titles")).unwrap();
+    let board = state.jira_status.board.clone();
+    assert_eq!(state.overview.issue_title(&ticket, &board), None);
+    title_read(
+        &mut state,
+        1504,
+        TitleLookup::Known("Readable titles".into()),
+    );
+    assert_eq!(
+        state.overview.issue_title(&ticket, &board),
+        Some("Readable titles")
+    );
+    let (card_title, row) = card_and_row(&state, BRANCH_ONLY, None);
+    assert_eq!(card_title, "Readable titles");
+    assert_eq!(row, card_title);
+    let all = cards(&state);
+    assert_eq!(
+        card(&all, &wt(BRANCH_ONLY)).title_source,
+        TitleSource::GithubIssue(1504)
+    );
+}
+
+/// US1.3: the folder's ticket wins over a different one in the branch.
+#[test]
+fn the_folders_ticket_wins_over_the_branchs() {
+    let mut state = branch_ticketed();
+    title_read(&mut state, 900, TitleLookup::Known("Branch issue".into()));
+    assert_eq!(card_and_row(&state, "feat-813_x", None).0, "feat/900_y");
+    title_read(&mut state, 813, TitleLookup::Known("Folder issue".into()));
+    let (card_title, row) = card_and_row(&state, "feat-813_x", None);
+    assert_eq!(
+        (card_title.as_str(), row.as_str()),
+        ("Folder issue", "Folder issue")
+    );
+}
+
+/// FR-007 (T005): card and row agree for a branch-titled and a folder-titled worktree; a rename
+/// still wins in the row; the project root and an orphan folder keep today's title.
+#[test]
+fn the_card_and_the_row_agree_and_a_rename_wins_in_the_row() {
+    let state = branch_ticketed();
+    let (card_title, row) = card_and_row(&state, "plain", None);
+    assert_eq!(
+        (card_title.as_str(), row.as_str()),
+        ("main-work", "main-work")
+    );
+    let (card_title, row) = card_and_row(&state, "orphan", None);
+    assert_eq!(card_title, row);
+    let all = cards(&state);
+    let orphan = card(&all, &wt("orphan"));
+    assert_eq!(orphan.title, orphan.display_name);
+    assert_eq!(orphan.title_source, TitleSource::Folder);
+    assert_eq!(
+        card_and_row(&state, "plain", Some("my pet name")).1,
+        "my pet name"
+    );
+    let root = card(&all, &SessionLocation::Default);
+    assert_eq!(root.title, root.display_name);
+    assert_eq!(root.title_source, TitleSource::Folder);
+}
+
+// ---- Feature 1504 (US1.2, US1.4, T020): a Jira title ticket's summary titles the worktree ----
+
+const JIRA_FOLDER: &str = "feat-ABC-42_login";
+const JIRA_BRANCH_ONLY: &str = "jira-thread-t2a600";
+
+fn jira_ticketed() -> State {
+    project_with(vec![
+        worktree(
+            JIRA_FOLDER,
+            Some("feat/ABC-42_login"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+        worktree(
+            JIRA_BRANCH_ONLY,
+            Some("fix/ABC-43_crash"),
+            WorktreeStatus::Valid,
+            false,
+        ),
+    ])
+}
+
+/// Answer one Jira read of `summaries` the way the status driver applies it, at `now` seconds;
+/// `None` answers with a failure.
+fn jira_read(state: &mut State, summaries: Option<&[(&str, &str)]>, now: u64) {
+    use micold_core::jira_status::KeyedIssue;
+    let (epoch, asked) = state
+        .jira_status
+        .board
+        .begin(vec!["ABC-42".into()], vec!["ABC-43".into()])
+        .expect("keys to read");
+    let result = summaries
+        .map(|pairs| {
+            pairs
+                .iter()
+                .map(|(key, summary)| KeyedIssue {
+                    key: key.to_string(),
+                    status: None,
+                    summary: Some(summary.to_string()),
+                })
+                .collect()
+        })
+        .ok_or(micold_core::github::IssueLoadError::RateLimited);
+    state
+        .jira_status
+        .board
+        .apply(epoch, &asked, result, std::time::Duration::from_secs(now));
+}
+
+/// US1.2, FR-004: a folder's Jira key and a branch's (folder without a ticket) are titled by
+/// their summaries, on the card and the row alike.
+#[test]
+fn a_jira_summary_titles_the_card_and_the_row() {
+    let mut state = jira_ticketed();
+    jira_read(
+        &mut state,
+        Some(&[("ABC-42", "Login rate limit"), ("ABC-43", "Crash on save")]),
+        0,
+    );
+    let ticket = title_ticket(JIRA_FOLDER, Some("feat/ABC-42_login")).unwrap();
+    assert_eq!(
+        state
+            .overview
+            .issue_title(&ticket, &state.jira_status.board),
+        Some("Login rate limit")
+    );
+    for (dir, want) in [
+        (JIRA_FOLDER, "Login rate limit"),
+        (JIRA_BRANCH_ONLY, "Crash on save"),
+    ] {
+        let (card_title, row) = card_and_row(&state, dir, None);
+        assert_eq!((card_title.as_str(), row.as_str()), (want, want), "{dir}");
+    }
+}
+
+/// US1.4, FR-001: with no summary (nothing read, a key Jira does not return, a failed read the
+/// board retired) the title falls through to the branch.
+#[test]
+fn without_a_jira_summary_the_title_falls_through_to_the_branch() {
+    let mut state = jira_ticketed();
+    let branch = |state: &State| card_and_row(state, JIRA_FOLDER, None);
+    let expected = (
+        "feat/ABC-42_login".to_string(),
+        "feat/ABC-42_login".to_string(),
+    );
+    assert_eq!(branch(&state), expected, "no connection: nothing read");
+    jira_read(&mut state, Some(&[("ABC-43", "Crash on save")]), 0);
+    assert_eq!(branch(&state), expected, "an unknown key is not returned");
+    jira_read(&mut state, Some(&[("ABC-42", "Login rate limit")]), 1);
+    let summary = (
+        "Login rate limit".to_string(),
+        "Login rate limit".to_string(),
+    );
+    assert_eq!(branch(&state), summary, "the summary is read");
+    jira_read(&mut state, None, 2);
+    assert_eq!(branch(&state), summary, "one failed read keeps the summary");
+    for n in 1..3 {
+        jira_read(&mut state, None, 2 + n);
+    }
+    assert_eq!(branch(&state), expected, "failed reads retired the summary");
 }
 
 /// US4.2, US4.3: the phase and ratio come from the files, the card state and the pull request;

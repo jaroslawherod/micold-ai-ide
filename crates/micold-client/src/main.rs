@@ -478,7 +478,12 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let header_before = app.core.changes.header.entry.clone();
     let titles_were_readable = shell::issues::titles_readable(app);
     let worktrees_before = shell::issues::worktrees_fingerprint(app);
+    let facts_before = shell::location_titles::facts_fingerprint(app);
+    let project_before = app.core.workspace.active.clone();
     let task = update_inner(app, message);
+    // Feature 1465 (U1): the history records the place shown after every message, the app's own
+    // moves included.
+    app.core.observe_place();
     // Feature 1126, R3/R6: the header follows the shown location after any message, including one
     // the shell applied itself, and a newly followed worktree's issue title is read — or read once
     // titles become readable (the switch arrives, a daemon route opens) while it is shown.
@@ -487,9 +492,19 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let became_readable = !titles_were_readable && shell::issues::titles_readable(app);
     // Feature 1125, FR-011: the sidebar's rows lead with their issue titles, so a changed worktree
     // list (or titles becoming readable) reads the titles not yet held, for every worktree.
-    if shell::issues::worktrees_fingerprint(app) != worktrees_before || became_readable {
+    let worktrees_changed = shell::issues::worktrees_fingerprint(app) != worktrees_before;
+    if worktrees_changed || became_readable {
         shell::issues::on_worktrees_changed(app);
     }
+    // Feature 1504, L7: the spec and commit titles are read off the UI thread whenever the list
+    // (including a worktree's status or path) or the active project changed, by whichever message.
+    let facts_changed = shell::location_titles::facts_fingerprint(app) != facts_before;
+    let task = if facts_changed || app.core.workspace.active != project_before {
+        let dirs = shell::location_titles::listed_dirs(app);
+        Task::batch([task, shell::location_titles::read_facts(app, &dirs)])
+    } else {
+        task
+    };
     if app.core.changes.header.entry != header_before || became_readable {
         if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {
             shell::issues::on_header_followed(app, &dir);
@@ -1287,6 +1302,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Feature 1185: a filter message; a first focus or Retry asks Jira for the filter's choices,
         // and a change of the chosen filters reloads the listing with them.
         Message::WorktreeForm(FormMsg::JiraFilter(msg)) => shell::jira_filters::on_filter(app, msg),
+        // Feature 1400: a GitHub filter message; a filter change reloads the listing with the
+        // filter, a first focus of a label field or Retry asks for the labels.
+        Message::WorktreeForm(FormMsg::GithubFilter(msg)) => {
+            shell::github_filter::on_filter(app, msg)
+        }
         Message::Session(SessionMsg::StartRequested {
             location,
             provider,
@@ -1320,6 +1340,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Feature 803 (contracts/ui.md U3).
         Message::Navigation(msg) => shell::navigation::update(app, msg),
+        Message::History(msg) => shell::history::update(app, msg),
         // Wired by the quick switcher's update (feature 968, T017).
         Message::QuickSwitch(msg) => shell::quick_switch::update(app, msg),
         Message::Session(SessionMsg::Selected(id)) => {
@@ -1516,6 +1537,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Attach(msg @ AttachMsg::Opened) => {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_opened(app)
+        }
+        // BUG-1555: a dismissal is written to the settings so it survives a restart.
+        Message::Attach(AttachMsg::OfferDismissed) => {
+            app.core.update(Message::Attach(AttachMsg::OfferDismissed));
+            shell::persist::persist_offer_dismissal(app.caps.settings(), &mut app.core);
+            Task::none()
         }
         Message::Attach(msg @ AttachMsg::OfferAttachAll) => {
             app.core.update(Message::Attach(msg));

@@ -11,7 +11,12 @@
 //! removed (FR-013, FR-014). An error text built for it names the OS error, never the query
 //! (FR-016).
 //!
-//! Depends on `micold_core` and `std` alone, so the shell test includes this file by path.
+//! Depends on `micold_core` and `std` alone, so the shell test includes this file by path. The
+//! remembered file's read, write and removal are `shell::remembered`'s, declared here by path so
+//! that test includes it too.
+
+#[path = "remembered.rs"]
+pub mod remembered;
 
 use std::io;
 use std::path::Path;
@@ -41,23 +46,24 @@ pub fn write_token(dir: &Path, project: &Path, token: &ApiToken) -> io::Result<(
 
 /// Delete the token file; a missing file is already what was asked for.
 pub fn remove_token(dir: &Path, project: &Path) -> io::Result<()> {
-    remove_if_present(&jira_token_path(dir, project))
+    remembered::remove(&jira_token_path(dir, project))
 }
 
 /// The mode and last run query `project` remembers (feature 1186, FR-013): a missing or
 /// unreadable file is the default, basic and empty (Edge "Remembered data unreadable").
 pub fn read_query(dir: &Path, project: &Path) -> RememberedQuery {
-    std::fs::read(jira_query_path(dir, project))
-        .map(|bytes| RememberedQuery::from_json(&bytes))
-        .unwrap_or_default()
+    remembered::read(&jira_query_path(dir, project))
 }
 
 /// Remember one field: read the file, apply `change`, write it back owner-only through a temporary
 /// file and a rename, so a reader never sees half a file and another window's write to the other
 /// field stands (contracts/selector-source-and-storage.md §4).
 pub fn remember_query(dir: &Path, project: &Path, change: &RememberChange) -> io::Result<()> {
-    let next = read_query(dir, project).with_change(change);
-    micold_core::owner_only::write(dir, &jira_query_file_name(project), &next.to_json()).map(drop)
+    remembered::remember(
+        dir,
+        &jira_query_file_name(project),
+        |held: RememberedQuery| held.with_change(change),
+    )
 }
 
 /// The notification a failed [`remember_query`] raises: the OS error, never the query (FR-016).
@@ -67,15 +73,7 @@ pub fn remember_failed(error: &io::Error) -> String {
 
 /// Delete the remembered file; a missing file is already what was asked for.
 pub fn remove_query(dir: &Path, project: &Path) -> io::Result<()> {
-    remove_if_present(&jira_query_path(dir, project))
-}
-
-/// Remove `path`; a missing file is success.
-fn remove_if_present(path: &Path) -> io::Result<()> {
-    match std::fs::remove_file(path) {
-        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
-        _ => Ok(()),
-    }
+    remembered::remove(&jira_query_path(dir, project))
 }
 
 /// Perform a save's connection action in the order the contract fixes: the token file first,

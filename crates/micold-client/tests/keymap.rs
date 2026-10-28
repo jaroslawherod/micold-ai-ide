@@ -1261,3 +1261,261 @@ fn the_user_guide_names_every_review_key_and_its_text() {
         );
     }
 }
+
+// ---- Back/Forward keys (feature 1465, contracts/keys.md H1, H2, H5) -----------------------------
+
+use micold_client::keymap::{
+    history_key, history_key_label, history_key_labels, is_overview_chord,
+    is_overview_full_screen_chord, nav_chord,
+};
+use micold_core::history::Dir as HistoryDir;
+
+fn alt() -> Mods {
+    Mods {
+        alt: true,
+        ..Mods::NONE
+    }
+}
+
+fn cmd() -> Mods {
+    Mods {
+        logo: true,
+        ..Mods::NONE
+    }
+}
+
+fn arrow(named: NamedKey, mods: Mods) -> KeyInput {
+    ki(Key::Named(named), mods, None)
+}
+
+/// The running platform's Back and Forward presses (H1), each with its direction.
+fn history_presses() -> Vec<(KeyInput, HistoryDir)> {
+    #[cfg(target_os = "macos")]
+    let presses = vec![
+        (
+            kp(Key::Char('['), PhysicalKey::BracketLeft, cmd()),
+            HistoryDir::Back,
+        ),
+        (
+            kp(Key::Char(']'), PhysicalKey::BracketRight, cmd()),
+            HistoryDir::Forward,
+        ),
+        // Another layout types something else on the same keys: the position decides.
+        (
+            kp(Key::Char('ü'), PhysicalKey::BracketLeft, cmd()),
+            HistoryDir::Back,
+        ),
+        (
+            kp(Key::Char('+'), PhysicalKey::BracketRight, cmd()),
+            HistoryDir::Forward,
+        ),
+        // No code from the platform: the logical key decides, as `nav_chord`'s fallback.
+        (
+            kp(Key::Char('['), PhysicalKey::Other, cmd()),
+            HistoryDir::Back,
+        ),
+        (
+            kp(Key::Char(']'), PhysicalKey::Other, cmd()),
+            HistoryDir::Forward,
+        ),
+    ];
+    #[cfg(not(target_os = "macos"))]
+    let presses = vec![
+        (arrow(NamedKey::ArrowLeft, alt()), HistoryDir::Back),
+        (arrow(NamedKey::ArrowRight, alt()), HistoryDir::Forward),
+    ];
+    presses
+}
+
+/// Presses next to the platform's keys that are not Back or Forward (H1), the other platform's
+/// keys among them.
+fn history_near_misses() -> Vec<KeyInput> {
+    let alt_shift = Mods {
+        shift: true,
+        ..alt()
+    };
+    let ctrl_alt = Mods {
+        ctrl: true,
+        ..alt()
+    };
+    let cmd_shift = Mods {
+        shift: true,
+        ..cmd()
+    };
+    let cmd_alt = Mods { alt: true, ..cmd() };
+    let cmd_ctrl = Mods {
+        ctrl: true,
+        ..cmd()
+    };
+    let mut misses = vec![
+        arrow(NamedKey::ArrowLeft, Mods::NONE),
+        arrow(NamedKey::ArrowRight, Mods::NONE),
+        arrow(NamedKey::ArrowLeft, alt_shift),
+        arrow(NamedKey::ArrowLeft, ctrl_alt),
+        arrow(NamedKey::ArrowUp, alt()),
+        arrow(NamedKey::ArrowDown, alt()),
+        arrow(NamedKey::ArrowLeft, ctrl()),
+        arrow(NamedKey::ArrowLeft, cmd()),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, cmd_shift),
+        kp(Key::Char('{'), PhysicalKey::Other, cmd_shift),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, cmd_alt),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, cmd_ctrl),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, Mods::NONE),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, alt()),
+        kp(Key::Char('['), PhysicalKey::BracketLeft, ctrl()),
+        kp(Key::Char('x'), PhysicalKey::Other, cmd()),
+    ];
+    // The other platform's form.
+    #[cfg(target_os = "macos")]
+    misses.extend([
+        arrow(NamedKey::ArrowLeft, alt()),
+        arrow(NamedKey::ArrowRight, alt()),
+    ]);
+    #[cfg(not(target_os = "macos"))]
+    misses.extend([
+        kp(Key::Char('['), PhysicalKey::BracketLeft, cmd()),
+        kp(Key::Char(']'), PhysicalKey::BracketRight, cmd()),
+        kp(Key::Char('['), PhysicalKey::Other, cmd()),
+    ]);
+    misses
+}
+
+#[test]
+fn the_platforms_back_and_forward_keys_decode() {
+    for (input, dir) in history_presses() {
+        assert_eq!(history_key(&input), Some(dir), "{input:?}");
+    }
+}
+
+#[test]
+fn near_misses_of_the_back_and_forward_keys_decode_to_nothing() {
+    for input in history_near_misses() {
+        assert_eq!(history_key(&input), None, "{input:?}");
+    }
+}
+
+/// H2 (SC-003): a focused terminal gets what it got before the feature.
+#[test]
+fn the_terminal_encodes_the_back_and_forward_keys_as_before() {
+    let mode = TermMode::default();
+    // Alt+←/→ (and macOS Option+←/→, the same modifier): xterm's Alt-modified arrows.
+    assert_eq!(
+        bytes(encode(&arrow(NamedKey::ArrowLeft, alt()), mode)),
+        b"\x1b[1;3D"
+    );
+    assert_eq!(
+        bytes(encode(&arrow(NamedKey::ArrowRight, alt()), mode)),
+        b"\x1b[1;3C"
+    );
+    // Cmd+[ / Cmd+]: not terminal input.
+    for (c, physical) in [
+        ('[', PhysicalKey::BracketLeft),
+        (']', PhysicalKey::BracketRight),
+    ] {
+        assert_eq!(
+            encode(&kp(Key::Char(c), physical, cmd()), mode),
+            KeyOutput::Ignore,
+            "Cmd+{c}"
+        );
+    }
+}
+
+/// Whether `out` is one of the app's chords rather than input or nothing.
+fn is_app_chord_output(out: &KeyOutput) -> bool {
+    !matches!(out, KeyOutput::Bytes(_) | KeyOutput::Ignore)
+}
+
+#[test]
+fn no_back_or_forward_key_is_another_chord() {
+    let mode = TermMode::default();
+    for (input, _) in history_presses() {
+        assert_eq!(nav_chord(&input), None, "{input:?}");
+        assert!(!is_switcher_chord(&input), "{input:?}");
+        assert!(!is_overview_chord(&input.key, input.mods), "{input:?}");
+        assert!(
+            !is_overview_full_screen_chord(&input.key, input.mods),
+            "{input:?}"
+        );
+        let out = encode(&input, mode);
+        assert!(!is_app_chord_output(&out), "{input:?} encodes to {out:?}");
+    }
+}
+
+#[test]
+fn no_other_chord_is_a_back_or_forward_key() {
+    let mut chords: Vec<KeyInput> = ['e', 't', 'o', 'f', 'd', 'h', 'w', 'c', 'v', 'p']
+        .into_iter()
+        .map(|c| ki(Key::Char(c), primary_shift(), None))
+        .collect();
+    for named in [
+        NamedKey::ArrowLeft,
+        NamedKey::ArrowRight,
+        NamedKey::ArrowUp,
+        NamedKey::ArrowDown,
+        NamedKey::PageUp,
+        NamedKey::PageDown,
+    ] {
+        chords.push(arrow(named, primary_shift()));
+    }
+    for (_, physical) in NAV_CHORDS {
+        chords.push(kp(Key::Char('x'), physical, primary_shift()));
+    }
+    for c in ['[', ']', ',', '.', '{', '}'] {
+        chords.push(kp(Key::Char(c), PhysicalKey::Other, primary_shift()));
+    }
+    // Copy and paste: Cmd+C / Cmd+V on macOS, Ctrl+Shift+C / V elsewhere (above).
+    chords.extend(['c', 'v'].map(|c| ki(Key::Char(c), cmd(), None)));
+    for input in chords {
+        assert_eq!(history_key(&input), None, "{input:?}");
+    }
+}
+
+#[test]
+fn the_back_and_forward_labels_name_both_platform_forms() {
+    assert_eq!(
+        history_key_labels(HistoryDir::Back),
+        ("Alt+←".to_string(), "Cmd+[".to_string())
+    );
+    assert_eq!(
+        history_key_labels(HistoryDir::Forward),
+        ("Alt+→".to_string(), "Cmd+]".to_string())
+    );
+    for dir in [HistoryDir::Back, HistoryDir::Forward] {
+        let (other, mac) = history_key_labels(dir);
+        let want = if cfg!(target_os = "macos") {
+            mac
+        } else {
+            other
+        };
+        assert_eq!(history_key_label(dir), want, "{dir:?}");
+    }
+}
+
+/// FR-013: the app-chord table lists Back and Forward with their keys in both forms and their
+/// mouse buttons.
+#[test]
+fn the_user_guide_lists_back_and_forward_with_their_keys_and_buttons() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/user-guide/terminal-panes.md");
+    let text = std::fs::read_to_string(path).expect("the user guide page reads");
+    for (dir, action, button) in [
+        (HistoryDir::Back, "Back", "mouse back button"),
+        (HistoryDir::Forward, "Forward", "mouse forward button"),
+    ] {
+        let row = text
+            .lines()
+            .find(|line| line.starts_with(&format!("| {action} |")))
+            .unwrap_or_else(|| panic!("terminal-panes.md has a {action} row"));
+        let (other, mac) = history_key_labels(dir);
+        for label in [&other, &mac] {
+            assert!(
+                !label.is_empty() && row.contains(label.as_str()),
+                "{action} row lists {label:?}: {row}"
+            );
+        }
+        assert!(
+            row.to_lowercase().contains(button),
+            "{action} row names the {button}: {row}"
+        );
+    }
+}

@@ -32,20 +32,20 @@ const MARKERS: &[&str] = &[
     "start_issue_search(",
     "start_issue_descriptions(",
     "start_query(",
+    // Feature 1400: the filtered listing, the filtered search and the label choices.
+    "start_filtered_load(",
+    "start_filtered_search(",
+    "start_label_choices(",
 ];
 
 /// `(file relative to the repository root, the trimmed line, why it is not another trigger)`.
 const ALLOWED: &[(&str, &str, &str)] = &[
     (
         "crates/micold-client/src/shell/issues.rs",
-        "fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {",
-        "The definition of the single load path. A signature names the function; it calls nothing.",
-    ),
-    (
-        "crates/micold-client/src/shell/issues.rs",
         "let tooling = app.caps.issue_tooling();",
-        "The only use of the capability, inside `start_issue_load`, so every fetch goes through the \
-         two callers below.",
+        "The capability's use inside `GhJob::of`, the one lookup of `gh` (feature 1400 factored it \
+         out of `start_issue_load`): only the load paths, `start_filtered_load` and \
+         `start_label_choices` build a `GhJob`, each from the named events below.",
     ),
     (
         "crates/micold-client/src/shell/issues.rs",
@@ -114,6 +114,58 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "1186 FR-004, FR-004a, FR-003a: `run_if_newly_awaited`, after the reducer accepted `Run`, \
          or showed the Jira source in advanced mode with a last run query, and now awaits a fresh \
          run. A switch or a keystroke awaits none.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "pub(crate) fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {",
+        "The definition of the single load path, `pub(crate)` since feature 1400 so the GitHub \
+         filters' shell starts the same load; a signature calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "return crate::shell::github_filter::start_filtered_load(app, seq, repo, search);",
+        "1400 (source-and-storage §4): inside `start_issue_load`, the same named events load the \
+         filtered listing while the form's GitHub filter is not the default.",
+    ),
+    (
+        "crates/micold-client/src/shell/issues.rs",
+        "return crate::shell::github_filter::start_filtered_search(app, seq, repo, search, gh);",
+        "1400 (FR-016): inside `start_issue_search`, the same named events search beyond the \
+         filtered list with the filter.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "work.push(start_issue_load(app, seq));",
+        "1400 FR-008: `on_filter`, after the reducer accepted a filter change (a pick, a chip \
+         removed, Clear filters) and handed out a fresh issue seq; a focus or a keystroke in a \
+         label field hands out none.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "pub(crate) fn start_filtered_load(",
+        "1400: the definition of the filtered listing path; a signature calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "pub(crate) fn start_filtered_search(",
+        "1400: the definition of the filtered search path; a signature calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "let source = app.caps.issue_tooling().source;",
+        "1400: the capability's use inside `start_filtered_search`, built from the `gh` the load \
+         located, as 034's search is.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "work.push(start_label_choices(app, seq));",
+        "1400 FR-005: `on_filter`, after the reducer accepted the first opening of a label field \
+         or a Retry of a failed label load and handed out a fresh filter seq.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "fn start_label_choices(app: &mut App, seq: u64) -> Task<Message> {",
+        "1400: the definition of the label choice path; a signature calls nothing.",
     ),
     (
         "crates/micold-client/src/shell/pr_status.rs",
@@ -229,5 +281,52 @@ fn no_view_code_fetches_issues() {
             .strip_prefix(&root)
             .is_ok_and(|rel| rel.to_string_lossy().replace('\\', "/").starts_with(UI))),
         "the scan reads the files under `ui/`"
+    );
+}
+
+/// Feature 1400 (FR-024, contracts/source-and-storage.md §2): the GitHub filters' own files log
+/// and notify nothing, so no draft, `UserQuery`, `ScopedSearch`, `BasicFilters` or label value can
+/// reach a log line or a notice other than the selector's own. Stricter than the rule (a line that
+/// logs something else would pass it): these files have nothing to log.
+#[test]
+fn the_github_filter_files_log_and_notify_nothing() {
+    const FILES: &[&str] = &[
+        "crates/micold-client/src/features/worktree_form/github_filter.rs",
+        "crates/micold-client/src/shell/github_filter.rs",
+        "crates/micold-client/src/ui/github_filter.rs",
+        "crates/micold-core/src/github_filter.rs",
+    ];
+    const LOGS: &[&str] = &[
+        "tracing::",
+        "log::",
+        "notify_",
+        "trace!(",
+        "debug!(",
+        "info!(",
+        "warn!(",
+        "error!(",
+        "eprintln!(",
+        "println!(",
+    ];
+    let root = repo_root();
+    let mut found = Vec::new();
+    for file in FILES {
+        let text = fs::read_to_string(root.join(file))
+            .unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
+        for line in text.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if LOGS.iter().any(|m| line.contains(m)) {
+                found.push(format!("  {file}: {}", line.trim()));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "the GitHub filter files log or notify:\n{}\n\nFR-024: a filter value, the query or the \
+         typed text must never reach a log line or another notice.",
+        found.join("\n")
     );
 }

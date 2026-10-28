@@ -514,6 +514,9 @@ pub struct Issue {
     /// The Jira ticket's current status; `None` for a GitHub issue and for a ticket Jira reported
     /// none for. Takes no part in matching or ordering (1101 FR-011).
     status: Option<crate::jira_status::TicketStatus>,
+    /// The issue is closed: only a filtered GitHub search lists one (feature 1400 data-model §8).
+    /// `false` for every default-listed and every Jira issue. Takes no part in matching or ordering.
+    closed: bool,
 }
 
 /// Where a match's emphasis lands on a row's two lines (038 data-model §3): byte ranges of
@@ -560,6 +563,7 @@ impl Issue {
             key: None,
             type_name: None,
             status: None,
+            closed: false,
         };
         issue.row_text = issue.match_text();
         issue
@@ -590,6 +594,17 @@ impl Issue {
     pub fn with_status(mut self, status: Option<crate::jira_status::TicketStatus>) -> Issue {
         self.status = status;
         self
+    }
+
+    /// The same issue, closed or not (feature 1400: a search node's `state == "CLOSED"`).
+    pub fn closed(mut self, closed: bool) -> Issue {
+        self.closed = closed;
+        self
+    }
+
+    /// Whether the issue is closed; only a filtered GitHub search lists a closed issue.
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
 
     /// The Jira ticket's status, when Jira reported a usable one.
@@ -939,6 +954,7 @@ impl fmt::Debug for Issue {
             .field("title", &self.title)
             .field("labels", &self.labels)
             .field("updated_at", &self.updated_at)
+            .field("closed", &self.closed)
             .field("reporter", &REDACTED)
             .field("description", &REDACTED)
             .finish_non_exhaustive()
@@ -992,6 +1008,8 @@ macro_rules! issue_node_selection {
         "number title updatedAt labels(first: 20) { nodes { name } } author { login }"
     };
 }
+/// For `crate::github_filter`'s search queries (feature 1400), which select the same node.
+pub(crate) use issue_node_selection;
 
 /// The opening of the open-issue connection, shared by [`LIST_QUERY`] and [`DESCRIPTIONS_QUERY`]
 /// so the second pass reads the pages the first read: same states, order and page size.
@@ -1056,7 +1074,7 @@ const LABELS_PER_ISSUE: usize = 20;
 /// without an author — a deleted account — is still an issue, reported by [`GHOST_LOGIN`]; a node
 /// without a body — every listed node, and a searched issue with none — is still an issue, without
 /// a description.
-fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
+pub(crate) fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
     let labels = node["labels"]["nodes"]
         .as_array()
         .map(|labels| {
@@ -1101,7 +1119,7 @@ pub(crate) fn graphql_error_at(json: &serde_json::Value, path: &[&str]) -> Optio
 }
 
 /// What one GraphQL `errors[]` entry means for the user.
-fn graphql_error_of(error: &serde_json::Value) -> IssueLoadError {
+pub(crate) fn graphql_error_of(error: &serde_json::Value) -> IssueLoadError {
     match error["type"].as_str() {
         Some("NOT_FOUND") => IssueLoadError::NoAccess,
         Some("RATE_LIMITED") => IssueLoadError::RateLimited,
@@ -1123,22 +1141,30 @@ pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
     page_args(LIST_QUERY, repo, cursor)
 }
 
-/// The arguments after `gh` for one page of the open-issue connection read with `query`.
-fn page_args(query: &str, repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
-    let mut args: Vec<String> = [
+/// The arguments after `gh` every GraphQL request starts with: github.com, then `query` as a raw
+/// string. Each caller appends its own variables, every string one `-f`.
+pub(crate) fn graphql_args(query: &str) -> Vec<String> {
+    [
         "api",
         "graphql",
         "--hostname",
         "github.com",
         "-f",
         &format!("query={query}"),
-        "-f",
-        &format!("owner={}", repo.owner),
-        "-f",
-        &format!("name={}", repo.name),
     ]
     .map(str::to_string)
-    .to_vec();
+    .to_vec()
+}
+
+/// The arguments after `gh` for one page of the open-issue connection read with `query`.
+fn page_args(query: &str, repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    let mut args = graphql_args(query);
+    args.extend([
+        "-f".to_string(),
+        format!("owner={}", repo.owner),
+        "-f".to_string(),
+        format!("name={}", repo.name),
+    ]);
     if let Some(cursor) = cursor {
         args.push("-f".into());
         args.push(format!("cursor={cursor}"));
@@ -1181,18 +1207,11 @@ pub fn search_args(repo: &GithubRepo, text: &str) -> Vec<String> {
     } else {
         SEARCH_QUERY
     };
-    let mut args: Vec<String> = [
-        "api",
-        "graphql",
-        "--hostname",
-        "github.com",
-        "-f",
-        &format!("query={query}"),
-        "-f",
-        &format!("q=repo:{repo} is:issue is:open {text}"),
-    ]
-    .map(str::to_string)
-    .to_vec();
+    let mut args = graphql_args(query);
+    args.extend([
+        "-f".to_string(),
+        format!("q=repo:{repo} is:issue is:open {text}"),
+    ]);
     if let Some(n) = number {
         args.extend([
             "-f".to_string(),
@@ -1297,6 +1316,50 @@ pub trait IssueSource: IssueLookup {
         repo: &GithubRepo,
         cursor: Option<&str>,
     ) -> Result<DescriptionPage, IssueLoadError>;
+
+    /// One page of the issues `search` selects, in its order, with their bodies; issues of
+    /// another repository and pull requests already dropped (feature 1400
+    /// contracts/source-and-storage.md §1).
+    fn search_page(
+        &self,
+        _repo: &GithubRepo,
+        _search: &crate::github_filter::ScopedSearch,
+        _cursor: Option<&str>,
+    ) -> Result<IssuePage, crate::github_filter::FilterFailure> {
+        Err(not_supported().into())
+    }
+
+    /// The first issues a search beyond a filtered list selects (feature 1400 FR-016), no cursor.
+    fn search_filtered(
+        &self,
+        _repo: &GithubRepo,
+        _search: &crate::github_filter::ScopedSearch,
+    ) -> Result<Vec<Issue>, crate::github_filter::FilterFailure> {
+        Err(not_supported().into())
+    }
+
+    /// One page of the repository's label names (feature 1400 research R10).
+    fn labels_page(
+        &self,
+        _repo: &GithubRepo,
+        _cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        Err(not_supported())
+    }
+}
+
+/// What an [`IssueSource`] without filtered requests answers them with.
+fn not_supported() -> IssueLoadError {
+    IssueLoadError::Other("not supported".into())
+}
+
+/// One page of names (labels) read from a repository connection (feature 1400).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NamePage {
+    /// The names, as GitHub spells them, in its order.
+    pub names: Vec<String>,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<String>,
 }
 
 /// Load open issues page by page, up to [`ISSUE_LOAD_CAP`] (contracts/github-issue-source.md §4).
@@ -1368,6 +1431,21 @@ pub fn descriptions_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String>
     page_args(DESCRIPTIONS_QUERY, repo, cursor)
 }
 
+/// The GraphQL document for one page of the repository's labels (feature 1400 research R10). One
+/// line, like every query.
+pub const LABELS_QUERY: &str = concat!(
+    "query($owner: String!, $name: String!, $cursor: String) { ",
+    "repository(owner: $owner, name: $name) { ",
+    "labels(first: 100, after: $cursor, orderBy: {field: NAME, direction: ASC}) { ",
+    "pageInfo { hasNextPage endCursor } nodes { name } } } }"
+);
+
+/// The arguments after `gh` for one page of labels: only the repository and the cursor leave the
+/// machine (feature 1400 contracts/source-and-storage.md §2).
+pub fn labels_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    page_args(LABELS_QUERY, repo, cursor)
+}
+
 /// Pages the description pass reads at most: as many as hold [`ISSUE_LOAD_CAP`] issues, so a load
 /// makes at most that many requests again (038 FR-026).
 pub const DESCRIPTION_PAGE_CAP: usize = ISSUE_LOAD_CAP / 100;
@@ -1428,7 +1506,7 @@ pub fn parse_descriptions_page(stdout: &[u8]) -> Result<DescriptionPage, IssueLo
 }
 
 /// Where the page after this one starts, from a connection's `pageInfo`; `None` on the last page.
-fn next_cursor_of(connection: &serde_json::Value) -> Option<String> {
+pub(crate) fn next_cursor_of(connection: &serde_json::Value) -> Option<String> {
     let page_info = &connection["pageInfo"];
     if page_info["hasNextPage"].as_bool() == Some(true) {
         page_info["endCursor"].as_str().map(str::to_string)
@@ -1677,6 +1755,15 @@ pub struct FakeIssueSource {
     details_delay: std::time::Duration,
     details_calls: std::sync::Mutex<Vec<(String, u32)>>,
     details_deadlines: std::sync::Mutex<Vec<std::time::Instant>>,
+    search_pages: std::sync::Mutex<
+        std::collections::VecDeque<Result<IssuePage, crate::github_filter::FilterFailure>>,
+    >,
+    filtered_searches: std::sync::Mutex<
+        std::collections::VecDeque<Result<Vec<Issue>, crate::github_filter::FilterFailure>>,
+    >,
+    asked_searches: std::sync::Mutex<Vec<String>>,
+    labels: std::sync::Mutex<std::collections::VecDeque<Result<NamePage, IssueLoadError>>>,
+    label_calls: std::sync::Mutex<Vec<Option<String>>>,
 }
 
 impl FakeIssueSource {
@@ -1802,6 +1889,41 @@ impl FakeIssueSource {
             .clone()
     }
 
+    /// Answer the next unanswered `search_page` calls with `pages`, in order (feature 1400).
+    pub fn with_search_pages(
+        self,
+        pages: Vec<Result<IssuePage, crate::github_filter::FilterFailure>>,
+    ) -> Self {
+        locked(&self.search_pages).extend(pages);
+        self
+    }
+
+    /// Answer the next unanswered `search_filtered` call with `result` (feature 1400).
+    pub fn with_search_filtered(
+        self,
+        result: Result<Vec<Issue>, crate::github_filter::FilterFailure>,
+    ) -> Self {
+        locked(&self.filtered_searches).push_back(result);
+        self
+    }
+
+    /// Answer the next unanswered `labels_page` calls with `pages`, in order (feature 1400).
+    pub fn with_labels(self, pages: Vec<Result<NamePage, IssueLoadError>>) -> Self {
+        locked(&self.labels).extend(pages);
+        self
+    }
+
+    /// The scoped search text of every `search_page` and `search_filtered` call so far, in call
+    /// order: what a filtered request sent (feature 1400).
+    pub fn asked_searches(&self) -> Vec<String> {
+        locked(&self.asked_searches).clone()
+    }
+
+    /// The cursor of every `labels_page` call so far.
+    pub fn label_calls(&self) -> Vec<Option<String>> {
+        locked(&self.label_calls).clone()
+    }
+
     fn lock_script(
         &self,
     ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<IssuePage, IssueLoadError>>>
@@ -1864,6 +1986,52 @@ impl IssueSource for FakeIssueSource {
                 ))
             })
     }
+
+    fn search_page(
+        &self,
+        _repo: &GithubRepo,
+        search: &crate::github_filter::ScopedSearch,
+        _cursor: Option<&str>,
+    ) -> Result<IssuePage, crate::github_filter::FilterFailure> {
+        locked(&self.asked_searches).push(search.as_str().to_string());
+        locked(&self.search_pages)
+            .pop_front()
+            .unwrap_or_else(|| Err(unscripted("search page").into()))
+    }
+
+    fn search_filtered(
+        &self,
+        _repo: &GithubRepo,
+        search: &crate::github_filter::ScopedSearch,
+    ) -> Result<Vec<Issue>, crate::github_filter::FilterFailure> {
+        locked(&self.asked_searches).push(search.as_str().to_string());
+        locked(&self.filtered_searches)
+            .pop_front()
+            .unwrap_or_else(|| Err(unscripted("filtered search").into()))
+    }
+
+    fn labels_page(
+        &self,
+        _repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        locked(&self.label_calls).push(cursor.map(str::to_string));
+        locked(&self.labels)
+            .pop_front()
+            .unwrap_or_else(|| Err(unscripted("label page")))
+    }
+}
+
+/// `mutex`'s value, whether or not a panicking test poisoned it.
+fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// What [`FakeIssueSource`] answers a call nothing was scripted for.
+fn unscripted(what: &str) -> IssueLoadError {
+    IssueLoadError::Other(format!("FakeIssueSource: no {what} scripted for this call"))
 }
 
 /// With nothing scripted it answers "no details scripted", so a test that does not care still runs.
@@ -1958,23 +2126,53 @@ impl IssueLoadError {
     }
 
     fn github_message(&self, repo: &GithubRepo) -> String {
+        let (opening, cause) = self.github_parts(repo);
+        format!("{}{cause}", opening.unwrap_or_default())
+    }
+
+    /// The GitHub notice's cause alone, without 034's "Couldn't read issues" opening, for a load
+    /// that is not the issue list (feature 1400's labels, under "Couldn't load the labels.").
+    pub fn github_cause(&self, repo: &GithubRepo) -> String {
+        let (opening, cause) = self.github_parts(repo);
+        if opening.is_none() {
+            return cause;
+        }
+        let mut chars = cause.chars();
+        chars.next().map_or_else(String::new, |first| {
+            first.to_uppercase().chain(chars).collect()
+        })
+    }
+
+    /// The GitHub notice as 034's opening, when it has one, and the cause after it.
+    fn github_parts(&self, repo: &GithubRepo) -> (Option<&'static str>, String) {
+        const READ: Option<&str> = Some("Couldn't read issues: ");
         match self {
-            Self::ToolMissing => "Couldn't read issues: the GitHub CLI (`gh`) isn't installed. \
-                                  Install it from cli.github.com, then sign in with `gh auth login`."
-                .to_owned(),
-            Self::NotSignedIn => "Couldn't read issues: you're not signed in to GitHub. \
-                                  Run `gh auth login` in a terminal, then retry."
-                .to_owned(),
-            Self::NoAccess => format!("Couldn't read issues: your GitHub sign-in can't access {repo}."),
-            Self::Offline => "Couldn't reach GitHub. Check your connection, then retry.".to_owned(),
-            Self::RateLimited => {
-                "GitHub's rate limit was reached. Wait a minute, then retry.".to_owned()
-            }
-            Self::TimedOut => "GitHub didn't answer within 10 seconds.".to_owned(),
-            Self::Other(detail) => format!("Couldn't read issues: {detail}"),
-            Self::Unreachable(_) | Self::CredentialsRefused | Self::NotJiraCloud => {
-                "Couldn't read issues. Check your connection and settings, then retry.".to_owned()
-            }
+            Self::ToolMissing => (
+                READ,
+                "the GitHub CLI (`gh`) isn't installed. \
+                 Install it from cli.github.com, then sign in with `gh auth login`."
+                    .to_owned(),
+            ),
+            Self::NotSignedIn => (
+                READ,
+                "you're not signed in to GitHub. Run `gh auth login` in a terminal, then retry."
+                    .to_owned(),
+            ),
+            Self::NoAccess => (READ, format!("your GitHub sign-in can't access {repo}.")),
+            Self::Offline => (
+                None,
+                "Couldn't reach GitHub. Check your connection, then retry.".to_owned(),
+            ),
+            Self::RateLimited => (
+                None,
+                "GitHub's rate limit was reached. Wait a minute, then retry.".to_owned(),
+            ),
+            Self::TimedOut => (None, "GitHub didn't answer within 10 seconds.".to_owned()),
+            Self::Other(detail) => (READ, detail.clone()),
+            Self::Unreachable(_) | Self::CredentialsRefused | Self::NotJiraCloud => (
+                Some("Couldn't read issues. "),
+                "Check your connection and settings, then retry.".to_owned(),
+            ),
         }
     }
 
@@ -2180,6 +2378,40 @@ impl IssueSource for GhCli {
         cursor: Option<&str>,
     ) -> Result<DescriptionPage, IssueLoadError> {
         self.run(descriptions_args(repo, cursor), parse_descriptions_page)
+    }
+
+    fn search_page(
+        &self,
+        repo: &GithubRepo,
+        search: &crate::github_filter::ScopedSearch,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, crate::github_filter::FilterFailure> {
+        use crate::github_filter::{filtered_answer_of, parse_search_page, search_page_args};
+        filtered_answer_of(&self.outcome(search_page_args(search, cursor)), |stdout| {
+            parse_search_page(stdout, repo)
+        })
+    }
+
+    fn search_filtered(
+        &self,
+        repo: &GithubRepo,
+        search: &crate::github_filter::ScopedSearch,
+    ) -> Result<Vec<Issue>, crate::github_filter::FilterFailure> {
+        use crate::github_filter::{filtered_answer_of, parse_search_page, search_filtered_args};
+        filtered_answer_of(&self.outcome(search_filtered_args(search)), |stdout| {
+            parse_search_page(stdout, repo).map(|page| page.issues)
+        })
+    }
+
+    fn labels_page(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        self.run(
+            labels_args(repo, cursor),
+            crate::github_filter::parse_labels_page,
+        )
     }
 }
 

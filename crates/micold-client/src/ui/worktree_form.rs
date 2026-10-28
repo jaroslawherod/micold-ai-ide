@@ -27,7 +27,7 @@ use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::github::Issue;
 use micold_core::issue_details::DetailLine;
 use micold_core::jira::IssueProvider;
-use micold_core::jira_status::StatusBoard;
+use micold_core::jira_status::{StatusBoard, StatusCategory, TicketStatus};
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb, Roles};
@@ -75,7 +75,7 @@ pub fn modal<'a>(
             fields = fields.push(session_select(form, r));
         }
         BranchSource::Issue => {
-            fields = fields.push(issue_picker(form, board, r));
+            fields = fields.push(issue_picker(form, board, r, focused));
             fields = naming_inputs(fields, form, r, focused);
         }
     }
@@ -493,13 +493,24 @@ pub fn issue_rows_with(
     (rows, selected)
 }
 
+/// The chip a closed issue's row carries.
+fn closed_status() -> TicketStatus {
+    TicketStatus {
+        name: "Closed".to_string(),
+        category: Some(StatusCategory::Done),
+    }
+}
+
 /// One issue's row, the one form every issue list shows (038 FR-006, 1186 FR-006): the title line
 /// and the details line with the match's emphasis, the status (the board's when it holds the
 /// ticket) and the description as the tooltip.
 fn issue_row(issue: &Issue, spans: &[std::ops::Range<usize>], board: &StatusBoard) -> TypeaheadRow {
     let emphasis = issue.emphasis(spans);
     let entry = issue.key().and_then(|key| board.status_of(key));
+    // A closed issue says so, ahead of any status the board or its listing holds (feature 1400,
+    // selector-ui §3).
     let (status, stale) = match entry {
+        _ if issue.is_closed() => (Some(closed_status()), false),
         Some(entry) => (Some(entry.status.clone()), entry.stale),
         None => (issue.status().cloned(), false),
     };
@@ -521,9 +532,27 @@ const FILTERS_BUTTON_WIDTH: f32 = 160.0;
 /// wide enough for "No project user matches; you are still offered" in its list (ledger D15).
 const FILTERS_PANEL_WIDTH: f32 = 360.0;
 
+/// The Jira source's Basic/Advanced switch (feature 1186).
+fn jira_mode_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
+    super::jira_query::mode_switch(
+        form.jira_query.mode,
+        |mode| {
+            Message::WorktreeForm(FormMsg::JiraQuery(
+                crate::features::worktree_form::jira_query::Msg::ModeChanged(mode),
+            ))
+        },
+        r,
+    )
+}
+
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
-fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> Element<'a, Message> {
+fn issue_picker<'a>(
+    form: &'a WorktreeForm,
+    board: &StatusBoard,
+    r: Roles,
+    focused: Option<FieldId>,
+) -> Element<'a, Message> {
     let mut col = column![].spacing(spacing::XS);
     // Feature 1186 (FR-001): with the Jira source showing, Basic or Advanced, heading the picker
     // rather than a field of its own: the form is the tallest dialog, and a field's gap would push
@@ -542,7 +571,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         (true, Some(clear)) => {
             col = col.push(
                 row![
-                    super::jira_query::mode_switch(form, r),
+                    jira_mode_switch(form, r),
                     iced::widget::Space::new().width(Length::Fill),
                     clear,
                 ]
@@ -550,15 +579,27 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 .align_y(iced::Alignment::Center),
             );
         }
-        (true, None) => col = col.push(super::jira_query::mode_switch(form, r)),
+        (true, None) => col = col.push(jira_mode_switch(form, r)),
         (false, Some(clear)) => col = col.push(clear),
         (false, None) => {}
+    }
+    // Feature 1400 (research R13): the GitHub filters' row heads the picker, trailing: Clear
+    // filters while one is chosen, then the Filters button. Not beside the search, as the Jira one
+    // is: the search's open list is as wide as the field, and a narrower list wraps a long issue
+    // title into rows the eight-row list cannot show whole (`gates/issue_rows_show_all_text.rs`).
+    // Feature 1400's switch (US3) takes this row's leading side.
+    if let Some(row) = super::github_filter::controls_row(form, r) {
+        col = col.push(row);
     }
     if form.shows_advanced() {
         return super::jira_query::picker(col, form, board, r);
     }
     if let Some(notice) = form.issue_notice() {
         col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
+    }
+    // Feature 1400 (US3 AS1): advanced mode's Query input and Run, above the search.
+    if let Some(query) = super::github_filter::query_row(form, r, focused) {
+        col = col.push(query);
     }
     let Some(source) = form.notice_source() else {
         return col.into();
@@ -583,6 +624,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         form.jira_filters
             .active_line()
             .filter(|_| shows_filters(form))
+            .or_else(|| super::github_filter::active_line(form))
             .map(|line| active_filters_line(line, caption, r))
     };
     let jira = form.jira_site();
@@ -592,7 +634,8 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         ISSUE_SEARCH_PLACEHOLDER
     };
     match &form.issues {
-        IssueList::NotRequested => {}
+        // Feature 1400 (FR-013): advanced mode before a query runs prompts for one.
+        IssueList::NotRequested => col = col.extend(super::github_filter::prompt(form, r)),
         // The switch and the inputs below stay live while this runs (FR-006).
         IssueList::Loading { .. } => {
             let loading = match jira {
@@ -621,6 +664,23 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 )),
             };
         }
+        // Feature 1400 (FR-018): GitHub refused the filter; its messages stand in place of the list,
+        // the filter in place to fix beside them.
+        IssueList::Rejected(messages) => {
+            let lines = super::github_filter::rejection_lines(messages);
+            let mut lines = lines.into_iter();
+            if let Some(first) = lines.next() {
+                col = col.push(seat(
+                    Text::new(first, TypeRole::Caption, r).tint(r.error).into(),
+                ));
+            }
+            for line in lines {
+                col = col.push(Text::new(line, TypeRole::Caption, r).tint(r.error));
+            }
+            col = col.extend(active(None));
+        }
+        // Feature 1400 (FR-012): the query was not sent; why, in place of the list.
+        IssueList::Refused(refused) => col = col.push(super::github_filter::refusal(refused, r)),
         // Feature 1185 (FR-011): the filters chose nothing; the active line above clears them.
         IssueList::Loaded { listing, .. }
             if listing.issues.is_empty() && form.filtered_empty_text().is_some() =>
@@ -677,7 +737,11 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             if let (Some(status), IssueList::Loaded { search, .. }) =
                 (form.issue_search_status(), &form.issues)
             {
-                col = if matches!(search, SearchState::Failed { .. }) {
+                col = if matches!(search, SearchState::Rejected(_)) {
+                    // Feature 1400: GitHub refused the search; the same search would be refused
+                    // again, so it says so and offers no Retry.
+                    col.push(Text::new(status, TypeRole::Caption, r).tint(r.error))
+                } else if form.issue_search_retries() {
                     // One row: the legend (feature 937) took a line of the dialog's height, which
                     // the panel-placement gate measures, so the failure and its Retry share one.
                     col.push(
@@ -717,17 +781,32 @@ fn jira_filters_control<'a>(
         .into_iter()
         .map(|kind| material::MenuSelectRow::controls(jira_filter_field(form, kind, source, r)))
         .collect();
-    material::MenuSelect::new(
-        filters_label(filters.chosen.active().len()),
+    filters_panel(
+        filters.chosen.active().len(),
         fields,
         filters.panel_open,
         filter(FilterMsg::PanelToggled),
         filter(FilterMsg::PanelDismissed),
         r,
     )
-    .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
-    .panel_width(FILTERS_PANEL_WIDTH)
-    .into()
+}
+
+/// The **Filters** button and the floating panel it opens, shared by the Jira (feature 1185) and
+/// the GitHub (feature 1400, research R13) filters: a [`material::MenuSelect`] [`FILTERS_BUTTON_WIDTH`]
+/// wide naming how many filters are chosen, whose list is a [`FILTERS_PANEL_WIDTH`] panel of
+/// `rows`, its trailing edge on the button's.
+pub(super) fn filters_panel<'a>(
+    chosen: usize,
+    rows: Vec<material::MenuSelectRow<'a, Message>>,
+    open: bool,
+    on_toggle: Message,
+    on_dismiss: Message,
+    r: Roles,
+) -> Element<'a, Message> {
+    material::MenuSelect::new(filters_label(chosen), rows, open, on_toggle, on_dismiss, r)
+        .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
+        .panel_width(FILTERS_PANEL_WIDTH)
+        .into()
 }
 
 /// The Filters button's words: "Filters", or "Filters · 2" while two are chosen.
@@ -795,7 +874,7 @@ fn jira_filter_field<'a>(
 /// one the tallest dialog lacks (`gates/panel_placement.rs`), so a line too long for the dialog (three
 /// filters and the cap, a long name) ends in an ellipsis, whole in its tooltip and the values whole
 /// in the Filters panel's fields (ledger D15).
-fn active_filters_line<'a>(
+pub(super) fn active_filters_line<'a>(
     line: String,
     caption: Option<String>,
     r: Roles,

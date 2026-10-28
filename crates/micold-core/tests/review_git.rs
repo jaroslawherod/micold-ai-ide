@@ -1260,3 +1260,82 @@ fn a_mode_change_alone_changes_the_identity() {
     assert_eq!((before.added, before.removed), (after.added, after.removed));
     assert_ne!(before.identity, after.identity, "{before:?} {after:?}");
 }
+
+/// Feature 1504 (L7): the subject of the branch's own latest commit, and none whenever there is
+/// no branch, no base or no commit of its own.
+#[test]
+fn the_own_commit_subject_is_the_branchs_latest_commit_the_default_branch_lacks() {
+    let f = fixture();
+    let cli = GitCli::new();
+    write(&f.wt, "b.rs", "fn b() { later(); }\n");
+    commit_all(
+        &f.wt,
+        "fix(overview): wrap long titles\n\nThe body is not the subject.",
+    );
+    assert_eq!(
+        cli.own_commit_subject(&f.wt).as_deref(),
+        Some("fix(overview): wrap long titles")
+    );
+    assert_eq!(
+        cli.own_commit_subject(&f.root),
+        None,
+        "main has none of its own"
+    );
+
+    let fresh = f.root.parent().unwrap().join("fresh");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "fresh",
+            fresh.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(cli.own_commit_subject(&fresh), None, "a fresh branch");
+
+    let head = git(&f.wt, &["rev-parse", "HEAD"]);
+    git(&f.wt, &["checkout", "-q", "--detach", &head]);
+    assert_eq!(cli.own_commit_subject(&f.wt), None, "a detached HEAD");
+}
+
+/// Feature 1504 (L7, review A F1): syncing the branch with `main` makes a merge commit the latest
+/// one main lacks; the title skips it and stays the branch's own work.
+#[test]
+fn a_merge_from_the_default_branch_is_not_the_own_commit_subject() {
+    let f = fixture();
+    let cli = GitCli::new();
+    write(&f.root, "old.rs", "one\ntwo\nthree\nfour\nfive\n");
+    commit_all(&f.root, "main moves on");
+    git(
+        &f.wt,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "--no-edit",
+            "-m",
+            "Merge branch 'main' into feature",
+            "main",
+        ],
+    );
+    assert_eq!(
+        cli.own_commit_subject(&f.wt).as_deref(),
+        Some("feature work")
+    );
+}
+
+#[test]
+fn without_a_default_branch_or_a_repository_there_is_no_own_commit_subject() {
+    let f = fixture_on("trunk");
+    let cli = GitCli::new();
+    assert_eq!(cli.own_commit_subject(&f.wt), None, "no default branch");
+    let plain = tempfile::tempdir().unwrap();
+    assert_eq!(
+        cli.own_commit_subject(plain.path()),
+        None,
+        "not a repository"
+    );
+}

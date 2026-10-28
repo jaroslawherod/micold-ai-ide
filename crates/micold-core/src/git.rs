@@ -238,6 +238,12 @@ pub trait Git {
     /// `git log -g --ignore-missing --date=unix --format=%gD%x09%H%x09%gs <refs> --` prints them
     /// (feature 1003, research R1). A ref without a reflog is skipped. Read-only.
     fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String>;
+
+    /// The subject of the latest commit on the branch checked out in the worktree at `dir` that
+    /// is not on the default branch and not a merge (feature 1504, FR-001 item 6, L7): `None` on
+    /// a detached `HEAD`, without a review base, with no commit of its own, on error or timeout.
+    /// Read-only.
+    fn own_commit_subject(&self, dir: &Path) -> Option<String>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -842,6 +848,10 @@ impl Git for GitCli {
     fn reflogs(&self, dir: &Path, refs: &[String]) -> io::Result<String> {
         GitCli::reflogs(self, dir, refs)
     }
+
+    fn own_commit_subject(&self, dir: &Path) -> Option<String> {
+        GitCli::own_commit_subject(self, dir)
+    }
 }
 
 /// How many of a failed fetch's output lines are retained for its error message. Generous, because
@@ -987,6 +997,9 @@ struct FakeState {
     /// worktree dir -> the answer `whole_change` gives, as scripted (feature 1271); an unscripted
     /// dir has an empty whole change.
     whole_changes: BTreeMap<PathBuf, crate::review::marks::WholeChange>,
+    /// worktree dir -> the subject `own_commit_subject` answers, as scripted (feature 1504); an
+    /// unscripted dir has no commit of its own.
+    own_commits: BTreeMap<PathBuf, String>,
 }
 
 impl FakeGit {
@@ -1015,6 +1028,15 @@ impl FakeGit {
             .borrow_mut()
             .whole_changes
             .insert(dir.into(), change);
+        self
+    }
+
+    /// Answer `own_commit_subject(dir)` with `subject` (feature 1504, L7).
+    pub fn with_own_commit(self, dir: impl Into<PathBuf>, subject: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .own_commits
+            .insert(dir.into(), subject.to_string());
         self
     }
 
@@ -1627,5 +1649,10 @@ impl Git for FakeGit {
             .get(&(dir.to_path_buf(), refs.to_vec()))
             .cloned()
             .ok_or_else(|| io::Error::other("no reflog scripted"))
+    }
+
+    /// The subject scripted by [`FakeGit::with_own_commit`], else none.
+    fn own_commit_subject(&self, dir: &Path) -> Option<String> {
+        self.inner.borrow().own_commits.get(dir).cloned()
     }
 }
