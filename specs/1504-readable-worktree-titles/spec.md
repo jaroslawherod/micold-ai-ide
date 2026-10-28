@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-10-28 — shipped in PRs #1557, #1566, #1568, #1572, #1575, #1580
 
 **Input**: User description: "Implement GitHub issue #1504: Worktrees without a GitHub issue title
 should still show a readable overview. Follow-up to #1488, which fixes the main cause: a closed

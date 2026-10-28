@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M5 implemented on 1504-m5 (T042–T046), full gate green, reviews A/B pending; earlier: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
-- **Next step**: orchestrator runs scoped M4 review A round 2 (sonnet) on fix range `6abaeabc2..5c220dc75`, and the M4 visual pass; then fill REVIEW_A2/VISUAL_PASS in scratchpad pr-body-m4.md and open the M4 PR after M3's
+- **Phase**: close — Polish T047/T050 and the carried docs notes done on branch 1504-close (stacked on 1504-m5, PR #1580); gate green; tdd-verify and close diff review pending
+- **Next step**: orchestrator runs `speckit-tdd-verify` (autopilot-worker) and the close diff review (sonnet, specs/docs truth + test correctness), continues this unit with findings; then Phase `done`, Next step `handoff`, and the close PR is opened from scratchpad pr-title-close.md / pr-body-close.md
 
 ## Pull requests
 
@@ -20,8 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1566 | M1 | merged | 2104379be |
 | #1568 | M2 | merged | fb29142a7 |
 | — | M3 | #1572, merged | 6f67d1beb |
-| — | M4 | pending (not opened; branch 1504-m4, stacked on M3) | — |
-| — | M5 | pending (not opened; branch 1504-m5, stacked on M4) | — |
+| — | M4 | #1575, merged | — |
+| — | M5 | #1580, in CI | — |
+| — | close | pending (not opened; branch 1504-close, stacked on M5) | — |
 
 ## Milestones
 
@@ -75,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
 | M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
+| Close: tdd-verify (autopilot-worker) | 1 | — | pending (orchestrator; `speckit-tdd-verify` on specs/1504-readable-worktree-titles, save to tdd/verification.md; speckit-converge skipped only if every milestone has a CLEAN review B — M3 round 2 and M5 B not recorded in this ledger, so run it) |
+| Close diff review (sonnet) | 1 | — | pending (orchestrator; no rubric file: correctness of the tests and truth of the docs; diff `git diff 1e4021a18..HEAD` (close docs: worktrees-and-sessions.md, settings.md, tasks.md, spec.md, quickstart.md) plus `origin/main...HEAD` for the feature) |
 
 ## Red runs (M5)
 
