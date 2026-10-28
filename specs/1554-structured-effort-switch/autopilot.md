@@ -73,6 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 scoped gate (fix diff) | 2 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`, `structured_effort` 16/16 |
 | Full gate M2 | 1 | — | red: `a_stored_level_the_model_does_not_take_launches_with_none` asserted the session runs as soon as the stand-in recorded its argv, before the daemon registered the process (a race in this milestone's test). Now waits for it (`eventually`); 3/3 runs green |
 | Full gate M2 | 2 | — | green: `scripts/gate.sh` at 33f5bc8e8 (origin/main b18b611d1; `PROTOCOL_VERSION` there still 72, branch 73) |
+| M3 scoped gate | 1 | — | green but for the two root-only daemon tests (as M2: `sessions` `worktree_delete_blocked_by_an_unremovable_path…`, `settings` `a_service_write_over_an_unreadable_settings_file…`). fmt, clippy `-p micold-daemon --all-targets -D warnings` green; `cargo test -p micold-daemon --no-fail-fast` 104 binaries ok; `structured_effort` 22/22 (3 more runs green), `structured_model`, `structured_permission`, `structured_switch`, `structured_input`, `structured_commands` green |
 
 ## Declined review findings
 
@@ -81,7 +82,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: M3 T018–T021 implemented test-first and committed (0dcb153f1), scoped gate green (see *Review rounds*).
+- **Next step**: reviews A (code-review, high) and B (conformance) round 1 on `origin/main...HEAD` (5b7a23904..0dcb153f1), snapshot `ac16d784e736a09f0c149c09183edba84f17b755:0dcb153f18ef0d4e621843356211dc7f5a3b409b`; then fix findings, full gate (`scripts/gate.sh`), push, PR body.
+- **Main paths**: `crates/micold-daemon/src/structured.rs` (`EffortAsk`, `PendingEffort`, `defer_effort`, `defer_effort_level`, `reapply_effort`, `flush_deferred`, `write_deferred_effort`, `effort_sent`/`cli_model`), `crates/micold-daemon/src/state.rs` (`pick_effort` busy branch, `EffortPicks.deferred`, `DeferredEffort`, `EffortAnswer`, `follow_effort_answer`, `effort_level`, `reapply_effort`, `follow_model_answer`, `pick_model` busy branch, turn-end `flush_deferred`), `crates/micold-daemon/src/server.rs` (`spawn_effort_answers`), tests `crates/micold-daemon/tests/structured_effort.rs`, `structured_permission.rs`, `docs/daemon.md`.
+- **Open findings**: none. PR: none yet.
 
 ## Open escalation
 
