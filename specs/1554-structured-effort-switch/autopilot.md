@@ -41,7 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
-| D10 | M1 | `/effort`'s palette entry: whose words? | The app's description replaces the CLI's (FR-009, R6); the CLI's `argumentHint` (which lists `auto`, `ultracode [on\|off]`) is kept as reported | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed` |
+| D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
 
 ## Review rounds
 
@@ -55,7 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | b3b75d3032d7a421da8cbd34fcd4c3151089a0b8:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CHANGES: F1 MAJOR (M4 verified against guide text M5 ships → Part B 7 split 7a/7b), F2–F4 MINOR — all fixed. Fresh headless `claude -p`, read-only tools |
 | Tasks | 2 | 46f2f3cf63681dad6afe2f105902d3c5b928d369:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CLEAN (scoped re-review of the fix diff) |
 | M1 scoped gate | 1 | — | green: fmt, clippy (core, workspace), client and daemon tests; core tests green with the four root-only tests skipped (they need a non-root user; `scripts/gate.sh` runs them unprivileged). Built with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`: the default build filled the disk |
-| A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | pending: run by the orchestrator in a fresh context |
+| A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN: 2 MINOR — F1 `/effort` kept the CLI's argument hint (lists `ultracode`, `auto`): app hint set, D10 updated; F2 `supportsEffort: false` without a level list read as unknown: now no effort — both fixed test-first. Run by the orchestrator in a fresh context |
+| B (conformance) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN, no findings. Verify passed: core lib + the five integration test binaries; daemon/client `cargo check --tests` clean. Run by the orchestrator |
 
 ## Declined review findings
 

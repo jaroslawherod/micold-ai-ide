@@ -10,7 +10,7 @@ Names are Rust items; **new** marks an item that does not exist on `main`. Resea
 | `EffortLevel` | newtype over `String`; serde `try_from`/`into` `String` | lowercase ASCII letters only, 1–16 bytes, not `default`, `auto` or `ultracode`; `EffortLevel::parse(&str)` lowercases first; checked again when read back from the store | FR-002, FR-007 |
 | `EFFORT_LEVELS` | `[&str; 5]` = `low, medium, high, xhigh, max` | least to most; offered when none are reported | FR-002 |
 | `EffortChoice` | `Default` \| `Level(EffortLevel)`; `#[default] Default` | `is_default()`; a store skips `Default` | FR-010, FR-011 |
-| `EffortSupport` | `{ supported: bool, levels: Vec<EffortLevel> }` | from a reported model's `supportsEffort` / `supportedEffortLevels`; a name `EffortLevel::parse` refuses is dropped | FR-003 |
+| `EffortSupport` | `{ supported: bool, levels: Vec<EffortLevel> }` | from a reported model's `supportsEffort` / `supportedEffortLevels`; `supportsEffort: false` alone → `{ false, [] }`; a name `EffortLevel::parse` refuses is dropped | FR-003 |
 | `effort_support(models: &[ReportedModel], model: &ModelChoice) -> Option<&EffortSupport>` | | the model whose `value == model.cli_value()`; none listed, or listed without effort fields → `None` (unknown) | FR-002, FR-010a |
 | `offered_levels(Option<&EffortSupport>) -> Vec<EffortLevel>` | | `supported` with ≥ 1 level → those levels in the CLI's order; otherwise `EFFORT_LEVELS` | FR-002, D4 |
 | `effective_level<'a>(&'a EffortChoice, Option<&EffortSupport>) -> Option<&'a EffortLevel>` | | `Default` → `None`; `Level(l)` → `Some(l)` when support is `None` or `supported && levels ∋ l`; else `None` | FR-003, FR-010a, FR-011 |
@@ -24,13 +24,13 @@ Names are Rust items; **new** marks an item that does not exist on `main`. Resea
 
 | Item | Change | FR |
 |---|---|---|
-| `ReportedModel` (`event.rs`) | `+ effort: Option<EffortSupport>` (`#[serde(default)]`), filled by `commands::parse_initialize` from `supportsEffort` / `supportedEffortLevels`; either absent → `None` | FR-002, FR-003 |
+| `ReportedModel` (`event.rs`) | `+ effort: Option<EffortSupport>` (`#[serde(default)]`), filled by `commands::parse_initialize` from `supportsEffort` / `supportedEffortLevels`; `supportsEffort` absent or not a boolean, or `true` without a level list → `None`; `false` → no effort, whatever the list | FR-002, FR-003 |
 | `StructuredEvent::EffortChanged` **new**, daemon note | `{ effort: EffortChoice }`: the choice from here on | FR-004, FR-006 |
 | `StructuredEvent::EffortRefused` **new**, daemon note | `{ effort: EffortChoice, message: String }`: a deferred change the CLI refused | FR-005 |
 | `SavedEvent` (`saved.rs`) | existing `CommandsReported` keeps its encoding through **new** `SavedReportedModelV1` (`value`, `display_name`, `description`); **new** variants appended after `KindSwitched`: `CommandsReportedV2 { commands, models: Vec<ReportedModel> }` (every new write), `EffortChanged`, `EffortRefused`. `EVENTS_FORMAT_VERSION` stays 1 | FR-010 |
 | `control::encode_apply_effort(id, Option<&EffortLevel>)` **new** | `{"type":"control_request","request_id":…,"request":{"subtype":"apply_flag_settings","settings":{"effortLevel":"<level>"\|null}}}\n` | FR-004, FR-006 |
 | `control::parse_apply_effort(&ControlOutcome) -> Result<(), EffortRefusal>` **new** | `Success(_)` → `Ok`; `Error { message, .. }` → `Refused { message }` | FR-005 |
-| `commands::APP_COMMANDS` **new** | `[MODEL_COMMAND, EFFORT_COMMAND]`; `EFFORT_COMMAND = "effort"`; the kind rule and the fallback list use it, so `/effort` is one `App` entry with the app's description | FR-009 |
+| `commands::APP_COMMANDS` **new** | `[MODEL_COMMAND, EFFORT_COMMAND]`; `EFFORT_COMMAND = "effort"`; the kind rule and the fallback list use it, so `/effort` is one `App` entry with the app's description and argument hint `<default\|low\|medium\|high\|xhigh\|max>` (not the CLI's, which lists `auto` and `ultracode`) | FR-009 |
 | `DraftCommand::Effort(Option<String>)` **new** | `classify_draft`: `/effort` + blank rest → `Effort(None)`, else `Effort(Some(rest trimmed))` | FR-007 |
 | `EntryKind::EffortChanged` **new** (`transcript/entry.rs`) | `{ effort: EffortChoice, refused: Option<String> }` from the two notes (`transcript/build.rs`) | FR-004, FR-005 |
 
