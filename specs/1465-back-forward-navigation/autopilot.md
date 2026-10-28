@@ -7,26 +7,27 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1465
-- **Worktree branch**: 1465-m3 (M3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
+- **Worktree branch**: 1465-m4 (M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M3 implemented (T024–T026 ticked); full gate green (4f0e18d13; first run failed root_state_is_shared because a bin test read history.list, fixed); reviews A and B round 1 pending
-- **Next step**: full gate on M3, then review A (code-review high) and review B (conformance) on range fa3e7bf39..HEAD, then pr-title-m3.md / pr-body-m3.md
+- **Phase**: M4 implementing (T027–T033)
+- **Next step**: M4 TDD cycles 15+ (runs.known, cross-project resolve, shell lookup), then gates and reviews A/B on M4
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1559 | design | merged | ed945a97b54efe6e58c68c39a91c29f019c3741d |
-| #1567 | M1 | open (head c359a7871, gate green) | — |
+| #1567 | M1 | merged | ebd7090c556500a3b530604d4cde73f91b3b7ddc |
+| (pending) | M2 + M3 (one PR) | being opened by the orchestrator | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | open |
-| M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | — | implemented, reviews clean, PR not opened |
-| M3 | T024–T026 | light | The Review tab's own Back first | — | implemented, gate green, reviews pending |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | planned |
+| M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
+| M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
+| M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implementing |
 | M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | planned |
 
 ## Decisions
@@ -57,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (Forward with nothing shown correctly does not offer the current entry; no fix needed) |
 | Review B M1 (conformance, scoped) | 2 | range 47db7b665..7dcc454a0 (pre-rebase) | CLEAN, 1 MINOR (cycle-log red runs for cycles 1–8 not reproducible from committed code since the stubs were not committed; the log states it honestly; no fix needed) |
 | Review A M2 (code-review high) + Review B M2 (conformance) | 1 | 637f832282d1952c56e904236b76cf62167ffc9e:ac1817bca4303fa68d3693bbf688cf878c2ae420 | A: CLEAN, no findings; B: CLEAN, no findings (range c359a7871..fa3e7bf39) |
+| Review A M3 (code-review high) | 1 | range fa3e7bf39..7e775ab64 | CLEAN, no findings |
+| Review B M3 (conformance) | 1 | range fa3e7bf39..7e775ab64 | CLEAN, 1 MINOR (tests/history.rs:637: nothing checks 'list untouched' after BrowseBack is applied and observe_place runs — fixed in M4: the test applies BrowseBack, observes, and asserts entries and position again) |
 
 ## Declined review findings
 

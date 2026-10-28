@@ -656,6 +656,14 @@ fn back_in_a_browsing_review_tab_is_the_tabs_own_back() {
             )],
             "{source:?}"
         );
+        // Applied as the shell runs it, then observed: still nothing recorded or moved.
+        micold_client::features::changes::update(
+            &mut state.changes,
+            micold_client::features::changes::Msg::BrowseBack,
+        );
+        state.observe_place();
+        assert_eq!(state.history.list.position(), position, "{source:?}");
+        assert_eq!(entries(&state), before, "{source:?}: applied");
     }
 }
 
