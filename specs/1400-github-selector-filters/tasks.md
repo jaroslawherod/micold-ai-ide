@@ -185,9 +185,9 @@ Advanced and runs the query once; an unrun draft is not remembered.
 
 **Independent Test**: run Q on A, type Q2 without running, reopen: Advanced, Q in the input, Q run once.
 
-- [ ] T050 [US2] Write failing reducer tests in `crates/micold-client/tests/github_filter_state.rs`: reopening in Advanced with Q runs Q once as soon as the GitHub source shows (US2 AS3, FR-013), an empty run is not remembered as run (M5 review), none ever run → the prompt and nothing sent; Q2 typed and not run → reopen shows Q (AS4); outcomes `Remembered(Mode)` at each switch and `Remembered(Query)` at each accepted run, never for a draft or a refused run
-- [ ] T051 [US2] Build `mode`, `last_run` and `draft` from `RememberedSelector` in `from_remembered`, the advanced branch of the source-shown event, and the `Mode`/`Query` outcomes in `crates/micold-client/src/features/worktree_form/github_filter.rs`, and the prompt text in the rows area in `crates/micold-client/src/ui/github_filter.rs`, until T050 passes
-- [ ] T052 [US2] Add "the mode and the last run query are remembered; a query typed but not run is not" to "Filtering GitHub issues" in `docs/user-guide/worktrees-and-sessions.md`
+- [x] T050 [US2] Write failing reducer tests in `crates/micold-client/tests/github_filter_state.rs`: reopening in Advanced with Q runs Q once as soon as the GitHub source shows (US2 AS3, FR-013), an empty run is not remembered as run (M5 review), none ever run → the prompt and nothing sent; Q2 typed and not run → reopen shows Q (AS4); outcomes `Remembered(Mode)` at each switch and `Remembered(Query)` at each accepted run, never for a draft or a refused run
+- [x] T051 [US2] Build `mode`, `last_run` and `draft` from `RememberedSelector` in `from_remembered`, the advanced branch of the source-shown event, and the `Mode`/`Query` outcomes in `crates/micold-client/src/features/worktree_form/github_filter.rs`, and the prompt text in the rows area in `crates/micold-client/src/ui/github_filter.rs`, until T050 passes
+- [x] T052 [US2] Add "the mode and the last run query are remembered; a query typed but not run is not" to "Filtering GitHub issues" in `docs/user-guide/worktrees-and-sessions.md`
 
 **Checkpoint**: US2 AS1–AS5 pass; quickstart §B B11 passes.
 

@@ -13,8 +13,9 @@
 //! listing, or 034's listing once the filter is the default again, FR-009), and the seq check drops
 //! every older answer.
 //!
-//! The project remembers its basic filters (FR-021): the form opens with them (`Msg::Restored`,
-//! read by the shell), and each change hands back `Outcome::GithubSelectorRemembered`. A
+//! The project remembers its mode, basic filters and last run query (FR-021): the form opens with
+//! them (`Msg::Restored`, read by the shell), and each change, switch and accepted run hands back
+//! `Outcome::GithubSelectorRemembered`; a draft typed and not run is not remembered. A
 //! remembered label the repository no longer has still applies, its chip saying so.
 //!
 //! The selector is kept while the form is open, across a change of source or provider (spec Edge
@@ -191,11 +192,21 @@ fn label_failure(error: &IssueLoadError, source: NoticeSource<'_>) -> String {
 }
 
 impl GithubSelector {
-    /// The selector a form opens with, from what the project remembers (data-model §10): its basic
-    /// filters, applied as the GitHub source shows (US2 AS1).
+    /// The selector a form opens with, from what the project remembers (data-model §10): its mode,
+    /// basic filters and last run query, applied as the GitHub source shows (US2 AS1, AS3). The
+    /// input starts as the last run query; a query none ran, or an empty one, is no run (FR-013).
     pub fn from_remembered(remembered: &RememberedSelector) -> GithubSelector {
+        let last_run = UserQuery::parse(&remembered.query)
+            .ok()
+            .filter(|query| remembered.ran && !query.as_str().is_empty());
         GithubSelector {
+            mode: remembered.mode,
             basic: remembered.basic.clone(),
+            draft: last_run
+                .as_ref()
+                .map(|query| query.as_str().to_string())
+                .unwrap_or_default(),
+            last_run,
             ..GithubSelector::default()
         }
     }
@@ -599,8 +610,8 @@ pub fn refusal_line(messages: &[String]) -> String {
     )
 }
 
-/// The filters' reducer. A change of the basic filters hands back
-/// `Outcome::GithubSelectorRemembered` for the shell to write (FR-021).
+/// The filters' reducer. A change of the basic filters, a switch of mode and an accepted run hand
+/// back `Outcome::GithubSelectorRemembered` for the shell to write (FR-021).
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     let next_issue_seq = state.worktree_form.issue_request_seq + 1;
     let next_filter_seq = state.worktree_form.filter_request_seq + 1;
@@ -611,6 +622,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     let mut reload = false;
     let mut run = false;
     let mut asked = false;
+    let mut remember = None;
     match msg {
         // Answers apply whatever the form is doing, as a load's answer does.
         Msg::Loaded { seq, result, .. } => {
@@ -703,6 +715,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             selector.basic.set_state(state);
         }
         Msg::ModeChanged(mode) => {
+            let before = form.github_selector.mode;
+            remember = (before != mode).then_some(SelectorChange::Mode(mode));
             if form.change_github_mode(mode) {
                 // Not remembered as a basic change: the basic filters did not change.
                 form.issues = IssueList::Loading {
@@ -718,6 +732,12 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             // A refusal takes a fresh seq too, so an answer still in flight cannot replace it.
             state.worktree_form.issue_request_seq = next_issue_seq;
             run = form.run_github_query();
+            // FR-021: an accepted run only; a refused or an empty one is not a run.
+            if run {
+                if let Some(query) = &form.github_selector.last_run {
+                    remember = Some(SelectorChange::Query(query.as_str().to_string()));
+                }
+            }
         }
         Msg::Run => {}
         Msg::ClearedAll => {
@@ -733,6 +753,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         };
     }
     let mut outcomes = Vec::new();
+    if let (Some(change), Some(project)) = (remember, state.workspace.active.clone()) {
+        outcomes.push(crate::features::Outcome::GithubSelectorRemembered { project, change });
+    }
     if reload {
         form.issues = IssueList::Loading {
             seq: next_issue_seq,
