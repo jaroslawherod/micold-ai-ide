@@ -12,6 +12,18 @@
 | Window state | `cargo test -p micold-client --test features_command_palette --test features_effort_picker` | picker rows and marks, unsupported wording, `/effort` opens / picks / refuses with draft kept (FR-001–FR-003, FR-007) |
 | Everything else unchanged | `scripts/gate.sh` (cloud) / `mise run gate` | every existing test green (SC-006) |
 
+### Part A results (close unit, 2026-10-28, main 946232f2c)
+
+| Check | Result |
+|---|---|
+| Levels, choice, support, argument | `micold-core` lib filtered: 24 passed |
+| Recorded shapes | `structured_parse` 13, `structured_commands` 22 passed |
+| Marker and saved history | `structured_transcript` 73; lib `structured::saved` 14 passed |
+| Store, argv, wire | `session_store` 47, `protocol_roundtrip` 22, `schema_hash` 14 passed |
+| Daemon against the stand-in | `structured_effort` 30 passed; the binary 60 more runs in a loop, no failure (the first close run caught the M6 race, fixed in #1604) |
+| Window state | `features_command_palette` 23, `features_effort_picker` 16 passed |
+| Everything else unchanged | `scripts/gate.sh` (see the close PR) |
+
 ## Part B — manual / visual pass (GUI exception)
 
 Prerequisite: a logged-in `claude` on `PATH`; the dev client against a scratch project.

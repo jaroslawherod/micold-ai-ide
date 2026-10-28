@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M6
-- **Next step**: M6 review A round 2 (scoped to the fix diff), then the orchestrator opens the PR (body in the scratchpad) and merges; then a new close unit (speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR).
+- **Phase**: close
+- **Next step**: close unit 2: T032 (quickstart Part A on main 946232f2c), speckit-tdd-verify (converge skipped: every milestone has a CLEAN review B), close review, gate, close PR.
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
 | #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e73f88e639035794414eb651ada04dfe |
 | #1599 | M5: `/effort` in the composer, daemon backstop, guide | merged | 5a109a9617e2bd48578b77236d51ae1ec3ba1a86 |
+| #1604 | M6: a refused deferred pick is never asked again; stand-in start race | merged | 946232f2cd4d214b68a2f9f5c4d50a41b81b67c7 |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | #1599 | merged |
-| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | implemented, gate green, PR to open |
+| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | #1604 | merged |
 
 ## Decisions
 
@@ -107,6 +108,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CHANGES: A1 MAJOR race narrowed not closed (`follow_effort_answer` took the deferred pick and put the choice back under two locks; a failed put back still re-applied) → choice put back under the lock that takes the pick, no re-apply on failure; A2 MINOR a deferred write that failed held re-applies → `effort_pick_written` false on a failed write; A3 MINOR stale `reapply_held` → reset by an unheld re-apply and a replacing busy pick. All fixed (cycle log 17: why no new test). Run by the orchestrator |
 | B (conformance) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CLEAN, 2 MINOR: B1 as A3 (fixed); B2 record the 100-run Verify (B ran 40, 0 failures; recorded here, re-run after the fix). Run by the orchestrator |
 | M6 after review fixes | 1 | — | `structured_effort` 30/30, the whole binary 100 runs in a loop with no failure (Verify); full gate `scripts/gate.sh` green on the fix tree (parent f348ed298) |
+| Close: quickstart Part A (T032) | 2 | — | all green on main 946232f2c (results in quickstart.md); `structured_effort` 30/30 plus 60 runs in a loop with no failure |
 
 ## Declined review findings
 
@@ -126,5 +128,7 @@ None.
 - `pick_model` (#943, state.rs) has the pattern review A M2 F1 fixed for effort: a stopped or terminal session's stored model pick does not bump `model_picks`, so a late answer to an earlier idle pick can replace it. Out of scope for #1554.
 - Show Claude Code's resolved default level (`Default (medium)`) by reading `get_settings` → `applied.effort` after each launch and change (research R10); not in the spec.
 - Visual pass M4 observed raw JSON "Raw event" blocks in the transcript at session start; unrelated to #1554, not fixed here.
+- M6 review A round 2 (low): if `catalog.set_effort` fails after a refusal in `follow_effort_answer` (state.rs), the held re-apply is dropped and the catalog keeps the refused level while the CLI stays on the previous one.
+- M6 review A round 2 (low, pre-existing): in `write_deferred_effort` (structured.rs ~1079–1087) `take()` runs before `effort_pick_sent.store(true)`, a narrow window where a concurrent re-apply writes the catalog's level after the pick.
 
 Note: this unit had no Agent tool; the spec review ran as a fresh headless `claude -p` process (read-only tools) instead of an `autopilot-reviewer` subagent.

@@ -247,7 +247,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 7: Polish (close unit)
 
-- [ ] T032 Run quickstart Part A and record the results in
+- [x] T032 Run quickstart Part A and record the results in
   `specs/1554-structured-effort-switch/quickstart.md`
 
 ## Phase 8: Daemon — a refused deferred pick is never asked again (M6; FR-005, found at close)
