@@ -30,6 +30,8 @@
 //!
 //! Nothing here logs or notifies a filter value, the scoped search text or a typed label (FR-024):
 //! `tests/issues_are_requested_only_on_named_events.rs` scans this file for it.
+//!
+//! [`ISSUE_SEARCH_DEBOUNCE`]: crate::shell::issues::ISSUE_SEARCH_DEBOUNCE
 
 use std::path::PathBuf;
 
@@ -43,7 +45,7 @@ use micold_core::github_filter::{
 };
 
 use crate::shell::issues::{
-    remember_github_selector, search_after_pause, start_issue_load, GhJob, ISSUE_SEARCH_DEBOUNCE,
+    after_debounce, remember_github_selector, search_after_pause, start_issue_load, GhJob,
 };
 use crate::App;
 
@@ -111,12 +113,9 @@ pub fn on_filter(app: &mut App, msg: GithubMsg) -> Task<Message> {
         .pending_github_people_search()
         .filter(|seq| *seq > choice_before)
     {
-        work.push(Task::perform(
-            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
-            move |()| {
-                Message::WorktreeForm(FormMsg::GithubFilter(GithubMsg::PeopleSearchDue { seq }))
-            },
-        ));
+        work.push(after_debounce(Message::WorktreeForm(
+            FormMsg::GithubFilter(GithubMsg::PeopleSearchDue { seq }),
+        )));
     }
     // A people search starts when its debounce ended (its seq is the one due) or on a Retry.
     if let Some((seq, text)) = app

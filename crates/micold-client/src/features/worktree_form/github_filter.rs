@@ -672,19 +672,9 @@ impl GithubSelector {
     /// The words of `field`'s chosen value, as the field shows it; empty when none is chosen.
     pub fn shown(&self, field: ValueField) -> String {
         let shown = match field {
-            ValueField::Assignee => self.basic.assignee().map(|assignee| match assignee {
-                Assignee::Me => "Me",
-                Assignee::Nobody => "No assignee",
-                Assignee::User(login) => login.as_str(),
-            }),
-            ValueField::Author => self.basic.author().map(|author| match author {
-                Author::Me => "Me",
-                Author::User(login) => login.as_str(),
-            }),
-            ValueField::Milestone => self.basic.milestone().map(|milestone| match milestone {
-                Milestone::Nobody => "No milestone",
-                Milestone::Titled(title) => title.as_str(),
-            }),
+            ValueField::Assignee => self.basic.assignee().map(Assignee::words),
+            ValueField::Author => self.basic.author().map(Author::words),
+            ValueField::Milestone => self.basic.milestone().map(Milestone::words),
         };
         shown.unwrap_or_default().to_string()
     }

@@ -15,6 +15,8 @@
 //! the listing is reloaded when the reducer accepted a pick, a clear or **Clear filters** that
 //! changed the chosen filters and handed out a new issue seq (FR-008, research R6). Nothing else
 //! here sends anything: not opening the form, not showing the Jira source, not a redraw.
+//!
+//! [`ISSUE_SEARCH_DEBOUNCE`]: crate::shell::issues::ISSUE_SEARCH_DEBOUNCE
 
 use iced::Task;
 use micold_client::app::Message;
@@ -24,7 +26,7 @@ use micold_core::github::IssueLoadError;
 use micold_core::jira::{ApiToken, JiraConnection, JiraSource};
 use micold_core::jira_filter::FilterKind;
 
-use crate::shell::issues::{jira_request, start_jira_load, ISSUE_SEARCH_DEBOUNCE};
+use crate::shell::issues::{after_debounce, jira_request, start_jira_load};
 use crate::App;
 
 /// A filter message: the reducer takes it, then the choice request or the listing reload it newly
@@ -61,12 +63,9 @@ pub fn on_filter(app: &mut App, msg: FilterMsg) -> Task<Message> {
         .pending_people_search()
         .filter(|seq| *seq > choice_before)
     {
-        work.push(Task::perform(
-            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
-            move |()| {
-                Message::WorktreeForm(FormMsg::JiraFilter(FilterMsg::PeopleSearchDue { seq }))
-            },
-        ));
+        work.push(after_debounce(Message::WorktreeForm(FormMsg::JiraFilter(
+            FilterMsg::PeopleSearchDue { seq },
+        ))));
     }
     // A search starts when its debounce ended (its seq is the one due) or on a Retry (a new seq).
     if let Some((seq, text)) = app
