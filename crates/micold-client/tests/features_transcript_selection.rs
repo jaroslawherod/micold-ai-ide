@@ -325,10 +325,9 @@ fn a_user_message_copies_its_text_as_drawn() {
     );
 }
 
-/// An effort note draws no text (#1554), so it copies none: copying across it joins the rows
-/// either side of it.
+/// An effort marker copies the words it draws (#1554 M4, FR-004, FR-005), as a model marker does.
 #[test]
-fn an_effort_note_copies_nothing() {
+fn an_effort_marker_copies_its_words() {
     use micold_core::structured::effort::{EffortChoice, EffortLevel};
     let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
     let held = Held::new(
@@ -353,12 +352,22 @@ fn an_effort_note_copies_nothing() {
         .map(|(n, _)| n)
         .collect();
     assert_eq!(notes.len(), 2, "both effort notes are entries");
-    for n in notes {
-        assert_eq!(held.units_of(held.body(n)), vec![]);
-    }
+    let changed = "Reasoning effort: high from here on";
+    let refused = "Reasoning effort high was not applied: not supported";
+    assert_eq!(
+        held.units_of(held.body(notes[0])),
+        vec![(vec![0], changed.to_owned())]
+    );
+    assert_eq!(
+        held.units_of(held.body(notes[1])),
+        vec![(vec![0], refused.to_owned())]
+    );
     let last = held.transcript.entries().count() - 1;
     let all = held.rows_selection(held.body(0), held.body(last));
-    assert_eq!(copy_text(&held.view(), &all), "before\nafter");
+    assert_eq!(
+        copy_text(&held.view(), &all),
+        format!("before\n{changed}\n{refused}\nafter")
+    );
 }
 
 /// S-3, R3: markdown copies its shown text; list markers before their item text on its line,

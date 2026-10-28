@@ -464,8 +464,6 @@ pub struct State {
     composers: HashMap<SessionId, Composer>,
     /// The command palettes and model pickers open over these composers (#943).
     pub palette: crate::features::command_palette::State,
-    /// The effort pickers open beside the model switchers (#1554 FR-002).
-    pub effort: crate::features::effort_picker::EffortPickerState,
     /// The open offer to switch a Claude session's kind, with its confirmation step once the
     /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
     pub switch_offer: Option<crate::features::session::SwitchOffer>,
@@ -526,7 +524,6 @@ impl State {
     pub fn forget(&mut self, session: SessionId) {
         self.composers.remove(&session);
         self.palette.forget(session);
-        self.effort.forget(session);
         if self
             .switch_offer
             .as_ref()

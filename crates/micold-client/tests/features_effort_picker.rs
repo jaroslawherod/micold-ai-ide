@@ -88,8 +88,7 @@ fn set_effort(w: &mut Window, s: SessionId, effort: EffortChoice) {
 }
 
 fn rows(w: &Window, s: SessionId) -> Vec<EffortRow> {
-    w.composers
-        .effort
+    w.effort_picker
         .picker(s)
         .expect("the picker is open")
         .rows()
@@ -109,7 +108,7 @@ fn current(w: &Window, s: SessionId) -> Vec<EffortChoice> {
 }
 
 fn highlighted(w: &Window, s: SessionId) -> Option<EffortChoice> {
-    let picker = w.composers.effort.picker(s)?;
+    let picker = w.effort_picker.picker(s)?;
     picker
         .rows()
         .get(picker.highlight()?)
@@ -149,7 +148,7 @@ fn the_control_is_offered_only_for_a_structured_claude_code_session() {
             "{cli:?} {kind:?} offers no effort (FR-012)"
         );
         w.open_effort_picker(s);
-        assert!(w.composers.effort.picker(s).is_none(), "nor opens a picker");
+        assert!(w.effort_picker.picker(s).is_none(), "nor opens a picker");
     }
 }
 
@@ -205,12 +204,12 @@ fn a_model_without_effort_still_offers_the_five_levels() {
 fn the_trigger_toggles_and_a_dismissal_closes() {
     let (mut w, s) = window(None);
     w.effort_picker_toggled(s);
-    assert!(w.composers.effort.picker(s).is_some(), "opened");
+    assert!(w.effort_picker.picker(s).is_some(), "opened");
     w.effort_picker_toggled(s);
-    assert!(w.composers.effort.picker(s).is_none(), "closed again");
+    assert!(w.effort_picker.picker(s).is_none(), "closed again");
     w.open_effort_picker(s);
-    w.composers.effort.close(s);
-    assert!(w.composers.effort.picker(s).is_none(), "dismissed");
+    w.effort_picker.close(s);
+    assert!(w.effort_picker.picker(s).is_none(), "dismissed");
 }
 
 #[test]
@@ -224,7 +223,7 @@ fn the_arrows_move_the_highlight_and_enter_picks_it() {
     w.effort_picker_moved(s, Direction::Prev);
     assert_eq!(highlighted(&w, s), Some(chosen("medium")));
     assert_eq!(w.effort_picked(s, None), Some(chosen("medium")), "Enter");
-    assert!(w.composers.effort.picker(s).is_none(), "a pick closes it");
+    assert!(w.effort_picker.picker(s).is_none(), "a pick closes it");
 }
 
 #[test]
@@ -248,7 +247,7 @@ fn picking_the_current_choice_closes_and_asks_nothing() {
     set_effort(&mut w, s, chosen("high"));
     w.open_effort_picker(s);
     assert_eq!(w.effort_picked(s, None), None, "already the choice");
-    assert!(w.composers.effort.picker(s).is_none());
+    assert!(w.effort_picker.picker(s).is_none());
 }
 
 #[test]
@@ -256,10 +255,10 @@ fn the_picker_is_per_session() {
     let (mut w, s) = window(None);
     let other = SessionId::new();
     w.open_effort_picker(s);
-    assert!(w.composers.effort.picker(other).is_none());
-    w.composers.effort.forget(s);
+    assert!(w.effort_picker.picker(other).is_none());
+    w.effort_picker.forget(s);
     assert!(
-        w.composers.effort.picker(s).is_none(),
+        w.effort_picker.picker(s).is_none(),
         "forgotten with its session"
     );
 }

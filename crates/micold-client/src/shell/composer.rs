@@ -164,7 +164,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 set_effort(app, session, choice);
             }
         }
-        Msg::EffortPickerClosed(session) => app.core.composers.effort.close(session),
+        Msg::EffortPickerClosed(session) => app.core.effort_picker.close(session),
         Msg::SwitchRequested { session, to } => {
             if let Some(request) = app.core.switch_requested(session, to) {
                 switch_kind(app, request);
@@ -457,7 +457,7 @@ mod tests {
     fn a_pick_asks_the_service_once_and_a_refusal_is_said_with_the_choice_unchanged() {
         let (mut app, mut rx, s) = app_with_session();
         let _ = update(&mut app, Msg::EffortPickerToggled(s));
-        assert!(app.core.composers.effort.picker(s).is_some(), "opened");
+        assert!(app.core.effort_picker.picker(s).is_some(), "opened");
         // Default, low, medium, high: the fourth row.
         let _ = update(
             &mut app,
@@ -473,7 +473,7 @@ mod tests {
             [high],
             "one request, for the picked level"
         );
-        assert!(app.core.composers.effort.picker(s).is_none(), "closed");
+        assert!(app.core.effort_picker.picker(s).is_none(), "closed");
 
         let _ = crate::shell::daemon_sync::on_daemon_event(
             &mut app,

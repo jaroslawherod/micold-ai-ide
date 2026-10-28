@@ -66,7 +66,7 @@ See [contracts/wire.md](contracts/wire.md): `SessionSummary.effort`, `SetSession
 
 | Item | Where | Holds | FR |
 |---|---|---|---|
-| `EffortPickerState` **new** | `features/effort_picker.rs` | `open`, `highlight`, rows: Default + `offered_levels`, the current choice, `EffortAvailability` | FR-001–FR-003 |
+| `EffortPickerState` **new** (`effort_picker::State`, the window's `effort_picker`: the feature-ownership guard reads a field's owner from a type named `State`) | `features/effort_picker.rs` | `open`, `highlight`, rows: Default + `offered_levels`, the current choice, `EffortAvailability` | FR-001–FR-003 |
 | `effort_label(&EffortChoice) -> String` | same | `Effort: Default` / `Effort: <level>` | FR-001 |
 | `availability_note(&EffortAvailability) -> Option<String>` | same | the words of R7 | FR-003 |
 | `SendIntent::SetEffort(EffortChoice)` **new** | `features/command_palette.rs`, beside `SetModel` | `/effort <value>` resolved by `parse_effort_arg`; `/effort` alone opens the effort picker and a wrong value shows `EffortArgError`, both `SendIntent::Nothing` with the draft kept | FR-007 |

@@ -472,6 +472,9 @@ pub struct State {
     /// Each structured session's composer in this window (feature 941) -- see
     /// [`crate::features::composer::State`].
     pub composers: crate::features::composer::State,
+    /// The effort pickers open beside the structured sessions' model switchers (#1554) -- see
+    /// [`crate::features::effort_picker::State`].
+    pub effort_picker: crate::features::effort_picker::State,
     /// The structured sessions' permission prompts in this window (#942) -- see
     /// [`crate::features::permission_prompts::State`].
     pub permission_prompts: crate::features::permission_prompts::State,
@@ -1169,6 +1172,7 @@ impl State {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
         self.composers.forget(session);
+        self.effort_picker.forget(session);
         self.structured_insights.forget(session);
         self.permission_prompts.forget(session);
         self.transcript_selection.forget(session);

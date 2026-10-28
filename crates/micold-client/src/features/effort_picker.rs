@@ -91,13 +91,14 @@ impl EffortPicker {
     }
 }
 
-/// The effort pickers open over the window's composers, one per session at most.
+/// The effort pickers open over the window's composers, one per session at most: the window's
+/// `effort_picker`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct EffortPickerState {
+pub struct State {
     open: HashMap<SessionId, EffortPicker>,
 }
 
-impl EffortPickerState {
+impl State {
     /// `session`'s open picker.
     pub fn picker(&self, session: SessionId) -> Option<&EffortPicker> {
         self.open.get(&session)
@@ -181,15 +182,13 @@ impl crate::app::State {
         }
         let support = self.effort_support_of(session);
         let current = self.effort_choice(session);
-        self.composers
-            .effort
-            .open(session, support.as_ref(), &current);
+        self.effort_picker.open(session, support.as_ref(), &current);
     }
 
     /// A press on `session`'s trigger: open its picker, or close it when open.
     pub fn effort_picker_toggled(&mut self, session: SessionId) {
-        if self.composers.effort.picker(session).is_some() {
-            self.composers.effort.close(session);
+        if self.effort_picker.picker(session).is_some() {
+            self.effort_picker.close(session);
         } else {
             self.open_effort_picker(session);
         }
@@ -197,7 +196,7 @@ impl crate::app::State {
 
     /// The arrows in `session`'s effort picker.
     pub fn effort_picker_moved(&mut self, session: SessionId, direction: Direction) {
-        self.composers.effort.step(session, direction);
+        self.effort_picker.step(session, direction);
     }
 
     /// Take row `row` of `session`'s effort picker (the highlighted one when `None`), closing it:
@@ -208,7 +207,7 @@ impl crate::app::State {
         session: SessionId,
         row: Option<usize>,
     ) -> Option<EffortChoice> {
-        let row = self.composers.effort.take(session, row)?;
+        let row = self.effort_picker.take(session, row)?;
         (row.choice != self.effort_choice(session)).then_some(row.choice)
     }
 }

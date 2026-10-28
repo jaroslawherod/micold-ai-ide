@@ -305,7 +305,7 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
 /// Default and the offered levels, the current one marked in words, and a note line when the
 /// model does not take the choice, which the trigger's tooltip says too.
 fn effort_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Element<'a, Message> {
-    let picker = state.composers.effort.picker(session);
+    let picker = state.effort_picker.picker(session);
     let note = state.effort_note(session);
     let header = state.effort_header(session);
     let mut rows: Vec<MenuSelectRow<'a, Message>> = Vec::new();
