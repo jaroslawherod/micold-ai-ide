@@ -158,7 +158,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **Advanced query with a scope qualifier** (`repo:other/x`, `org:acme`, `-repo:...`): refused before sending, with the reason (GitHub would combine repositories rather than narrow). Inside a quoted string (`"repo:x"`) it is text and runs.
 - **Advanced query with `is:pr`, `type:pr` or `is:pull-request`**: runs; the scope makes the result empty, and the selector says no issue matches.
 - **Advanced query naming the repository's state** (`is:open`, `state:closed`, `is:closed`): honoured; with no state term both open and closed issues are listed.
-- **Empty advanced query**: running an empty or whitespace-only query lists every issue of the repository, open and closed, most recently updated first; it is a valid filter, not an error.
+- **Empty advanced query**: running an empty or whitespace-only query sends nothing: the prompt stands in place of the list, as before any run, and no query counts as run (M5 visual pass: an empty run listed every issue, closed ones too, which no one asks for by pressing Enter on an empty input; 1186's Jira query behaves the same).
 - **Query of only a sort qualifier** (`sort:created-asc`): lists every issue of the repository in that order.
 - **Unknown qualifier or a word GitHub reads as text** (`lable:bug`): GitHub decides; when it accepts the query, the selector shows what it returns, as github.com does; only a refusal shows an error.
 - **Very long query**: longer than 1,000 characters (after the cleaning below) is refused before sending, with the limit in the message.
@@ -196,7 +196,7 @@ A developer chooses "no assignee" in the assignee filter (or themselves as the a
 - **FR-010**: In advanced mode the user MUST be able to type a GitHub issue search query in the syntax github.com's issue search accepts; a query MUST run when the user presses Enter in the query input or activates the run control, and MUST NOT run on each keystroke.
 - **FR-011**: The app MUST run the user query within the scope: the request MUST restrict results to the repository's issues whatever the query holds, and MUST honour the user query's terms, including state terms, negations, `no:` and `linked:` qualifiers, boolean operators and parentheses where GitHub's issue search supports them. Without a sort qualifier the list MUST be most recently updated first; with one, it MUST be in GitHub's order for it.
 - **FR-012**: Before sending, the app MUST refuse a user query that holds a scope qualifier, has an unclosed quoted string, has parentheses that do not balance outside quoted strings, or is longer than 1,000 characters after cleaning, and MUST show the reason in place of the list. A refused query MUST NOT be sent.
-- **FR-013**: When the form opens in advanced mode and a last run query is remembered for the project (including an empty one that was run), the selector MUST run it once as soon as the GitHub source is showing; when no query was ever run on the project it MUST show the empty input with a prompt to type and run a query, and send nothing.
+- **FR-013**: When the form opens in advanced mode and a last run query is remembered for the project, the selector MUST run it once as soon as the GitHub source is showing; when no query was ever run on the project it MUST show the empty input with a prompt to type and run a query, and send nothing.
 
 ### Listing and search
 

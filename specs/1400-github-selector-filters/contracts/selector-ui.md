@@ -30,8 +30,8 @@ Excluding labels in-progress, blocked             [Search issues ...............
   full text as tooltip; hidden when default and in advanced mode (FR-007; Edge "Default filter").
 - Advanced: `material::TextField` "Query", placeholder "Type a GitHub search query, then press
   Enter or Run", `.on_submit(Run)`; **Run** `Button`. Shown in place of the Filters button and the
-  active line (US3 AS1). Before any run on the project: the rows area shows the same prompt text
-  (FR-013).
+  active line (US3 AS1). Before any run on the project, and after an empty or whitespace-only
+  run (which sends nothing): the rows area shows the same prompt text (FR-013).
 
 ## 2. The Filters panel (FR-003, FR-005)
 

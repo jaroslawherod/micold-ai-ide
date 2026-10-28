@@ -1161,6 +1161,25 @@ impl WorktreeForm {
         self.refresh_default_prompt();
     }
 
+    /// A switch to advanced mode (Jira's 1186, GitHub's 1400) leaves the basic list's work: a search
+    /// beyond it pending or running stops, and a list still loading is dropped. `true` when a load
+    /// was dropped (the list is then `NotRequested`).
+    fn stop_basic_work(&mut self) -> bool {
+        if let IssueList::Loaded { search, .. } = &mut self.issues {
+            if matches!(
+                search,
+                SearchState::Pending { .. } | SearchState::Searching { .. }
+            ) {
+                *search = SearchState::Idle;
+            }
+        }
+        let loading = matches!(self.issues, IssueList::Loading { .. });
+        if loading {
+            self.issues = IssueList::NotRequested;
+        }
+        loading
+    }
+
     /// The search beyond the loaded issues answered. Only the awaited answer applies (FR-007a); its
     /// issues replace the previous search's, less any already loaded (invariant 4), and are ranked
     /// with the loaded ones, so one that does not match the query is not shown (invariant 5). A

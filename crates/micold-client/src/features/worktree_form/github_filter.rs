@@ -201,17 +201,22 @@ impl GithubSelector {
     }
 
     /// The mode whose filter the list shown was asked with: `listed_for` once a list was asked
-    /// for, else the mode shown. Switching to Advanced leaves the basic list in place until a query
-    /// runs (US3 AS1), so what that list is searched beyond with and what it says follow the list,
-    /// not the switch.
-    fn listing_mode(&self) -> QueryMode {
-        self.listed_for.unwrap_or(self.mode)
+    /// for, else basic mode's (before the source shows). Switching to Advanced leaves the basic list
+    /// in place until a query runs (US3 AS1), so what that list is searched beyond with and what it
+    /// says follow the list, not the switch. `None` in advanced mode with nothing listed: the prompt
+    /// shows, whatever query ran before (review A F3).
+    fn listing_mode(&self) -> Option<QueryMode> {
+        match (self.listed_for, self.mode) {
+            (Some(listed), _) => Some(listed),
+            (None, QueryMode::Basic) => Some(QueryMode::Basic),
+            (None, QueryMode::Advanced) => None,
+        }
     }
 
     /// The filter a request is made with (data-model §10): the basic filters for a basic list; for
-    /// a query's list, the last run query, or none (the prompt, nothing sent).
+    /// a query's list, the last run query; none while the prompt shows (nothing sent).
     pub fn active_filter(&self) -> Option<GithubFilter> {
-        match self.listing_mode() {
+        match self.listing_mode()? {
             QueryMode::Basic => Some(GithubFilter::Basic(self.basic.clone())),
             QueryMode::Advanced => self.last_run.clone().map(GithubFilter::Advanced),
         }
@@ -264,7 +269,7 @@ impl GithubSelector {
     /// Whether the list shown is a query's that holds a `sort:` qualifier: GitHub's order for it,
     /// not the most recently updated first (FR-011, FR-014).
     pub fn sorted_by_query(&self) -> bool {
-        self.listing_mode() == QueryMode::Advanced
+        self.listing_mode() == Some(QueryMode::Advanced)
             && self
                 .last_run
                 .as_ref()
@@ -275,8 +280,8 @@ impl GithubSelector {
     /// query says it.
     pub fn listed_state(&self) -> Option<IssueState> {
         match self.listing_mode() {
-            QueryMode::Basic => Some(self.basic.state()),
-            QueryMode::Advanced => None,
+            Some(QueryMode::Basic) => Some(self.basic.state()),
+            _ => None,
         }
     }
 
@@ -477,16 +482,7 @@ impl WorktreeForm {
         self.github_selector.close_lists();
         match mode {
             QueryMode::Advanced => {
-                if let IssueList::Loaded { search, .. } = &mut self.issues {
-                    if matches!(
-                        search,
-                        SearchState::Pending { .. } | SearchState::Searching { .. }
-                    ) {
-                        *search = SearchState::Idle;
-                    }
-                }
-                if matches!(self.issues, IssueList::Loading { .. }) {
-                    self.issues = IssueList::NotRequested;
+                if self.stop_basic_work() {
                     self.github_selector.listed_for = None;
                 }
                 false
@@ -499,13 +495,22 @@ impl WorktreeForm {
     }
 
     /// Run the draft (US3 AS2, US4 AS5): a query refused is shown in place of the list and never
-    /// sent (FR-012); one accepted becomes the last run, the draft shows it as cleaned, and the list
-    /// loads it. `true` when it is to load.
+    /// sent (FR-012); an empty one sends nothing and the prompt shows, as before any run (spec Edge
+    /// "Empty advanced query"); one accepted becomes the last run, the draft shows it as cleaned,
+    /// and the list loads it. `true` when it is to load.
     fn run_github_query(&mut self) -> bool {
         let selector = &mut self.github_selector;
         selector.listed_for = Some(QueryMode::Advanced);
         self.issue_highlight = None;
         match UserQuery::parse(&selector.draft) {
+            Ok(query) if query.as_str().is_empty() => {
+                selector.draft.clear();
+                selector.last_run = None;
+                selector.listed_for = None;
+                self.issues = IssueList::NotRequested;
+                self.issue_list_open = false;
+                false
+            }
             Err(refusal) => {
                 self.issues = IssueList::Refused(refusal);
                 self.issue_list_open = false;

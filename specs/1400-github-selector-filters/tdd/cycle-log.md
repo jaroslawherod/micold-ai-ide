@@ -139,3 +139,14 @@ single-issue details query (checked by parsing its answer with `parse_details`).
 | Scoped gate 1 (`tests/field_focus_call_sites.rs`) | the Query input reports its focus (`FieldId::AddWorktreeGithubQuery`, `.track_focus`) | `every_input_in_the_application_reports_its_focus` FAILED (`ui/github_filter.rs:181 TextField::new`) | passed in scoped gate 2 |
 
 Also fixed: `gates/issue_rows_show_all_text.rs` (M4's `a_closed_row_shows_closed_not_a_stale_status`) did not compile against 1504's `StatusBoard::begin(status, summary)` / `KeyedIssue` on this base.
+
+### M5 review round 1 fixes (MINORs, test first)
+
+| Finding | Behaviour | Red (before the code) | Green |
+|---|---|---|---|
+| Review A F1 (refactor) | `WorktreeForm::stop_basic_work` (stops a pending/running search beyond, drops a loading list to `NotRequested`) shared by Jira's `change_query_mode` and GitHub's `change_github_mode`; no behaviour change | not red: a refactor, guarded by the existing tests (`github_filter_state` 54 passed with it in the red run below; `jira_query_state` unchanged) | Verify green |
+| Review A F3 (`tests/github_filter_state.rs::a_basic_load_dropped_for_advanced_leaves_no_active_filter`) | after a run, a basic list dropped by a switch to Advanced while loading leaves no active filter: `active_filter()` / `github_filter()` `None`, statement "Reads open issues of o/r from GitHub.", the prompt shows, nothing sent (`listing_mode` is `None` in advanced mode with nothing listed) | `cargo test -p micold-client --test github_filter_state`: FAILED (`active_filter()` was `Some(Advanced(..))`) | 56 passed |
+| Visual F1 (`an_empty_run_sends_nothing_and_keeps_the_prompt`) | Enter/Run on `""`, `"   "`, `"\t \n"` sends nothing: `NotRequested` (the prompt), `last_run = None`, no active filter; after a query's list too, and back to Basic then reloads | same run: FAILED (`github_filtered_load()` was `Some(repo:o/r is:issue sort:updated-desc)`) | 56 passed |
+
+Spec Edge "Empty advanced query", FR-013, search-rules §1/§4, selector-ui §1, data-model §3/§7/§10 and T050
+reworded: an empty run is not a run.
