@@ -478,7 +478,7 @@ pane") and FR-001's anchor on diff lines.
   tests or `crates/micold-material`): a press on a diff line then a drag anchors the selection at
   the press, as prose and code do; a same-line drag ending right of a short diff line's end selects
   to that line's end. Fails on main
-- [ ] T055 [US1] Fix the diff line's press: the press inside the hunk's `sideways` viewport reaches
+- [x] T055 [US1] Fix the diff line's press: the press inside the hunk's `sideways` viewport reaches
   the selection area before the drag moves (suspect the scrollable taking the press), and a point
   right of a line's end answers that line's end; T054 passes. Re-run quickstart Part B steps 1 and
   9 with the `visual-pass` skill, recorded in `visual-pass/m6-visual-pass.md`

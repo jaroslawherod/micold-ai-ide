@@ -128,6 +128,8 @@ struct State {
     /// From the window's coordinates to the area's: a scrollable around the area shifts the
     /// cursor it hands down by its offset, while a move's `position` stays the window's.
     shift: Vector,
+    /// The cursor handed down with the last event that was not a redraw: where its batch ended.
+    batch_end: Option<Point>,
 }
 
 impl operation::Focusable for State {
@@ -254,21 +256,28 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
         // The runtime hands every event of a batch the cursor where the batch ended, so in a fast
         // drag the press would land where the drag got to (#1550 M6). Each event is seen at its
         // own place instead: a move where it went, a press or release where the last move left the
-        // pointer. A frame's redraw is a batch of its own, so its cursor less the pointer is what a
+        // pointer. A frame's redraw is a batch of its own, so when its cursor is where the last
+        // batch ended (no moves the area has not seen yet), that cursor less the pointer is what a
         // scrollable around the area shifts positions by.
         let at = {
             let state = tree.state.downcast_mut::<State>();
             match event {
-                Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                    state.pointer = Some(*position);
-                }
-                Event::Mouse(mouse::Event::CursorLeft) => state.pointer = None,
                 Event::Window(iced::window::Event::RedrawRequested(_)) => {
                     if let (Some(given), Some(pointer)) = (cursor.position(), state.pointer) {
-                        state.shift = given - pointer;
+                        if state.batch_end == Some(given) {
+                            state.shift = given - pointer;
+                        }
                     }
                 }
-                _ => {}
+                Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    state.pointer = Some(*position);
+                    state.batch_end = cursor.position();
+                }
+                Event::Mouse(mouse::Event::CursorLeft) => {
+                    state.pointer = None;
+                    state.batch_end = None;
+                }
+                _ => state.batch_end = cursor.position(),
             }
             state.pointer.map(|p| p + state.shift)
         };
@@ -494,6 +503,33 @@ mod tests {
         let end = Point::new(250.0, TEXT_ROW / 2.0);
         let out = press_with(&mut m, mouse::Button::Left, end);
         assert_eq!(out, vec!["press 1", "focus true", "hit t 0"]);
+    }
+
+    /// A-2: a redraw can come while moves the area has not seen yet wait (its cursor is already
+    /// where they go); it teaches no shift then, so the press after them lands where it happened.
+    #[test]
+    fn a_redraw_ahead_of_the_moves_shifts_nothing() {
+        let row = TEXT_ROW / 2.0;
+        let (a, b, c) = (
+            Point::new(2.0, row),
+            Point::new(20.0, row),
+            Point::new(40.0, row),
+        );
+        let expected = mounted(false).press(c);
+        let mut m = mounted(false);
+        let moved = |p: Point| Event::Mouse(mouse::Event::CursorMoved { position: p });
+        let redraw = || {
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            ))
+        };
+        m.send(moved(a), mouse::Cursor::Available(a));
+        m.send(redraw(), mouse::Cursor::Available(a));
+        m.send(moved(b), mouse::Cursor::Available(b));
+        // The window's cursor is already at `c`; the move there is still queued.
+        m.send(redraw(), mouse::Cursor::Available(c));
+        m.send(moved(c), mouse::Cursor::Available(c));
+        assert_eq!(press_with(&mut m, mouse::Button::Left, c), expected);
     }
 
     /// A-2: a press outside the area gives the focus up.

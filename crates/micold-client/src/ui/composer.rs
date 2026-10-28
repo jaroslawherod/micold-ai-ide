@@ -626,7 +626,8 @@ pub(crate) fn transcript_keys(
 }
 
 /// The session whose transcript [`transcript_keys`] listens to, if it listens at all: the active
-/// one, which a press to select in a pane of a split has made the pressed pane's (#1550 M6).
+/// one, which a press to select in a pane of a split has made the pressed pane's (#1550 M6). Public
+/// only so the binary's App tests can read it.
 pub fn transcript_keys_session(
     state: &State,
     interrupt: bool,
