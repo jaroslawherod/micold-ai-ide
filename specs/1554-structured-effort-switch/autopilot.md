@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
 - **Phase**: M1
-- **Next step**: review A (code-review, high) on the M1 diff, run by the orchestrator in a fresh context; then review B, full gate, push and PR body.
+- **Next step**: orchestrator opens the M1 PR (branch pushed; body in the session scratchpad `pr-1554-m1-body.md`), waits on CI and merges; then M2.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | — | implemented; reviews pending |
+| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | pending (branch pushed) | reviews done; full gate green; PR to open |
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | pending |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | 46f2f3cf63681dad6afe2f105902d3c5b928d369:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CLEAN (scoped re-review of the fix diff) |
 | M1 scoped gate | 1 | — | green: fmt, clippy (core, workspace), client and daemon tests; core tests green with the four root-only tests skipped (they need a non-root user; `scripts/gate.sh` runs them unprivileged). Built with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`: the default build filled the disk |
 | A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN: 2 MINOR — F1 `/effort` kept the CLI's argument hint (lists `ultracode`, `auto`): app hint set, D10 updated; F2 `supportsEffort: false` without a level list read as unknown: now no effort — both fixed test-first. Run by the orchestrator in a fresh context |
+| Full gate M1 | 1 | — | green: `scripts/gate.sh` at 023f35c86 (rebased onto origin/main ff9557a57; `PROTOCOL_VERSION` there still 71, branch 72) |
 | B (conformance) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN, no findings. Verify passed: core lib + the five integration test binaries; daemon/client `cargo check --tests` clean. Run by the orchestrator |
 
 ## Declined review findings
@@ -65,16 +66,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: M1 T001–T010 implemented and ticked (commit 32f37caee); red/green evidence in
-  `tdd/cycle-log.md`; scoped gate green (see *Review rounds*); decisions D9, D10.
-- Next: act on review A M1 round 1 (snapshot in *Review rounds*), then review B (conformance,
-  once), then the full gate `scripts/gate.sh` with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
-  CARGO_PROFILE_TEST_DEBUG=0` (the default debug build filled the ~39 GB disk; delete
-  `target-shared/` first if under 20 GB free), push, write the PR body.
-- Visible change in M1: the command palette now lists `/effort` under "In this app" with "Set the
-  reasoning effort for later turns" (sending it still sends text until M5). Text-only; no visual
-  pass run.
-- PR labels: docs-not-needed (no user-facing behaviour yet; the guide lands in M4/M5).
+- Done: M1 T001–T010 implemented (TDD log `tdd/cycle-log.md`); reviews A and B CLEAN, A's two
+  MINORs fixed test-first (D10 updated); rebased onto origin/main ff9557a57; full gate green at
+  023f35c86; branch pushed.
+- Next: open the M1 PR — title `#1554: Structured view: model reasoning effort cannot be changed
+  (M1)`, body in the session scratchpad `pr-1554-m1-body.md`, label docs-not-needed; record its
+  number here; wait on CI; merge; then M2.
 
 ## Open escalation
 
