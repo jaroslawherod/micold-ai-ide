@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
 - **Phase**: M6
-- **Next step**: M6 review A and B, full gate, PR; then a new close unit (speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR).
+- **Next step**: M6 review A round 2 (scoped to the fix diff), then the orchestrator opens the PR (body in the scratchpad) and merges; then a new close unit (speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR).
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | #1599 | merged |
-| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | implemented, in review |
+| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | implemented, gate green, PR to open |
 
 ## Decisions
 
@@ -104,6 +104,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B (conformance) M5 | 2 | 09d3654e6:7d97bc068 | CLEAN (scoped to 09d3654e6..7d97bc068): A1, A2/B2, B1 and the visual pass's V1 all verified FIXED. Run by the orchestrator |
 | M6 TDD (T033–T034) | 1 | — | red every run on main: `a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_never_asks_it_again` asked `[low, high, low]`; green after T034: `structured_effort` 30/30 |
 | M6 scoped checks | 1 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings` (one needless borrow fixed), `structured_effort` 30/30 and the whole binary 100 runs in a loop with no failure (Verify) |
+| A (code-review, high) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CHANGES: A1 MAJOR race narrowed not closed (`follow_effort_answer` took the deferred pick and put the choice back under two locks; a failed put back still re-applied) → choice put back under the lock that takes the pick, no re-apply on failure; A2 MINOR a deferred write that failed held re-applies → `effort_pick_written` false on a failed write; A3 MINOR stale `reapply_held` → reset by an unheld re-apply and a replacing busy pick. All fixed (cycle log 17: why no new test). Run by the orchestrator |
+| B (conformance) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CLEAN, 2 MINOR: B1 as A3 (fixed); B2 record the 100-run Verify (B ran 40, 0 failures; recorded here, re-run after the fix). Run by the orchestrator |
+| M6 after review fixes | 1 | — | `structured_effort` 30/30, the whole binary 100 runs in a loop with no failure (Verify); full gate `scripts/gate.sh` green on the fix tree (parent f348ed298) |
 
 ## Declined review findings
 

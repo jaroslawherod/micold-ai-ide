@@ -190,3 +190,11 @@ the implementation it covers.
 - green: `reapply_effort` holds back (`EffortPicks::reapply_held`) while the deferred pick is
   written to this process (`DeferredEffort::process`, `StructuredSession::effort_pick_deferred`)
   and its answer not handled; `follow_effort_answer` re-applies once the choice is put back.
+- review A round 1 (no new test; why): A1 the choice is now put back (`catalog.set_effort`) under
+  the same daemon lock that takes the deferred pick, so `reapply_effort`, which reads both under
+  that lock, sees either the pick unanswered (and holds back) or the choice already put back; the
+  window A1 named no longer exists, so no interleaving is left for a test to force. A failed put
+  back no longer re-applies. A2 a deferred pick whose write failed is not "written"
+  (`StructuredSession::effort_pick_written`, false on a failed write), so it holds nothing back;
+  the stand-in cannot fail a write to a running process, so no test. A3 `reapply_held` is reset by
+  every re-apply that is not held and by a busy pick replacing the deferred one.

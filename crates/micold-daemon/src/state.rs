@@ -4424,11 +4424,13 @@ impl DaemonState {
     /// is put back to the choice before it, unless another pick was kept since. An idle pick
     /// made after it and not answered yet is not one: if the CLI takes it, its answer keeps it
     /// ([`Self::finish_effort_pick`]); if not, the CLI is still on the choice before both.
-    /// A re-apply held back for this answer ([`Self::reapply_effort`]) is made once the choice is
-    /// as the answer leaves it.
+    /// The choice is put back under the lock that takes the deferred pick, so a re-apply never
+    /// sees the pick answered and the refused level still held. A re-apply held back for this
+    /// answer ([`Self::reapply_effort`]) is made then, unless the choice could not be put back.
     pub fn follow_effort_answer(&self, session: SessionId, answer: EffortAnswer) {
-        let (previous, reapply) = {
-            let mut inner = self.lock();
+        let (restored, reapply) = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
             let Some(picks) = inner.effort_picks.get_mut(&session) else {
                 return;
             };
@@ -4445,15 +4447,27 @@ impl DaemonState {
                     return;
                 }
             };
-            (previous, std::mem::take(&mut picks.reapply_held))
+            let reapply = std::mem::take(&mut picks.reapply_held);
+            let restored = previous.map_or(Ok(false), |previous| {
+                inner
+                    .catalog
+                    .set_effort(session, &previous)
+                    .map_err(|why| why.to_string())
+            });
+            (restored, reapply)
         };
-        if let Some(previous) = previous {
-            if let Err(err) = self.keep_effort(session, &previous) {
+        match restored {
+            Ok(changed) => {
+                if changed {
+                    self.broadcast_catalog();
+                }
+                if reapply {
+                    self.reapply_effort(session);
+                }
+            }
+            Err(err) => {
                 tracing::warn!(session = %session.0, %err, "the refused effort choice was not put back");
             }
-        }
-        if reapply {
-            self.reapply_effort(session);
         }
     }
 
@@ -4504,10 +4518,11 @@ impl DaemonState {
             };
             if let Some(picks) = inner.effort_picks.get_mut(&session) {
                 let written = picks.deferred.as_ref().is_some_and(|deferred| {
-                    deferred.process == child.serial() && !child.effort_pick_deferred()
+                    deferred.process == child.serial() && child.effort_pick_written()
                 });
+                // A re-apply made now replaces one held back before.
+                picks.reapply_held = written;
                 if written {
-                    picks.reapply_held = true;
                     return;
                 }
             }
@@ -4675,6 +4690,8 @@ impl DaemonState {
                     pick: picks.latest,
                     process: child.serial(),
                 });
+                // Held for the pick this one replaces: this one is written with the choice now.
+                picks.reapply_held = false;
                 drop(guard);
                 return match self.keep_effort(session, &effort) {
                     Ok(_) => EffortPick::Answered(Ok(())),

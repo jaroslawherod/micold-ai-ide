@@ -511,6 +511,8 @@ pub struct StructuredSession {
     /// An effort change made during a turn, written after the deferred model when it ends (#1554
     /// R1, R4).
     deferred_effort: Mutex<Option<PendingEffort>>,
+    /// Whether the latest effort pick deferred past a turn was written ([`Self::effort_pick_written`]).
+    effort_pick_sent: AtomicBool,
     /// A model chosen while a turn was in progress (#943 FR-015): written before the next user
     /// message, or once the turn's `result` is in, whichever is first. A later pick replaces it.
     /// Taken only under the stdin mutex, so it is written once.
@@ -730,6 +732,7 @@ impl StructuredSession {
             effort_sent,
             cli_model,
             deferred_effort: Mutex::new(None),
+            effort_pick_sent: AtomicBool::new(false),
             deferred_model: Mutex::new(None),
             turn,
             emit,
@@ -1003,6 +1006,7 @@ impl StructuredSession {
     /// `result` ([`Self::flush_deferred`]). Replaces a change deferred before and not written yet;
     /// whether that was a user's pick, which the CLI then never saw.
     pub fn defer_effort(&self, choice: &EffortChoice, level: Option<&EffortLevel>) -> bool {
+        self.effort_pick_sent.store(false, Ordering::SeqCst);
         lock(&self.deferred_effort)
             .replace(PendingEffort {
                 choice: Some(choice.clone()),
@@ -1011,11 +1015,13 @@ impl StructuredSession {
             .is_some_and(|replaced| replaced.choice.is_some())
     }
 
-    /// Whether a user's effort pick is deferred past the turn and not written yet (#1554 FR-005).
-    pub fn effort_pick_deferred(&self) -> bool {
-        lock(&self.deferred_effort)
+    /// Whether the latest user's effort pick deferred past a turn was written to the CLI (#1554
+    /// FR-005): not while it waits for the turn's end, nor when its write failed.
+    pub fn effort_pick_written(&self) -> bool {
+        let pending = lock(&self.deferred_effort)
             .as_ref()
-            .is_some_and(|pending| pending.choice.is_some())
+            .is_some_and(|pending| pending.choice.is_some());
+        !pending && self.effort_pick_sent.load(Ordering::SeqCst)
     }
 
     /// Make `level` the effort the CLI is asked for once no turn is open, with no note (#1554 R4:
@@ -1078,8 +1084,15 @@ impl StructuredSession {
         };
         let request_id = next_request_id();
         let line = encode_apply_effort(&request_id, level.as_ref());
+        let pick = choice.is_some();
+        if pick {
+            self.effort_pick_sent.store(true, Ordering::SeqCst);
+        }
         self.note_effort_ask(&request_id, choice, level, true);
         if let Err(err) = write_whole(stdin, &line) {
+            if pick {
+                self.effort_pick_sent.store(false, Ordering::SeqCst);
+            }
             self.forget_effort_ask(&request_id);
             tracing::warn!(session = %self.id.0, %err, "the deferred effort change could not be written");
         }
