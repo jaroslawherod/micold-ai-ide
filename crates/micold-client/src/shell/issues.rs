@@ -847,14 +847,17 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
 
 // ---- The Overview's issue titles (feature 813, research R8) ----
 
-/// The Overview opened: read the title of every worktree's issue ([`request_titles`]).
+/// The Overview opened: read the title of every worktree's issue ([`request_titles`]), and every
+/// worktree's spec and commit facts, so a spec written or a commit made since shows (feature 1504,
+/// L7).
 pub fn on_overview_opened(app: &mut App) -> Task<Message> {
     let tickets = worktree_tickets(app);
     // The issue links need the repository even when no title is read (feature 1122, R2).
     if !request_titles(app, &tickets) {
         read_repo(app);
     }
-    Task::none()
+    let dirs = crate::shell::location_titles::listed_dirs(app);
+    crate::shell::location_titles::read_facts(app, &dirs)
 }
 
 /// The worktree list changed, or titles became readable (feature 1125, FR-011): a sidebar row's

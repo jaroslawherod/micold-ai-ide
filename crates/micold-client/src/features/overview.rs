@@ -48,6 +48,27 @@ impl std::fmt::Debug for TitleLookup {
     }
 }
 
+/// What a worktree's own files and repository say for its title (feature 1504, FR-001 items 4 and
+/// 6, L7): its feature spec's heading and its branch's own latest commit subject, read off the UI
+/// thread by `shell::location_titles` when the worktree list changes or the Overview opens.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct TitleFacts {
+    /// The title in the feature spec's heading.
+    pub spec: Option<String>,
+    /// The subject of the branch's latest commit the default branch lacks.
+    pub commit: Option<String>,
+}
+
+/// The texts are the user's and never logged (FR-011, L9): a debug dump says only which are known.
+impl std::fmt::Debug for TitleFacts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TitleFacts")
+            .field("spec", &self.spec.as_ref().map(|_| ".."))
+            .field("commit", &self.commit.as_ref().map(|_| ".."))
+            .finish()
+    }
+}
+
 /// What the Overview knows of the active project's GitHub repository (feature 1122, research R2):
 /// the issue links need it at render, so it is read once per project and kept here.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -82,6 +103,13 @@ pub struct State {
     pub progress: BTreeMap<String, FileProgress>,
     /// The issue title per GitHub title ticket (R8; feature 1504). Cleared on a project switch.
     pub titles: BTreeMap<u64, TitleLookup>,
+    /// The spec and commit facts per worktree directory name (feature 1504, L7). Cleared on a
+    /// project switch; a directory no longer asked for is pruned when facts are stored.
+    pub facts: BTreeMap<String, TitleFacts>,
+    /// The last facts round asked for: bumped by each [`Msg::TitleFactsRequested`].
+    pub facts_round: u64,
+    /// The round last asked for, per worktree directory name: only that round's answer is stored.
+    pub facts_asked: BTreeMap<String, u64>,
     /// The activation accepted and waiting out [`OVERVIEW_ACTIVATION_DELAY`] (feature 971, D3).
     /// While set, further activations, closing and toggling are ignored: the first one stands.
     pub activating: Option<Activation>,
@@ -262,6 +290,26 @@ pub enum Msg {
         /// The answer.
         result: TitleLookup,
     },
+    /// The spec and commit facts of these worktrees (every listed one) are being read (feature
+    /// 1504, L7): a new round, recorded per directory; a directory left out is no longer asked.
+    TitleFactsRequested {
+        /// The active project.
+        project: PathBuf,
+        /// The listed worktrees' directory names.
+        dirs: Vec<String>,
+    },
+    /// A worktree's facts were read in `round`: stored only when that is the round last asked
+    /// for its directory.
+    TitleFactsRead {
+        /// The project the read was started in; dropped when it is no longer the active one.
+        project: PathBuf,
+        /// The worktree's directory name.
+        dir: String,
+        /// The round the read was asked in.
+        round: u64,
+        /// What was read.
+        facts: TitleFacts,
+    },
     /// The window moved to another project: what was read describes the old one.
     ProjectSwitched,
     /// A card's menu opens at `anchor`, replacing any open one (feature 972, US2.4).
@@ -350,6 +398,7 @@ impl Msg {
         match self {
             Self::ProgressRead { project, .. }
             | Self::TitleRead { project, .. }
+            | Self::TitleFactsRead { project, .. }
             | Self::RepoRead { project, .. } => Some(project),
             _ => None,
         }
@@ -399,11 +448,28 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         Msg::TitleRead { number, result, .. } => {
             state.titles.insert(number, result);
         }
+        Msg::TitleFactsRequested { dirs, .. } => {
+            state.facts_round += 1;
+            let round = state.facts_round;
+            state.facts_asked = dirs.into_iter().map(|dir| (dir, round)).collect();
+        }
+        Msg::TitleFactsRead {
+            dir, round, facts, ..
+        } => {
+            if state.facts_asked.get(&dir) == Some(&round) {
+                state.facts.insert(dir, facts);
+                let asked = &state.facts_asked;
+                state.facts.retain(|dir, _| asked.contains_key(dir));
+            }
+        }
         Msg::ActivationRequested(_) | Msg::ActivationDue => {}
         Msg::ProjectSwitched => {
             state.activating = None;
             state.progress.clear();
             state.titles.clear();
+            state.facts.clear();
+            state.facts_round = 0;
+            state.facts_asked.clear();
             state.card_menu = None;
             state.focus_return = None;
             state.focus_landed = None;
@@ -501,7 +567,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
 /// A worktree's location title (feature 1504, FR-001, FR-007): the Overview card, the sidebar row
 /// and the session-area header all read it here, so they cannot disagree. The pull request and the
 /// main session's title come from what the window holds at render (R8, R9, L8): no new reading,
-/// and a reading or an archive changes the title with no message of its own (FR-010).
+/// and a reading or an archive changes the title with no message of its own (FR-010). The spec
+/// heading and the own-commit subject are the [`TitleFacts`] already read off the UI thread (L7).
 pub fn location_title(
     app: &crate::app::State,
     worktree: &Worktree,
@@ -519,11 +586,14 @@ pub fn location_title(
             SessionLabel::Named(text) | SessionLabel::Derived(text) => Some(text.as_str()),
             SessionLabel::Pending => None,
         });
+    let facts = app.overview.facts.get(&worktree.dir_name);
     choose(&TitleInputs {
         ticket: ticket.as_ref(),
         issue_title,
         pull_request: open_pull_request(&app.pr_status, worktree.branch.as_deref()),
+        spec: facts.and_then(|facts| facts.spec.as_deref()),
         session,
+        commit: facts.and_then(|facts| facts.commit.as_deref()),
         branch: worktree.branch.as_deref(),
         ..TitleInputs::named(display_name)
     })

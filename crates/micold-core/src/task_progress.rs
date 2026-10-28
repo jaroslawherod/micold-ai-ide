@@ -169,7 +169,7 @@ pub fn phase(
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 
 /// The file's text; `None` when missing, unreadable, over [`MAX_FILE_BYTES`] or not UTF-8.
-fn read_text(path: &Path) -> Option<String> {
+pub(crate) fn read_text(path: &Path) -> Option<String> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::fs::File::open(path)
@@ -183,9 +183,9 @@ fn read_text(path: &Path) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-/// What the worktree at `root` says about the feature of `ticket`. Blocking I/O: call it off
-/// the UI thread. Anything missing, huge or unreadable is absent.
-pub fn read(root: &Path, ticket: Option<&str>) -> FileProgress {
+/// The feature folder of the worktree at `root`, relative to it: [`feature_dir`] over its
+/// `.specify/feature.json` and its `specs/` folders. Blocking I/O.
+pub(crate) fn feature_folder(root: &Path, ticket: Option<&str>) -> Option<String> {
     let feature_json = read_text(&root.join(".specify/feature.json"));
     let spec_dirs: Vec<String> = std::fs::read_dir(root.join("specs"))
         .map(|entries| {
@@ -196,7 +196,13 @@ pub fn read(root: &Path, ticket: Option<&str>) -> FileProgress {
                 .collect()
         })
         .unwrap_or_default();
-    let Some(feature_dir) = feature_dir(feature_json.as_deref(), &spec_dirs, ticket) else {
+    feature_dir(feature_json.as_deref(), &spec_dirs, ticket)
+}
+
+/// What the worktree at `root` says about the feature of `ticket`. Blocking I/O: call it off
+/// the UI thread. Anything missing, huge or unreadable is absent.
+pub fn read(root: &Path, ticket: Option<&str>) -> FileProgress {
+    let Some(feature_dir) = feature_folder(root, ticket) else {
         return FileProgress::default();
     };
     let dir = root.join(&feature_dir);

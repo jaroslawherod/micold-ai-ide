@@ -411,3 +411,171 @@ mod location_titles {
         );
     }
 }
+
+// ---- Feature 1504 (T035, US2.2, US2.4, L7, L9): spec and commit facts ----
+
+mod title_facts {
+    use micold_client::app::{Message, State as App};
+    use micold_client::features::overview::{location_title, update, Msg, State, TitleFacts};
+    use micold_core::location_title::TitleSource;
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{AiCli, Session, SessionLabel, SessionLocation};
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+    use std::path::PathBuf;
+
+    const DIR: &str = "project-thread-7041o6";
+    const SPEC: &str = "Overview cards, readable layout and content";
+    const COMMIT: &str = "fix(overview): wrap long titles";
+    const SESSION_TITLE: &str = "Fix the flaky resize test";
+
+    fn project() -> PathBuf {
+        PathBuf::from("/repo")
+    }
+
+    fn facts(spec: Option<&str>, commit: Option<&str>) -> TitleFacts {
+        TitleFacts {
+            spec: spec.map(str::to_string),
+            commit: commit.map(str::to_string),
+        }
+    }
+
+    fn requested(dirs: &[&str]) -> Msg {
+        Msg::TitleFactsRequested {
+            project: project(),
+            dirs: dirs.iter().map(|d| d.to_string()).collect(),
+        }
+    }
+
+    fn read(dir: &str, round: u64, facts: TitleFacts) -> Msg {
+        Msg::TitleFactsRead {
+            project: project(),
+            dir: dir.into(),
+            round,
+            facts,
+        }
+    }
+
+    /// Each request is a new round, recorded for every directory it names; a directory it leaves
+    /// out is no longer asked for.
+    #[test]
+    fn a_request_bumps_the_round_and_records_it_per_dir() {
+        let mut state = State::default();
+        update(&mut state, requested(&["a", "b"]));
+        assert_eq!(state.facts_round, 1);
+        assert_eq!(state.facts_asked.get("a"), Some(&1));
+        assert_eq!(state.facts_asked.get("b"), Some(&1));
+        update(&mut state, requested(&["b"]));
+        assert_eq!(state.facts_round, 2);
+        assert_eq!(state.facts_asked.get("b"), Some(&2));
+        assert_eq!(state.facts_asked.get("a"), None, "a is no longer listed");
+    }
+
+    /// L7: only the answer of the round last asked for a listed directory is stored; an older
+    /// round's and an unlisted directory's are dropped, and storing prunes unlisted directories.
+    #[test]
+    fn only_the_last_rounds_answer_for_a_listed_dir_is_stored() {
+        let mut state = State::default();
+        update(&mut state, requested(&["a", "b"]));
+        update(&mut state, read("b", 1, facts(Some(SPEC), None)));
+        update(&mut state, requested(&["a"]));
+        update(&mut state, read("a", 1, facts(Some("stale"), None)));
+        assert_eq!(state.facts.get("a"), None, "an older round");
+        update(&mut state, read("z", 2, facts(Some(SPEC), None)));
+        assert_eq!(state.facts.get("z"), None, "an unlisted dir");
+        update(&mut state, read("a", 2, facts(None, Some(COMMIT))));
+        assert_eq!(state.facts.get("a"), Some(&facts(None, Some(COMMIT))));
+        assert_eq!(state.facts.get("b"), None, "b was pruned");
+    }
+
+    /// The root drops an answer read in another project (L7).
+    #[test]
+    fn an_answer_from_another_project_is_dropped() {
+        let mut app = App::default();
+        app.workspace.active = Some(project());
+        app.update(Message::Overview(requested(&[DIR])));
+        app.update(Message::Overview(Msg::TitleFactsRead {
+            project: PathBuf::from("/elsewhere"),
+            dir: DIR.into(),
+            round: 1,
+            facts: facts(Some(SPEC), None),
+        }));
+        assert!(app.overview.facts.is_empty());
+        app.update(Message::Overview(read(DIR, 1, facts(Some(SPEC), None))));
+        assert_eq!(app.overview.facts.get(DIR), Some(&facts(Some(SPEC), None)));
+    }
+
+    #[test]
+    fn a_project_switch_clears_the_facts() {
+        let mut state = State::default();
+        update(&mut state, requested(&["a"]));
+        update(&mut state, read("a", 1, facts(Some(SPEC), Some(COMMIT))));
+        update(&mut state, Msg::ProjectSwitched);
+        assert!(state.facts.is_empty());
+        assert!(state.facts_asked.is_empty());
+        assert_eq!(state.facts_round, 0);
+    }
+
+    /// L9: a debug dump of the facts, or of the message carrying them, holds no text.
+    #[test]
+    fn the_facts_debug_leaves_the_texts_out() {
+        let read = read("a", 1, facts(Some(SPEC), Some(COMMIT)));
+        let dump = format!("{read:?}");
+        assert!(!dump.contains(SPEC) && !dump.contains(COMMIT), "{dump}");
+        assert!(dump.contains("TitleFacts"), "{dump}");
+    }
+
+    fn app_with(facts_read: TitleFacts, session_title: bool) -> App {
+        let mut app = App::default();
+        app.workspace.projects.push(Project {
+            path: project(),
+            display_name: "repo".into(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        app.workspace.active = Some(project());
+        app.worktree.worktrees = vec![Worktree {
+            dir_name: DIR.into(),
+            path: PathBuf::from(format!("/repo/.claude/worktrees/{DIR}")),
+            branch: Some("claude/project-thread-7041o6".into()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        if session_title {
+            let mut session =
+                Session::start_new(SessionLocation::Worktree(DIR.into()), AiCli::ClaudeCode);
+            session.main = true;
+            session.label = SessionLabel::Named(SESSION_TITLE.into());
+            app.workspace
+                .sessions
+                .entry(project())
+                .or_default()
+                .push(session);
+        }
+        update(&mut app.overview, requested(&[DIR]));
+        update(&mut app.overview, read(DIR, 1, facts_read));
+        app
+    }
+
+    fn text_and_source(app: &App) -> (String, TitleSource) {
+        let title = location_title(app, &app.worktree.worktrees[0], DIR);
+        (title.text, title.source)
+    }
+
+    /// US2.2, US2.4, FR-001: the spec heading wins over the session title, which wins over the
+    /// commit subject; the commit subject wins over the branch.
+    #[test]
+    fn stored_facts_title_the_card_in_order() {
+        assert_eq!(
+            text_and_source(&app_with(facts(Some(SPEC), Some(COMMIT)), true)),
+            (SPEC.into(), TitleSource::Spec)
+        );
+        assert_eq!(
+            text_and_source(&app_with(facts(None, Some(COMMIT)), true)),
+            (SESSION_TITLE.into(), TitleSource::Session)
+        );
+        assert_eq!(
+            text_and_source(&app_with(facts(None, Some(COMMIT)), false)),
+            (COMMIT.into(), TitleSource::Commit)
+        );
+    }
+}
