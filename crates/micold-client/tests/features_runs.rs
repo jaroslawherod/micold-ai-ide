@@ -1438,3 +1438,88 @@ mod required {
         assert!(empty_of(d, FieldId::RunPrompt));
     }
 }
+
+// ---- Each project's last group list (feature 1465, research R5) ------------------------------
+
+/// A root state whose active project is `/<name>`.
+fn root_in(name: &str) -> micold_client::app::State {
+    let mut root = micold_client::app::State::default();
+    root.workspace.active = Some(PathBuf::from(format!("/{name}")));
+    root
+}
+
+fn routed(root: &mut micold_client::app::State, msg: Msg) {
+    let _ = micold_client::features::runs::routed(root, msg);
+}
+
+#[test]
+fn known_keeps_each_projects_last_group_list() {
+    let mut root = root_in("p");
+    routed(&mut root, Msg::GroupsChanged(vec![group(1, "a")]));
+    assert_eq!(
+        root.runs.known.get(&PathBuf::from("/p")),
+        Some(&vec![group(1, "a")])
+    );
+    root.workspace.active = Some(PathBuf::from("/q"));
+    routed(&mut root, Msg::GroupsChanged(vec![group(2, "b")]));
+    assert_eq!(
+        root.runs.known.get(&PathBuf::from("/q")),
+        Some(&vec![group(2, "b")])
+    );
+    assert_eq!(
+        root.runs.known.get(&PathBuf::from("/p")),
+        Some(&vec![group(1, "a")]),
+        "another project's list is kept"
+    );
+    routed(&mut root, Msg::GroupsChanged(Vec::new()));
+    assert_eq!(
+        root.runs.known.get(&PathBuf::from("/q")),
+        Some(&Vec::new()),
+        "the last list"
+    );
+}
+
+#[test]
+fn compare_of_a_group_from_the_now_active_projects_last_list_opens() {
+    let mut root = root_in("p");
+    routed(&mut root, Msg::GroupsChanged(vec![group(1, "a")]));
+    root.workspace.active = Some(PathBuf::from("/q"));
+    routed(&mut root, Msg::GroupsChanged(vec![group(2, "b")]));
+    // Back in P (the switch), before P's own list arrives.
+    root.workspace.active = Some(PathBuf::from("/p"));
+    let g = group(1, "a").id;
+    routed(
+        &mut root,
+        Msg::CompareOpened {
+            group: g,
+            project: PathBuf::from("/p"),
+        },
+    );
+    assert_eq!(root.runs.groups, vec![group(1, "a")], "P's last list");
+    assert_eq!(root.runs.compare.as_ref().map(|c| c.group), Some(g));
+}
+
+#[test]
+fn compare_of_a_group_in_no_list_or_another_project_opens_nothing() {
+    let mut root = root_in("p");
+    routed(&mut root, Msg::GroupsChanged(vec![group(1, "a")]));
+    root.workspace.active = Some(PathBuf::from("/q"));
+    routed(&mut root, Msg::GroupsChanged(vec![group(2, "b")]));
+    routed(
+        &mut root,
+        Msg::CompareOpened {
+            group: group(1, "a").id,
+            project: PathBuf::from("/p"),
+        },
+    );
+    assert_eq!(root.runs.groups, vec![group(2, "b")], "P is not active");
+    assert!(root.runs.compare.is_none());
+    routed(
+        &mut root,
+        Msg::CompareOpened {
+            group: group(9, "z").id,
+            project: PathBuf::from("/q"),
+        },
+    );
+    assert!(root.runs.compare.is_none(), "a group in no list");
+}
