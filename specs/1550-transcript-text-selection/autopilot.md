@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M3
-- **Next step**: M3 scoped gate + review A, then review B and visual pass
+- **Next step**: M3 full gate on the merged tree, push, PR body (orchestrator opens the PR)
 
 ## Pull requests
 
@@ -71,6 +71,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 (code-review high) | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | 1 BLOCKER, 1 MAJOR, 8 MINOR: fixed BLOCKER (unfocused transcript listener heard a busy turn's Escape/Ctrl+C over dialogs and views: `transcript_keys(state, interrupt)` + `State::transcript_focused`), MAJOR (empty copy text no longer written), MINOR F6 (Show in full clears like a toggle), F7 (menu Copy/Select all refocus), F10 (T021/T023 wording, prose only); 5 MINOR declined (below). No re-review: no BLOCKER/MAJOR left open, fixes tested red→green |
 | Review B M2 | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | CLEAN; Verify pass (28/40/18/2); 1 MINOR fixed, prose only (T021 focus.rs join named as T041's) |
 | Review A M3 (code-review high, headless) | 1 | c1645efc0134e397e126b86897deccd6f8b41a91:14636211796c477bf6dc6dcc2d0f4feda20206a9 | CHANGES: 1 MAJOR, 3 MINOR: fixed F1 (empty span panicked `cut_at_selection`: `split_at` drops empty ranges; test red→green), F2 (`link_regions` takes the text's wrapping), F3 (selected `Text` measures with Advanced shaping, as its rich-text child draws); F4 declined (below) |
+| Review A M3 (scoped, sonnet) | 2 | d371bebf0d185118d9af6c681062e861aae0da8a:4de2424fca9a9a44108a5c0ea28f5e30e29cf581 | CLEAN: F1–F3 fixes hold, F4's reason stands, the `wake_at` edge-scroll change is sound |
+| Review B M3 (sonnet) | 1 | d371bebf0d185118d9af6c681062e861aae0da8a:4de2424fca9a9a44108a5c0ea28f5e30e29cf581 | CLEAN; Verify pass (material lib 441, client `ui::material` 648; showcase_completeness 46, material_builder_api 13 unfiltered) |
+| Visual pass M3 (headless render) | 1 | 4de2424fc | pass: `visual/m3-visual-pass.md`, `visual/m3-selectable-leaves.png` |
 
 ## Declined review findings
 
