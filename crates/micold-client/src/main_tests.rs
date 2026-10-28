@@ -7580,13 +7580,111 @@ mod issue_source {
             Some(github_remote()),
         );
         settle(&mut rig.app, work);
-        assert!(
-            micold_client::features::overview::TitleLookup::Unavailable
-                == rig.app.core.overview.titles[&42]
-        );
+        assert!(matches!(
+            rig.app.core.overview.titles[&42],
+            micold_client::features::overview::TitleLookup::Failed { .. }
+        ));
         assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
         assert!(rig.constructed.lock().unwrap().is_empty(), "no gh source");
         assert!(rig.source.lookup_calls().is_empty(), "no title read");
+    }
+
+    /// Answer the rig's pending title 42 with `remotes` and return what the Overview then holds
+    /// for it, with the Unix seconds before and after the answer.
+    fn title_answer(
+        rig: &mut IssueRig,
+        remotes: Option<Vec<GitRemote>>,
+    ) -> (micold_client::features::overview::TitleLookup, u64, u64) {
+        rig.app
+            .core
+            .overview
+            .titles
+            .insert(42, micold_client::features::overview::TitleLookup::Pending);
+        let before = micold_core::unix_time::unix_secs();
+        let work = crate::shell::issues::on_title_remotes(
+            &mut rig.app,
+            PathBuf::from(PROJECT),
+            vec![42],
+            remotes,
+        );
+        settle(&mut rig.app, work);
+        let after = micold_core::unix_time::unix_secs();
+        (rig.app.core.overview.titles[&42].clone(), before, after)
+    }
+
+    /// Feature 1504, FR-009, R3: a failed answer is `Failed { at }` stamped with the time of the
+    /// answer, so the read is asked again after the retry interval.
+    fn assert_failed(answer: (micold_client::features::overview::TitleLookup, u64, u64)) {
+        let (lookup, before, after) = answer;
+        match lookup {
+            micold_client::features::overview::TitleLookup::Failed { at } => {
+                assert!((before..=after).contains(&at), "stamped {at}, not now");
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn title_answer_a_lost_remotes_read_is_failed() {
+        let mut rig = titles_rig(true);
+        assert_failed(title_answer(&mut rig, None));
+    }
+
+    #[test]
+    fn title_answer_a_project_without_a_github_remote_is_no_issue() {
+        let mut rig = titles_rig(true);
+        let gitlab = vec![GitRemote {
+            name: "origin".into(),
+            url: "git@gitlab.com:o/r.git".into(),
+        }];
+        assert_eq!(
+            title_answer(&mut rig, Some(gitlab)).0,
+            micold_client::features::overview::TitleLookup::NoIssue
+        );
+    }
+
+    #[test]
+    fn title_answer_a_number_that_is_no_issue_is_no_issue() {
+        let mut rig = titles_rig(true);
+        rig.source = Arc::new(FakeIssueSource::new().with_title(Ok(None)));
+        let source = Arc::clone(&rig.source);
+        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
+            locate_gh: Arc::new(|_| Some(PathBuf::from(FAKE_GH))),
+            source: Arc::new(move |_| Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>),
+            pull_requests: IssueTooling::none().pull_requests,
+        });
+        assert_eq!(
+            title_answer(&mut rig, Some(github_remote())).0,
+            micold_client::features::overview::TitleLookup::NoIssue
+        );
+    }
+
+    #[test]
+    fn title_answer_a_failed_read_is_failed_with_the_time() {
+        let mut rig = titles_rig(true);
+        rig.source = Arc::new(FakeIssueSource::new().with_title(Err(
+            micold_core::github::IssueLookupError::Load(
+                micold_core::github::IssueLoadError::NoAccess,
+            ),
+        )));
+        let source = Arc::clone(&rig.source);
+        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
+            locate_gh: Arc::new(|_| Some(PathBuf::from(FAKE_GH))),
+            source: Arc::new(move |_| Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>),
+            pull_requests: IssueTooling::none().pull_requests,
+        });
+        assert_failed(title_answer(&mut rig, Some(github_remote())));
+    }
+
+    #[test]
+    fn title_answer_no_gh_is_failed() {
+        let mut rig = titles_rig(true);
+        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
+            locate_gh: Arc::new(|_| None),
+            source: IssueTooling::none().source,
+            pull_requests: IssueTooling::none().pull_requests,
+        });
+        assert_failed(title_answer(&mut rig, Some(github_remote())));
     }
 
     /// On: the same steps read the title (the default is unchanged).

@@ -263,24 +263,24 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ### Tests
 
-- [ ] T042 [P] [US3] Write failing tests in `crates/micold-client/tests/overview.rs`:
+- [x] T042 [P] [US3] Write failing tests in `crates/micold-client/tests/overview.rs`:
   `titles_to_fetch(..., now)` re-asks `Failed { at }` only when `now - at >= 300`, never
   `NoIssue`, `Known` or `Pending` (US3.1–3.3, L5); while `Failed` or `Pending` the card shows the
   next source's title, never a loading text
-- [ ] T043 [P] [US3] Write failing tests named `title_answer_*` in
+- [x] T043 [P] [US3] Write failing tests named `title_answer_*` in
   `crates/micold-client/src/main_tests.rs`: `on_title_remotes(None)` → `Failed`, no GitHub remote
   → `NoIssue`, `read_title` `Ok(None)` → `NoIssue`, `Err(Load)` → `Failed { at }` stamped with
   `micold_core::unix_time::unix_secs()` (Unix seconds, research R3)
 
 ### Implementation
 
-- [ ] T044 [US3] In `crates/micold-client/src/features/overview.rs`: `TitleLookup` gains `NoIssue`
+- [x] T044 [US3] In `crates/micold-client/src/features/overview.rs`: `TitleLookup` gains `NoIssue`
   and `Failed { at: u64 }` (replacing `Unavailable`); `titles_to_fetch` takes `now` and adds due
   retries
-- [ ] T045 [US3] In `crates/micold-client/src/shell/issues.rs`: map `on_title_remotes` (~line 882)
+- [x] T045 [US3] In `crates/micold-client/src/shell/issues.rs`: map `on_title_remotes` (~line 882)
   and `read_title` (~line 980) answers per research R3, stamping `Failed { at }` with
   `micold_core::unix_time::unix_secs()`; pass that `now` to `titles_to_fetch`
-- [ ] T046 [US3] Update `docs/user-guide/overview.md` *Title*: a failed read is asked again after
+- [x] T046 [US3] Update `docs/user-guide/overview.md` *Title*: a failed read is asked again after
   5 minutes, on the next Overview opening or list refresh
 
 **Checkpoint**: quickstart §B *Retry*.

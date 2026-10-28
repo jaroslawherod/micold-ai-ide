@@ -939,7 +939,12 @@ fn request_titles(app: &mut App, tickets: &[TitleTicket]) -> bool {
     // issue links need it, and remotes are a git read, not a GitHub one (feature 1122, R2).
     let routed = has_route(app);
     let wanted = if app.core.settings.github_issues_enabled {
-        titles_to_fetch(&app.core.overview, tickets, routed)
+        titles_to_fetch(
+            &app.core.overview,
+            tickets,
+            routed,
+            micold_core::unix_time::unix_secs(),
+        )
     } else {
         Vec::new()
     };
@@ -952,7 +957,7 @@ fn request_titles(app: &mut App, tickets: &[TitleTicket]) -> bool {
     // `wanted` is empty unless `routed` held just above (a route to a daemon with an outbox), which
     // is exactly what `send_op` needs, so the request below is always sent and marking the titles
     // pending first cannot strand them. A daemon lost afterwards resolves the op as unknown
-    // (`on_title_remotes(None)`), which settles them as unavailable. Its answer also records the
+    // (`on_title_remotes(None)`), which settles them as failed, to be asked again. Its answer also records the
     // repository, so no second read is asked for.
     app.core
         .update(Message::Overview(Msg::TitlesRequested(wanted.clone())));
@@ -1019,12 +1024,13 @@ pub fn on_title_remotes(
 ) -> Task<Message> {
     use micold_client::features::overview::{Msg, TitleLookup};
     let started_in = project.clone();
-    let unavailable = |numbers: Vec<u64>| {
+    // Every number settles as `result` (feature 1504, R3).
+    let settled = |numbers: Vec<u64>, result: TitleLookup| {
         Task::batch(numbers.into_iter().map(|number| {
             Task::done(Message::Overview(Msg::TitleRead {
                 project: started_in.clone(),
                 number,
-                result: TitleLookup::Unavailable,
+                result: result.clone(),
             }))
         }))
     };
@@ -1055,12 +1061,19 @@ pub fn on_title_remotes(
     if numbers.is_empty() {
         return Task::none();
     }
-    // Feature 1102: an issue title is a GitHub issue read, so the switch gates it too.
-    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) =
-        choice.filter(|_| app.core.settings.github_issues_enabled)
-    else {
-        return unavailable(numbers);
+    // Feature 1504, R3: no remotes answer is a failure to retry; a project with no GitHub
+    // repository has no issue to read, now or later.
+    let Some(choice) = choice else {
+        return settled(numbers, failed_now());
     };
+    let micold_core::github::RemoteChoice::Github { repo, .. } = choice else {
+        return settled(numbers, TitleLookup::NoIssue);
+    };
+    // Feature 1102: an issue title is a GitHub issue read, so the switch gates it too. Off, the
+    // titles stay unread for the occasion after it is turned on again.
+    if !app.core.settings.github_issues_enabled {
+        return settled(numbers, failed_now());
+    }
     let tooling = app.caps.issue_tooling();
     let cached = app.env_include_cache.get(&project).cloned();
     let resolver = app.caps.env_include_shared();
@@ -1089,12 +1102,7 @@ pub fn on_title_remotes(
             .flatten()
         },
         move |read| {
-            read.unwrap_or_else(|| {
-                asked
-                    .iter()
-                    .map(|number| (*number, TitleLookup::Unavailable))
-                    .collect()
-            })
+            read.unwrap_or_else(|| asked.iter().map(|number| (*number, failed_now())).collect())
         },
     )
     .then(move |read| {
@@ -1108,6 +1116,13 @@ pub fn on_title_remotes(
     })
 }
 
+/// A read that failed just now, to be asked again after the retry interval (feature 1504, R3).
+fn failed_now() -> micold_client::features::overview::TitleLookup {
+    micold_client::features::overview::TitleLookup::Failed {
+        at: micold_core::unix_time::unix_secs(),
+    }
+}
+
 /// One title through `gh`. A failure is logged by number alone and leaves the branch (FR-020).
 fn read_title(
     gh: &(dyn micold_core::github::IssueSource + Send + Sync),
@@ -1116,17 +1131,20 @@ fn read_title(
 ) -> micold_client::features::overview::TitleLookup {
     use micold_client::features::overview::TitleLookup;
     let Ok(small) = u32::try_from(number) else {
-        return TitleLookup::Unavailable;
+        return TitleLookup::NoIssue;
     };
     match gh.read_title(repo, small) {
         Ok(Some(title)) => TitleLookup::Known(title),
         Ok(None) => {
             eprintln!("micold: no title for issue #{number} on the Overview: it is not an issue");
-            TitleLookup::Unavailable
+            TitleLookup::NoIssue
         }
         Err(error) => {
             eprintln!("{}", title_failure_line(number, &error));
-            TitleLookup::Unavailable
+            match error {
+                micold_core::github::IssueLookupError::NotOpenIssue { .. } => TitleLookup::NoIssue,
+                micold_core::github::IssueLookupError::Load(_) => failed_now(),
+            }
         }
     }
 }
@@ -1181,16 +1199,16 @@ mod title_tests {
     }
 
     #[test]
-    fn no_issue_or_a_failed_read_is_unavailable() {
+    fn no_issue_is_never_retried_and_a_failed_read_is() {
         use micold_core::github::FakeIssueSource;
         assert_eq!(
             read(FakeIssueSource::new().with_title(Ok(None))),
-            TitleLookup::Unavailable
+            TitleLookup::NoIssue
         );
         let failed = Err(IssueLookupError::Load(IssueLoadError::NoAccess));
-        assert_eq!(
+        assert!(matches!(
             read(FakeIssueSource::new().with_title(failed)),
-            TitleLookup::Unavailable
-        );
+            TitleLookup::Failed { at } if at > 0
+        ));
     }
 }
