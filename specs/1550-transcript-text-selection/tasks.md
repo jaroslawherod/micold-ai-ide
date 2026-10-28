@@ -450,9 +450,10 @@ layout_snapshot`; quickstart Part B step 6.
   the copy controls (header value, input, result, diff path; keyboard; Copied/failed
   confirmation); the out-of-scope note on copying in
   `specs/939-structured-transcript-view/spec.md` says #1550 delivers it (FR-021)
-- [ ] T049 [US3] Quickstart Part B (steps 1–9) with the `visual-pass` skill on Linux, evidence in
+- [x] T049 [US3] Quickstart Part B (steps 1–9) with the `visual-pass` skill on Linux, evidence in
   `specs/1550-transcript-text-selection/visual-pass/` (FR-020, SC-006 screenshots; macOS and
-  Windows from the CI-built clients)
+  Windows from the CI-built clients). Recorded in `m4b-visual-pass.md` and `m5-visual-pass.md`;
+  step 9's copy key fails in a two-pane split (M4b code), a follow-up in the ledger
 
 ---
 

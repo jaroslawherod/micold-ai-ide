@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M5
-- **Next step**: M5 full gate (last one died of a full disk), finish T049 visual pass (classify the tool-card darkening; steps 7–9), push, PR body; see *Handover*
+- **Next step**: M5 PR (pushed; the orchestrator opens it from `pr-1550-m5-body.md`), then fix the split-pane copy key (*Follow-ups not done*) before closing the spec
 
 ## Pull requests
 
@@ -123,43 +123,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 unit 3 handed over at the context cap (~130k). State at c93e37726 + this ledger commit (local, not
-pushed). Reviews A and B are done (see *Review rounds*); no code changed in unit 3.
-
-- **Full gate NOT green yet.** `full-gate-1` (on 79f1ffd04) died at `GATE_EXIT=101` from
-  `No space left on device` (a parallel release build filled the ~40 GB disk). `target-shared/debug`
-  was wiped to recover (28 GB free after). Next: run the full `scripts/gate.sh` again, detached,
-  with nothing else building (it needs ~26 GB). Then delete `target-shared/release` if disk is short.
-- **T049 visual pass, release build** (client copied to `vp5/bin/`, pre-M5 client at 84bca0374 in
-  `vp5/binpre/`, both with `micold-daemon`; setup `vp5/env2.sh`, display :79, Xvfb now stopped).
-  - Priority check **did not reproduce**: pointer presses on an unfolded Bash card's input, result
-    and header controls copied 9 of 9 tries (`{"command":"<CWD>/notes.txt"}`, the numbered result,
-    `<CWD>/notes.txt`), "Copied" drawn on the pressed control (evidence
-    `visual-pass/m5-6-tool-card-header-and-result-copied.png`). Edit card: diff path, input and
-    result controls each copied by pointer (`m5-6-diff-path-copied.png`). #940's code-block control
-    copies and shows "Copied" too. The debug-build failure was the slow client, not M5.
-  - **Open, to classify**: hovering a tool card's chevron or one of its copy controls darkens the
-    whole card with a translucent layer that keeps getting darker on later frames and stays after
-    the pointer leaves; widgets drawn later (texts, controls) show as light patches
-    (`visual-pass/m5-tool-card-darkening.png`: hover, just after a press, 3 s later). Fold+unfold
-    resets it. Plain buttons ("Open in terminal") and markdown code blocks do not do it. Not yet
-    known whether it predates M5: compare with `vp5/binpre/micold-ai-ide` (start it with
-    `$RUNENV`, unfold a tool card with its chevron — find it with a full-res crop, the header's
-    chevron is the rightmost glyph — hover the chevron, move away, crop). If pre-M5 does it too:
-    note it as a follow-up issue (lavapipe or DisclosureCard), not an M5 bug. If only M5: root-cause
-    (suspect the copy control's `TakesTheKeyboard` indicator `layer`/fade or an `IconButton` state
-    layer drawn with the card's bounds), red-then-green test, fresh review.
-  - Keyboard: Enter after a pointer press, and Tab+Enter, did not copy in this session, and no focus
-    ring was visible at 40 % screenshots; Tab moved focus to the top Bash card's header. Not
-    conclusive (focus may have been on the composer; X focus was the client window). Renderer
-    tests cover Enter/Space through focus traversal; the debug pass saw Enter copy the input.
-    Re-check once with a full-res crop of the focused control after each Tab.
-  - Steps 7 (streaming selection), 8 (light/dark, failed card, CJK/emoji) and 9 (two panes) are
-    NOT RUN yet. Then write `visual-pass/m5-visual-pass.md` (style of m4b's) and copy its PNGs to
-    `/mnt/project-files/issue-1550/` (the three above are there already).
-- Then: `git fetch origin && git merge origin/main`, green full gate, push
-  (`git push -u origin claude/project-thread-zj503u`), PR body to
-  `$SCRATCHPAD/pr-1550-m5-body.md`.
+None.
 
 ## Open escalation
 
@@ -167,6 +131,9 @@ None.
 
 ## Follow-ups not done
 
+- **Pre-existing, not #1550 (separate GitHub issue)**: *Tool card darkens cumulatively on hover and stays dark*. Repro (Linux, Xvfb + lavapipe): open a structured session, get a tool card (e.g. a Bash call), unfold it with its chevron, hover the chevron (or, from M5 on, a copy control): the whole card darkens with a translucent layer that gets darker on later frames and stays after the pointer leaves; texts drawn later show as light patches; fold+unfold resets it. The pre-M5 client (84bca0374) does the same (mean grey 0.853 → 0.772 → 0.727) and its sidebar went fully black the same way, so it predates M5 (suspect a state layer drawn without a clear, or lavapipe). Evidence: `visual-pass/m5-tool-card-darkening.png`, `visual-pass/m5-darkening-pre-m5.png`.
+- **M5 visual pass, step 9 FAIL (M4b code, needs a fix in #1550)**: in a two-pane split of two structured sessions, Ctrl+C after a drag-selection copies nothing in either pane (menu Copy works; single pane works). Likely cause: `ui::composer::transcript_keys` subscribes only for `state.session.active` and requires `App::transcript_focused()` (`focused_field == Transcript(active)`), while `App::update_selection`'s press sets `focused_field = Transcript(pressed session)` without focusing that pane (`shell::panes::focus_pane` is what moves `session.active`). Fix: key the subscription off the focused transcript's session (or focus the pane on a transcript press), with an App-level test: two panes, press in the non-active pane, Ctrl+C copies it.
+- **M5 visual pass, minor (M4 code)**: on a diff's lines the selection anchors where the drag first moves, not at the press (a fast drag from `banana` started at `fig`), and a same-line drag ending right of a short diff line's end selects nothing. Prose, code results and raw events anchor at the press. Suspect the diff's `sideways` scrollable taking the press.
 - T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
 - M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`). **M4b: done**, the area's count (`Press.clicks`) decides the granularity (see M4b note).
