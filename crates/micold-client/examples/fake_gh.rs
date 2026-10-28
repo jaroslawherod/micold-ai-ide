@@ -18,6 +18,7 @@
 //!   `repo:`, `is:open` / `is:closed`, `label:"…"`, `-label:"…"` and `sort:updated-desc|asc`
 //!   (`created-…` sorts by number); every other word, quoted or not, must appear in the title (any
 //!   case).
+//! - A single issue's details (837), with its labels and no relations.
 //! - The labels: every label, in one page.
 //!
 //! Each search's `q` is written to stderr, so a step can check what a filtered request sent.
@@ -194,6 +195,31 @@ fn search(q: &str) -> serde_json::Value {
     } } })
 }
 
+/// The single-issue details read (837): the issue's labels and no relations, so picking an issue
+/// shows its details rather than "Couldn't read this issue's details". `null` for a number the
+/// repository lacks.
+fn details(number: u64) -> serde_json::Value {
+    let empty = serde_json::json!({ "totalCount": 0, "nodes": [] });
+    let Some(issue) = issues().into_iter().find(|i| i.number == number) else {
+        return serde_json::json!({ "data": { "repository": { "issue": null } } });
+    };
+    let labels: Vec<_> = issue
+        .labels
+        .iter()
+        .map(|l| serde_json::json!({ "name": l }))
+        .collect();
+    serde_json::json!({ "data": { "repository": { "issue": {
+        "number": number,
+        "issueDependenciesSummary": { "blockedBy": 0, "totalBlockedBy": 0, "blocking": 0, "totalBlocking": 0 },
+        "blockedBy": empty, "blocking": empty, "parent": null,
+        "subIssuesSummary": { "total": 0, "completed": 0 }, "subIssues": empty,
+        "labels": { "totalCount": labels.len(), "nodes": labels },
+        "assignees": empty, "milestone": null, "projectItems": empty,
+        "closedByPullRequestsReferences": empty,
+        "timelineItems": { "nodes": [], "pageInfo": { "hasNextPage": false, "endCursor": null } },
+    } } } })
+}
+
 fn listing(repo: &str) -> serde_json::Value {
     let mut open: Vec<FakeIssue> = issues().into_iter().filter(|i| !i.closed).collect();
     open.sort_by_key(|i| i.age);
@@ -254,7 +280,14 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
     // The listing asks for each issue's `labels(first: 20)` too, so it is told apart first.
-    let answer = if query.contains("search(") {
+    let answer = if query.contains("issueDependenciesSummary") {
+        details(
+            fields
+                .get("n")
+                .and_then(|n| n.parse().ok())
+                .unwrap_or_default(),
+        )
+    } else if query.contains("search(") {
         if modes.contains(&"search-refused") {
             eprintln!("fake_gh: q={}", fields.get("q").map_or("", String::as_str));
             serde_json::json!({ "data": { "search": null }, "errors": [{ "type": "INVALID",

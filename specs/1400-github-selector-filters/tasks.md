@@ -312,8 +312,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: the Filters panel's State row lists open, closed or all issues; closed rows carry
   a "Closed" chip (ahead of a status-board status) and pick like open ones
 - **Satisfies**: US5 AS1–AS3; FR-003 (state), FR-014 (closed mark), FR-017, FR-021 (state)
-- **Verify**: `cargo test -p micold-client --test github_filter_state --test layout_snapshot
-  issue_rows_show_all_text`; quickstart §B B6
+- **Verify**: `cargo test -p micold-client --test github_filter_state` and
+  `cargo test -p micold-client --test layout_snapshot issue_rows_show_all_text`; quickstart §B B6
 - **Depends on**: M3
 - **Tier**: light
 

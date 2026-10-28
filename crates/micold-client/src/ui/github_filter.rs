@@ -13,8 +13,8 @@ use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::WorktreeForm;
 use crate::icons::Icon;
 use crate::ui::material::{self, Button, ToggleChip, TypeaheadRow};
-use iced::widget::{column, row, Row, Space};
-use iced::{Alignment, Element, Length};
+use iced::widget::{column, container, row, Row, Space};
+use iced::{Alignment, Element, Length, Padding};
 use micold_core::github::NoticeSource;
 use micold_core::github_filter::NOT_ACCEPTED;
 use micold_core::tokens::{spacing, Roles};
@@ -144,14 +144,21 @@ pub(super) fn controls_row<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Eleme
         return None;
     }
     let source = form.notice_source()?;
-    let mut controls = row![Space::new().width(Length::Fill)]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
-    if !form.github_selector.basic.is_default() {
-        controls =
-            controls.push(Button::text("Clear filters", r).on_press(github(GithubMsg::ClearedAll)));
-    }
-    Some(controls.push(filters_control(form, source, r)).into())
+    // The slot ahead of the Filters control is always there, empty or holding **Clear filters**:
+    // focus is kept by position in the tree, so a button that came and went ahead of the control
+    // moved it, and the chip a keyboard pick had focused lost the keyboard when the pick turned
+    // the filter on or off. The gap sits inside the slot so an empty one adds none.
+    let clear: Element<'a, Message> = if form.github_selector.basic.is_default() {
+        Space::new().into()
+    } else {
+        container(Button::text("Clear filters", r).on_press(github(GithubMsg::ClearedAll)))
+            .padding(Padding::default().right(spacing::SM))
+            .into()
+    };
+    let controls = row![Space::new().width(Length::Fill), clear]
+        .align_y(Alignment::Center)
+        .push(filters_control(form, source, r));
+    Some(controls.into())
 }
 
 /// The line naming the active filter under the search, while the GitHub filters show (FR-007).
@@ -200,5 +207,38 @@ mod tests {
     fn the_fields_are_named_for_their_list() {
         assert_eq!(title(LabelList::Include), "Include labels");
         assert_eq!(title(LabelList::Exclude), "Exclude labels");
+    }
+
+    /// A form showing the GitHub filters, with `chosen` as its state.
+    fn showing(chosen: micold_core::github_filter::IssueState) -> crate::app::State {
+        use crate::features::worktree_form::{BranchSource, Msg};
+        let mut state = crate::app::State::default();
+        state.workspace.active = Some(std::path::PathBuf::from("/work/acme"));
+        let mut send = |msg| state.update(Message::WorktreeForm(msg));
+        send(Msg::Opened);
+        send(Msg::RemotesListed(Ok(vec![micold_core::git::GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }])));
+        send(Msg::SourceChanged(BranchSource::Issue));
+        send(Msg::GithubFilter(GithubMsg::StateChosen(chosen)));
+        state
+    }
+
+    /// A keyboard pick that turns **Clear filters** on or off must not move the **Filters**
+    /// control (and the focus a chosen chip holds in it) to another slot of the row: the focus is
+    /// kept by position in the tree, so a button that comes and goes ahead of it loses the focus.
+    #[test]
+    fn clear_filters_coming_and_going_keeps_the_filters_control_in_its_slot() {
+        use micold_core::github_filter::IssueState;
+        let r = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
+        let slots = |chosen| {
+            let state = showing(chosen);
+            let form = state.worktree_form.form.as_ref().unwrap();
+            let row = controls_row(form, r).unwrap();
+            let count = row.as_widget().children().len();
+            count
+        };
+        assert_eq!(slots(IssueState::Open), slots(IssueState::Closed));
     }
 }

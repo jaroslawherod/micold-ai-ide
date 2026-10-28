@@ -841,24 +841,23 @@ two fields and a **State** row:
   (ahead of any status shown for it), and you pick it like an open one: the ticket, name and type
   are filled the same way.
 
-The labels are the repository's, alphabetically, read from GitHub the first time you open one of
-the fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It
-then shows as a chip under its field; pressing the chip removes it. A label already in a list is not
+The labels are the repository's, alphabetically, read from GitHub the first time you open one of the
+fields. Type to narrow them, and pick one (or press Enter on the highlighted one) to add it. It then
+shows as a chip under its field; pressing the chip removes it. A label already in a list is not
 offered in that list again; picking one the other list holds moves it, since a label can't be both
-included and excluded. Up to 1,000 labels are
-offered; a repository with more says "Only the first 1,000 labels are offered". A label whose name
-holds a quote (`"`) can't be sent as a filter, so it is not offered, and the field says how many
-were left out. If the labels can't be read, the field says why and offers **Retry**; the list and
-the search keep working.
+included and excluded. Up to 1,000 labels are offered; a repository with more says "Only the first
+1,000 labels are offered". A label whose name holds a quote (`"`) can't be sent as a filter, so it
+is not offered, and the field says how many were left out. If the labels can't be read, the field
+says why and offers **Retry**; the list and the search keep working.
 
 The button names how many filters you chose ("Filters · 2"). Each change reloads the list from
 GitHub with the filters, most recently updated first, and a line under the search names them, for
-example "Excluding labels in-progress, blocked" or "Closed issues". The statement under the source then reads "Reads
-issues of <repository> from GitHub, sending the filter and the search text." **Clear filters**,
-above the statement, removes every filter and brings back the usual list of open issues. With no
-filter chosen, the picker reads and sends exactly what it did before. Switching the source to Jira
-(or to a branch) and back keeps the filters and clears the search text. With GitHub issues turned
-off in Settings, there is no Filters button and nothing is sent.
+example "Excluding labels in-progress, blocked" or "Closed issues". The statement under the source
+then reads "Reads issues of <repository> from GitHub, sending the filter and the search text."
+**Clear filters**, above the statement, removes every filter and brings back the usual list of open
+issues. With no filter chosen, the picker reads and sends exactly what it did before. Switching the
+source to Jira (or to a branch) and back keeps the filters and clears the search text. With GitHub
+issues turned off in Settings, there is no Filters button and nothing is sent.
 
 What you type in **Issue** narrows the filtered list the usual way. When more issues match the
 filters than the list holds, your words are also sent to GitHub's search together with the filters,
@@ -871,9 +870,9 @@ The filters are remembered per project, on this computer only: the next time you
 worktree** on the project, in this or a later run of the app, the list loads with them already
 applied. Another project keeps its own filters, or none. **Clear filters** is remembered too. A
 remembered label the repository no longer has still applies, and its chip adds "· not in this
-repository" after the name so you can remove it. Turning GitHub issues off, or switching the project to Jira,
-keeps what was remembered; the remembered filters are deleted when the project is removed from the
-app.
+repository" after the name so you can remove it. Turning GitHub issues off, or switching the project
+to Jira, keeps what was remembered; the remembered filters are deleted when the project is removed
+from the app.
 
 GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
 still show under its old labels. Change a filter, or clear them, to ask again.
