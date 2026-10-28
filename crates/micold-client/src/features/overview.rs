@@ -293,7 +293,8 @@ pub enum Msg {
     },
     /// These tickets' titles are being fetched: each without an entry is pending (R8).
     TitlesRequested(Vec<u64>),
-    /// A ticket's title was read: [`TitleLookup::Known`], [`TitleLookup::NoIssue`] or [`TitleLookup::Failed`].
+    /// A ticket's title was read: [`TitleLookup::Known`], [`TitleLookup::NoIssue`] or
+    /// [`TitleLookup::Failed`].
     TitleRead {
         /// The project the read was started in; dropped when it is no longer the active one.
         project: PathBuf,
@@ -700,7 +701,8 @@ pub fn titles_to_fetch(
         };
         let due = match state.titles.get(number) {
             None => true,
-            Some(TitleLookup::Failed { at }) => now.saturating_sub(*at) >= TITLE_RETRY_AFTER,
+            // A clock that went back (`now < at`) would otherwise never be due again.
+            Some(TitleLookup::Failed { at }) => now < *at || now - *at >= TITLE_RETRY_AFTER,
             Some(_) => false,
         };
         if due && !wanted.contains(number) {
