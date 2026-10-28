@@ -743,10 +743,12 @@ impl GithubSelector {
                 ));
                 let people = self.people_rows(field);
                 // A typed valid login is offered too, unless the search found that person.
+                // GitHub logins are case-insensitive: `OctoCat` typed is `octocat` found.
                 let typed = Login::parse(&self.typed(field)).filter(|login| {
-                    !people
-                        .iter()
-                        .any(|row| row.action == ValueAction::Author(Author::User(login.clone())))
+                    !people.iter().any(|row| {
+                        matches!(&row.action, ValueAction::Author(Author::User(found))
+                            if found.as_str().eq_ignore_ascii_case(login.as_str()))
+                    })
                 });
                 rows.extend(people);
                 if let Some(login) = typed {
@@ -759,6 +761,20 @@ impl GithubSelector {
             ValueField::Milestone => rows.extend(self.milestone_rows()),
         }
         rows
+    }
+
+    /// The row of `field`'s list that holds its chosen value, to mark it as 1185's Jira fields
+    /// do: "Any …" (row 0) while none is chosen; none while the chosen value is not listed.
+    pub fn selected_value_row(&self, field: ValueField) -> Option<usize> {
+        let chosen = match field {
+            ValueField::Assignee => self.basic.assignee().cloned().map(ValueAction::Assignee),
+            ValueField::Author => self.basic.author().cloned().map(ValueAction::Author),
+            ValueField::Milestone => self.basic.milestone().cloned().map(ValueAction::Milestone),
+        }
+        .unwrap_or(ValueAction::Any);
+        self.value_rows(field)
+            .iter()
+            .position(|row| row.action == chosen)
     }
 
     /// What a person field's list holds after its fixed choices: the people the search for this

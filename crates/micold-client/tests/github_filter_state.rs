@@ -2483,3 +2483,56 @@ fn the_chosen_value_in_the_field_is_not_a_search_and_debug_names_no_one() {
         "{printed}"
     );
 }
+
+/// M7 review A F1: GitHub logins are case-insensitive, so a typed login the search found in
+/// another case is the person found, not offered again as "Use login".
+#[test]
+fn a_typed_login_found_in_another_case_is_not_offered_again() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
+    let fake = FakeIssueSource::new().with_people(Ok(vec![person("octocat", None)]));
+    search_people(&mut state, ValueField::Author, "OctoCat", &fake);
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me", "octocat"]
+    );
+}
+
+/// M7 review A F2: a single-value field marks its chosen row, as 1185's Jira fields do: "Any …"
+/// while nothing is chosen, else the row that chooses the value.
+#[test]
+fn a_single_value_field_marks_its_chosen_row() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    let selected = |state: &State, field| form(state).github_selector.selected_value_row(field);
+    for field in ValueField::ALL {
+        assert_eq!(selected(&state, field), Some(0), "{field:?} marks Any");
+    }
+    pick_value(
+        &mut state,
+        ValueField::Assignee,
+        ValueAction::Assignee(Assignee::Nobody),
+    );
+    assert_eq!(selected(&state, ValueField::Assignee), Some(2));
+    pick_value(
+        &mut state,
+        ValueField::Author,
+        ValueAction::Author(Author::Me),
+    );
+    assert_eq!(selected(&state, ValueField::Author), Some(1));
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    serve_milestones(&mut state, &["v2.4", "alpha"]);
+    pick_value(
+        &mut state,
+        ValueField::Milestone,
+        ValueAction::Milestone(titled("v2.4")),
+    );
+    let rows = form(&state)
+        .github_selector
+        .value_rows(ValueField::Milestone);
+    let marked = selected(&state, ValueField::Milestone).expect("the milestone is marked");
+    assert_eq!(rows[marked].action, ValueAction::Milestone(titled("v2.4")));
+    pick_value(&mut state, ValueField::Assignee, ValueAction::Any);
+    assert_eq!(selected(&state, ValueField::Assignee), Some(0));
+}

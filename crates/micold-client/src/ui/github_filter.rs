@@ -170,6 +170,7 @@ fn value_field<'a>(
     .label(field.title())
     .open(state.open)
     .highlighted(state.highlight)
+    .selected(selector.selected_value_row(field))
     .on_focus(github(GithubMsg::ValueFocused(field)))
     .on_move(move |direction| github(GithubMsg::ValueHighlightMoved(field, direction)))
     .on_dismiss(github(GithubMsg::ValueDismissed(field)))
