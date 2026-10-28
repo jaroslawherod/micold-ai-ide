@@ -82,6 +82,11 @@ it). No ticked task lacks its evidence; T018 is ticked as "deviation recorded", 
 | 4 | LOW | Test added after its code: the M6 review addition to `an_empty_run_is_not_remembered_as_run` (a remembered query now refused reopens on the prompt) landed in `de7e59628`, after M6's code. It pins what the types already force (`UserQuery` is built only by `parse`, so a refused text can never become `last_run`), and core's `invalid_remembered_values_are_dropped` (PROVEN, M1) covers the file path. Not counted as a behaviour; read strictly it is test-after | `github_filter_state.rs:1953-1961` |
 | 5 | LOW | Mystery guest: the GraphQL fixtures are hand-written, not recorded from GitHub (`search_filtered_page.json`, `search_rejected.json`, `labels_page.json`, `milestones_page.json`, `assignable_users.json`), so the tests prove the parser against the contract's guess at GitHub's shape | `crates/micold-core/tests/fixtures/gh/`; ledger Follow-ups (T018) |
 
+Fixed in the close unit (test style only, no assertion weakened):
+- Finding 1 is fixed (T062): the listed unlabelled assertions now carry a message naming the rule.
+- Finding 2 is fixed (T063): the US6 test is split into four, one per behaviour, each assertion labelled (`github_filter_state` 71 to 74 tests).
+- Finding 3 is fixed (T064): `removing_a_value_and_clear_filters` names US1 AS6 / FR-007 in its doc comment.
+
 Properties: the feature's tests are deterministic (no clock, sleep or network: the debounce is a
 message the test delivers, `PeopleSearchDue { seq }`), isolated (each builds its own `State` and
 `FakeIssueSource`; the shell tests use temp dirs), and fast (`github_filter` 57 in 0.02 s,
