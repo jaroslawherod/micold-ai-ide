@@ -573,6 +573,8 @@ fn body_units<'a>(
         EntryKind::ModelChanged { model, refused } => {
             u.line(vec![0], model_changed_text(model, refused.as_deref()));
         }
+        // The transcript draws no text for an effort note yet (#1554), so it copies none.
+        EntryKind::EffortChanged { .. } => {}
         EntryKind::TerminalPeriod => {
             let marker = crate::features::session::terminal_period_marker();
             u.line(vec![0], marker.title);

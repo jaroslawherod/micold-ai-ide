@@ -325,6 +325,42 @@ fn a_user_message_copies_its_text_as_drawn() {
     );
 }
 
+/// An effort note draws no text (#1554), so it copies none: copying across it joins the rows
+/// either side of it.
+#[test]
+fn an_effort_note_copies_nothing() {
+    use micold_core::structured::effort::{EffortChoice, EffortLevel};
+    let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+    let held = Held::new(
+        0,
+        [
+            user("before"),
+            StructuredEvent::EffortChanged {
+                effort: high.clone(),
+            },
+            StructuredEvent::EffortRefused {
+                effort: high,
+                message: "not supported".into(),
+            },
+            user("after"),
+        ],
+    );
+    let notes: Vec<usize> = held
+        .transcript
+        .entries()
+        .enumerate()
+        .filter(|(_, e)| matches!(e.kind(), EntryKind::EffortChanged { .. }))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(notes.len(), 2, "both effort notes are entries");
+    for n in notes {
+        assert_eq!(held.units_of(held.body(n)), vec![]);
+    }
+    let last = held.transcript.entries().count() - 1;
+    let all = held.rows_selection(held.body(0), held.body(last));
+    assert_eq!(copy_text(&held.view(), &all), "before\nafter");
+}
+
 /// S-3, R3: markdown copies its shown text; list markers before their item text on its line,
 /// table cells joined by a tab and rows by a line break, inline code without backticks, links as
 /// their shown text, a code block's lines in full.
