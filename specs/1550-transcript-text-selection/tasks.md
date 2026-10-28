@@ -463,13 +463,13 @@ Found by M5's visual pass (quickstart Part B step 9) and cut by the close unit: 
 misses US2 in a two-pane split (FR-008, *Multi-session*: "the copy key acts only on the focused
 pane") and FR-001's anchor on diff lines.
 
-- [ ] T052 [P] [US2] App-level test in `crates/micold-client/tests/features_transcript_selection.rs`
+- [x] T052 [P] [US2] App-level test in `crates/micold-client/tests/features_transcript_selection.rs`
   (or the App tests beside `App::transcript_focused`, `crates/micold-client/src/app.rs`): two panes
   of two structured sessions, a press and drag in the pane that is not `session.active`, then
   Ctrl+C copies that pane's selection and interrupts nothing; the same with the other pane; the
   subscription built by `ui::composer::transcript_keys` hears the key for the pressed pane's
   session. Fails on main
-- [ ] T053 [US2] Make the copy key act on the focused transcript's pane: key
+- [x] T053 [US2] Make the copy key act on the focused transcript's pane: key
   `ui::composer::transcript_keys` (`crates/micold-client/src/ui/composer.rs`, wired in
   `crates/micold-client/src/ui/mod.rs`) off the session of `FieldId::Transcript(_)` when it is
   focused, not only `state.session.active`, or have `App::update_selection`'s press focus that

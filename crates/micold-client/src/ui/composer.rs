@@ -618,14 +618,23 @@ pub(crate) fn transcript_keys(
     state: &State,
     interrupt: bool,
 ) -> Option<iced::Subscription<Message>> {
-    let session = state.session.active?;
-    (crate::ui::terminal::shows_transcript(state, session)
-        && ((interrupt && state.composers.offers_stop(session)) || state.transcript_focused()))
-    .then(|| {
+    transcript_keys_session(state, interrupt).map(|session| {
         iced::keyboard::listen()
             .with(session)
             .filter_map(transcript_key_message)
     })
+}
+
+/// The session whose transcript [`transcript_keys`] listens to, if it listens at all: the active
+/// one, which a press to select in a pane of a split has made the pressed pane's (#1550 M6).
+pub fn transcript_keys_session(
+    state: &State,
+    interrupt: bool,
+) -> Option<micold_core::session::SessionId> {
+    let session = state.session.active?;
+    (crate::ui::terminal::shows_transcript(state, session)
+        && ((interrupt && state.composers.offers_stop(session)) || state.transcript_focused()))
+    .then_some(session)
 }
 
 /// A key press on `session`'s transcript, for the composer to decide (`transcript_key`).
