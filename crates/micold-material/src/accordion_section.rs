@@ -40,6 +40,8 @@ pub enum HeaderText {
 pub(crate) struct HeaderSelect<'a, M> {
     title: Box<dyn FnOnce(Text<'a, M>) -> Text<'a, M> + 'a>,
     summary: WrapLine<'a, M>,
+    /// The summary's selected bytes, drawn highlighted on its cut line.
+    summary_selected: Option<Range<usize>>,
 }
 
 /// What wraps the summary's drawn line, given the summary's whole text.
@@ -52,7 +54,7 @@ impl<'a, M: 'a> HeaderSelect<'a, M> {
     ) -> Self {
         let on_hit: Rc<dyn Fn(K, Hit) -> M + 'a> = Rc::new(on_hit);
         let (title, selected) = part(HeaderText::Title);
-        let (summary, _) = part(HeaderText::Summary);
+        let (summary, summary_selected) = part(HeaderText::Summary);
         let title_hit = Rc::clone(&on_hit);
         Self {
             title: Box::new(move |t| t.selectable(title, selected, move |k, h| title_hit(k, h))),
@@ -71,6 +73,7 @@ impl<'a, M: 'a> HeaderSelect<'a, M> {
                 })
                 .into()
             }),
+            summary_selected,
         }
     }
 }
@@ -177,7 +180,8 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
     /// Make the header's title and closed summary selectable (feature 1550): `part` names each
     /// one's slot and selected bytes, and hits are sent as `on_hit(slot, hit)`. The title draws
     /// its selected bytes highlighted; the summary, drawn cut, answers hits in its whole text and
-    /// draws no highlight yet. Without this call the header draws exactly as before.
+    /// highlights what is shown of its selected bytes. Without this call the header draws exactly
+    /// as before.
     pub fn selectable<K: Clone + 'static>(
         mut self,
         part: impl Fn(HeaderText) -> (K, Option<Range<usize>>) + 'static,
@@ -206,14 +210,18 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
         };
         let mut title = Text::new(title, TypeRole::Action, s.roles);
         let summary = s.summary.filter(|text| !s.open && !text.is_empty());
-        let line = |text: String| -> Element<'a, M> {
-            Ellipsized::at_role(text, TypeRole::Caption, s.roles.on_surface_variant).into()
+        let line = |text: String, selected: Option<Range<usize>>| -> Element<'a, M> {
+            let (fill, ink) = super::selectable_text::highlight(s.roles);
+            Ellipsized::at_role(text, TypeRole::Caption, s.roles.on_surface_variant)
+                .highlighted(selected, fill, ink)
+                .into()
         };
         let summary = match s.select {
-            None => summary.map(line),
+            None => summary.map(|text| line(text, None)),
             Some(select) => {
                 title = (select.title)(title);
-                summary.map(|text| (select.summary)(line(text.clone()), &text))
+                let selected = select.summary_selected;
+                summary.map(|text| (select.summary)(line(text.clone(), selected), &text))
             }
         };
         let header: Element<'a, M> = if s.leading.is_some() || s.trailing.is_some() {

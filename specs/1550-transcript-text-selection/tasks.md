@@ -379,12 +379,12 @@ shell::transcript`; quickstart Part B steps 1–5.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T039 [US1] Wiring tests in `crates/micold-client/tests/features_transcript_selection.rs` and
+- [x] T039 [US1] Wiring tests in `crates/micold-client/tests/features_transcript_selection.rs` and
   the new `tests` module of `crates/micold-client/src/shell/transcript.rs` (contracts/selectable-text.md
   *A-2*, *A-3*; FR-003, FR-007): `Press` sets `focused_field` to `FieldId::Transcript(session)`;
   `Edge { dir }` yields a `scroll_by` on `transcript_scroll_id(session)` for that session only, in
   the direction given, and none when not dragging
-- [ ] T040 [US4] Menu tests in `crates/micold-client/tests/features_transcript_selection.rs`
+- [x] T040 [US4] Menu tests in `crates/micold-client/tests/features_transcript_selection.rs`
   (contracts/keys-menu-copy.md *M-1*–*M-4*, FR-013): the menu items built for the open menu are
   **Copy** (`message: None` while the selection is empty) and **Select all**, at the right-press
   origin; an empty transcript shows Copy disabled (Edge Cases *Empty transcript*); M-3 is
@@ -392,16 +392,16 @@ shell::transcript`; quickstart Part B steps 1–5.
 
 ### Implementation
 
-- [ ] T041 [US1] Wrap the transcript's scrollable in `SelectionArea` in
+- [x] T041 [US1] Wrap the transcript's scrollable in `SelectionArea` in
   `crates/micold-client/src/ui/transcript/mod.rs` (`.id`, `.dragging`, `on_press`, `on_edge`,
   `on_release`, `on_context`, `on_focus_change` → `TranscriptMsg::Select`), joined to
   `FieldId::Transcript(session)` through `crates/micold-client/src/ui/focus.rs`; `Edge` becomes
   `scroll_by` on `transcript_scroll_id(session)` in `crates/micold-client/src/shell/transcript.rs`;
   T039 passes
-- [ ] T042 [US4] The context menu: `micold_material::ContextMenu` with the T040 items over the
+- [x] T042 [US4] The context menu: `micold_material::ContextMenu` with the T040 items over the
   transcript in `crates/micold-client/src/ui/transcript/mod.rs`, closing on Escape and an outside
   click (`MenuDismissed`); T040 passes
-- [ ] T043 [US1] User guide: `docs/user-guide/worktrees-and-sessions.md` *Structured sessions*
+- [x] T043 [US1] User guide: `docs/user-guide/worktrees-and-sessions.md` *Structured sessions*
   describes selecting (drag across entries, edge scroll, double- and triple-click, Ctrl+A / Cmd+A
   in the focused transcript, the right-click menu), that releasing never copies (unlike the
   terminal view), the copy keys per platform and their arbitration with the interrupt (with a

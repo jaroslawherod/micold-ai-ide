@@ -3,23 +3,26 @@
 //! research R2, R3, R7, R9): what each row of a structured session's transcript contributes to a
 //! copied selection, and the window's selection state per session — the gesture, granularity,
 //! select-all, the context menu, the rules that clear it and the checked copy. Render-free.
+//! M4b (T039, T040; selectable-text.md A-2, A-3; keys-menu-copy.md M-1, M-2): the selection
+//! area's press, edge scroll and click count as the window applies them, and the menu's items.
 
 use std::collections::HashSet;
 
 use micold_client::app::State as App;
 use micold_client::features::permission_prompts::State as Prompts;
-use micold_client::features::structured_transcript::TranscriptMsg;
+use micold_client::features::structured_transcript::{Scroll, TranscriptMsg, EDGE_SCROLL_STEP};
 use micold_client::features::transcript_rich::{DerivedBody, Part, RichCache};
 use micold_client::features::transcript_selection::shown::{
     footer_view, hunk_title, omitted_text, resolution_label, structured_input, unshown_caption,
     INPUT_CUT, PLAN_TITLE,
 };
 use micold_client::features::transcript_selection::{
-    copy_text, rows, units, Click, Joint, SelectMsg, TranscriptView, Unit, COPY_FAILED,
+    copy_text, rows, units, Click, EdgeDir, Joint, SelectMsg, TranscriptView, Unit, COPY_FAILED,
 };
 use micold_client::features::window::FieldId;
 use micold_client::features::Outcome;
 use micold_client::ui::syntax::GRAMMAR;
+use micold_client::ui::transcript::{context_menu_items, MENU_COPY, MENU_SELECT_ALL};
 use micold_core::protocol::messages::{
     PermissionRequest, PromptId, Resolution, SessionProcess, TerminalRef,
 };
@@ -1213,4 +1216,121 @@ fn show_in_full_in_range_clears_it_and_one_outside_keeps_it() {
         app.transcript_selection.selection(s).is_none(),
         "in the range"
     );
+}
+
+// ---- T039: the transcript's selection area, wired (contracts/selectable-text.md A-2, A-3) ----
+
+fn press(app: &mut App, s: SessionId, clicks: Click) {
+    send(app, SelectMsg::Press { session: s, clicks });
+}
+
+fn edge(app: &mut App, s: SessionId, dir: EdgeDir) -> Option<Scroll> {
+    app.update_transcript(TranscriptMsg::Select(SelectMsg::Edge { session: s, dir }))
+        .scroll
+}
+
+/// A-2, FR-007: a press to select gives that session's transcript the keyboard.
+#[test]
+fn a_press_gives_the_transcript_the_keyboard() {
+    let (mut app, s) = app_with([user("hello world")]);
+    app.window.focused_field = Some(FieldId::Composer(s));
+    press(&mut app, s, Click::Single);
+    assert_eq!(app.window.focused_field, Some(FieldId::Transcript(s)));
+}
+
+/// A-3, FR-003: a drag held past an edge scrolls that session's transcript that way, one step a
+/// frame; with no drag in progress, or after the release, it scrolls nothing.
+#[test]
+fn an_edge_scrolls_the_dragging_session_only_and_only_while_dragging() {
+    let (mut app, a) = app_with([user("hello world"), user("second")]);
+    let b = SessionId::new();
+    let _ = app.structured_events(b, 0, &seq(0, [user("other")]), false, &GRAMMAR);
+    assert_eq!(edge(&mut app, a, EdgeDir::Down), None, "no drag");
+    press(&mut app, a, Click::Single);
+    let pos = resolve(&app, a, &e(0, 2));
+    send(&mut app, hit(a, pos, Click::Single));
+    assert_eq!(
+        edge(&mut app, a, EdgeDir::Down),
+        Some(Scroll::By(EDGE_SCROLL_STEP))
+    );
+    assert_eq!(
+        edge(&mut app, a, EdgeDir::Up),
+        Some(Scroll::By(-EDGE_SCROLL_STEP))
+    );
+    assert_eq!(
+        edge(&mut app, b, EdgeDir::Down),
+        None,
+        "another session is not dragging"
+    );
+    send(&mut app, SelectMsg::Release { session: a });
+    assert_eq!(edge(&mut app, a, EdgeDir::Down), None, "released");
+}
+
+/// FR-005, M3 Review A F4: the press's click count, which the area counts over the whole
+/// transcript, decides the granularity, even when the unit hit counted the press as its first.
+#[test]
+fn the_areas_click_count_decides_the_granularity() {
+    let (mut app, s) = app_with([user("alpha beta gamma")]);
+    press(&mut app, s, Click::Double);
+    let pos = resolve(&app, s, &e(0, 7));
+    send(&mut app, hit(s, pos, Click::Single));
+    send(&mut app, SelectMsg::Release { session: s });
+    assert_eq!(copied(&app, s).as_deref(), Some("beta"));
+}
+
+// ---- T040: the context menu's items (contracts/keys-menu-copy.md M-1, M-2) ----
+
+fn menu_of(app: &App, s: SessionId) -> Vec<(&'static str, Option<SelectMsg>)> {
+    context_menu_items(&app.transcript_selection, s)
+}
+
+/// M-1, M-2: a right press opens Copy and Select all at its origin; Copy sends nothing while the
+/// selection is empty and copies once there is one.
+#[test]
+fn the_menu_offers_copy_only_with_a_selection_and_select_all_always() {
+    let (mut app, s) = app_with([user("hello world"), user("second")]);
+    send(
+        &mut app,
+        SelectMsg::Context {
+            session: s,
+            origin: (40, 50),
+        },
+    );
+    assert_eq!(app.transcript_selection.open_menu(), Some((s, (40, 50))));
+    assert_eq!(
+        menu_of(&app, s),
+        vec![
+            (MENU_COPY, None),
+            (MENU_SELECT_ALL, Some(SelectMsg::SelectAll { session: s })),
+        ]
+    );
+    send(&mut app, SelectMsg::MenuDismissed { session: s });
+    assert_eq!(app.transcript_selection.open_menu(), None);
+    drag(&mut app, s, e(0, 6), e(1, 3));
+    assert_eq!(
+        menu_of(&app, s),
+        vec![
+            (MENU_COPY, Some(SelectMsg::CopySelection { session: s })),
+            (MENU_SELECT_ALL, Some(SelectMsg::SelectAll { session: s })),
+        ]
+    );
+}
+
+/// Edge Cases *Empty transcript*: the menu opens over a transcript with nothing in it, with Copy
+/// disabled, and Select all selects nothing.
+#[test]
+fn an_empty_transcript_shows_copy_disabled() {
+    let mut app = App::default();
+    let s = SessionId::new();
+    send(
+        &mut app,
+        SelectMsg::Context {
+            session: s,
+            origin: (1, 2),
+        },
+    );
+    assert_eq!(menu_of(&app, s)[0], (MENU_COPY, None));
+    send(&mut app, SelectMsg::SelectAll { session: s });
+    assert!(!app.transcript_selection.selecting(s));
+    assert_eq!(menu_of(&app, s)[0], (MENU_COPY, None));
 }

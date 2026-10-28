@@ -81,6 +81,15 @@ impl From<crate::ui::material::selectable_text::Click> for Click {
 }
 
 impl Click {
+    /// The click a selection area's press count (1 to 3) is; a count past three is a triple.
+    pub fn from_count(count: u8) -> Self {
+        match count {
+            0 | 1 => Self::Single,
+            2 => Self::Double,
+            _ => Self::Triple,
+        }
+    }
+
     fn granularity(self) -> Granularity {
         match self {
             Self::Single => Granularity::Char,
@@ -103,7 +112,8 @@ pub enum EdgeDir {
 pub enum SelectMsg {
     /// The pointer is over `pos` with its button down: the gesture's first hit starts the
     /// selection, the next ones move its focus. `line` is the visual line under the pointer in
-    /// wrapped prose, which a triple click selects.
+    /// wrapped prose, which a triple click selects. `click` is the unit's own count; the
+    /// granularity follows the area's (`Press::clicks`), which sees every press of the gesture.
     Hit {
         session: SessionId,
         pos: TextPos,
@@ -112,7 +122,7 @@ pub enum SelectMsg {
     },
     /// A press in the transcript that no control took: a new gesture.
     Press { session: SessionId, clicks: Click },
-    /// A drag holds the pointer past an edge (the view scrolls; M4b).
+    /// A drag holds the pointer past an edge: the view scrolls that way (FR-003).
     Edge { session: SessionId, dir: EdgeDir },
     /// The button was released: the gesture ends, and the clipboard is not touched (FR-012).
     Release { session: SessionId },
@@ -877,6 +887,23 @@ impl State {
         self.sessions.get(&session)?.menu
     }
 
+    /// The session whose context menu is open, and where (window pixels): at most one is, since
+    /// a press anywhere else dismisses it.
+    pub fn open_menu(&self) -> Option<(SessionId, (u16, u16))> {
+        self.sessions
+            .iter()
+            .find_map(|(session, s)| Some((*session, s.menu?)))
+    }
+
+    /// Whether a selection drag in `session`'s transcript is in progress: the button is down and
+    /// the selection follows the pointer, which an edge scroll then extends (FR-003).
+    pub fn dragging(&self, session: SessionId) -> bool {
+        self.sessions
+            .get(&session)
+            .and_then(|s| s.selection.as_ref())
+            .is_some_and(Selection::dragging)
+    }
+
     /// Apply a selection message of the transcript `view` draws (`None`: the window holds no
     /// transcript of the session). Returns the text to copy for a `CopySelection` of a non-empty
     /// selection (S-12); nothing else writes the clipboard (S-8, FR-012).
@@ -890,10 +917,8 @@ impl State {
                 s.armed = Some(clicks);
                 None
             }
-            SelectMsg::Hit {
-                pos, click, line, ..
-            } => {
-                self.hit(view?, pos, click, line);
+            SelectMsg::Hit { pos, line, .. } => {
+                self.hit(view?, pos, line);
                 None
             }
             SelectMsg::Release { .. } => {
@@ -935,15 +960,9 @@ impl State {
     }
 
     /// A hit at `pos`: the gesture's first starts the selection there, expanded to the word or
-    /// line the click count asks for (S-11); a later one moves its focus, expanded by the
+    /// line the press's click count asks for (S-11); a later one moves its focus, expanded by the
     /// selection's granularity.
-    fn hit(
-        &mut self,
-        view: &TranscriptView<'_>,
-        pos: TextPos,
-        click: Click,
-        line: Option<Range<usize>>,
-    ) {
+    fn hit(&mut self, view: &TranscriptView<'_>, pos: TextPos, line: Option<Range<usize>>) {
         let Some(s) = self.sessions.get_mut(&view.session) else {
             return;
         };
@@ -967,10 +986,13 @@ impl State {
                 selection.extend(pos, range);
             }
             _ => {
-                if s.armed.take().is_none() {
+                // The click count is the area's, which sees every press of the gesture; a unit
+                // counts only the presses on itself, so a double click whose presses land in two
+                // units is a double click (M3 Review A F4).
+                let Some(clicks) = s.armed.take() else {
                     return;
-                }
-                let granularity = click.granularity();
+                };
+                let granularity = clicks.granularity();
                 let range = expand(granularity);
                 s.prints.clear();
                 s.selection = Some(Selection::start(pos, granularity, range));

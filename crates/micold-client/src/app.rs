@@ -1252,13 +1252,30 @@ impl State {
         &mut self,
         msg: crate::features::transcript_selection::SelectMsg,
     ) -> crate::features::structured_transcript::Effect {
+        use crate::features::structured_transcript::{Effect, Scroll, EDGE_SCROLL_STEP};
+        use crate::features::transcript_selection::{EdgeDir, SelectMsg};
         let session = msg.session();
-        // The menu's Copy and Select all give the transcript the keyboard again (FR-019a), even
-        // when there is nothing to copy; a copy key or Ctrl+A already comes from it.
+        // A drag held past an edge scrolls that session's transcript, and only while a drag is
+        // in progress (FR-003, contracts/selectable-text.md A-3).
+        if let SelectMsg::Edge { dir, .. } = msg {
+            if !self.transcript_selection.dragging(session) {
+                return Effect::default();
+            }
+            let step = match dir {
+                EdgeDir::Up => -EDGE_SCROLL_STEP,
+                EdgeDir::Down => EDGE_SCROLL_STEP,
+            };
+            return Effect {
+                scroll: Some(Scroll::By(step)),
+                ..Effect::default()
+            };
+        }
+        // A press to select gives the transcript the keyboard (FR-007, A-2), as do the menu's
+        // Copy and Select all (FR-019a), even when there is nothing to copy; a copy key or Ctrl+A
+        // already comes from it.
         let refocus = matches!(
             msg,
-            crate::features::transcript_selection::SelectMsg::CopySelection { .. }
-                | crate::features::transcript_selection::SelectMsg::SelectAll { .. }
+            SelectMsg::Press { .. } | SelectMsg::CopySelection { .. } | SelectMsg::SelectAll { .. }
         );
         let view = transcript_view_of(
             &self.structured_transcript,
