@@ -25,9 +25,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::features::transcript_selection::shown::first_line;
 pub use crate::features::transcript_selection::shown::{
-    attachments_line, command_chip_description, command_chip_title, compacted_text, era_tag,
-    footer_view, model_changed_text, omitted_text, oversized_text, subagent_count,
-    subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
+    attachments_line, command_chip_description, command_chip_title, compacted_text,
+    effort_changed_text, era_tag, footer_view, model_changed_text, omitted_text, oversized_text,
+    subagent_count, subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
     COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL,
     THINKING_TITLE, USER_LABEL,
 };
@@ -154,6 +154,22 @@ fn unit_caption(text: impl Into<String>, ctx: &RenderCtx<'_>, path: Vec<u16>) ->
         .wrapping(Wrapping::WordOrGlyph)
         .width(Length::Fill);
     ctx.text(drawn, path, len).into()
+}
+
+/// A model or effort marker, its row's one unit: its words in a caption, tinted as an error when
+/// the change was refused, since a refusal is said in words and the role only adds to them
+/// (#943 FR-012).
+fn change_marker(shown: String, refused: bool, ctx: &RenderCtx<'_>) -> Block {
+    let len = shown.len();
+    let text = Text::new(shown, TypeRole::Caption, ctx.roles)
+        .wrapping(Wrapping::WordOrGlyph)
+        .width(Length::Fill);
+    let text = if refused {
+        text.tint(ctx.roles.error)
+    } else {
+        text.muted()
+    };
+    ctx.text(text, vec![0], len).into()
 }
 
 /// The omitted notice: its row's one unit.
@@ -318,22 +334,17 @@ pub(super) fn entry(
             }
         }
         EntryKind::Cleared => unit_caption(CLEARED, ctx, vec![0]),
-        // A refusal is said in words; the error role only adds to them (FR-012).
-        EntryKind::ModelChanged { model, refused } => {
-            let shown = model_changed_text(model, refused.as_deref());
-            let len = shown.len();
-            let text = Text::new(shown, TypeRole::Caption, roles)
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill);
-            let text = match refused {
-                Some(_) => text.tint(roles.error),
-                None => text.muted(),
-            };
-            ctx.text(text, vec![0], len).into()
-        }
-        // No daemon writes an effort note before #1554 M2, and no window draws its marker before
-        // M4.
-        EntryKind::EffortChanged { .. } => iced::widget::Space::new().into(),
+        EntryKind::ModelChanged { model, refused } => change_marker(
+            model_changed_text(model, refused.as_deref()),
+            refused.is_some(),
+            ctx,
+        ),
+        // The effort marker, laid out as the model's (#1554 FR-004, FR-005, research R8).
+        EntryKind::EffortChanged { effort, refused } => change_marker(
+            effort_changed_text(effort, refused.as_deref()),
+            refused.is_some(),
+            ctx,
+        ),
         // The terminal period: where the conversation went, and where its turns are (#943 FR-023,
         // US5 scenario 2).
         EntryKind::TerminalPeriod => {
@@ -769,6 +780,24 @@ mod tests {
         assert_eq!(
             compacted_text(Some("auto")),
             "Conversation compacted automatically"
+        );
+    }
+
+    #[test]
+    fn an_effort_marker_names_the_choice_or_the_refusal() {
+        use micold_core::structured::effort::{EffortChoice, EffortLevel};
+        let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+        assert_eq!(
+            effort_changed_text(&high, None),
+            "Reasoning effort: high from here on"
+        );
+        assert_eq!(
+            effort_changed_text(&EffortChoice::Default, None),
+            "Reasoning effort: Default from here on"
+        );
+        assert_eq!(
+            effort_changed_text(&high, Some("Unknown effort level")),
+            "Reasoning effort high was not applied: Unknown effort level"
         );
     }
 

@@ -10,7 +10,8 @@
 //!
 //! #943 fills two of its places: the completion slot with the command palette while a `/` is
 //! typed ([`palette`]), and the status row with the session's model, which opens the model picker
-//! (`Typeahead`) in its place (FR-007, FR-013, FR-014).
+//! (`Typeahead`) in its place (FR-007, FR-013, FR-014). #1554 puts the effort picker beside the
+//! model (`MenuSelect`, its openness and highlight held in `features::effort_picker`).
 
 use iced::widget::text_editor::{Binding, KeyPress, Status};
 use iced::widget::{column, container, row, Row, Space};
@@ -28,8 +29,8 @@ use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, CommandPalette, PromptCard, QueueRow, Scrollable, Text,
-    TextArea, TextField, TypeRole, Typeahead, TypeaheadRow,
+    AttachmentChip, BusyIndicator, Button, CommandPalette, MenuSelect, MenuSelectRow, PromptCard,
+    QueueRow, Scrollable, Text, TextArea, TextField, TypeRole, Typeahead, TypeaheadRow,
 };
 use iced::widget::text::Wrapping;
 use micold_core::session::SessionKind;
@@ -63,6 +64,10 @@ pub const MODEL_PLACEHOLDER: &str = "Model name";
 
 /// The model picker's width in the status row: room for a model's full name.
 pub const MODEL_PICKER_WIDTH: f32 = 280.0;
+
+/// The effort trigger's width in the status row: `Effort: Default` and its chevron, and a list
+/// wide enough for a level and its "current" mark.
+pub const EFFORT_PICKER_WIDTH: f32 = 200.0;
 
 /// The model picker's field of `session`, which the shell focuses as the picker opens. One per
 /// session: two panes side by side each draw their own.
@@ -241,6 +246,9 @@ fn status_row<'a>(
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::Center);
+    if state.offers_effort(session) {
+        status = status.push(effort_control(state, session, roles));
+    }
     if let Some(overdue) = composers.overdue_notice(session) {
         status = status
             .push(Text::new(overdue, TypeRole::Caption, roles).width(Length::Fill))
@@ -291,6 +299,54 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
     container(typeahead)
         .width(Length::Fixed(MODEL_PICKER_WIDTH))
         .into()
+}
+
+/// The session's effort choice beside the model, pressed to open its picker (#1554 FR-001–FR-003):
+/// Default and the offered levels, the current one marked in words, and a note line when the
+/// model does not take the choice, which the trigger's tooltip says too.
+fn effort_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Element<'a, Message> {
+    let picker = state.effort_picker.picker(session);
+    let note = state.effort_note(session);
+    let header = state.effort_header(session);
+    let mut rows: Vec<MenuSelectRow<'a, Message>> = Vec::new();
+    if let Some(note) = &note {
+        rows.push(MenuSelectRow::note(note.clone()));
+    }
+    let options = picker.map(|p| p.rows()).unwrap_or_default();
+    rows.extend(options.iter().enumerate().map(|(i, r)| {
+        let mut line = row![Text::new(r.label(), TypeRole::Body, roles)]
+            .spacing(spacing::SM)
+            .align_y(Alignment::Center);
+        if let Some(mark) = r.mark() {
+            line = line.push(Text::new(mark, TypeRole::Caption, roles).muted());
+        }
+        MenuSelectRow::option(
+            line,
+            r.current,
+            send(Msg::EffortPicked {
+                session,
+                row: Some(i),
+            }),
+        )
+    }));
+    let tooltip = match &note {
+        Some(note) => format!("{header}. {note}"),
+        None => header.clone(),
+    };
+    MenuSelect::new(
+        header,
+        rows,
+        picker.is_some(),
+        send(Msg::EffortPickerToggled(session)),
+        send(Msg::EffortPickerClosed(session)),
+        roles,
+    )
+    .tooltip(tooltip)
+    .keyboard(picker.and_then(|p| p.highlight()), options.len(), true)
+    .on_move(move |direction| send(Msg::EffortPickerMoved { session, direction }))
+    .on_pick(send(Msg::EffortPicked { session, row: None }))
+    .width(Length::Fixed(EFFORT_PICKER_WIDTH))
+    .into()
 }
 
 /// A picker row labelled `label`, its `spans` emphasised, with `details` under it when there are

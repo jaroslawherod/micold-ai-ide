@@ -1698,6 +1698,24 @@ mod switching {
         assert_eq!(held, Some(reported.model));
     }
 
+    /// #1554 FR-001: the effort trigger reads the choice the service holds, as the model's does.
+    #[test]
+    fn a_snapshot_carries_the_effort_choice_into_the_window() {
+        use micold_core::structured::effort::{EffortChoice, EffortLevel};
+        let (mut w, s) = structured();
+        let mut reported = summary(s, SessionKind::Structured);
+        reported.effort = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+        reconcile_catalog(
+            &mut w,
+            DaemonId(1),
+            &snapshot(vec![reported.clone()]),
+            false,
+        );
+        let held = w.workspace.find_session(s).map(|(_, x)| x.effort.clone());
+        assert_eq!(held, Some(reported.effort));
+        assert_eq!(w.effort_header(s), "Effort: high");
+    }
+
     // ---- T053 ----
 
     #[test]

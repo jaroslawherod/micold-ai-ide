@@ -1691,7 +1691,7 @@ above it. A terminal session's pane has no composer and works as before.
   session stopped, the connection lost before it confirmed — comes back into the composer with
   the reason, nothing lost.
 
-#### Commands and the model
+#### Commands, the model and effort
 
 Skills and slash commands work in a structured session as they do in the terminal: type the
 command into the composer and send it. The transcript shows the command as you typed it, not the
@@ -1726,6 +1726,33 @@ instructions Claude Code expanded it into.
   terminal session, or inside a terminal Claude Code, changes it for that process only: the app
   shows the model the structured session last reported, and the choice it keeps is the one picked
   here.
+- **Reasoning effort.** Beside the model, the status row shows **Effort: Default** or the level
+  you chose, such as **Effort: high**. Press it to open the effort picker: **Default** and the
+  levels from least to most, the current one marked **current** in words. The levels are the ones
+  Claude Code reports for the session's model; when it reports none, all five are offered. Pick
+  one, or move with Up and Down and press Enter; Escape closes the picker without a change.
+  - **Default** — Claude Code's own default for the model, as if no level were chosen.
+  - **low** — the least thinking before answering: the quickest replies, for simple requests.
+  - **medium** — a balance of speed and thinking.
+  - **high** — thinks harder before answering, for design questions and tricky bugs.
+  - **xhigh** — more thinking still, for hard problems; slower replies.
+  - **max** — the most thinking Claude Code allows: the slowest replies and the most usage.
+- **When the model does not take the level.** When Claude Code reports that the session's model
+  does not support reasoning effort, the picker and the trigger's tooltip say "This model does not
+  support reasoning effort; Claude Code's default applies"; for a level the model does not offer,
+  they say "high is not available for this model; Claude Code's default applies" (with your level).
+  Your choice is kept and you can still change it: it applies again once the session runs a model
+  that takes it.
+- **When the effort change takes effect.** The new level applies from the next answer. An idle
+  session keeps running and keeps the conversation; pick during a turn and the turn in hand
+  finishes at the level it started with. The transcript marks the point with "Reasoning effort:
+  high from here on" (or **Default**), and a level Claude Code does not accept is marked with its
+  reason, the choice left as it was. The choice is kept with the session across restarts of the
+  session, the app and the session service, and when you switch the session to the terminal and
+  back: the terminal's Claude Code starts with the same level.
+- **An effort change made inside the terminal is not seen here.** Changing the level with `/effort`
+  inside a terminal Claude Code changes it for that process only; the structured view shows, and
+  launches with, the choice made here.
 - **What a command leaves in the transcript.** A command you sent is a card headed as you typed
   it, with its description behind it; `/compact` is marked where the conversation was compacted,
   its summary folded behind the marker, and the turns above stay; `/clear` is marked too, the turns

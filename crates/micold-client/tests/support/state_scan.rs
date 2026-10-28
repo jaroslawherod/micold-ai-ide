@@ -42,6 +42,8 @@ pub use source_scan::code_only;
 /// `Workspace` is not in here: its members belong to three different features, so a call on it is
 /// resolved to the members it actually writes rather than treated as one opaque mutation.
 pub const MUTATORS: &[&str] = &[
+    // #1554: `effort_picker.open` opens a session's effort picker.
+    "open",
     // Feature 1269: `changes.tabs` — × closes a Review tab, a forgotten project drops its tabs,
     // and the follow step marks a location unwatched and remembers a location's last session.
     "close",
@@ -130,6 +132,8 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // #1554: `effort_picker.picker`, a session's open effort picker.
+    "picker",
     // Feature 1269: `changes.tabs.shown_key`, the shown Review tab's location, and
     // `changes.tabs.session_for`, the session a location shows.
     "shown_key",

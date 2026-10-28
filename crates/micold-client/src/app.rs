@@ -472,6 +472,9 @@ pub struct State {
     /// Each structured session's composer in this window (feature 941) -- see
     /// [`crate::features::composer::State`].
     pub composers: crate::features::composer::State,
+    /// The effort pickers open beside the structured sessions' model switchers (#1554) -- see
+    /// [`crate::features::effort_picker::State`].
+    pub effort_picker: crate::features::effort_picker::State,
     /// The structured sessions' permission prompts in this window (#942) -- see
     /// [`crate::features::permission_prompts::State`].
     pub permission_prompts: crate::features::permission_prompts::State,
@@ -651,6 +654,12 @@ impl State {
                 .session
                 .active
                 .is_some_and(|id| self.composers.palette.picker(id).is_some())
+            // #1554: so does the effort picker's list while it is open.
+            // Not once the session is no longer one with a trigger: nothing draws the list then.
+            && !self
+                .session
+                .active
+                .is_some_and(|id| self.effort_picker_shown(id))
             // Settings is not a floating surface any more, so the registry cannot answer for it
             // (feature 027, FR-026). Without this the terminal it replaced on screen would still
             // be taking every key the user typed into a form.
@@ -1169,6 +1178,7 @@ impl State {
         self.structured_transcript.forget(session);
         self.transcript_rich.forget(session);
         self.composers.forget(session);
+        self.effort_picker.forget(session);
         self.structured_insights.forget(session);
         self.permission_prompts.forget(session);
         self.transcript_selection.forget(session);
