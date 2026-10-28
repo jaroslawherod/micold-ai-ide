@@ -64,7 +64,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- Done: M1 T001–T010 implemented and ticked (commit 32f37caee); red/green evidence in
+  `tdd/cycle-log.md`; scoped gate green (see *Review rounds*); decisions D9, D10.
+- Next: act on review A M1 round 1 (snapshot in *Review rounds*), then review B (conformance,
+  once), then the full gate `scripts/gate.sh` with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
+  CARGO_PROFILE_TEST_DEBUG=0` (the default debug build filled the ~39 GB disk; delete
+  `target-shared/` first if under 20 GB free), push, write the PR body.
+- Visible change in M1: the command palette now lists `/effort` under "In this app" with "Set the
+  reasoning effort for later turns" (sending it still sends text until M5). Text-only; no visual
+  pass run.
+- PR labels: docs-not-needed (no user-facing behaviour yet; the guide lands in M4/M5).
 
 ## Open escalation
 
