@@ -12,7 +12,10 @@
 //! and handed out a new issue seq (FR-008). The filtered search runs where 034's search runs
 //! (`start_issue_search` branches here). The label choices run when the reducer accepted the first
 //! opening of a label field, or a **Retry** of a failed request, and handed out a new filter seq
-//! (FR-005). Nothing else here sends anything: not opening the form, not a redraw.
+//! (FR-005). US6: the open milestones load on the milestone field's first focus (or a **Retry**),
+//! under a new filter seq; the assignable users are searched when text typed into the assignee or
+//! author field waited out [`ISSUE_SEARCH_DEBOUNCE`] and is still the newest (or on a **Retry**),
+//! sending the typed text. Nothing else here sends anything: not opening the form, not a redraw.
 //!
 //! # What the project remembers
 //!
@@ -34,10 +37,14 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::worktree_form::github_filter::Msg as GithubMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
-use micold_core::github::{GithubRepo, IssueLoadError};
-use micold_core::github_filter::{load_filtered, load_label_choices, FilterFailure, ScopedSearch};
+use micold_core::github::{GithubRepo, IssueLoadError, IssueSource};
+use micold_core::github_filter::{
+    load_filtered, load_label_choices, load_milestone_choices, FilterFailure, ScopedSearch,
+};
 
-use crate::shell::issues::{remember_github_selector, search_after_pause, start_issue_load, GhJob};
+use crate::shell::issues::{
+    remember_github_selector, search_after_pause, start_issue_load, GhJob, ISSUE_SEARCH_DEBOUNCE,
+};
 use crate::App;
 
 /// A filter message: the reducer takes it, then the listing, the label choices or the search it
@@ -45,6 +52,10 @@ use crate::App;
 pub fn on_filter(app: &mut App, msg: GithubMsg) -> Task<Message> {
     let issue_before = app.core.worktree_form.issue_request_seq;
     let choice_before = app.core.worktree_form.filter_request_seq;
+    let due = match msg {
+        GithubMsg::PeopleSearchDue { seq } => Some(seq),
+        _ => None,
+    };
     let (msg, loaded) = match msg {
         GithubMsg::Loaded {
             seq,
@@ -84,6 +95,37 @@ pub fn on_filter(app: &mut App, msg: GithubMsg) -> Task<Message> {
         .filter(|seq| *seq > choice_before)
     {
         work.push(start_label_choices(app, seq));
+    }
+    if let Some(seq) = app
+        .core
+        .worktree_form
+        .awaited_milestone_choices()
+        .filter(|seq| *seq > choice_before)
+    {
+        work.push(start_milestones(app, seq));
+    }
+    // Text typed into a person field waits out the debounce, then says it is due (US6, 034 R9).
+    if let Some(seq) = app
+        .core
+        .worktree_form
+        .pending_github_people_search()
+        .filter(|seq| *seq > choice_before)
+    {
+        work.push(Task::perform(
+            async move { tokio::time::sleep(ISSUE_SEARCH_DEBOUNCE).await },
+            move |()| {
+                Message::WorktreeForm(FormMsg::GithubFilter(GithubMsg::PeopleSearchDue { seq }))
+            },
+        ));
+    }
+    // A people search starts when its debounce ended (its seq is the one due) or on a Retry.
+    if let Some((seq, text)) = app
+        .core
+        .worktree_form
+        .awaited_github_people_search()
+        .filter(|(seq, _)| *seq > choice_before || Some(*seq) == due)
+    {
+        work.push(start_people_search(app, seq, text));
     }
     // A filtered list reloaded with text typed and more to find searches beyond it again; the
     // reducer left that search pending under the load's seq (FR-016).
@@ -155,6 +197,42 @@ pub(crate) fn start_filtered_search(
 /// Locate `gh` and read the repository's labels, up to ten pages, on a blocking thread, answering
 /// `GithubFilter(LabelsLoaded { seq })`. Sends the repository's owner and name only (FR-023).
 fn start_label_choices(app: &mut App, seq: u64) -> Task<Message> {
+    ask(app, "label request", load_label_choices, move |result| {
+        GithubMsg::LabelsLoaded { seq, result }
+    })
+}
+
+/// Locate `gh` and read the repository's open milestones, on a blocking thread, answering
+/// `GithubFilter(MilestonesLoaded { seq })`. Sends the repository's owner and name only (US6).
+fn start_milestones(app: &mut App, seq: u64) -> Task<Message> {
+    ask(
+        app,
+        "milestone request",
+        load_milestone_choices,
+        move |result| GithubMsg::MilestonesLoaded { seq, result },
+    )
+}
+
+/// Locate `gh` and search the repository's assignable users for `text`, on a blocking thread,
+/// answering `GithubFilter(PeopleLoaded { seq })`. Sends the repository and the typed text (US6).
+fn start_people_search(app: &mut App, seq: u64, text: String) -> Task<Message> {
+    ask(
+        app,
+        "people search",
+        move |source, repo| source.assignable_users(repo, &text),
+        move |result| GithubMsg::PeopleLoaded { seq, result },
+    )
+}
+
+/// Locate `gh` and run one choice request for the open form's repository on a blocking thread,
+/// answering with `answer`; a missing `gh` or a stopped thread is an error, so the field shows it
+/// with **Retry**.
+fn ask<T: Send + 'static>(
+    app: &mut App,
+    what: &'static str,
+    request: impl FnOnce(&dyn IssueSource, &GithubRepo) -> Result<T, IssueLoadError> + Send + 'static,
+    answer: impl FnOnce(Result<T, IssueLoadError>) -> GithubMsg + Send + 'static,
+) -> Task<Message> {
     let Some(repo) = app
         .core
         .worktree_form
@@ -167,18 +245,15 @@ fn start_label_choices(app: &mut App, seq: u64) -> Task<Message> {
     Task::perform(
         GhJob::of(app).run(move |located| match located {
             None => Err(IssueLoadError::ToolMissing),
-            Some((source, _)) => load_label_choices(&*source, &repo),
+            Some((source, _)) => request(&*source, &repo),
         }),
         move |joined| {
             let result = joined.map(|(result, _)| result).unwrap_or_else(|stopped| {
                 Err(IssueLoadError::Other(format!(
-                    "the label request stopped unexpectedly: {stopped}"
+                    "the {what} stopped unexpectedly: {stopped}"
                 )))
             });
-            Message::WorktreeForm(FormMsg::GithubFilter(GithubMsg::LabelsLoaded {
-                seq,
-                result,
-            }))
+            Message::WorktreeForm(FormMsg::GithubFilter(answer(result)))
         },
     )
 }

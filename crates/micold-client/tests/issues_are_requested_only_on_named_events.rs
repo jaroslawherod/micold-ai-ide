@@ -36,6 +36,9 @@ const MARKERS: &[&str] = &[
     "start_filtered_load(",
     "start_filtered_search(",
     "start_label_choices(",
+    // Feature 1400 US6: the milestone choices and the people search.
+    "start_milestones(",
+    "start_people_search(",
 ];
 
 /// `(file relative to the repository root, the trimmed line, why it is not another trigger)`.
@@ -166,6 +169,28 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "crates/micold-client/src/shell/github_filter.rs",
         "fn start_label_choices(app: &mut App, seq: u64) -> Task<Message> {",
         "1400: the definition of the label choice path; a signature calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "work.push(start_milestones(app, seq));",
+        "1400 US6 FR-005: `on_filter`, after the reducer accepted the first focus of the \
+         milestone field or a Retry of a failed milestone load and handed out a fresh filter seq.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "fn start_milestones(app: &mut App, seq: u64) -> Task<Message> {",
+        "1400 US6: the definition of the milestone choice path; a signature calls nothing.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "work.push(start_people_search(app, seq, text));",
+        "1400 US6 FR-005: `on_filter`, when text typed into the assignee or author field waited \
+         out the 300 ms debounce and is still the newest, or a Retry of a failed people search.",
+    ),
+    (
+        "crates/micold-client/src/shell/github_filter.rs",
+        "fn start_people_search(app: &mut App, seq: u64, text: String) -> Task<Message> {",
+        "1400 US6: the definition of the people search path; a signature calls nothing.",
     ),
     (
         "crates/micold-client/src/shell/pr_status.rs",
