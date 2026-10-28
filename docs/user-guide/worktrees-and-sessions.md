@@ -895,6 +895,13 @@ basic filters and their list (reloaded if a query's results were showing); the q
 kept for the next switch while the form stays open. Switching the source to Jira and back runs the
 last query you ran again, not one you typed and did not run.
 
+The mode and the last query you ran are remembered per project, like the filters: reopen **Add
+worktree** on a project you last used in **Advanced** and it opens in **Advanced** with that query in
+the input, and runs it once as soon as the GitHub source shows. A query you typed but did not run is
+not remembered; the form reopens with the last one you ran. If you never ran a query, the form
+opens in **Advanced** with the prompt and sends nothing. An empty **Run** sends nothing and is not
+remembered.
+
 **When a query is not run.** The app refuses a query before sending it, and says why in place of
 the list, when it names a repository, organization or user (`repo:`, `org:`, `user:` or `owner:`
 outside quotes: the selector already searches this repository), leaves a quote open, has
