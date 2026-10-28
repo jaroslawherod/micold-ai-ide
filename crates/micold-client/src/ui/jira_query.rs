@@ -33,12 +33,19 @@ fn message(msg: QueryMsg) -> Message {
     Message::WorktreeForm(FormMsg::JiraQuery(msg))
 }
 
-/// The Basic/Advanced switch heading the issue picker (FR-001): two chips, the active one the mode
-/// shown. The picker shows it only while the Jira source is showing.
-pub fn mode_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
-    let chip = |label: &'static str, mode: QueryMode| {
-        ToggleChip::new(label, message(QueryMsg::ModeChanged(mode)), r)
-            .active(form.jira_query.mode == mode)
+/// The Basic/Advanced switch heading the issue picker (FR-001): two chips, the active one `mode`,
+/// each pressing `on_change` with its own mode. The picker shows it while the Jira source shows
+/// (feature 1186) and, for the GitHub filters, while the GitHub source shows (feature 1400,
+/// research R12).
+pub fn mode_switch<'a>(
+    mode: QueryMode,
+    on_change: impl Fn(QueryMode) -> Message,
+    r: Roles,
+) -> Element<'a, Message> {
+    let chip = |label: &'static str, chip_mode: QueryMode| {
+        ToggleChip::new(label, on_change(chip_mode), r)
+            .active(mode == chip_mode)
+            .takes_the_keyboard()
     };
     row![
         chip("Basic", QueryMode::Basic),

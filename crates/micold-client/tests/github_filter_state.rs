@@ -22,9 +22,10 @@ use micold_core::git::GitRemote;
 use micold_core::github::{FakeIssueSource, Issue, IssueLoadError, IssuePage, NamePage};
 use micold_core::github_filter::{
     load_filtered, load_label_choices, BasicFilters, FilterFailure, IssueState, LabelName,
-    RememberedSelector, SelectorChange, NOT_ACCEPTED,
+    QueryRefusal, RememberedSelector, SelectorChange, NOT_ACCEPTED,
 };
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
+use micold_core::jira_query::QueryMode;
 use micold_core::typeahead::Direction;
 
 const EXCLUDE_IN_PROGRESS: &str =
@@ -162,6 +163,44 @@ fn serve(state: &mut State, fake: &FakeIssueSource) -> bool {
         },
     );
     true
+}
+
+/// The GitHub source showing 034's default listing on a project also connected to Jira, so the
+/// GitHub / Jira choice is offered.
+fn both_providers() -> State {
+    let mut both = State::default();
+    both.workspace.active = Some(project());
+    both.settings.jira_enabled = true;
+    both.settings.jira_connections.insert(
+        connection_key(&project()),
+        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+    );
+    send(&mut both, Msg::Opened);
+    send(
+        &mut both,
+        Msg::RemotesListed(Ok(vec![GitRemote {
+            name: "origin".into(),
+            url: "git@github.com:o/r.git".into(),
+        }])),
+    );
+    send(&mut both, Msg::SourceChanged(BranchSource::Issue));
+    let seq = both.worktree_form.awaited_issue_load().unwrap();
+    send(
+        &mut both,
+        Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: default_issues(),
+                    total_open: 3,
+                    complete: true,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    both
 }
 
 /// The labels `in-progress`, `blocked`, `bug` and `ui` loaded into the selector, the panel open.
@@ -405,38 +444,7 @@ fn leaving_the_source_and_back_keeps_the_filters_and_reloads() {
     assert_eq!(search.as_str(), EXCLUDE_BOTH);
 
     // The same through the GitHub / Jira choice.
-    let mut both = State::default();
-    both.workspace.active = Some(project());
-    both.settings.jira_enabled = true;
-    both.settings.jira_connections.insert(
-        connection_key(&project()),
-        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
-    );
-    send(&mut both, Msg::Opened);
-    send(
-        &mut both,
-        Msg::RemotesListed(Ok(vec![GitRemote {
-            name: "origin".into(),
-            url: "git@github.com:o/r.git".into(),
-        }])),
-    );
-    send(&mut both, Msg::SourceChanged(BranchSource::Issue));
-    let seq = both.worktree_form.awaited_issue_load().unwrap();
-    send(
-        &mut both,
-        Msg::IssuesLoaded {
-            seq,
-            result: Ok((
-                micold_core::github::IssueListing {
-                    issues: default_issues(),
-                    total_open: 3,
-                    complete: true,
-                },
-                gh(),
-            )),
-            resolved_env: None,
-        },
-    );
+    let mut both = both_providers();
     with_labels(&mut both);
     pick(&mut both, LabelList::Exclude, "blocked");
     send(&mut both, Msg::IssueProviderChanged(IssueProvider::Jira));
@@ -1370,4 +1378,408 @@ fn the_pre_source_hint_names_the_remembered_state() {
             "{chosen:?}"
         );
     }
+}
+
+// --- T041: advanced mode (US3) ----------------------------------------------------------------
+
+/// Search-rules §4's scoped listing text of `query` in `o/r`, without a sort qualifier of its own.
+fn advanced(condition: &str) -> String {
+    format!("repo:o/r is:issue ({condition}) sort:updated-desc")
+}
+
+fn held_numbers(state: &State) -> Vec<u64> {
+    form(state)
+        .issues
+        .held()
+        .iter()
+        .map(|i| i.number())
+        .collect()
+}
+
+/// Type `query` into the Query input and run it.
+fn run(state: &mut State, query: &str) {
+    filter(state, GithubMsg::DraftChanged(query.to_string()));
+    filter(state, GithubMsg::Run);
+}
+
+/// Answer the filtered listing the form awaits with `answer`, through `load_filtered` against a fake
+/// source; what the fake was asked.
+fn answer_with(state: &mut State, answer: Result<IssuePage, FilterFailure>) -> Vec<String> {
+    let fake = FakeIssueSource::new().with_search_pages(vec![answer]);
+    assert!(serve(state, &fake), "a filtered listing is awaited");
+    fake.asked_searches()
+}
+
+/// US3 AS1, FR-002: switching to Advanced sends nothing, keeps the search text and the list.
+#[test]
+fn switching_to_advanced_sends_nothing_and_keeps_the_search_and_the_list() {
+    let mut state = shown(default_issues());
+    send(&mut state, Msg::IssueQueryChanged("crash".into()));
+    let seq = state.worktree_form.issue_request_seq;
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(form(&state).github_selector.mode, QueryMode::Advanced);
+    assert_eq!(
+        state.worktree_form.issue_request_seq, seq,
+        "nothing is sent"
+    );
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    assert_eq!(form(&state).issue_query, "crash");
+    assert_eq!(held_numbers(&state), vec![7, 42, 108]);
+    assert!(form(&state).shows_github_filters());
+    assert_eq!(form(&state).github_selector.active_line(), None);
+}
+
+/// FR-010: editing the draft never sends.
+#[test]
+fn editing_the_draft_never_sends() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    let seq = state.worktree_form.issue_request_seq;
+    for text in ["s", "st", "state:open"] {
+        filter(&mut state, GithubMsg::DraftChanged(text.into()));
+    }
+    assert_eq!(form(&state).github_selector.draft, "state:open");
+    assert_eq!(state.worktree_form.issue_request_seq, seq);
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+}
+
+/// US3 AS2: Run (Enter or **Run**) sends one listing with search-rules §4's text; the draft shows
+/// the query as run, and the list holds GitHub's answer in its order.
+#[test]
+fn run_lists_the_query_within_the_repository() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "  -label:in-progress\tstate:open ");
+    let selector = &form(&state).github_selector;
+    assert_eq!(selector.draft, "-label:in-progress state:open");
+    assert_eq!(selector.listed_for, Some(QueryMode::Advanced));
+    let asked = answer_with(
+        &mut state,
+        Ok(page(
+            vec![
+                issue(42, "Crash on open", &["bug"]),
+                issue(108, "Blocked docs", &["blocked"]),
+            ],
+            2,
+            None,
+        )),
+    );
+    assert_eq!(asked, vec![advanced("-label:in-progress state:open")]);
+    assert_eq!(held_numbers(&state), vec![42, 108]);
+    assert_eq!(
+        form(&state).issue_notice().as_deref(),
+        Some("Reads issues of o/r from GitHub, sending the filter and the search text.")
+    );
+}
+
+/// US3 AS3: a sort qualifier is kept, and the list is in GitHub's order for it; a capped list
+/// names the first issues, not the most recently updated.
+#[test]
+fn a_sort_qualifier_is_kept_in_githubs_order() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "-label:blocked sort:created-asc");
+    let (seq, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(
+        search.as_str(),
+        "repo:o/r is:issue (-label:blocked) sort:created-asc"
+    );
+    filter(
+        &mut state,
+        GithubMsg::Loaded {
+            seq,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: vec![issue(3, "Old", &[]), issue(9, "Newer", &[])],
+                    total_open: 1_234,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    assert_eq!(held_numbers(&state), vec![3, 9]);
+    assert_eq!(
+        form(&state).issue_cap_caption().as_deref(),
+        Some("Showing the first 2 of 1,234 issues — search also looks on GitHub.")
+    );
+}
+
+/// US3 AS4: the query, not the app, decides the state: closed issues are listed and marked.
+#[test]
+fn closed_issues_a_query_returns_are_listed_and_marked() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "state:closed");
+    answer_with(
+        &mut state,
+        Ok(page(
+            vec![issue(5, "Fixed crash", &["bug"]).closed(true)],
+            1,
+            None,
+        )),
+    );
+    let held = form(&state).issues.held();
+    assert_eq!(held.len(), 1);
+    assert!(held[0].is_closed());
+}
+
+/// US3 AS5, FR-020: an empty result says no issue matches the query, distinct from an error.
+#[test]
+fn an_empty_result_says_no_issue_matches_this_query() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:nothing");
+    answer_with(&mut state, Ok(page(Vec::new(), 0, None)));
+    assert!(matches!(form(&state).issues, IssueList::Loaded { .. }));
+    assert_eq!(
+        form(&state).filtered_empty_text(),
+        Some("No issue matches this query.")
+    );
+}
+
+/// US3 AS6, FR-002: back to Basic reloads the basic filters only when a query's list shows, and the
+/// draft is kept for the next switch.
+#[test]
+fn switching_back_to_basic_restores_the_basic_list_and_keeps_the_draft() {
+    // No query ran: the basic list never left, so nothing is sent.
+    let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], true);
+    let seq = state.worktree_form.issue_request_seq;
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    filter(&mut state, GithubMsg::DraftChanged("label:bug".into()));
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
+    assert_eq!(state.worktree_form.issue_request_seq, seq);
+    assert_eq!(held_numbers(&state), vec![42]);
+    assert_eq!(
+        form(&state).github_selector.active_line().as_deref(),
+        Some("Excluding labels in-progress, blocked")
+    );
+
+    // A query ran: back to Basic loads the basic filters' list again.
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(form(&state).github_selector.draft, "label:bug");
+    filter(&mut state, GithubMsg::Run);
+    answer_with(
+        &mut state,
+        Ok(page(vec![issue(77, "Bug", &["bug"])], 1, None)),
+    );
+    filter(&mut state, GithubMsg::DraftChanged("label:ui".into()));
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
+    assert_eq!(
+        form(&state).github_selector.listed_for,
+        Some(QueryMode::Basic)
+    );
+    let asked = answer_with(
+        &mut state,
+        Ok(page(vec![issue(42, "Crash on open", &["bug"])], 1, None)),
+    );
+    assert_eq!(asked, vec![EXCLUDE_BOTH.to_string()]);
+    assert_eq!(held_numbers(&state), vec![42]);
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(form(&state).github_selector.draft, "label:ui");
+}
+
+/// A mode switch discards an answer in flight: the run's when back to Basic, the basic filters'
+/// when to Advanced, where the prompt then shows until a query runs.
+#[test]
+fn a_mode_switch_discards_an_answer_in_flight() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:bug");
+    let (ran, _, _) = state.worktree_form.github_filtered_load().unwrap();
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
+    let basic = state
+        .worktree_form
+        .awaited_issue_load()
+        .expect("the basic list loads");
+    assert!(basic > ran);
+    let late = |seq| GithubMsg::Loaded {
+        seq,
+        result: Ok((
+            micold_core::github::IssueListing {
+                issues: vec![issue(77, "Bug", &["bug"])],
+                total_open: 1,
+                complete: true,
+            },
+            gh(),
+        )),
+        resolved_env: None,
+    };
+    filter(&mut state, late(ran));
+    assert_eq!(form(&state).issues, IssueList::Loading { seq: basic });
+
+    // The basic list in flight, then Advanced: its answer is dropped, nothing else is sent.
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq: basic,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: default_issues(),
+                    total_open: 3,
+                    complete: true,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    assert!(form(&state).issues.held().is_empty());
+    assert!(form(&state).shows_github_filters(), "the switch stays");
+}
+
+/// FR-016 in advanced mode: the search beyond a capped list carries the query, the typed words
+/// quoted (search-rules §4's `beyond`).
+#[test]
+fn the_search_beyond_carries_the_query() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "a OR b sort:created-asc");
+    let (seq, _, _) = state.worktree_form.github_filtered_load().unwrap();
+    filter(
+        &mut state,
+        GithubMsg::Loaded {
+            seq,
+            result: Ok((
+                micold_core::github::IssueListing {
+                    issues: vec![issue(3, "Old crash", &[])],
+                    total_open: 2_000,
+                    complete: false,
+                },
+                gh(),
+            )),
+            resolved_env: None,
+        },
+    );
+    send(&mut state, Msg::IssueQueryChanged("crash OR ui".into()));
+    let seq = state.worktree_form.pending_issue_search().unwrap();
+    send(&mut state, Msg::IssueSearchDue { seq });
+    let (_, _, search, _) = state.worktree_form.github_filtered_search().unwrap();
+    assert_eq!(
+        search.as_str(),
+        "repo:o/r is:issue (a OR b) \"crash\" \"OR\" \"ui\""
+    );
+}
+
+/// Spec Edge "Switching source to Jira and back": in advanced mode the last run query runs again,
+/// not the draft; with none run, nothing is sent and the prompt shows.
+#[test]
+fn back_from_jira_in_advanced_runs_the_last_run_query_not_the_draft() {
+    let mut both = both_providers();
+    filter(&mut both, GithubMsg::ModeChanged(QueryMode::Advanced));
+    send(&mut both, Msg::IssueProviderChanged(IssueProvider::Jira));
+    send(&mut both, Msg::IssueProviderChanged(IssueProvider::Github));
+    assert_eq!(
+        both.worktree_form.awaited_issue_load(),
+        None,
+        "no query ran: nothing is sent"
+    );
+    assert!(form(&both).shows_github_filters());
+
+    run(&mut both, "state:open");
+    answer_with(&mut both, Ok(page(vec![issue(42, "Crash", &[])], 1, None)));
+    filter(&mut both, GithubMsg::DraftChanged("label:x".into()));
+    send(&mut both, Msg::IssueProviderChanged(IssueProvider::Jira));
+    assert_eq!(both.worktree_form.github_filtered_load(), None);
+    send(&mut both, Msg::IssueProviderChanged(IssueProvider::Github));
+    let (_, _, search) = both.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), advanced("state:open"));
+    assert_eq!(form(&both).github_selector.draft, "label:x");
+
+    // The same through the branch source.
+    send(&mut both, Msg::SourceChanged(BranchSource::New));
+    send(&mut both, Msg::SourceChanged(BranchSource::Issue));
+    let (_, _, search) = both.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(search.as_str(), advanced("state:open"));
+}
+
+// --- T046: refusals and GitHub's errors (US4) -------------------------------------------------
+
+/// US4 AS5, SC-004, FR-012: a query that could leave the scope, or is malformed or too long, is
+/// refused before sending; the reason stands in place of the list and the draft is kept.
+#[test]
+fn a_refused_query_is_never_sent() {
+    let long = "a".repeat(1_001);
+    for (query, refusal) in [
+        ("repo:other/x", QueryRefusal::ScopeQualifier),
+        ("(a", QueryRefusal::UnbalancedParentheses),
+        ("label:\"x", QueryRefusal::UnclosedQuote),
+        (long.as_str(), QueryRefusal::TooLong),
+    ] {
+        let mut state = shown(default_issues());
+        filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+        run(&mut state, query);
+        assert_eq!(
+            form(&state).issues,
+            IssueList::Refused(refusal),
+            "{query:.20}"
+        );
+        assert_eq!(state.worktree_form.awaited_issue_load(), None);
+        assert_eq!(state.worktree_form.github_filtered_load(), None);
+        assert_eq!(form(&state).github_selector.draft, query);
+        assert!(form(&state).issues.held().is_empty());
+    }
+    assert!(QueryRefusal::ScopeQualifier.message().contains("repo:"));
+}
+
+/// US4 AS1, AS2: GitHub's refusal shows its messages in order, the draft kept; editing and running
+/// again replaces the error with the new result.
+#[test]
+fn githubs_refusal_shows_its_messages_and_a_new_run_replaces_them() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "lable:bug");
+    answer_with(
+        &mut state,
+        Err(FilterFailure::Rejected(vec!["m1".into(), "m2".into()])),
+    );
+    assert_eq!(
+        form(&state).issues,
+        IssueList::Rejected(vec!["m1".into(), "m2".into()])
+    );
+    assert_eq!(form(&state).github_selector.draft, "lable:bug");
+    run(&mut state, "label:bug");
+    let asked = answer_with(
+        &mut state,
+        Ok(page(vec![issue(42, "Crash", &["bug"])], 1, None)),
+    );
+    assert_eq!(asked, vec![advanced("label:bug")]);
+    assert_eq!(held_numbers(&state), vec![42]);
+}
+
+/// US4 AS3, FR-019: another failure shows 034's notice, and Retry runs the same query again.
+#[test]
+fn a_failed_run_retries_the_same_query() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:bug");
+    answer_with(
+        &mut state,
+        Err(FilterFailure::Load(IssueLoadError::Offline)),
+    );
+    assert_eq!(
+        form(&state).issues,
+        IssueList::Failed {
+            error: IssueLoadError::Offline
+        }
+    );
+    filter(&mut state, GithubMsg::DraftChanged("label:ui".into()));
+    send(&mut state, Msg::IssueRetry);
+    let asked = answer_with(&mut state, Ok(page(Vec::new(), 0, None)));
+    assert_eq!(asked, vec![advanced("label:bug")]);
+}
+
+/// US4 AS4: a refusal without a message says so in plain words.
+#[test]
+fn a_refusal_without_a_message_says_so_plainly() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:bug");
+    answer_with(&mut state, Err(FilterFailure::Rejected(Vec::new())));
+    assert_eq!(form(&state).issues, IssueList::Rejected(Vec::new()));
+    assert_eq!(NOT_ACCEPTED, "GitHub did not accept the search query.");
 }

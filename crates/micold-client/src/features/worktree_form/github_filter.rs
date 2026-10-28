@@ -200,10 +200,18 @@ impl GithubSelector {
         }
     }
 
-    /// The filter a request is made with: the basic filters in basic mode; in advanced mode the
-    /// last run query, or none (the prompt, nothing sent).
+    /// The mode whose filter the list shown was asked with: `listed_for` once a list was asked
+    /// for, else the mode shown. Switching to Advanced leaves the basic list in place until a query
+    /// runs (US3 AS1), so what that list is searched beyond with and what it says follow the list,
+    /// not the switch.
+    fn listing_mode(&self) -> QueryMode {
+        self.listed_for.unwrap_or(self.mode)
+    }
+
+    /// The filter a request is made with (data-model §10): the basic filters for a basic list; for
+    /// a query's list, the last run query, or none (the prompt, nothing sent).
     pub fn active_filter(&self) -> Option<GithubFilter> {
-        match self.mode {
+        match self.listing_mode() {
             QueryMode::Basic => Some(GithubFilter::Basic(self.basic.clone())),
             QueryMode::Advanced => self.last_run.clone().map(GithubFilter::Advanced),
         }
@@ -253,10 +261,20 @@ impl GithubSelector {
         }
     }
 
-    /// The state the list shows: the chosen one in basic mode, none in advanced mode, where the
+    /// Whether the list shown is a query's that holds a `sort:` qualifier: GitHub's order for it,
+    /// not the most recently updated first (FR-011, FR-014).
+    pub fn sorted_by_query(&self) -> bool {
+        self.listing_mode() == QueryMode::Advanced
+            && self
+                .last_run
+                .as_ref()
+                .is_some_and(|query| !query.sorts().is_empty())
+    }
+
+    /// The state the list shows: the chosen one for a basic list, none for a query's, where the
     /// query says it.
     pub fn listed_state(&self) -> Option<IssueState> {
-        match self.mode {
+        match self.listing_mode() {
             QueryMode::Basic => Some(self.basic.state()),
             QueryMode::Advanced => None,
         }
@@ -417,12 +435,88 @@ impl GithubSelector {
 
 impl WorktreeForm {
     /// Whether the open form shows the GitHub filters: the GitHub source is showing with GitHub
-    /// issues on, its list asked for (FR-025).
+    /// issues on, its list asked for (FR-025), or advanced mode's prompt standing in for it.
     pub fn shows_github_filters(&self) -> bool {
         self.jira_site().is_none()
             && self.github_repo().is_some()
             && self.source == BranchSource::Issue
-            && self.issues != IssueList::NotRequested
+            && (self.issues != IssueList::NotRequested
+                || self.github_selector.mode == QueryMode::Advanced)
+    }
+
+    /// Whether advanced mode shows on the GitHub source (US3).
+    pub fn shows_github_advanced(&self) -> bool {
+        self.shows_github_filters() && self.github_selector.mode == QueryMode::Advanced
+    }
+
+    /// The GitHub source was shown (data-model §10, "GitHub source shown"): the list then loads
+    /// with the mode's filter, so it is the one listed. `true` when advanced mode has no query run
+    /// yet and takes it instead: the prompt shows and nothing is sent (FR-013).
+    pub(crate) fn github_source_shown(&mut self) -> bool {
+        if self.jira_site().is_some() || self.github_repo().is_none() {
+            return false;
+        }
+        let selector = &mut self.github_selector;
+        if selector.mode == QueryMode::Advanced && selector.last_run.is_none() {
+            selector.listed_for = None;
+            return true;
+        }
+        selector.listed_for = Some(selector.mode);
+        false
+    }
+
+    /// The switch was pressed (data-model §10). To Advanced: nothing is sent (FR-002); a basic list
+    /// still loading is dropped for the prompt, and a search beyond it stops. To Basic: the basic
+    /// filters' list loads again when a query's list (or nothing) showed; else the list stays.
+    /// `true` when the basic list is to load. The draft is kept either way.
+    fn change_github_mode(&mut self, mode: QueryMode) -> bool {
+        if self.github_selector.mode == mode {
+            return false;
+        }
+        self.github_selector.mode = mode;
+        self.github_selector.close_lists();
+        match mode {
+            QueryMode::Advanced => {
+                if let IssueList::Loaded { search, .. } = &mut self.issues {
+                    if matches!(
+                        search,
+                        SearchState::Pending { .. } | SearchState::Searching { .. }
+                    ) {
+                        *search = SearchState::Idle;
+                    }
+                }
+                if matches!(self.issues, IssueList::Loading { .. }) {
+                    self.issues = IssueList::NotRequested;
+                    self.github_selector.listed_for = None;
+                }
+                false
+            }
+            QueryMode::Basic => {
+                self.github_selector.listed_for == Some(QueryMode::Advanced)
+                    || self.issues == IssueList::NotRequested
+            }
+        }
+    }
+
+    /// Run the draft (US3 AS2, US4 AS5): a query refused is shown in place of the list and never
+    /// sent (FR-012); one accepted becomes the last run, the draft shows it as cleaned, and the list
+    /// loads it. `true` when it is to load.
+    fn run_github_query(&mut self) -> bool {
+        let selector = &mut self.github_selector;
+        selector.listed_for = Some(QueryMode::Advanced);
+        self.issue_highlight = None;
+        match UserQuery::parse(&selector.draft) {
+            Err(refusal) => {
+                self.issues = IssueList::Refused(refusal);
+                self.issue_list_open = false;
+                false
+            }
+            Ok(query) => {
+                selector.draft = query.as_str().to_string();
+                selector.last_run = Some(query);
+                true
+            }
+        }
     }
 
     /// The GitHub filter in force when it is not the default: what a GitHub request carries
@@ -461,6 +555,12 @@ pub enum Msg {
     StateChosen(IssueState),
     /// **Clear filters**: the default filter.
     ClearedAll,
+    /// The Basic/Advanced switch was pressed (US3).
+    ModeChanged(QueryMode),
+    /// The Query input's text changed; nothing is sent (FR-010).
+    DraftChanged(String),
+    /// Enter in the Query input, or **Run**: run the draft (US3 AS2, FR-010).
+    Run,
     /// The form opened: the project's remembered selector, read by the shell (FR-021).
     Restored(RememberedSelector),
     /// The repository's labels answered. Applies only while awaited under `seq`.
@@ -504,6 +604,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     };
     let editing = form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting();
     let mut reload = false;
+    let mut run = false;
     let mut asked = false;
     match msg {
         // Answers apply whatever the form is doing, as a load's answer does.
@@ -596,12 +697,35 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             reload = selector.basic.state() != state;
             selector.basic.set_state(state);
         }
+        Msg::ModeChanged(mode) => {
+            if form.change_github_mode(mode) {
+                // Not remembered as a basic change: the basic filters did not change.
+                form.issues = IssueList::Loading {
+                    seq: next_issue_seq,
+                };
+                form.issue_highlight = None;
+                form.github_selector.listed_for = Some(QueryMode::Basic);
+                state.worktree_form.issue_request_seq = next_issue_seq;
+            }
+        }
+        Msg::DraftChanged(text) => form.github_selector.draft = text,
+        Msg::Run if form.github_selector.mode == QueryMode::Advanced => {
+            // A refusal takes a fresh seq too, so an answer still in flight cannot replace it.
+            state.worktree_form.issue_request_seq = next_issue_seq;
+            run = form.run_github_query();
+        }
+        Msg::Run => {}
         Msg::ClearedAll => {
             let selector = &mut form.github_selector;
             reload = !selector.basic.is_default();
             selector.basic = selector.basic.cleared();
             selector.rematch_both();
         }
+    }
+    if run {
+        form.issues = IssueList::Loading {
+            seq: next_issue_seq,
+        };
     }
     let mut outcomes = Vec::new();
     if reload {

@@ -156,8 +156,10 @@ Both are reset like `Failed`. `held()` is empty for both.
 | **US6** `people` | `ChoiceLoad<Person>` + `people_pending: Option<u64>` | Debounced search (1185). |
 | **US6** `assignee_field`, `author_field`, `milestone_field` | `FilterField` | |
 
-- `active_filter(&self) -> GithubFilter`: `Basic(basic.clone())` in basic mode; in advanced mode
-  `Advanced(last_run)` when one ran, else none (the prompt, nothing sent).
+- `active_filter(&self) -> GithubFilter`: by the mode the list shown was asked in (`listed_for`,
+  else `mode`; set to `mode` whenever a load starts): `Basic(basic.clone())` for a basic list; for
+  a query's, `Advanced(last_run)` when one ran, else none (the prompt, nothing sent). So the basic
+  list kept after a switch to Advanced (US3 AS1) is still searched and described as basic (M5).
 - `from_remembered(RememberedSelector) -> GithubSelector` at form open.
 
 ### Transitions (reducer `features::worktree_form::github_filter::update`)

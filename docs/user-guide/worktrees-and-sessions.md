@@ -701,8 +701,10 @@ GitHub remote." or "Couldn't read this repository's remotes: …".
 
 **What is sent to GitHub, and when.** Opening the form contacts nothing but the app's own session
 service. Before you choose the chip, the line under the chips names the repository it would read:
-"GitHub issue reads open issues of *owner/name* from GitHub." Only choosing the chip, or pressing
-**Retry** after a failure, asks GitHub for the repository's open issues. The request carries the
+"GitHub issue reads open issues of *owner/name* from GitHub." (with a state filter remembered for
+the project, it names that state instead: closed issues, or open and closed issues; see [Filtering
+GitHub issues](#filtering-github-issues)). Only choosing the chip, or pressing **Retry** after a
+failure, asks GitHub for the repository's issues. The request carries the
 repository's owner and name and nothing else from your project. When more than 1,000 issues are
 open, typing in **Issue** also searches GitHub (see below); that request carries the text you typed
 as well. Picking an issue asks GitHub once more, for that issue's relationships (see below); that
@@ -873,6 +875,32 @@ remembered label the repository no longer has still applies, and its chip adds "
 repository" after the name so you can remove it. Turning GitHub issues off, or switching the project
 to Jira, keeps what was remembered; the remembered filters are deleted when the project is removed
 from the app.
+
+**Advanced mode.** For anything the filters can't express (linked pull requests, dates, `OR`,
+another order), switch the selector from **Basic** to **Advanced**, at the head of the picker. The
+**Filters** button and the line naming the filters give way to a **Query** input and a **Run**
+button; the search text stays, and so does the list until a query runs. Type a query in the syntax
+of github.com's issue search, for example
+`state:open no:assignee -linked:pr -label:blocked sort:created-asc`, and press Enter or **Run**.
+Nothing is sent while you type. The query always runs within this repository's issues: the app adds
+`repo:` and `is:issue` around it, and adds no state term, so the query decides whether closed issues
+are listed (a closed one is marked **Closed**). Without a `sort:` qualifier the list is most
+recently updated first; with one, it is in GitHub's order for it, and a list cut at 1,000 says
+"Showing the first 1,000 of *N* issues". What you type in **Issue** then narrows the query's
+results, and searches GitHub with the query when more match than the list holds. A query that
+matches nothing says "No issue matches this query." Switching back to **Basic** brings back the
+basic filters and their list (reloaded if a query's results were showing); the query you typed is
+kept for the next switch while the form stays open. Switching the source to Jira and back runs the
+last query you ran again, not one you typed and did not run.
+
+**When a query is not run.** The app refuses a query before sending it, and says why in place of
+the list, when it names a repository, organization or user (`repo:`, `org:`, `user:` or `owner:`
+outside quotes: the selector already searches this repository), leaves a quote open, has
+parentheses that don't match, or is longer than 1,000 characters. If GitHub refuses the query, for
+example for a misspelled qualifier, its own messages are shown in place of the list, in GitHub's
+order (or "GitHub did not accept the search query." when it gives none), and the query stays in
+the input for you to fix and run again. Any other failure (no `gh`, not signed in, offline, rate
+limited) shows the same notice and **Retry** as the usual list; **Retry** runs the same query again.
 
 GitHub's search index can lag an edit by a few seconds: an issue whose labels you just changed may
 still show under its old labels. Change a filter, or clear them, to ask again.

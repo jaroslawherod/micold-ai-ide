@@ -1381,6 +1381,13 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },
+        // Feature 1400 (US3): advanced mode over a capped list of a sorted query: the switch, the
+        // Query input with Run, the search and the cap caption.
+        CoveredState {
+            name: "add-worktree-dialog-github-advanced",
+            build: || StateUnderTest::new(super::github_picker::github_advanced(with_project())),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         // Rows, a long title, and the cap caption: more open issues than the load holds.
         CoveredState {
             name: "add-worktree-dialog-issue-loaded",

@@ -8,15 +8,18 @@
 //! quickstart §B.
 
 use crate::app::Message;
+use crate::features::window::FieldId;
 use crate::features::worktree_form::github_filter::{GithubSelector, LabelList, Msg as GithubMsg};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::WorktreeForm;
 use crate::icons::Icon;
-use crate::ui::material::{self, Button, ToggleChip, TypeaheadRow};
+use crate::ui::focus::TrackFocus;
+use crate::ui::material::{self, Button, Text, TextField, ToggleChip, TypeRole, TypeaheadRow};
 use iced::widget::{column, container, row, Row, Space};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::github::NoticeSource;
-use micold_core::github_filter::NOT_ACCEPTED;
+use micold_core::github_filter::{QueryRefusal, NOT_ACCEPTED};
+use micold_core::jira_query::QueryMode;
 use micold_core::tokens::{spacing, Roles};
 
 fn github(msg: GithubMsg) -> Message {
@@ -136,14 +139,23 @@ fn label_field<'a>(
     section.into()
 }
 
-/// The row heading the picker while the GitHub filters show: **Clear filters** while a filter is
-/// chosen (FR-007), then the **Filters** button, both trailing (contracts/selector-ui.md §1, where
-/// feature 1400's switch will lead).
+/// The Query input's placeholder (contracts/selector-ui.md §1), and the prompt in place of the list
+/// before a query runs (FR-013).
+pub const PROMPT: &str = "Type a GitHub search query, then press Enter or Run";
+
+/// The row heading the picker while the GitHub filters show (contracts/selector-ui.md §1): the
+/// Basic/Advanced switch leading (FR-001); in basic mode **Clear filters** while a filter is chosen
+/// (FR-007), then the **Filters** button, both trailing. Advanced mode has neither (US3 AS1).
 pub(super) fn controls_row<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Message>> {
     if !form.shows_github_filters() {
         return None;
     }
     let source = form.notice_source()?;
+    let mode = form.github_selector.mode;
+    let switch = super::jira_query::mode_switch(mode, |m| github(GithubMsg::ModeChanged(m)), r);
+    if mode == QueryMode::Advanced {
+        return Some(row![switch, Space::new().width(Length::Fill)].into());
+    }
     // The slot ahead of the Filters control is always there, empty or holding **Clear filters**:
     // focus is kept by position in the tree, so a button that came and went ahead of the control
     // moved it, and the chip a keyboard pick had focused lost the keyboard when the pick turned
@@ -155,10 +167,50 @@ pub(super) fn controls_row<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Eleme
             .padding(Padding::default().right(spacing::SM))
             .into()
     };
-    let controls = row![Space::new().width(Length::Fill), clear]
+    let controls = row![switch, Space::new().width(Length::Fill), clear]
         .align_y(Alignment::Center)
         .push(filters_control(form, source, r));
     Some(controls.into())
+}
+
+/// Advanced mode's query row, under the statement (contracts/selector-ui.md §1): the Query input,
+/// where Enter runs the draft, beside **Run** (FR-010). The input keeps Enter: it is captured there,
+/// so it reaches nothing behind the dialog.
+pub(super) fn query_row<'a>(
+    form: &'a WorktreeForm,
+    r: Roles,
+    focused: Option<FieldId>,
+) -> Option<Element<'a, Message>> {
+    if !form.shows_github_advanced() {
+        return None;
+    }
+    let field = TextField::new(PROMPT, &form.github_selector.draft, r)
+        .label("Query")
+        .track_focus(FieldId::AddWorktreeGithubQuery, focused)
+        .on_input(|text| github(GithubMsg::DraftChanged(text)))
+        .on_submit(github(GithubMsg::Run));
+    Some(
+        row![
+            container(field).width(Length::Fill),
+            Button::text("Run", r).on_press(github(GithubMsg::Run)),
+        ]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center)
+        .into(),
+    )
+}
+
+/// What stands in place of the list in advanced mode before a query runs (FR-013): the prompt.
+pub(super) fn prompt<'a>(form: &WorktreeForm, r: Roles) -> Option<Element<'a, Message>> {
+    form.shows_github_advanced()
+        .then(|| Text::new(PROMPT, TypeRole::Caption, r).muted().into())
+}
+
+/// Why a query was not run (FR-012), error-tinted in place of the list.
+pub(super) fn refusal<'a>(refusal: &QueryRefusal, r: Roles) -> Element<'a, Message> {
+    Text::new(refusal.message(), TypeRole::Caption, r)
+        .tint(r.error)
+        .into()
 }
 
 /// The line naming the active filter under the search, while the GitHub filters show (FR-007).
@@ -200,6 +252,14 @@ mod tests {
                 "one".to_string(),
                 "two".to_string()
             ]
+        );
+    }
+
+    #[test]
+    fn the_prompt_is_spelled_as_shipped() {
+        assert_eq!(
+            PROMPT,
+            "Type a GitHub search query, then press Enter or Run"
         );
     }
 

@@ -14,7 +14,7 @@
 //! **Compiled into the `layout_snapshot` binary**, beside the other gates that read covered states.
 
 use crate::support::covered_states::covered_states;
-use crate::support::github_picker::LABELS;
+use crate::support::github_picker::{ADVANCED_QUERY, LABELS};
 use crate::support::layout::{self as lay, StateUnderTest};
 
 /// The dialog's fixed width.
@@ -189,4 +189,64 @@ fn the_panel_stacks_its_fields_and_wraps_six_chips_inside_it() {
         chips.iter().any(|c| c.origin.y > first + 8.0),
         "six chips stayed on one row: the row did not wrap"
     );
+}
+
+/// T043 (US3 AS1, selector-ui §1, §5): in advanced mode the switch heads the picker, the Query input
+/// and **Run** share one row in place of the Filters button and the active line, and the cap
+/// caption of a sorted query keeps one line under the search; the footer stays reachable.
+#[test]
+fn the_query_row_and_the_cap_caption_fit_the_dialog() {
+    let drawn = painted(&covered("add-worktree-dialog-github-advanced"));
+    for gone in ["Clear filters", "Filters"] {
+        assert!(
+            drawn.iter().all(|d| d.content != gone),
+            "{gone:?} shows in advanced mode"
+        );
+    }
+    let basic = find(&drawn, "Basic");
+    let advanced = find(&drawn, "Advanced");
+    let run = find(&drawn, "Run");
+    let query = find(&drawn, ADVANCED_QUERY);
+    for text in [basic, advanced, run, query] {
+        assert_inside(text);
+        assert_whole(text);
+    }
+    let middle = |t: &lay::Overflow| t.origin.y + t.natural_height / 2.0;
+    assert!(
+        (middle(query) - middle(run)).abs() <= 8.0 && query.origin.x < run.origin.x,
+        "the query ({:.1}, {:.1}) and Run ({:.1}, {:.1}) are not one row, in that order",
+        query.origin.x,
+        middle(query),
+        run.origin.x,
+        middle(run)
+    );
+    // The field's text is set a size up from the button's, so one line of it is a little taller.
+    assert!(
+        query.natural_height < 1.5 * run.natural_height,
+        "the query wraps to {:.1}px, past one line ({:.1})",
+        query.natural_height,
+        run.natural_height
+    );
+    assert!(
+        advanced.origin.y < run.origin.y,
+        "the switch does not head the picker"
+    );
+    let caption = drawn
+        .iter()
+        .find(|d| d.content.starts_with("Showing the first 2 of 1,234 issues"))
+        .expect("the cap caption names the first issues");
+    assert_inside(caption);
+    assert_whole(caption);
+    assert!(
+        caption.origin.y > run.origin.y,
+        "the cap caption is not under the query row"
+    );
+    for action in ["Create", "Cancel"] {
+        let button = find(&drawn, action);
+        assert_in_window(button);
+        assert!(
+            button.origin.y > caption.origin.y,
+            "{action} is not under the picker"
+        );
+    }
 }
