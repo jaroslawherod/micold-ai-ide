@@ -6,6 +6,7 @@ mod terminal_only;
 
 pub use terminal_only::{TerminalOnly, BUILT_INS, CHECKED_AGAINST, CLI_MARKED_WHY, TERMINAL_ONLY};
 
+use super::effort::{EffortLevel, EffortSupport};
 use super::{ControlOutcome, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -16,6 +17,22 @@ pub const MODEL_COMMAND: &str = "model";
 /// What the palette says of `/model` when the CLI gives no description.
 const MODEL_DESCRIPTION: &str = "Choose the model for this session";
 
+/// The app's effort command: it opens the effort picker or picks the level given, and is never
+/// sent (#1554 FR-007).
+pub const EFFORT_COMMAND: &str = "effort";
+
+/// What the palette says of `/effort`, in place of the CLI's own words: the app handles it
+/// (#1554 FR-009).
+const EFFORT_DESCRIPTION: &str = "Set the reasoning effort for later turns";
+
+/// What the palette shows as `/effort`'s argument, in place of the CLI's hint: the values
+/// `parse_effort_arg` takes, not the CLI's `auto` or `ultracode` (#1554 FR-007).
+const EFFORT_ARGUMENT_HINT: &str = "<default|low|medium|high|xhigh|max>";
+
+/// The commands the app handles itself: each is one [`CommandKind::App`] entry, whether or not
+/// the CLI reports it (FR-009).
+pub const APP_COMMANDS: [&str; 2] = [MODEL_COMMAND, EFFORT_COMMAND];
+
 /// The longest description kept from the CLI's answer, in bytes (data-model *Events*).
 pub const MAX_DESCRIPTION_BYTES: usize = 512;
 
@@ -25,7 +42,7 @@ pub enum CommandKind {
     Skill,
     Custom,
     BuiltIn,
-    /// Handled by the app, never sent: `/model`.
+    /// Handled by the app, never sent: [`APP_COMMANDS`].
     App,
 }
 
@@ -126,7 +143,7 @@ impl CommandList {
                     let names: Vec<&str> = std::iter::once(c.name.as_str())
                         .chain(c.aliases.iter().map(String::as_str))
                         .collect();
-                    let kind = if c.name == MODEL_COMMAND {
+                    let kind = if is_app_command(&c.name) {
                         CommandKind::App
                     } else if is_skill(&names) {
                         CommandKind::Skill
@@ -148,7 +165,7 @@ impl CommandList {
             None => names
                 .iter()
                 .map(|name| {
-                    let kind = if name == MODEL_COMMAND {
+                    let kind = if is_app_command(name) {
                         CommandKind::App
                     } else if is_skill(&[name.as_str()]) {
                         CommandKind::Skill
@@ -163,7 +180,7 @@ impl CommandList {
     }
 
     /// The list when the session's own is not known: [`BUILT_INS`], [`TERMINAL_ONLY`] and
-    /// `/model` (FR-009).
+    /// [`APP_COMMANDS`] (FR-009).
     pub fn fallback() -> Self {
         let built_ins = BUILT_INS
             .iter()
@@ -184,8 +201,21 @@ fn bare(name: String, kind: CommandKind) -> Command {
     }
 }
 
+fn is_app_command(name: &str) -> bool {
+    APP_COMMANDS.contains(&name)
+}
+
+/// The app's words for an app command the list adds.
+fn app_description(name: &str) -> &'static str {
+    if name == EFFORT_COMMAND {
+        EFFORT_DESCRIPTION
+    } else {
+        MODEL_DESCRIPTION
+    }
+}
+
 /// Marks the terminal-only commands, by [`TERMINAL_ONLY`] or the CLI's own list, by name or alias
-/// (FR-011), and adds every [`TERMINAL_ONLY`] entry and `/model` the list lacks.
+/// (FR-011), and adds every [`TERMINAL_ONLY`] entry and [`APP_COMMANDS`] entry the list lacks.
 fn completed(
     mut commands: Vec<Command>,
     cli_terminal: &[String],
@@ -193,6 +223,11 @@ fn completed(
 ) -> CommandList {
     for command in &mut commands {
         if command.kind == CommandKind::App {
+            // `/effort` takes the app's words and hint (#1554 R6); `/model` keeps the CLI's.
+            if command.name == EFFORT_COMMAND {
+                command.description = Some(EFFORT_DESCRIPTION.to_string());
+                command.argument_hint = Some(EFFORT_ARGUMENT_HINT.to_string());
+            }
             continue;
         }
         command.terminal_only = TERMINAL_ONLY
@@ -218,10 +253,18 @@ fn completed(
             commands.push(command);
         }
     }
-    if !commands.iter().any(|c| c.kind == CommandKind::App) {
-        let mut model = bare(MODEL_COMMAND.to_string(), CommandKind::App);
-        model.description = Some(MODEL_DESCRIPTION.to_string());
-        commands.push(model);
+    for name in APP_COMMANDS {
+        if !commands
+            .iter()
+            .any(|c| c.kind == CommandKind::App && c.name == name)
+        {
+            let mut command = bare(name.to_string(), CommandKind::App);
+            command.description = Some(app_description(name).to_string());
+            if name == EFFORT_COMMAND {
+                command.argument_hint = Some(EFFORT_ARGUMENT_HINT.to_string());
+            }
+            commands.push(command);
+        }
     }
     CommandList { commands, source }
 }
@@ -261,10 +304,36 @@ pub fn parse_initialize(outcome: &ControlOutcome) -> (Vec<ReportedCommand>, Vec<
                 value: non_blank(&m["value"])?,
                 display_name: non_blank(&m["displayName"]),
                 description: non_blank(&m["description"]).map(cut),
+                effort: effort_support_of(m),
             })
         })
         .collect();
     (commands, models)
+}
+
+/// A reported model's `supportsEffort` and `supportedEffortLevels` (#1554 R2): `None` (unknown)
+/// unless `supportsEffort` is a boolean and, when `true`, the levels are a list; `false` alone
+/// means no effort. A name [`EffortLevel::parse`] refuses, or one already listed, is dropped.
+fn effort_support_of(model: &Value) -> Option<EffortSupport> {
+    let supported = model["supportsEffort"].as_bool()?;
+    if !supported {
+        return Some(EffortSupport {
+            supported,
+            levels: Vec::new(),
+        });
+    }
+    let names = model["supportedEffortLevels"].as_array()?;
+    let mut levels: Vec<EffortLevel> = Vec::new();
+    for level in names
+        .iter()
+        .filter_map(Value::as_str)
+        .filter_map(|name| EffortLevel::parse(name).ok())
+    {
+        if !levels.contains(&level) {
+            levels.push(level);
+        }
+    }
+    Some(EffortSupport { supported, levels })
 }
 
 /// A string value that is not blank.
@@ -294,6 +363,8 @@ pub enum DraftCommand {
     Send,
     /// `/model`: opens the picker, or picks the name given.
     Model(Option<String>),
+    /// `/effort`: opens the effort picker, or picks the argument given, as typed (#1554 FR-007).
+    Effort(Option<String>),
     /// A terminal-only command, by the name typed: offers **Open in terminal**.
     TerminalOnly(String),
 }
@@ -327,9 +398,12 @@ pub fn classify_draft(text: &str, list: &CommandList) -> DraftCommand {
     let Some(invocation) = parse_invocation(text) else {
         return DraftCommand::Send;
     };
-    if invocation.name == MODEL_COMMAND {
-        let name = invocation.args.trim();
-        return DraftCommand::Model((!name.is_empty()).then(|| name.to_string()));
+    let arg = invocation.args.trim();
+    let arg = (!arg.is_empty()).then(|| arg.to_string());
+    match invocation.name.as_str() {
+        MODEL_COMMAND => return DraftCommand::Model(arg),
+        EFFORT_COMMAND => return DraftCommand::Effort(arg),
+        _ => {}
     }
     let terminal_only = list
         .commands()
@@ -379,6 +453,18 @@ mod tests {
                 DraftCommand::Model(Some("claude-opus-5-5".into())),
             ),
             ("/models", DraftCommand::Send),
+            // #1554 T005: `/effort` is the app's, with or without an argument (FR-007).
+            ("/effort", DraftCommand::Effort(None)),
+            ("/effort   ", DraftCommand::Effort(None)),
+            ("/effort\n", DraftCommand::Effort(None)),
+            ("/effort max", DraftCommand::Effort(Some("max".into()))),
+            ("/effort  Max ", DraftCommand::Effort(Some("Max".into()))),
+            (
+                "/effort high on",
+                DraftCommand::Effort(Some("high on".into())),
+            ),
+            ("say /effort max", DraftCommand::Send),
+            ("/efforts", DraftCommand::Send),
             ("/mcp", DraftCommand::TerminalOnly("mcp".into())),
             (
                 "/mcp reconnect all",

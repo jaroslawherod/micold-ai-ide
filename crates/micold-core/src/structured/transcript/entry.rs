@@ -1,6 +1,7 @@
 //! The transcript's entries (data-model.md *Entry*): what one structured session shows, in order.
 
 use crate::structured::commands::CommandInvocation;
+use crate::structured::effort::EffortChoice;
 
 /// An entry's place in one build of a transcript: monotonic, so the entry list is addressed by
 /// `id - first id` and eviction from the front is O(1) (research R2).
@@ -123,6 +124,12 @@ pub enum EntryKind {
     /// had (#943 FR-015, FR-016).
     ModelChanged {
         model: String,
+        refused: Option<String>,
+    },
+    /// The effort choice from here on, or, `refused`, the CLI's reason for not taking it (#1554
+    /// FR-004, FR-005).
+    EffortChanged {
+        effort: EffortChoice,
         refused: Option<String>,
     },
     /// The session ran in the terminal here; the turns of that period are not in the transcript

@@ -287,6 +287,9 @@ pub(super) fn entry(
                 None => text.muted().into(),
             }
         }
+        // No daemon writes an effort note before #1554 M2, and no window draws its marker before
+        // M4.
+        EntryKind::EffortChanged { .. } => iced::widget::Space::new().into(),
         // The terminal period: where the conversation went, and where its turns are (#943 FR-023,
         // US5 scenario 2).
         EntryKind::TerminalPeriod => {

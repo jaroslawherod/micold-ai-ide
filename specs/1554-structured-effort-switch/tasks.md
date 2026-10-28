@@ -30,7 +30,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 1: Setup — recorded fixtures (M1; research R9)
 
-- [ ] T001 Record with `scripts/capture-stream-json.sh --control <json>` against a logged-in Claude
+- [x] T001 Record with `scripts/capture-stream-json.sh --control <json>` against a logged-in Claude
   Code, with `CLAUDE_EFFORT` unset, into `core/tests/fixtures/stream-json/`:
   `effort-change.jsonl` (`apply_flag_settings {"effortLevel":"low"}`, `get_settings`,
   `apply_flag_settings {"effortLevel":null}`, `get_settings`, one user turn) and
@@ -40,7 +40,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 2: Foundational — core effort types, control, commands, notes (M1)
 
-- [ ] T002 [P] Unit tests in `core/src/structured/effort.rs` (new, `#[cfg(test)]` module) per
+- [x] T002 [P] Unit tests in `core/src/structured/effort.rs` (new, `#[cfg(test)]` module) per
   data-model.md *Core: `micold_core::structured::effort`*: `EffortLevel::parse` lowercases first and
   accepts "lowercase ASCII letters only, 1–16 bytes, not `default`, `auto` or `ultracode`" (refuses
   blank, 17 bytes, `-x`, `x-high`, `default`, `Auto`, `ultracode`); serde `try_from` refuses the
@@ -54,29 +54,29 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   (`high`, ` Max `, `default`, `AUTO` → choices; `extreme`, `ultracode`, `high on`, a level not in
   `offered` → `EffortArgError` whose `Display` is "Use /effort with one of: default, low, medium,
   high, xhigh, max" built from the offered levels) (FR-002, FR-003, FR-007, FR-010a, FR-011)
-- [ ] T003 Implement T002 in `core/src/structured/effort.rs` (`EffortLevel`, `EFFORT_LEVELS`,
+- [x] T003 Implement T002 in `core/src/structured/effort.rs` (`EffortLevel`, `EFFORT_LEVELS`,
   `EffortChoice`, `EffortSupport`, `effort_support`, `offered_levels`, `effective_level`,
   `EffortAvailability`, `availability`, `parse_effort_arg`, `EffortArgError`, `EffortRefusal`) and
   export the module from `core/src/structured/mod.rs`
-- [ ] T004 [P] [US1] [US2] Tests in `core/tests/structured_commands.rs`: `parse_initialize` on
+- [x] T004 [P] [US1] [US2] Tests in `core/tests/structured_commands.rs`: `parse_initialize` on
   `command-initialize.jsonl` fills every `ReportedModel.effort` with `supported: true` and the five
   levels in order; a model object without `supportsEffort`/`supportedEffortLevels` → `effort: None`;
   a level name `EffortLevel::parse` refuses is dropped; the session command list built from that
   fixture (which reports the CLI's `effort` built-in) has `/effort` exactly once, kind `App`, with
   the description "Set the reasoning effort for later turns"; the fallback list has it once too
   (FR-002, FR-003, FR-009)
-- [ ] T005 [P] [US2] Unit tests in `core/src/structured/commands/mod.rs`: `classify_draft` reads
+- [x] T005 [P] [US2] Unit tests in `core/src/structured/commands/mod.rs`: `classify_draft` reads
   `/effort` and `/effort   ` as `Effort(None)`, `/effort max` as `Effort(Some("max"))`,
   `/effort  Max ` as `Effort(Some("Max"))`, and `say /effort max` as `Send` (FR-007, Edge Case
   "Empty input")
-- [ ] T006 [P] [US1] Unit tests in `core/src/structured/control.rs`: `encode_apply_effort(id,
+- [x] T006 [P] [US1] Unit tests in `core/src/structured/control.rs`: `encode_apply_effort(id,
   Some(high))` and `encode_apply_effort(id, None)` produce exactly the two lines of
   contracts/claude-effort.md (`"effortLevel":"high"` / `"effortLevel":null`, trailing newline);
   `parse_apply_effort` maps `Success(_)` → `Ok(())` and `Error { message, .. }` →
   `Refused { message }`. Tests in `core/tests/structured_parse.rs`: every `control_response` line of
   `effort-change.jsonl` and `effort-launch.jsonl` (T001) parses, and the `apply_flag_settings`
   answers read as `Ok` through `parse_apply_effort` (FR-004, FR-005, FR-006)
-- [ ] T007 Implement T004–T006: `ReportedModel.effort: Option<EffortSupport>` (`#[serde(default)]`)
+- [x] T007 Implement T004–T006: `ReportedModel.effort: Option<EffortSupport>` (`#[serde(default)]`)
   in `core/src/structured/event.rs`, filled by `parse_initialize`; `EFFORT_COMMAND` and
   `APP_COMMANDS = [MODEL_COMMAND, EFFORT_COMMAND]` replacing the single-name kind rule and fallback
   entry in `core/src/structured/commands/mod.rs`; `DraftCommand::Effort(Option<String>)`;
@@ -84,7 +84,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   outside core keep today's behaviour until M5: `daemon/src/state.rs` `SessionUserMessage`
   classification treats `Effort(_)` as `Send`, the switch-kind classification treats it like
   `Model(_)`, and `client/src/features/command_palette.rs` maps it to `Classified::Message`
-- [ ] T008 [P] [US1] Tests: in `core/tests/structured_transcript.rs`, an `EffortChanged { effort }`
+- [x] T008 [P] [US1] Tests: in `core/tests/structured_transcript.rs`, an `EffortChanged { effort }`
   note → one `EntryKind::EffortChanged { effort, refused: None }` at that point, an `EffortRefused
   { effort, message }` note → one entry with `refused: Some(message)`; in `core/src/structured/saved.rs`
   unit tests, a version-1 event file holding the existing `CommandsReported` encoding (pinned bytes
@@ -93,14 +93,14 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   round-trip, and `EVENTS_FORMAT_VERSION` is still 1; in `core/tests/protocol_roundtrip.rs`, both
   notes and a `ReportedModel` with `effort` round-trip in a `StructuredEvents` frame (FR-004,
   FR-005, FR-010)
-- [ ] T009 Implement T008: `StructuredEvent::EffortChanged { effort: EffortChoice }` and
+- [x] T009 Implement T008: `StructuredEvent::EffortChanged { effort: EffortChoice }` and
   `EffortRefused { effort: EffortChoice, message: String }` in `core/src/structured/event.rs`;
   `SavedReportedModelV1` and the appended `CommandsReportedV2`, `EffortChanged`, `EffortRefused`
   variants (after `KindSwitched`) in `core/src/structured/saved.rs`; `EntryKind::EffortChanged` in
   `core/src/structured/transcript/entry.rs` built in `transcript/build.rs`. The exhaustive match in
   `client/src/ui/transcript/entries.rs` gets an arm that draws nothing until M4 draws the marker
   (no note is written before M2, and no window can pick before M4)
-- [ ] T010 Bump `PROTOCOL_VERSION` by one in `core/src/protocol/version.rs` and re-pin
+- [x] T010 Bump `PROTOCOL_VERSION` by one in `core/src/protocol/version.rs` and re-pin
   `core/tests/schema_hash.rs` (contracts/wire.md *Events (M1)*)
 
 ## Phase 3: Daemon — keep the choice, launch with it, apply it when idle (M2; US3, US1 scenarios 3, 6, 7)

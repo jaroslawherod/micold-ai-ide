@@ -337,7 +337,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 69 → 70 for feature 1289's setup messages (contracts C1–C2).
 ///
 /// And 70 → 71 for #1475's `ClientMsg::SshHostAliases`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 71;
+///
+/// And 71 → 72 for #1554's effort events (M1): `StructuredEvent::{EffortChanged, EffortRefused}`,
+/// `ReportedModel.effort`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 72;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

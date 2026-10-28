@@ -5,6 +5,7 @@
 use micold_core::structured::commands::{
     parse_initialize, CommandKind, CommandList, ListSource, BUILT_INS, TERMINAL_ONLY,
 };
+use micold_core::structured::effort::{EffortLevel, EffortSupport, EFFORT_LEVELS};
 use micold_core::structured::{
     ControlOutcome, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
 };
@@ -93,7 +94,8 @@ fn entries_without_a_usable_name_or_value_are_dropped_and_descriptions_are_cut()
         [ReportedModel {
             value: "m".into(),
             display_name: None,
-            description: None
+            description: None,
+            effort: None,
         }]
     );
     let (commands, _) = reported();
@@ -288,4 +290,114 @@ fn with_neither_source_the_list_is_the_fallback() {
         assert!(terminal_only(&fallback, entry.name), "{}", entry.name);
     }
     assert_eq!(kinds_of(&fallback, "model"), [CommandKind::App]);
+}
+
+/// #1554 T004: what `/effort` is in the palette (FR-009).
+const EFFORT_DESCRIPTION: &str = "Set the reasoning effort for later turns";
+const EFFORT_ARGUMENT_HINT: &str = "<default|low|medium|high|xhigh|max>";
+
+fn the_effort_entry(list: &CommandList) {
+    let entries: Vec<_> = list
+        .commands()
+        .iter()
+        .filter(|c| c.answers_to("effort"))
+        .collect();
+    assert_eq!(entries.len(), 1, "/effort once: {entries:?}");
+    assert_eq!(entries[0].kind, CommandKind::App);
+    assert_eq!(entries[0].description.as_deref(), Some(EFFORT_DESCRIPTION));
+    assert_eq!(
+        entries[0].argument_hint.as_deref(),
+        Some(EFFORT_ARGUMENT_HINT),
+        "the app's values, not the CLI's"
+    );
+    assert_eq!(entries[0].terminal_only, None);
+}
+
+#[test]
+fn every_reported_model_carries_its_effort_support() {
+    let (_, models) = reported();
+    let five: Vec<EffortLevel> = EFFORT_LEVELS
+        .iter()
+        .map(|name| EffortLevel::parse(name).unwrap())
+        .collect();
+    assert!(!models.is_empty());
+    for model in &models {
+        assert_eq!(
+            model.effort,
+            Some(EffortSupport {
+                supported: true,
+                levels: five.clone(),
+            }),
+            "{}",
+            model.value
+        );
+    }
+}
+
+#[test]
+fn effort_fields_that_are_missing_or_unusable_give_unknown_support_or_are_dropped() {
+    let answer = serde_json::json!({
+        "models": [
+            {"value": "none"},
+            {"value": "only-flag", "supportsEffort": true},
+            {"value": "only-levels", "supportedEffortLevels": ["low"]},
+            {"value": "unsupported", "supportsEffort": false, "supportedEffortLevels": []},
+            {"value": "unsupported-no-list", "supportsEffort": false},
+            {"value": "odd", "supportsEffort": true,
+             "supportedEffortLevels": ["High", "auto", "ultracode", "x-high", 3, "", "max"]},
+            {"value": "not-bool", "supportsEffort": "yes", "supportedEffortLevels": ["low"]},
+        ],
+    });
+    let (_, models) = parse_initialize(&ControlOutcome::Success(answer.to_string()));
+    let effort = |value: &str| {
+        models
+            .iter()
+            .find(|m| m.value == value)
+            .unwrap_or_else(|| panic!("{value} reported"))
+            .effort
+            .clone()
+    };
+    let levels = |names: &[&str]| -> Vec<EffortLevel> {
+        names
+            .iter()
+            .map(|n| EffortLevel::parse(n).unwrap())
+            .collect()
+    };
+    assert_eq!(effort("none"), None);
+    assert_eq!(effort("only-flag"), None);
+    assert_eq!(effort("only-levels"), None);
+    assert_eq!(effort("not-bool"), None);
+    for unsupported in ["unsupported", "unsupported-no-list"] {
+        assert_eq!(
+            effort(unsupported),
+            Some(EffortSupport {
+                supported: false,
+                levels: vec![],
+            }),
+            "{unsupported}"
+        );
+    }
+    assert_eq!(
+        effort("odd"),
+        Some(EffortSupport {
+            supported: true,
+            levels: levels(&["high", "max"]),
+        })
+    );
+}
+
+#[test]
+fn effort_is_the_apps_command_once_with_its_description() {
+    let (commands, _) = reported();
+    assert!(
+        command(&commands, "effort").builtin,
+        "the fixture reports the CLI's own /effort"
+    );
+    the_effort_entry(&CommandList::from_history(&spawned_history()));
+    the_effort_entry(&CommandList::from_history(&events_of(&lines_of(
+        "command-skill",
+    ))));
+    the_effort_entry(&CommandList::fallback());
+    let list = CommandList::from_history(&spawned_history());
+    assert_eq!(kinds_of(&list, "model"), [CommandKind::App]);
 }
