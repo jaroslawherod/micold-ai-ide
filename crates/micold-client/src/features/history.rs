@@ -6,8 +6,15 @@
 //! (`State::press_history`, `State::observe_place`, `State::finish_history_move`) and applies a
 //! [`Step`] (`State::apply_history`); the shell entry is `shell/history.rs` (shape B).
 
+use std::path::Path;
+
 use micold_core::history::{Dir, History, Place, View};
 use micold_core::session::SessionLocation;
+
+/// The worktrees of a project that is not active, by `dir_name` (research R5): the shell reads
+/// them from disk as a project switch does, tests pass a map. `None`: unreadable, so that
+/// project's worktree places count as gone.
+pub type Lookup<'a> = &'a dyn Fn(&Path) -> Option<Vec<String>>;
 
 /// The window's history (FR-001), on the root as `history`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -47,7 +54,7 @@ pub enum Step {
 }
 
 /// What `msg` resolves to in `app` (contracts/ui.md U3). A move sets `moving`.
-pub fn resolve(app: &mut crate::app::State, msg: Msg) -> Step {
+pub fn resolve(app: &mut crate::app::State, msg: Msg, lookup: Lookup) -> Step {
     let Msg::Pressed { dir, source } = msg;
     if crate::features::navigation::blocked(app) {
         return Step::None;
@@ -69,7 +76,7 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg) -> Step {
         return Step::ReviewBack;
     }
     let mut list = std::mem::take(&mut app.history.list);
-    let found = list.step(dir, shown.as_ref(), |p| exists(app, p));
+    let found = list.step(dir, shown.as_ref(), |p| exists(app, p, lookup));
     app.history.list = list;
     match found {
         Some(place) => {
@@ -82,7 +89,7 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg) -> Step {
 
 /// Whether `place` can still be shown (research R5), for the active project. A place of another
 /// project counts as gone (until cross-project moves, US4).
-pub fn exists(app: &crate::app::State, place: &Place) -> bool {
+pub fn exists(app: &crate::app::State, place: &Place, _lookup: Lookup) -> bool {
     if app.workspace.active.as_ref() != Some(&place.project) {
         return false;
     }
