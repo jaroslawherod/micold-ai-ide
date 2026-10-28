@@ -93,7 +93,18 @@ Reducer (`titles_to_fetch`, `TitleLookup`) was written with the shell mapping st
   this diff while the M4 gate ran concurrently on the shared target (`capture-harness` private X
   display; `guide-own-image` libpq check; then daemon `structured_permission`
   `a_pending_request_marks_its_session_waiting...` Unknown vs AwaitingInput), each passing alone.
-- Reviews pending: review A (`code-review` high) and review B (conformance rubric
+- Review round 1 fix (B1), red run taken after the fact by stubbing `titles_to_fetch` so a `Failed`
+  entry is never due: `cargo test -p micold-client --test overview titles_to_fetch` exit 101,
+  `titles_to_fetch_re_asks_a_failed_read_only_after_the_retry_interval` failed at "due at exactly
+  300 s" (`left: []  right: [1]`); stub then restored. The other T042 test
+  (`a_retried_title_is_pending_...`) and the five `title_answer_*` tests have the genuine reds
+  above. The round 1 fix tests (A1 switch-off drops pending, A2 clock back, A3 seed from Failed,
+  A4 outage short-circuit, B2 NotOpenIssue/overflow) were written together with the fix, with no
+  separate red run; stated plainly. The feature records no tdd/cycle-log file.
+- Round 1: review A CHANGES (7 MINOR, all fixed: A1 switch-off removes Pending, A2 `now < at`
+  due, A3 seed Failed from the form, A4 outage stops the batch, A5 rig helper, A6 comments, A7 docs);
+  review B CHANGES (1 MAJOR, 3 MINOR, all fixed). Round 2 pending (scoped, sonnet).
+- Reviews pending (round 1, superseded): review A (`code-review` high) and review B (conformance rubric
   `.claude/skills/speckit-autopilot/rubrics/conformance.md`) on `05897a571..HEAD`; no visual pass
   (no UI change: only which titles are asked and when).
 

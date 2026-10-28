@@ -63,6 +63,12 @@ title ticket with no entry, or with `Failed { at }` where `now - at >= TITLE_RET
 | `read_title` `Ok(None)` (no issue, a pull request) | `NoIssue` |
 | `read_title` `Err(Load(_))`, `gh` not found, blocking task lost, remotes read failed (`on_title_remotes(None)`), daemon lost | `Failed { at: now }` |
 | Remotes name no GitHub repository | `NoIssue` (nothing to retry in this project) |
+| `read_title` `Err(NotOpenIssue)` (closed or a pull request, by a source that cannot tell) | `NoIssue` |
+| An issue number above `u32::MAX` | `NoIssue` (no such issue can exist) |
+| Remotes answered after the GitHub switch went off | the `Pending` entries are removed (neither `Failed` nor `NoIssue`), so the next occasion with the switch on asks at once |
+| After a repository-wide `Err(Load)` (offline, timed out, signed out, rate limited, no `gh`) in one batch | the remaining numbers of the batch are `Failed { at: now }` without asking `gh` |
+
+A clock that moved back (`now < at`) makes a `Failed` entry due at once, so a failure is never stuck.
 
 The occasions are the ones that already call `request_titles`: Overview opened, worktree list
 changed (`on_worktrees_changed`), titles became readable (service route opened, GitHub switch on),

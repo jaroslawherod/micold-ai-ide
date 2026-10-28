@@ -7526,8 +7526,8 @@ mod issue_source {
 
     /// The rig with the Overview's project holding one worktree of ticket 42.
     fn titles_rig(enabled: bool) -> IssueRig {
-        use micold_core::worktree::{Worktree, WorktreeStatus};
-        let mut rig = issue_rig(
+        titles_rig_with(
+            enabled,
             Some(FAKE_GH),
             FakeIssueSource::new().with_lookup(Ok(IssueSnapshot {
                 number: 42,
@@ -7535,7 +7535,19 @@ mod issue_source {
                 labels: vec![],
                 body_text: String::new(),
             })),
-        );
+        )
+    }
+
+    /// [`titles_rig`] on `source`, with `gh` found at `gh` (or nowhere).
+    fn titles_rig_with(enabled: bool, gh: Option<&str>, source: FakeIssueSource) -> IssueRig {
+        let mut rig = issue_rig(gh, source);
+        give_worktree_42(&mut rig, enabled);
+        rig
+    }
+
+    /// The rig's project lists the worktree of issue 42, with the issues switch at `enabled`.
+    fn give_worktree_42(rig: &mut IssueRig, enabled: bool) {
+        use micold_core::worktree::{Worktree, WorktreeStatus};
         rig.app.core.settings.github_issues_enabled = enabled;
         rig.app.core.worktree.worktrees = vec![Worktree {
             dir_name: "feat-42_crash".into(),
@@ -7544,10 +7556,9 @@ mod issue_source {
             status: WorktreeStatus::Valid,
             included: false,
         }];
-        rig
     }
 
-    /// Off: opening the Overview reads no title and records none, not even "unavailable", so
+    /// Off: opening the Overview reads no title and records none, not even "failed", so
     /// turning the switch on reads them next time. The remotes are still asked for once, for the
     /// issue links' repository (feature 1122, R2), and their answer reads no title.
     #[test]
@@ -7563,8 +7574,8 @@ mod issue_source {
         assert!(rig.source.lookup_calls().is_empty(), "no title read");
     }
 
-    /// Off: a remotes answer arriving after the switch went off reads nothing and settles the
-    /// asked titles as unavailable, without locating `gh`.
+    /// Off: a remotes answer arriving after the switch went off reads nothing and drops the
+    /// pending titles, without locating `gh`, so the next occasion with the switch on asks at once.
     #[test]
     fn with_the_switch_off_the_remotes_answer_reads_no_title() {
         let mut rig = titles_rig(false);
@@ -7580,10 +7591,10 @@ mod issue_source {
             Some(github_remote()),
         );
         settle(&mut rig.app, work);
-        assert!(matches!(
-            rig.app.core.overview.titles[&42],
-            micold_client::features::overview::TitleLookup::Failed { .. }
-        ));
+        assert!(
+            !rig.app.core.overview.titles.contains_key(&42),
+            "neither pending nor failed"
+        );
         assert!(rig.located_with.lock().unwrap().is_empty(), "no gh lookup");
         assert!(rig.constructed.lock().unwrap().is_empty(), "no gh source");
         assert!(rig.source.lookup_calls().is_empty(), "no title read");
@@ -7645,14 +7656,11 @@ mod issue_source {
 
     #[test]
     fn title_answer_a_number_that_is_no_issue_is_no_issue() {
-        let mut rig = titles_rig(true);
-        rig.source = Arc::new(FakeIssueSource::new().with_title(Ok(None)));
-        let source = Arc::clone(&rig.source);
-        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
-            locate_gh: Arc::new(|_| Some(PathBuf::from(FAKE_GH))),
-            source: Arc::new(move |_| Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>),
-            pull_requests: IssueTooling::none().pull_requests,
-        });
+        let mut rig = titles_rig_with(
+            true,
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_title(Ok(None)),
+        );
         assert_eq!(
             title_answer(&mut rig, Some(github_remote())).0,
             micold_client::features::overview::TitleLookup::NoIssue
@@ -7661,30 +7669,43 @@ mod issue_source {
 
     #[test]
     fn title_answer_a_failed_read_is_failed_with_the_time() {
-        let mut rig = titles_rig(true);
-        rig.source = Arc::new(FakeIssueSource::new().with_title(Err(
-            micold_core::github::IssueLookupError::Load(
-                micold_core::github::IssueLoadError::NoAccess,
-            ),
-        )));
-        let source = Arc::clone(&rig.source);
-        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
-            locate_gh: Arc::new(|_| Some(PathBuf::from(FAKE_GH))),
-            source: Arc::new(move |_| Arc::clone(&source) as Arc<dyn IssueSource + Send + Sync>),
-            pull_requests: IssueTooling::none().pull_requests,
-        });
+        let failed = Err(micold_core::github::IssueLookupError::Load(
+            micold_core::github::IssueLoadError::NoAccess,
+        ));
+        let mut rig = titles_rig_with(
+            true,
+            Some(FAKE_GH),
+            FakeIssueSource::new().with_title(failed),
+        );
         assert_failed(title_answer(&mut rig, Some(github_remote())));
     }
 
     #[test]
     fn title_answer_no_gh_is_failed() {
-        let mut rig = titles_rig(true);
-        rig.app.caps = rig.app.caps.clone().with_issue_tooling(IssueTooling {
-            locate_gh: Arc::new(|_| None),
-            source: IssueTooling::none().source,
-            pull_requests: IssueTooling::none().pull_requests,
-        });
+        let mut rig = titles_rig_with(true, None, FakeIssueSource::new());
         assert_failed(title_answer(&mut rig, Some(github_remote())));
+    }
+
+    /// A3: a title whose read failed is seeded from the New-worktree form's held issue, as one
+    /// with no entry is.
+    #[test]
+    fn title_answer_a_failed_title_is_seeded_from_the_form() {
+        let mut rig = loaded_rig();
+        give_worktree_42(&mut rig, true);
+        rig.app.core.overview.titles.insert(
+            42,
+            micold_client::features::overview::TitleLookup::Failed {
+                at: micold_core::unix_time::unix_secs(),
+            },
+        );
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        assert_eq!(
+            rig.app.core.overview.titles[&42],
+            micold_client::features::overview::TitleLookup::Known(
+                "Crash when opening empty project".into()
+            )
+        );
     }
 
     /// On: the same steps read the title (the default is unchanged).

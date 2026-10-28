@@ -2566,7 +2566,7 @@ fn titles_to_fetch_re_asks_a_failed_read_only_after_the_retry_interval() {
         titles_to_fetch(&state.overview, &tickets, false, 9_999).is_empty(),
         "no GitHub, no retry"
     );
-    assert!(at(500).is_empty(), "a clock that went back asks nothing");
+    assert_eq!(at(500), vec![1], "a clock that went back is due, not stuck");
 }
 
 /// FR-009: asking again moves a failed read to pending, so a second occasion before the answer
