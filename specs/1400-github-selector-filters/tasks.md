@@ -300,8 +300,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US2 AS1, AS2, AS5; FR-021 (basic), FR-022, FR-024 (write failure); SC-005 (basic),
   SC-006
 - **Verify**: `cargo test -p micold-client --test github_selector_shell --test github_filter_state
-  --test jira_connection_shell` and `cargo test -p micold-client --bin micold-ai-ide main_tests`;
-  quickstart §B B5, B7, B15
+  --test jira_connection_shell` and
+  `cargo test -p micold-client --bin micold-ai-ide github_selector_remembered`; quickstart §B B5,
+  B7, B15
 - **Depends on**: M2
 - **Tier**: full
 
