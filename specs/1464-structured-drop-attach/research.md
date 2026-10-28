@@ -32,3 +32,15 @@
 ## R7 Delivery of drops
 - **Decision**: treat as test-and-fix (D6); `SplitView::update` already sees `FileDropped` before children.
 - **Rationale**: FR-004 says a platform failure is a defect to fix here; cannot be known without running on each platform.
+
+### R7 findings (M1, T001 and T007)
+- **Baseline (T001)**: the three targets of the milestone's Verify command ran green on this branch with the M1 changes (the guard, its tests and the characterisation tests); the drop route they exercise was unchanged apart from the new `can_accept` argument.
+- **Drop route today**: window `FileDropped(path)` (one event per file) -> `SplitView::update` (resolves the pane under the pointer) -> `PaneMsg::FileDropped(pane, path)` -> `shell/drops.rs::on_file_dropped` (collects, 40 ms settle) -> `on_drops_settled` -> `read_for_composer` (sniff, read images off the UI thread) -> `composer::Msg::Dropped` -> `shell/composer.rs` computes `can_accept` -> `State::apply_drop(session, files, can_accept)`.
+- **Delivery (T007)**: `SplitView::update` handles `FileDropped` before it forwards the event to any child and never captures it, and `ui/panes.rs` renders a structured pane (transcript and composer) as a child of that `SplitView`, so neither widget can swallow the event. No defect found in code. Wayland, X11, macOS and Windows all deliver the same iced `window::Event::FileDropped`; none could be exercised on real hardware here, so the per-platform cells below are code-reading only and a real-desktop drop stays a manual check.
+
+| Platform | Finding |
+|---|---|
+| Linux Wayland | event path as above; not run on a real compositor |
+| Linux X11 | event path as above; not run on a real display |
+| macOS | event path as above; not run |
+| Windows | event path as above; not run |

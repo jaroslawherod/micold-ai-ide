@@ -696,7 +696,7 @@ fn a_draft_of_pictures_alone_is_sendable() {
         shell: ShellKind::Posix,
         sandbox: None,
     };
-    state.apply_drop(s, dropped);
+    state.apply_drop(s, dropped, true);
     assert!(state.can_send(s, true));
 }
 
@@ -887,6 +887,7 @@ fn drafts_pictures_and_carets_are_kept_per_session() {
             shell: ShellKind::Posix,
             sandbox: None,
         },
+        true,
     );
     let (da, db) = (state.draft(a).unwrap(), state.draft(b).unwrap());
     assert_eq!(
@@ -931,6 +932,7 @@ fn dropped_paths_are_inserted_at_the_caret_as_a_terminal_drop_plans_them() {
             shell: ShellKind::Posix,
             sandbox: None,
         },
+        true,
     );
     let draft = state.draft(s).unwrap();
     assert_eq!(draft.text, format!("see {expected} please"));
@@ -955,6 +957,7 @@ fn twenty_two_pictures_attach_the_first_twenty_and_name_the_rest() {
             shell: ShellKind::Posix,
             sandbox: None,
         },
+        true,
     );
     let composer = state.composer(s).unwrap();
     assert_eq!(composer.draft.images.len(), MAX_IMAGES_PER_MESSAGE);
@@ -991,6 +994,7 @@ fn a_too_large_picture_and_a_failed_read_are_not_attached_and_named() {
             shell: ShellKind::Posix,
             sandbox: None,
         },
+        true,
     );
     let composer = state.composer(s).unwrap();
     let names: Vec<_> = composer.draft.images.iter().map(|i| i.name()).collect();
@@ -1004,6 +1008,105 @@ fn a_too_large_picture_and_a_failed_read_are_not_attached_and_named() {
         notice.contains("gone.png") && notice.contains("No such file or directory"),
         "{notice}"
     );
+}
+
+/// A drop of `images` (each a PNG that reads fine) and `paths` (inserted as quoted paths).
+fn drop_of(images: &[&str], paths: &[&str]) -> DroppedFiles {
+    let images: Vec<PathBuf> = images.iter().map(PathBuf::from).collect();
+    DroppedFiles {
+        reads: images.iter().map(|_| Ok(PNG.to_vec())).collect(),
+        plan: DropPlan {
+            images,
+            paths: paths.iter().map(PathBuf::from).collect(),
+        },
+        shell: ShellKind::Posix,
+        sandbox: None,
+    }
+}
+
+// --- #1464 M1: the drop admission guard (FR-011, FR-016) and the spec 941 behaviour kept -----------
+
+#[test]
+fn a_drop_on_a_session_that_cannot_accept_input_changes_only_the_notice() {
+    let (mut state, s) = composer_in(TurnPhase::NotRunning);
+    state.edited(s, "draft".into(), (0, 5));
+    let before = state.draft(s).unwrap().clone();
+    state.apply_drop(s, drop_of(&["/d/a.png"], &["/d/b.txt"]), false);
+    assert_eq!(state.draft(s), Some(&before), "draft untouched");
+    assert_eq!(
+        state.composer(s).unwrap().notice.as_deref(),
+        Some("2 files not attached: the session is not accepting input")
+    );
+    state.apply_drop(s, drop_of(&["/d/a.png"], &[]), false);
+    assert_eq!(
+        state.composer(s).unwrap().notice.as_deref(),
+        Some("1 file not attached: the session is not accepting input")
+    );
+}
+
+#[test]
+fn an_empty_drop_leaves_the_draft_and_the_notice_untouched() {
+    for can_accept in [true, false] {
+        let (mut state, s) = composer_in(TurnPhase::Idle);
+        state.edited(s, "draft".into(), (0, 2));
+        state.notice(s, "earlier".into());
+        let before = state.draft(s).unwrap().clone();
+        state.apply_drop(s, drop_of(&[], &[]), can_accept);
+        assert_eq!(state.draft(s), Some(&before));
+        assert_eq!(
+            state.composer(s).unwrap().notice.as_deref(),
+            Some("earlier")
+        );
+    }
+}
+
+#[test]
+fn a_session_accepts_input_while_it_runs_and_not_after_it_ended() {
+    let (state, s) = composer_in(TurnPhase::Idle);
+    assert!(state.accepts_input(s));
+    let (state, s) = composer_in(TurnPhase::NotRunning);
+    assert!(!state.accepts_input(s));
+    assert!(!State::default().accepts_input(SessionId::new()));
+}
+
+#[test]
+fn several_pictures_dropped_at_once_attach_in_drop_order() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    state.apply_drop(s, drop_of(&["/d/c.png", "/d/a.png", "/d/b.png"], &[]), true);
+    let names: Vec<_> = state
+        .draft(s)
+        .unwrap()
+        .images
+        .iter()
+        .map(|i| i.name())
+        .collect();
+    assert_eq!(names, ["c.png", "a.png", "b.png"]);
+}
+
+#[test]
+fn pictures_and_other_files_dropped_together_give_chips_and_quoted_paths() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    let files = drop_of(&["/d/shot.png"], &["/d/my notes.txt"]);
+    let expected = plan_insertion(&files.plan.paths, ShellKind::Posix, InsertTarget::Host)
+        .text()
+        .expect("insertable");
+    state.apply_drop(s, files, true);
+    let draft = state.draft(s).unwrap();
+    assert_eq!(draft.images.len(), 1);
+    assert_eq!(draft.images[0].name(), "shot.png");
+    assert_eq!(draft.text, expected);
+    assert_eq!(state.composer(s).unwrap().notice, None);
+}
+
+#[test]
+fn a_drop_on_one_session_leaves_another_sessions_composer_alone() {
+    let (mut state, a) = composer_in(TurnPhase::Idle);
+    let b = SessionId::new();
+    state.input_reported(b, input(TurnPhase::Idle));
+    state.apply_drop(a, drop_of(&["/d/a.png"], &["/d/x"]), true);
+    let other = state.draft(b).unwrap();
+    assert!(other.images.is_empty() && other.text.is_empty());
+    assert_eq!(state.composer(b).unwrap().notice, None);
 }
 
 // --- #1274 T035: the shared text area's save chord and `.on_press` -------------------------------

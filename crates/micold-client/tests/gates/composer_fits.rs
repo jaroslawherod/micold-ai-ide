@@ -97,6 +97,7 @@ fn drop_picture(state: &mut State, id: SessionId) {
             shell: ShellKind::Posix,
             sandbox: None,
         },
+        true,
     );
 }
 
