@@ -26,6 +26,7 @@ use crate::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
     TerminalMode,
 };
+use crate::structured::effort::EffortChoice;
 use crate::structured::model::ModelChoice;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -315,11 +316,30 @@ struct StoredSession {
     /// `Default`, so an older record loads `Default` and no `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "ModelChoice::is_default")]
     model: ModelChoice,
+    /// The session's effort choice (#1554, FR-010). Additive and defaulted, and not written for
+    /// `Default`, so an older record loads `Default` and no `schema_version` bump is needed. A
+    /// stored level the app no longer accepts loads `Default` rather than failing the record.
+    #[serde(
+        default,
+        skip_serializing_if = "EffortChoice::is_default",
+        deserialize_with = "effort_or_default"
+    )]
+    effort: EffortChoice,
     /// The conversation a structured session resumes after a `/clear` (#943 FR-005a,
     /// provisional). Additive and defaulted, and not written when `None`, so an older record
     /// resumes its own id and no `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     conversation: Option<uuid::Uuid>,
+}
+
+/// A stored effort choice, or `Default` when the stored value is not one the app accepts (#1554
+/// T011): a bad level never costs the rest of the session record.
+fn effort_or_default<'de, D>(deserializer: D) -> Result<EffortChoice, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 fn is_false(value: &bool) -> bool {
@@ -443,6 +463,7 @@ impl StoredSession {
             kind: session.kind,
             permission_mode: session.permission_mode,
             model: session.model.clone(),
+            effort: session.effort.clone(),
             conversation: session.conversation,
         }
     }
@@ -483,6 +504,7 @@ impl StoredSession {
         session.main = self.main;
         session.permission_mode = self.permission_mode;
         session.model = self.model;
+        session.effort = self.effort;
         session.conversation = self.conversation;
         session
     }

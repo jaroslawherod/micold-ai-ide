@@ -394,6 +394,13 @@ pub trait AiCliProvider {
         Vec::new()
     }
 
+    /// The arguments that launch a session with the effective effort `level` (#1554 FR-010),
+    /// after [`Self::model_args`]. Empty by default: only Claude Code's effort is chosen in the app
+    /// (FR-012).
+    fn effort_args(&self, _level: Option<&crate::structured::effort::EffortLevel>) -> Vec<String> {
+        Vec::new()
+    }
+
     // --- attaching existing sessions (feature 582) ---
 
     /// The working directories under which this provider's store may hold sessions of the project
@@ -857,6 +864,12 @@ impl AiCliProvider for ClaudeProvider {
 
     fn model_args(&self, choice: &crate::structured::model::ModelChoice) -> Vec<String> {
         crate::structured::model::launch_args(choice)
+    }
+
+    fn effort_args(&self, level: Option<&crate::structured::effort::EffortLevel>) -> Vec<String> {
+        level
+            .map(|level| vec!["--effort".to_owned(), level.as_str().to_owned()])
+            .unwrap_or_default()
     }
 
     fn structured_args(&self) -> Option<&'static [&'static str]> {
@@ -2642,6 +2655,53 @@ mod structured_args_tests {
                 "" => ModelChoice::Default,
                 name => ModelChoice::Named(ModelName::parse(name).unwrap()),
             },
+            effort: None,
+        }
+    }
+
+    /// #1554 T011 (FR-010, FR-011): an effective level is `--effort <level>` after `--model` on a
+    /// Claude launch, in a terminal argv and a structured one alike; none adds nothing.
+    #[test]
+    fn an_effective_level_is_launched_with_effort_after_the_model() {
+        use crate::structured::effort::EffortLevel;
+        for mode in [LaunchMode::Fresh, LaunchMode::Resume] {
+            let spec = crate::terminal::LaunchSpec {
+                effort: Some(EffortLevel::parse("xhigh").unwrap()),
+                ..claude_spec(mode, "haiku")
+            };
+            let terminal = crate::terminal::launch_args(&spec);
+            let structured: Vec<String> = AiCli::ClaudeCode
+                .provider()
+                .structured_args()
+                .unwrap()
+                .iter()
+                .map(|a| a.to_string())
+                .chain(terminal.iter().cloned())
+                .collect();
+            for argv in [&terminal, &structured] {
+                let at = |flag: &str| argv.iter().position(|a| a == flag);
+                let effort = at("--effort").unwrap_or_else(|| panic!("{argv:?}"));
+                assert_eq!(argv[effort + 1], "xhigh", "{argv:?}");
+                assert!(at("--model").unwrap() < effort, "after --model: {argv:?}");
+                assert_eq!(argv.iter().filter(|a| *a == "--effort").count(), 1);
+            }
+            let none = crate::terminal::launch_args(&claude_spec(mode, "haiku"));
+            assert!(!none.iter().any(|a| a == "--effort"), "{none:?}");
+        }
+    }
+
+    /// #1554 T011 (FR-012): no other CLI is given an effort by the app.
+    #[test]
+    fn only_claude_code_takes_an_effort_level() {
+        use crate::structured::effort::EffortLevel;
+        let high = EffortLevel::parse("high").unwrap();
+        for which in AiCli::ALL {
+            assert!(which.provider().effort_args(None).is_empty(), "{which:?}");
+            let args = which.provider().effort_args(Some(&high));
+            match which {
+                AiCli::ClaudeCode => assert_eq!(args, ["--effort", "high"]),
+                _ => assert!(args.is_empty(), "{which:?}"),
+            }
         }
     }
 

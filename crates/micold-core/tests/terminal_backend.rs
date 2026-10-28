@@ -34,6 +34,7 @@ fn spec_for(provider: AiCli, mode: LaunchMode, id: Uuid) -> LaunchSpec {
         mode,
         env: vec![("TERM".to_string(), "xterm-256color".to_string())],
         model: Default::default(),
+        effort: Default::default(),
     }
 }
 

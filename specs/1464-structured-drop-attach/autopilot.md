@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: tasks (design PR)
-- **Next step**: merge design PR, then M1
+- **Phase**: M1 PR open
+- **Next step**: merge M1 PR, then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1553 | Design | open | … |
+| #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
+| #1589 | M1 | open | … |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Drop admission guard and delivery | #… | pending |
+| M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | pr-open |
 | M2 | T010–T019 | full | Add attachment button and picker | #… | pending |
 | M3 | T020–T023 | full | Attach shortcut | #… | pending |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
@@ -49,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | fd3401288b5a25c44dfc88383f1f63f3b70aa2a0:319556603dad39bc016d136d66459fd8ace9ceef | CLEAN (sonnet; D7 refusal variant, FR-010, T024–T033 checked against code) |
 
 ## Declined review findings
+
+- M1 review A: not-yet-reported session refused (design: session half of can_send), `can_accept` parameter (data-model D1), pre-read refusal (optimisation), stale notice (cleared on next send, as other notices) declined. T004/T006 test location and docs wording fixed (prose). Review B: Verify could not run for lock wait; the Verify targets were run green by the unit; no red-first record (tests written with the guard).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

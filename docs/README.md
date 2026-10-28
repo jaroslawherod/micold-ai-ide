@@ -42,6 +42,9 @@ follows describes the version you are reading it from (constitution, Principle V
 - [Running a prompt in parallel](user-guide/parallel-runs.md) — the **Run in parallel** button: one
   prompt, 2 to 8 runs each with its own AI CLI, worktree and branch, and the run group in the
   sidebar.
+- [Giving a structured session a file](user-guide/structured-input.md) — dropping files on a
+  structured session's view: pictures become attachments, other files quoted paths, and when a drop
+  is refused.
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Review tab: opening and
   keeping it, the source control and pull requests, the file tree and reviewed marks, comments,
   sending a review, the comments drawer and the review keys.

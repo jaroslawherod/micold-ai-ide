@@ -958,6 +958,19 @@ pub enum ClientMsg {
         /// The model it is to run.
         model: crate::structured::model::ModelChoice,
     },
+    /// Choose the reasoning effort of a Claude Code session (#1554 FR-004–FR-006, FR-010,
+    /// FR-012, contracts/wire.md *SetSessionEffort*). Persisted with the session and launched with
+    /// next. A running, idle structured session's CLI is asked first and the choice kept only when
+    /// it accepts; a stopped one's is stored and answered `OperationOk`. A terminal session's
+    /// choice is persisted and answered `OperationError`; another CLI's is refused.
+    SetSessionEffort {
+        /// Correlation id.
+        req: u64,
+        /// The session.
+        session: SessionId,
+        /// The effort it is to run with.
+        effort: crate::structured::effort::EffortChoice,
+    },
     /// Switch a Claude Code session between structured and terminal (#943 FR-019–FR-025,
     /// contracts/wire.md *SessionSwitchKind*): its CLI process ends and starts again in kind `to`,
     /// resuming the same conversation under the same session. Answered `OperationOk` once the new
@@ -1893,6 +1906,11 @@ pub struct SessionSummary {
     /// older frame means [`ModelChoice::Default`](crate::structured::model::ModelChoice::Default).
     #[serde(default)]
     pub model: crate::structured::model::ModelChoice,
+    /// The session's effort choice (#1554, FR-001, FR-010): durable, from the record. Absent on
+    /// an older frame means
+    /// [`EffortChoice::Default`](crate::structured::effort::EffortChoice::Default).
+    #[serde(default)]
+    pub effort: crate::structured::effort::EffortChoice,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -2516,6 +2534,7 @@ mod attention_wire_tests {
             kind: Default::default(),
             permission_mode: Default::default(),
             model: Default::default(),
+            effort: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: COUNTED,
@@ -2546,6 +2565,7 @@ mod attention_wire_tests {
             kind: Default::default(),
             permission_mode: Default::default(),
             model: Default::default(),
+            effort: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: 1,

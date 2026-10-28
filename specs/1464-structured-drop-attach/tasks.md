@@ -10,15 +10,15 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Record the baseline: run `cargo test -p micold-client --test features_composer --test pane_drop_target --test features_session` green on this branch and note in `specs/1464-structured-drop-attach/research.md` (R7) the current drop route (`SplitView` -> `shell/drops.rs::read_for_composer` -> `composer::Msg::Dropped` -> `State::apply_drop`)
+- [x] T001 Record the baseline: run `cargo test -p micold-client --test features_composer --test pane_drop_target --test features_session` green on this branch and note in `specs/1464-structured-drop-attach/research.md` (R7) the current drop route (`SplitView` -> `shell/drops.rs::read_for_composer` -> `composer::Msg::Dropped` -> `State::apply_drop`)
 
 ## Phase 2: Foundational
 
 The admission guard every route needs (D1, contracts/admission.md). Part of M1 with US1.
 
-- [ ] T002 [P] Failing reducer tests in `crates/micold-client/tests/features_composer.rs`: `Dropped` for a session that cannot accept input changes nothing but `notice` ("<n> file(s) not attached: the session is not accepting input"); an empty plan (no images, no paths) leaves draft and `notice` untouched (FR-011, FR-016)
-- [ ] T003 `State::apply_drop(session, files, can_accept)` guard in `crates/micold-client/src/features/composer.rs` (D1, data-model)
-- [ ] T004 Compute `can_accept` from `app.core` (session half of `can_send`, no `connected`) where `Msg::Dropped` is routed in `crates/micold-client/src/shell/composer.rs`, with a shell-level test in `crates/micold-client/tests/features_session.rs` that a drop on an ended session is refused with a notice
+- [x] T002 [P] Failing reducer tests in `crates/micold-client/tests/features_composer.rs`: `Dropped` for a session that cannot accept input changes nothing but `notice` ("<n> file(s) not attached: the session is not accepting input"); an empty plan (no images, no paths) leaves draft and `notice` untouched (FR-011, FR-016)
+- [x] T003 `State::apply_drop(session, files, can_accept)` guard in `crates/micold-client/src/features/composer.rs` (D1, data-model)
+- [x] T004 Compute `can_accept` from `app.core` (session half of `can_send`, no `connected`) where `Msg::Dropped` is routed in `crates/micold-client/src/shell/composer.rs`, with a shell-level test (in `crates/micold-client/src/main_tests.rs`: the shell is the binary's, out of reach of `tests/`) that a drop on an ended session is refused with a notice
 
 ## Phase 3: User Story 1 - Drop files anywhere on the structured view (P1) 🎯 MVP
 
@@ -26,11 +26,11 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 **Independent Test**: drop a PNG and a text file on the transcript; one chip and a quoted path appear; nothing reaches a terminal.
 
-- [ ] T005 [P] [US1] Characterisation tests (spec 941 behaviour, expected green on first run; failures are defects to fix in T008) in `crates/micold-client/tests/features_composer.rs`: several files dropped at once keep drop order; mixed images and other files give chips plus quoted paths; a rejected image is reported with file name and reason (FR-002, FR-003, SC-006)
-- [ ] T006 [P] [US1] Characterisation and routing tests (green or red on first run, as T005) in `crates/micold-client/tests/pane_drop_target.rs` and `features_session.rs`: a drop on a structured pane's transcript or composer reaches only that session's composer; with a terminal pane beside it no terminal receives input; with several structured sessions only the receiving one changes (FR-001, scenario 4)
-- [ ] T007 [US1] Investigate delivery (D6, FR-004): check that transcript and composer widgets do not swallow `FileDropped` before `SplitView::update` sees it, in `crates/micold-client/src/ui/material/split_view.rs` and `src/ui/panes.rs`; fix any defect found with a regression test, and record findings per platform (Wayland, X11, macOS, Windows) in `specs/1464-structured-drop-attach/research.md` R7
-- [ ] T008 [US1] Make T005 and T006 pass; fix whatever they show in `crates/micold-client/src/features/composer.rs`, `src/shell/drops.rs`, `src/shell/panes.rs`
-- [ ] T009 [US1] User guide: create `docs/user-guide/structured-input.md` (drop onto the view, quoted paths vs chips, refusal notice), list it in `docs/SUMMARY.md` and `docs/README.md`
+- [x] T005 [P] [US1] Characterisation tests (spec 941 behaviour, expected green on first run; failures are defects to fix in T008) in `crates/micold-client/tests/features_composer.rs`: several files dropped at once keep drop order; mixed images and other files give chips plus quoted paths; a rejected image is reported with file name and reason (FR-002, FR-003, SC-006)
+- [x] T006 [P] [US1] Characterisation and routing tests (green or red on first run, as T005) in `crates/micold-client/tests/features_composer.rs` and `src/main_tests.rs`: a drop on a structured pane's transcript or composer reaches only that session's composer; with a terminal pane beside it no terminal receives input; with several structured sessions only the receiving one changes (FR-001, scenario 4)
+- [x] T007 [US1] Investigate delivery (D6, FR-004): check that transcript and composer widgets do not swallow `FileDropped` before `SplitView::update` sees it, in `crates/micold-client/src/ui/material/split_view.rs` and `src/ui/panes.rs`; fix any defect found with a regression test, and record findings per platform (Wayland, X11, macOS, Windows) in `specs/1464-structured-drop-attach/research.md` R7
+- [x] T008 [US1] Make T005 and T006 pass; fix whatever they show in `crates/micold-client/src/features/composer.rs`, `src/shell/drops.rs`, `src/shell/panes.rs`
+- [x] T009 [US1] User guide: create `docs/user-guide/structured-input.md` (drop onto the view, quoted paths vs chips, refusal notice), list it in `docs/SUMMARY.md` and `docs/README.md`
 
 ## Phase 4: User Story 3 - "Add attachment" button with file picker (P1)
 

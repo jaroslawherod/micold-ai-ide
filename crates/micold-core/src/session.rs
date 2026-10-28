@@ -525,6 +525,10 @@ pub struct Session {
     /// The model the user chose for the session (#943, FR-017): persisted and used on every
     /// launch, in either kind. Changed through the daemon's `Catalog::set_model` only.
     pub model: crate::structured::model::ModelChoice,
+    /// The reasoning effort the user chose for the session (#1554, FR-010, FR-011): persisted and
+    /// used on every launch, in either kind; `Default` for a new session. Changed through the
+    /// daemon's `Catalog::set_effort` only.
+    pub effort: crate::structured::effort::EffortChoice,
     /// The conversation a structured session's CLI last reported when it is not the session's
     /// own id, as after a `/clear` (#943 FR-005a, provisional: ledger decision 2). Persisted;
     /// changed through the daemon's `Catalog::set_conversation` only, and read only through
@@ -581,6 +585,7 @@ impl Session {
             kind,
             permission_mode: PermissionMode::Default,
             model: crate::structured::model::ModelChoice::Default,
+            effort: crate::structured::effort::EffortChoice::Default,
             conversation: None,
         }
     }
@@ -635,6 +640,7 @@ impl Session {
             kind,
             permission_mode: PermissionMode::Default,
             model: crate::structured::model::ModelChoice::Default,
+            effort: crate::structured::effort::EffortChoice::Default,
             conversation: None,
         }
     }
@@ -926,6 +932,11 @@ mod resume_handle_tests {
             session.model,
             crate::structured::model::ModelChoice::Default,
             "a new session runs the CLI's default"
+        );
+        assert_eq!(
+            session.effort,
+            crate::structured::effort::EffortChoice::Default,
+            "#1554 FR-011: a new session's effort is the CLI's default"
         );
         assert_eq!(
             session.conversation, None,

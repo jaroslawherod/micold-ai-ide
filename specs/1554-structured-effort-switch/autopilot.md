@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M1
-- **Next step**: orchestrator opens the M1 PR (branch pushed; body in the session scratchpad `pr-1554-m1-body.md`), waits on CI and merges; then M2.
+- **Phase**: M2
+- **Next step**: M2 PR (pushed; the orchestrator opens it, waits on CI and merges); then M3.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
+| #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | pending (branch pushed) | reviews done; full gate green; PR to open |
-| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | pending |
+| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
+| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | pending | reviews done, full gate green, pushed |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
@@ -42,6 +43,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
 | D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
+| D11 | M2 | `OperationError` kind of the interim busy refusal (contracts/wire.md names only the sentence) | `Busy`; unknown session `NotFound`, every other refusal `Refused` | agent-resolved | crates/micold-daemon/src/state.rs `pick_effort`, test `a_busy_sessions_pick_is_refused_for_now` |
+| D12 | M2 | When is an idle pick's `EffortChanged` note written? | From the CLI's `success`, in its answer's place in the history (as `ModelChanged`); a stopped session's pick from the daemon, once stored (`note_effort_changed`, off the connection loop: it may read a saved history) | agent-resolved | data-model *State transitions*; structured.rs `effort_note` |
+| D13 | M2 | Effective level at a launch after a daemon restart, before the history is loaded | `launch_effort` reads the latest `CommandsReported` from the saved history when none is in memory, so FR-010a holds after a restore too | agent-resolved | test `a_stored_level_the_model_does_not_take_launches_with_none` |
 
 ## Review rounds
 
@@ -58,6 +62,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN: 2 MINOR — F1 `/effort` kept the CLI's argument hint (lists `ultracode`, `auto`): app hint set, D10 updated; F2 `supportsEffort: false` without a level list read as unknown: now no effort — both fixed test-first. Run by the orchestrator in a fresh context |
 | Full gate M1 | 1 | — | green: `scripts/gate.sh` at 023f35c86 (rebased onto origin/main ff9557a57; `PROTOCOL_VERSION` there still 71, branch 72) |
 | B (conformance) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | CLEAN, no findings. Verify passed: core lib + the five integration test binaries; daemon/client `cargo check --tests` clean. Run by the orchestrator |
+| M2 scoped gate | 1 | — | green but for six root-only permission tests (an unreadable or unremovable file is readable and removable as root): core `settings_refuses_save_over_failed_read`, `settings_write_is_logged`, `worktree_leftovers` (2); daemon `sessions` `worktree_delete_blocked_by_an_unremovable_path…`, `settings` `a_service_write_over_an_unreadable_settings_file…`. fmt, clippy (core, workspace) green; `structured_effort` 13/13, `structured_model`, `structured_switch`, `session_store`, `protocol_roundtrip` green. Built from a clean target with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0` |
+| A (code-review, high) M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | CLEAN: 3 MINOR — F1 a late answer to an idle pick could replace a choice stored after it (stored and terminal picks now count as the latest pick); F2 two quick stopped-session picks could note out of order (`note_effort_changed` notes the catalog's choice under the daemon lock, `EventStream::push_effort_note` skips a repeat of the last note); F3 an unchanged stored pick wrote a note (`keep_effort` returns `changed`; unchanged is answered without a note) — all fixed test-first (`a_late_answer_never_replaces_a_later_stored_choice`, `the_notes_of_quick_picks_end_with_the_choice_held`, `a_pick_that_changes_nothing_writes_no_note`). No further round (MINOR only). Run by the orchestrator |
+| B (conformance) M2 | 1 | a1bf8f55a2ab6fa774ad56b829071dad21d00876:df1d83cc5e644204812684c44871cfce292af654 | CLEAN: 1 MINOR — T016 named `ops.rs` `start_with_prompt` for `LaunchSpec.effort`; both sites are in state.rs: fixed, prose only. Verify passed (`structured_effort` 13/13; `session_store`, `protocol_roundtrip`, `schema_hash` green). Run by the orchestrator |
+| M2 scoped gate (fix diff) | 2 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`, `structured_effort` 16/16 |
+| Full gate M2 | 1 | — | red: `a_stored_level_the_model_does_not_take_launches_with_none` asserted the session runs as soon as the stand-in recorded its argv, before the daemon registered the process (a race in this milestone's test). Now waits for it (`eventually`); 3/3 runs green |
+| Full gate M2 | 2 | — | green: `scripts/gate.sh` at 33f5bc8e8 (origin/main b18b611d1; `PROTOCOL_VERSION` there still 72, branch 73) |
 
 ## Declined review findings
 
@@ -66,12 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: M1 T001–T010 implemented (TDD log `tdd/cycle-log.md`); reviews A and B CLEAN, A's two
-  MINORs fixed test-first (D10 updated); rebased onto origin/main ff9557a57; full gate green at
-  023f35c86; branch pushed.
-- Next: open the M1 PR — title `#1554: Structured view: model reasoning effort cannot be changed
-  (M1)`, body in the session scratchpad `pr-1554-m1-body.md`, label docs-not-needed; record its
-  number here; wait on CI; merge; then M2.
+None.
 
 ## Open escalation
 
@@ -79,6 +84,7 @@ None.
 
 ## Follow-ups not done
 
+- `pick_model` (#943, state.rs) has the pattern review A M2 F1 fixed for effort: a stopped or terminal session's stored model pick does not bump `model_picks`, so a late answer to an earlier idle pick can replace it. Out of scope for #1554.
 - Show Claude Code's resolved default level (`Default (medium)`) by reading `get_settings` → `applied.effort` after each launch and change (research R10); not in the spec.
 
 Note: this unit had no Agent tool; the spec review ran as a fresh headless `claude -p` process (read-only tools) instead of an `autopilot-reviewer` subagent.

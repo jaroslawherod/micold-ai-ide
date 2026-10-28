@@ -36,6 +36,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
         kind: Default::default(),
         permission_mode: Default::default(),
         model: Default::default(),
+        effort: Default::default(),
         origin: None,
         agents: Vec::new(),
         paused_on_user: false,

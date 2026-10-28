@@ -4271,6 +4271,7 @@ pub(crate) mod tests {
             kind: Default::default(),
             permission_mode: Default::default(),
             model: Default::default(),
+            effort: Default::default(),
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,

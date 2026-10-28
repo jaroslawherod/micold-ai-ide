@@ -32,6 +32,7 @@ use micold_core::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
     SessionLocation, ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
 };
+use micold_core::structured::effort::{EffortChoice, EffortLevel};
 use micold_core::structured::input::{
     Message, QueueEntryId, QueueRefusal, QueuedMessage, SessionInput, Submit,
 };
@@ -352,6 +353,8 @@ struct Inner {
     prompts: crate::permission::PromptRegistry,
     /// Each structured session's model picks while this daemon runs (#943 FR-015, FR-016).
     model_picks: HashMap<SessionId, ModelPicks>,
+    /// Each Claude Code session's effort picks while this daemon runs (#1554 R5, Edge Cases).
+    effort_picks: HashMap<SessionId, EffortPicks>,
     /// The sessions switching kind, each with the kind it switches to (#943 R8, FR-025): set for
     /// the whole switch, so a second request and the messages sent meanwhile see it.
     switching: HashMap<SessionId, SessionKind>,
@@ -920,6 +923,20 @@ fn wire_worktree_status(status: worktree::WorktreeStatus) -> WorktreeStatus {
 pub const TERMINAL_MODEL_REFUSAL: &str =
     "Model switching is for structured sessions; the choice is used at the next structured launch";
 
+/// The answer to `SetSessionEffort` for another CLI than Claude Code (#1554 FR-012): nothing is
+/// stored.
+pub const EFFORT_NOT_CLAUDE: &str = "Reasoning effort is for Claude Code sessions";
+
+/// The answer to `SetSessionEffort` on a terminal session (#1554 contracts/wire.md): the choice is
+/// kept for the next launch all the same (FR-010).
+pub const TERMINAL_EFFORT_REFUSAL: &str =
+    "Effort is changed from the structured view; the choice is used at the next launch";
+
+/// The answer to `SetSessionEffort` while a turn is in progress, until a busy pick is deferred to
+/// the turn's end (#1554 M2, interim): nothing is stored or written.
+pub const BUSY_EFFORT_REFUSAL: &str =
+    "The session is busy; the effort can be changed when the turn ends";
+
 /// Why a switch of kind was refused (#943 contracts/wire.md *SessionSwitchKind*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SwitchRefusal {
@@ -1010,6 +1027,40 @@ struct DeferredPick {
     previous: ModelChoice,
 }
 
+/// One session's effort picks in this daemon run (#1554 R5, Edge Cases "two windows"), as
+/// [`ModelPicks`]: a pick is kept only if no later pick was kept first.
+#[derive(Default)]
+struct EffortPicks {
+    /// The number of the latest pick.
+    latest: u64,
+    /// The number of the latest pick kept in the catalog.
+    kept: u64,
+}
+
+/// An effort pick's refusal: the kind of `OperationError` and the sentence the user is shown.
+pub type EffortRefused = (micold_core::protocol::messages::ErrorKind, String);
+
+/// How far [`DaemonState::pick_effort`] got (#1554 contracts/wire.md *SetSessionEffort*).
+pub enum EffortPick {
+    /// Answered.
+    Answered(Result<(), EffortRefused>),
+    /// Stored, changed, for a session that is not running: its `EffortChanged` note is for
+    /// [`DaemonState::note_effort_changed`], which reads a saved history (**blocking**).
+    Stored,
+    /// A running idle session's CLI asked, its answer for [`DaemonState::finish_effort_pick`].
+    Asked(AskedEffort),
+}
+
+/// An `apply_flag_settings` request written to an idle session's CLI, waiting for its answer.
+pub struct AskedEffort {
+    session: SessionId,
+    pick: u64,
+    effort: EffortChoice,
+    child: Arc<StructuredSession>,
+    request_id: String,
+    answer: tokio::sync::oneshot::Receiver<micold_core::structured::ControlOutcome>,
+}
+
 /// What a structured session's CLI answered to a model change, as its note says (#943 R7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelAnswer {
@@ -1055,6 +1106,8 @@ struct SpawnPlan {
     resume_handle: uuid::Uuid,
     /// The session's model choice, launched with (#943 FR-017).
     model: ModelChoice,
+    /// The session's effort choice, launched with as its effective level (#1554 FR-010, R3).
+    effort: EffortChoice,
 }
 
 struct ClientHandle {
@@ -1159,6 +1212,7 @@ impl DaemonState {
                 confirmations: crate::mcp::confirm::Registry::default(),
                 prompts: crate::permission::PromptRegistry::default(),
                 model_picks: HashMap::new(),
+                effort_picks: HashMap::new(),
                 switching: HashMap::new(),
                 views: Views::default(),
                 attention_unsaved: false,
@@ -4139,7 +4193,7 @@ impl DaemonState {
         if let Some(DeferredPick { chosen, previous }) = restore {
             let unchanged = self
                 .launch_identity(session)
-                .is_some_and(|(_, model)| model == chosen);
+                .is_some_and(|(_, model, _)| model == chosen);
             if unchanged {
                 if let Err(err) = self.keep_model(session, &previous) {
                     tracing::warn!(session = %session.0, %err, "the refused model choice was not put back");
@@ -4341,13 +4395,191 @@ impl DaemonState {
         Ok(())
     }
 
-    /// `session`'s resume handle and model choice as the catalog holds them (#943 FR-017, FR-020).
-    fn launch_identity(&self, session: SessionId) -> Option<(uuid::Uuid, ModelChoice)> {
+    /// `session`'s resume handle, model choice and effort choice as the catalog holds them (#943
+    /// FR-017, FR-020; #1554 FR-010).
+    fn launch_identity(
+        &self,
+        session: SessionId,
+    ) -> Option<(uuid::Uuid, ModelChoice, EffortChoice)> {
         self.lock()
             .catalog
             .workspace()
             .find_session(session)
-            .map(|(_, s)| (s.resume_handle(), s.model.clone()))
+            .map(|(_, s)| (s.resume_handle(), s.model.clone(), s.effort.clone()))
+    }
+
+    /// The effort level a launch of `session` with `model` names for `choice` (#1554 R3, FR-010,
+    /// FR-010a, FR-011): none for `Default`; else the choice unless the latest models its CLI
+    /// reported, in this run or in its saved history, say `model` does not take it. A launch
+    /// never fails over it. **Blocking** when the history is not loaded: a saved one is read.
+    fn launch_effort(
+        &self,
+        session: SessionId,
+        model: &ModelChoice,
+        choice: &EffortChoice,
+    ) -> Option<EffortLevel> {
+        use micold_core::structured::effort::{effective_level, effort_support};
+        if choice.is_default() {
+            return None;
+        }
+        let models = match self.event_stream(session) {
+            Some(stream) => stream.reported_models(),
+            None => match self
+                .history_store
+                .get()
+                .map(|store| store.load_events(session))
+            {
+                Some(micold_core::terminal_history::EventsLoad::Events { events, .. }) => {
+                    crate::structured::latest_reported_models(events.iter()).to_vec()
+                }
+                _ => Vec::new(),
+            },
+        };
+        effective_level(choice, effort_support(&models, model)).cloned()
+    }
+
+    /// Store `effort` as `session`'s choice and broadcast the catalog when it changed; whether it
+    /// did.
+    fn keep_effort(&self, session: SessionId, effort: &EffortChoice) -> Result<bool, String> {
+        let changed = self
+            .lock()
+            .catalog
+            .set_effort(session, effort)
+            .map_err(|why| why.to_string())?;
+        if changed {
+            self.broadcast_catalog();
+        }
+        Ok(changed)
+    }
+
+    /// The effort pick `ClientMsg::SetSessionEffort` makes (#1554 R5, FR-004–FR-006, FR-012,
+    /// contracts/wire.md), up to the CLI's answer: refused for an unknown session and for another
+    /// CLI than Claude Code; a terminal session's is stored and answered
+    /// [`TERMINAL_EFFORT_REFUSAL`]; a session not running has it stored, its note to follow
+    /// ([`EffortPick::Stored`]) when it changed, answered at once when it did not. A running idle session's CLI is asked here, with the effective
+    /// level for the session's model, before this returns, so picks sent one after another reach
+    /// it in that order; [`Self::finish_effort_pick`] waits for the answer. A busy session's is
+    /// refused with [`BUSY_EFFORT_REFUSAL`] for now (M2), nothing stored or written.
+    pub fn pick_effort(&self, session: SessionId, effort: EffortChoice) -> EffortPick {
+        use micold_core::protocol::messages::ErrorKind;
+        use micold_core::structured::effort::{effective_level, effort_support};
+        let refused = |kind, message: String| EffortPick::Answered(Err((kind, message)));
+        let (child, pick, model) = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let (kind, model) = match inner.catalog.workspace().find_session(session) {
+                None => {
+                    return refused(
+                        ErrorKind::NotFound,
+                        crate::catalog::SetModeError::NoSession.to_string(),
+                    )
+                }
+                Some((_, s)) if s.provider != AiCli::ClaudeCode => {
+                    return refused(ErrorKind::Refused, EFFORT_NOT_CLAUDE.to_owned())
+                }
+                Some((_, s)) => (s.kind, s.model.clone()),
+            };
+            let child = Self::structured_primary(inner, session)
+                .filter(|child| child.is_running())
+                .cloned();
+            // A pick stored here is the latest: an earlier idle pick answered late is not kept
+            // over it (`finish_effort_pick`).
+            if kind == SessionKind::Terminal || child.is_none() {
+                let picks = inner.effort_picks.entry(session).or_default();
+                picks.latest += 1;
+                picks.kept = picks.latest;
+            }
+            let child = match (kind, child) {
+                (SessionKind::Terminal, _) => {
+                    drop(guard);
+                    return match self.keep_effort(session, &effort) {
+                        Ok(_) => refused(ErrorKind::Refused, TERMINAL_EFFORT_REFUSAL.to_owned()),
+                        Err(why) => refused(ErrorKind::Refused, why),
+                    };
+                }
+                (SessionKind::Structured, None) => {
+                    drop(guard);
+                    return match self.keep_effort(session, &effort) {
+                        Ok(true) => EffortPick::Stored,
+                        Ok(false) => EffortPick::Answered(Ok(())),
+                        Err(why) => refused(ErrorKind::Refused, why),
+                    };
+                }
+                (SessionKind::Structured, Some(child)) => child,
+            };
+            if !child.turn().is_idle() {
+                return refused(ErrorKind::Busy, BUSY_EFFORT_REFUSAL.to_owned());
+            }
+            let picks = inner.effort_picks.entry(session).or_default();
+            picks.latest += 1;
+            (child, picks.latest, model)
+        };
+        let models = self
+            .event_stream(session)
+            .map(|stream| stream.reported_models())
+            .unwrap_or_default();
+        let level = effective_level(&effort, effort_support(&models, &model));
+        match child.ask_effort(&effort, level) {
+            Ok((request_id, answer)) => EffortPick::Asked(AskedEffort {
+                session,
+                pick,
+                effort,
+                child,
+                request_id,
+                answer,
+            }),
+            Err(failed) => refused(
+                ErrorKind::Refused,
+                crate::structured::effort_change_failed(&failed),
+            ),
+        }
+    }
+
+    /// Wait for the CLI's answer to an idle session's effort pick (FR-004, FR-005): accepted, the
+    /// choice is kept and broadcast, unless a later pick was kept first; refused or unanswered,
+    /// the error is the reason and the choice stays as it was.
+    pub async fn finish_effort_pick(&self, asked: AskedEffort) -> Result<(), EffortRefused> {
+        let AskedEffort {
+            session,
+            pick,
+            effort,
+            child,
+            request_id,
+            answer,
+        } = asked;
+        let refused = |message| (micold_core::protocol::messages::ErrorKind::Refused, message);
+        child
+            .effort_answer(&request_id, answer)
+            .await
+            .map_err(refused)?;
+        let latest = {
+            let mut inner = self.lock();
+            let picks = inner.effort_picks.entry(session).or_default();
+            let latest = pick > picks.kept;
+            if latest {
+                picks.kept = pick;
+            }
+            latest
+        };
+        if latest {
+            self.keep_effort(session, &effort).map_err(refused)?;
+        }
+        Ok(())
+    }
+
+    /// Note in `session`'s event history the effort choice the catalog holds now (#1554 R5,
+    /// FR-004): the marker of a pick made while it was not running, where the choice starts to
+    /// apply. Read and written under the daemon lock, which every catalog change takes, so of picks
+    /// noted out of order the history still ends with the choice held; nothing is written when the
+    /// history's last effort note already names it. **Blocking**: a saved history is read.
+    pub fn note_effort_changed(&self, session: SessionId) {
+        let Some(stream) = self.event_stream_loading(session, true) else {
+            return;
+        };
+        let inner = self.lock();
+        if let Some((_, s)) = inner.catalog.workspace().find_session(session) {
+            stream.push_effort_note(&s.effort);
+        }
     }
 
     /// `session`'s permission mode as the catalog holds it.
@@ -5918,6 +6150,7 @@ impl DaemonState {
                             scrollback,
                             resume_handle: s.resume_handle(),
                             model: s.model.clone(),
+                            effort: s.effort.clone(),
                         })
                 })
         };
@@ -6042,6 +6275,7 @@ impl DaemonState {
                     env: ai_cli_env
                         .expect("the launch gate resolves every AI-CLI start's environment"),
                     model: plan.model.clone(),
+                    effort: self.launch_effort(id, &plan.model, &plan.effort),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
@@ -7631,9 +7865,12 @@ impl DaemonState {
         let spawned = match mode {
             TerminalMode::AiCli => {
                 // The record as it is now: a model chosen since the last start is launched with.
-                let (resume_handle, model) = self
-                    .launch_identity(id)
-                    .unwrap_or((id.0, ModelChoice::Default));
+                let (resume_handle, model, effort) = self.launch_identity(id).unwrap_or((
+                    id.0,
+                    ModelChoice::Default,
+                    EffortChoice::Default,
+                ));
+                let effort = self.launch_effort(id, &model, &effort);
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
@@ -7642,6 +7879,7 @@ impl DaemonState {
                     provider,
                     mode: LaunchMode::Resume,
                     model,
+                    effort,
                 };
                 let kind = match dead {
                     Proc::Pty { .. } => SessionKind::Terminal,

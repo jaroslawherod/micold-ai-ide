@@ -14201,6 +14201,91 @@ mod panes {
         assert!(inputs(&mut rx).is_empty());
         assert!(app.core.notifications.queue.is_active());
     }
+
+    /// A drop of one picture's path for structured `session`, as the shell reads it.
+    fn composer_drop(session: SessionId) -> Message {
+        use micold_client::features::composer::{DroppedFiles, Msg};
+        Message::Composer(Msg::Dropped {
+            session,
+            files: Box::new(DroppedFiles {
+                plan: micold_core::structured::attachment::DropPlan {
+                    images: vec![PathBuf::from("/d/shot.png")],
+                    paths: Vec::new(),
+                },
+                reads: vec![Ok(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec())],
+                shell: micold_core::path_insert::ShellKind::Posix,
+                sandbox: None,
+            }),
+        })
+    }
+
+    /// FR-011 (#1464, T004): the shell asks the session whether it accepts input. A drop on an
+    /// ended session is refused with a notice; the same drop on a running one attaches.
+    #[test]
+    fn a_composer_drop_on_an_ended_session_is_refused_with_a_notice_and_a_running_one_attaches() {
+        use micold_client::features::composer::InputState;
+        use micold_core::protocol::messages::TurnPhase;
+        let (mut app, ids, _rx) = app_with_sessions(2);
+        let (ended, running) = (ids[0], ids[1]);
+        for id in [ended, running] {
+            app.core.composers.input_reported(
+                id,
+                InputState {
+                    phase: if id == running {
+                        TurnPhase::Idle
+                    } else {
+                        TurnPhase::NotRunning
+                    },
+                    hold: false,
+                    queue: Vec::new(),
+                },
+            );
+        }
+        let _ = update(&mut app, composer_drop(ended));
+        let _ = update(&mut app, composer_drop(running));
+        let refused = app.core.composers.composer(ended).unwrap();
+        assert!(refused.draft.images.is_empty(), "nothing attached");
+        assert_eq!(
+            refused.notice.as_deref(),
+            Some("1 file not attached: the session is not accepting input")
+        );
+        let taken = app.core.composers.composer(running).unwrap();
+        assert_eq!(taken.draft.images.len(), 1);
+        assert_eq!(taken.notice, None);
+    }
+
+    /// FR-001 (#1464, T006): files dropped on a structured pane beside a terminal pane type
+    /// nothing into the terminal; the structured pane's composer is the one that reads them.
+    #[test]
+    fn a_drop_on_a_structured_pane_beside_a_terminal_sends_no_terminal_input() {
+        use micold_core::session::SessionKind;
+        let (mut app, ids, mut rx) = app_with_sessions(2);
+        let (terminal_pane, _) = two_running_panes(&mut app, &ids);
+        let structured = ids[1];
+        let (_, s) = app.core.workspace.find_session_mut(structured).unwrap();
+        s.kind = SessionKind::Structured;
+        let pane = layout_of(&app)
+            .panes()
+            .into_iter()
+            .find(|p| p.terminal().is_some_and(|t| t.session == structured))
+            .map(|p| p.id())
+            .unwrap();
+        assert_ne!(terminal_pane.session, structured);
+        let _ = drain(&mut rx);
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(
+                pane,
+                PathBuf::from("/d/shot.png"),
+            ))),
+        );
+        let _ = update(
+            &mut app,
+            Message::Session(SessionMsg::Pane(PaneMsg::DropsSettled)),
+        );
+        assert!(inputs(&mut rx).is_empty(), "no terminal received input");
+        assert!(app.pending_drops.is_empty());
+    }
 }
 
 /// Feature 491 (FR-004, FR-007): the binary routes an op to its binding's daemon only, and one

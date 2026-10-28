@@ -19,9 +19,10 @@ use std::time::Duration;
 use micold_core::session::{KindRefusal, PermissionMode, SessionId};
 use micold_core::structured::commands::parse_initialize;
 use micold_core::structured::control::{
-    encode_initialize, encode_interrupt, encode_set_mode, encode_set_model, next_request_id,
-    parse_set_model,
+    encode_apply_effort, encode_initialize, encode_interrupt, encode_set_mode, encode_set_model,
+    next_request_id, parse_set_model,
 };
+use micold_core::structured::effort::{EffortChoice, EffortLevel};
 use micold_core::structured::input::Message;
 use micold_core::structured::model::ModelChoice;
 use micold_core::structured::{
@@ -135,6 +136,30 @@ impl EventStream {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .next_seq()
+    }
+
+    /// The models the latest `CommandsReported` note lists, with what each supports (#1554 R3):
+    /// read under the history lock without copying the history; none before the CLI reported any.
+    pub fn reported_models(&self) -> Vec<micold_core::structured::ReportedModel> {
+        let history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        latest_reported_models(history.iter().map(|e| &e.event)).to_vec()
+    }
+
+    /// Append an `EffortChanged` note naming `effort`, unless the history's last such note already
+    /// names it (#1554 R5): checked and appended under the history lock.
+    pub fn push_effort_note(&self, effort: &micold_core::structured::effort::EffortChoice) {
+        let mut history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        let last = history.iter().rev().find_map(|e| match &e.event {
+            StructuredEvent::EffortChanged { effort } => Some(effort),
+            _ => None,
+        });
+        if last == Some(effort) {
+            return;
+        }
+        let sequenced = history.append(StructuredEvent::EffortChanged {
+            effort: effort.clone(),
+        });
+        let _ = self.live.send(sequenced);
     }
 
     /// Append `event` to the history and broadcast it, under the history lock, so a viewer that
@@ -301,6 +326,65 @@ fn model_note(ask: &ModelAsk, outcome: &ControlOutcome) -> Option<StructuredEven
     }
 }
 
+/// The models the latest `CommandsReported` note among `events` (oldest first) lists; none when
+/// there is no such note (#1554 R3).
+pub fn latest_reported_models<'a>(
+    events: impl DoubleEndedIterator<Item = &'a StructuredEvent>,
+) -> &'a [micold_core::structured::ReportedModel] {
+    events
+        .rev()
+        .find_map(|event| match event {
+            StructuredEvent::CommandsReported { models, .. } => Some(models.as_slice()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// An `apply_flag_settings` effort request written to the CLI and not answered yet (#1554 R1, R5):
+/// the choice it applies; its `success` becomes an [`StructuredEvent::EffortChanged`] note.
+struct EffortAsk {
+    choice: EffortChoice,
+}
+
+/// The effort requests of one process waiting for their answers, by request id.
+type EffortAsks = Mutex<HashMap<String, EffortAsk>>;
+
+/// The note the answer to `ask` becomes (#1554 FR-004): an accepted change, the choice from here
+/// on; a refusal, nothing (it is its requester's answer).
+fn effort_note(ask: &EffortAsk, outcome: &ControlOutcome) -> Option<StructuredEvent> {
+    match outcome {
+        ControlOutcome::Success(_) => Some(StructuredEvent::EffortChanged {
+            effort: ask.choice.clone(),
+        }),
+        ControlOutcome::Error { .. } => None,
+    }
+}
+
+/// Why a running session's CLI did not change its effort (#1554 FR-005): the sentence the user is
+/// shown.
+pub fn effort_change_failed(failed: &ControlFailed) -> String {
+    match failed {
+        ControlFailed::NoAnswer => "Claude did not answer the effort change.".to_owned(),
+        ControlFailed::Stopped => "Claude stopped before it answered.".to_owned(),
+        ControlFailed::Unsent(err) => {
+            format!("The effort change could not be sent to the CLI: {err}")
+        }
+    }
+}
+
+/// The CLI's answer to a control request, waited for up to [`CONTROL_ANSWER_BOUND`]: `Ok` on its
+/// `success`, its refusal's text, or why there was no answer.
+async fn control_answer(
+    answer: oneshot::Receiver<ControlOutcome>,
+) -> Result<(), Result<String, ControlFailed>> {
+    match tokio::time::timeout(CONTROL_ANSWER_BOUND, answer).await {
+        Ok(Ok(ControlOutcome::Success(_))) => Ok(()),
+        Ok(Ok(ControlOutcome::Error { message, .. })) => Err(Ok(message)),
+        Ok(Err(_)) => Err(Err(ControlFailed::Stopped)),
+        Err(_) => Err(Err(ControlFailed::NoAnswer)),
+    }
+}
+
 /// Why a running session's CLI did not change its model (#943 FR-016): the sentence the user is
 /// shown.
 pub fn model_change_failed(failed: &ControlFailed) -> String {
@@ -382,6 +466,9 @@ pub struct StructuredSession {
     /// The `set_model` requests not answered yet, shared with the stdout reader, which turns each
     /// answer into its note (#943 R7).
     model_asks: Arc<ModelAsks>,
+    /// The effort requests not answered yet, shared with the stdout reader, which turns each
+    /// accepted one into its note (#1554 R5).
+    effort_asks: Arc<EffortAsks>,
     /// A model chosen while a turn was in progress (#943 FR-015): written before the next user
     /// message, or once the turn's `result` is in, whichever is first. A later pick replaces it.
     /// Taken only under the stdin mutex, so it is written once.
@@ -490,6 +577,8 @@ impl StructuredSession {
         let reader_initialize = initialize.clone();
         let model_asks: Arc<ModelAsks> = Arc::default();
         let reader_asks = Arc::clone(&model_asks);
+        let effort_asks: Arc<EffortAsks> = Arc::default();
+        let reader_effort_asks = Arc::clone(&effort_asks);
         let mut on_event = on_event;
         let emit = Arc::new(Mutex::new(Emit {
             on_event: Box::new(move |event| {
@@ -512,6 +601,13 @@ impl StructuredSession {
                     // #943 R7: a `set_model` answer becomes its note in its place.
                     if let Some(ask) = lock(&reader_asks).remove(request_id.as_str()) {
                         if let Some(note) = model_note(&ask, outcome) {
+                            on_event(note);
+                        }
+                        return;
+                    }
+                    // #1554 R5: so does an effort answer.
+                    if let Some(ask) = lock(&reader_effort_asks).remove(request_id.as_str()) {
+                        if let Some(note) = effort_note(&ask, outcome) {
                             on_event(note);
                         }
                         return;
@@ -574,6 +670,7 @@ impl StructuredSession {
             written: Mutex::new(None),
             control,
             model_asks,
+            effort_asks,
             deferred_model: Mutex::new(None),
             turn,
             emit,
@@ -759,14 +856,64 @@ impl StructuredSession {
         request_id: &str,
         answer: oneshot::Receiver<ControlOutcome>,
     ) -> Result<(), String> {
-        let failed = match tokio::time::timeout(CONTROL_ANSWER_BOUND, answer).await {
-            Ok(Ok(ControlOutcome::Success(_))) => return Ok(()),
-            Ok(Ok(ControlOutcome::Error { message, .. })) => return Err(message),
-            Ok(Err(_)) => ControlFailed::Stopped,
-            Err(_) => ControlFailed::NoAnswer,
-        };
-        self.forget_model_ask(request_id);
-        Err(model_change_failed(&failed))
+        match control_answer(answer).await {
+            Ok(()) => Ok(()),
+            Err(Ok(refused)) => Err(refused),
+            Err(Err(failed)) => {
+                self.forget_model_ask(request_id);
+                Err(model_change_failed(&failed))
+            }
+        }
+    }
+
+    /// Ask the CLI to answer later turns with effort `level` (`None`: its own default) for the
+    /// user's `choice` (#1554 R1, R5, FR-004, FR-006): write one `apply_flag_settings` control
+    /// request now, and hand back its id and the receiver of its answer, for
+    /// [`Self::effort_answer`]. Its `success` also becomes an `EffortChanged` note naming `choice`.
+    /// A write that fails leaves nothing waiting.
+    pub fn ask_effort(
+        &self,
+        choice: &EffortChoice,
+        level: Option<&EffortLevel>,
+    ) -> Result<(String, oneshot::Receiver<ControlOutcome>), ControlFailed> {
+        let request_id = next_request_id();
+        let answer = self
+            .control
+            .wait_for(&request_id)
+            .ok_or(ControlFailed::Stopped)?;
+        lock(&self.effort_asks).insert(
+            request_id.clone(),
+            EffortAsk {
+                choice: choice.clone(),
+            },
+        );
+        if let Err(err) = self.write_line(&encode_apply_effort(&request_id, level)) {
+            self.forget_effort_ask(&request_id);
+            return Err(ControlFailed::Unsent(err));
+        }
+        Ok((request_id, answer))
+    }
+
+    /// The CLI's answer to [`Self::ask_effort`]'s request `request_id`, waited for up to
+    /// [`CONTROL_ANSWER_BOUND`]: `Ok` when it accepted, else its reason (FR-005).
+    pub async fn effort_answer(
+        &self,
+        request_id: &str,
+        answer: oneshot::Receiver<ControlOutcome>,
+    ) -> Result<(), String> {
+        match control_answer(answer).await {
+            Ok(()) => Ok(()),
+            Err(Ok(refused)) => Err(refused),
+            Err(Err(failed)) => {
+                self.forget_effort_ask(request_id);
+                Err(effort_change_failed(&failed))
+            }
+        }
+    }
+
+    fn forget_effort_ask(&self, request_id: &str) {
+        self.control.forget(request_id);
+        lock(&self.effort_asks).remove(request_id);
     }
 
     /// Ask the CLI for `choice` once the turn in progress is over (#943 FR-015): before the next

@@ -476,6 +476,9 @@ fn sample_summary() -> SessionSummary {
         model: micold_core::structured::model::ModelChoice::Named(
             micold_core::structured::model::ModelName::parse("haiku").unwrap(),
         ),
+        effort: micold_core::structured::effort::EffortChoice::Level(
+            micold_core::structured::effort::EffortLevel::parse("high").unwrap(),
+        ),
         title: SessionLabel::Named("Fix login".into()),
         lifecycle: WireLifecycle::Failed {
             reason: "crash loop".into(),
@@ -958,8 +961,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_72() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 72);
+fn the_protocol_version_is_73() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 73);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -1071,6 +1074,7 @@ fn the_permission_mode_rides_the_summary_and_the_create_and_defaults_when_absent
         let summary = SessionSummary {
             permission_mode: mode,
             model: Default::default(),
+            effort: Default::default(),
             ..sample_summary()
         };
         json_roundtrip(&summary);
@@ -2397,6 +2401,7 @@ fn the_main_marker_and_set_main_round_trip() {
         kind: Default::default(),
         permission_mode: Default::default(),
         model: Default::default(),
+        effort: Default::default(),
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: 0,
@@ -2834,6 +2839,47 @@ fn the_model_choice_rides_the_summary_and_set_session_model() {
     assert!(
         serde_json::from_str::<ClientMsg>(&bad).is_err(),
         "an invalid name never reaches the daemon"
+    );
+}
+
+/// #1554 T011 (FR-010, FR-012): a summary carries the session's effort choice and
+/// `SetSessionEffort` rides both wires; an older summary without it decodes as `Default`, and a
+/// level the app does not accept does not decode at all.
+#[test]
+fn the_effort_choice_rides_the_summary_and_set_session_effort() {
+    use micold_core::structured::effort::{EffortChoice, EffortLevel};
+    for effort in [
+        EffortChoice::Default,
+        EffortChoice::Level(EffortLevel::parse("xhigh").unwrap()),
+    ] {
+        let summary = SessionSummary {
+            effort: effort.clone(),
+            ..sample_summary()
+        };
+        json_roundtrip(&summary);
+        postcard_roundtrip(&summary);
+        let set = ClientMsg::SetSessionEffort {
+            req: 5,
+            session: sid(),
+            effort,
+        };
+        json_roundtrip(&set);
+        postcard_roundtrip(&set);
+    }
+    let mut old = serde_json::to_value(sample_summary()).expect("a summary encodes");
+    old.as_object_mut()
+        .expect("an object")
+        .remove("effort")
+        .expect("the summary carries its effort");
+    let back: SessionSummary = serde_json::from_value(old).expect("an older summary decodes");
+    assert_eq!(back.effort, EffortChoice::Default);
+    let bad = format!(
+        r#"{{"SetSessionEffort":{{"req":1,"session":{},"effort":{{"Level":"ultracode"}}}}}}"#,
+        serde_json::to_string(&sid()).unwrap()
+    );
+    assert!(
+        serde_json::from_str::<ClientMsg>(&bad).is_err(),
+        "a level the app does not accept never reaches the daemon"
     );
 }
 

@@ -253,7 +253,10 @@
 ///
 /// And 71 → 72 for #1554's effort events (M1): `StructuredEvent::{EffortChanged, EffortRefused}`
 /// and `ReportedModel.effort`, which change the postcard layout `StructuredEvents` carries.
-pub const PROTOCOL_VERSION: u32 = 72;
+///
+/// And 72 → 73 for #1554's effort choice (M2): `effort` on `SessionSummary` and
+/// `ClientMsg::SetSessionEffort`, which shift the postcard layout.
+pub const PROTOCOL_VERSION: u32 = 73;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
