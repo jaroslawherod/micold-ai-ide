@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- M7 re-review of the round 1 fixes (scoped, sonnet, fd36c527c:7fcbb124f): CLEAN; the refactor matched old strings and debounce timing exactly.
+
 - M6 review (combined A+B, sonnet): CLEAN, 3 MINORs. F1 (no test for a remembered query now refused) added to `an_empty_run_is_not_remembered_as_run`; F2 (user guide did not say a reopen after an empty Run runs the last run query) one sentence added; F3 (no shell-level Mode/Query write test) declined: `with_change` and the shell write path are covered by core and M3 tests.
 
 | Review | Round | Snapshot | Verdict |
