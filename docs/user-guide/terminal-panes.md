@@ -90,8 +90,9 @@ below: the terminal never receives them, so they shadow the same keys with Shift
 program. The Overview, quick-switcher and location chords work whether or not a terminal is focused.
 The mouse's side buttons go back and forward through the places you have been (sessions, Review
 tabs, the Overview and Compare) from anywhere in the window, over a terminal too; the terminal
-program never receives them. Places that are gone, such as a closed session or a removed worktree,
-are skipped. In a Review tab, Back first does the tab's own **Back** (from a browsed file to what
+program never receives them. Places that no longer exist, such as a closed session, a removed
+worktree or a project that was closed or is unavailable, are passed over without an error, and a
+place in another project switches to that project as the project switcher does. In a Review tab, Back first does the tab's own **Back** (from a browsed file to what
 was being read) and leaves the tab only when that has nothing left; Forward always uses the app's
 history. Back and Forward's keys are the exception to "the app takes every chord": a focused
 text field or terminal keeps them (shells and fields use Alt+←/→ to move by word; on macOS
