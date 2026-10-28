@@ -607,6 +607,16 @@ fn a_button_move_lands_on_the_terminal_as_a_click_would() {
 
 // ---- FR-011: the Review tab's own Back first (T024) --------------------------------------------
 
+/// Opens a file in the shown Review tab; the root declines `Message::Changes`, the shell runs it.
+fn browse_a_file(state: &mut State) {
+    let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
+    micold_client::features::changes::update(
+        &mut state.changes,
+        micold_client::features::changes::Msg::BrowseOpen(file),
+    );
+    state.observe_place();
+}
+
 /// `feat-a` shown as a Review tab, after a session was shown; with `browse`, a file is opened in
 /// it (one Back frame on its stack).
 fn in_review(browse: bool) -> (State, SessionId) {
@@ -617,11 +627,7 @@ fn in_review(browse: bool) -> (State, SessionId) {
         Message::Sidebar(sidebar::Msg::ReviewChangesRequested(worktree("feat-a"))),
     );
     if browse {
-        let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
-        send(
-            &mut state,
-            Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
-        );
+        browse_a_file(&mut state);
     }
     (state, a)
 }
@@ -664,18 +670,16 @@ fn back_in_a_review_tab_without_a_browse_frame_is_the_global_back() {
 fn forward_from_a_browsing_review_tab_is_the_global_forward() {
     let (mut state, a) = in_review(true);
     // D, A, Review(feat-a): leave the browse, go Back to A, then Forward is the Review tab again.
-    let file_back = Message::Changes(micold_client::features::changes::Msg::BrowseBack);
-    send(&mut state, file_back);
+    micold_client::features::changes::update(
+        &mut state.changes,
+        micold_client::features::changes::Msg::BrowseBack,
+    );
     back(&mut state);
     assert_eq!(state.session.active, Some(a));
     let step = press(&mut state, Dir::Forward, Source::Button);
     assert_eq!(step, Step::Show(at(View::Review(worktree("feat-a")))));
     // Browsing there again: Forward with nothing ahead stays the global Forward (does nothing).
-    let file = micold_core::review::RelPath::from_native("src/a.rs").expect("relative path");
-    send(
-        &mut state,
-        Message::Changes(micold_client::features::changes::Msg::BrowseOpen(file)),
-    );
+    browse_a_file(&mut state);
     assert_eq!(
         press(&mut state, Dir::Forward, Source::Key),
         Step::None,
