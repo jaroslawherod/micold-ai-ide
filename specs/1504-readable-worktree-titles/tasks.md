@@ -208,21 +208,21 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ### Tests — spec and commit facts (US2.2, US2.4)
 
-- [ ] T033 [P] [US2] Write failing core tests in `crates/micold-core/src/location_title.rs`:
+- [x] T033 [P] [US2] Write failing core tests in `crates/micold-core/src/location_title.rs`:
   `spec_title` strips `Feature Specification:`, gives none for `[FEATURE NAME]`/`[...]`-only and no
   heading (L4, FR-012); `read_spec_title` on a temp dir finds the folder of `.specify/feature.json`,
   else `specs/<n>-*` for ticket `n`, handles CRLF and BOM, gives none for a missing file, and
   reads a worktree whose path has non-ASCII characters (`wt-überblick`)
-- [ ] T034 [P] [US2] Write failing core tests in `crates/micold-core/tests/review_git.rs` for
+- [x] T034 [P] [US2] Write failing core tests in `crates/micold-core/tests/review_git.rs` for
   `GitCli::own_commit_subject` on a temp repo: own commit → its subject; fresh branch → none;
   detached HEAD → none; no default branch → none; a dir that is not a git repository → none; and in `crates/micold-core/tests/git_fake.rs`
   for `FakeGit::with_own_commit` (L7)
-- [ ] T035 [P] [US2] Write failing reducer tests in
+- [x] T035 [P] [US2] Write failing reducer tests in
   `crates/micold-client/tests/features_overview.rs`: `TitleFactsRequested` bumps `facts_round` and
   records it per dir; `TitleFactsRead` is dropped for an older round, an unlisted dir or another
   project, stored otherwise; `ProjectSwitched` clears facts; `Debug` of `TitleFacts` omits texts;
   stored facts title the card (spec over session, commit under session) (L7, L9, US2.2, US2.4)
-- [ ] T036 [P] [US2] Write failing tests named `title_facts_*` in
+- [x] T036 [P] [US2] Write failing tests named `title_facts_*` in
   `crates/micold-client/src/main_tests.rs`: through `update`, a `set_worktrees` listing, a created
   worktree (`features::worktree::created`), an included one and an Overview opening each leave
   their dirs in `facts_asked`; with capabilities `without_local_git` (worktrees not on this
@@ -230,17 +230,17 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ### Implementation — spec and commit facts
 
-- [ ] T037 [US2] Implement `spec_title` and `read_spec_title` in
+- [x] T037 [US2] Implement `spec_title` and `read_spec_title` in
   `crates/micold-core/src/location_title.rs`; make `task_progress::read_text` `pub(crate)` in
   `crates/micold-core/src/task_progress.rs`
-- [ ] T038 [US2] Add `Git::own_commit_subject` in `crates/micold-core/src/git.rs` (with
+- [x] T038 [US2] Add `Git::own_commit_subject` in `crates/micold-core/src/git.rs` (with
   `FakeGit::with_own_commit`) and its `GitCli` impl in `crates/micold-core/src/review/git.rs`
   (`review_base` merge-base, `log -1 --format=%s base..HEAD` through the bounded `read`)
-- [ ] T039 [US2] In `crates/micold-client/src/features/overview.rs`: `TitleFacts` (texts-free
+- [x] T039 [US2] In `crates/micold-client/src/features/overview.rs`: `TitleFacts` (texts-free
   `Debug`), `State.facts`/`facts_round`/`facts_asked`, `Msg::TitleFactsRequested` and
   `Msg::TitleFactsRead` reducers (prune unlisted dirs), `read_project` arm; feed spec and commit
   into `location_title`
-- [ ] T040 [US2] New `crates/micold-client/src/shell/location_titles.rs` (registered in the shell
+- [x] T040 [US2] New `crates/micold-client/src/shell/location_titles.rs` (registered in the shell
   module): `read_facts(app, &dirs)` applies `TitleFactsRequested`, then per valid worktree one
   `Task::perform` + `spawn_blocking` with `shell/changes.rs`'s `READ_DEADLINE` reading the spec
   heading and the own-commit subject independently (a failing or missing `git` loses only the
@@ -248,7 +248,7 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
   (`caps.shared_git()` none: the worktrees are the daemon's, not this machine's); call it from `crates/micold-client/src/main.rs` beside the fingerprint check
   (~line 490, also on an active-project change) and from `issues::on_overview_opened`
   (`crates/micold-client/src/shell/issues.rs` ~line 737); log no text (L9)
-- [ ] T041 [US2] Update `docs/user-guide/overview.md` *Title*: spec and latest-commit sources, read
+- [x] T041 [US2] Update `docs/user-guide/overview.md` *Title*: spec and latest-commit sources, read
   when the worktree list changes or the Overview opens
 
 **Checkpoint**: quickstart §B rows E–I, *Refresh*.
