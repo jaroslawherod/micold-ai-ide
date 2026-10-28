@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
 - **Phase**: M6
-- **Next step**: M6 (T033–T034; T035 is done, uncommitted until then: see Handover), then a new close unit.
+- **Next step**: M6 review A and B, full gate, PR; then a new close unit (speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR).
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | #1599 | merged |
-| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | not started |
+| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | implemented, in review |
 
 ## Decisions
 
@@ -101,6 +101,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Full gate M5 | 1 | — | green: `scripts/gate.sh` at 9e609d687 (earlier runs: shell test import, `clear_notice` unclassified in the isolation guard — fixed; disk filled twice without the low-debug env vars) |
 | Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
 | Close: quickstart Part A (T032) | 1 | — | all green on main 5a109a961 but `structured_effort` 28/29: `a_refused_idle_pick_after_a_refused_deferred_one…` asked `low` again (2 of about 250 runs; a real race, M6). Stress runs also showed two `Rig::start` races in the stand-in ("the CLI's answer never happened", "Claude did not answer the effort change"): fixed in the stand-in (T035). Results not yet written to quickstart.md: the close unit after M6 re-runs Part A |
+| B (conformance) M5 | 2 | 09d3654e6:7d97bc068 | CLEAN (scoped to 09d3654e6..7d97bc068): A1, A2/B2, B1 and the visual pass's V1 all verified FIXED. Run by the orchestrator |
+| M6 TDD (T033–T034) | 1 | — | red every run on main: `a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_never_asks_it_again` asked `[low, high, low]`; green after T034: `structured_effort` 30/30 |
+| M6 scoped checks | 1 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings` (one needless borrow fixed), `structured_effort` 30/30 and the whole binary 100 runs in a loop with no failure (Verify) |
 
 ## Declined review findings
 
@@ -109,10 +112,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done** (close unit 1): ledger brought up to M5 merged (#1599, 5a109a961); quickstart Part A run (see *Review rounds*); race found → M6 cut (tasks.md Phase 8, T033–T035, D21); T035 done and committed with this ledger change (not pushed: it ships in M6's PR).
-- **Next step**: M6 unit: T033 (deterministic test of the race, fails on main) and T034 (`state.rs` `reapply_effort` / `settle_effort_ask` against an unanswered deferred pick). Then a new close unit: speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR.
-- **Main paths**: `crates/micold-daemon/src/state.rs` (`reapply_effort` ~4474, `settle_effort_ask` ~4698, `EffortPicks` ~1031), `crates/micold-daemon/src/structured.rs` (`defer_effort`, `reapply_effort`), test `crates/micold-daemon/tests/structured_effort.rs` ~1104.
-- **Open findings**: none besides M6.
+None.
 
 ## Open escalation
 

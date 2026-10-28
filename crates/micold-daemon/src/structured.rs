@@ -1011,6 +1011,13 @@ impl StructuredSession {
             .is_some_and(|replaced| replaced.choice.is_some())
     }
 
+    /// Whether a user's effort pick is deferred past the turn and not written yet (#1554 FR-005).
+    pub fn effort_pick_deferred(&self) -> bool {
+        lock(&self.deferred_effort)
+            .as_ref()
+            .is_some_and(|pending| pending.choice.is_some())
+    }
+
     /// Make `level` the effort the CLI is asked for once no turn is open, with no note (#1554 R4:
     /// the level the choice gives for a new model): a change still deferred takes it in place of
     /// its own; otherwise one is deferred, unless `level` is what the CLI was last asked for.

@@ -1039,6 +1039,10 @@ struct EffortPicks {
     /// does not hold the choice the CLI was last asked for, so no level is re-applied from it
     /// (#1554 R4); the answer re-applies it ([`DaemonState::finish_effort_pick`]).
     asking: Option<u64>,
+    /// A re-apply held back while `deferred` was written and its answer not handled: the catalog
+    /// may still hold a level the CLI refused (FR-005). That answer's handling re-applies it
+    /// ([`DaemonState::follow_effort_answer`]).
+    reapply_held: bool,
 }
 
 /// An effort pick deferred past a turn (#1554 FR-005): put back to `previous` when the CLI refuses
@@ -1047,6 +1051,8 @@ struct DeferredEffort {
     chosen: EffortChoice,
     previous: EffortChoice,
     pick: u64,
+    /// The [`StructuredSession::serial`] of the process it was deferred in.
+    process: u64,
 }
 
 /// An effort pick's refusal: the kind of `OperationError` and the sentence the user is shown.
@@ -4418,14 +4424,16 @@ impl DaemonState {
     /// is put back to the choice before it, unless another pick was kept since. An idle pick
     /// made after it and not answered yet is not one: if the CLI takes it, its answer keeps it
     /// ([`Self::finish_effort_pick`]); if not, the CLI is still on the choice before both.
+    /// A re-apply held back for this answer ([`Self::reapply_effort`]) is made once the choice is
+    /// as the answer leaves it.
     pub fn follow_effort_answer(&self, session: SessionId, answer: EffortAnswer) {
-        let previous = {
+        let (previous, reapply) = {
             let mut inner = self.lock();
             let Some(picks) = inner.effort_picks.get_mut(&session) else {
                 return;
             };
             let kept = picks.kept;
-            match (&answer, picks.deferred.take()) {
+            let previous = match (&answer, picks.deferred.take()) {
                 (EffortAnswer::Refused(effort), Some(deferred)) if *effort == deferred.chosen => {
                     (deferred.pick == kept).then_some(deferred.previous)
                 }
@@ -4434,14 +4442,18 @@ impl DaemonState {
                 }
                 (_, deferred) => {
                     picks.deferred = deferred;
-                    None
+                    return;
                 }
-            }
+            };
+            (previous, std::mem::take(&mut picks.reapply_held))
         };
         if let Some(previous) = previous {
             if let Err(err) = self.keep_effort(session, &previous) {
                 tracing::warn!(session = %session.0, %err, "the refused effort choice was not put back");
             }
+        }
+        if reapply {
+            self.reapply_effort(session);
         }
     }
 
@@ -4471,9 +4483,12 @@ impl DaemonState {
     /// now, when that is not the level last sent (#1554 R4): after a model change it accepted, or
     /// a deferred one it refused, or an idle effort pick's answer. At once when idle, else at the
     /// turn's end; never noted. Not while an idle effort pick is unanswered: its answer does it.
+    /// Nor while a deferred pick is written to this process and its answer not handled (FR-005):
+    /// the catalog may hold a level the CLI refused; that answer's handling does it.
     fn reapply_effort(&self, session: SessionId) {
         let (child, level) = {
-            let inner = self.lock();
+            let mut guard = self.lock();
+            let inner = &mut *guard;
             if inner
                 .effort_picks
                 .get(&session)
@@ -4481,16 +4496,25 @@ impl DaemonState {
             {
                 return;
             }
-            let Some(child) = Self::structured_primary(&inner, session)
+            let Some(child) = Self::structured_primary(inner, session)
                 .filter(|child| child.is_running())
                 .cloned()
             else {
                 return;
             };
+            if let Some(picks) = inner.effort_picks.get_mut(&session) {
+                let written = picks.deferred.as_ref().is_some_and(|deferred| {
+                    deferred.process == child.serial() && !child.effort_pick_deferred()
+                });
+                if written {
+                    picks.reapply_held = true;
+                    return;
+                }
+            }
             let Some((_, s)) = inner.catalog.workspace().find_session(session) else {
                 return;
             };
-            let level = Self::effort_level(&inner, session, &child.cli_model(), &s.effort);
+            let level = Self::effort_level(inner, session, &child.cli_model(), &s.effort);
             (child, level)
         };
         child.reapply_effort(level);
@@ -4649,6 +4673,7 @@ impl DaemonState {
                     chosen: effort.clone(),
                     previous,
                     pick: picks.latest,
+                    process: child.serial(),
                 });
                 drop(guard);
                 return match self.keep_effort(session, &effort) {

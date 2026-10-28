@@ -178,3 +178,15 @@ the implementation it covers.
   (also the queue edit), `Composers::clear_notice` on a sent `/effort` and an opened picker.
 - guide: T030 paragraph "`/effort` in the message box". No test.
 
+
+### Cycle 17 — a refused deferred pick is never asked again (T033–T034, M6)
+
+- red: `structured_effort`
+  `a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_never_asks_it_again` (the
+  deferred pick's answer held by the test, as `hold_turn_end` holds a turn's end) failed every
+  run: `left: [Some("low"), Some("high"), Some("low")]`. The idle pick's settle re-applied the
+  catalog's choice, still the refused deferred `low`, and the CLI's last-sent level was already
+  undone by the deferred refusal.
+- green: `reapply_effort` holds back (`EffortPicks::reapply_held`) while the deferred pick is
+  written to this process (`DeferredEffort::process`, `StructuredSession::effort_pick_deferred`)
+  and its answer not handled; `follow_effort_answer` re-applies once the choice is put back.

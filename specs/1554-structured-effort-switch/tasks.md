@@ -258,12 +258,12 @@ The idle pick's answer is settled (`settle_effort_ask` → `reapply_effort`, sta
 deferred pick's refusal, written and answered first, has put the catalog's choice back, so the
 re-apply asks the CLI again for the refused deferred level.
 
-- [ ] T033 [US1] Test in `daemon/tests/structured_effort.rs` that makes the order deterministic:
+- [x] T033 [US1] Test in `daemon/tests/structured_effort.rs` that makes the order deterministic:
   the idle pick's answer settled while the deferred pick's refusal is not yet handled (hold that
   answer, as `hold_turn_end` holds the turn's end) → no `apply_flag_settings` for the refused
   deferred level after the two picks; once the refusal is handled the choice is the one before
   both, and the CLI is asked at most for that level (FR-005). Fails on main
-- [ ] T034 Implement T033 in `daemon/src/state.rs`: `reapply_effort` does not re-apply a level
+- [x] T034 Implement T033 in `daemon/src/state.rs`: `reapply_effort` does not re-apply a level
   whose deferred pick is written and unanswered; the deferred answer's handling re-applies the
   choice the catalog then holds when an idle settle was held back for it
 - [x] T035 [P] Stand-in (`daemon/tests/support/structured.rs`): the script's leading `models` and
