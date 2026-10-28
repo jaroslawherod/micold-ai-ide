@@ -11,6 +11,7 @@ use micold_client::features::worktree_form::{BranchSource, Msg};
 use micold_core::git::GitRemote;
 use micold_core::github::{Issue, IssueListing};
 use micold_core::github_filter::{LabelChoices, LabelName};
+use micold_core::jira_query::QueryMode;
 
 /// The repository's labels the fixtures offer: six long enough that their chips wrap.
 pub const LABELS: &[&str] = &[
@@ -93,25 +94,30 @@ fn exclude(state: &mut State, names: &[&str]) {
     }
 }
 
-/// The GitHub source of `o/r` showing, the labels loaded, `names` excluded and the filtered list
-/// answered, capped; the panel left open.
-fn filtered_with(mut state: State, names: &[&str]) -> State {
-    send(&mut state, Msg::Opened);
+/// The GitHub source of `o/r` showing 034's list.
+fn github_source(state: &mut State) {
+    send(state, Msg::Opened);
     // No session, as the other picker states: the first prompt is not this state's subject.
-    send(&mut state, Msg::SessionCliChosen(None));
+    send(state, Msg::SessionCliChosen(None));
     send(
-        &mut state,
+        state,
         Msg::RemotesListed(Ok(vec![GitRemote {
             name: "origin".into(),
             url: "git@github.com:o/r.git".into(),
         }])),
     );
-    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    send(state, Msg::SourceChanged(BranchSource::Issue));
     answer(
-        &mut state,
+        state,
         vec![issue(42, "Crash when opening empty project", &["bug"])],
         true,
     );
+}
+
+/// The GitHub source of `o/r` showing, the labels loaded, `names` excluded and the filtered list
+/// answered, capped; the panel left open.
+fn filtered_with(mut state: State, names: &[&str]) -> State {
+    github_source(&mut state);
     github(&mut state, GithubMsg::PanelToggled);
     github(&mut state, GithubMsg::Focused(LabelList::Exclude));
     let seq = state
@@ -153,4 +159,28 @@ pub fn github_filtered(state: State) -> State {
 /// Six labels excluded and the panel open: the Exclude field's chips wrap inside the panel.
 pub fn github_filters_panel(state: State) -> State {
     filtered_with(state, &LABELS[..6])
+}
+
+/// The query [`github_advanced`] runs: a sort qualifier, so the cap caption names the first issues.
+pub const ADVANCED_QUERY: &str = "-label:in-progress sort:created-asc";
+
+/// Advanced mode with [`ADVANCED_QUERY`] run over a capped list (feature 1400, US3): the switch, the
+/// Query input and **Run**, the search and the cap caption "Showing the first 2 of 1,234 issues…".
+pub fn github_advanced(mut state: State) -> State {
+    github_source(&mut state);
+    github(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    github(
+        &mut state,
+        GithubMsg::DraftChanged(ADVANCED_QUERY.to_string()),
+    );
+    github(&mut state, GithubMsg::Run);
+    answer(
+        &mut state,
+        vec![
+            issue(3, "Settings page loses its scroll position", &["ui"]),
+            issue(9, "Crash when opening empty project", &["bug"]),
+        ],
+        false,
+    );
+    state
 }

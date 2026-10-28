@@ -75,7 +75,7 @@ pub fn modal<'a>(
             fields = fields.push(session_select(form, r));
         }
         BranchSource::Issue => {
-            fields = fields.push(issue_picker(form, board, r));
+            fields = fields.push(issue_picker(form, board, r, focused));
             fields = naming_inputs(fields, form, r, focused);
         }
     }
@@ -532,9 +532,27 @@ const FILTERS_BUTTON_WIDTH: f32 = 160.0;
 /// wide enough for "No project user matches; you are still offered" in its list (ledger D15).
 const FILTERS_PANEL_WIDTH: f32 = 360.0;
 
+/// The Jira source's Basic/Advanced switch (feature 1186).
+fn jira_mode_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
+    super::jira_query::mode_switch(
+        form.jira_query.mode,
+        |mode| {
+            Message::WorktreeForm(FormMsg::JiraQuery(
+                crate::features::worktree_form::jira_query::Msg::ModeChanged(mode),
+            ))
+        },
+        r,
+    )
+}
+
 /// The issue source's body (feature 034, contracts/issue-picker-ui.md §2): the notice naming the
 /// repository, then the picker as far as the load has got.
-fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> Element<'a, Message> {
+fn issue_picker<'a>(
+    form: &'a WorktreeForm,
+    board: &StatusBoard,
+    r: Roles,
+    focused: Option<FieldId>,
+) -> Element<'a, Message> {
     let mut col = column![].spacing(spacing::XS);
     // Feature 1186 (FR-001): with the Jira source showing, Basic or Advanced, heading the picker
     // rather than a field of its own: the form is the tallest dialog, and a field's gap would push
@@ -553,7 +571,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         (true, Some(clear)) => {
             col = col.push(
                 row![
-                    super::jira_query::mode_switch(form, r),
+                    jira_mode_switch(form, r),
                     iced::widget::Space::new().width(Length::Fill),
                     clear,
                 ]
@@ -561,7 +579,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
                 .align_y(iced::Alignment::Center),
             );
         }
-        (true, None) => col = col.push(super::jira_query::mode_switch(form, r)),
+        (true, None) => col = col.push(jira_mode_switch(form, r)),
         (false, Some(clear)) => col = col.push(clear),
         (false, None) => {}
     }
@@ -578,6 +596,10 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
     }
     if let Some(notice) = form.issue_notice() {
         col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
+    }
+    // Feature 1400 (US3 AS1): advanced mode's Query input and Run, above the search.
+    if let Some(query) = super::github_filter::query_row(form, r, focused) {
+        col = col.push(query);
     }
     let Some(source) = form.notice_source() else {
         return col.into();
@@ -612,7 +634,8 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
         ISSUE_SEARCH_PLACEHOLDER
     };
     match &form.issues {
-        IssueList::NotRequested => {}
+        // Feature 1400 (FR-013): advanced mode before a query runs prompts for one.
+        IssueList::NotRequested => col = col.extend(super::github_filter::prompt(form, r)),
         // The switch and the inputs below stay live while this runs (FR-006).
         IssueList::Loading { .. } => {
             let loading = match jira {
@@ -656,6 +679,8 @@ fn issue_picker<'a>(form: &'a WorktreeForm, board: &StatusBoard, r: Roles) -> El
             }
             col = col.extend(active(None));
         }
+        // Feature 1400 (FR-012): the query was not sent; why, in place of the list.
+        IssueList::Refused(refused) => col = col.push(super::github_filter::refusal(refused, r)),
         // Feature 1185 (FR-011): the filters chose nothing; the active line above clears them.
         IssueList::Loaded { listing, .. }
             if listing.issues.is_empty() && form.filtered_empty_text().is_some() =>

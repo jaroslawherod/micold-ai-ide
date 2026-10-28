@@ -120,6 +120,8 @@ pub enum FieldId {
     AddWorktreeBranch,
     /// The add-worktree form's first-prompt field.
     AddWorktreeFirstPrompt,
+    /// The add-worktree form's GitHub advanced-mode Query input (feature 1400).
+    AddWorktreeGithubQuery,
     /// The Run in parallel dialog's prompt field.
     RunPrompt,
     /// The Run in parallel dialog's optional ticket field.

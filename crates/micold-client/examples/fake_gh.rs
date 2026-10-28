@@ -14,10 +14,11 @@
 //!
 //! - The open-issue listing and its description pass (034): every open issue, most recently
 //!   updated first, in pages of 100.
-//! - A search (034's search beyond and feature 1400's filtered listing and search): honours
-//!   `repo:`, `is:open` / `is:closed`, `label:"…"`, `-label:"…"` and `sort:updated-desc|asc`
-//!   (`created-…` sorts by number); every other word, quoted or not, must appear in the title (any
-//!   case).
+//! - A search (034's search beyond and feature 1400's filtered listing, advanced query and
+//!   search): honours `repo:`, `is:open` / `is:closed`, `state:open` / `state:closed`,
+//!   `label:"…"`, `-label:"…"` and `sort:updated-desc|asc` (`created-…` sorts by number);
+//!   parentheses outside quotes are ignored (no `OR`); every other word, quoted or not, must appear
+//!   in the title (any case).
 //! - A single issue's details (837), with its labels and no relations.
 //! - The labels: every label, in one page.
 //!
@@ -31,6 +32,10 @@
 //! - `no-labels`: the repository has no labels.
 //! - `labels-cap`: every labels page is full and has a next one, so only the first 1,000 load.
 //! - `search-refused`: every search is refused with a GraphQL error at `search`.
+//! - `reject` (also as `MICOLD_FAKE_GH=reject`, quickstart B10): a search holding a qualifier the
+//!   fake does not know outside quotes (a typo such as `lable:bug`) is refused with a GraphQL error
+//!   at `search` carrying two messages, as GitHub refuses an invalid query; fix it and the next
+//!   search answers.
 
 use std::collections::BTreeMap;
 
@@ -120,26 +125,51 @@ struct Terms {
     by_number: bool,
 }
 
-/// Split `q` into tokens, a quoted run kept whole (its quotes removed).
-fn tokens(q: &str) -> Vec<String> {
+/// Split `q` into tokens, a quoted run kept whole (its quotes removed); parentheses outside quotes
+/// separate tokens and are dropped. Each token says whether any of it was quoted.
+fn quoted_tokens(q: &str) -> Vec<(String, bool)> {
     let mut out = Vec::new();
     let mut current = String::new();
     let mut quoted = false;
+    let mut had_quote = false;
     for c in q.chars() {
         match c {
-            '"' => quoted = !quoted,
-            c if c.is_whitespace() && !quoted => {
+            '"' => {
+                quoted = !quoted;
+                had_quote = true;
+            }
+            c if (c.is_whitespace() || c == '(' || c == ')') && !quoted => {
                 if !current.is_empty() {
-                    out.push(std::mem::take(&mut current));
+                    out.push((std::mem::take(&mut current), had_quote));
                 }
+                had_quote = false;
             }
             c => current.push(c),
         }
     }
     if !current.is_empty() {
-        out.push(current);
+        out.push((current, had_quote));
     }
     out
+}
+
+fn tokens(q: &str) -> Vec<String> {
+    quoted_tokens(q)
+        .into_iter()
+        .map(|(token, _)| token)
+        .collect()
+}
+
+/// The qualifiers the fake reads; any other `name:` outside quotes is one GitHub would judge.
+const KNOWN: &[&str] = &["repo:", "is:", "state:", "label:", "-label:", "sort:"];
+
+/// A qualifier outside quotes the fake does not know, as `reject` mode refuses it.
+fn unknown_qualifier(q: &str) -> Option<String> {
+    quoted_tokens(q)
+        .into_iter()
+        .filter(|(token, quoted)| !quoted && token.contains(':'))
+        .map(|(token, _)| token)
+        .find(|token| !KNOWN.iter().any(|known| token.starts_with(known)))
 }
 
 fn terms(q: &str) -> Terms {
@@ -148,9 +178,9 @@ fn terms(q: &str) -> Terms {
         if let Some(repo) = token.strip_prefix("repo:") {
             terms.repo = repo.to_string();
         } else if token == "is:issue" {
-        } else if token == "is:open" {
+        } else if token == "is:open" || token == "state:open" {
             terms.state = Some(false);
-        } else if token == "is:closed" {
+        } else if token == "is:closed" || token == "state:closed" {
             terms.state = Some(true);
         } else if let Some(label) = token.strip_prefix("-label:") {
             terms.exclude.push(label.to_string());
@@ -179,8 +209,9 @@ fn search(q: &str) -> serde_json::Value {
             terms.words.iter().all(|w| title.contains(w.as_str()))
         })
         .collect();
+    // Newest first, then reversed for `-asc`: a higher number was created later.
     if terms.by_number {
-        found.sort_by_key(|i| i.number);
+        found.sort_by_key(|i| std::cmp::Reverse(i.number));
     } else {
         found.sort_by_key(|i| i.age);
     }
@@ -275,7 +306,12 @@ fn main() {
         _ => String::new(),
     };
     let mode = std::env::var("FAKE_GH_MODE").unwrap_or_default();
-    let modes: Vec<&str> = mode.split(',').map(str::trim).collect();
+    let micold = std::env::var("MICOLD_FAKE_GH").unwrap_or_default();
+    let modes: Vec<&str> = mode
+        .split(',')
+        .chain(micold.split(','))
+        .map(str::trim)
+        .collect();
     if modes.contains(&"slow") {
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
@@ -293,6 +329,18 @@ fn main() {
             serde_json::json!({ "data": { "search": null }, "errors": [{ "type": "INVALID",
                 "path": ["search"],
                 "message": "The search query is not valid (fake_gh search-refused)" }] })
+        } else if let Some(unknown) = fields
+            .get("q")
+            .filter(|_| modes.contains(&"reject"))
+            .and_then(|q| unknown_qualifier(q))
+        {
+            eprintln!("fake_gh: q={}", fields.get("q").map_or("", String::as_str));
+            serde_json::json!({ "data": { "search": null }, "errors": [
+                { "type": "INVALID", "path": ["search"],
+                  "message": format!("Invalid search qualifier: {unknown} (fake_gh reject)") },
+                { "type": "INVALID", "path": ["search"],
+                  "message": "Check the qualifiers of github.com's issue search, then run it again." },
+            ] })
         } else {
             search(fields.get("q").map(String::as_str).unwrap_or_default())
         }

@@ -173,8 +173,9 @@ fn the_gate_can_fail() {
     );
 }
 
-/// Feature 1400 (T027): the GitHub basic-mode states with the active line and the cap caption, and
-/// with the Filters panel open, are among the states the two scans above read, so their floating
+/// Feature 1400 (T027, T043): the GitHub basic-mode states with the active line and the cap caption,
+/// with the Filters panel open, and the advanced-mode state with the query row and the cap caption,
+/// are among the states the two scans above read, so their floating
 /// panel is held inside the window like every other (the footer's reach is asked in
 /// `github_filters_fit`).
 #[test]
@@ -182,6 +183,7 @@ fn the_github_filter_states_are_scanned() {
     for name in [
         "add-worktree-dialog-github-filtered",
         "add-worktree-dialog-github-filters-panel",
+        "add-worktree-dialog-github-advanced",
     ] {
         assert!(
             covered_states().iter().any(|c| c.name == name),

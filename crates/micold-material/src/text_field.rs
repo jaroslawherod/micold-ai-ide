@@ -308,6 +308,18 @@ mod tests {
         assert!(captured, "the field keeps the key");
     }
 
+    /// Feature 1400 (GitHub advanced mode's Query input): Enter in a focused field with
+    /// `on_submit` publishes it once and is captured there, so nothing behind the field (a button
+    /// under a dialog's scrim) hears it.
+    #[test]
+    fn enter_in_a_focused_field_with_on_submit_is_captured() {
+        let mut m = Mounted::new(field("is:open").on_submit("run".to_owned()));
+        m.focus_next();
+        let (messages, captured) = m.send_captured(named_key(Named::Enter), Cursor::Unavailable);
+        assert_eq!(messages, ["run"]);
+        assert!(captured, "the field keeps Enter");
+    }
+
     /// Unfocused, Escape is not the field's: nothing is published and the key goes on.
     #[test]
     fn escape_outside_the_field_is_left_alone() {

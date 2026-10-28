@@ -38,7 +38,7 @@ use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
     GithubRepo, Issue, IssueListing, IssueLoadError, NoticeSource, RemoteChoice,
 };
-use micold_core::github_filter::IssueState;
+use micold_core::github_filter::{GithubFilter, IssueState};
 use micold_core::issue_details::IssueDetails;
 use micold_core::issue_types::LabelTypeEntry;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
@@ -482,6 +482,9 @@ pub enum IssueList {
     /// GitHub refused the filter (feature 1400, FR-018): its messages, in its order, shown in place
     /// of the list. Reset like `Failed`; it holds no issue.
     Rejected(Vec<String>),
+    /// The advanced query was not sent (feature 1400, FR-012): why, shown in place of the list.
+    /// Reset like `Failed`; it holds no issue.
+    Refused(micold_core::github_filter::QueryRefusal),
     /// The open issues, and the `gh` that read them (kept for the search beyond the cap, M3).
     Loaded {
         listing: IssueListing,
@@ -919,9 +922,12 @@ impl WorktreeForm {
     /// What an empty list says when filters chose nothing (feature 1185, FR-011); `None` without
     /// a filter.
     pub fn filtered_empty_text(&self) -> Option<&'static str> {
-        // Feature 1400 (FR-020): a filtered GitHub list that came back empty.
-        if self.github_filter().is_some() {
-            return Some("No issue matches these filters.");
+        // Feature 1400 (FR-020): a filtered GitHub list that came back empty: a query's says so
+        // of the query (US3 AS5).
+        match self.github_filter() {
+            Some(GithubFilter::Advanced(_)) => return Some("No issue matches this query."),
+            Some(GithubFilter::Basic(_)) => return Some("No issue matches these filters."),
+            None => {}
         }
         self.jira_filtered()
             .then_some("No open issue matches the filters.")
@@ -1008,6 +1014,17 @@ impl WorktreeForm {
                 } else {
                     format!("Showing the {shown} most recently updated.")
                 })
+            }
+            // Feature 1400 (FR-014): a query's own sort lists its first issues, not the most
+            // recently updated.
+            IssueList::Loaded { listing, .. }
+                if !listing.complete && self.github_selector.sorted_by_query() =>
+            {
+                Some(format!(
+                    "Showing the first {} of {} issues — search also looks on GitHub.",
+                    group_digits(listing.issues.len() as u64),
+                    group_digits(listing.total_open)
+                ))
             }
             IssueList::Loaded { listing, .. } if !listing.complete => {
                 // Feature 1400: the count is of the issues the chosen state lists, not always open ones.
@@ -1614,7 +1631,8 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
         form.reset_branch_search();
         form.reset_issues();
         if source == BranchSource::Issue {
-            if !form.jira_query_shown(next_seq) {
+            // Advanced mode with no query run takes the GitHub source's list (feature 1400).
+            if !form.jira_query_shown(next_seq) && !form.github_source_shown() {
                 form.issues = IssueList::Loading { seq: next_seq };
             }
             started = true;
@@ -1646,7 +1664,10 @@ pub fn issue_provider_changed(
         form.provider = provider;
         form.remembered_provider = Some(provider);
         form.reset_issues();
-        if form.source == BranchSource::Issue && !form.jira_query_shown(next_seq) {
+        if form.source == BranchSource::Issue
+            && !form.jira_query_shown(next_seq)
+            && !form.github_source_shown()
+        {
             form.issues = IssueList::Loading { seq: next_seq };
         }
         changed = true;
