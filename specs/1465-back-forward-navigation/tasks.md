@@ -178,7 +178,7 @@ and Forward (quickstart B12).
 No code. Done by the close unit in the close PR.
 
 - [ ] T037 Run quickstart §B (B1–B13) with the `visual-pass` skill and save the evidence under `specs/1465-back-forward-navigation/`
-- [ ] T038 Record quickstart §C (C1–C4, macOS and Windows) results or the CI evidence in `specs/1465-back-forward-navigation/quickstart.md`
+- [x] T038 Record quickstart §C (C1–C4, macOS and Windows) results or the CI evidence in `specs/1465-back-forward-navigation/quickstart.md`
 
 ---
 
