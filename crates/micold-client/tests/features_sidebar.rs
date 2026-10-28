@@ -2040,7 +2040,7 @@ mod two_line_rows {
             &node.display_name,
             None,
         );
-        let tip = with_title_line(&node, &titled(&node, Some(TITLE)), today.clone());
+        let tip = with_title_line(&node, &titled(&node, Some(TITLE)), None, today.clone());
         let mut lines = tip.lines();
         assert_eq!(lines.next(), Some(TITLE));
         assert_eq!(lines.next(), Some("From GitHub issue #1117"));
@@ -2049,8 +2049,9 @@ mod two_line_rows {
     }
 
     /// Feature 1504 (T027, FR-008, US2.6, L3): the line after the title names its source, for
-    /// each source but the folder; a title from the folder or the branch keeps today's tooltip
-    /// (the `Name:` and `Branch:` lines already say it).
+    /// each source but the folder. A title from the branch is not repeated (the `Branch:` line
+    /// holds it), but its source line still says *Branch name*; a title from the folder keeps
+    /// today's tooltip.
     #[test]
     fn the_tooltip_names_the_titles_source_after_the_title() {
         let node = node(vec![], vec![]);
@@ -2068,24 +2069,23 @@ mod two_line_rows {
                 source,
             };
             assert_eq!(
-                with_title_line(&node, &title, today.clone()),
+                with_title_line(&node, &title, None, today.clone()),
                 format!("Add readable titles\n{words}\n{today}"),
                 "{:?}",
                 title.source
             );
         }
-        for title in [titled(&node, None), {
-            let mut folder = node.clone();
-            folder.worktree.branch = None;
-            titled(&folder, None)
-        }] {
-            assert_eq!(
-                with_title_line(&node, &title, today.clone()),
-                today,
-                "{:?}",
-                title.source
-            );
-        }
+        let branch = titled(&node, None);
+        assert_eq!(branch.source, TitleSource::Branch);
+        assert_eq!(
+            with_title_line(&node, &branch, None, today.clone()),
+            format!("Branch name\n{today}")
+        );
+        let mut folder = node.clone();
+        folder.worktree.branch = None;
+        let folder = titled(&folder, None);
+        assert_eq!(folder.source, TitleSource::Folder);
+        assert_eq!(with_title_line(&node, &folder, None, today.clone()), today);
     }
 
     /// A title the tooltip already names (the row's name or its branch) is not repeated above it.
@@ -2093,15 +2093,34 @@ mod two_line_rows {
     fn the_tooltip_does_not_repeat_a_title_that_is_the_name_or_the_branch() {
         let node = node(vec![], vec![]);
         let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
-        assert_eq!(
-            with_title_line(&node, &titled(&node, None), today.clone()),
-            today
-        );
+        let tip = with_title_line(&node, &titled(&node, None), None, today.clone());
+        assert!(!tip.lines().any(|line| line == BRANCH), "{tip}");
         let mut folder = node.clone();
         folder.worktree.branch = None;
         assert_eq!(
-            with_title_line(&node, &titled(&folder, None), today.clone()),
+            with_title_line(&node, &titled(&folder, None), None, today.clone()),
             today
+        );
+    }
+
+    /// Feature 1125 (FR-012) with 1504: a renamed row's tooltip leads with the rename, the row's
+    /// first line, not a pull request title the row does not show, and names no source; a blank
+    /// rename does not count.
+    #[test]
+    fn a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title() {
+        let node = node(vec![], vec![]);
+        let today = worktree_tooltip(None, &node.worktree, &node.display_name, None);
+        let title = LocationTitle {
+            text: "Add readable titles".into(),
+            source: TitleSource::PullRequest(1520),
+        };
+        assert_eq!(
+            with_title_line(&node, &title, Some("my pet name"), today.clone()),
+            format!("my pet name\n{today}")
+        );
+        assert_eq!(
+            with_title_line(&node, &title, Some("  "), today.clone()),
+            format!("Add readable titles\nFrom pull request #1520\n{today}")
         );
     }
 

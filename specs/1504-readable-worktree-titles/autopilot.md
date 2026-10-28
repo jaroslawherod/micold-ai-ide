@@ -64,8 +64,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CLEAN, 2 MINOR — both fixed, no round 2 (only MINORs): (a) `without_a_jira_summary_the_title_falls_through_to_the_branch` now asserts the summary after the t=1 read and after the first failure; (b) `StatusBoard::apply` doc names the one-read-in-flight assumption `due` ensures |
 | M2 review B (conformance, sonnet) | 1 | 9450b457e924177b36a486a1b443e093f84ee3b1:f99f06acf669b05a4624510539054cffd45f92e7 | CHANGES: 1 MAJOR, 1 MINOR — F1 fixed (T049: `DATA_USE`, both selector notices and settings.md now disclose the title and keys named only in a branch; tests changed first, red); F2 no TDD cycle log — accepted as in M1, red runs in ledger and PR body |
 | M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
-| M3 review A (code-review high) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | pending (orchestrator; `075ac3985..HEAD`) |
-| M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | pending (orchestrator; `rubrics/conformance.md`, re-run Verify) |
+| M3 review A (code-review high) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CLEAN, 2 MINOR — both fixed: (a) a renamed row's tooltip led with the location title the row does not show (1125 FR-012): `with_title_line` takes the rename and leads with it, no source line (test `a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title`); (b) = review B F1 |
+| M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CHANGES: 1 MAJOR, 1 MINOR. F1 [MAJOR] fixed: `with_title_line` skipped the source line for a Branch title (L3 exempts only Folder); now only Folder names no source, and a title that repeats the Name/Branch line is dropped but its words stay (`Branch name\n{tooltip}`); test rewritten, worktrees-and-sessions.md aligned with overview.md. F2 [MINOR] deferred to M4 (Follow-ups) |
+| M3 review B (conformance, sonnet) | 2 | pending | pending (orchestrator; scoped to the fix commit, sonnet, re-run Verify) |
 | M3 visual pass | 1 | 53ba8af40 | pending (quickstart §B rows A–E, G, I + Refresh E/G; showcase *title sources, expanded*) |
 
 ## Red runs (M3)
@@ -93,6 +94,13 @@ so every red is a failing assertion, not a compile error:
   left the tooltip without the `From pull request #1520` line.
 
 Green after T028–T030: the same commands, all passed (core 40, features_overview 13).
+
+Review fixes (A minor (a), B F1), `cargo test -p micold-client --test features_sidebar -- tooltip`
+with `with_title_line` given an ignored `renamed` parameter: 2 failed as assertions —
+`a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title` (left opened with
+`Add readable titles\nFrom pull request #1520`, right `my pet name`) and
+`the_tooltip_names_the_titles_source_after_the_title` (Branch title: left today's tooltip, right
+`Branch name\n…`). Green after the fix: features_sidebar 107 passed.
 
 ## Red runs (M2)
 
@@ -157,4 +165,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- M4: add `TitleSource::Spec` and `TitleSource::Commit` to `showcase::samples::title_sources()` (M3 review B F2).
