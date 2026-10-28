@@ -99,6 +99,25 @@ pub fn rows(transcript: Option<&Transcript>) -> Vec<Row<'_>> {
     rows
 }
 
+/// `status` drawn as an `IconLabel` in its tone, the unit at `path` when `ctx` draws a selectable
+/// row.
+fn status_unit(
+    status: Status,
+    ctx: &RenderCtx<'_>,
+    path: Vec<u16>,
+) -> Element<'static, TranscriptMsg> {
+    let label = status_label(status, ctx.roles);
+    ctx.icon_label_with(label, path, status.label.len(), std::convert::identity)
+        .into()
+}
+
+/// A muted `IconLabel` with `icon`, the row's unit at `[0]`.
+fn label_unit(icon: Icon, label: &'static str, ctx: &RenderCtx<'_>) -> Block {
+    let drawn = IconLabel::new(icon, label, TypeRole::Label, ctx.roles).muted();
+    ctx.icon_label_with(drawn, vec![0], label.len(), std::convert::identity)
+        .into()
+}
+
 /// `status` drawn as an `IconLabel` in its tone.
 fn status_label(status: Status, roles: Roles) -> IconLabel<'static, TranscriptMsg> {
     let label = IconLabel::new(status.icon, status.label, TypeRole::Label, roles);
@@ -126,9 +145,20 @@ fn caption(text: impl Into<String>, roles: Roles) -> Element<'static, Transcript
         .into()
 }
 
-/// The omitted notice.
-pub fn omitted_notice(n: u64, roles: Roles) -> Element<'static, TranscriptMsg> {
-    caption(omitted_text(n), roles)
+/// A muted caption line that is the unit at `path` of the row `ctx` draws (feature 1550).
+fn unit_caption(text: impl Into<String>, ctx: &RenderCtx<'_>, path: Vec<u16>) -> Block {
+    let text = text.into();
+    let len = text.len();
+    let drawn = Text::new(text, TypeRole::Caption, ctx.roles)
+        .muted()
+        .wrapping(Wrapping::WordOrGlyph)
+        .width(Length::Fill);
+    ctx.text(drawn, path, len).into()
+}
+
+/// The omitted notice: its row's one unit.
+pub fn omitted_notice(n: u64, ctx: &RenderCtx<'_>) -> Element<'static, TranscriptMsg> {
+    unit_caption(omitted_text(n), ctx, vec![0])
 }
 
 /// "No output yet".
@@ -171,19 +201,24 @@ pub(super) fn entry(
 ) -> Block {
     let roles = ctx.roles;
     let session = scope.session;
-    let block = |streaming| BlockRef {
+    let block = |streaming, at| BlockRef {
         session,
         key: entry.key(),
         revision: entry.revision(),
         streaming,
+        at,
     };
     let toggle = || on_toggle.clone();
+    // A card's header: its title `[0]` and folded summary `[1]` (feature 1550).
+    let header = |card: DisclosureCard<'static, TranscriptMsg>, title: &str, summary: &str| {
+        ctx.header(card, title.len(), summary.len())
+    };
     match entry.kind() {
         EntryKind::SessionStart { model, cwd, .. } => {
             let mut parts = vec!["Session started".to_owned()];
             parts.extend(model.iter().cloned());
             parts.extend(cwd.iter().cloned());
-            caption(parts.join(" · "), roles)
+            unit_caption(parts.join(" · "), ctx, vec![0])
         }
         // A command turn is its text as typed, `/name args`, with the command list's description
         // behind it (#943 FR-003).
@@ -196,28 +231,36 @@ pub(super) fn entry(
                 // Folded, the description is one line, cut when the pane is narrow; open, it is
                 // the whole of what the command list said of the command (#943 FR-003).
                 let description = command_chip_description(chip);
-                let mut card = DisclosureCard::new(command_chip_title(chip), toggle(), roles)
+                let title = command_chip_title(chip);
+                let card = DisclosureCard::new(title.clone(), toggle(), roles)
                     .summary(description.clone())
                     .open(open);
+                let mut card = header(card, &title, &description);
                 if open {
-                    card = card.body(caption(description, roles));
+                    card = card.body(unit_caption(description, ctx, vec![2]));
                 }
                 let mut turn =
                     column![caption(user_label(entry, scope), roles), card].spacing(spacing::XS);
                 if let Some(line) = attachments_line(attachments) {
-                    turn = turn.push(caption(line, roles));
+                    turn = turn.push(unit_caption(line, ctx, vec![3]));
                 }
                 return turn.into();
             }
+            let shown = plain_text(text);
+            let len = shown.len();
             let mut message = column![
                 caption(user_label(entry, scope), roles),
-                Text::new(plain_text(text), TypeRole::Body, roles)
-                    .wrapping(Wrapping::WordOrGlyph)
-                    .width(Length::Fill),
+                ctx.text(
+                    Text::new(shown, TypeRole::Body, roles)
+                        .wrapping(Wrapping::WordOrGlyph)
+                        .width(Length::Fill),
+                    vec![0],
+                    len,
+                ),
             ]
             .spacing(spacing::XS);
             if let Some(line) = attachments_line(attachments) {
-                message = message.push(caption(line, roles));
+                message = message.push(unit_caption(line, ctx, vec![3]));
             }
             message.into()
         }
@@ -225,7 +268,7 @@ pub(super) fn entry(
             text, streaming, ..
         } => (renderers.assistant_text)(
             &AssistantText {
-                block: block(*streaming),
+                block: block(*streaming, 0),
                 text,
             },
             ctx,
@@ -236,10 +279,11 @@ pub(super) fn entry(
             let card = DisclosureCard::new(COMMAND_OUTPUT_TITLE, toggle(), roles)
                 .summary(first_line(text).to_owned())
                 .open(open);
+            let card = header(card, COMMAND_OUTPUT_TITLE, first_line(text));
             if open {
                 card.body((renderers.assistant_text)(
                     &AssistantText {
-                        block: block(false),
+                        block: block(false, 2),
                         text,
                     },
                     ctx,
@@ -254,15 +298,16 @@ pub(super) fn entry(
         EntryKind::Compacted { trigger, summary } => {
             let marker = compacted_text(trigger.as_deref());
             let Some(summary) = summary else {
-                return caption(marker, roles);
+                return unit_caption(marker, ctx, vec![0]);
             };
-            let card = DisclosureCard::new(marker, toggle(), roles)
+            let card = DisclosureCard::new(marker.clone(), toggle(), roles)
                 .summary(first_line(summary).to_owned())
                 .open(open);
+            let card = header(card, &marker, first_line(summary));
             if open {
                 card.body((renderers.assistant_text)(
                     &AssistantText {
-                        block: block(false),
+                        block: block(false, 2),
                         text: summary,
                     },
                     ctx,
@@ -272,20 +317,19 @@ pub(super) fn entry(
                 card.into()
             }
         }
-        EntryKind::Cleared => caption(CLEARED, roles),
+        EntryKind::Cleared => unit_caption(CLEARED, ctx, vec![0]),
         // A refusal is said in words; the error role only adds to them (FR-012).
         EntryKind::ModelChanged { model, refused } => {
-            let text = Text::new(
-                model_changed_text(model, refused.as_deref()),
-                TypeRole::Caption,
-                roles,
-            )
-            .wrapping(Wrapping::WordOrGlyph)
-            .width(Length::Fill);
-            match refused {
-                Some(_) => text.tint(roles.error).into(),
-                None => text.muted().into(),
-            }
+            let shown = model_changed_text(model, refused.as_deref());
+            let len = shown.len();
+            let text = Text::new(shown, TypeRole::Caption, roles)
+                .wrapping(Wrapping::WordOrGlyph)
+                .width(Length::Fill);
+            let text = match refused {
+                Some(_) => text.tint(roles.error),
+                None => text.muted(),
+            };
+            ctx.text(text, vec![0], len).into()
         }
         // No daemon writes an effort note before #1554 M2, and no window draws its marker before
         // M4.
@@ -295,8 +339,13 @@ pub(super) fn entry(
         EntryKind::TerminalPeriod => {
             let marker = crate::features::session::terminal_period_marker();
             column![
-                IconLabel::new(Icon::RegularTerminal, marker.title, TypeRole::Label, roles),
-                caption(marker.detail, roles),
+                ctx.icon_label_with(
+                    IconLabel::new(Icon::RegularTerminal, marker.title, TypeRole::Label, roles),
+                    vec![0],
+                    marker.title.len(),
+                    std::convert::identity,
+                ),
+                unit_caption(marker.detail, ctx, vec![1]),
             ]
             .spacing(spacing::XS)
             .into()
@@ -306,11 +355,12 @@ pub(super) fn entry(
                 .leading(Icon::Thinking)
                 .summary(first_line(text).to_owned())
                 .open(open);
+            let card = header(card, THINKING_TITLE, first_line(text));
             // A folded body is not shown, so its renderer does not run (R-1).
             if open {
                 card.body((renderers.thinking)(
                     &ThinkingText {
-                        block: block(*streaming),
+                        block: block(*streaming, 2),
                         text,
                     },
                     ctx,
@@ -324,7 +374,7 @@ pub(super) fn entry(
             card,
             open,
             toggle(),
-            block(card.streaming),
+            block(card.streaming, 2),
             renderers,
             ctx,
             scope,
@@ -335,7 +385,7 @@ pub(super) fn entry(
             caption(ORPHAN_RESULT, roles),
             (renderers.tool_result)(
                 &ToolResult {
-                    block: block(false),
+                    block: block(false, 1),
                     tool: None,
                     parts,
                     is_error: *is_error,
@@ -349,22 +399,15 @@ pub(super) fn entry(
             let turn = scope
                 .insights
                 .and_then(|i| i.state.turn(session, entry.key()));
-            footer_row(&footer_view_with(footer, turn), roles)
+            footer_row(&footer_view_with(footer, turn), ctx)
         }
-        EntryKind::TurnEndedWithoutResult => IconLabel::new(
-            Icon::ToolNoResult,
-            ENDED_WITHOUT_RESULT,
-            TypeRole::Label,
-            roles,
-        )
-        .muted()
-        .into(),
-        EntryKind::Interrupted => {
-            IconLabel::new(Icon::ToolNoResult, INTERRUPTED, TypeRole::Label, roles)
-                .muted()
-                .into()
+        EntryKind::TurnEndedWithoutResult => {
+            label_unit(Icon::ToolNoResult, ENDED_WITHOUT_RESULT, ctx)
         }
-        EntryKind::Oversized { original_bytes } => caption(oversized_text(*original_bytes), roles),
+        EntryKind::Interrupted => label_unit(Icon::ToolNoResult, INTERRUPTED, ctx),
+        EntryKind::Oversized { original_bytes } => {
+            unit_caption(oversized_text(*original_bytes), ctx, vec![0])
+        }
         // X5: one placeholder per thread whose parent is held nowhere (FR-017).
         EntryKind::SubagentNotice { count } => {
             let placeholders: Vec<Block> = scope
@@ -376,21 +419,23 @@ pub(super) fn entry(
                 .filter_map(|t| thread_card(&t.parent, None, true, renderers, ctx, scope))
                 .collect();
             if placeholders.is_empty() {
-                caption(subagent_notice_text(*count), roles)
+                unit_caption(subagent_notice_text(*count), ctx, vec![0])
             } else {
                 column(placeholders).spacing(spacing::SM).into()
             }
         }
-        EntryKind::Raw { text, .. } => column![
-            caption(RAW_LABEL, roles),
-            Text::new(plain_text(text), TypeRole::Caption, roles)
+        EntryKind::Raw { text, .. } => {
+            let shown = plain_text(text);
+            let len = shown.len();
+            let raw = Text::new(shown, TypeRole::Caption, roles)
                 .muted()
                 .monospace()
                 .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill),
-        ]
-        .spacing(spacing::XS)
-        .into(),
+                .width(Length::Fill);
+            column![caption(RAW_LABEL, roles), ctx.text(raw, vec![1], len)]
+                .spacing(spacing::XS)
+                .into()
+        }
     }
 }
 
@@ -415,6 +460,7 @@ fn tool_card(
         .filter(|d| d.revision == block.revision)
         .and_then(|_| ctx.cache.edit_counts(block.session, block.key));
     let header = tool_header_counted(card, counts);
+    // The status in a tool card's header is a label of the card, not a unit (feature 1550).
     let mut status = row![status_label(header.status, roles)]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
@@ -428,6 +474,7 @@ fn tool_card(
     if let Some(task) = task {
         status = status.push(task_label_view(task, roles));
     }
+    let (title, summary) = (header.title.len(), header.summary.len());
     let shell = DisclosureCard::new(header.title, on_toggle, roles)
         .leading(Icon::ToolCall)
         .summary(header.summary)
@@ -435,6 +482,7 @@ fn tool_card(
         .trailing(status)
         .open(open)
         .failed(header.failed);
+    let shell = ctx.header(shell, title, summary);
     let thread = thread_card(&card.id, Some(card.status), false, renderers, ctx, scope);
     let with_thread = |card: Block| match thread {
         Some(thread) => column![card, thread].spacing(spacing::SM).into(),
@@ -456,7 +504,7 @@ fn tool_card(
     if let Some(result) = &card.result {
         body = body.push((renderers.tool_result)(
             &ToolResult {
-                block,
+                block: BlockRef { at: 3, ..block },
                 tool: Some(&card.name),
                 parts: &result.parts,
                 is_error: result.is_error,
@@ -546,6 +594,8 @@ fn thread_body(
     insights: InsightsCtx<'_>,
 ) -> Block {
     let session = scope.session;
+    // A thread's entries are not units of the transcript's rows yet (feature 1550).
+    let ctx = &RenderCtx { row: None, ..*ctx };
     let entries: Vec<Block> = thread
         .entries()
         .map(|e| {
@@ -668,13 +718,18 @@ pub fn with_trailing<'a, M: 'a>(
     }
 }
 
-/// A footer: its status, then its figures as one caption line, then an error turn's text.
-fn footer_row(view: &FooterView, roles: Roles) -> Block {
-    let mut line = row![status_label(view.status, roles)]
+/// A footer: its status, then its figures as one caption line, then an error turn's text; units
+/// `[0]`, `[1]` and `[2]`.
+fn footer_row(view: &FooterView, ctx: &RenderCtx<'_>) -> Block {
+    let roles = ctx.roles;
+    let mut line = row![status_unit(view.status, ctx, vec![0])]
         .spacing(spacing::SM)
         .align_y(Alignment::Center);
     if !view.figures.is_empty() {
-        line = line.push(Text::new(view.figures.join(" · "), TypeRole::Caption, roles).muted());
+        let figures = view.figures.join(" · ");
+        let len = figures.len();
+        let text = Text::new(figures, TypeRole::Caption, roles).muted();
+        line = line.push(ctx.text(text, vec![1], len));
     }
     let line: Element<'static, TranscriptMsg> = if view.details.is_empty() {
         line.into()
@@ -683,12 +738,11 @@ fn footer_row(view: &FooterView, roles: Roles) -> Block {
     };
     let mut footer = column![line].spacing(spacing::XS);
     if let Some(error) = &view.error_text {
-        footer = footer.push(
-            Text::new(error.clone(), TypeRole::Body, roles)
-                .tint(roles.error)
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill),
-        );
+        let text = Text::new(error.clone(), TypeRole::Body, roles)
+            .tint(roles.error)
+            .wrapping(Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+        footer = footer.push(ctx.text(text, vec![2], error.len()));
     }
     footer.into()
 }

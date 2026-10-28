@@ -482,7 +482,9 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
                 .collect();
             state.measured = Some((self.measure.clone(), width));
         }
-        layout::Node::with_children(child.size(), vec![child])
+        // The child's own node, not a node around it: the wrapper adds no level to the layout
+        // tree, so a leaf made selectable lays out exactly as before (T-4; layout_snapshot).
+        child
     }
 
     fn draw(
@@ -495,7 +497,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let child = layout.children().next().expect("the child's layout");
+        let child = layout;
         self.child.as_widget().draw(
             &tree.children[0],
             renderer,
@@ -525,7 +527,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
         if let Some(shown) = state.shown.as_mut() {
             operation.custom(None, layout.bounds(), shown as &mut dyn Any);
         }
-        let child = layout.children().next().expect("the child's layout");
+        let child = layout;
         self.child
             .as_widget_mut()
             .operate(&mut tree.children[0], child, renderer, operation);
@@ -542,7 +544,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
-        let child = layout.children().next().expect("the child's layout");
+        let child = layout;
         self.child.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -597,7 +599,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
         viewport: &Rectangle,
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
-        let child = layout.children().next().expect("the child's layout");
+        let child = layout;
         match self.child.as_widget().mouse_interaction(
             &tree.children[0],
             child,
@@ -622,7 +624,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<iced::advanced::overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let child = layout.children().next().expect("the child's layout");
+        let child = layout;
         self.child.as_widget_mut().overlay(
             &mut tree.children[0],
             child,

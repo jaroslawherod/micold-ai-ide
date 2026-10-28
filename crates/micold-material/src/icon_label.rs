@@ -18,11 +18,13 @@
 //! `Text` side by side in a row of its own.
 
 use crate::icons::Icon;
+use crate::selectable_text::Hit;
 use crate::{Glyph, Text, TypeRole};
 use iced::widget::row;
 use iced::{Alignment, Element};
 use micold_core::tokens::{spacing, Rgb, Roles};
 use std::borrow::Cow;
+use std::ops::Range;
 
 /// A glyph followed by a label, both at the same type role.
 pub struct IconLabel<'a, M> {
@@ -33,8 +35,12 @@ pub struct IconLabel<'a, M> {
     tint: Option<Rgb>,
     label_tint: Option<Rgb>,
     muted: bool,
+    select: Option<SelectLabel<'a, M>>,
     _marker: std::marker::PhantomData<M>,
 }
+
+/// The step that makes the label selectable, its slot type erased (feature 1550).
+type SelectLabel<'a, M> = Box<dyn FnOnce(Text<'a, M>) -> Text<'a, M> + 'a>;
 
 impl<'a, M: 'a> IconLabel<'a, M> {
     /// A labelled icon at `role`. The glyph and the label both take it.
@@ -47,6 +53,7 @@ impl<'a, M: 'a> IconLabel<'a, M> {
             tint: None,
             label_tint: None,
             muted: false,
+            select: None,
             _marker: std::marker::PhantomData,
         }
     }
@@ -75,6 +82,20 @@ impl<'a, M: 'a> IconLabel<'a, M> {
         self.muted = true;
         self
     }
+
+    /// Make the label selectable, as [`Text::selectable`] does (feature 1550); the glyph is not
+    /// text. With `selected = None` it draws exactly as without this call.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        slot: K,
+        selected: Option<Range<usize>>,
+        on_hit: impl Fn(K, Hit) -> M + 'a,
+    ) -> Self {
+        self.select = Some(Box::new(move |text| {
+            text.selectable(slot, selected, on_hit)
+        }));
+        self
+    }
 }
 
 impl<'a, M: 'a> From<IconLabel<'a, M>> for Element<'a, M> {
@@ -89,6 +110,9 @@ impl<'a, M: 'a> From<IconLabel<'a, M>> for Element<'a, M> {
         }
         if let Some(tint) = l.label_tint {
             text = text.tint(tint);
+        }
+        if let Some(select) = l.select {
+            text = select(text);
         }
         row![glyph, text]
             .spacing(spacing::XS)

@@ -110,7 +110,7 @@ pub mod virtual_rows;
 mod wide_content;
 pub use accordion::Accordion;
 pub use accordion_group::AccordionGroup;
-pub use accordion_section::AccordionSection;
+pub use accordion_section::{AccordionSection, HeaderText};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use app_mark::AppMark;
 pub use attachment_chip::AttachmentChip;

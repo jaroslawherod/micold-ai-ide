@@ -197,6 +197,57 @@ pub enum RowSelection {
     Within((TextPath, usize), (TextPath, usize)),
 }
 
+/// Where a selection's end lies against the units under a path: before them all, among them, or
+/// after them all.
+enum Side {
+    Before,
+    Among,
+    After,
+}
+
+fn side(under: &TextPath, at: &TextPath) -> Side {
+    if at.0.starts_with(&under.0) {
+        Side::Among
+    } else if at < under {
+        Side::Before
+    } else {
+        Side::After
+    }
+}
+
+impl RowSelection {
+    /// The part of `self` over the units under `under` (a block's path, research R3): `None` when
+    /// it touches none of them, `Whole` when it holds all of them, else the part. What a block's
+    /// own `lazy` key holds, so a block outside the selection is not rebuilt as it moves.
+    pub fn clip(&self, under: &TextPath) -> Option<RowSelection> {
+        // Each end as: no unit under `under` is selected, all are, or the end lies among them.
+        let from = |p: &TextPath| match side(under, p) {
+            Side::Before => Some(true),
+            Side::Among => Some(false),
+            Side::After => None,
+        };
+        let to = |p: &TextPath| match side(under, p) {
+            Side::Before => None,
+            Side::Among => Some(false),
+            Side::After => Some(true),
+        };
+        let start = |p: &TextPath, o: usize| from(p).map(|all| (!all).then(|| (p.clone(), o)));
+        let end = |p: &TextPath, o: usize| to(p).map(|all| (!all).then(|| (p.clone(), o)));
+        let (start, end) = match self {
+            Self::Whole => (None, None),
+            Self::From(p, o) => (start(p, *o)?, None),
+            Self::To(p, o) => (None, end(p, *o)?),
+            Self::Within((p, a), (q, b)) => (start(p, *a)?, end(q, *b)?),
+        };
+        Some(match (start, end) {
+            (None, None) => Self::Whole,
+            (Some((p, o)), None) => Self::From(p, o),
+            (None, Some((q, b))) => Self::To(q, b),
+            (Some(a), Some(b)) => Self::Within(a, b),
+        })
+    }
+}
+
 /// The selected byte range of the unit at `path` whose shown text is `len` bytes long, `None`
 /// when none of it is selected.
 pub fn range_in(part: &RowSelection, path: &TextPath, len: usize) -> Option<Range<usize>> {
@@ -428,5 +479,38 @@ mod tests {
             "an empty slice"
         );
         assert_eq!(range_in(&to, &p(&[2]), 0), None);
+    }
+
+    #[test]
+    fn clip_keeps_the_part_over_a_blocks_units() {
+        let p = |s: &[u16]| TextPath::new(s);
+        let whole = Some(RowSelection::Whole);
+        // From `[0, 2, 1]`: blocks before it untouched, after it whole, its own block the part.
+        let from = RowSelection::From(p(&[0, 2, 1]), 3);
+        assert_eq!(from.clip(&p(&[0, 1])), None);
+        assert_eq!(from.clip(&p(&[0, 2])), Some(from.clone()));
+        assert_eq!(from.clip(&p(&[0, 3])), whole);
+        assert_eq!(from.clip(&p(&[1])), whole);
+        let to = RowSelection::To(p(&[0, 2, 1]), 3);
+        assert_eq!(to.clip(&p(&[0, 1])), whole);
+        assert_eq!(to.clip(&p(&[0, 2])), Some(to.clone()));
+        assert_eq!(to.clip(&p(&[0, 3])), None);
+        // An end at a path shorter than the block's lies before all of the block's units.
+        assert_eq!(RowSelection::From(p(&[0]), 2).clip(&p(&[0, 4])), whole);
+        assert_eq!(RowSelection::To(p(&[0]), 2).clip(&p(&[0, 4])), None);
+        let within = RowSelection::Within((p(&[0, 1]), 4), (p(&[0, 3, 0]), 2));
+        assert_eq!(within.clip(&p(&[0, 0])), None);
+        assert_eq!(
+            within.clip(&p(&[0, 1])),
+            Some(RowSelection::From(p(&[0, 1]), 4))
+        );
+        assert_eq!(within.clip(&p(&[0, 2])), whole);
+        assert_eq!(
+            within.clip(&p(&[0, 3])),
+            Some(RowSelection::To(p(&[0, 3, 0]), 2))
+        );
+        assert_eq!(within.clip(&p(&[0, 4])), None);
+        assert_eq!(within.clip(&p(&[0])), Some(within.clone()));
+        assert_eq!(RowSelection::Whole.clip(&p(&[5])), whole);
     }
 }

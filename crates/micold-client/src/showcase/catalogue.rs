@@ -791,7 +791,9 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/accordion_section.rs",
         component: "AccordionSection",
-        variants: &[],
+        // `HeaderText`: the selectable texts of a header (feature 1550; `Title` is a `TypeRole`
+        // too). The posed "closed, with a summary" shows both.
+        variants: &["Summary"],
         density: &[],
         posed: &[
             "closed, with a summary",

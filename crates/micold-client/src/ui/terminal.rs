@@ -590,6 +590,8 @@ pub(crate) fn transcript_body<'a>(
             roles: tokens::roles(scheme),
             scheme,
             cache: &state.transcript_rich,
+            selected: state.transcript_selection.selection(id),
+            row: None,
         },
         |msg| match msg {
             TranscriptMsg::Insights(msg) => Message::Session(SessionMsg::Insights(msg)),

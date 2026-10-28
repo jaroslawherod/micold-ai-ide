@@ -18,7 +18,9 @@ use iced::widget::column;
 use iced::widget::text::Wrapping;
 use iced::{Element, Length};
 use micold_core::protocol::messages::{PermissionRequest, Resolution};
+use micold_core::session::SessionId;
 use micold_core::structured::permission::request::{Question, RequestKind};
+use micold_core::structured::selection::RowPos;
 use micold_core::structured::transcript::{input_summary, Entry, EntryKind};
 use micold_core::tokens::{spacing, Roles};
 
@@ -91,8 +93,18 @@ pub fn input_form(tool: &str, card_held: bool) -> InputForm {
     }
 }
 
-/// The ended request's label under its card.
-pub(super) fn resolution_row<'a, M: 'a>(resolution: Resolution, roles: Roles) -> Element<'a, M> {
+/// The ended request's label under its card, drawn as row `pos` of `session`: its label is the
+/// row's one unit (feature 1550).
+pub(super) fn resolution_row<'a, M: 'a>(
+    resolution: Resolution,
+    ctx: &RenderCtx<'_>,
+    session: SessionId,
+    pos: RowPos,
+    on_transcript: fn(TranscriptMsg) -> M,
+) -> Element<'a, M> {
+    let part = ctx.selected.and_then(|s| s.in_row(&pos));
+    let ctx = ctx.at(session, pos, part.as_ref());
+    let roles = ctx.roles;
     let icon = match resolution {
         Resolution::Allowed
         | Resolution::AllowedAlways
@@ -103,20 +115,26 @@ pub(super) fn resolution_row<'a, M: 'a>(resolution: Resolution, roles: Roles) ->
             Icon::NeedsPermission
         }
     };
-    IconLabel::new(icon, resolution_label(resolution), TypeRole::Label, roles)
-        .muted()
+    let label = resolution_label(resolution);
+    let drawn = IconLabel::new(icon, label, TypeRole::Label, roles).muted();
+    ctx.icon_label_with(drawn, vec![0], label.len(), on_transcript)
         .into()
 }
 
-/// `shown` as its kind's view; `card` is the transcript entry of its tool call when held.
+/// `shown` as its kind's view, drawn as row `pos`; `card` is the transcript entry of its tool call
+/// when held. Its descriptive text is selectable, its controls are not (feature 1550).
 pub(super) fn request_block<'a, M: Clone + 'a>(
     shown: &'a Shown,
     card: Option<&'a Entry>,
     can_submit: bool,
     d: &Draw<'a, M>,
+    pos: RowPos,
 ) -> Element<'a, M> {
     let request = &shown.request;
     let (session, id) = (request.session, request.id);
+    let part = d.ctx.selected.and_then(|s| s.in_row(&pos));
+    let sel = d.ctx.at(session, pos, part.as_ref());
+    let sel = &sel;
     let on_prompt = d.on_prompt;
     // Nothing more is sent while an answer is on its way.
     let send = move |action: Action| {
@@ -129,10 +147,10 @@ pub(super) fn request_block<'a, M: Clone + 'a>(
         })
     };
     let card_view = match &request.kind {
-        RequestKind::Tool => tool_view(shown, card, d, &send),
-        RequestKind::PlanApproval { plan } => plan_view(shown, plan, d, &send),
+        RequestKind::Tool => tool_view(shown, card, d, sel, &send),
+        RequestKind::PlanApproval { plan } => plan_view(shown, plan, d, sel, &send),
         RequestKind::Question { questions } => {
-            question_view(shown, questions, can_submit, d, &send)
+            question_view(shown, questions, can_submit, d, sel, &send)
         }
     };
     let card_view = match &shown.error {
@@ -166,6 +184,7 @@ pub fn request_view<'a, M: Clone + 'a>(
         None,
         prompts.state.can_submit(session, id),
         &d,
+        RowPos::End(0),
     ))
 }
 
@@ -182,25 +201,28 @@ fn tool_view<'a, M: Clone + 'a>(
     shown: &'a Shown,
     card: Option<&'a Entry>,
     d: &Draw<'a, M>,
+    sel: &RenderCtx<'_>,
     send: &dyn Fn(Action) -> Option<M>,
 ) -> PromptCard<'a, M> {
     let request: &'a PermissionRequest = &shown.request;
     let (session, id, on_prompt) = (request.session, request.id, d.on_prompt);
     let roles = d.ctx.roles;
+    let on = d.on_transcript;
     let input = shown
         .full_input
         .as_deref()
         .unwrap_or(&request.input_preview);
+    let summary = input_summary(&request.tool_name, input);
+    let summary_len = summary.len();
     let mut view = PromptCard::new(request.tool_name.clone(), roles)
+        .title_text(sel.step(vec![0], request.tool_name.len(), on))
         .leading(Icon::NeedsPermission)
-        .body(
-            wrapped(
-                input_summary(&request.tool_name, input),
-                TypeRole::Body,
-                roles,
-            )
-            .monospace(),
-        );
+        .body(sel.text_with(
+            wrapped(summary, TypeRole::Body, roles).monospace(),
+            vec![1],
+            summary_len,
+            on,
+        ));
     let held = card.and_then(|entry| match entry.kind() {
         EntryKind::ToolCall(call) => Some((entry, call)),
         _ => None,
@@ -214,24 +236,39 @@ fn tool_view<'a, M: Clone + 'a>(
                         key: entry.key(),
                         revision: entry.revision(),
                         streaming: call.streaming,
+                        at: 2,
                     },
                     tool: &call.name,
                     input_json: &call.input,
                 },
-                &d.ctx,
+                sel,
             )
             .map(d.on_transcript),
         ),
-        _ => view.body(
-            wrapped(structured_input(input), TypeRole::Caption, roles)
-                .muted()
-                .monospace(),
-        ),
+        _ => {
+            let structured = structured_input(input);
+            let len = structured.len();
+            view.body(
+                sel.text_with(
+                    wrapped(structured, TypeRole::Caption, roles)
+                        .muted()
+                        .monospace(),
+                    vec![2],
+                    len,
+                    on,
+                ),
+            )
+        }
     };
     if shown.input_cut() && shown.full_input.is_none() {
         view = view.body(
             column![
-                wrapped(INPUT_CUT.to_owned(), TypeRole::Caption, roles).muted(),
+                sel.text_with(
+                    wrapped(INPUT_CUT.to_owned(), TypeRole::Caption, roles).muted(),
+                    vec![3],
+                    INPUT_CUT.len(),
+                    on,
+                ),
                 Button::text(SHOW_ALL, roles)
                     .on_press(on_prompt(PromptsMsg::ShowAllRequested { session, id })),
             ]
@@ -253,9 +290,12 @@ fn tool_view<'a, M: Clone + 'a>(
         .action(Button::filled(ALLOW, roles).on_press_maybe(send(Action::Allow)))
         .action(Button::outlined(DENY, roles).on_press_maybe(send(Action::Deny)));
     if let Some(rule) = &request.always_allow {
+        let note = always_allow_note(rule);
+        let len = note.len();
         view = view
             .action(Button::outlined(ALWAYS_ALLOW, roles).on_press_maybe(send(Action::AlwaysAllow)))
-            .note(always_allow_note(rule));
+            .note(note)
+            .note_text(sel.step(vec![4], len, on));
     }
     view
 }
@@ -265,13 +305,21 @@ fn plan_view<'a, M: Clone + 'a>(
     shown: &'a Shown,
     plan: &'a str,
     d: &Draw<'a, M>,
+    sel: &RenderCtx<'_>,
     send: &dyn Fn(Action) -> Option<M>,
 ) -> PromptCard<'a, M> {
     let (session, id, on_prompt) = (shown.request.session, shown.request.id, d.on_prompt);
     let roles = d.ctx.roles;
+    let on = d.on_transcript;
     PromptCard::new(PLAN_TITLE, roles)
+        .title_text(sel.step(vec![0], PLAN_TITLE.len(), on))
         .leading(Icon::NeedsPermission)
-        .body(wrapped(plan.to_owned(), TypeRole::Body, roles))
+        .body(sel.text_with(
+            wrapped(plan.to_owned(), TypeRole::Body, roles),
+            vec![1],
+            plan.len(),
+            on,
+        ))
         .body(
             TextField::new(NOTE_PLACEHOLDER, &shown.draft.note, roles)
                 .on_input(move |text| on_prompt(PromptsMsg::NoteEdited { session, id, text }))
@@ -296,11 +344,15 @@ fn question_view<'a, M: Clone + 'a>(
     questions: &'a [Question],
     can_submit: bool,
     d: &Draw<'a, M>,
+    sel: &RenderCtx<'_>,
     send: &dyn Fn(Action) -> Option<M>,
 ) -> PromptCard<'a, M> {
     let (session, id, on_prompt) = (shown.request.session, shown.request.id, d.on_prompt);
     let roles = d.ctx.roles;
-    let mut view = PromptCard::new(QUESTION_TITLE, roles).leading(Icon::NeedsPermission);
+    let on = d.on_transcript;
+    let mut view = PromptCard::new(QUESTION_TITLE, roles)
+        .title_text(sel.step(vec![0], QUESTION_TITLE.len(), on))
+        .leading(Icon::NeedsPermission);
     for (question, (asked, draft)) in questions.iter().zip(&shown.draft.answers).enumerate() {
         let mut choices = ChoiceList::new(roles)
             .multiple(asked.multi_select)
@@ -333,10 +385,21 @@ fn question_view<'a, M: Clone + 'a>(
                 draft.chosen.contains(&at),
             );
         }
+        let at = u16::try_from(question + 1).unwrap_or(u16::MAX);
         view = view.body(
             column![
-                wrapped(asked.header.clone(), TypeRole::Label, roles).muted(),
-                wrapped(asked.text.clone(), TypeRole::Body, roles),
+                sel.text_with(
+                    wrapped(asked.header.clone(), TypeRole::Label, roles).muted(),
+                    vec![at, 0],
+                    asked.header.len(),
+                    on,
+                ),
+                sel.text_with(
+                    wrapped(asked.text.clone(), TypeRole::Body, roles),
+                    vec![at, 1],
+                    asked.text.len(),
+                    on,
+                ),
                 choices,
             ]
             .spacing(spacing::XS),
