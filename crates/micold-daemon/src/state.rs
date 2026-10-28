@@ -4249,10 +4249,12 @@ impl DaemonState {
         }
         match classify_draft(command, &Self::command_list_of(inner, session)) {
             DraftCommand::TerminalOnly(_) => Ok(()),
-            DraftCommand::Send | DraftCommand::Model(_) => Err(SwitchRefusal::BadCommand(
-                "The command of a switch to the terminal must be one that needs the terminal"
-                    .into(),
-            )),
+            DraftCommand::Send | DraftCommand::Model(_) | DraftCommand::Effort(_) => {
+                Err(SwitchRefusal::BadCommand(
+                    "The command of a switch to the terminal must be one that needs the terminal"
+                        .into(),
+                ))
+            }
         }
     }
 
@@ -8016,7 +8018,8 @@ impl DaemonState {
             return Ok(());
         }
         match classify_draft(text, &Self::command_list_of(inner, session)) {
-            DraftCommand::Send => Ok(()),
+            // `/effort` is still sent as typed until #1554 M5 makes the daemon refuse it.
+            DraftCommand::Send | DraftCommand::Effort(_) => Ok(()),
             DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
             DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),
         }

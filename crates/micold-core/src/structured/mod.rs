@@ -8,6 +8,7 @@ pub mod attachment;
 pub mod commands;
 pub mod control;
 pub mod edit_diff;
+pub mod effort;
 mod event;
 mod history;
 pub mod input;

@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::effort::EffortChoice;
 use super::history::MAX_BYTES;
 use super::{parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent};
 use crate::session::SessionKind;
@@ -44,10 +45,11 @@ enum SavedEvent {
     },
     InterruptAsked,
     /// The daemon's notes (#943), saved whole: no line holds them. Appended after the variants
-    /// above, so a version-1 file keeps its meaning.
+    /// above, so a version-1 file keeps its meaning. Read only: a new commands note is written as
+    /// `CommandsReportedV2` (#1554).
     CommandsReported {
         commands: Vec<ReportedCommand>,
-        models: Vec<ReportedModel>,
+        models: Vec<SavedReportedModelV1>,
     },
     ModelChanged {
         model: String,
@@ -59,6 +61,40 @@ enum SavedEvent {
     KindSwitched {
         to: SessionKind,
     },
+    /// #1554's notes, appended after the variants above, so a version-1 file keeps its meaning.
+    /// Every new commands note is written in this shape, which carries each model's effort
+    /// support.
+    CommandsReportedV2 {
+        commands: Vec<ReportedCommand>,
+        models: Vec<ReportedModel>,
+    },
+    EffortChanged {
+        effort: EffortChoice,
+    },
+    EffortRefused {
+        effort: EffortChoice,
+        message: String,
+    },
+}
+
+/// A reported model as `CommandsReported` saved it before models carried effort support (#943):
+/// frozen, so a version-1 file written then keeps its meaning (#1554 R8).
+#[derive(Debug, Serialize, Deserialize)]
+struct SavedReportedModelV1 {
+    value: String,
+    display_name: Option<String>,
+    description: Option<String>,
+}
+
+impl From<SavedReportedModelV1> for ReportedModel {
+    fn from(model: SavedReportedModelV1) -> Self {
+        ReportedModel {
+            value: model.value,
+            display_name: model.display_name,
+            description: model.description,
+            effort: None,
+        }
+    }
 }
 
 impl SavedEvent {
@@ -84,11 +120,18 @@ impl SavedEvent {
             StructuredEvent::InterruptAsked => SavedEvent::InterruptAsked,
             StructuredEvent::OversizedOnWire { .. } => return None,
             StructuredEvent::CommandsReported { commands, models } => {
-                SavedEvent::CommandsReported {
+                SavedEvent::CommandsReportedV2 {
                     commands: commands.clone(),
                     models: models.clone(),
                 }
             }
+            StructuredEvent::EffortChanged { effort } => SavedEvent::EffortChanged {
+                effort: effort.clone(),
+            },
+            StructuredEvent::EffortRefused { effort, message } => SavedEvent::EffortRefused {
+                effort: effort.clone(),
+                message: message.clone(),
+            },
             StructuredEvent::ModelChanged { model } => SavedEvent::ModelChanged {
                 model: model.clone(),
             },
@@ -110,7 +153,17 @@ impl SavedEvent {
             }
             SavedEvent::InterruptAsked => StructuredEvent::InterruptAsked,
             SavedEvent::CommandsReported { commands, models } => {
+                StructuredEvent::CommandsReported {
+                    commands,
+                    models: models.into_iter().map(ReportedModel::from).collect(),
+                }
+            }
+            SavedEvent::CommandsReportedV2 { commands, models } => {
                 StructuredEvent::CommandsReported { commands, models }
+            }
+            SavedEvent::EffortChanged { effort } => StructuredEvent::EffortChanged { effort },
+            SavedEvent::EffortRefused { effort, message } => {
+                StructuredEvent::EffortRefused { effort, message }
             }
             SavedEvent::ModelChanged { model } => StructuredEvent::ModelChanged { model },
             SavedEvent::ModelRefused { model, message } => {
@@ -312,6 +365,7 @@ mod tests {
                     value: "haiku".into(),
                     display_name: Some("Haiku".into()),
                     description: Some("Fastest".into()),
+                    effort: None,
                 }],
             },
             StructuredEvent::CommandsReported {
@@ -331,7 +385,102 @@ mod tests {
             StructuredEvent::KindSwitched {
                 to: SessionKind::Structured,
             },
+            // #1554 T008: a model's effort support and the effort notes.
+            StructuredEvent::CommandsReported {
+                commands: vec![],
+                models: vec![with_effort()],
+            },
+            StructuredEvent::EffortChanged {
+                effort: EffortChoice::Level(EffortLevel::parse("high").unwrap()),
+            },
+            StructuredEvent::EffortChanged {
+                effort: EffortChoice::Default,
+            },
+            StructuredEvent::EffortRefused {
+                effort: EffortChoice::Level(EffortLevel::parse("max").unwrap()),
+                message: "apply_flag_settings is not supported in this context".into(),
+            },
+            StructuredEvent::EffortRefused {
+                effort: EffortChoice::Default,
+                message: "no".into(),
+            },
         ]
+    }
+
+    use crate::structured::effort::{EffortChoice, EffortLevel, EffortSupport};
+
+    /// A reported model whose effort support is known.
+    fn with_effort() -> ReportedModel {
+        ReportedModel {
+            value: "default".into(),
+            display_name: None,
+            description: None,
+            effort: Some(EffortSupport {
+                supported: true,
+                levels: vec![
+                    EffortLevel::parse("low").unwrap(),
+                    EffortLevel::parse("max").unwrap(),
+                ],
+            }),
+        }
+    }
+
+    /// #1554 T008: a commands note saved before models carried effort keeps its bytes and reads
+    /// with every model's support unknown.
+    #[test]
+    fn a_version_one_commands_note_without_effort_still_reads() {
+        // omitted 0; one event, CommandsReported (variant 5): no commands; one model, value "m",
+        // display name Some("M"), no description.
+        let payload: &[u8] = &[0, 1, 5, 0, 1, 1, b'm', 1, 1, b'M', 0];
+        let written = postcard::to_allocvec(&SavedEvents {
+            omitted: 0,
+            events: vec![SavedEvent::CommandsReported {
+                commands: vec![],
+                models: vec![SavedReportedModelV1 {
+                    value: "m".into(),
+                    display_name: Some("M".into()),
+                    description: None,
+                }],
+            }],
+        })
+        .unwrap();
+        assert_eq!(written, payload);
+        assert_eq!(
+            decode_events(&framed(payload)),
+            Ok((
+                0,
+                vec![StructuredEvent::CommandsReported {
+                    commands: vec![],
+                    models: vec![ReportedModel {
+                        value: "m".into(),
+                        display_name: Some("M".into()),
+                        description: None,
+                        effort: None,
+                    }],
+                }]
+            ))
+        );
+        assert_eq!(EVENTS_FORMAT_VERSION, 1);
+    }
+
+    #[test]
+    fn a_commands_note_is_written_in_the_new_shape_and_keeps_effort() {
+        let note = StructuredEvent::CommandsReported {
+            commands: vec![],
+            models: vec![with_effort()],
+        };
+        let bytes = encode_events(0, &sequenced(0, vec![note.clone()]));
+        let payload = unframe(&bytes, &MAGIC, EVENTS_FORMAT_VERSION, MAX_EVENTS_FILE_BYTES)
+            .expect("a framed file");
+        let saved: SavedEvents = postcard::from_bytes(payload).expect("saved events");
+        assert!(
+            matches!(
+                saved.events.as_slice(),
+                [SavedEvent::CommandsReportedV2 { .. }]
+            ),
+            "{saved:?}"
+        );
+        assert_eq!(decode_events(&bytes), Ok((0, vec![note])));
     }
 
     #[test]
@@ -354,6 +503,8 @@ mod tests {
             r#"{"type":"model_changed","model":"m"}"#,
             r#"{"ModelRefused":{"model":"m","message":"x"}}"#,
             r#"{"KindSwitched":{"to":"Terminal"}}"#,
+            r#"{"EffortChanged":{"effort":"Default"}}"#,
+            r#"{"EffortRefused":{"effort":"Default","message":"x"}}"#,
         ] {
             let event = parse_line(line);
             assert!(

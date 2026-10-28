@@ -250,7 +250,10 @@
 /// And 70 → 71 for #1475's `ClientMsg::SshHostAliases`: the client tells the daemon which SSH host
 /// aliases its machine resolves to github.com, which shifts the postcard index of every
 /// `ClientMsg` variant after it.
-pub const PROTOCOL_VERSION: u32 = 71;
+///
+/// And 71 → 72 for #1554's effort events (M1): `StructuredEvent::{EffortChanged, EffortRefused}`
+/// and `ReportedModel.effort`, which change the postcard layout `StructuredEvents` carries.
+pub const PROTOCOL_VERSION: u32 = 72;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

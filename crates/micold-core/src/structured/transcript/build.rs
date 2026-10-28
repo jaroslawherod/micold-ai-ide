@@ -209,6 +209,20 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             };
             transcript.open(at(0), seq, kind);
         }
+        StructuredEvent::EffortChanged { effort } => {
+            let kind = EntryKind::EffortChanged {
+                effort: effort.clone(),
+                refused: None,
+            };
+            transcript.open(at(0), seq, kind);
+        }
+        StructuredEvent::EffortRefused { effort, message } => {
+            let kind = EntryKind::EffortChanged {
+                effort: effort.clone(),
+                refused: Some(message.clone()),
+            };
+            transcript.open(at(0), seq, kind);
+        }
         // One marker per terminal period: the note that opens it, until one closes it.
         StructuredEvent::KindSwitched { to } => match to {
             SessionKind::Terminal if !transcript.in_terminal => {

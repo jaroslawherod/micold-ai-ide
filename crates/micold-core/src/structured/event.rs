@@ -5,6 +5,7 @@
 //! them. Externally tagged (serde's default), because the wire is postcard, which cannot carry an
 //! internally tagged enum.
 
+use super::effort::EffortChoice;
 use crate::session::SessionKind;
 use serde::{Deserialize, Serialize};
 
@@ -122,6 +123,13 @@ pub enum StructuredEvent {
     ModelRefused { model: String, message: String },
     /// Daemon note: the session switched kind here (#943 R8).
     KindSwitched { to: SessionKind },
+    /// Daemon note: the effort choice from here on, once the CLI took it (#1554 R8).
+    EffortChanged { effort: EffortChoice },
+    /// Daemon note: the CLI refused a deferred effort change, with its reason (#1554 FR-005).
+    EffortRefused {
+        effort: EffortChoice,
+        message: String,
+    },
 }
 
 /// `PartialEq` is total here: the only float, `total_cost_usd`, comes from JSON, which has no NaN,
@@ -150,7 +158,9 @@ impl StructuredEvent {
             | Self::CommandsReported { .. }
             | Self::ModelChanged { .. }
             | Self::ModelRefused { .. }
-            | Self::KindSwitched { .. } => 0,
+            | Self::KindSwitched { .. }
+            | Self::EffortChanged { .. }
+            | Self::EffortRefused { .. } => 0,
         }
     }
 }
@@ -174,6 +184,10 @@ pub struct ReportedModel {
     pub value: String,
     pub display_name: Option<String>,
     pub description: Option<String>,
+    /// `supportsEffort` / `supportedEffortLevels`; `None` when the CLI sent either not (#1554
+    /// R2): support unknown.
+    #[serde(default)]
+    pub effort: Option<super::effort::EffortSupport>,
 }
 
 /// How the CLI answered a control request (contracts/claude-permission.md *Mode change*).

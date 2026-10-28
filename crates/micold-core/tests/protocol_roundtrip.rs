@@ -958,8 +958,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_71() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 71);
+fn the_protocol_version_is_72() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 72);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -967,6 +967,7 @@ fn the_protocol_version_is_71() {
 #[test]
 fn the_command_model_and_kind_events_round_trip_in_a_structured_events_frame() {
     use micold_core::session::SessionKind;
+    use micold_core::structured::effort::{EffortChoice, EffortLevel, EffortSupport};
     use micold_core::structured::{
         parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
     };
@@ -988,11 +989,37 @@ fn the_command_model_and_kind_events_round_trip_in_a_structured_events_frame() {
                     builtin: false,
                 },
             ],
-            models: vec![ReportedModel {
-                value: "haiku".into(),
-                display_name: Some("Haiku".into()),
-                description: None,
-            }],
+            models: vec![
+                ReportedModel {
+                    value: "haiku".into(),
+                    display_name: Some("Haiku".into()),
+                    description: None,
+                    effort: None,
+                },
+                // #1554 T008: a model's effort support rides the frame too.
+                ReportedModel {
+                    value: "default".into(),
+                    display_name: None,
+                    description: None,
+                    effort: Some(EffortSupport {
+                        supported: true,
+                        levels: vec![
+                            EffortLevel::parse("low").unwrap(),
+                            EffortLevel::parse("max").unwrap(),
+                        ],
+                    }),
+                },
+            ],
+        },
+        StructuredEvent::EffortChanged {
+            effort: EffortChoice::Level(EffortLevel::parse("high").unwrap()),
+        },
+        StructuredEvent::EffortChanged {
+            effort: EffortChoice::Default,
+        },
+        StructuredEvent::EffortRefused {
+            effort: EffortChoice::Level(EffortLevel::parse("max").unwrap()),
+            message: "apply_flag_settings is not supported in this context".into(),
         },
         StructuredEvent::ModelChanged {
             model: "claude-haiku-5-5".into(),

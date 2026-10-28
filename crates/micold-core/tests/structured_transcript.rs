@@ -1943,6 +1943,67 @@ fn a_model_note_is_a_model_marker_and_a_refusal_carries_the_reason() {
     );
 }
 
+/// #1554 T008: an effort note is an effort marker where it is; a refusal carries the reason
+/// (FR-004, FR-005).
+#[test]
+fn an_effort_note_is_an_effort_marker_and_a_refusal_carries_the_reason() {
+    use micold_core::structured::effort::{EffortChoice, EffortLevel};
+    let high = EffortChoice::Level(EffortLevel::parse("high").unwrap());
+    let transcript = built(&sequenced(
+        a_turn("before")
+            .into_iter()
+            .chain([
+                StructuredEvent::EffortChanged {
+                    effort: high.clone(),
+                },
+                StructuredEvent::EffortChanged {
+                    effort: EffortChoice::Default,
+                },
+                StructuredEvent::EffortRefused {
+                    effort: high.clone(),
+                    message: "apply_flag_settings is not supported in this context".into(),
+                },
+            ])
+            .chain(a_turn("after")),
+    ));
+    let markers: Vec<(usize, EntryKind)> = kinds(&transcript)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, kind)| matches!(kind, EntryKind::EffortChanged { .. }))
+        .collect();
+    let all = kinds(&transcript);
+    let first = markers.first().expect("a marker").0;
+    assert!(
+        all[..first]
+            .iter()
+            .any(|k| matches!(k, EntryKind::AssistantText { .. })),
+        "the markers come after the first turn: {all:?}"
+    );
+    assert!(
+        all[markers.last().unwrap().0..]
+            .iter()
+            .any(|k| matches!(k, EntryKind::AssistantText { .. })),
+        "and before the second: {all:?}"
+    );
+    assert_eq!(
+        markers.into_iter().map(|(_, k)| k).collect::<Vec<_>>(),
+        vec![
+            EntryKind::EffortChanged {
+                effort: high.clone(),
+                refused: None,
+            },
+            EntryKind::EffortChanged {
+                effort: EffortChoice::Default,
+                refused: None,
+            },
+            EntryKind::EffortChanged {
+                effort: high,
+                refused: Some("apply_flag_settings is not supported in this context".into()),
+            },
+        ]
+    );
+}
+
 fn switched(to: SessionKind) -> StructuredEvent {
     StructuredEvent::KindSwitched { to }
 }

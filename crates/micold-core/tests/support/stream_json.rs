@@ -42,6 +42,10 @@ pub const COMMAND_RECORDED: [&str; 11] = [
     "resume-after-clear",
 ];
 
+/// #1554's recordings: an effort change while running and an effort at launch
+/// (`tests/fixtures/stream-json/README.md`).
+pub const EFFORT_RECORDED: [&str; 2] = ["effort-change", "effort-launch"];
+
 /// The stdout of the permission-prompt recordings (#942,
 /// `tests/fixtures/permission-prompt/README.md`).
 pub const PROMPT_RECORDED: [&str; 6] = [

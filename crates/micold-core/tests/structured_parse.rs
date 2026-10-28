@@ -8,7 +8,11 @@ use micold_core::structured::{
 
 #[path = "support/stream_json.rs"]
 mod stream_json;
-use stream_json::{events_of, lines_of, COMMAND_RECORDED, PROMPT_RECORDED, RECORDED, RECORDED_941};
+use micold_core::structured::control::parse_apply_effort;
+use micold_core::structured::effort::EffortRefusal;
+use stream_json::{
+    events_of, lines_of, COMMAND_RECORDED, EFFORT_RECORDED, PROMPT_RECORDED, RECORDED, RECORDED_941,
+};
 
 /// Whether the line's `type` (and `subtype`, for `system`) is one the model types (R9).
 fn is_known_type(line: &str) -> bool {
@@ -44,7 +48,9 @@ fn raw_of(event: &StructuredEvent) -> Option<&str> {
         | StructuredEvent::CommandsReported { .. }
         | StructuredEvent::ModelChanged { .. }
         | StructuredEvent::ModelRefused { .. }
-        | StructuredEvent::KindSwitched { .. } => None,
+        | StructuredEvent::KindSwitched { .. }
+        | StructuredEvent::EffortChanged { .. }
+        | StructuredEvent::EffortRefused { .. } => None,
     }
 }
 
@@ -74,6 +80,7 @@ fn every_recorded_line_is_one_event_in_order_and_every_known_type_is_typed() {
         .chain(PROMPT_RECORDED)
         .chain(RECORDED_941)
         .chain(COMMAND_RECORDED)
+        .chain(EFFORT_RECORDED)
     {
         let lines = lines_of(name);
         let events = events_of(&lines);
@@ -763,4 +770,62 @@ fn the_new_lines_tolerate_missing_and_unknown_fields() {
             ..
         }
     ));
+}
+
+/// #1554 T006: every answer of the effort recordings is typed, and each `apply_flag_settings`
+/// answer reads as applied (FR-004, FR-006).
+#[test]
+fn the_effort_recordings_answer_every_request_and_apply_each_change() {
+    let change = control_responses("effort-change");
+    let ids: Vec<&str> = change.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(ids, ["micold-1", "micold-2", "micold-3", "micold-4"]);
+    for (id, outcome) in &change {
+        assert!(
+            matches!(outcome, ControlOutcome::Success(_)),
+            "{id}: {outcome:?}"
+        );
+    }
+    // micold-1 sets `low`, micold-3 clears it: the CLI answers with no body.
+    for applied in [&change[0].1, &change[2].1] {
+        assert_eq!(applied, &ControlOutcome::Success("null".into()));
+        assert_eq!(parse_apply_effort(applied), Ok(()));
+    }
+    let applied_effort = |outcome: &ControlOutcome| match outcome {
+        ControlOutcome::Success(text) => {
+            let value: serde_json::Value = serde_json::from_str(text).expect("JSON");
+            value["applied"]["effort"].as_str().map(str::to_string)
+        }
+        other => panic!("not a success: {other:?}"),
+    };
+    assert_eq!(applied_effort(&change[1].1).as_deref(), Some("low"));
+    assert_eq!(applied_effort(&change[3].1).as_deref(), Some("medium"));
+    let events = events_of(&lines_of("effort-change"));
+    assert!(
+        matches!(
+            last_result(&events),
+            StructuredEvent::Result {
+                is_error: false,
+                ..
+            }
+        ),
+        "the session keeps running and answers the turn"
+    );
+
+    let launch = control_responses("effort-launch");
+    assert_eq!(launch.len(), 1);
+    assert_eq!(launch[0].0, "micold-1");
+    assert_eq!(applied_effort(&launch[0].1).as_deref(), Some("high"));
+}
+
+#[test]
+fn an_apply_effort_error_is_the_clis_refusal() {
+    assert_eq!(
+        parse_apply_effort(&ControlOutcome::Error {
+            message: "apply_flag_settings is not supported in this context".into(),
+            code: None,
+        }),
+        Err(EffortRefusal::Refused {
+            message: "apply_flag_settings is not supported in this context".into(),
+        })
+    );
 }
