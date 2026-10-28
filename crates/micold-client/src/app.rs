@@ -2088,7 +2088,8 @@ impl State {
         crate::features::history::observe(&mut self.history, shown);
     }
 
-    /// What a Back/Forward press resolves to (feature 1465, U3); a move turns observation off
+    /// What a Back/Forward press resolves to (feature 1465, U3), `lookup` listing the worktrees of a
+    /// project that is not active (research R5); a move turns observation off
     /// until [`Self::finish_history_move`].
     pub fn press_history(
         &mut self,
@@ -2122,6 +2123,12 @@ impl State {
             }
             Step::Show(place) => place,
         };
+        // Another project's place: switch to it first, as the project switcher does (U4).
+        let switch = (self.workspace.active.as_ref() != Some(&place.project)).then(|| {
+            Message::Project(crate::features::project::Msg::Reopened(
+                place.project.clone(),
+            ))
+        });
         let close_overview = self
             .overview
             .open
@@ -2131,7 +2138,7 @@ impl State {
             .compare
             .is_some()
             .then_some(Message::Runs(runs::Msg::CompareClosed));
-        match place.view {
+        let show: Vec<Message> = match place.view {
             View::Session { id, .. } => vec![Message::Session(session::Msg::Selected(id))],
             View::Review(location) => close_overview
                 .into_iter()
@@ -2153,7 +2160,8 @@ impl State {
                     project: place.project,
                 })])
                 .collect(),
-        }
+        };
+        switch.into_iter().chain(show).collect()
     }
 
     /// Apply a resolved navigation press (feature 803, contracts/ui.md U3) and return the

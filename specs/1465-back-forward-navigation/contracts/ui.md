@@ -18,7 +18,7 @@ the Overview, Compare or a Review tab, and the app's own moves (a shown session 
 0. `app.core.workspace.refresh_availability(app.caps.scanner())`, so `exists` and the switch read
    the same availability (research R5).
 1. `step = app.core.press_history(msg, &lookup)` (the root drives the feature) with
-   `lookup = |project| Some(discover_worktrees(git, project) paths)`.
+   `lookup = |project| Some(discover_worktrees(git, project) dir_names)`.
 2. `follow_ups = app.core.apply_history(step)`; each runs through the root `update`.
 3. `app.core.finish_history_move()` (only for `Step::Show`).
 
