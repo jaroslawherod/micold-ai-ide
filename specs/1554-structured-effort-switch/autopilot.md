@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M4
-- **Next step**: M4 PR: pushed, body ready; the orchestrator opens it and waits on CI, then M5.
+- **Phase**: M5
+- **Next step**: reviews A and B and the visual pass (T031) of M5 run by the orchestrator on the pushed head; then the full gate and the PR.
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 | #1591 | M2: keep the choice, launch with `--effort`, idle and stopped picks | merged | 5b7a239045d5bcf99f644b75b63c13b7fb000d74 |
 | #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
+| #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e (merge commit on main) |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | #1591 | merged |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
-| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | pending (body in scratchpad) | pushed |
-| M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
+| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
+| M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | in progress |
 
 ## Decisions
 
@@ -90,6 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M4 | 1 | dc2a77a059733a63134610de1fc61550db605c2c:279bff1679ff05d45ab6a0cfa176a6bd315a336e | CHANGES: F1 MAJOR open picker kept the keyboard after a switch to terminal → `effort_picker_shown` (open and `offers_effort`) gates `session_view_has_keyboard`, `SwitchRequested` closes it; F2 MAJOR no note at Default on a model without effort → `availability_note` says `NO_EFFORT_NOTE` whatever the choice (FR-003, D4; no conflict); F3 MINOR a pick equal to the stale catalog choice dropped while one is in flight → `effort_picked(.., in_flight)`, the shell passes whether a `SessionEffort` is pending; F4 MINOR a stored level the model does not list had no row → appended, marked current, highlighted; F5 MINOR focus back to the composer when the list closes, `follow` on move — all fixed test-first (features_effort_picker +4, shell::composer +3). Fixes no larger than suggested: no round 2. Run by the orchestrator |
 | B (conformance) M4 | 1 | dc2a77a059733a63134610de1fc61550db605c2c:279bff1679ff05d45ab6a0cfa176a6bd315a336e | CLEAN. Verify: features_effort_picker 12/12, ui::transcript::entries 9/9. 1 MINOR: M4 decision reused D9 → renumbered D20 (fixed, prose only). Run by the orchestrator |
 | Full gate M4 | — | — | green on 56370ab86 (`scripts/gate.sh`), after rebase onto origin/main 3190828cb (PROTOCOL_VERSION still 73; layout_snapshot passes) |
+| M5 scoped checks | 1 | — | green: fmt, clippy `-p micold-core -p micold-client -p micold-daemon --all-targets -D warnings`; `features_command_palette` 23/23, `features_effort_picker` 16/16, `shell::composer` 5/5, `structured_effort` 28/28, `structured_commands` 9/9. Cloud: no mise, ran cargo directly; target-shared deleted first (12 GB free) |
 | Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
 
 ## Declined review findings
@@ -99,9 +101,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M4 T022–T026; review A round 1 F1–F5 and B's MINOR fixed (56370ab86); full gate green on 56370ab86; branch pushed. Previous PR #1594 merged at 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd.
-- **Next step**: orchestrator opens the M4 PR (title `#1554: Structured view: model reasoning effort cannot be changed (M4)`, body in the session scratchpad `pr-1554-m4-body.md`), records its number, waits on CI and merges; then M5 (T027–T031).
-- **Main paths**: `crates/micold-client/src/features/effort_picker.rs`, `src/ui/composer.rs` (`effort_control`), `src/shell/composer.rs`, `src/app.rs`, `tests/features_effort_picker.rs`, guide `docs/user-guide/worktrees-and-sessions.md`.
+- **Done**: M5 T027–T030 (T031 is the orchestrator's visual pass): `SendIntent::SetEffort`, `Classified::Effort`/`EffortPicker` in `command_palette.rs` (`classify` takes the model's offered levels, `effort_offered` in `effort_picker.rs`), routed in `shell/composer.rs` `send`; daemon `UserMessageRefusal::EffortIsTheApps` (core `user_message.rs`, `state.rs` `refuse_app_handled`, which also covers a queue edit); guide paragraph "`/effort` in the message box". Previous PR #1596 merged (196125f1e).
+- **Next step**: review A (high) and B on `origin/main...HEAD`, visual pass T031 (quickstart Part B 4–5, 7b), full gate, PR body in the scratchpad `pr-1554-m5-body.md`.
+- **Main paths**: `crates/micold-client/src/features/command_palette.rs`, `features/composer.rs`, `shell/composer.rs`, `crates/micold-daemon/src/state.rs`, `crates/micold-core/src/structured/user_message.rs`, tests `features_command_palette.rs`, `structured_effort.rs`.
 - **Open findings**: none.
 
 ## Open escalation

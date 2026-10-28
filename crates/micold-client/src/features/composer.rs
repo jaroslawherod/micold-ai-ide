@@ -976,14 +976,18 @@ impl crate::app::State {
     }
 
     /// What sending `session`'s draft does (FR-010, FR-018): a message for the composer to send,
-    /// or handled here (the picker opened, the terminal offered, a refusal said), or a model to
-    /// ask the service for, its draft left for the shell to clear once the request went out.
+    /// or handled here (a picker opened, the terminal offered, a refusal said), or a model or an effort
+    /// to ask the service for, its draft left for the shell to clear once the request went out.
     /// `/model` alone leaves the composer; a terminal-only command stays until the switch is done.
     pub fn send_intent(&mut self, session: SessionId) -> SendIntent {
         let Some(text) = self.composers.draft(session).map(|d| d.text.clone()) else {
             return SendIntent::Message;
         };
-        match classify(&text, &self.command_list(session)) {
+        match classify(
+            &text,
+            &self.command_list(session),
+            &self.effort_offered(session),
+        ) {
             Classified::Message => SendIntent::Message,
             Classified::Picker => {
                 self.composers.replace_text(session, String::new(), (0, 0));
@@ -992,6 +996,16 @@ impl crate::app::State {
             }
             Classified::Model(Ok(choice)) => SendIntent::SetModel(choice),
             Classified::Model(Err(refusal)) => {
+                self.composers.notice(session, refusal.to_string());
+                SendIntent::Nothing
+            }
+            Classified::EffortPicker => {
+                self.composers.replace_text(session, String::new(), (0, 0));
+                self.open_effort_picker(session);
+                SendIntent::Nothing
+            }
+            Classified::Effort(Ok(choice)) => SendIntent::SetEffort(choice),
+            Classified::Effort(Err(refusal)) => {
                 self.composers.notice(session, refusal.to_string());
                 SendIntent::Nothing
             }

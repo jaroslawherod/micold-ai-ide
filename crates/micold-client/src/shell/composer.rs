@@ -333,6 +333,14 @@ fn send(app: &mut App, session: SessionId) {
             }
             return;
         }
+        SendIntent::SetEffort(choice) => {
+            if set_effort(app, session, choice) {
+                app.core
+                    .composers
+                    .replace_text(session, String::new(), (0, 0));
+            }
+            return;
+        }
     }
     let connected = connected(app, session);
     let Some(draft) = app.core.composers.take_send(session, connected) else {
@@ -475,6 +483,34 @@ mod tests {
             }
         }
         sent
+    }
+
+    #[test]
+    fn sending_slash_effort_asks_the_service_at_once_and_is_no_user_message() {
+        let (mut app, mut rx, s) = app_with_session();
+        app.core
+            .composers
+            .edited(s, "/effort high".to_string(), (0, 12));
+        send(&mut app, s);
+        let mut asked = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                ClientMsg::SetSessionEffort { effort, .. } => asked.push(effort),
+                ClientMsg::SessionUserMessage { .. } => panic!("/effort is not a message"),
+                _ => {}
+            }
+        }
+        let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+        assert_eq!(asked, [high], "one request, for the level");
+        assert_eq!(
+            app.core
+                .composers
+                .draft(s)
+                .map(|d| d.text.clone())
+                .unwrap_or_default(),
+            "",
+            "the command is used up once sent"
+        );
     }
 
     #[test]

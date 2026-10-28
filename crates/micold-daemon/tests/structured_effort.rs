@@ -1210,3 +1210,56 @@ async fn a_pick_left_unwritten_by_an_ended_process_is_not_carried_into_the_next(
         .follow_effort_answer(id, EffortAnswer::Refused(level("high")));
     assert_eq!(rig.effort(0), level("low"));
 }
+
+/// M5 T028 (FR-007, FR-008, SC-003, contracts/wire.md *Changed behaviour (M5)*): `/effort` in a
+/// `SessionUserMessage`, idle or busy, with or without an argument, is refused with the sentence;
+/// nothing is written to the CLI, nothing is queued, no note is made, the choice stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn slash_effort_sent_as_a_message_is_refused_and_never_reaches_the_cli() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "").await;
+    let mut window = Window::connect(&rig.state).await;
+    let texts = [
+        "/effort high",
+        "/effort",
+        "/effort extreme",
+        "/effort default",
+    ];
+    let mut req = 0;
+    for busy in [false, true] {
+        if busy {
+            req += 1;
+            assert_ok(&window.request(say(req, id, "one"), req).await);
+            eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+        }
+        for text in texts {
+            req += 1;
+            let answer = window.request(say(req, id, text), req).await;
+            let (kind, message) = refused(&answer);
+            assert_eq!(kind, ErrorKind::Refused, "{text} (busy: {busy})");
+            assert!(
+                message.contains("/effort is handled by the app"),
+                "{text}: {message}"
+            );
+        }
+    }
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        stdin_kinds(dir),
+        ["one"],
+        "only the plain message reached the CLI"
+    );
+    let history = rig.history(0);
+    assert_eq!(
+        history
+            .iter()
+            .filter(|e| matches!(e, StructuredEvent::UserSent { .. }))
+            .count(),
+        1,
+        "nothing queued or noted: {history:#?}"
+    );
+    assert!(effort_notes(&history).is_empty(), "no effort note");
+    assert_eq!(rig.effort(0), EffortChoice::Default);
+}

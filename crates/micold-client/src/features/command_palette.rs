@@ -18,6 +18,9 @@ use micold_core::structured::commands::palette::{accept, filter, palette_query, 
 use micold_core::structured::commands::{
     classify_draft, Command, CommandKind, CommandList, DraftCommand, ListSource, CLI_MARKED_WHY,
 };
+use micold_core::structured::effort::{
+    parse_effort_arg, EffortArgError, EffortChoice, EffortLevel,
+};
 use micold_core::structured::model::{ModelChoice, ModelName, ModelRefusal, MODEL_SHORTCUTS};
 use micold_core::structured::ReportedModel;
 use micold_core::typeahead::{move_highlight, Direction};
@@ -385,6 +388,9 @@ pub enum SendIntent {
     Nothing,
     /// `/model <name>`: ask the service for this model.
     SetModel(ModelChoice),
+    /// `/effort <level>`: ask the service to run the session with this effort, at once, busy or
+    /// not (#1554 FR-007, FR-008).
+    SetEffort(EffortChoice),
 }
 
 /// The palettes and model pickers open in this window, per session.
@@ -518,11 +524,13 @@ impl State {
     }
 }
 
-/// How a draft of `text` is sent, with `list` the session's commands (FR-010, FR-018).
-pub(crate) fn classify(text: &str, list: &CommandList) -> Classified {
+/// How a draft of `text` is sent, with `list` the session's commands (FR-010, FR-018) and
+/// `offered` the effort levels its model takes (#1554 FR-007).
+pub(crate) fn classify(text: &str, list: &CommandList, offered: &[EffortLevel]) -> Classified {
     match classify_draft(text, list) {
-        // `/effort` is sent as typed until #1554 M5 resolves it in the app.
-        DraftCommand::Send | DraftCommand::Effort(_) => Classified::Message,
+        DraftCommand::Send => Classified::Message,
+        DraftCommand::Effort(None) => Classified::EffortPicker,
+        DraftCommand::Effort(Some(arg)) => Classified::Effort(parse_effort_arg(&arg, offered)),
         DraftCommand::Model(None) => Classified::Picker,
         DraftCommand::Model(Some(name)) => Classified::Model(model_choice(&name)),
         DraftCommand::TerminalOnly(name) => {
@@ -544,6 +552,8 @@ pub(crate) enum Classified {
     Message,
     Picker,
     Model(Result<ModelChoice, ModelRefusal>),
+    EffortPicker,
+    Effort(Result<EffortChoice, EffortArgError>),
     TerminalOnly { command: String, reason: String },
 }
 

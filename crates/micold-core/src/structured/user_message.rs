@@ -23,6 +23,9 @@ pub enum UserMessageRefusal {
     /// `/model`, with or without a name: the app's model picker handles it, never the CLI
     /// (#943 FR-018).
     ModelIsTheApps,
+    /// `/effort`, with or without an argument: the app's effort picker and `/effort` handling
+    /// act on it, never the CLI (#1554 FR-007, FR-008).
+    EffortIsTheApps,
     /// A terminal-only command, by the name sent (`settings`, `mcp`, …): it runs only in the
     /// terminal (#943 FR-010).
     NeedsTerminal(String),
@@ -41,6 +44,9 @@ impl fmt::Display for UserMessageRefusal {
             }
             Self::ModelIsTheApps => {
                 "/model is handled by the app, not sent to Claude Code: choose the model in the session's view"
+            }
+            Self::EffortIsTheApps => {
+                "/effort is handled by the app, not sent to Claude Code: choose the effort in the session's view"
             }
             Self::NeedsTerminal(name) => {
                 return write!(
