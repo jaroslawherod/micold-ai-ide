@@ -143,6 +143,17 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             let can_accept = app.core.composers.accepts_input(session);
             app.core.composers.apply_drop(session, *files, can_accept);
         }
+        Msg::AttachRequested(session) => {
+            if app.core.composers.attach_requested(session) {
+                return crate::shell::attach_picker::open(session);
+            }
+        }
+        Msg::AttachPickerClosed(session) => app.core.composers.attach_picker_closed(session),
+        Msg::AttachPicked { session, paths } => {
+            if app.core.composers.attach_picked(session, paths.len()) {
+                return read_picked(app, session, paths);
+            }
+        }
         Msg::PaletteClicked { session, row } => app.core.palette_clicked(session, row),
         Msg::ModelPickerRequested(session) => app.core.open_model_picker(session),
         Msg::ModelPickerTyped { session, text } => app.core.model_picker_typed(session, text),
@@ -232,6 +243,24 @@ fn effort_in_flight(app: &App, session: SessionId) -> bool {
         .any(|op| matches!(op, PendingOp::SessionEffort { session: s } if *s == session))
 }
 
+/// The files the picker returned, read and admitted as a drop of them is (#1464 FR-008): the same
+/// reader, the shell and sandbox share resolved as `drops::on_drops_settled` does.
+fn read_picked(app: &mut App, session: SessionId, paths: Vec<std::path::PathBuf>) -> Task<Message> {
+    let sandbox = match crate::shell::sandbox::share(app) {
+        Ok(sandbox) => sandbox,
+        Err(reason) => {
+            app.core.composers.notice(session, reason);
+            return Task::none();
+        }
+    };
+    crate::shell::drops::read_for_composer(
+        session,
+        paths,
+        crate::shell::drops::login_shell_kind(),
+        sandbox,
+    )
+}
+
 fn session_of(msg: &Msg) -> SessionId {
     match msg {
         Msg::Key { session, .. }
@@ -244,6 +273,9 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::QueueEditChanged { session, .. }
         | Msg::QueueEditAttachmentRemoved { session, .. }
         | Msg::Dropped { session, .. }
+        | Msg::AttachRequested(session)
+        | Msg::AttachPicked { session, .. }
+        | Msg::AttachPickerClosed(session)
         | Msg::PaletteClicked { session, .. }
         | Msg::ModelPickerTyped { session, .. }
         | Msg::ModelPickerMoved { session, .. }

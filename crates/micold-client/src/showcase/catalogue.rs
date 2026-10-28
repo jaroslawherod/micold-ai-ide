@@ -1176,6 +1176,21 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::composer::attachment_chip,
     },
     Entry {
+        module: "ui/composer.rs",
+        component: "AddAttachmentButton",
+        variants: &[],
+        density: &[],
+        posed: &["enabled", "disabled"],
+        live: &[
+            "hover it: the tooltip \"Add attachment\"",
+            "Tab to it: its focus ring; Enter or Space presses it",
+        ],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::composer::attach_button,
+    },
+    Entry {
         module: "material/queue_row.rs",
         component: "QueueRow",
         variants: &[],

@@ -212,8 +212,8 @@ fn places(state: &State) -> (Point, Point, Point) {
     (send, send_queued, Point::new(send.x - 200.0, send.y))
 }
 
-/// Tab from the text area lands on **Send**, and the window still holds the keyboard after the
-/// next event: a composer control has it, not the pane.
+/// Tab from the text area passes **Add attachment** (#1464 FR-010) and lands on **Send**, and the
+/// window still holds the keyboard after the next event: a composer control has it, not the pane.
 #[test]
 fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
     let (mut state, id) = crowded();
@@ -231,6 +231,14 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
     let messages = {
         let mut mounted = Mounted::new(view(&state));
         mounted.operate(Box::new(FocusAt(area)));
+        mounted.event(&tab_released());
+        mounted.operate(Box::new(focusable::focus_next::<()>()));
+        let attach = painted_at(&StateUnderTest::new(state.clone()), "\u{e226}");
+        let at = mounted.focused().expect("Tab lands somewhere");
+        assert!(
+            at.contains(attach),
+            "Tab lands on Add attachment first: {at:?}"
+        );
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         let at = mounted.focused().expect("Tab lands somewhere");

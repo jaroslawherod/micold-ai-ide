@@ -1234,3 +1234,115 @@ mod text_area_keys {
         );
     }
 }
+
+// --- #1464 M2: the Add attachment button's reducer half (FR-007, 008, 009, 012, 013, 015) ---------
+
+/// What the shell does on a press of **Add attachment**: ask the reducer, and open the picker when
+/// it says to. `true` when a picker was opened.
+fn press_attach(state: &mut State, session: SessionId) -> bool {
+    state.attach_requested(session)
+}
+
+#[test]
+fn attach_requested_twice_opens_one_picker() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    assert!(state.can_attach(s));
+    assert!(press_attach(&mut state, s), "the first press opens it");
+    assert!(state.picker_open(s));
+    assert!(!state.can_attach(s), "the button is disabled meanwhile");
+    assert!(!press_attach(&mut state, s), "the second press opens none");
+    assert!(state.picker_open(s));
+}
+
+#[test]
+fn a_picker_open_for_one_session_does_not_block_another() {
+    let (mut state, a) = composer_in(TurnPhase::Idle);
+    let b = SessionId::new();
+    state.input_reported(b, input(TurnPhase::Idle));
+    assert!(press_attach(&mut state, a));
+    assert!(press_attach(&mut state, b));
+}
+
+#[test]
+fn attach_requested_on_a_session_that_cannot_accept_input_opens_nothing() {
+    let (mut state, s) = composer_in(TurnPhase::NotRunning);
+    assert!(!state.can_attach(s));
+    assert!(!press_attach(&mut state, s));
+    assert!(!state.picker_open(s));
+    assert_eq!(state.composer(s).and_then(|c| c.notice.as_deref()), None);
+}
+
+#[test]
+fn a_closed_picker_changes_nothing_and_says_nothing() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    state.edited(s, "draft".into(), (0, 5));
+    let before = state.composer(s).unwrap().clone();
+    assert!(press_attach(&mut state, s));
+    state.attach_picker_closed(s);
+    assert!(!state.picker_open(s));
+    assert_eq!(state.composer(s).unwrap(), &before, "no draft, no notice");
+    assert!(press_attach(&mut state, s), "it can be opened again");
+}
+
+#[test]
+fn a_result_for_a_session_that_ended_meanwhile_is_refused_with_a_notice() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    state.edited(s, "draft".into(), (0, 5));
+    assert!(press_attach(&mut state, s));
+    state.input_reported(s, input(TurnPhase::NotRunning));
+    let before = state.draft(s).unwrap().clone();
+    assert!(
+        !state.attach_picked(s, 2),
+        "nothing is to be read or applied"
+    );
+    assert!(!state.picker_open(s), "the picker is over");
+    assert_eq!(state.draft(s), Some(&before));
+    assert_eq!(
+        state.composer(s).unwrap().notice.as_deref(),
+        Some("2 files not attached: the session is not accepting input")
+    );
+}
+
+#[test]
+fn a_picked_result_lands_only_on_the_requesting_session() {
+    let (mut state, a) = composer_in(TurnPhase::Idle);
+    let b = SessionId::new();
+    state.input_reported(b, input(TurnPhase::Idle));
+    assert!(press_attach(&mut state, a));
+    assert!(state.attach_picked(a, 1));
+    state.apply_drop(a, drop_of(&["/d/a.png"], &[]), true);
+    assert_eq!(state.draft(a).unwrap().images.len(), 1);
+    assert!(state.draft(b).unwrap().images.is_empty());
+    assert!(!state.picker_open(b));
+}
+
+#[test]
+fn the_same_ordered_files_by_drop_or_by_picker_give_the_same_composer() {
+    let images = ["/d/c.png", "/d/a.png", "/d/huge.png"];
+    let paths = ["/d/my notes.txt", "/d/b.txt"];
+    // By drop.
+    let (mut dropped, s) = composer_in(TurnPhase::Idle);
+    dropped.apply_drop(s, drop_of(&images, &paths), true);
+    // By picker: button, picker, result, the shell reads the files as for a drop, then the one
+    // admission.
+    let (mut picked, p) = composer_in(TurnPhase::Idle);
+    assert!(press_attach(&mut picked, p));
+    assert!(picked.attach_picked(p, images.len() + paths.len()));
+    picked.apply_drop(p, drop_of(&images, &paths), picked.accepts_input(p));
+    let (d, k) = (dropped.composer(s).unwrap(), picked.composer(p).unwrap());
+    assert_eq!(d.draft, k.draft);
+    assert_eq!(d.notice, k.notice);
+    assert_eq!(d.draft.images.len(), 3);
+}
+
+#[test]
+fn button_press_picker_requested_then_picked_is_the_whole_flow() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    assert!(press_attach(&mut state, s));
+    assert!(state.picker_open(s));
+    assert!(state.attach_picked(s, 1), "the shell goes on to read it");
+    assert!(!state.picker_open(s));
+    state.apply_drop(s, drop_of(&["/d/a.png"], &[]), state.accepts_input(s));
+    assert_eq!(state.draft(s).unwrap().images.len(), 1);
+    assert!(state.can_attach(s), "the button is back");
+}

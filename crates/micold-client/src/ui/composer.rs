@@ -24,13 +24,15 @@ use crate::app::{EditorAction, Message, State};
 use crate::features::command_palette::{palette_key, PaletteLine, PaletteState};
 use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
 use crate::features::window::{FieldId, Msg as WindowMsg};
+use crate::icons::Icon;
 use crate::keymap::KeyInput;
 use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, CommandPalette, MenuSelect, MenuSelectRow, PromptCard,
-    QueueRow, Scrollable, Text, TextArea, TextField, TypeRole, Typeahead, TypeaheadRow,
+    AttachmentChip, BusyIndicator, Button, CommandPalette, IconButton, MenuSelect, MenuSelectRow,
+    PromptCard, QueueRow, Scrollable, Text, TextArea, TextField, Tooltip, TooltipPosition,
+    TypeRole, Typeahead, TypeaheadRow,
 };
 use iced::widget::text::Wrapping;
 use micold_core::session::SessionKind;
@@ -464,6 +466,24 @@ pub fn palette_of<'a, M: Clone + 'a>(
     palette.into()
 }
 
+/// The **Add attachment** button's tooltip (#1464 FR-006).
+pub const ATTACH_TOOLTIP: &str = "Add attachment";
+
+/// The **Add attachment** icon button with its tooltip, pressing `press`; inert without one. Also
+/// posed by the showcase (#1464 FR-014).
+pub fn attach_button<'a, M: Clone + 'a>(roles: Roles, press: Option<M>) -> Element<'a, M> {
+    Tooltip::new(
+        IconButton::new(Icon::Attach, roles)
+            .padding(spacing::SM)
+            .keyboard(true)
+            .on_press_maybe(press),
+        ATTACH_TOOLTIP,
+        roles,
+    )
+    .position(TooltipPosition::Top)
+    .into()
+}
+
 /// The text area beside #942's control, **Send** and, while busy, **Stop** (FR-004, FR-012).
 fn input_row<'a>(
     state: &'a State,
@@ -497,6 +517,14 @@ fn input_row<'a>(
     if let Some(control) = control {
         controls = controls.push(control);
     }
+    // #1464 FR-006: **Add attachment**, before Stop and Send; disabled, not hidden, while the
+    // session cannot accept input or its picker is open, so the row does not shift.
+    controls = controls.push(attach_button(
+        roles,
+        composers
+            .can_attach(session)
+            .then(|| send(Msg::AttachRequested(session))),
+    ));
     if composers.offers_stop(session) {
         controls = controls
             .push(Button::outlined("Stop", roles).on_press(send(Msg::StopRequested(session))));

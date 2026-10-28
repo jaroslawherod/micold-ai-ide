@@ -93,6 +93,7 @@ fn expected(icon: Icon) -> char {
         Icon::ReviewUnseen => '\u{ef4a}',
         Icon::ReviewDrafts => '\u{e39e}',
         Icon::ReviewDone => '\u{e876}',
+        Icon::Attach => '\u{e226}',
     }
 }
 
@@ -140,8 +141,9 @@ fn all_covers_every_variant_without_duplicates() {
     // feature 944's subagent and background-task icons (`smart_toy`, `pending_actions`), +2 for
     // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`), +1 for
     // feature 1125's sidebar more menu (`more_horiz`; `more_vert` is `Menu`'s), +3 for feature
-    // 1271's review row states (`circle`, `adjust`, `done`).
-    assert_eq!(Icon::ALL.len(), 85, "curated set size");
+    // 1271's review row states (`circle`, `adjust`, `done`), +1 for feature 1464's composer
+    // **Add attachment** button (`attach_file`).
+    assert_eq!(Icon::ALL.len(), 86, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -316,5 +318,23 @@ fn the_review_state_icons_are_pinned_and_unique() {
                 "{icon:?} and {other:?} share a codepoint"
             );
         }
+    }
+}
+
+/// Feature 1464 (research R1): the composer's Add attachment glyph is pinned, in `Icon::ALL`, and
+/// shares a codepoint with no other icon.
+#[test]
+fn the_attach_icon_is_pinned_and_unique() {
+    assert!(
+        Icon::ALL.contains(&Icon::Attach),
+        "Attach must be in Icon::ALL"
+    );
+    assert_eq!(Icon::Attach.glyph(), '\u{e226}', "attach_file");
+    for &other in Icon::ALL.iter().filter(|&&other| other != Icon::Attach) {
+        assert_ne!(
+            Icon::Attach.glyph(),
+            other.glyph(),
+            "shares a codepoint with {other:?}"
+        );
     }
 }

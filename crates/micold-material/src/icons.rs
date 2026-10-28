@@ -221,6 +221,9 @@ pub enum Icon {
     /// A review file row marked reviewed on its current change, ✓ (feature 1271) — `done`:
     /// `U+E5CA`, the same tick, is [`Icon::ChecksPassing`]'s.
     ReviewDone,
+    /// The composer's **Add attachment** button (feature 1464, research R1): Material's
+    /// `attach_file`, the paperclip.
+    Attach,
 }
 
 impl Icon {
@@ -311,6 +314,7 @@ impl Icon {
         Icon::ReviewUnseen,
         Icon::ReviewDrafts,
         Icon::ReviewDone,
+        Icon::Attach,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -426,6 +430,8 @@ impl Icon {
             Icon::ReviewUnseen => '\u{ef4a}',
             Icon::ReviewDrafts => '\u{e39e}',
             Icon::ReviewDone => '\u{e876}',
+            // Feature 1464 (research R1): `attach_file`.
+            Icon::Attach => '\u{e226}',
         }
     }
 }
