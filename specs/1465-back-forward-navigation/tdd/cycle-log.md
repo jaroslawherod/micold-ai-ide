@@ -203,3 +203,26 @@ there.
 - green: `runs::routed` copies every `GroupsChanged` list into `known[active]`, and on
   `CompareOpened` for the active project with a group missing from `groups` but in
   `known[project]` sets `groups` from it first → features_runs 57 passed.
+
+### Cycle 16 — places in another project (T028, T031, US4 AS2–AS3, FR-006, FR-007)
+
+- tests: `tests/history.rs` `back_reaches_another_projects_session_by_switching_project`,
+  `another_projects_listed_worktree_and_default_exist`,
+  `another_projects_worktree_missing_from_its_lookup_is_skipped_and_removed`,
+  `compare_of_another_project_reopens_it_with_its_last_group_list`,
+  `apply_history_switches_project_first_for_another_projects_place`; T010's
+  "another project's place is gone" test replaced. The test `send` runs `Project(Reopened)` as
+  `on_known_project_reopened` does (switch, drain, the lookup's worktrees delivered).
+- red (e6671778a, `press_history` taking a lookup it ignored): those five FAILED — `None` or
+  `/repo`'s D where `/other`'s place was expected; `apply_history` without `Project(Reopened)`.
+- guards, passed on arrival (another project was always gone): 
+  `an_unavailable_or_unknown_projects_places_are_skipped_and_removed`,
+  `compare_of_another_project_whose_group_is_gone_is_skipped_and_removed`.
+- green: `exists` per research R5 for every project (known and available, or active; worktree in
+  `worktree.worktrees` or `lookup(project)`, by `dir_name`; Compare in `runs.groups` or
+  `runs.known[project]`); `apply_history` prefixes `Project(Reopened(project))` → history 34
+  passed. Two test faults fixed on the way to green, not in the code: the unreadable-lookup case
+  reused the first fixture's session ids, and the Compare test asserted Compare closed after
+  Forward, which is the shell's `Selected` arm (covered in `main_tests`, T029).
+- decision: the lookup lists `dir_name`s, not paths: a `SessionLocation::Worktree` holds the
+  `dir_name` identity, which `reconcile` may disambiguate for included worktrees.

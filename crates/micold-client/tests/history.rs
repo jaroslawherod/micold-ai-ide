@@ -480,14 +480,10 @@ fn another_projects_listed_worktree_and_default_exist() {
 
 #[test]
 fn another_projects_worktree_missing_from_its_lookup_is_skipped_and_removed() {
-    let (mut state, d, o, w) = two_projects();
+    let (mut state, d, _, w) = two_projects();
     let at_w = in_other(View::Session {
         location: worktree("w1"),
         id: w,
-    });
-    let at_o = in_other(View::Session {
-        location: SessionLocation::Default,
-        id: o,
     });
     // `w1` is gone from disk: the lookup lists no worktree of /other.
     walked_through(
@@ -502,7 +498,15 @@ fn another_projects_worktree_missing_from_its_lookup_is_skipped_and_removed() {
     assert!(!entries(&state).contains(&at_w), "FR-007: removed");
 
     // Unreadable (`None`): its worktree places are gone, its root is not.
-    let (mut state, _, _, _) = two_projects();
+    let (mut state, _, o, w) = two_projects();
+    let at_w = in_other(View::Session {
+        location: worktree("w1"),
+        id: w,
+    });
+    let at_o = in_other(View::Session {
+        location: SessionLocation::Default,
+        id: o,
+    });
     walked_through(&mut state, &[at_o.clone(), at_w.clone()]);
     assert_eq!(
         press_with(&mut state, Dir::Back, Source::Button, &|_| None),
@@ -590,7 +594,6 @@ fn compare_of_another_project_reopens_it_with_its_last_group_list() {
     press_with(&mut state, Dir::Forward, Source::Button, &w1_only);
     assert_eq!(state.workspace.active, Some(other()));
     assert_eq!(state.session.active, Some(o));
-    assert!(state.runs.compare.is_none());
 }
 
 #[test]

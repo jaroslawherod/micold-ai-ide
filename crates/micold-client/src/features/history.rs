@@ -87,32 +87,46 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg, lookup: Lookup) -> Step {
     }
 }
 
-/// Whether `place` can still be shown (research R5), for the active project. A place of another
-/// project counts as gone (until cross-project moves, US4).
-pub fn exists(app: &crate::app::State, place: &Place, _lookup: Lookup) -> bool {
-    if app.workspace.active.as_ref() != Some(&place.project) {
+/// Whether `place` can still be shown (research R5), in any project: the project known and
+/// available (or the active one); its location listed (`worktree.worktrees` for the active project,
+/// `lookup` for another); a session not archived there; a Compare group in that project's last
+/// group list (`runs.groups`, or `runs.known` for another project).
+pub fn exists(app: &crate::app::State, place: &Place, lookup: Lookup) -> bool {
+    let project = &place.project;
+    let active = app.workspace.active.as_ref() == Some(project);
+    let available = active
+        || app.workspace.projects.iter().any(|p| {
+            &p.path == project && p.availability == micold_core::project::Availability::Available
+        });
+    if !available {
         return false;
     }
     let location_exists = |location: &SessionLocation| match location {
         SessionLocation::Default => true,
-        SessionLocation::Worktree(dir) => app.worktree.worktrees.iter().any(|w| &w.dir_name == dir),
+        SessionLocation::Worktree(dir) if active => {
+            app.worktree.worktrees.iter().any(|w| &w.dir_name == dir)
+        }
+        SessionLocation::Worktree(dir) => lookup(project).is_some_and(|dirs| dirs.contains(dir)),
     };
     match &place.view {
         View::Session { location, id } => {
             location_exists(location)
-                && app
-                    .workspace
-                    .sessions
-                    .get(&place.project)
-                    .is_some_and(|sessions| {
-                        sessions
-                            .iter()
-                            .any(|s| s.id == *id && !s.archived && &s.location == location)
-                    })
+                && app.workspace.sessions.get(project).is_some_and(|sessions| {
+                    sessions
+                        .iter()
+                        .any(|s| s.id == *id && !s.archived && &s.location == location)
+                })
         }
         View::Review(location) => location_exists(location),
         View::Overview => true,
-        View::Compare(group) => app.runs.groups.iter().any(|g| g.id == *group),
+        View::Compare(group) => {
+            let groups = if active {
+                Some(&app.runs.groups)
+            } else {
+                app.runs.known.get(project)
+            };
+            groups.is_some_and(|groups| groups.iter().any(|g| g.id == *group))
+        }
     }
 }
 
