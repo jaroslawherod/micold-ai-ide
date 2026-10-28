@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m4 (M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M4 review round 1 fixes in (A F1, F2, F4 fixed test-first, F3 accepted and pinned, TDD cycle 18; B F1, F2 rewrapped); full gate running; scoped round 2 of A and B pending
-- **Next step**: full gate, then scoped round 2 of review A and B on the fix range 27327176c..HEAD, then pr-title-m4.md / pr-body-m4.md
+- **Phase**: M4 review round 1 fixes in (A F1, F2, F4 fixed test-first, F3 accepted and pinned, TDD cycle 18; B F1, F2 rewrapped, prose only); full gate green (scripts/gate.sh at 35b176119); scoped round 2 of A and B pending on 27327176c..35b176119
+- **Next step**: scoped round 2 of review A (sonnet) and B (Verify re-run) on 27327176c..35b176119; then the M4 PR (pr-title-m4.md / pr-body-m4.md written)
 
 ## Pull requests
 
