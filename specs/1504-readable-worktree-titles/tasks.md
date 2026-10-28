@@ -289,12 +289,12 @@ each tooltip (FR-008), titles that follow their sources (FR-010).
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T047 Confirm `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs` and
+- [x] T047 Confirm `crates/micold-client/tests/issues_are_requested_only_on_named_events.rs` and
   `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs` pass with caller counts
   unchanged (L8, SC-004)
 - [x] T048 (ships in M1) Add the *Amended by 1504* notes to `specs/813-worktree-overview/spec.md` FR-015 and
   `specs/1120-overview-card-readability/spec.md` US2 scenarios 1–2 (FR-013, plan D8)
-- [ ] T049 Run quickstart.md Part A and Part B (visual pass) and record the result in
+- [ ] T050 Run quickstart.md Part A and Part B (visual pass) and record the result in
   `specs/1504-readable-worktree-titles/quickstart.md`
 
 ---
@@ -399,4 +399,4 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M1
 - **Tier**: light
 
-Polish T047 and T049 change no code: the close unit does them in the close PR. T048 ships in M1.
+Polish T047 and T050 change no code: the close unit does them in the close PR. T048 ships in M1.
