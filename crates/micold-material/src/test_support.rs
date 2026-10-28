@@ -697,3 +697,47 @@ pub fn is_bundled(db: &fontdb::Database, id: fontdb::ID, bytes: &[u8]) -> bool {
         Some(fontdb::Source::Binary(_))
     ) && db.with_face_data(id, |data, _| data == bytes) == Some(true)
 }
+
+/// Collects what every selectable leaf reports to a widget operation (feature 1550, T-6): each
+/// leaf's slot (those of type `K`), where its text starts in the slot's text, and the text.
+pub struct ShownTexts<K>(pub Vec<(K, usize, String)>);
+
+impl<K: Clone + Send + 'static> Operation<Vec<(K, usize, String)>> for ShownTexts<K> {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Vec<(K, usize, String)>>)) {
+        operate(self);
+    }
+
+    fn custom(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: Rectangle,
+        state: &mut dyn std::any::Any,
+    ) {
+        let Some(shown) = state.downcast_ref::<super::selectable_text::Shown>() else {
+            return;
+        };
+        if let Some(slot) = shown.slot.downcast_ref::<K>() {
+            self.0.push((slot.clone(), shown.base, shown.text.clone()));
+        }
+    }
+
+    fn finish(&self) -> Outcome<Vec<(K, usize, String)>> {
+        Outcome::Some(self.0.clone())
+    }
+}
+
+/// The rows of a drawn `buffer` (`width` px wide, RGBA) holding a pixel of `colour`, give or take
+/// two levels per channel: where a fill such as the selection's was painted (feature 1550).
+pub fn rows_with(buffer: &[u8], width: u32, colour: micold_core::tokens::Rgb) -> Vec<u32> {
+    let c = super::style::color(colour);
+    let want = [c.r, c.g, c.b].map(|v| (v * 255.0).round() as i32);
+    let mut rows: Vec<u32> = Vec::new();
+    for (i, px) in buffer.as_chunks::<4>().0.iter().enumerate() {
+        let close = (0..3).all(|k| (i32::from(px[k]) - want[k]).abs() <= 2);
+        let y = i as u32 / width;
+        if close && rows.last() != Some(&y) {
+            rows.push(y);
+        }
+    }
+    rows
+}

@@ -166,6 +166,32 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::text,
     },
     Entry {
+        module: "material/selectable_text.rs",
+        component: "SelectableText",
+        // `Click`: what a hit's press was — a word on `Double`, a line on `Triple` (FR-005).
+        variants: &["Single", "Double", "Triple"],
+        density: &[],
+        posed: &["nothing selected", "a range selected across rows"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::atoms::selectable_text,
+    },
+    Entry {
+        module: "material/selection_area.rs",
+        component: "SelectionArea",
+        // `Edge`: which edge a drag holds the pointer past (FR-003).
+        variants: &["Up", "Down"],
+        density: &[],
+        posed: &["around selectable text"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::atoms::selection_area,
+    },
+    Entry {
         module: "material/ellipsized.rs",
         component: "Ellipsized",
         variants: &[],
@@ -1107,7 +1133,8 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/inline_diff.rs",
         component: "InlineDiff",
-        variants: &[],
+        // `DiffPart`: the selectable parts of a diff (feature 1550; `Caption` is a `TypeRole` too).
+        variants: &["Path", "Lines"],
         density: &[],
         posed: &["an Edit", "a MultiEdit", "a Write", "a large diff"],
         live: &["scroll a long line sideways"],
@@ -1539,6 +1566,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
         reason: "the type-ahead row's label with its matched characters emphasised: public only so \
                  the review's changed-file tree can highlight its filter's matches in the same \
                  treatment (feature 1273, FR-009); every label it draws is posed by the type-ahead's \
+                 entries.",
+    },
+    Exemption {
+        module: "material/selectable_text.rs",
+        component: "Selectable",
+        reason: "the hit-testing wrapper every selectable leaf puts around what it already draws \
+                 (feature 1550): public only so the client's code block and inline diff can compose \
+                 it across the Material crate's boundary, and it draws nothing of its own — every \
+                 leaf it wraps is posed by `SelectableText`'s, `CodeBlock`'s and `InlineDiff`'s \
                  entries.",
     },
     Exemption {

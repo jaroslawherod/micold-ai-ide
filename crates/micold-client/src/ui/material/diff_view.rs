@@ -605,6 +605,49 @@ fn line_spans<'s>(
     }
 }
 
+/// [`line_text`] with the bytes of `selected` (in `content`) drawn on the selection's fill in its
+/// ink, over the syntax colours (feature 1550, FR-020).
+pub(super) fn line_text_selected<M: 'static>(
+    content: String,
+    spans: &[(std::ops::Range<usize>, Rgb)],
+    selected: std::ops::Range<usize>,
+    r: Roles,
+) -> Element<'static, M> {
+    let (fill, ink) = super::selectable_text::highlight(r);
+    let pieces = segments(&content, spans);
+    let mut at = 0;
+    let ranges: Vec<std::ops::Range<usize>> = pieces
+        .iter()
+        .map(|(piece, _)| {
+            at += piece.len();
+            at - piece.len()..at
+        })
+        .collect();
+    let mut k = 0;
+    let shown: Vec<text::Span<'static, (), Font>> =
+        super::selectable_text::split_at(ranges.iter().cloned(), Some(&selected))
+            .into_iter()
+            .map(|(range, on)| {
+                while ranges[k].end <= range.start {
+                    k += 1;
+                }
+                let piece = span(content[range].to_owned());
+                if on {
+                    piece
+                        .color(super::style::color(ink))
+                        .background(super::style::color(fill))
+                } else {
+                    piece.color(super::style::color(pieces[k].1.unwrap_or(r.on_surface)))
+                }
+            })
+            .collect();
+    rich_text(shown)
+        .font(Font::MONOSPACE)
+        .size(CODE_SIZE)
+        .wrapping(Wrapping::None)
+        .into()
+}
+
 /// A line's text in its syntax colours, the rest in `on_surface`; monospace, never wrapped (a
 /// long line is reached by scrolling the diff sideways, #1466).
 /// Shared with [`InlineDiff`](super::InlineDiff) (feature 940, research R9).

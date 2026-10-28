@@ -14,14 +14,21 @@
 //!
 //! Everything shown is owned, so the element is `'static` and can sit inside iced `lazy`.
 
+use std::ops::Range;
+use std::rc::Rc;
+
 use iced::widget::{column, container, row, text::Wrapping};
 use iced::{Alignment, Element, Length};
 use micold_core::review::diff::{LineKind, SchemeSpans, SideSpans};
 use micold_core::structured::edit_diff::{EditDiff, EditHunk};
 use micold_core::tokens::{spacing, Roles};
 
-use super::code_block::{expand_tabs, sideways, SHOW_IN_FULL};
-use super::diff_view::{large_message, line_text, marker, tinted};
+use super::code_block::{
+    code_shape, drawn_range, expand_tabs, in_line, selectable_line, sideways, MakeSelectable,
+    SHOW_IN_FULL,
+};
+use super::diff_view::{large_message, line_text, line_text_selected, marker, tinted};
+use super::selectable_text::{Hit, Measure};
 use super::{style, Button, Text, TypeRole};
 
 pub use crate::features::transcript_selection::shown::{hunk_title, note_text, NO_NEWLINE};
@@ -33,7 +40,27 @@ pub struct InlineDiff<'a, M> {
     roles: Roles,
     spans: Option<SideSpans>,
     large: Option<M>,
+    select: Option<SelectPart<M>>,
 }
+
+/// A selectable piece of an inline diff, each its own unit (feature 1550, R2): the path, hunk
+/// `h`'s caption (its name and note), and hunk `h`'s lines joined with `\n`, without the gutter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DiffPart {
+    Path,
+    Caption(usize),
+    Lines(usize),
+}
+
+/// What makes one part selectable: its selected bytes, the wrapper of a line drawn for it, and
+/// the step that makes a [`Text`] drawn for it selectable.
+struct Part<M> {
+    selected: Option<Range<usize>>,
+    make: MakeSelectable<M>,
+    text: Box<dyn FnOnce(Text<'static, M>) -> Text<'static, M>>,
+}
+
+type SelectPart<M> = Rc<dyn Fn(DiffPart) -> Part<M>>;
 
 impl<'a, M: Clone + 'static> InlineDiff<'a, M> {
     pub fn new(diff: &'a EditDiff, roles: Roles) -> Self {
@@ -42,6 +69,7 @@ impl<'a, M: Clone + 'static> InlineDiff<'a, M> {
             roles,
             spans: None,
             large: None,
+            select: None,
         }
     }
 
@@ -57,14 +85,55 @@ impl<'a, M: Clone + 'static> InlineDiff<'a, M> {
         self.large = Some(on_show);
         self
     }
+
+    /// Make the path, each hunk's caption and each hunk's lines selectable (feature 1550,
+    /// contracts/selectable-text.md): `part` names each piece's slot and selected bytes, and hits
+    /// are sent as `on_hit(slot, hit)`. The lines answer in bytes of their text joined with `\n`,
+    /// without the marker gutter or the padding. With nothing selected it draws exactly as
+    /// without this call.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        part: impl Fn(DiffPart) -> (K, Option<Range<usize>>) + 'static,
+        on_hit: impl Fn(K, Hit) -> M + 'static,
+    ) -> Self {
+        let on_hit: Rc<dyn Fn(K, Hit) -> M> = Rc::new(on_hit);
+        self.select = Some(Rc::new(move |p| {
+            let (slot, selected) = part(p);
+            let hit = Rc::clone(&on_hit);
+            let (key, range) = (slot.clone(), selected.clone());
+            Part {
+                selected,
+                make: selectable_line(slot, Rc::clone(&on_hit)),
+                text: Box::new(move |t: Text<'static, M>| {
+                    t.selectable(key, range, move |k, h| hit(k, h))
+                }),
+            }
+        }));
+        self
+    }
+}
+
+/// `text`, made selectable as `part` when the diff is.
+fn part_text<M: 'static>(
+    text: Text<'static, M>,
+    part: DiffPart,
+    select: Option<&SelectPart<M>>,
+) -> Element<'static, M> {
+    match select {
+        Some(select) => (select(part).text)(text).into(),
+        None => text.into(),
+    }
 }
 
 /// The muted caption of a hunk: its name and note.
 fn caption<M: 'static>(content: impl Into<String>, r: Roles) -> Element<'static, M> {
+    caption_text(content, r).into()
+}
+
+fn caption_text<M: 'static>(content: impl Into<String>, r: Roles) -> Text<'static, M> {
     Text::new(content.into(), TypeRole::Label, r)
         .muted()
         .wrapping(Wrapping::WordOrGlyph)
-        .into()
 }
 
 /// One diff line: its marker cell and text on its tint, the text padded with spaces to `width`
@@ -76,12 +145,24 @@ fn line_row<M: 'static>(
     text: &str,
     spans: &[(std::ops::Range<usize>, micold_core::tokens::Rgb)],
     width: usize,
+    select: Option<(&Part<M>, usize)>,
     r: Roles,
 ) -> Element<'static, M> {
-    let (mut text, spans) = expand_tabs(text, spans);
+    let line = text;
+    let (mut text, spans) = expand_tabs(line, spans);
     let pad = width.saturating_sub(text.chars().count());
     text.extend(std::iter::repeat_n(' ', pad));
-    let cells = row![marker(kind, r), line_text(text, &spans, r)]
+    let drawn = match select {
+        None => line_text(text, &spans, r),
+        Some((part, start)) => {
+            let child = match in_line(part.selected.as_ref(), start, line.len()) {
+                None => line_text(text, &spans, r),
+                Some(sel) => line_text_selected(text, &spans, drawn_range(line, &sel), r),
+            };
+            (part.make)(child, Measure::code_line(line, width, code_shape()), start)
+        }
+    };
+    let cells = row![marker(kind, r), drawn]
         .padding([0.0, spacing::XS])
         .align_y(Alignment::Center);
     tinted(cells.into(), kind, r, Length::Shrink)
@@ -109,9 +190,10 @@ fn widest<'t>(lines: impl IntoIterator<Item = &'t str>) -> usize {
 /// hunk's first line among all the diff's lines (from 1), for the spans.
 fn hunk<M: Clone + 'static>(
     h: &EditHunk,
-    show_title: bool,
+    (index, show_title): (usize, bool),
     first: u32,
     spans: &SideSpans,
+    select: Option<&SelectPart<M>>,
     r: Roles,
 ) -> Element<'static, M> {
     let mut parts = column![].spacing(spacing::XS);
@@ -123,7 +205,8 @@ fn hunk<M: Clone + 'static>(
         said.push(note_text(note).to_owned());
     }
     if !said.is_empty() {
-        parts = parts.push(caption(said.join(" · "), r));
+        let text = caption_text(said.join(" · "), r);
+        parts = parts.push(part_text(text, DiffPart::Caption(index), select));
     }
     let newline = (h.old_no_newline != h.new_no_newline).then_some(if h.old_no_newline {
         LineKind::Removed
@@ -131,11 +214,17 @@ fn hunk<M: Clone + 'static>(
         LineKind::Added
     });
     let width = widest(h.lines.iter().map(|line| line.text.as_str()));
+    let part = select.map(|select| select(DiffPart::Lines(index)));
+    let mut start = 0;
     let mut lines: Vec<Element<'static, M>> = h
         .lines
         .iter()
         .zip(first..)
-        .map(|(line, n)| line_row(line.kind, &line.text, spans.line(n), width, r))
+        .map(|(line, n)| {
+            let at = part.as_ref().map(|part| (part, start));
+            start += line.text.len() + 1;
+            line_row(line.kind, &line.text, spans.line(n), width, at, r)
+        })
         .collect();
     if let Some(kind) = newline {
         lines.push(note_row(kind, r));
@@ -150,10 +239,11 @@ impl<'a, 'b, M: Clone + 'static> From<InlineDiff<'a, M>> for Element<'b, M> {
     fn from(view: InlineDiff<'a, M>) -> Self {
         let r = view.roles;
         let diff = view.diff;
+        let select = view.select.as_ref();
         let path = Text::new(diff.path.clone(), TypeRole::Label, r)
             .monospace()
             .wrapping(Wrapping::WordOrGlyph);
-        let mut parts = column![path].spacing(spacing::SM);
+        let mut parts = column![part_text(path, DiffPart::Path, select)].spacing(spacing::SM);
         match view.large {
             Some(on_show) => {
                 parts = parts.push(
@@ -170,8 +260,8 @@ impl<'a, 'b, M: Clone + 'static> From<InlineDiff<'a, M>> for Element<'b, M> {
                 let spans = view.spans.as_ref().unwrap_or(&none);
                 let several = diff.hunks.len() > 1;
                 let mut first = 1;
-                for h in &diff.hunks {
-                    parts = parts.push(hunk(h, several, first, spans, r));
+                for (index, h) in diff.hunks.iter().enumerate() {
+                    parts = parts.push(hunk(h, (index, several), first, spans, select, r));
                     first += u32::try_from(h.lines.len()).unwrap_or(u32::MAX);
                 }
             }
@@ -187,8 +277,9 @@ impl<'a, 'b, M: Clone + 'static> From<InlineDiff<'a, M>> for Element<'b, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{roles, Mounted};
+    use super::super::test_support::{roles, Mounted, ShownTexts};
     use super::*;
+    use iced::Point;
     use micold_core::structured::edit_diff::edit_diff;
 
     fn painted(diff: &EditDiff) -> Vec<String> {
@@ -270,5 +361,79 @@ mod tests {
         assert!(painted.contains(&large_message(1, 0)), "{painted:?}");
         assert!(painted.contains(&SHOW_IN_FULL.to_string()), "{painted:?}");
         assert!(!painted.contains(&"one".to_string()), "{painted:?}");
+    }
+
+    fn selectable(diff: &EditDiff) -> InlineDiff<'_, String> {
+        InlineDiff::new(diff, roles()).selectable(
+            |part| (part, None),
+            |part: DiffPart, hit: Hit| format!("{part:?} {}", hit.offset),
+        )
+    }
+
+    fn short_and_long() -> EditDiff {
+        edit_diff(
+            "Edit",
+            r#"{"file_path":"src/a.rs","old_string":"x","new_string":"longer"}"#,
+        )
+        .expect("an Edit")
+    }
+
+    /// Feature 1550 T-4 (gate): selectable with nothing selected draws pixel-equal to the diff.
+    #[test]
+    fn a_selectable_diff_with_nothing_selected_draws_as_before() {
+        let diff = short_and_long();
+        let draw = |d: InlineDiff<'_, String>| Mounted::new(d).drawn(iced::Color::WHITE);
+        assert_eq!(
+            draw(selectable(&diff)),
+            draw(InlineDiff::new(&diff, roles()))
+        );
+    }
+
+    /// Feature 1550: the path, the hunk captions and each hunk's lines are units, the lines
+    /// without the marker gutter or the padding.
+    #[test]
+    fn the_path_captions_and_line_text_are_reported_without_the_gutter() {
+        let input = r#"{"file_path":"src/a.rs","edits":[
+            {"old_string":"x","new_string":"longer","replace_all":true},
+            {"old_string":"y","new_string":"y"}]}"#;
+        let diff = edit_diff("MultiEdit", input).expect("a MultiEdit");
+        let mut m = Mounted::new(selectable(&diff));
+        let shown = m
+            .drive(ShownTexts::<DiffPart>(Vec::new()))
+            .expect("reported");
+        let expected = [
+            (DiffPart::Path, 0, "src/a.rs".to_owned()),
+            (
+                DiffPart::Caption(0),
+                0,
+                "Edit 1 of 2 \u{b7} Replaces every occurrence".to_owned(),
+            ),
+            (DiffPart::Lines(0), 0, "x".to_owned()),
+            (DiffPart::Lines(0), 2, "longer".to_owned()),
+            (
+                DiffPart::Caption(1),
+                0,
+                "Edit 2 of 2 \u{b7} No change".to_owned(),
+            ),
+        ];
+        assert_eq!(shown[..expected.len()], expected[..], "{shown:?}");
+    }
+
+    /// Feature 1550 T-1: a press on a line answers in bytes of the hunk's joined lines.
+    #[test]
+    fn a_press_on_a_line_answers_in_bytes_of_the_joined_lines() {
+        let diff = short_and_long();
+        let mut m = Mounted::new(selectable(&diff));
+        let painted = m.painted_text();
+        let line = painted
+            .iter()
+            .find(|p| p.content.starts_with("longer"))
+            .expect("the added line is painted");
+        let advance = line.bounds.width / line.content.chars().count() as f32;
+        let at = Point::new(
+            line.bounds.x + 2.3 * advance,
+            line.bounds.y + line.bounds.height / 2.0,
+        );
+        assert_eq!(m.press(at), vec!["Lines(0) 4".to_owned()]);
     }
 }

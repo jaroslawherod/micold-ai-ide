@@ -371,7 +371,8 @@ fn the_frame_requests_are_the_guarded_one_and_the_timed_one() {
     );
 }
 
-/// The timed door has two callers: the tooltip's rest mode and the card grid's expand rest.
+/// The timed door has three callers: the tooltip's rest mode, the card grid's expand rest and the
+/// selection area's edge scroll.
 ///
 /// `wake_at` cannot spin by itself, but a component that called it on every frame with an instant
 /// a frame away would be a frame loop in two steps. So a new caller is a decision, made here: add
@@ -388,6 +389,12 @@ fn wake_at_has_only_listed_callers() {
             "ui/material/card_grid.rs",
             "asks only while its expand `ShowTimer` is waiting on a hovered card, for the instant \
              the rest ends (1121 FR-002)",
+        ),
+        (
+            "ui/material/selection_area.rs",
+            "asks only while a selection drag holds the pointer past the area's top or bottom \
+             edge, a frame ahead, so the transcript scrolls each frame; it stops when the pointer \
+             comes back or the button is released (1550 FR-003)",
         ),
     ];
 

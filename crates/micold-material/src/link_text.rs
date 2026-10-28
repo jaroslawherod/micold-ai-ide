@@ -32,6 +32,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::keyboard_focus::{Indicator, Regions, TakesTheKeyboard};
 use super::roboto::italic_has_glyph;
+use super::selectable_text::{highlight, split_at, Hit, Measure, Selectable, Shape};
 use super::{style, TypeRole};
 
 /// What a link press sends, from the link's address.
@@ -45,7 +46,17 @@ pub struct LinkText<'a, M> {
     role: TypeRole,
     muted: bool,
     strong: bool,
+    monospace: bool,
+    wrapping: Wrapping,
     on_link: Option<OnLink<M>>,
+    select: Option<Select<M>>,
+}
+
+/// What [`LinkText::selectable`] was given: the slot's report, the selected bytes and what a hit
+/// sends (feature 1550).
+struct Select<M> {
+    selected: Option<Range<usize>>,
+    make: Box<dyn FnOnce(Element<'static, M>, Measure) -> Selectable<'static, M>>,
 }
 
 impl<'a, M: Clone + 'static> LinkText<'a, M> {
@@ -57,7 +68,10 @@ impl<'a, M: Clone + 'static> LinkText<'a, M> {
             role: TypeRole::Body,
             muted: false,
             strong: false,
+            monospace: false,
+            wrapping: Wrapping::WordOrGlyph,
             on_link: None,
+            select: None,
         }
     }
 
@@ -84,6 +98,81 @@ impl<'a, M: Clone + 'static> LinkText<'a, M> {
         self.on_link = Some(Rc::new(f));
         self
     }
+
+    /// Set the text in `Font::MONOSPACE` at the role's size (code spans stay monospace anyway).
+    pub fn monospace(mut self) -> Self {
+        self.monospace = true;
+        self
+    }
+
+    /// How the text breaks when it does not fit: word, else glyph, by default.
+    pub fn wrapping(mut self, wrapping: Wrapping) -> Self {
+        self.wrapping = wrapping;
+        self
+    }
+
+    /// Make the text selectable (feature 1550, contracts/selectable-text.md): hits are sent as
+    /// `on_hit(slot, hit)`, and the bytes of `selected` are drawn on the selection's fill in its
+    /// ink. With `selected = None` it draws exactly as without this call.
+    pub fn selectable<K: Clone + 'static>(
+        mut self,
+        slot: K,
+        selected: Option<Range<usize>>,
+        on_hit: impl Fn(K, Hit) -> M + 'static,
+    ) -> Self {
+        self.select = Some(Select {
+            selected,
+            make: Box::new(move |child, measure| Selectable::new(child, measure, slot, on_hit)),
+        });
+        self
+    }
+}
+
+/// The face a markdown span is set in on `base`: monospace for code, bold for strong text or a
+/// header row, Roboto's italic for emphasis outside code.
+fn span_font(s: &Span, base: Font, strong: bool) -> Font {
+    let mut font = if s.style.code { Font::MONOSPACE } else { base };
+    if s.style.bold || strong {
+        font.weight = Weight::Bold;
+    }
+    // Emphasis draws in Roboto's own italic at the span's weight (feature 1259). Code inside
+    // emphasis stays upright: the bundled Fira Mono has no italic, and a synthesised slant would
+    // misalign the column a code span is read in.
+    if s.style.italic && !s.style.code {
+        font.style = Slant::Italic;
+    }
+    font
+}
+
+/// `spans` cut at the ends of `selected` (bytes of their joined text), each with whether it is
+/// selected.
+fn cut_at_selection(spans: &[Span], selected: Option<&Range<usize>>) -> Vec<(Span, bool)> {
+    let mut at = 0;
+    let mut ranges = Vec::with_capacity(spans.len());
+    for s in spans {
+        ranges.push(at..at + s.text.len());
+        at += s.text.len();
+    }
+    let joined: String = spans.iter().map(|s| s.text.as_str()).collect();
+    let floor = |mut i: usize| {
+        while !joined.is_char_boundary(i) {
+            i -= 1;
+        }
+        i
+    };
+    let selected = selected.map(|r| floor(r.start.min(at))..floor(r.end.min(at)));
+    let mut out = Vec::with_capacity(spans.len() + 2);
+    let mut k = 0;
+    for (piece, on) in split_at(ranges.iter().cloned(), selected.as_ref()) {
+        while ranges[k].end <= piece.start {
+            k += 1;
+        }
+        let s = &spans[k];
+        let start = piece.start - ranges[k].start;
+        let text = s.text[start..start + piece.len()].to_owned();
+        out.push((Span { text, ..s.clone() }, on));
+    }
+    out
 }
 
 /// The colour of plain text: `on_surface`, or `on_surface_variant` when muted.
@@ -110,16 +199,7 @@ fn painted(
     strong: bool,
     opens: bool,
 ) -> TextSpan<'static, String, Font> {
-    let mut font = if s.style.code { Font::MONOSPACE } else { base };
-    if s.style.bold || strong {
-        font.weight = Weight::Bold;
-    }
-    // Emphasis draws in Roboto's own italic at the span's weight (feature 1259). Code inside
-    // emphasis stays upright: the bundled Fira Mono has no italic, and a synthesised slant would
-    // misalign the column a code span is read in.
-    if s.style.italic && !s.style.code {
-        font.style = Slant::Italic;
-    }
+    let font = span_font(s, base, strong);
     let link = s.link.as_ref();
     let colour = match link {
         Some(link) if link.activatable => link_ink(r),
@@ -193,6 +273,7 @@ fn link_regions(
     size: f32,
     line_height: iced::widget::text::LineHeight,
     font: Font,
+    wrapping: Wrapping,
 ) -> Vec<Rectangle> {
     let paragraph = <iced::Renderer as iced::advanced::text::Renderer>::Paragraph::with_spans(
         iced::advanced::text::Text {
@@ -204,7 +285,7 @@ fn link_regions(
             align_x: Alignment::Default,
             align_y: alignment::Vertical::Top,
             shaping: Shaping::Advanced,
-            wrapping: Wrapping::WordOrGlyph,
+            wrapping,
         },
     );
     let mut out: Vec<Rectangle> = Vec::new();
@@ -229,24 +310,55 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
     fn from(t: LinkText<'a, M>) -> Self {
         let r = t.roles;
         let opens = t.on_link.is_some();
-        let spans = upright_where_italic_lacks(t.spans);
-        let shown: Vec<TextSpan<'static, String, Font>> = spans
+        let base = if t.monospace {
+            Font::MONOSPACE
+        } else {
+            t.role.font()
+        };
+        let upright = upright_where_italic_lacks(t.spans);
+        let selected = t.select.as_ref().and_then(|s| s.selected.as_ref());
+        let cut = cut_at_selection(&upright, selected);
+        let (fill, on_fill) = highlight(r);
+        let shown: Vec<TextSpan<'static, String, Font>> = cut
             .iter()
-            .map(|s| painted(s, t.role.font(), r, t.muted, t.strong, opens))
+            .map(|(s, on)| {
+                let p = painted(s, base, r, t.muted, t.strong, opens);
+                if *on {
+                    p.color(style::color(on_fill))
+                        .background(style::color(fill))
+                } else {
+                    p
+                }
+            })
             .collect();
+        let spans: Vec<Span> = cut.into_iter().map(|(s, _)| s).collect();
         let mut text = rich_text(shown.clone())
             .size(t.role.size())
             .line_height(t.role.line_height())
-            .font(t.role.font())
-            .wrapping(Wrapping::WordOrGlyph)
+            .font(base)
+            .wrapping(t.wrapping)
             .width(Length::Fill);
-        let Some(on_link) = t.on_link else {
-            let text: Element<'static, M> = text.into();
-            return text;
-        };
-        let press = Rc::clone(&on_link);
-        text = text.on_link_click(move |url: String| press(url));
+        if let Some(on_link) = &t.on_link {
+            let press = Rc::clone(on_link);
+            text = text.on_link_click(move |url: String| press(url));
+        }
         let mut element: Element<'static, M> = text.into();
+        if let Some(select) = t.select {
+            let shape = Shape {
+                size: t.role.size(),
+                line_height: t.role.line_height(),
+                font: base,
+                wrapping: t.wrapping,
+                shaping: Shaping::Advanced,
+            };
+            let pieces = spans
+                .iter()
+                .map(|s| (s.text.as_str(), span_font(s, base, t.strong)));
+            element = (select.make)(element, Measure::new(pieces, shape)).into();
+        }
+        let Some(on_link) = t.on_link else {
+            return element;
+        };
         // Innermost the last link, so the outermost stop, which traversal visits first, is the
         // first link. A link whose text changes style is several spans in a row with the same
         // link: one stop.
@@ -264,11 +376,12 @@ impl<'a, 'b, M: Clone + 'static> From<LinkText<'a, M>> for Element<'b, M> {
             previous = Some(link);
         }
         let shown: Rc<Vec<TextSpan<'static, String, Font>>> = Rc::new(shown);
-        let (size, line_height, font) = (t.role.size(), t.role.line_height(), t.role.font());
+        let (size, line_height, font, wrapping) =
+            (t.role.size(), t.role.line_height(), base, t.wrapping);
         for (target, run) in targets.into_iter().rev() {
             let shown = Rc::clone(&shown);
             let regions: Regions = Rc::new(move |room| {
-                link_regions(&shown, run.clone(), room, size, line_height, font)
+                link_regions(&shown, run.clone(), room, size, line_height, font, wrapping)
             });
             let message = on_link(target.to_owned());
             element = TakesTheKeyboard::new(element, true)
@@ -324,6 +437,51 @@ mod tests {
             link("mail", "mailto:dev@example.com", true),
             plain("."),
         ]
+    }
+
+    /// Review A M3 F1: an empty span (a markdown run with no text) is no piece, selected or not.
+    #[test]
+    fn an_empty_span_draws_without_a_piece_of_its_own() {
+        let spans = vec![plain(""), plain("a"), plain(""), plain("bc"), plain("")];
+        let hit = |_: &str, h: Hit| h.offset.to_string();
+        for selected in [None, Some(0..2)] {
+            let text = LinkText::new(&spans, roles()).selectable("u", selected, hit);
+            let painted: String = Mounted::new(text)
+                .painted_text()
+                .into_iter()
+                .map(|p| p.content)
+                .collect();
+            assert_eq!(painted, "abc");
+        }
+    }
+
+    /// Feature 1550 T-4 (gate): selectable with nothing selected draws pixel-equal to the link
+    /// text without `.selectable`; a selected range draws on the selection fill.
+    #[test]
+    fn selectable_link_text_draws_as_before_until_something_is_selected() {
+        let spans = sample();
+        let r = roles();
+        let room = iced::Size::new(400.0, 100.0);
+        let draw = |t: LinkText<'_, String>| Mounted::new_in(t, room).drawn(iced::Color::WHITE);
+        let on = |url: String| format!("open {url}");
+        let hit = |_: &str, h: Hit| h.offset.to_string();
+        let plain = draw(LinkText::new(&spans, r).on_link(on));
+        let none = draw(
+            LinkText::new(&spans, r)
+                .on_link(on)
+                .selectable("u", None, hit),
+        );
+        assert_eq!(none, plain);
+        let (some, width) = draw(LinkText::new(&spans, r).on_link(on).selectable(
+            "u",
+            Some(2..12),
+            hit,
+        ));
+        let fill = super::super::test_support::rows_with(&some, width, r.primary_container);
+        assert!(
+            !fill.is_empty(),
+            "the selected bytes are on primary_container"
+        );
     }
 
     fn mounted(spans: &[Span]) -> Mounted<'_> {
@@ -536,6 +694,7 @@ mod tests {
             TypeRole::Body.size(),
             TypeRole::Body.line_height(),
             TypeRole::Body.font(),
+            Wrapping::WordOrGlyph,
         );
         assert_eq!(regions.len(), 1);
     }
@@ -557,6 +716,7 @@ mod tests {
                 TypeRole::Body.size(),
                 TypeRole::Body.line_height(),
                 TypeRole::Body.font(),
+                Wrapping::WordOrGlyph,
             )
         };
         assert_eq!(regions(2000.0).len(), 1);
