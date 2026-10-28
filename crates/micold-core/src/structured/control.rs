@@ -3,6 +3,7 @@
 //! ([`StructuredEvent::ControlResponse`](super::StructuredEvent::ControlResponse)).
 //! Render-free and process-free; the daemon writes the line and waits for the answer.
 
+use super::effort::{EffortLevel, EffortRefusal};
 use super::model::{ModelChoice, ModelRefusal};
 use super::ControlOutcome;
 use crate::session::PermissionMode;
@@ -65,6 +66,27 @@ pub fn parse_set_model(outcome: &ControlOutcome) -> Result<String, ModelRefusal>
         ControlOutcome::Error { message, code } => Err(ModelRefusal::Refused {
             message: message.clone(),
             code: code.clone(),
+        }),
+    }
+}
+
+/// The line that asks the CLI to answer later turns with `level`, or with Claude Code's own
+/// default for `None` (#1554 R1, contracts/claude-effort.md); ends in `\n`.
+pub fn encode_apply_effort(request_id: &str, level: Option<&EffortLevel>) -> String {
+    let request_id = serde_json::Value::from(request_id);
+    let level = serde_json::Value::from(level.map(EffortLevel::as_str));
+    format!(
+        "{{\"type\":\"control_request\",\"request_id\":{request_id},\"request\":{{\"subtype\":\"apply_flag_settings\",\"settings\":{{\"effortLevel\":{level}}}}}}}\n"
+    )
+}
+
+/// Whether the CLI took an `apply_flag_settings` effort change: any success, since the CLI does
+/// not check the level (P-1); its refusal otherwise (FR-005).
+pub fn parse_apply_effort(outcome: &ControlOutcome) -> Result<(), EffortRefusal> {
+    match outcome {
+        ControlOutcome::Success(_) => Ok(()),
+        ControlOutcome::Error { message, .. } => Err(EffortRefusal::Refused {
+            message: message.clone(),
         }),
     }
 }
@@ -187,6 +209,44 @@ mod tests {
                 "{answer}"
             );
         }
+    }
+
+    /// #1554 T006: the two lines of contracts/claude-effort.md.
+    #[test]
+    fn apply_effort_is_the_contracts_one_line() {
+        let high = EffortLevel::parse("high").unwrap();
+        assert_eq!(
+            encode_apply_effort("micold-4", Some(&high)),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-4\",\"request\":{\"subtype\":\"apply_flag_settings\",\"settings\":{\"effortLevel\":\"high\"}}}\n"
+        );
+        assert_eq!(
+            encode_apply_effort("micold-5", None),
+            "{\"type\":\"control_request\",\"request_id\":\"micold-5\",\"request\":{\"subtype\":\"apply_flag_settings\",\"settings\":{\"effortLevel\":null}}}\n"
+        );
+        let value: serde_json::Value =
+            serde_json::from_str(&encode_apply_effort("a\"b", Some(&high))).expect("JSON");
+        assert_eq!(value["request_id"], "a\"b");
+    }
+
+    #[test]
+    fn an_apply_effort_answer_is_applied_or_the_clis_refusal() {
+        use crate::structured::ControlOutcome;
+        for answer in ["null", "{}", r#"{"anything":1}"#] {
+            assert_eq!(
+                parse_apply_effort(&ControlOutcome::Success(answer.into())),
+                Ok(()),
+                "{answer}"
+            );
+        }
+        assert_eq!(
+            parse_apply_effort(&ControlOutcome::Error {
+                message: "apply_flag_settings: settings must be an object".into(),
+                code: Some("x".into()),
+            }),
+            Err(EffortRefusal::Refused {
+                message: "apply_flag_settings: settings must be an object".into(),
+            })
+        );
     }
 
     #[test]

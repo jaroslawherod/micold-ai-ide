@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (body in the session scratchpad), waits on CI and merges; then milestone M1 (T001–T010).
+- **Phase**: M1
+- **Next step**: review A (code-review, high) on the M1 diff, run by the orchestrator in a fresh context; then review B, full gate, push and PR body.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | Design: spec, clarifications, plan, research, contracts, tasks | pushed, PR to be opened by the orchestrator | — |
+| #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | — | pending |
+| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | — | implemented; reviews pending |
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | pending |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
@@ -40,6 +40,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | plan | Does a running CLI take an effort change, or must the session relaunch? (spec Assumption 1) | Running: `apply_flag_settings {"effortLevel": level|null}`; deferred to turn end when busy, like `set_model`; `--effort` at launch in both kinds | agent-resolved | research.md P-1, P-2 (recorded against the real CLI 2.1.311), R1 |
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
+| D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
+| D10 | M1 | `/effort`'s palette entry: whose words? | The app's description replaces the CLI's (FR-009, R6); the CLI's `argumentHint` (which lists `auto`, `ultracode [on\|off]`) is kept as reported | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed` |
 
 ## Review rounds
 

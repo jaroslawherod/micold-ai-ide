@@ -521,7 +521,8 @@ impl State {
 /// How a draft of `text` is sent, with `list` the session's commands (FR-010, FR-018).
 pub(crate) fn classify(text: &str, list: &CommandList) -> Classified {
     match classify_draft(text, list) {
-        DraftCommand::Send => Classified::Message,
+        // `/effort` is sent as typed until #1554 M5 resolves it in the app.
+        DraftCommand::Send | DraftCommand::Effort(_) => Classified::Message,
         DraftCommand::Model(None) => Classified::Picker,
         DraftCommand::Model(Some(name)) => Classified::Model(model_choice(&name)),
         DraftCommand::TerminalOnly(name) => {

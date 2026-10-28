@@ -319,6 +319,7 @@ fn reported_models() -> Vec<ReportedModel> {
             value: value.into(),
             display_name: Some(value.to_uppercase()),
             description: None,
+            effort: None,
         })
         .collect()
 }
