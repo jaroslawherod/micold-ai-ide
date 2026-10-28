@@ -106,7 +106,8 @@ pub struct State {
     /// The spec and commit facts per worktree directory name (feature 1504, L7). Cleared on a
     /// project switch; a directory no longer asked for is pruned when facts are stored.
     pub facts: BTreeMap<String, TitleFacts>,
-    /// The last facts round asked for: bumped by each [`Msg::TitleFactsRequested`].
+    /// The last facts round asked for: bumped by each [`Msg::TitleFactsRequested`], and never
+    /// reset, so a round is unique across project switches.
     pub facts_round: u64,
     /// The round last asked for, per worktree directory name: only that round's answer is stored.
     pub facts_asked: BTreeMap<String, u64>,
@@ -468,7 +469,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.progress.clear();
             state.titles.clear();
             state.facts.clear();
-            state.facts_round = 0;
+            // The round keeps counting: a late answer from an earlier visit to the same project
+            // carries an older round than this visit's, so it is dropped (L7).
             state.facts_asked.clear();
             state.card_menu = None;
             state.focus_return = None;

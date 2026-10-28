@@ -512,7 +512,36 @@ mod title_facts {
         update(&mut state, Msg::ProjectSwitched);
         assert!(state.facts.is_empty());
         assert!(state.facts_asked.is_empty());
-        assert_eq!(state.facts_round, 0);
+        assert_eq!(
+            state.facts_round, 1,
+            "the round keeps counting across projects"
+        );
+    }
+
+    /// L7 (review A F2): A → B → A inside the read deadline: the first visit's answer still in
+    /// flight carries an older round than the second visit's, so it is dropped, not stored.
+    #[test]
+    fn a_late_answer_from_an_earlier_visit_to_the_project_is_dropped() {
+        let mut app = App::default();
+        app.workspace.active = Some(project());
+        app.update(Message::Overview(requested(&[DIR])));
+        let first_visit = app.overview.facts_round;
+        app.update(Message::Overview(Msg::ProjectSwitched));
+        app.update(Message::Overview(Msg::ProjectSwitched));
+        app.update(Message::Overview(requested(&[DIR])));
+        app.update(Message::Overview(read(
+            DIR,
+            first_visit,
+            facts(Some("stale"), None),
+        )));
+        assert!(app.overview.facts.is_empty(), "the first visit's answer");
+        let second_visit = app.overview.facts_round;
+        app.update(Message::Overview(read(
+            DIR,
+            second_visit,
+            facts(Some(SPEC), None),
+        )));
+        assert_eq!(app.overview.facts.get(DIR), Some(&facts(Some(SPEC), None)));
     }
 
     /// L9: a debug dump of the facts, or of the message carrying them, holds no text.
