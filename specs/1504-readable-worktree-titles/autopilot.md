@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); not pushed
-- **Next step**: full gate on M4, then orchestrator runs M4 review A (code-review high) and review B (conformance, sonnet) on `2d4d8fb10..HEAD` and the M4 visual pass
+- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 72832ebf8; not pushed
+- **Next step**: orchestrator runs M4 review A (code-review high) and review B (conformance, sonnet) on `2d4d8fb10..72832ebf8` and the M4 visual pass; then fill REVIEW_A/REVIEW_B/VISUAL_PASS/GATE_LINE in scratchpad pr-body-m4.md and open the M4 PR after M3's
 
 ## Pull requests
 
@@ -70,6 +70,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CHANGES: 1 MAJOR, 1 MINOR. F1 [MAJOR] fixed: `with_title_line` skipped the source line for a Branch title (L3 exempts only Folder); now only Folder names no source, and a title that repeats the Name/Branch line is dropped but its words stay (`Branch name\n{tooltip}`); test rewritten, worktrees-and-sessions.md aligned with overview.md. F2 [MINOR] deferred to M4 (Follow-ups) |
 | M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | pending (orchestrator, sonnet; fix diff `review-snapshot.sh diff bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc` = `253f3f912..e51e05b76`; re-run Verify) |
 | M3 visual pass | 1 | e51e05b76 | pending (title, row tooltip, header tooltip, expanded card for rows A, C, E, G, I, a folder-titled and a renamed worktree; Refresh E/G) |
+| M4 review A (code-review high) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | pending (orchestrator; diff `2d4d8fb10..72832ebf8`) |
+| M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | pending (orchestrator, rubric `.claude/skills/speckit-autopilot/rubrics/conformance.md`, brief `brief.py milestone specs/1504-readable-worktree-titles M4`, diff `2d4d8fb10..72832ebf8`) |
+| M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
 
 ## Red runs (M4)
 
