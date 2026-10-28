@@ -278,8 +278,15 @@ fn excluding_both(issues: Vec<Issue>, complete: bool) -> State {
 fn the_default_filter_loads_034s_listing() {
     let mut state = available();
     send(&mut state, Msg::SourceChanged(BranchSource::Issue));
-    assert!(state.worktree_form.awaited_issue_load().is_some());
-    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert!(
+        state.worktree_form.awaited_issue_load().is_some(),
+        "the listing is awaited"
+    );
+    assert_eq!(
+        state.worktree_form.github_filtered_load(),
+        None,
+        "no scoped search is awaited"
+    );
     assert_eq!(
         form(&state).issue_notice().as_deref(),
         Some("Reads open issues of o/r from GitHub.")
@@ -381,6 +388,7 @@ fn a_label_chosen_in_one_list_moves_when_chosen_in_the_other() {
 }
 
 /// US1 AS5: removing one value keeps the others; Clear filters is 034's listing again.
+/// US1 AS6, FR-007: the active line is gone after Clear filters (the naming half is in `the_statement_names_the_filter_while_one_is_active`).
 #[test]
 fn removing_a_value_and_clear_filters() {
     let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], true);
@@ -388,10 +396,24 @@ fn removing_a_value_and_clear_filters() {
     let (_, _, search) = state.worktree_form.github_filtered_load().unwrap();
     assert_eq!(search.as_str(), EXCLUDE_IN_PROGRESS);
     filter(&mut state, GithubMsg::ClearedAll);
-    assert!(form(&state).github_selector.basic.is_default());
-    assert!(state.worktree_form.awaited_issue_load().is_some());
-    assert_eq!(state.worktree_form.github_filtered_load(), None);
-    assert_eq!(form(&state).github_selector.active_line(), None);
+    assert!(
+        form(&state).github_selector.basic.is_default(),
+        "Clear filters resets the filters"
+    );
+    assert!(
+        state.worktree_form.awaited_issue_load().is_some(),
+        "the listing is awaited"
+    );
+    assert_eq!(
+        state.worktree_form.github_filtered_load(),
+        None,
+        "no scoped search is awaited"
+    );
+    assert_eq!(
+        form(&state).github_selector.active_line(),
+        None,
+        "no active line without filters"
+    );
     // Clearing nothing reloads nothing.
     let seq = state.worktree_form.issue_request_seq;
     filter(&mut state, GithubMsg::ClearedAll);
@@ -1029,8 +1051,15 @@ fn another_project_opens_with_its_own_filters_or_the_default() {
     assert_eq!(search.as_str(), INCLUDE_BUG);
 
     let none = reopened(RememberedSelector::default());
-    assert_eq!(none.worktree_form.github_filtered_load(), None);
-    assert!(none.worktree_form.awaited_issue_load().is_some());
+    assert_eq!(
+        none.worktree_form.github_filtered_load(),
+        None,
+        "nothing remembered: no scoped search is awaited"
+    );
+    assert!(
+        none.worktree_form.awaited_issue_load().is_some(),
+        "nothing remembered: the listing is awaited"
+    );
     assert!(form(&none).github_selector.basic.is_default());
     assert_eq!(form(&none).github_selector.active_line(), None);
 }
@@ -1247,9 +1276,20 @@ fn all_sends_no_state_term_and_open_is_the_default_listing() {
     assert_eq!(form(&state).github_selector.basic.chosen_count(), 1);
 
     filter(&mut state, GithubMsg::StateChosen(IssueState::Open));
-    assert_eq!(state.worktree_form.github_filtered_load(), None);
-    assert!(state.worktree_form.awaited_issue_load().is_some());
-    assert_eq!(form(&state).github_selector.basic.chosen_count(), 0);
+    assert_eq!(
+        state.worktree_form.github_filtered_load(),
+        None,
+        "Open is the default: no scoped search is awaited"
+    );
+    assert!(
+        state.worktree_form.awaited_issue_load().is_some(),
+        "Open is the default: the listing is awaited"
+    );
+    assert_eq!(
+        form(&state).github_selector.basic.chosen_count(),
+        0,
+        "Open counts as no choice"
+    );
 }
 
 /// US5 AS3, FR-017: a closed issue picks like an open one.
@@ -2320,117 +2360,172 @@ fn a_milestone_failure_retries_and_none_open_says_so() {
     );
 }
 
-/// US6 AS4, FR-021: each choice reloads once with its term ANDed with the labels and the state,
-/// and is remembered; "Any …" clears it.
-#[test]
-fn each_us6_choice_is_one_listing_anded_with_the_others_and_remembered() {
+/// The three US6 choices on top of an excluded label and Closed, answered by one served listing.
+struct Us6Chosen {
+    state: State,
+    expected: BasicFilters,
+    seq: u64,
+    /// Per choice: what it emitted, the filters it should have remembered, the request sequence.
+    picks: Vec<(Vec<Outcome>, BasicFilters, u64)>,
+    fake: FakeIssueSource,
+}
+
+fn us6_chosen() -> Us6Chosen {
     let mut state = shown(default_issues());
     with_labels(&mut state);
     pick(&mut state, LabelList::Exclude, "blocked");
     filter(&mut state, GithubMsg::StateChosen(IssueState::Closed));
     let mut expected = excluding_labels(&["blocked"]);
     expected.set_state(IssueState::Closed);
-
     let seq = state.worktree_form.issue_request_seq;
+    let mut picks = Vec::new();
+
     filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
     expected.set_assignee(Some(Assignee::Nobody));
-    assert_eq!(
-        pick_value(
-            &mut state,
-            ValueField::Assignee,
-            ValueAction::Assignee(Assignee::Nobody)
-        ),
-        remembers(expected.clone())
+    let out = pick_value(
+        &mut state,
+        ValueField::Assignee,
+        ValueAction::Assignee(Assignee::Nobody),
     );
-    assert_eq!(
-        state.worktree_form.issue_request_seq,
-        seq + 1,
-        "one listing"
-    );
-    assert_eq!(
-        form(&state)
-            .github_selector
-            .value_field(ValueField::Assignee)
-            .query,
-        "No assignee"
-    );
+    picks.push((out, expected.clone(), state.worktree_form.issue_request_seq));
 
     filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
     expected.set_author(Some(Author::Me));
-    assert_eq!(
-        pick_value(
-            &mut state,
-            ValueField::Author,
-            ValueAction::Author(Author::Me)
-        ),
-        remembers(expected.clone())
+    let out = pick_value(
+        &mut state,
+        ValueField::Author,
+        ValueAction::Author(Author::Me),
     );
+    picks.push((out, expected.clone(), state.worktree_form.issue_request_seq));
 
     filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
     serve_milestones(&mut state, &["v2.4"]);
     expected.set_milestone(Some(titled("v2.4")));
-    assert_eq!(
-        pick_value(
-            &mut state,
-            ValueField::Milestone,
-            ValueAction::Milestone(titled("v2.4"))
-        ),
-        remembers(expected.clone())
-    );
-    assert_eq!(state.worktree_form.issue_request_seq, seq + 3);
-    let fake = FakeIssueSource::new().with_search_pages(vec![Ok(page(Vec::new(), 0, None))]);
-    assert!(serve(&mut state, &fake));
-    assert_eq!(
-        fake.asked_searches(),
-        ["repo:o/r is:issue is:closed -label:\"blocked\" no:assignee author:@me milestone:\"v2.4\" sort:updated-desc"]
-    );
-    assert_eq!(
-        form(&state).github_selector.active_line().as_deref(),
-        Some("Excluding labels blocked; Closed issues; No assignee; By me; Milestone v2.4")
-    );
-    assert_eq!(form(&state).github_selector.basic.chosen_count(), 5);
-
-    // The same choice again changes nothing.
-    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
-    assert!(pick_value(
+    let out = pick_value(
         &mut state,
-        ValueField::Author,
-        ValueAction::Author(Author::Me)
-    )
-    .is_empty());
+        ValueField::Milestone,
+        ValueAction::Milestone(titled("v2.4")),
+    );
+    picks.push((out, expected.clone(), state.worktree_form.issue_request_seq));
 
-    // "Any …" clears each.
+    let fake = FakeIssueSource::new().with_search_pages(vec![Ok(page(Vec::new(), 0, None))]);
+    assert!(serve(&mut state, &fake), "the last listing is served");
+    Us6Chosen {
+        state,
+        expected,
+        seq,
+        picks,
+        fake,
+    }
+}
+
+/// US6 AS4, FR-021: each choice reloads once with its term ANDed with the labels and the state,
+/// and is remembered.
+#[test]
+fn each_us6_choice_is_one_listing_anded_with_the_others_and_remembered() {
+    let chosen = us6_chosen();
+    for (n, (out, snapshot, request_seq)) in chosen.picks.iter().enumerate() {
+        assert_eq!(
+            out,
+            &remembers(snapshot.clone()),
+            "choice {n} is remembered with the filters so far"
+        );
+        assert_eq!(
+            *request_seq,
+            chosen.seq + 1 + n as u64,
+            "choice {n} is one listing"
+        );
+    }
+    let state = &chosen.state;
+    assert_eq!(
+        form(state)
+            .github_selector
+            .value_field(ValueField::Assignee)
+            .query,
+        "No assignee",
+        "the assignee field shows the choice"
+    );
+    assert_eq!(
+        chosen.fake.asked_searches(),
+        ["repo:o/r is:issue is:closed -label:\"blocked\" no:assignee author:@me milestone:\"v2.4\" sort:updated-desc"],
+        "the one search ANDs every term"
+    );
+    assert_eq!(
+        form(state).github_selector.active_line().as_deref(),
+        Some("Excluding labels blocked; Closed issues; No assignee; By me; Milestone v2.4"),
+        "the active line names every choice"
+    );
+    assert_eq!(
+        form(state).github_selector.basic.chosen_count(),
+        5,
+        "five choices are counted"
+    );
+}
+
+/// US6 AS4: the same choice again changes nothing.
+#[test]
+fn repeating_a_us6_choice_changes_nothing() {
+    let mut chosen = us6_chosen();
+    let state = &mut chosen.state;
+    filter(state, GithubMsg::ValueFocused(ValueField::Author));
+    assert!(
+        pick_value(state, ValueField::Author, ValueAction::Author(Author::Me)).is_empty(),
+        "a repeated choice emits nothing to remember or load"
+    );
+}
+
+/// US6 AS4, FR-021: "Any …" clears that choice and remembers the rest.
+#[test]
+fn any_clears_a_us6_choice_and_remembers_the_rest() {
+    let mut chosen = us6_chosen();
+    let state = &mut chosen.state;
+    let mut expected = chosen.expected.clone();
     expected.set_author(None);
     assert_eq!(
-        pick_value(&mut state, ValueField::Author, ValueAction::Any),
-        remembers(expected.clone())
+        pick_value(state, ValueField::Author, ValueAction::Any),
+        remembers(expected.clone()),
+        "Any author is remembered"
     );
     assert_eq!(
-        form(&state)
+        form(state)
             .github_selector
             .value_field(ValueField::Author)
             .query,
-        ""
+        "",
+        "Any author empties the author field"
     );
     expected.set_assignee(None);
-    filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
+    filter(state, GithubMsg::ValueFocused(ValueField::Assignee));
     assert_eq!(
-        pick_value(&mut state, ValueField::Assignee, ValueAction::Any),
-        remembers(expected.clone())
+        pick_value(state, ValueField::Assignee, ValueAction::Any),
+        remembers(expected.clone()),
+        "Any assignee is remembered"
     );
-    // Clear filters clears the values and their fields' text.
+}
+
+/// US6 AS4, FR-021: Clear filters clears the values and their fields' text.
+#[test]
+fn clear_filters_clears_the_us6_values_and_their_fields() {
+    let mut chosen = us6_chosen();
+    let state = &mut chosen.state;
     assert_eq!(
-        value(&mut state, GithubMsg::ClearedAll),
-        remembers(BasicFilters::default())
+        value(state, GithubMsg::ClearedAll),
+        remembers(BasicFilters::default()),
+        "Clear filters remembers the default filters"
     );
     assert_eq!(
-        form(&state)
+        form(state)
             .github_selector
             .value_field(ValueField::Milestone)
             .query,
-        ""
+        "",
+        "Clear filters empties the milestone field"
     );
-    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert_eq!(
+        state.worktree_form.github_filtered_load(),
+        None,
+        "Clear filters is 034's listing again"
+    );
 }
 
 /// FR-021: what a session remembers of the US6 values reopens as one listing with their terms,

@@ -47,3 +47,16 @@ issue title without a restart (SC-003).
 
 Platforms: run the table on Linux, macOS and Windows (a branch with `\`-free non-ASCII name, e.g.
 `feat/1504_überblick`, still yields ticket 1504; spec with CRLF and BOM still gives its title).
+
+## Results (close unit, 2026-10-28)
+
+**Part A**: passed. `scripts/gate.sh` (fmt, clippy core and workspace, `cargo test --workspace`,
+script tests) exited 0 on the stacked tree (ledger, *Review rounds*, row "Close gate"). Its run
+included `issues_are_requested_only_on_named_events` and `jira_is_requested_only_on_named_events`,
+with caller counts unchanged (L8, SC-004). The close PR adds two tests (mutation survivors), and the full gate ran again with them.
+
+**Part B**: passed milestone by milestone, with screenshots in `/mnt/project-files/issue-1504/`:
+M1 rows A, B and rename (light and dark), M2 rows C and D (the stub Jira request asks status and
+summary, including ABC-43), M3 7 of 7 (prefix `m3-`), M4 rows F and H with Refresh (prefix `m4-`).
+M5 needed no visual pass because it changed no UI; its Retry row is covered by the reducer and
+mapping tests (`titles_to_fetch_*`, `title_answer_*`, `title_tests`).

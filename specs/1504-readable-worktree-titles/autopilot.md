@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M5 implemented on 1504-m5 (T042–T046), full gate green, reviews A/B pending; earlier: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
-- **Next step**: orchestrator runs scoped M4 review A round 2 (sonnet) on fix range `6abaeabc2..5c220dc75`, and the M4 visual pass; then fill REVIEW_A2/VISUAL_PASS in scratchpad pr-body-m4.md and open the M4 PR after M3's
+- **Phase**: done — close PR ready on branch 1504-close (rebased onto origin/main 4317a0a3a); not pushed, title/body in scratchpad pr-title-close.md / pr-body-close.md
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,8 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1566 | M1 | merged | 2104379be |
 | #1568 | M2 | merged | fb29142a7 |
 | — | M3 | #1572, merged | 6f67d1beb |
-| — | M4 | pending (not opened; branch 1504-m4, stacked on M3) | — |
-| — | M5 | pending (not opened; branch 1504-m5, stacked on M4) | — |
+| — | M4 | #1575, merged | 0045f46e6 |
+| — | M5 | #1580, merged | 4317a0a3a |
+| — | close | ready (branch 1504-close; the orchestrator pushes and opens it; "Fixes #1504") | — |
 
 ## Milestones
 
@@ -75,6 +76,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
 | M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
+| Close: tdd-verify (autopilot-worker) | 1 | b240c4c70 (`tdd/verification.md`) | FAIL on process evidence only (M1 and fix-test reds missing; no unbuilt behaviour; 3 of 3 mutants caught). Remediated with after-the-fact mutation red runs for M1 T002–T005, T009–T012, F1–F3 and M5 A1–A4, B2: 22 of 24 mutants caught at first; the 2 survivors (empty branch accepted by `choose`; `worktree_tickets` passing no branch) were killed by new tests `an_empty_branch_falls_through_to_the_folder` (red: `left: (Branch, "")`) and `title_answer_a_ticket_only_in_the_branch_is_asked_for` (red: `left: []`), each green on the real code; the restoring edits changed no code |
+| Close diff review (sonnet) | 1 | `git diff 1e4021a18..HEAD` | CHANGES (2 MAJOR, 2 MINOR), all fixed: spec Status names the close PR; quickstart Part A gate claim has the row below; visual passes recorded (M3 PASS 7 of 7, M4 PASS, M5 none needed: no UI changed) and T050 ticked; M4/M5 merge SHAs filled |
+| M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | CLEAN (1 MINOR, no change) |
+| M5 round 2 (combined A+B, scoped, sonnet) | 2 | — | CLEAN, 1 MINOR fixed (107-column comment in `request_titles`) |
+| Close: speckit-converge | — | — | skipped: with the two rows above every milestone has a CLEAN review B (M1 r1, M2 r1 fixed then accepted, M3 r2, M4 r1, M5 r2) |
+| Close gate | — | close HEAD with the two new tests | full `scripts/gate.sh` exit 0 (fmt, clippy, workspace tests, script tests) on the rebased tree including the two test-strength tests |
 
 ## Red runs (M5)
 

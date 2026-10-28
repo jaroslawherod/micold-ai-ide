@@ -932,11 +932,14 @@ still show under its old labels. Change a filter, or clear them, to ask again.
 With the Jira integration on and the project connected, a worktree named for one of its tickets
 shows the ticket's current status (for example **In Review**) as a chip on the second line of its
 row in the sidebar, and on the worktree's card in the [Overview](overview.md). A finished ticket
-keeps showing its status. A worktree whose ticket is not in the connected project, or whose ticket Jira does not know or cannot show you, has no chip.
+keeps showing its status. A worktree whose ticket is not in the connected project, or whose ticket
+Jira does not know or cannot show you, has no chip.
 
 The status is read when a project opens, and again when the window regains focus after the last
 read is more than five minutes old, so it follows a ticket a teammate moved without a restart. The
-tickets of all the project's worktrees are read together in one request (up to 100 at a time).
+tickets of all the project's worktrees are read together in one request (up to 100 at a time). The
+same request also reads each ticket's title, including the title of a ticket named only in a
+worktree's branch, which has no chip (see [Title](overview.md#title)).
 
 When a read fails (you are offline, the token is rejected, Jira is unavailable), the last status
 stays on screen as a dimmed chip, and its tooltip adds "may be out of date". Nothing else changes

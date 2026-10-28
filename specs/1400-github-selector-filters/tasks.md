@@ -215,7 +215,17 @@ milestone (no milestone, an open milestone).
 
 ## Phase 10: Polish
 
-- [ ] T061 Run quickstart §B B1–B18 with the `visual-pass` skill (B17 by hand with a real `gh` when available) and record the results in `specs/1400-github-selector-filters/visual/close.md`
+- [x] T061 Run quickstart §B B1–B18 with the `visual-pass` skill (B17 by hand with a real `gh` when available) and record the results in `specs/1400-github-selector-filters/visual/close.md`
+
+---
+
+## Phase 11: TDD remediation
+
+From `tdd/verification.md` (PASS_WITH_GAPS, 2026-10-28). None blocks the feature: no HIGH finding.
+
+- [x] T062 [P] Finding 1: give the unlabelled one-line assertions in `crates/micold-client/tests/github_filter_state.rs` (e.g. lines 281, 282, 392, 1033, 1251) a message naming the rule, as the TDD profile's convention asks; `cargo test -p micold-client --test github_filter_state` stays green (74 passed after T063)
+- [x] T063 Finding 2: split `each_us6_choice_is_one_listing_anded_with_the_others_and_remembered` (`crates/micold-client/tests/github_filter_state.rs:2326`) into one test per behaviour (one listing ANDed, a repeat remembers nothing, "Any …" clears, Clear filters clears the fields), each assertion labelled; same command, same behaviours asserted
+- [x] T064 [P] Finding 3: name US1 AS6 / FR-007 in the doc comment of a test asserting the active line (`crates/micold-client/tests/github_filter_state.rs`, e.g. `removing_a_value_and_clear_filters`); prose only
 
 ---
 
