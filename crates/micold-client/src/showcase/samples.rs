@@ -294,7 +294,12 @@ pub fn title_sources() -> Vec<(&'static str, micold_core::location_title::TitleS
             TitleSource::JiraIssue("ABC-42".into()),
         ),
         ("Add readable titles", TitleSource::PullRequest(1520)),
+        (
+            "Overview cards, readable layout and content",
+            TitleSource::Spec,
+        ),
         ("Fix the flaky resize test", TitleSource::Session),
+        ("fix(overview): wrap long titles", TitleSource::Commit),
         ("claude/project-thread-7041o6", TitleSource::Branch),
         ("project-thread-7041o6", TitleSource::Folder),
     ]

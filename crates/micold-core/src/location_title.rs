@@ -121,6 +121,33 @@ pub fn first_line(text: &str) -> Option<&str> {
     (!line.is_empty()).then_some(line)
 }
 
+/// The title in a feature spec's heading (FR-012, L4): its first `# ` line, normalised as
+/// [`first_line`], without the `Feature Specification:` prefix. `None` without such a line, and
+/// for the template's `[FEATURE NAME]` or any other text that is only a `[...]` placeholder.
+pub fn spec_title(text: &str) -> Option<String> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let heading = text.lines().find_map(|line| line.strip_prefix("# "))?;
+    let heading = first_line(heading)?;
+    let title = heading
+        .strip_prefix("Feature Specification:")
+        .unwrap_or(heading)
+        .trim();
+    let placeholder = title.starts_with('[') && title.ends_with(']');
+    (!title.is_empty() && !placeholder).then(|| title.to_string())
+}
+
+/// The spec heading title of the worktree at `root` (FR-001 item 4, L7): the `spec.md` of the
+/// folder `.specify/feature.json` names, else of the one `specs/<ticket>-*` folder. `ticket` is the
+/// number of the worktree's GitHub title ticket. Blocking I/O: call it off the UI thread. A
+/// missing, unreadable or huge file gives none.
+pub fn read_spec_title(root: &std::path::Path, ticket: Option<u64>) -> Option<String> {
+    let ticket = ticket.map(|number| number.to_string());
+    let folder = crate::task_progress::feature_folder(root, ticket.as_deref())?;
+    spec_title(&crate::task_progress::read_text(
+        &root.join(folder).join("spec.md"),
+    )?)
+}
+
 /// The location title (FR-001, L1): the first input in order that gives a text. The issue title
 /// counts only for its ticket's kind; `branch` and `display_name` are used as they are.
 pub fn choose(inputs: &TitleInputs) -> LocationTitle {
@@ -443,5 +470,116 @@ mod tests {
         for (source, words) in rows {
             assert_eq!(source.words().as_deref(), words, "{source:?}");
         }
+    }
+
+    // ---- L4: spec headings ----
+
+    #[test]
+    fn a_spec_heading_loses_its_feature_specification_prefix() {
+        assert_eq!(
+            spec_title(
+                "# Feature Specification: Overview cards, readable layout and content\n\nbody"
+            )
+            .as_deref(),
+            Some("Overview cards, readable layout and content")
+        );
+        assert_eq!(
+            spec_title("\u{feff}# Feature Specification:   Padded  \r\nnext").as_deref(),
+            Some("Padded")
+        );
+        assert_eq!(
+            spec_title("Some preamble\n\n# A plain heading\n## Sub").as_deref(),
+            Some("A plain heading"),
+            "the first `# ` line, without the prefix it lacks"
+        );
+    }
+
+    #[test]
+    fn a_placeholder_or_missing_spec_heading_gives_no_title() {
+        for text in [
+            "# Feature Specification: [FEATURE NAME]\n",
+            "# [Some placeholder]\n",
+            "# Feature Specification:\n",
+            "## Only a second-level heading\n",
+            "No heading at all\n",
+            "",
+        ] {
+            assert_eq!(spec_title(text), None, "{text:?}");
+        }
+    }
+
+    fn write(root: &std::path::Path, path: &str, text: &[u8]) {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, text).unwrap();
+    }
+
+    #[test]
+    fn the_spec_title_is_read_from_the_folder_feature_json_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            root,
+            ".specify/feature.json",
+            br#"{"feature_directory":"specs/900-named"}"#,
+        );
+        write(
+            root,
+            "specs/900-named/spec.md",
+            b"# Feature Specification: Named\n",
+        );
+        write(
+            root,
+            "specs/1504-ticket/spec.md",
+            b"# Feature Specification: Ticket\n",
+        );
+        assert_eq!(read_spec_title(root, Some(1504)).as_deref(), Some("Named"));
+    }
+
+    #[test]
+    fn without_feature_json_the_spec_folder_of_the_ticket_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            root,
+            "specs/1504-ticket/spec.md",
+            "\u{feff}# Feature Specification: Windows heading\r\n\r\nbody\r\n".as_bytes(),
+        );
+        write(
+            root,
+            "specs/1503-other/spec.md",
+            b"# Feature Specification: Other\n",
+        );
+        assert_eq!(
+            read_spec_title(root, Some(1504)).as_deref(),
+            Some("Windows heading"),
+            "CRLF and a BOM"
+        );
+        assert_eq!(read_spec_title(root, None), None, "no ticket, no folder");
+        assert_eq!(read_spec_title(root, Some(42)), None, "no folder for 42");
+    }
+
+    #[test]
+    fn a_missing_spec_file_or_worktree_gives_no_spec_title() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("specs/1504-empty")).unwrap();
+        assert_eq!(read_spec_title(root, Some(1504)), None);
+        assert_eq!(read_spec_title(&root.join("missing"), Some(1504)), None);
+    }
+
+    #[test]
+    fn a_worktree_with_a_non_ascii_path_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("wt-überblick");
+        write(
+            &root,
+            "specs/7-ü/spec.md",
+            "# Feature Specification: Überblick\n".as_bytes(),
+        );
+        assert_eq!(
+            read_spec_title(&root, Some(7)).as_deref(),
+            Some("Überblick")
+        );
     }
 }

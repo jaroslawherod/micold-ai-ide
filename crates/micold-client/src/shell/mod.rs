@@ -38,6 +38,7 @@ pub mod jira_refresh;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;
+pub mod location_titles;
 pub mod navigation;
 pub mod os_theme;
 pub mod overview_watch;

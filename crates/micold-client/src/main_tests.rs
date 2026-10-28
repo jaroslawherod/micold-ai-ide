@@ -17018,3 +17018,128 @@ mod github_selector_remembered {
         );
     }
 }
+
+// --- 1504 (T036, FR-006, L7): the spec and commit facts are asked on every list change -----
+
+mod title_facts {
+    use super::*;
+    use micold_client::features::overview::Msg as OverviewMsg;
+    use micold_client::features::worktree::Msg as WorktreeMsg;
+    use micold_client::features::worktree_form::Msg as FormMsg;
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+
+    fn project() -> PathBuf {
+        PathBuf::from("/repo")
+    }
+
+    fn worktree_at(dir: &str, path: PathBuf) -> Worktree {
+        Worktree {
+            dir_name: dir.into(),
+            path,
+            branch: Some(format!("claude/{dir}")),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }
+    }
+
+    fn worktree(dir: &str) -> Worktree {
+        worktree_at(dir, project().join(".claude/worktrees").join(dir))
+    }
+
+    fn app() -> App {
+        let mut app = base_app();
+        app.core.workspace.active = Some(project());
+        app
+    }
+
+    fn asked(app: &App) -> Vec<&str> {
+        app.core
+            .overview
+            .facts_asked
+            .keys()
+            .map(String::as_str)
+            .collect()
+    }
+
+    fn listed(app: &mut App, dirs: &[&str]) {
+        let list = dirs.iter().map(|dir| worktree(dir)).collect();
+        let _ = crate::update(app, Message::Worktree(WorktreeMsg::Loaded(list)));
+    }
+
+    #[test]
+    fn title_facts_a_listing_asks_for_every_listed_dir() {
+        let mut app = app();
+        listed(&mut app, &["a", "b"]);
+        assert_eq!(asked(&app), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn title_facts_a_created_or_included_worktree_is_asked_for() {
+        let mut app = app();
+        listed(&mut app, &["a"]);
+        let _ = crate::update(
+            &mut app,
+            Message::WorktreeForm(FormMsg::Created(worktree("b"))),
+        );
+        assert_eq!(asked(&app), vec!["a", "b"], "created");
+        let mut included = worktree("c");
+        included.included = true;
+        included.path = PathBuf::from("/elsewhere/c");
+        let _ = crate::update(&mut app, Message::Worktree(WorktreeMsg::Included(included)));
+        assert_eq!(asked(&app), vec!["a", "b", "c"], "included");
+    }
+
+    #[test]
+    fn title_facts_opening_the_overview_asks_again() {
+        let mut app = app();
+        app.core.worktree.worktrees = vec![worktree("a")];
+        let _ = crate::update(
+            &mut app,
+            Message::Overview(OverviewMsg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(app.core.overview.open);
+        assert_eq!(asked(&app), vec!["a"]);
+        assert_eq!(app.core.overview.facts_round, 1);
+    }
+
+    /// FR-006, L7: without local git the worktrees are the daemon's, not this machine's: nothing
+    /// is asked or read.
+    #[test]
+    fn title_facts_without_local_git_nothing_is_asked() {
+        let mut app = app();
+        app.caps = app.caps.clone().without_local_git();
+        listed(&mut app, &["a"]);
+        let _ = crate::update(
+            &mut app,
+            Message::Overview(OverviewMsg::Toggled {
+                settings_open: false,
+            }),
+        );
+        assert!(asked(&app).is_empty());
+        assert_eq!(app.core.overview.facts_round, 0);
+    }
+
+    /// L7, US2.2: the read runs to its answer: a worktree's spec heading is stored; its folder is
+    /// no git repository, so the commit read fails and loses only the commit.
+    #[test]
+    fn title_facts_a_listed_worktrees_spec_heading_is_read_and_stored() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("wt-überblick");
+        let spec = root.join("specs/1504-readable/spec.md");
+        std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+        std::fs::write(&spec, "# Feature Specification: Readable titles\n").unwrap();
+        let mut app = app();
+        let mut wt = worktree_at("wt-überblick", root);
+        wt.branch = Some("feat/1504_readable".into());
+        let work = crate::update(&mut app, Message::Worktree(WorktreeMsg::Loaded(vec![wt])));
+        settle(&mut app, work);
+        let facts = app.core.overview.facts.get("wt-überblick").cloned();
+        assert_eq!(
+            facts.as_ref().and_then(|f| f.spec.as_deref()),
+            Some("Readable titles")
+        );
+        assert_eq!(facts.and_then(|f| f.commit), None);
+    }
+}

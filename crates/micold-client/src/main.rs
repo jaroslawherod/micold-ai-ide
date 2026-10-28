@@ -478,6 +478,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let header_before = app.core.changes.header.entry.clone();
     let titles_were_readable = shell::issues::titles_readable(app);
     let worktrees_before = shell::issues::worktrees_fingerprint(app);
+    let project_before = app.core.workspace.active.clone();
     let task = update_inner(app, message);
     // Feature 1465 (U1): the history records the place shown after every message, the app's own
     // moves included.
@@ -490,9 +491,18 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let became_readable = !titles_were_readable && shell::issues::titles_readable(app);
     // Feature 1125, FR-011: the sidebar's rows lead with their issue titles, so a changed worktree
     // list (or titles becoming readable) reads the titles not yet held, for every worktree.
-    if shell::issues::worktrees_fingerprint(app) != worktrees_before || became_readable {
+    let worktrees_changed = shell::issues::worktrees_fingerprint(app) != worktrees_before;
+    if worktrees_changed || became_readable {
         shell::issues::on_worktrees_changed(app);
     }
+    // Feature 1504, L7: the spec and commit titles are read off the UI thread whenever the list or
+    // the active project changed, by whichever message.
+    let task = if worktrees_changed || app.core.workspace.active != project_before {
+        let dirs = shell::location_titles::listed_dirs(app);
+        Task::batch([task, shell::location_titles::read_facts(app, &dirs)])
+    } else {
+        task
+    };
     if app.core.changes.header.entry != header_before || became_readable {
         if let Some((_, SessionLocation::Worktree(dir))) = app.core.changes.header.entry.clone() {
             shell::issues::on_header_followed(app, &dir);

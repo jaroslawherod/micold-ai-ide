@@ -178,8 +178,9 @@ Each location in the sidebar is a row of **two lines**:
 
 - The **first line** is the worktree's **title**, the same title its [Overview](overview.md#title)
   card shows: the title of its GitHub issue or the summary of its Jira issue when the app knows
-  it, else the title of the branch's open pull request, else the title of its main session, else
-  its branch, else its name. The *Default* entry reads **Default**.
+  it, else the title of the branch's open pull request, else its feature spec's heading, else the
+  title of its main session, else the subject of the branch's latest commit of its own, else its
+  branch, else its name. The *Default* entry reads **Default**.
 - The **second line** is the **short branch** and the **sessions**, such as
   `fix/1117 · 1 session running` or `main · no sessions`. A Conventional-Commits branch like
   `fix/1117_ci-red` is shortened to its type and issue number, `fix/1117`, so the type and the issue
@@ -189,7 +190,8 @@ Each location in the sidebar is a row of **two lines**:
 
 A line that does not fit the sidebar's width ends in an ellipsis. Hover the row for its tooltip,
 which begins with the full title, then says where the title came from (*From GitHub issue #1504*,
-*From Jira ABC-42*, *From pull request #1520*, *From the session title*, *Branch name*), then holds
+*From Jira ABC-42*, *From pull request #1520*, *From the feature spec*, *From the session title*,
+*From the latest commit*, *Branch name*), then holds
 the full branch on its `Branch` line, the name, the folder, the location and the rest it always
 showed. A title that is the branch or the name is not repeated above its `Branch` or `Name` line; a
 title from the branch still says *Branch name*, and a title that is the worktree's name says nothing
