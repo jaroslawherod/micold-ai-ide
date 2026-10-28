@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M5
-- **Next step**: M5 T049 visual pass (release build), full gate result, push, PR body; see *Handover*
+- **Next step**: M5 full gate (last one died of a full disk), finish T049 visual pass (classify the tool-card darkening; steps 7–9), push, PR body; see *Handover*
 
 ## Pull requests
 
@@ -123,29 +123,43 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 unit 2 handed over at the context cap (200k). Done: scoped gate green; Review A r1 (CHANGES: F1
-header control split the header, F4 dup lookup; fixed) and r2 (sonnet, CLEAN); Review B (CHANGES: F1
-tool-card controls untested through the view, F2 root thread-copy arm untested; fixed with
-`transcript_rich_renderers` tests (press/Enter/Space) and an App-level test in
-`features_structured_insights`, mutant reds logged in `tdd/cycle-log.md`). All in 79f1ffd04 (local,
-not pushed). `origin/main` merged: already up to date at 79f1ffd04.
+M5 unit 3 handed over at the context cap (~130k). State at c93e37726 + this ledger commit (local, not
+pushed). Reviews A and B are done (see *Review rounds*); no code changed in unit 3.
 
-Running when handed over: full `scripts/gate.sh` at 79f1ffd04, detached, log
-`/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/full-gate-1.log` (ends `GATE_EXIT=<n>`; reniced 19). If red, fix, re-run.
-
-Next: T049 visual pass (quickstart Part B 6–9), then push and the PR body. Setup kept in
-`/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/vp5`: `env.sh` (display 78 released; re-claim one), fixtures in `fx/` (`bash`, `fail` (failed
-Bash card), `cjk`, `stream` (a reply cut after its last text delta, stays streaming: send it last),
-plus `edit`, `md` replies), `proj/` with `.fake-stream`, `pathbin/claude` stand-in, data dir via
-`MICOLD_DATA_DIR`. Create the session with the sidebar's `+` beside Default, then "Open in
-structured view". **Use a release build** (as M4b did): the debug client under lavapipe ran at 100%
-CPU and showed input seconds late, so its observations are unreliable. Seen with the debug build,
-to re-check: the header `ToolValue` control copied `<CWD>/notes.txt` by pointer (2 of 3 tries);
-Enter on the focused input control copied the input JSON; pointer presses on the unfolded card's
-input and result controls never wrote the clipboard (the press focused the control and highlighted
-the input text, as if the selection area took it); no "Copied" was ever drawn on any control (check
-a #940 code block's control too, to tell an Xvfb read-back problem from an M5 one). Clicking a card
-header body does not toggle it; its chevron does. Thread cards stay unselectable (separate issue).
+- **Full gate NOT green yet.** `full-gate-1` (on 79f1ffd04) died at `GATE_EXIT=101` from
+  `No space left on device` (a parallel release build filled the ~40 GB disk). `target-shared/debug`
+  was wiped to recover (28 GB free after). Next: run the full `scripts/gate.sh` again, detached,
+  with nothing else building (it needs ~26 GB). Then delete `target-shared/release` if disk is short.
+- **T049 visual pass, release build** (client copied to `vp5/bin/`, pre-M5 client at 84bca0374 in
+  `vp5/binpre/`, both with `micold-daemon`; setup `vp5/env2.sh`, display :79, Xvfb now stopped).
+  - Priority check **did not reproduce**: pointer presses on an unfolded Bash card's input, result
+    and header controls copied 9 of 9 tries (`{"command":"<CWD>/notes.txt"}`, the numbered result,
+    `<CWD>/notes.txt`), "Copied" drawn on the pressed control (evidence
+    `visual-pass/m5-6-tool-card-header-and-result-copied.png`). Edit card: diff path, input and
+    result controls each copied by pointer (`m5-6-diff-path-copied.png`). #940's code-block control
+    copies and shows "Copied" too. The debug-build failure was the slow client, not M5.
+  - **Open, to classify**: hovering a tool card's chevron or one of its copy controls darkens the
+    whole card with a translucent layer that keeps getting darker on later frames and stays after
+    the pointer leaves; widgets drawn later (texts, controls) show as light patches
+    (`visual-pass/m5-tool-card-darkening.png`: hover, just after a press, 3 s later). Fold+unfold
+    resets it. Plain buttons ("Open in terminal") and markdown code blocks do not do it. Not yet
+    known whether it predates M5: compare with `vp5/binpre/micold-ai-ide` (start it with
+    `$RUNENV`, unfold a tool card with its chevron — find it with a full-res crop, the header's
+    chevron is the rightmost glyph — hover the chevron, move away, crop). If pre-M5 does it too:
+    note it as a follow-up issue (lavapipe or DisclosureCard), not an M5 bug. If only M5: root-cause
+    (suspect the copy control's `TakesTheKeyboard` indicator `layer`/fade or an `IconButton` state
+    layer drawn with the card's bounds), red-then-green test, fresh review.
+  - Keyboard: Enter after a pointer press, and Tab+Enter, did not copy in this session, and no focus
+    ring was visible at 40 % screenshots; Tab moved focus to the top Bash card's header. Not
+    conclusive (focus may have been on the composer; X focus was the client window). Renderer
+    tests cover Enter/Space through focus traversal; the debug pass saw Enter copy the input.
+    Re-check once with a full-res crop of the focused control after each Tab.
+  - Steps 7 (streaming selection), 8 (light/dark, failed card, CJK/emoji) and 9 (two panes) are
+    NOT RUN yet. Then write `visual-pass/m5-visual-pass.md` (style of m4b's) and copy its PNGs to
+    `/mnt/project-files/issue-1550/` (the three above are there already).
+- Then: `git fetch origin && git merge origin/main`, green full gate, push
+  (`git push -u origin claude/project-thread-zj503u`), PR body to
+  `$SCRATCHPAD/pr-1550-m5-body.md`.
 
 ## Open escalation
 
