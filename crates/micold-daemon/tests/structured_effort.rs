@@ -1038,12 +1038,41 @@ async fn a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end() {
     std::fs::write(dir.join("turn-2"), "").unwrap();
 }
 
+/// The ends of `dir`'s first turn, held back once its `result` is read: the turn is over for the
+/// CLI and not yet handed on to the daemon, until [`hand_on`].
+async fn hold_turn_end(
+    ends: &mut tokio::sync::mpsc::UnboundedReceiver<micold_daemon::structured::TurnClosed>,
+    dir: &Path,
+) -> Vec<micold_daemon::structured::TurnClosed> {
+    use micold_daemon::structured::ClosedBy;
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    let mut held = Vec::new();
+    loop {
+        let closed = tokio::time::timeout(Duration::from_secs(15), ends.recv())
+            .await
+            .expect("the turn ends")
+            .expect("the feed is open");
+        let result = closed.by == ClosedBy::Result;
+        held.push(closed);
+        if result {
+            return held;
+        }
+    }
+}
+
+/// Hand the turn ends [`hold_turn_end`] held on to the daemon.
+async fn hand_on(rig: &Rig, held: Vec<micold_daemon::structured::TurnClosed>) {
+    let state = Arc::clone(&rig.state);
+    tokio::task::spawn_blocking(move || held.into_iter().for_each(|c| state.turn_closed(c)))
+        .await
+        .unwrap();
+}
+
 /// M3 review (FR-004): an idle pick made after a turn's `result` and before the turn's end is
 /// handed on goes out after the pick deferred past that turn, so the CLI ends on the later pick,
 /// which the catalog holds.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_one() {
-    use micold_daemon::structured::ClosedBy;
     let rig = Rig::undriven();
     let (id, dir) = (rig.ids[0], rig.dir(0));
     let mut ends = rig
@@ -1056,24 +1085,9 @@ async fn an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_on
     assert_ok(&window.request(say(1, id, "one"), 1).await);
     eventually("the message on stdin", || stdin_lines(dir).len() == 1);
     assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
-    std::fs::write(dir.join("turn-1"), "").unwrap();
-    let mut held = Vec::new();
-    loop {
-        let closed = tokio::time::timeout(Duration::from_secs(15), ends.recv())
-            .await
-            .expect("the turn ends")
-            .expect("the feed is open");
-        let result = closed.by == ClosedBy::Result;
-        held.push(closed);
-        if result {
-            break;
-        }
-    }
+    let held = hold_turn_end(&mut ends, dir).await;
     assert_ok(&window.request(pick(3, id, &level("high")), 3).await);
-    let state = Arc::clone(&rig.state);
-    tokio::task::spawn_blocking(move || held.into_iter().for_each(|c| state.turn_closed(c)))
-        .await
-        .unwrap();
+    hand_on(&rig, held).await;
     eventually("both notes", || effort_notes(&rig.history(0)).len() == 2);
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(
@@ -1082,6 +1096,41 @@ async fn an_idle_pick_before_the_turns_end_is_handled_goes_after_the_deferred_on
     );
     assert_eq!(effort_notes(&rig.history(0)), [level("low"), level("high")]);
     assert_eq!(rig.effort(0), level("high"));
+}
+
+/// M3 review A round 2 (FR-005): when the CLI refuses both a deferred pick and an idle pick made
+/// after it, the choice goes back to the level the CLI is still on, not to the refused deferred
+/// one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both() {
+    let rig = Rig::undriven();
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    let mut ends = rig
+        .state
+        .input_feed()
+        .take_receiver()
+        .expect("the turn ends");
+    rig.start_turns(0, "efforts medium\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    let held = hold_turn_end(&mut ends, dir).await;
+    let answer = window.request(pick(3, id, &level("high")), 3).await;
+    assert_eq!(refused(&answer).0, ErrorKind::Refused, "{answer:?}");
+    hand_on(&rig, held).await;
+    eventually("the choice back to the one before both", || {
+        rig.effort(0) == EffortChoice::Default
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    // A re-apply after the idle answer may ask again for the level before both: never another.
+    let asked = efforts_asked(dir);
+    assert_eq!(
+        asked[..2],
+        [Some("low".to_owned()), Some("high".to_owned())]
+    );
+    assert!(asked[2..].iter().all(Option::is_none), "{asked:?}");
+    assert_eq!(rig.effort(0), EffortChoice::Default);
 }
 
 /// M3 review (research R4): a model change answered while an idle pick's answer is awaited
