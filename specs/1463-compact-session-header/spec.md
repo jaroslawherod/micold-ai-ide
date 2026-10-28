@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-26
 
-**Status**: Draft
+**Status**: Closed 2026-10-28 — shipped in PRs #1469, #1487, #1505, #1547, and the close PR
 
 **Input**: GitHub issue #1463 "Compact session header: title, chips and Changes on one line; switch button in the tab strip". Builds on spec 1126 (worktree context header and session tabs).
 

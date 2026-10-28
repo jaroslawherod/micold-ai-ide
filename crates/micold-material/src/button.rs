@@ -807,14 +807,9 @@ mod tests {
             .0
             .height
         };
-        assert_eq!(
-            at(density::STANDARD),
-            density::height(density::BUTTON_BASE, 0)
-        );
-        assert_eq!(
-            at(density::DENSE),
-            density::height(density::BUTTON_BASE, density::DENSE)
-        );
+        // Literal expectations, so a change to `density::height` shows up here.
+        assert_eq!(at(density::STANDARD), 40.0);
+        assert_eq!(at(density::DENSE), 28.0);
         assert!(at(density::DENSE) < at(density::STANDARD));
     }
 }

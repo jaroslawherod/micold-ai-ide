@@ -26,3 +26,17 @@ against old code. The red runs below were observed while the strip layout was be
 | Tiled-row gate | weak: a height heuristic only | accepted as a known weak gate |
 
 Final: `cargo test -p micold-client --test layout_snapshot --test session_area_stability`: 158 and 16 passed.
+
+# Cycle log — M3 and close (gates pinned against surviving mutants)
+
+Mutants were hand-made (no mutation tool). Each row says who saw the failure; rows not re-run at close say so.
+
+| Task | Mutant | Failing test observed | Seen by |
+|---|---|---|---|
+| T023 | `SWITCH_CAPTION_MAX_WIDTH` 120 -> 400 | `a_long_caption_is_cut_before_the_switch_or_restart_is_squeezed` | M3 review B |
+| T026 | `GiveWayRow` `Shorten(rank)` -> `Keep`; density ignored | the new `GiveWayRow` and `Button::density` unit tests | M3 review B |
+| T025 | `caption: None` | `switch_offer_of` held-queue test | tdd-verify at close |
+| T022 | tiled padding `[XS,SM]` -> `[SM,SM]` | `a_tiled_pane_still_has_its_switch_row` | tdd-verify at close |
+| T029 | touch-target threshold -> `100000.0` | `layout_snapshot`: "the strip New session ... is narrower than the touch target" (the guard had matched `"New session"`, never the real part name `"strip New session"`, so it ran on nothing; now also asserts it ran on two parts) | close unit |
+| T030 | `density::height` | button test now compares literal 40 and 28 dp | not re-run |
+| T021, T024, T027, rank tie | | | not re-run at close (build lock held by other worktrees for 40+ minutes) |
