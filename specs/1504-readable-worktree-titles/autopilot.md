@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 72832ebf8; not pushed
-- **Next step**: orchestrator runs M4 review A (code-review high) and review B (conformance, sonnet) on `2d4d8fb10..72832ebf8` and the M4 visual pass; then fill REVIEW_A/REVIEW_B/VISUAL_PASS/GATE_LINE in scratchpad pr-body-m4.md and open the M4 PR after M3's
+- **Phase**: M4 implemented (T033–T041 + M3 review B F2 follow-up) and review A round 1 MINORs F1–F3 fixed on branch 1504-m4 (worktree /home/user/wt-1504-m4), stacked on M3's head 2d4d8fb10 (M3 PR pending, not opened); full gate (`scripts/gate.sh`) green at 5c220dc75; not pushed
+- **Next step**: orchestrator runs scoped M4 review A round 2 (sonnet) on fix range `6abaeabc2..5c220dc75`, and the M4 visual pass; then fill REVIEW_A2/VISUAL_PASS in scratchpad pr-body-m4.md and open the M4 PR after M3's
 
 ## Pull requests
 
@@ -70,8 +70,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CHANGES: 1 MAJOR, 1 MINOR. F1 [MAJOR] fixed: `with_title_line` skipped the source line for a Branch title (L3 exempts only Folder); now only Folder names no source, and a title that repeats the Name/Branch line is dropped but its words stay (`Branch name\n{tooltip}`); test rewritten, worktrees-and-sessions.md aligned with overview.md. F2 [MINOR] deferred to M4 (Follow-ups) |
 | M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | pending (orchestrator, sonnet; fix diff `review-snapshot.sh diff bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc` = `253f3f912..e51e05b76`; re-run Verify) |
 | M3 visual pass | 1 | e51e05b76 | pending (title, row tooltip, header tooltip, expanded card for rows A, C, E, G, I, a folder-titled and a renamed worktree; Refresh E/G) |
-| M4 review A (code-review high) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | pending (orchestrator; diff `2d4d8fb10..72832ebf8`) |
-| M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | pending (orchestrator, rubric `.claude/skills/speckit-autopilot/rubrics/conformance.md`, brief `brief.py milestone specs/1504-readable-worktree-titles M4`, diff `2d4d8fb10..72832ebf8`) |
+| M4 review A (code-review high) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 3 MINOR (real defects, all fixed test-first): F1 own commit could be a merge from main after syncing → `log -1 --no-merges` (git.rs), test `a_merge_from_the_default_branch_is_not_the_own_commit_subject`, contract L7 + data-model + research updated; F2 `ProjectSwitched` reset `facts_round`, so A→B→A let a stale round-1 answer through → round never reset, test `a_late_answer_from_an_earlier_visit_to_the_project_is_dropped`, data-model updated; F3 facts trigger missed invalid→valid / moved worktree → `location_titles::facts_fingerprint` (issue fingerprint + status + path; `WorktreeStatus: Hash`) drives the facts read in main.rs, test `title_facts_a_worktree_turning_valid_or_moving_is_asked_again` |
+| M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
+| M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
 
 ## Red runs (M4)
@@ -102,6 +103,15 @@ not reading facts, `read_facts` returning `Task::none()`), so every red is a fai
   listing / created+included / Overview opening each left `[]`, right the dirs; the end-to-end
   `title_facts_a_listed_worktrees_spec_heading_is_read_and_stored` left `None`, right
   `Some("Readable titles")`. `title_facts_without_local_git_nothing_is_asked` passes on the stub.
+- Review A fixes (written before each fix, run red on the unfixed code):
+  F1 `cargo test -p micold-core --test review_git own_commit`: exit 101,
+  `a_merge_from_the_default_branch_is_not_the_own_commit_subject` left
+  `Some("Merge branch 'main' into feature")`, right `Some("feature work")`.
+  F2 `cargo test -p micold-client --test features_overview title_facts`: exit 101,
+  `a_project_switch_clears_the_facts` (now expects the round kept) left `0`, right `1`;
+  `a_late_answer_from_an_earlier_visit_to_the_project_is_dropped` failed (stale answer stored).
+  F3 `cargo test -p micold-client --bin micold-ai-ide title_facts`: exit 101,
+  `title_facts_a_worktree_turning_valid_or_moving_is_asked_again` "turned valid" left `1`, right `2`.
 
 ## Red runs (M3)
 
