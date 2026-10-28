@@ -532,6 +532,12 @@ const FILTERS_BUTTON_WIDTH: f32 = 160.0;
 /// wide enough for "No project user matches; you are still offered" in its list (ledger D15).
 const FILTERS_PANEL_WIDTH: f32 = 360.0;
 
+/// The Filters panel's height before it scrolls: twelve menu items, so the GitHub panel's six rows
+/// (feature 1400 US6: two label fields with their chips, State, Assignee, Author and Milestone)
+/// show whole rather than scrolling inside the picker's eight. Never taller than the room on
+/// screen, and Jira's four fields are shorter than either.
+const FILTERS_PANEL_HEIGHT: f32 = micold_core::tokens::density::MENU_ITEM_BASE * 12.0;
+
 /// The Jira source's Basic/Advanced switch (feature 1186).
 fn jira_mode_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     super::jira_query::mode_switch(
@@ -806,6 +812,7 @@ pub(super) fn filters_panel<'a>(
     material::MenuSelect::new(filters_label(chosen), rows, open, on_toggle, on_dismiss, r)
         .width(Length::Fixed(FILTERS_BUTTON_WIDTH))
         .panel_width(FILTERS_PANEL_WIDTH)
+        .max_list_height(FILTERS_PANEL_HEIGHT)
         .into()
 }
 
@@ -814,6 +821,28 @@ pub fn filters_label(chosen: usize) -> String {
     match chosen {
         0 => "Filters".to_string(),
         n => format!("Filters · {n}"),
+    }
+}
+
+/// One row of a filter field's list: its words, single-line with a tooltip, or, for a row with a
+/// heading, the heading over its words wrapped in full (a failure's cause, why there is nothing
+/// to choose or why values are not offered: a cut reason says nothing; 1185 FR-012); dimmed when it does nothing.
+pub(super) fn typeahead_row(
+    label: String,
+    summary: Option<String>,
+    spans: Vec<std::ops::Range<usize>>,
+    enabled: bool,
+) -> TypeaheadRow {
+    let built = match summary {
+        Some(summary) => TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new()),
+        None => TypeaheadRow::new(label.clone(), spans)
+            .single_line()
+            .tooltip(label),
+    };
+    if enabled {
+        built
+    } else {
+        built.disabled()
     }
 }
 
@@ -828,25 +857,16 @@ fn jira_filter_field<'a>(
 ) -> Element<'a, Message> {
     let filters = &form.jira_filters;
     let field = filters.field(kind);
-    let rows: Vec<TypeaheadRow> = filters
+    let rows = filters
         .rows(kind)
         .iter()
         .map(|row| {
-            let label = row.label(kind, Some(source));
-            let built = match row.summary(kind) {
-                // A failure's cause, or why there is nothing to choose, is the row's second line,
-                // wrapped in full: a cut reason says nothing (FR-012; spec Edge Cases, "Empty
-                // choices").
-                Some(summary) => TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new()),
-                None => TypeaheadRow::new(label.clone(), row.spans.clone())
-                    .single_line()
-                    .tooltip(label),
-            };
-            if row.enabled() {
-                built
-            } else {
-                built.disabled()
-            }
+            typeahead_row(
+                row.label(kind, Some(source)),
+                row.summary(kind),
+                row.spans.clone(),
+                row.enabled(),
+            )
         })
         .collect();
     let filter = move |msg: FilterMsg| Message::WorktreeForm(FormMsg::JiraFilter(msg));

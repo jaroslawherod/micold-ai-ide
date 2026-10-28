@@ -16,11 +16,18 @@
 //!   updated first, in pages of 100.
 //! - A search (034's search beyond and feature 1400's filtered listing, advanced query and
 //!   search): honours `repo:`, `is:open` / `is:closed`, `state:open` / `state:closed`,
-//!   `label:"…"`, `-label:"…"` and `sort:updated-desc|asc` (`created-…` sorts by number);
+//!   `label:"…"`, `-label:"…"`, (US6) `assignee:<login>|@me`, `no:assignee`, `author:<login>|@me`,
+//!   `milestone:"…"`, `no:milestone` (`@me` is `octocat`) and `sort:updated-desc|asc`
+//!   (`created-…` sorts by number);
 //!   parentheses outside quotes are ignored (no `OR`); every other word, quoted or not, must appear
 //!   in the title (any case).
 //! - A single issue's details (837), with its labels and no relations.
 //! - The labels: every label, in one page.
+//! - (US6) The open milestones `v2.4`, `Sprint 12: polish`, `Backlog` and `say "hi"` (a title
+//!   with a quote, not offered), in one page; issues are spread over the first two and none.
+//! - (US6) The assignable users `octocat` (The Octocat), `monalisa` (Mona Lisa), `hubot` and
+//!   `octo-dog`, those whose login or name holds the typed `q` (any case); issues are assigned to
+//!   the first three or no one, and opened by `octocat` or `monalisa`.
 //!
 //! Each search's `q` is written to stderr, so a step can check what a filtered request sent.
 //! Anything else is answered with a GraphQL error.
@@ -48,11 +55,28 @@ const LABELS: &[&str] = &[
     "ui",
 ];
 
+/// The assignable users: login and display name.
+const PEOPLE: &[(&str, Option<&str>)] = &[
+    ("octocat", Some("The Octocat")),
+    ("monalisa", Some("Mona Lisa")),
+    ("hubot", None),
+    ("octo-dog", None),
+];
+
+/// The open milestones, in GitHub's (unsorted) order.
+const MILESTONES: &[&str] = &["v2.4", "Sprint 12: polish", "Backlog", "say \"hi\""];
+
+/// Who `@me` is.
+const ME: &str = "octocat";
+
 struct FakeIssue {
     number: u64,
     title: String,
     labels: Vec<&'static str>,
     closed: bool,
+    assignee: Option<&'static str>,
+    author: &'static str,
+    milestone: Option<&'static str>,
     /// Minutes before the newest update: smaller is more recent.
     age: u64,
 }
@@ -94,6 +118,18 @@ fn issues() -> Vec<FakeIssue> {
                 title: format!("{} ({n})", TITLES[(n as usize) % TITLES.len()]),
                 labels,
                 closed: n % 7 == 0,
+                assignee: match n % 4 {
+                    0 => None,
+                    1 => Some("octocat"),
+                    2 => Some("monalisa"),
+                    _ => Some("hubot"),
+                },
+                author: if n % 2 == 0 { "octocat" } else { "monalisa" },
+                milestone: match n % 3 {
+                    0 => Some("v2.4"),
+                    1 => Some("Sprint 12: polish"),
+                    _ => None,
+                },
                 age: (n * 37) % 101,
             }
         })
@@ -106,7 +142,7 @@ fn node(issue: &FakeIssue, repo: &str) -> serde_json::Value {
         "title": issue.title,
         "updatedAt": format!("2026-10-{:02}T{:02}:{:02}:00Z", 26 - issue.age / 10, 23 - issue.age % 10, issue.number % 60),
         "labels": { "nodes": issue.labels.iter().map(|l| serde_json::json!({ "name": l })).collect::<Vec<_>>() },
-        "author": { "login": "octocat" },
+        "author": { "login": issue.author },
         "bodyText": format!("The description of issue {}.", issue.number),
         "state": if issue.closed { "CLOSED" } else { "OPEN" },
         "repository": { "nameWithOwner": repo },
@@ -120,6 +156,11 @@ struct Terms {
     state: Option<bool>,
     include: Vec<String>,
     exclude: Vec<String>,
+    /// `Some(None)`: `no:assignee`.
+    assignee: Option<Option<String>>,
+    author: Option<String>,
+    /// `Some(None)`: `no:milestone`.
+    milestone: Option<Option<String>>,
     words: Vec<String>,
     ascending: bool,
     by_number: bool,
@@ -161,7 +202,23 @@ fn tokens(q: &str) -> Vec<String> {
 }
 
 /// The qualifiers the fake reads; any other `name:` outside quotes is one GitHub would judge.
-const KNOWN: &[&str] = &["repo:", "is:", "state:", "label:", "-label:", "sort:"];
+const KNOWN: &[&str] = &[
+    "repo:",
+    "is:",
+    "state:",
+    "label:",
+    "-label:",
+    "sort:",
+    "no:",
+    "assignee:",
+    "author:",
+    "milestone:",
+];
+
+/// A login as a search names it: `@me` is [`ME`].
+fn person(login: &str) -> String {
+    if login == "@me" { ME } else { login }.to_string()
+}
 
 /// A qualifier outside quotes the fake does not know, as `reject` mode refuses it.
 fn unknown_qualifier(q: &str) -> Option<String> {
@@ -186,6 +243,16 @@ fn terms(q: &str) -> Terms {
             terms.exclude.push(label.to_string());
         } else if let Some(label) = token.strip_prefix("label:") {
             terms.include.push(label.to_string());
+        } else if token == "no:assignee" {
+            terms.assignee = Some(None);
+        } else if token == "no:milestone" {
+            terms.milestone = Some(None);
+        } else if let Some(login) = token.strip_prefix("assignee:") {
+            terms.assignee = Some(Some(person(login)));
+        } else if let Some(login) = token.strip_prefix("author:") {
+            terms.author = Some(person(login));
+        } else if let Some(title) = token.strip_prefix("milestone:") {
+            terms.milestone = Some(Some(title.to_string()));
         } else if let Some(sort) = token.strip_prefix("sort:") {
             terms.ascending = sort.ends_with("-asc");
             terms.by_number = sort.starts_with("created");
@@ -204,6 +271,19 @@ fn search(q: &str) -> serde_json::Value {
         .filter(|i| terms.state.is_none_or(|closed| i.closed == closed))
         .filter(|i| terms.include.iter().all(|l| i.labels.contains(&l.as_str())))
         .filter(|i| !terms.exclude.iter().any(|l| i.labels.contains(&l.as_str())))
+        .filter(|i| {
+            terms
+                .assignee
+                .as_ref()
+                .is_none_or(|a| a.as_deref() == i.assignee)
+        })
+        .filter(|i| terms.author.as_deref().is_none_or(|a| a == i.author))
+        .filter(|i| {
+            terms
+                .milestone
+                .as_ref()
+                .is_none_or(|m| m.as_deref() == i.milestone)
+        })
         .filter(|i| {
             let title = i.title.to_lowercase();
             terms.words.iter().all(|w| title.contains(w.as_str()))
@@ -285,6 +365,33 @@ fn labels(modes: &[&str], after: Option<&str>) -> serde_json::Value {
     } } } })
 }
 
+/// The open milestones, in one page (US6).
+fn milestones() -> serde_json::Value {
+    let nodes: Vec<_> = MILESTONES
+        .iter()
+        .map(|t| serde_json::json!({ "title": t }))
+        .collect();
+    serde_json::json!({ "data": { "repository": { "milestones": {
+        "pageInfo": { "hasNextPage": false, "endCursor": null },
+        "nodes": nodes,
+    } } } })
+}
+
+/// The assignable users whose login or name holds `q`, any case (US6).
+fn people(q: &str) -> serde_json::Value {
+    eprintln!("fake_gh: people q={q}");
+    let q = q.to_lowercase();
+    let nodes: Vec<_> = PEOPLE
+        .iter()
+        .filter(|(login, name)| {
+            login.contains(q.as_str())
+                || name.is_some_and(|n| n.to_lowercase().contains(q.as_str()))
+        })
+        .map(|(login, name)| serde_json::json!({ "login": login, "name": name }))
+        .collect();
+    serde_json::json!({ "data": { "repository": { "assignableUsers": { "nodes": nodes } } } })
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--version") {
@@ -346,6 +453,10 @@ fn main() {
         }
     } else if query.contains("issues(states: OPEN") {
         listing(&repo)
+    } else if query.contains("milestones(") {
+        milestones()
+    } else if query.contains("assignableUsers(") {
+        people(fields.get("q").map(String::as_str).unwrap_or_default())
     } else if query.contains("labels(") {
         if modes.contains(&"labels-fail") {
             eprintln!("HTTP 502: Bad Gateway (https://api.github.com/graphql)");

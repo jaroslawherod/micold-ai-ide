@@ -9,12 +9,14 @@
 
 use crate::app::Message;
 use crate::features::window::FieldId;
-use crate::features::worktree_form::github_filter::{GithubSelector, LabelList, Msg as GithubMsg};
+use crate::features::worktree_form::github_filter::{
+    GithubSelector, LabelList, Msg as GithubMsg, ValueField,
+};
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::WorktreeForm;
 use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, Text, TextField, ToggleChip, TypeRole, TypeaheadRow};
+use crate::ui::material::{self, Button, Text, TextField, ToggleChip, TypeRole};
 use iced::widget::{column, container, row, Row, Space};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::github::NoticeSource;
@@ -27,7 +29,8 @@ fn github(msg: GithubMsg) -> Message {
 }
 
 /// The GitHub **Filters** button and its panel: the Include labels and Exclude labels fields, each
-/// with its chosen labels under it (contracts/selector-ui.md §2).
+/// with its chosen labels under it, the State row, then the Assignee, Author and Milestone fields
+/// (contracts/selector-ui.md §2).
 fn filters_control<'a>(
     form: &'a WorktreeForm,
     source: NoticeSource<'_>,
@@ -39,6 +42,11 @@ fn filters_control<'a>(
         .map(|list| material::MenuSelectRow::controls(label_field(form, list, source, r)))
         .collect();
     rows.push(material::MenuSelectRow::controls(state_row(selector, r)));
+    rows.extend(
+        ValueField::ALL.into_iter().map(|field| {
+            material::MenuSelectRow::controls(value_field(selector, field, source, r))
+        }),
+    );
     super::worktree_form::filters_panel(
         selector.basic.chosen_count(),
         rows,
@@ -83,24 +91,16 @@ fn label_field<'a>(
 ) -> Element<'a, Message> {
     let selector = &form.github_selector;
     let field = selector.field(list);
-    let rows: Vec<TypeaheadRow> = selector
+    let rows = selector
         .rows(list)
         .iter()
         .map(|row| {
-            let label = row.label(source);
-            let built = match row.summary() {
-                // A failure's cause, or why labels are not offered, is the row's second line,
-                // wrapped in full: a cut reason says nothing (as 1185's fields).
-                Some(summary) => TypeaheadRow::new(summary, Vec::new()).details(label, Vec::new()),
-                None => TypeaheadRow::new(label.clone(), row.spans.clone())
-                    .single_line()
-                    .tooltip(label),
-            };
-            if row.enabled() {
-                built
-            } else {
-                built.disabled()
-            }
+            super::worktree_form::typeahead_row(
+                row.label(source),
+                row.summary().map(str::to_string),
+                row.spans.clone(),
+                row.enabled(),
+            )
         })
         .collect();
     let typeahead = material::Typeahead::new(
@@ -137,6 +137,44 @@ fn label_field<'a>(
         section = section.push(Row::with_children(chips).spacing(spacing::XS).wrap());
     }
     section.into()
+}
+
+/// A single-value field (US6, selector-ui §2 rows 4–6): a typeahead showing the chosen value's
+/// words, over "Any …", its fixed choices and the people or milestones on offer.
+fn value_field<'a>(
+    selector: &'a GithubSelector,
+    field: ValueField,
+    source: NoticeSource<'_>,
+    r: Roles,
+) -> Element<'a, Message> {
+    let state = selector.value_field(field);
+    let rows = selector
+        .value_rows(field)
+        .iter()
+        .map(|row| {
+            super::worktree_form::typeahead_row(
+                row.label(source),
+                row.summary().map(str::to_string),
+                row.spans.clone(),
+                row.enabled(),
+            )
+        })
+        .collect();
+    material::Typeahead::new(
+        &state.query,
+        rows,
+        move |text| github(GithubMsg::ValueQueryChanged(field, text)),
+        r,
+    )
+    .placeholder(field.title())
+    .label(field.title())
+    .open(state.open)
+    .highlighted(state.highlight)
+    .on_focus(github(GithubMsg::ValueFocused(field)))
+    .on_move(move |direction| github(GithubMsg::ValueHighlightMoved(field, direction)))
+    .on_dismiss(github(GithubMsg::ValueDismissed(field)))
+    .on_pick(move |index| github(GithubMsg::ValuePicked(field, index)))
+    .into()
 }
 
 /// The Query input's placeholder (contracts/selector-ui.md §1), and the prompt in place of the list
