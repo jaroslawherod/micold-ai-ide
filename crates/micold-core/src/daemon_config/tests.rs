@@ -239,7 +239,7 @@ fn v3_a_listen_table_with_no_key_is_refused() {
 
 #[test]
 fn v3_a_listen_table_with_two_keys_is_refused() {
-    let text = format!("{CONTAINER_HEAD}").replace("[auth]", "socket = \"auto\"\n[auth]");
+    let text = CONTAINER_HEAD.replace("[auth]", "socket = \"auto\"\n[auth]");
     let error = expect(&text, "V3", "listen");
     assert_eq!(error.line, line_of(&text, "[listen]"));
 }
@@ -554,7 +554,7 @@ fn v8_the_finding_points_at_the_offending_element() {
 #[test]
 fn idle_stop_accepts_default_off_and_seconds_and_names_a_bad_value() {
     let kind = |value: &str| {
-        format!("{HOST_HEAD}").replace(
+        HOST_HEAD.replace(
             "name = \"t\"",
             &format!("name = \"t\"\nidle_stop = {value}"),
         )
