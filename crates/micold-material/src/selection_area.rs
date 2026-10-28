@@ -125,6 +125,9 @@ struct State {
     previous: Option<mouse::Click>,
     /// Where the last move put the pointer, in the window's coordinates.
     pointer: Option<Point>,
+    /// From the window's coordinates to the area's: a scrollable around the area shifts the
+    /// cursor it hands down by its offset, while a move's `position` stays the window's.
+    shift: Vector,
 }
 
 impl operation::Focusable for State {
@@ -251,7 +254,8 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
         // The runtime hands every event of a batch the cursor where the batch ended, so in a fast
         // drag the press would land where the drag got to (#1550 M6). Each event is seen at its
         // own place instead: a move where it went, a press or release where the last move left the
-        // pointer. The area is never inside a scrollable, so its coordinates are the window's.
+        // pointer. A frame's redraw is a batch of its own, so its cursor less the pointer is what a
+        // scrollable around the area shifts positions by.
         let at = {
             let state = tree.state.downcast_mut::<State>();
             match event {
@@ -259,9 +263,14 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
                     state.pointer = Some(*position);
                 }
                 Event::Mouse(mouse::Event::CursorLeft) => state.pointer = None,
+                Event::Window(iced::window::Event::RedrawRequested(_)) => {
+                    if let (Some(given), Some(pointer)) = (cursor.position(), state.pointer) {
+                        state.shift = given - pointer;
+                    }
+                }
                 _ => {}
             }
-            state.pointer
+            state.pointer.map(|p| p + state.shift)
         };
         let cursor = match (cursor, at) {
             (mouse::Cursor::Available(_), Some(p)) => mouse::Cursor::Available(p),
@@ -459,6 +468,32 @@ mod tests {
         release(&mut m, Point::new(2.0, TEXT_ROW / 2.0));
         let again = m.press(Point::new(2.0, TEXT_ROW / 2.0));
         assert_eq!(again[0], "press 2", "a second click in place");
+    }
+
+    /// A-2: inside a scrolled scrollable the cursor handed down is shifted by the offset while a
+    /// move's position stays the window's; a press in a batch that ends further on still lands
+    /// where it happened, in the area's coordinates (#1550 M6).
+    #[test]
+    fn a_press_in_a_scrolled_area_lands_where_it_happened() {
+        let mut m = mounted(false);
+        let scrolled = Vector::new(0.0, 300.0);
+        let at = Point::new(2.0, TEXT_ROW / 2.0);
+        let moved = |p: Point| {
+            Event::Mouse(mouse::Event::CursorMoved {
+                position: p - scrolled,
+            })
+        };
+        m.send(moved(at), mouse::Cursor::Available(at));
+        m.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Available(at),
+        );
+        // One batch: the press, then the drag's move, all handed the cursor where it ended.
+        let end = Point::new(250.0, TEXT_ROW / 2.0);
+        let out = press_with(&mut m, mouse::Button::Left, end);
+        assert_eq!(out, vec!["press 1", "focus true", "hit t 0"]);
     }
 
     /// A-2: a press outside the area gives the focus up.

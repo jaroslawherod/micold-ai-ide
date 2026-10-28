@@ -53,7 +53,8 @@ SelectionArea::new(content)
 - **A-2 Focus**: an uncaptured left press inside takes keyboard focus and publishes `on_press`.
   FR-007. The children see each mouse event at its own place (a move where it went, a press or
   release where the last move left the pointer), not where the runtime's batch of events ended,
-  so a fast drag starts at the press (#1550 M6).
+  so a fast drag starts at the press (#1550 M6), in the area's own coordinates when a scrollable
+  around it shifts them (the shift is learned from each frame's redraw).
 - **A-3 Edge scroll**: while `dragging` and the cursor is above (below) the bounds, children see the
   cursor clamped to the top (bottom) row and the area publishes `on_edge(Up)` (`Down`) each frame it
   requests. FR-003.

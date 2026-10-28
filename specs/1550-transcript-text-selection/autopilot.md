@@ -94,6 +94,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M5 (code-review high, headless) | 1 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f | CHANGES: F1 MAJOR header control `align_right(Fill)` halved the summary (fixed: bare control in the header, snapshot summary 804.3 of 834.3); F4 MINOR duplicated copy lookup (fixed: `entries::copy_of`); F2, F3 MINOR declined |
 | Review A M5 (sonnet, fix diff) | 2 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f → working tree | CLEAN |
 | Review B M5 (conformance, sonnet, headless) | 1 | 5d2f55723c6022905be2569aded0638079b10e46:134dfd722ca191711f85359eca732cc52b48bb1f | CHANGES: F1 MAJOR the three tool-card controls untested through the view (fixed: two renderer tests, press/Enter/Space); F2 MAJOR root thread-copy arm untested (fixed: App-level test); F3 MINOR (fixed: mutant red runs logged). Verify: features_transcript_rich 24, layout_snapshot 171 passed. Fixes were tests only: no re-run needed beyond the scoped gate |
+| Review A M6 (code-review high, headless) | 1 | efdf193fd0886ebb5faaab45c69715611a497247:92be93d4edf52c06dea6f501f1e629c5ffffdb7d | CHANGES: 1 MAJOR, 4 MINOR. F1 MAJOR fixed: `SelectionArea` swapped in the window position, off by the offset inside a scrollable (the showcase gallery); it now learns the scrollable's shift from each frame's redraw (its own batch in iced_winit), test `a_press_in_a_scrolled_area_lands_where_it_happened` (red without). F2–F5 MINOR, declined below |
 
 ## Declined review findings
 
@@ -122,6 +123,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4b | A F5 | edge gating split between root and `State` | fixed: `State::edge_scroll` holds the rule; the root maps it to `Scroll::By`. |
 | M4b | A F6 | a release the area never sees leaves the drag on | MINOR: X11/winit deliver the release of a press begun in the window (implicit grab); a modal opening mid-drag is not a path the UI offers. |
 | M4b | A F8 | `dragging` lags the press by one message | MINOR: the press's own hit (T-1) arrives in the same event as `on_press`, so the drag starts before any frame past the edge. |
+| M6 | A F2 | only `SelectMsg::Press` focuses the pane; the menu's Copy/Select all in an unfocused pane leave `session.active` on the other | MINOR: the menu acts on the session it was opened in (M4b/M5), so its Copy copies the right pane; the copy keys follow the press that made the selection. |
+| M6 | A F3 | a drag that ends right of the hunk's `sideways` viewport gets no cursor, so it does not reach the line's end | MINOR: the fix answers the end of a line for a pointer right of the text inside the viewport (the case the visual pass saw); past the viewport the area's clamp and the next move cover it. |
+| M6 | A F4 | `state.pointer` can go stale when an ancestor or overlay takes moves | MINOR: the shift learned at each redraw absorbs a stale pointer (shift = given − pointer), so the next press without a move lands at the frame's cursor, as before M6. |
+| M6 | A F5 | the batch-cursor fix lives in `SelectionArea` only, not in a root wrapper for every widget | MINOR, altitude: no other widget has shown the symptom; a root-level fix is out of #1550's scope. |
 
 ## Handover
 
