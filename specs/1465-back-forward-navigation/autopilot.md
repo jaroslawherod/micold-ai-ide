@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m5 (M5, stacked on 1465-m4; M4 on 1465-m4, stacked on 1465-m3; M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M5 implemented (T034–T036 ticked, TDD cycle 18); full gate green at be9d666d3; visual-pass and reviews A and B round 1 pending
-- **Next step**: visual-pass (review-shortcut-sheet, -single-keys-off; light and dark), review A and B on range 27327176c..HEAD, then pr-title-m5.md and pr-body-m5.md
+- **Phase**: close (M5 reviews and visual-pass done; T038 recorded; speckit-converge skipped: review B CLEAN for every milestone)
+- **Next step**: close — speckit-tdd-verify and T037 (quickstart §B B1–B13 visual-pass) by the orchestrator; then test-strength fixes, close-diff review, spec Status, full gate, pr-title-close.md / pr-body-close.md (M5 + close ship as one PR after #1574 merges and the branch is restacked on main)
 
 ## Pull requests
 
@@ -18,17 +18,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1559 | design | merged | ed945a97b54efe6e58c68c39a91c29f019c3741d |
 | #1567 | M1 | merged | ebd7090c556500a3b530604d4cde73f91b3b7ddc |
-| (pending) | M2 + M3 (one PR) | being opened by the orchestrator | — |
+| #1571 | M2 + M3 | merged | ad0f70293 |
+| #1574 | M4 | open (review A r1 CHANGES fixed; r2 A and B CLEAN — recorded in branch 1465-m4's ledger) | — |
+| (pending) | M5 + close (one PR) | branch 1465-m5, to be restacked on main after #1574 merges | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
-| M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
-| M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate green, reviews pending |
-| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | implemented, gate green, visual-pass and reviews pending |
+| M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | #1571 | merged |
+| M3 | T024–T026 | light | The Review tab's own Back first | #1571 | merged |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | #1574 | open, reviews clean |
+| M5 | T034–T036 | light | The Review sheet lists Back and Forward | M5+close PR | reviews clean, visual-pass PASS |
 
 ## Decisions
 
@@ -64,6 +66,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 (code-review high) | 1 | range 9b3e348bb..27327176c (snapshot 5fb76795f85b2c0114f83b6245805dab20a57b40:75974ce8725a33caed3f0dc316e755deed529399) | CHANGES: 1 MAJOR, 3 MINOR (F1 another project's worktrees read only by local discovery: included (uniquified) worktrees, remote projects and no-git clients counted as gone and removed — fix: `worktree.known` per-project `dir_name`s written in `set_worktrees`, lookup = known ∪ discover; F2 lookup not memoized per press — fix: cached per project in `resolve`; F3 `runs.known[P]` stale for a group dismissed in the background — accepted, test pins it, data-model.md; F4 `shown_place` reports Compare under a project it does not belong to — fix: Compare only when `compare.project == active`) |
 | Review B M4 (conformance) | 1 | range 9b3e348bb..27327176c | CLEAN, 2 MINOR (F1 guide paragraph not rewrapped; F2 shell/history.rs module doc line over-long — both fixed, prose only) |
 
+| Review A M4 / Review B M4 | 1–2 | see branch 1465-m4's ledger (PR #1574) | A r1 CHANGES, fixed; r2 A and B CLEAN |
+| Review A M5 (code-review) | 1 | range 27327176c..be9d666d3 | CLEAN (sheet_model rows, labels from history_key_label, layout_snapshot only two sheet states) |
+| Review B M5 (conformance) | 1 | range 27327176c..be9d666d3 | CLEAN |
+| Visual-pass M5 | 1 | review shortcut sheet, single keys on/off, light and dark | PASS, 1 MINOR (Alt+← / Alt+→ keycap arrows draw as thin lines with small arrowheads, readable when zoomed; nothing clipped; no fix). Evidence: evidence/m5-sheet-*.png |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -79,4 +86,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- tdd/cycle-log.md has two "Cycle 18" entries across branches (M4 part 2 on 1465-m4, M5 here); renumber M5's to follow M4's when the branch is restacked on main.

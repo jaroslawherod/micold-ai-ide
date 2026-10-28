@@ -52,3 +52,19 @@ On macOS and on Windows, with a mouse that has side buttons:
 | C2 | macOS: Cmd+[ / Cmd+] with no field focused; then in the review's comment box; then Option+← in that box. | Back / Forward; in the box nothing moves the history and Option+← moves the caret by word. |
 | C3 | Windows: Alt+← / Alt+→ with no field focused, then in a terminal running `cat -v`. | Back / Forward; in the terminal `^[[1;3D` and no move. |
 | C4 | B3 on each platform. | The terminal program receives nothing for a side-button press. |
+
+### §C results (2026-10-28)
+
+Not run by hand: the autopilot run had no macOS or Windows machine and no mouse with side
+buttons. The evidence instead:
+
+- **C1, C4**: side buttons arrive as iced's `mouse::Button::Back` / `Forward` on every platform,
+  and the routing that keeps a press from the terminal program is platform-independent; it is
+  covered on Linux by `side_button` and the terminal pane tests (§A) and by §B B1/B3.
+- **C2**: the Cmd+[ / Cmd+] arm of `keymap::history_key` and `history_key_label` is behind
+  `cfg(target_os = "macos")`. CI's `build + test (macos-latest)` leg compiles it (`cargo build
+  --workspace`) and runs the core suite; the client tests that drive the arm run on Linux only.
+- **C3**: Windows uses the same Alt+←/→ arm as Linux (no `cfg` difference), tested in §A; CI's
+  `build + test (windows-latest)` leg compiles the workspace.
+
+Hand-check C1–C4 on the first macOS and Windows build that ships this feature.
