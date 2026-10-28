@@ -332,6 +332,13 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     ),
     (
         "transcript_selection",
+        "structured_transcript",
+        "TranscriptMsg — the transcript's context menu is a registered floating surface whose \
+         dismissal message is the transcript view's `TranscriptMsg::Select(MenuDismissed)`, the \
+         route every selection message takes; named, never handled (feature 1550, FR-013, M-4)",
+    ),
+    (
+        "transcript_selection",
         "session",
         "terminal_period_marker — the terminal period's marker text is the session feature's to \
          say; the selection copies it as drawn, a pure read (feature 1550, #943 FR-023)",

@@ -74,10 +74,6 @@ pub enum Scroll {
     By(i32),
 }
 
-/// How far one frame of a selection drag held past the transcript's edge scrolls it, in pixels
-/// (feature 1550, FR-003): about a line every two frames, so the selection grows at reading pace.
-pub const EDGE_SCROLL_STEP: i32 = 12;
-
 /// What the transcript view says (data-model.md *Messages*), carried by the session message
 /// family as `session::Msg::Transcript`.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -99,6 +99,10 @@ impl Click {
     }
 }
 
+/// How far one frame of a selection drag held past the transcript's edge scrolls it, in pixels
+/// (FR-003): about a line every two frames, so the selection grows at reading pace.
+pub const EDGE_SCROLL_STEP: i32 = 12;
+
 /// Which edge of the transcript a drag holds the pointer past (FR-003).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EdgeDir {
@@ -932,7 +936,6 @@ impl State {
     /// negative upward; nothing without a drag in progress (FR-003, contracts/selectable-text.md
     /// A-3).
     pub fn edge_scroll(&self, session: SessionId, dir: EdgeDir) -> Option<i32> {
-        use crate::features::structured_transcript::EDGE_SCROLL_STEP;
         self.dragging(session).then_some(match dir {
             EdgeDir::Up => -EDGE_SCROLL_STEP,
             EdgeDir::Down => EDGE_SCROLL_STEP,

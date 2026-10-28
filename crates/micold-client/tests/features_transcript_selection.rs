@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use micold_client::app::State as App;
 use micold_client::features::permission_prompts::State as Prompts;
-use micold_client::features::structured_transcript::{Scroll, TranscriptMsg, EDGE_SCROLL_STEP};
+use micold_client::features::structured_transcript::{Scroll, TranscriptMsg};
 use micold_client::features::transcript_rich::{DerivedBody, Part, RichCache};
 use micold_client::features::transcript_selection::shown::{
     footer_view, hunk_title, omitted_text, resolution_label, structured_input, unshown_caption,
@@ -18,6 +18,7 @@ use micold_client::features::transcript_selection::shown::{
 };
 use micold_client::features::transcript_selection::{
     copy_text, rows, units, Click, EdgeDir, Joint, SelectMsg, TranscriptView, Unit, COPY_FAILED,
+    EDGE_SCROLL_STEP,
 };
 use micold_client::features::window::FieldId;
 use micold_client::features::Outcome;
