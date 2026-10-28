@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M5
-- **Next step**: reviews A and B and the visual pass (T031) of M5 run by the orchestrator on the pushed head; then the full gate and the PR.
+- **Phase**: M6
+- **Next step**: M6 (T033–T034; T035 is done, uncommitted until then: see Handover), then a new close unit.
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 | #1591 | M2: keep the choice, launch with `--effort`, idle and stopped picks | merged | 5b7a239045d5bcf99f644b75b63c13b7fb000d74 |
 | #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
-| #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e (merge commit on main) |
+| #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e73f88e639035794414eb651ada04dfe |
+| #1599 | M5: `/effort` in the composer, daemon backstop, guide | merged | 5a109a9617e2bd48578b77236d51ae1ec3ba1a86 |
 
 ## Milestones
 
@@ -30,7 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | #1591 | merged |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
-| M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | in progress |
+| M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | #1599 | merged |
+| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | not started |
 
 ## Decisions
 
@@ -44,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | plan | Does a running CLI take an effort change, or must the session relaunch? (spec Assumption 1) | Running: `apply_flag_settings {"effortLevel": level|null}`; deferred to turn end when busy, like `set_model`; `--effort` at launch in both kinds | agent-resolved | research.md P-1, P-2 (recorded against the real CLI 2.1.311), R1 |
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
 | D20 | M4 | `EffortPickerState` in `composers` (plan) or its own field? | Its own field `effort_picker: effort_picker::State` on the window: the feature-isolation guard forbids a feature writing another's state and reads a field's owner from a type named `State`; data-model.md notes it | agent-resolved | `feature_write_isolation`, `feature_registration_cost` |
+| D21 | close | A race found by the close unit's quickstart Part A run in shipped M3 behaviour: fix it in the close PR or in a milestone? | A new milestone M6 (close.md step 2): it changes daemon concurrency, which is not Polish; the stand-in fix (T035, tests only) ships with it | agent-resolved | `[Some("low"), Some("high"), Some("low")]` from `a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both`, 2 of about 250 runs |
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
 | D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
@@ -97,6 +100,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M5 (T031) | 1 | 09d3654e6 | PASS light and dark (`visual-pass/m5/report.md`); unoffered-level case not runnable (the CLI offers all levels), unit tests cover it. V1 (treated MAJOR): the refusal notice outlived a later successful `/effort`, an opened picker — `Composers::clear_notice` on both, test-first |
 | Full gate M5 | 1 | — | green: `scripts/gate.sh` at 9e609d687 (earlier runs: shell test import, `clear_notice` unclassified in the isolation guard — fixed; disk filled twice without the low-debug env vars) |
 | Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
+| Close: quickstart Part A (T032) | 1 | — | all green on main 5a109a961 but `structured_effort` 28/29: `a_refused_idle_pick_after_a_refused_deferred_one…` asked `low` again (2 of about 250 runs; a real race, M6). Stress runs also showed two `Rig::start` races in the stand-in ("the CLI's answer never happened", "Claude did not answer the effort change"): fixed in the stand-in (T035). Results not yet written to quickstart.md: the close unit after M6 re-runs Part A |
 
 ## Declined review findings
 
@@ -105,10 +109,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M5 T027–T030 (T031 is the orchestrator's visual pass): `SendIntent::SetEffort`, `Classified::Effort`/`EffortPicker` in `command_palette.rs` (`classify` takes the model's offered levels, `effort_offered` in `effort_picker.rs`), routed in `shell/composer.rs` `send`; daemon `UserMessageRefusal::EffortIsTheApps` (core `user_message.rs`, `state.rs` `refuse_app_handled`, which also covers a queue edit); guide paragraph "`/effort` in the message box". Previous PR #1596 merged (196125f1e).
-- **Next step**: full gate, PR body in the scratchpad `pr-1554-m5-body.md`; the orchestrator opens the PR.
-- **Main paths**: `crates/micold-client/src/features/command_palette.rs`, `features/composer.rs`, `shell/composer.rs`, `crates/micold-daemon/src/state.rs`, `crates/micold-core/src/structured/user_message.rs`, tests `features_command_palette.rs`, `structured_effort.rs`.
-- **Open findings**: none.
+- **Done** (close unit 1): ledger brought up to M5 merged (#1599, 5a109a961); quickstart Part A run (see *Review rounds*); race found → M6 cut (tasks.md Phase 8, T033–T035, D21); T035 done and committed with this ledger change (not pushed: it ships in M6's PR).
+- **Next step**: M6 unit: T033 (deterministic test of the race, fails on main) and T034 (`state.rs` `reapply_effort` / `settle_effort_ask` against an unanswered deferred pick). Then a new close unit: speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR.
+- **Main paths**: `crates/micold-daemon/src/state.rs` (`reapply_effort` ~4474, `settle_effort_ask` ~4698, `EffortPicks` ~1031), `crates/micold-daemon/src/structured.rs` (`defer_effort`, `reapply_effort`), test `crates/micold-daemon/tests/structured_effort.rs` ~1104.
+- **Open findings**: none besides M6.
 
 ## Open escalation
 
