@@ -77,3 +77,19 @@ existed after T038 (structural).
 | T037 | card headers (`AccordionSection`/`DisclosureCard::selectable`, `HeaderText`), `IconLabel::selectable`, captions, footer, raw rows, user text; `Units::header` drops an open card's summary | T033 (open cards drew no summary but units listed one); `a_selectable_header_reports_its_title_and_folded_summary` | `micold-material` lib 442 passed; `features_transcript_selection` 33 passed (2 M2 tests updated to the open header) |
 | T038 | request blocks (`PromptCard::title_text`/`note_text`) and resolution rows at `Entry(id, Prompt(k))` / `End(k)`, the omitted notice at `Omitted`; `Selectable` passes its child's node through | `layout_snapshot` FAILED (wrapper node added a level) until the pass-through; `showcase_completeness` FAILED until `HeaderText::Summary` was named | `layout_snapshot` 169 passed, unchanged fixture; `showcase_completeness` 46 passed |
 | T034 | select-all + `copy_text` < 1 s; one drag step (hit → update → view/layout) < 100 ms, release, `MAX_EVENTS` | structural | `transcript_open_budget` (release) 6 passed: copy 0.85 ms, slowest drag step 27 ms |
+
+## M4b (T039–T043)
+
+T039/T040's tests were written with T041/T042 in one pass (the wiring is a handful of lines per
+behaviour), so their red evidence is a mutant run against the finished code: each behaviour
+reverted in place (Press not refocusing, `edge_scroll` always `None`, granularity from a fixed
+single click, Copy always enabled, the menu not registered as a surface, a second menu not closing
+the first), one build, every new test red, then reverted.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T039 (red) | `Press` focuses `FieldId::Transcript(s)`; `Edge` → `Scroll::By(±EDGE_SCROLL_STEP)` for the dragging session only, none without a drag or after release; the area's click count decides the granularity (M3 A F4) | mutant run: `a_press_gives_the_transcript_the_keyboard`, `an_edge_scrolls_the_dragging_session_only_and_only_while_dragging`, `the_areas_click_count_decides_the_granularity` (and the M2 `double_and_triple_clicks_select_a_word_and_a_line`) FAILED | `features_transcript_selection` 40 passed; `shell::transcript` (bin) 1 passed: an edge during a drag is one task, none for another session |
+| T040 (red) | menu items Copy (`None` without a selection) and Select all; empty transcript Copy disabled; Escape closes the registered menu and the menu holds the keyboard; one menu per window | mutant run: `the_menu_offers_copy_only_with_a_selection_and_select_all_always`, `an_empty_transcript_shows_copy_disabled`, `escape_closes_the_menu_and_the_menu_holds_the_keyboard`, `opening_a_menu_closes_another_sessions` FAILED (8 of 40 in all) | same |
+| T041 | `SelectionArea` around the transcript's stack (`transcript_area_id`), `TrackFocusAs` for it in `ui/focus.rs`, `Scroll::By` → `scroll_by` in `shell/transcript.rs`; folded summary highlight (`Ellipsized::highlighted`, M4a follow-up) | T039; `the_shown_part_of_a_selection_is_highlighted` | `micold-material` lib passed |
+| T042 | `ui::transcript::context_menu` on the window overlay, `TranscriptContextMenu` registered (`overlay/registry.rs`) | T040 | same |
+| T043 | user guide *Selecting and copying transcript text* | docs | `scripts/tests/*.test.sh` in the gate |

@@ -13,6 +13,9 @@
 //! even if a measurement is off by a fraction.
 
 use std::marker::PhantomData;
+use std::ops::Range;
+
+use unicode_segmentation::UnicodeSegmentation;
 
 use super::shaped_text::{draw_paragraph, State};
 use super::text::TypeRole;
@@ -20,7 +23,7 @@ use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
 use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{mouse, renderer, Widget};
-use iced::{alignment, Element, Font, Length, Pixels, Rectangle, Size};
+use iced::{alignment, Element, Font, Length, Pixels, Point, Rectangle, Size};
 use micold_core::tokens::Rgb;
 
 /// The character standing in for what did not fit. One glyph rather than three dots: it is what
@@ -45,6 +48,8 @@ pub struct Ellipsized<M> {
     path: bool,
     /// Draw in the host's foreground rather than `color` ([`Self::inherit_color`]).
     inherit: bool,
+    /// Bytes of the content drawn selected, on a fill in an ink ([`Self::highlighted`]).
+    selected: Option<(Range<usize>, Rgb, Rgb)>,
     marker: PhantomData<M>,
 }
 
@@ -64,6 +69,7 @@ impl<M> Ellipsized<M> {
             width: Length::Fill,
             path: false,
             inherit: false,
+            selected: None,
             marker: PhantomData,
         }
     }
@@ -125,6 +131,35 @@ impl<M> Ellipsized<M> {
         self.inherit = true;
         self
     }
+
+    /// Draw the bytes `range` of the content selected: on `fill` in `ink` (feature 1550: a folded
+    /// card's selected summary). Of a cut label, what is shown of the range is; a range that runs
+    /// into the cut part takes the ellipsis too. `None` draws as before.
+    pub fn highlighted(mut self, range: Option<Range<usize>>, fill: Rgb, ink: Rgb) -> Self {
+        self.selected = range.map(|range| (range, fill, ink));
+        self
+    }
+}
+
+/// The bytes of `fitted`, what is drawn of `content`, that show the selected bytes `selected` of
+/// `content`: the shown prefix's part of it, and the ellipsis when the range runs past the cut.
+/// `None` when nothing shown is selected. A path's label (cut at its front) is not highlighted.
+fn shown_selection(content: &str, fitted: &str, selected: &Range<usize>) -> Option<Range<usize>> {
+    let kept = if fitted == content {
+        content.len()
+    } else {
+        let kept = fitted.strip_suffix(ELLIPSIS)?;
+        content.starts_with(kept).then_some(kept.len())?
+    };
+    let start = selected.start.min(kept);
+    let end = if selected.end > kept {
+        fitted.len()
+    } else {
+        selected.end
+    };
+    // A range off the text's character boundaries (stale against a changed text) draws none.
+    let on_boundaries = fitted.is_char_boundary(start) && fitted.is_char_boundary(end);
+    (start < end && on_boundaries).then_some(start..end)
 }
 
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
@@ -246,7 +281,55 @@ where
         } else {
             super::style::color(self.color)
         };
-        draw_paragraph(renderer, &state.paragraph, layout, viewport, color);
+        let shown = self.selected.as_ref().and_then(|(range, fill, ink)| {
+            Some((
+                shown_selection(&self.content, &state.fitted, range)?,
+                fill,
+                ink,
+            ))
+        });
+        let Some((range, fill, ink)) = shown else {
+            draw_paragraph(renderer, &state.paragraph, layout, viewport, color);
+            return;
+        };
+        // The selected run's x span, from the shaped line's grapheme positions.
+        let paragraph = &state.paragraph;
+        let size = paragraph.min_bounds();
+        let x_of = |byte: usize| {
+            let index = state.fitted[..byte].graphemes(true).count();
+            paragraph
+                .grapheme_position(0, index)
+                .map_or(size.width, |p| p.x)
+        };
+        let bounds = layout.bounds();
+        let clip = bounds.intersection(viewport).unwrap_or(bounds);
+        let (from, to) = (x_of(range.start), x_of(range.end));
+        let lit = Rectangle::new(
+            Point::new(bounds.x + from, bounds.y),
+            Size::new((to - from).max(0.0), size.height),
+        );
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: lit,
+                ..renderer::Quad::default()
+            },
+            super::style::color(*fill),
+        );
+        let at = Point::new(bounds.x, bounds.y);
+        let before = Rectangle::new(clip.position(), Size::new(lit.x - clip.x, clip.height));
+        let after = Rectangle::new(
+            Point::new(lit.x + lit.width, clip.y),
+            Size::new(clip.x + clip.width - (lit.x + lit.width), clip.height),
+        );
+        for (part, tint) in [
+            (before, color),
+            (lit, super::style::color(*ink)),
+            (after, color),
+        ] {
+            if let Some(part) = part.intersection(&clip) {
+                renderer.fill_paragraph(paragraph, at, tint, part);
+            }
+        }
     }
 }
 
@@ -332,6 +415,33 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Feature 1550: of a cut label, the shown part of the selection is drawn, and the ellipsis
+    /// stands for a selected tail; of an uncut one, exactly the range.
+    #[test]
+    fn the_shown_part_of_a_selection_is_highlighted() {
+        let content = "alpha beta gamma";
+        assert_eq!(shown_selection(content, content, &(6..10)), Some(6..10));
+        let fitted = "alpha be…";
+        assert_eq!(shown_selection(content, fitted, &(0..5)), Some(0..5));
+        assert_eq!(
+            shown_selection(content, fitted, &(6..16)),
+            Some(6..fitted.len()),
+            "past the cut, the ellipsis is selected too"
+        );
+        assert_eq!(
+            shown_selection(content, fitted, &(12..16)),
+            Some(8..fitted.len()),
+            "only the cut part: the ellipsis alone"
+        );
+        assert_eq!(shown_selection(content, fitted, &(3..3)), None);
+        assert_eq!(shown_selection(content, "…a/b.rs", &(0..2)), None, "a path");
+        assert_eq!(
+            shown_selection("é and more", "é and more", &(1..4)),
+            None,
+            "off a character boundary"
+        );
+    }
 
     /// A stand-in for the renderer's shaper: one unit per character, so the arithmetic is
     /// checkable by eye. Proportional fonts differ in the numbers, never in the rule.

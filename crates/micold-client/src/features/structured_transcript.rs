@@ -69,6 +69,9 @@ pub enum Scroll {
     End,
     /// `scroll_to(AbsoluteOffset { y })`: back where the user left a detached view.
     To(u32),
+    /// `scroll_by(AbsoluteOffset { y })`: a selection drag held past an edge moves the view this
+    /// far, negative upward (feature 1550, FR-003).
+    By(i32),
 }
 
 /// What the transcript view says (data-model.md *Messages*), carried by the session message

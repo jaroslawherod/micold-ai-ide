@@ -915,6 +915,20 @@ pub fn view_with<'a>(
             )
         });
 
+    // A structured transcript's right-click menu (feature 1550, FR-013): Copy and Select all, at
+    // the press point, which the selection area reports in window space.
+    let transcript_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        crate::ui::transcript::context_menu(
+            &state.transcript_selection,
+            state.window.window_size,
+            |msg| {
+                Message::Session(SessionMsg::Transcript(
+                    crate::features::structured_transcript::TranscriptMsg::Select(msg),
+                ))
+            },
+            roles,
+        );
+
     cdk::overlay::Overlay::new(base)
         .push(overflow_menu)
         .push(switcher)
@@ -926,6 +940,7 @@ pub fn view_with<'a>(
         .push_maybe(session_menu)
         .push_maybe(card_menu)
         .push_maybe(shell_instance_menu)
+        .push_maybe(transcript_menu)
         .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
