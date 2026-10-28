@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Analyze | 1 | — | speckit-analyze (fresh headless process): 0 CRITICAL, 2 HIGH (C1 marker text in draw code → `effort_changed_text` tested; D1 terminal-kind pick → spec Edge Case added), 5 MEDIUM, 5 LOW — all fixed except S1 (task size, LOW) |
 | Tasks | 1 | b3b75d3032d7a421da8cbd34fcd4c3151089a0b8:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CHANGES: F1 MAJOR (M4 verified against guide text M5 ships → Part B 7 split 7a/7b), F2–F4 MINOR — all fixed. Fresh headless `claude -p`, read-only tools |
 | Tasks | 2 | 46f2f3cf63681dad6afe2f105902d3c5b928d369:1404427c4dbf5c12168db2d65f2d0b86dfeb896f | CLEAN (scoped re-review of the fix diff) |
+| M1 scoped gate | 1 | — | green: fmt, clippy (core, workspace), client and daemon tests; core tests green with the four root-only tests skipped (they need a non-root user; `scripts/gate.sh` runs them unprivileged). Built with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`: the default build filled the disk |
+| A (code-review, high) M1 | 1 | 803c2cc89e1cbf07ef6df599f81fdc7f53985395:32f37caee2f5e04cd90b7924b1b2df55e0872b53 | pending: run by the orchestrator in a fresh context |
 
 ## Declined review findings
 
