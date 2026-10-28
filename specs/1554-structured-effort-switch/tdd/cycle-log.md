@@ -151,3 +151,14 @@ the implementation it covers.
 ### Cycle 14 — guide (T025)
 
 - `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and effort*. No test.
+
+### Cycle 15 — the window takes the catalog's effort (found driving the real client)
+
+- red: `features_session` `a_snapshot_carries_the_effort_choice_into_the_window` failed
+  (`left: Some(Default)`, `right: Some(Level("high"))`): `catalog_sync` copied a summary's
+  `model` into the window's session but not its `effort`, so after a pick the marker read high
+  and the trigger kept `Effort: Default`.
+- green: `catalog_sync` copies `effort` beside `model`, for a known session and a new one.
+- also: `session_view_has_keyboard` yields while the effort list is open, as for the model picker
+  (`composer_fits` `the_open_effort_picker_keeps_the_keyboard_from_the_pane`); the composer tab
+  walk and the layout fixture take the new trigger (`composer_tab`, `layout_snapshot`).

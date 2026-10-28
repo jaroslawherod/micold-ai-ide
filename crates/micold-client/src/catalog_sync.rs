@@ -233,8 +233,10 @@ pub fn reconcile_catalog(
                 // The daemon owns which session of a location is main (feature 776, R14).
                 existing.main = summary.main;
                 existing.origin = summary.origin;
-                // The model choice and the kind, which a switch changes (#943 FR-017, R11).
+                // The model choice and the kind, which a switch changes (#943 FR-017, R11), and
+                // the effort choice (#1554 FR-001).
                 existing.model = summary.model.clone();
+                existing.effort = summary.effort.clone();
                 if existing.kind != summary.kind {
                     existing.kind = summary.kind;
                     kind_changed.push(existing.id);
@@ -296,6 +298,7 @@ pub fn reconcile_catalog(
                 s.main = summary.main;
                 s.origin = summary.origin;
                 s.model = summary.model.clone();
+                s.effort = summary.effort.clone();
                 list.push(s);
             }
         }

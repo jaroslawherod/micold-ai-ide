@@ -436,6 +436,28 @@ fn the_open_model_picker_keeps_the_keyboard_from_the_pane() {
     );
 }
 
+/// The open effort picker keeps the keyboard from the pane too (#1554): a press on its trigger
+/// takes the focus from the composer's text area, and its arrows, Enter and Escape are the list's.
+#[test]
+fn the_open_effort_picker_keeps_the_keyboard_from_the_pane() {
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    state.open_effort_picker(id);
+    assert!(
+        state.effort_picker.picker(id).is_some(),
+        "a structured Claude Code session offers it"
+    );
+    assert!(
+        !state.terminal_focused(),
+        "the list holds the keys while it is open"
+    );
+    state.effort_picker.close(id);
+    assert!(
+        state.terminal_focused(),
+        "closed, and nothing else focused, the pane has them back"
+    );
+}
+
 /// The queued message edited in place reports its field's focus the same way (FR-020).
 #[test]
 fn a_press_on_a_queued_message_being_edited_reports_its_field() {
