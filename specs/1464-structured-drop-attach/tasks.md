@@ -38,16 +38,16 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 **Independent Test**: click the button, pick an image and a text file; chip and quoted path appear as for a drop.
 
-- [ ] T010 [P] [US3] Failing reducer tests in `crates/micold-client/tests/features_composer.rs`: `AttachRequested` twice opens one picker; `AttachPickerClosed` is silent; `AttachPicked` after the session ended is refused with a notice; the result lands only on the requesting session; the same ordered paths via `Dropped` and via `AttachPicked` give equal draft, images and notice; button press -> picker requested -> `AttachPicked` is the whole flow (FR-007, 008, 009, 012, 013, 015, SC-001, SC-002)
-- [ ] T011 [P] [US3] Failing geometry test in `crates/micold-client/tests/layout_snapshot.rs`: the Add attachment button fits the composer row beside Stop/Send; disabled when the session cannot accept input or a picker is open (FR-006, 011)
-- [ ] T012 [US3] Add `rfd` (async dialog, `xdg-portal` + `tokio` on Linux) to `/Cargo.toml` workspace deps and `crates/micold-client/Cargo.toml`
-- [ ] T013 [US3] `Msg::{AttachRequested,AttachPicked,AttachPickerClosed}` and private `picker_open` on the composer entry, with the transitions of data-model.md, in `crates/micold-client/src/features/composer.rs`
-- [ ] T014 [US3] Make `read_for_composer` `pub(crate)` in `crates/micold-client/src/shell/drops.rs`; new `crates/micold-client/src/shell/attach_picker.rs` (`open(session) -> Task<Message>` over `rfd::AsyncFileDialog::pick_files`, title "Add attachment", no filter)
-- [ ] T015 [US3] Route the new messages in `crates/micold-client/src/shell/composer.rs`: spawn the picker task, hand picked paths to `read_for_composer`, refuse a late result for a session that no longer accepts input
-- [ ] T016 [P] [US3] `Icon::Attach` (paperclip) with its glyph source, and a unit test in `icons.rs` that it has a glyph, in `crates/micold-material/src/icons.rs`; list it in `docs/user-guide/icons.md`
-- [ ] T017 [US3] Push `micold_material::IconButton` with an `iced::widget::tooltip` ("Add attachment") before Stop/Send in `crates/micold-client/src/ui/composer.rs`; disabled via `on_press_maybe(None)`; keyboard focus through its existing support (FR-006, FR-010 focus part)
-- [ ] T018 [P] [US3] Showcase poses of the button (normal, hover, focus, disabled; the focus pose is also where keyboard reach by Tab and Enter/Space is checked, T040) in `crates/micold-client/src/showcase/sections/`
-- [ ] T019 [US3] User guide: the button and the picker in `docs/user-guide/structured-input.md`
+- [x] T010 [P] [US3] Failing reducer tests in `crates/micold-client/tests/features_composer.rs`: `AttachRequested` twice opens one picker; `AttachPickerClosed` is silent; `AttachPicked` after the session ended is refused with a notice; the result lands only on the requesting session; the same ordered paths via `Dropped` and via `AttachPicked` give equal draft, images and notice; button press -> picker requested -> `AttachPicked` is the whole flow (FR-007, 008, 009, 012, 013, 015, SC-001, SC-002)
+- [x] T011 [P] [US3] Failing geometry test in `crates/micold-client/tests/layout_snapshot.rs`: the Add attachment button fits the composer row beside Stop/Send; disabled when the session cannot accept input or a picker is open (FR-006, 011)
+- [x] T012 [US3] Add `rfd` (async dialog, `xdg-portal` + `tokio` on Linux) to `/Cargo.toml` workspace deps and `crates/micold-client/Cargo.toml`
+- [x] T013 [US3] `Msg::{AttachRequested,AttachPicked,AttachPickerClosed}` and private `picker_open` on the composer entry, with the transitions of data-model.md, in `crates/micold-client/src/features/composer.rs`
+- [x] T014 [US3] Make `read_for_composer` `pub(crate)` in `crates/micold-client/src/shell/drops.rs`; new `crates/micold-client/src/shell/attach_picker.rs` (`open(session) -> Task<Message>` over `rfd::AsyncFileDialog::pick_files`, title "Add attachment", no filter)
+- [x] T015 [US3] Route the new messages in `crates/micold-client/src/shell/composer.rs`: spawn the picker task, hand picked paths to `read_for_composer`, refuse a late result for a session that no longer accepts input
+- [x] T016 [P] [US3] `Icon::Attach` (paperclip) with its glyph source, and a unit test in `icons.rs` that it has a glyph, in `crates/micold-material/src/icons.rs`; list it in `docs/user-guide/icons.md`
+- [x] T017 [US3] Push `micold_material::IconButton` with an `iced::widget::tooltip` ("Add attachment") before Stop/Send in `crates/micold-client/src/ui/composer.rs`; disabled via `on_press_maybe(None)`; keyboard focus through its existing support (FR-006, FR-010 focus part)
+- [x] T018 [P] [US3] Showcase poses of the button (normal, hover, focus, disabled; the focus pose is also where keyboard reach by Tab and Enter/Space is checked, T040) in `crates/micold-client/src/showcase/sections/`
+- [x] T019 [US3] User guide: the button and the picker in `docs/user-guide/structured-input.md`
 
 ## Phase 5: User Story 4 - Keyboard shortcut (P2)
 

@@ -12,7 +12,7 @@
 //! The caret is the editor's: `(line, column)` with the column a byte offset into the line.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use micold_core::path_insert::{plan_insertion, InsertTarget, SandboxShare, ShellKind};
 use micold_core::protocol::messages::{
@@ -308,6 +308,9 @@ pub struct Composer {
     pub editor: crate::app::Editor,
     /// A preview of each of the draft's pictures, in order, made once per picture.
     pub previews: Vec<crate::app::Preview>,
+    /// The **Add attachment** picker is open for this session (#1464 FR-015): set by an accepted
+    /// `AttachRequested`, cleared by `AttachPicked` or `AttachPickerClosed`.
+    picker_open: bool,
 }
 
 impl Composer {
@@ -412,6 +415,15 @@ pub enum Msg {
         session: SessionId,
         files: Box<DroppedFiles>,
     },
+    /// The **Add attachment** button (#1464 FR-007).
+    AttachRequested(SessionId),
+    /// The files the user chose in `session`'s picker, in the order chosen (#1464 FR-008).
+    AttachPicked {
+        session: SessionId,
+        paths: Vec<PathBuf>,
+    },
+    /// `session`'s picker closed without a choice (#1464 FR-009).
+    AttachPickerClosed(SessionId),
     /// A click on the command palette's row `row` (#943 FR-008a).
     PaletteClicked { session: SessionId, row: usize },
     /// Open the model picker from the view (#943 FR-014).
@@ -598,6 +610,48 @@ impl State {
     /// connection and no draft asked of it (FR-011).
     pub fn accepts_input(&self, session: SessionId) -> bool {
         self.unavailable(session, true).is_none()
+    }
+
+    /// Whether **Add attachment** can open a picker for `session`: it accepts input and has none
+    /// open (#1464 FR-006, FR-011, FR-015).
+    pub fn can_attach(&self, session: SessionId) -> bool {
+        self.accepts_input(session) && !self.picker_open(session)
+    }
+
+    /// Whether a picker is open for `session` (#1464 FR-015).
+    pub fn picker_open(&self, session: SessionId) -> bool {
+        self.composer(session).is_some_and(|c| c.picker_open)
+    }
+
+    /// **Add attachment** was pressed: `true` when the shell is to open the picker, which is then
+    /// marked open. A session that cannot accept input, or one whose picker is already open, gets
+    /// none (#1464 FR-011, FR-015).
+    pub fn attach_requested(&mut self, session: SessionId) -> bool {
+        if !self.can_attach(session) {
+            return false;
+        }
+        self.entry(session).picker_open = true;
+        true
+    }
+
+    /// The picker closed without a choice: nothing changes and nothing is said (#1464 FR-009).
+    pub fn attach_picker_closed(&mut self, session: SessionId) {
+        if let Some(composer) = self.composers.get_mut(&session) {
+            composer.picker_open = false;
+        }
+    }
+
+    /// The picker returned `count` files for `session`: the picker is over, and `true` when the
+    /// shell is to read them and admit them as a drop. A session that stopped accepting input
+    /// meanwhile gets none of them and a notice (#1464 FR-012).
+    pub fn attach_picked(&mut self, session: SessionId, count: usize) -> bool {
+        let accepts = self.accepts_input(session);
+        let composer = self.entry(session);
+        composer.picker_open = false;
+        if count > 0 && !accepts {
+            composer.notice = Some(drop_refused(count));
+        }
+        count > 0 && accepts
     }
 
     /// Whether the draft can be sent: sendable, connected, running and no send waiting (FR-004,

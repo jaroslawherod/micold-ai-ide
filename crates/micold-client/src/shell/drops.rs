@@ -96,7 +96,7 @@ fn target_of(app: &App, pane: PaneId) -> DropTarget {
 /// Read a structured pane's dropped files off the UI thread (feature 941, R11): sniff each for a
 /// picture, read the pictures whole, and hand every read, `Ok` or `Err`, to the composer, which
 /// attaches, inserts or refuses (FR-027 to FR-029).
-fn read_for_composer(
+pub(crate) fn read_for_composer(
     session: micold_core::session::SessionId,
     paths: Vec<PathBuf>,
     shell: micold_core::path_insert::ShellKind,

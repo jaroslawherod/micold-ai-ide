@@ -239,3 +239,24 @@ pub fn command_palette<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
         Layout::FullWidth,
     )
 }
+
+/// The composer's **Add attachment** button (#1464 FR-014): enabled, and inert while the session
+/// cannot accept input or a picker is open. Hover shows the tooltip; Tab reaches it, and Enter or
+/// Space presses it (quickstart B, T040).
+pub fn attach_button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "enabled",
+                crate::ui::composer::attach_button(roles, Some(Message::NoOp)),
+                roles,
+            ),
+            posed(
+                "disabled",
+                crate::ui::composer::attach_button(roles, None),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}

@@ -836,3 +836,55 @@ fn a_session_with_a_pending_request_says_waiting_for_you() {
         );
     }
 }
+
+/// #1464 M2 (FR-006, FR-011): the **Add attachment** button's glyph (`attach_file`).
+const ATTACH_GLYPH: &str = "\u{e226}";
+
+#[test]
+fn the_add_attachment_button_fits_the_composer_row_beside_send() {
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        for (phase, label) in [
+            (TurnPhase::Idle, "ready"),
+            (busy(InterruptAsk::None), "busy, with Stop"),
+        ] {
+            let (mut state, id) = pane();
+            report(&mut state, id, phase, false, 0);
+            let (painted, transcript) = paint(themed(state, scheme), id);
+            under_the_transcript(&painted, transcript, ATTACH_GLYPH);
+            let (attach, send) = (find(&painted, ATTACH_GLYPH), find(&painted, "Send"));
+            assert!(
+                attach.origin.x + attach.natural_width <= send.origin.x + TOLERANCE,
+                "{label}: the button at {:?} sits before Send at {:?}",
+                attach.origin,
+                send.origin
+            );
+            assert!(
+                (attach.origin.y - send.origin.y).abs() <= 24.0,
+                "{label}: the button shares Send's row: {:?} vs {:?}",
+                attach.origin,
+                send.origin
+            );
+        }
+    }
+}
+
+#[test]
+fn the_add_attachment_button_is_disabled_when_the_session_cannot_accept_input_or_a_picker_is_open()
+{
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    assert!(state.composers.can_attach(id), "enabled when idle");
+    assert!(state.composers.attach_requested(id));
+    assert!(
+        !state.composers.can_attach(id),
+        "disabled while a picker is open"
+    );
+    report(&mut state, id, TurnPhase::NotRunning, false, 0);
+    assert!(
+        !state.composers.can_attach(id),
+        "disabled when it cannot accept input"
+    );
+    // Still drawn, so the row does not shift.
+    let (painted, _) = paint(state, id);
+    find(&painted, ATTACH_GLYPH);
+}

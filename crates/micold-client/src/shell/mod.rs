@@ -16,6 +16,7 @@
 //! are different systems — the iced runtime and the desktop environment — that happen to meet at
 //! one message.
 
+pub mod attach_picker;
 pub mod capabilities;
 pub mod changes;
 pub mod changes_watch;
