@@ -4415,17 +4415,19 @@ impl DaemonState {
     }
 
     /// A session's CLI answered an effort change deferred past a turn (#1554 FR-005): a refused one
-    /// is put back to the choice before it, unless another pick was made since.
+    /// is put back to the choice before it, unless another pick was kept since. An idle pick
+    /// made after it and not answered yet is not one: if the CLI takes it, its answer keeps it
+    /// ([`Self::finish_effort_pick`]); if not, the CLI is still on the choice before both.
     pub fn follow_effort_answer(&self, session: SessionId, answer: EffortAnswer) {
         let previous = {
             let mut inner = self.lock();
             let Some(picks) = inner.effort_picks.get_mut(&session) else {
                 return;
             };
-            let latest = picks.latest;
+            let kept = picks.kept;
             match (&answer, picks.deferred.take()) {
                 (EffortAnswer::Refused(effort), Some(deferred)) if *effort == deferred.chosen => {
-                    (deferred.pick == latest).then_some(deferred.previous)
+                    (deferred.pick == kept).then_some(deferred.previous)
                 }
                 (EffortAnswer::Accepted(effort), Some(deferred)) if *effort == deferred.chosen => {
                     None
@@ -4654,10 +4656,10 @@ impl DaemonState {
                     Err(why) => refused(ErrorKind::Refused, why),
                 };
             }
-            // An idle pick supersedes a deferred one (`ask_effort` writes it first), and is the
-            // choice the CLI ends on until its answer.
+            // An idle pick goes after a deferred one (`ask_effort` writes it first), and is the
+            // choice the CLI ends on until its answer. The deferred one stays for its own answer:
+            // refused, and this one too, the choice goes back to the one before both.
             picks.latest += 1;
-            picks.deferred = None;
             picks.asking = Some(picks.latest);
             (child, picks.latest, level)
         };
