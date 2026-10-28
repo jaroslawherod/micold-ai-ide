@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR not opened yet); full gate (`scripts/gate.sh`) green at 53ba8af40; not pushed; review A and review B and the visual pass pending
-- **Next step**: orchestrator runs M3 review A (code-review high) and review B (conformance, sonnet) on `075ac3985..HEAD` of 1504-m3 and the visual pass (quickstart §B rows A–E, G, I with source words; Refresh: close E's PR, archive G's session); M2's review B round 2 and PR still pending on 1504-m2; M3 PR text in scratchpad pr-title-m3.md / pr-body-m3.md
+- **Phase**: M3 implemented (T025–T032) on branch 1504-m3 (worktree /home/user/wt-1504-m3), stacked on M2's head 075ac3985 (M2 PR #1568 open); review A (CLEAN, 2 MINOR) and review B round 1 (F1 MAJOR) fixed at e51e05b76; full gate (`scripts/gate.sh`) green at e51e05b76; not pushed
+- **Next step**: orchestrator runs M3 review B round 2 (sonnet, scoped to `253f3f912..e51e05b76`) and the visual pass; then fill `VISUAL_PASS` in scratchpad pr-body-m3.md and open the M3 PR
 
 ## Pull requests
 
@@ -66,8 +66,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 visual pass | 1 | f99f06acf | PASS: quickstart §B rows C, D; stub request asks status+summary incl. ABC-43 (/mnt/project-files/issue-1504/m2-overview-sidebar.png, m2-jira-stub-request.log) |
 | M3 review A (code-review high) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CLEAN, 2 MINOR — both fixed: (a) a renamed row's tooltip led with the location title the row does not show (1125 FR-012): `with_title_line` takes the rename and leads with it, no source line (test `a_renamed_rows_tooltip_leads_with_the_rename_not_the_pull_request_title`); (b) = review B F1 |
 | M3 review B (conformance, sonnet) | 1 | bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc | CHANGES: 1 MAJOR, 1 MINOR. F1 [MAJOR] fixed: `with_title_line` skipped the source line for a Branch title (L3 exempts only Folder); now only Folder names no source, and a title that repeats the Name/Branch line is dropped but its words stay (`Branch name\n{tooltip}`); test rewritten, worktrees-and-sessions.md aligned with overview.md. F2 [MINOR] deferred to M4 (Follow-ups) |
-| M3 review B (conformance, sonnet) | 2 | pending | pending (orchestrator; scoped to the fix commit, sonnet, re-run Verify) |
-| M3 visual pass | 1 | 53ba8af40 | pending (quickstart §B rows A–E, G, I + Refresh E/G; showcase *title sources, expanded*) |
+| M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | pending (orchestrator, sonnet; fix diff `review-snapshot.sh diff bf46fa9238873d669c14b76be2cab7ff567a5c37:53ba8af404b6ea5388c08d7cdcd5d6c142d710bc` = `253f3f912..e51e05b76`; re-run Verify) |
+| M3 visual pass | 1 | e51e05b76 | pending (title, row tooltip, header tooltip, expanded card for rows A, C, E, G, I, a folder-titled and a renamed worktree; Refresh E/G) |
 
 ## Red runs (M3)
 
