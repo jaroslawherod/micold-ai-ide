@@ -11,7 +11,7 @@ table row. Research R4–R7, R12.
 | text with `\u{7}` | the character removed |
 | 1,000 `char`s after cleaning (non-ASCII counted as one each) | `Ok` |
 | 1,001 `char`s after cleaning | `Err(TooLong)` |
-| `""`, `"   "` | `Ok`, empty (Edge "Empty advanced query") |
+| `""`, `"   "` | `Ok`, empty; the client does not send it: an empty run shows the prompt (Edge "Empty advanced query") |
 
 ## 2. Refusals (FR-012, US4 AS5, SC-004)
 
@@ -55,7 +55,7 @@ Repository `acme/app`.
 | US6 Basic: assignee Nobody, milestone Nobody | `… is:open no:assignee no:milestone sort:updated-desc` |
 | Advanced `-label:in-progress state:open` | `repo:acme/app is:issue (-label:in-progress state:open) sort:updated-desc` |
 | Advanced `a OR b sort:created-asc` | `repo:acme/app is:issue (a OR b) sort:created-asc` |
-| Advanced `` (empty) | `repo:acme/app is:issue sort:updated-desc` |
+| Advanced `` (empty) | `repo:acme/app is:issue sort:updated-desc` (constructible, never sent: an empty run sends nothing) |
 | Advanced `sort:created-asc` | `repo:acme/app is:issue sort:created-asc` |
 | Default basic | not constructible: `GithubFilter::is_default` → today's path (FR-009) |
 

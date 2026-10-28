@@ -1783,3 +1783,73 @@ fn a_refusal_without_a_message_says_so_plainly() {
     assert_eq!(form(&state).issues, IssueList::Rejected(Vec::new()));
     assert_eq!(NOT_ACCEPTED, "GitHub did not accept the search query.");
 }
+
+// --- M5 review round 1 fixes ------------------------------------------------------------------
+
+/// Review A F3: after a query ran, a basic list dropped by a switch to Advanced while it loaded
+/// leaves nothing listed: no filter is active, the statement does not say one is sent, and the
+/// prompt stands in place of the list; nothing is sent.
+#[test]
+fn a_basic_load_dropped_for_advanced_leaves_no_active_filter() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:bug");
+    answer_with(
+        &mut state,
+        Ok(page(vec![issue(77, "Bug", &["bug"])], 1, None)),
+    );
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
+    assert!(state.worktree_form.awaited_issue_load().is_some());
+    let seq = state.worktree_form.issue_request_seq;
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    assert_eq!(
+        state.worktree_form.issue_request_seq, seq,
+        "nothing is sent"
+    );
+    assert_eq!(state.worktree_form.awaited_issue_load(), None);
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert!(form(&state).shows_github_advanced(), "the prompt shows");
+    assert_eq!(form(&state).github_selector.active_filter(), None);
+    assert_eq!(form(&state).github_filter(), None);
+    assert_eq!(
+        form(&state).issue_notice().as_deref(),
+        Some("Reads open issues of o/r from GitHub.")
+    );
+}
+
+/// Visual pass F1 (spec Edge "Empty advanced query"): running an empty or whitespace-only query
+/// sends nothing: the prompt stands in place of the list, as before any run, also after a list
+/// showed.
+#[test]
+fn an_empty_run_sends_nothing_and_keeps_the_prompt() {
+    for text in ["", "   ", "\t \n"] {
+        let mut state = shown(default_issues());
+        filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+        run(&mut state, text);
+        assert_eq!(state.worktree_form.github_filtered_load(), None, "{text:?}");
+        assert_eq!(state.worktree_form.awaited_issue_load(), None, "{text:?}");
+        assert_eq!(form(&state).issues, IssueList::NotRequested, "{text:?}");
+        assert!(form(&state).shows_github_advanced(), "the prompt shows");
+        assert_eq!(form(&state).github_selector.last_run, None);
+        assert_eq!(form(&state).github_selector.active_filter(), None);
+    }
+
+    // After a query's list: an empty run drops it for the prompt, and sends nothing.
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Advanced));
+    run(&mut state, "label:bug");
+    answer_with(
+        &mut state,
+        Ok(page(vec![issue(77, "Bug", &["bug"])], 1, None)),
+    );
+    run(&mut state, "  ");
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert!(form(&state).shows_github_advanced(), "the prompt shows");
+    assert_eq!(form(&state).github_selector.last_run, None);
+    assert_eq!(form(&state).github_selector.draft, "");
+    assert_eq!(form(&state).github_filter(), None);
+    // Back to Basic then loads the basic list again.
+    filter(&mut state, GithubMsg::ModeChanged(QueryMode::Basic));
+    assert!(state.worktree_form.awaited_issue_load().is_some());
+}

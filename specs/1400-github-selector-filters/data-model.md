@@ -60,7 +60,8 @@ function or test names them (plan §US6 separability).
 - `condition(&self) -> String`: `text` without the sort tokens, spaces collapsed, trimmed.
 - `sorts(&self) -> Vec<&str>`: the sort tokens as typed, in order.
 - `as_str(&self) -> &str`: what runs, what the input shows after a run, what is remembered.
-- The empty text parses (Edge "Empty advanced query").
+- The empty text parses; the selector never runs it (Edge "Empty advanced query": an empty run
+  shows the prompt).
 
 ```rust
 pub enum QueryRefusal { TooLong, UnclosedQuote, ScopeQualifier, UnbalancedParentheses }
@@ -110,8 +111,8 @@ pub enum FilterFailure { Rejected(Vec<String>), Load(IssueLoadError) }
 |---|---|---|
 | `mode` | `QueryMode` (reused from `jira_query`, research R12) | Default `Basic`. |
 | `basic` | `BasicFilters` | Default: the default filter. |
-| `query` | `String` | A `UserQuery::as_str()`; empty when none ran or the empty query ran. |
-| `ran` | `bool` | Whether any query ever ran on the project (FR-013: an empty query that ran re-runs; none ever run shows the prompt). |
+| `query` | `String` | A `UserQuery::as_str()`, never empty when `ran`; empty when none ran. |
+| `ran` | `bool` | Whether any query ever ran on the project (FR-013: none ever run shows the prompt; an empty run is not a run). |
 
 - `from_json(&[u8]) -> RememberedSelector`: lenient (unparseable → default; invalid values dropped
   as §2; a query `UserQuery::parse` refuses → `query = ""`, `ran = false`).
@@ -169,10 +170,10 @@ Both are reset like `Failed`. `held()` is empty for both.
 | Form opens with `RememberedSelector` R | `GithubSelector::from_remembered(R)`; nothing loads until the GitHub source shows. |
 | GitHub source shown (034's load point) | Basic: load with `basic` (default → today's load). Advanced: `last_run` some → run it once (FR-013); none → prompt, `issues = NotRequested`. |
 | Basic filter chosen / removed / state set / **Clear filters** | Update `basic`; bump `issue_request_seq`; `issues = Loading`; `listed_for = Basic`; outcome `GithubSelectorRemembered(Basic)` (FR-008, FR-021). |
-| Switch to Advanced | `mode = Advanced`; no load (FR-002); outcome `Remembered(Mode)`. |
+| Switch to Advanced | `mode = Advanced`; no load (FR-002); a basic list still loading is dropped (`issues = NotRequested`, `listed_for = None`: no active filter, the prompt); outcome `Remembered(Mode)`. |
 | Switch to Basic | `mode = Basic`; if `listed_for == Some(Advanced)` → bump seq, load `basic`; outcome `Remembered(Mode)`. |
 | Draft edited | `draft = text`; nothing else (FR-010). |
-| Run (Enter / Run) | `UserQuery::parse(draft)`: `Err(r)` → bump seq, `issues = Refused(r)` (nothing sent); `Ok(q)` → bump seq, `draft = q.as_str()`, `last_run = Some(q)`, `issues = Loading`, `listed_for = Advanced`, outcome `Remembered(Query)`. |
+| Run (Enter / Run) | `UserQuery::parse(draft)`: `Err(r)` → bump seq, `issues = Refused(r)` (nothing sent); `Ok(q)` with `q` empty → `draft` and `last_run` cleared, `listed_for = None`, `issues = NotRequested` (the prompt; nothing sent, not remembered); other `Ok(q)` → bump seq, `draft = q.as_str()`, `last_run = Some(q)`, `issues = Loading`, `listed_for = Advanced`, outcome `Remembered(Query)`. |
 | Filtered load answered (seq matches) | `Ok` → `Loaded` (descriptions done, R9); `Err(Rejected(m))` → `Rejected(m)`; `Err(Load(e))` → `Failed { e }`. Stale seq → dropped. |
 | Retry | Same filter, new seq (FR-019). |
 | Source → Jira, form closed, GitHub issues off | In-flight result discarded by the seq bump 034 already does; `GithubSelector` kept while the form is open (spec Edge "Switching source to Jira and back"). |
