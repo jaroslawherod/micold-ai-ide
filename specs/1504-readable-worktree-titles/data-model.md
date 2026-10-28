@@ -92,8 +92,9 @@ Transitions: none → `Pending` (`TitlesRequested`); `Pending` → `Known | NoIs
 `{ spec: Option<String>, commit: Option<String> }`, per worktree dir in
 `State.facts: BTreeMap<String, TitleFacts>`. `Debug` omits texts. Beside it,
 `State.facts_round: u64` (bumped per request) and `State.facts_asked: BTreeMap<String, u64>` (the
-round last asked per dir). All three cleared on `ProjectSwitched`; entries for dirs no longer listed
-are pruned when facts are stored.
+round last asked per dir). `facts` and `facts_asked` are cleared on `ProjectSwitched`; `facts_round`
+is never reset, so a late answer from an earlier visit to the same project is dropped. Entries for
+dirs no longer listed are pruned when facts are stored.
 
 ### Msg (extended)
 
