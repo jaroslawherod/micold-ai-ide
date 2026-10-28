@@ -9,9 +9,7 @@ pub const SUMMARY_MAX_CHARS: usize = 240;
 /// `key: value, …` summary of the input, else the input text itself; on one line, cut with `…`.
 pub fn input_summary(name: &str, input_json: &str) -> String {
     let text = match serde_json::from_str::<Value>(input_json) {
-        Ok(Value::Object(input)) => work_field(name)
-            .and_then(|field| input.get(field))
-            .and_then(Value::as_str)
+        Ok(Value::Object(input)) => work_str(name, &input)
             .map(str::to_string)
             .unwrap_or_else(|| generic(&input)),
         _ => input_json.to_string(),
@@ -23,14 +21,17 @@ pub fn input_summary(name: &str, input_json: &str) -> String {
 /// uncut and on all its lines; `None` for a tool without one, a missing or non-string field and
 /// input that is not a JSON object.
 pub fn work_value(name: &str, input_json: &str) -> Option<String> {
-    let field = work_field(name)?;
     match serde_json::from_str::<Value>(input_json) {
-        Ok(Value::Object(mut input)) => match input.remove(field) {
-            Some(Value::String(value)) => Some(value),
-            _ => None,
-        },
+        Ok(Value::Object(input)) => work_str(name, &input).map(str::to_string),
         _ => None,
     }
+}
+
+/// The string in `input`'s work field, when the tool has one and it holds a string.
+fn work_str<'a>(name: &str, input: &'a Map<String, Value>) -> Option<&'a str> {
+    work_field(name)
+        .and_then(|field| input.get(field))
+        .and_then(Value::as_str)
 }
 
 /// The input field that names a common tool's work.

@@ -183,7 +183,10 @@ fn a_position_built_in_a_text_is_snapped() {
 
 // S-5 — streaming never moves a selection.
 
-fn ids_by_key(transcript: &Transcript) -> Vec<(EntryKey, EntryId, u64)> {
+/// Each entry's key, id and revision, in order.
+type Snapshot = Vec<(EntryKey, EntryId, u64)>;
+
+fn ids_by_key(transcript: &Transcript) -> Snapshot {
     transcript
         .entries()
         .map(|e| (e.key().clone(), e.id(), e.revision()))
@@ -196,7 +199,7 @@ fn appending_and_changing_entries_never_moves_a_selection() {
     for name in RECORDED {
         let events = events_of(&lines_of(name));
         let mut transcript = Transcript::new();
-        let mut held: Option<(Selection, Vec<(EntryKey, EntryId, u64)>)> = None;
+        let mut held: Option<(Selection, Snapshot)> = None;
         for event in &events {
             transcript.apply(0, std::slice::from_ref(event), true);
             let now = ids_by_key(&transcript);
@@ -282,7 +285,7 @@ fn growing_the_focus_entry_past_the_focus_keeps_the_selected_text() {
         .expect("the fixture streams text");
     let mut transcript = replayed(&events[..=first]);
     let (id, text) = reply_text(&transcript);
-    let focus = text.len().min(3);
+    let focus = snap(&text, 3);
     let selected = text[..focus].to_string();
     let anchor_entry = transcript.entries().next().expect("an entry").id();
     let held = selection_of(pos(body(anchor_entry), &[0], 0), pos(body(id), &[0], focus));
@@ -341,6 +344,23 @@ fn word_at_selects_a_word_a_space_run_or_a_punctuation_run() {
         "at the end, the last run"
     );
     assert_eq!(word_at("", 0), 0..0);
+    let full_width = "テスト！！";
+    let bangs = range_of(full_width, "！！");
+    assert_eq!(word_at(full_width, bangs.start), bangs, "a full-width run");
+}
+
+#[test]
+fn word_at_never_crosses_a_line_break() {
+    let code = "foo  \n    bar\n\nbaz";
+    assert_eq!(
+        word_at(code, 4),
+        3..5,
+        "trailing spaces, not the break after them"
+    );
+    assert_eq!(word_at(code, 7), 6..10, "the next line's indentation alone");
+    assert_eq!(word_at(code, 5), 3..5, "at a line's end, its last run");
+    assert_eq!(word_at(code, 14), 14..14, "an empty line selects nothing");
+    assert_eq!(word_at(code, code.len()), 15..18);
 }
 
 #[test]

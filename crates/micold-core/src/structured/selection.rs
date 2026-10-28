@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
 use crate::structured::transcript::EntryId;
 
@@ -43,7 +43,8 @@ pub enum RowPos {
 }
 
 /// A place in the shown text: the derived order (row, then path, then offset) is reading order.
-/// `offset` is a byte offset into the unit's shown text, on a grapheme boundary (S-4).
+/// `offset` is a byte offset into the unit's shown text, on a grapheme boundary (S-4): build a
+/// position from a hit with [`TextPos::in_text`], which snaps it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TextPos {
     pub row: RowPos,
@@ -230,24 +231,31 @@ pub fn snap(text: &str, offset: usize) -> usize {
     if offset >= text.len() {
         return text.len();
     }
-    let mut before = 0;
-    for (start, _) in text.grapheme_indices(true) {
-        if start == offset {
-            return offset;
-        }
-        if start > offset {
-            return if offset - before <= start - offset {
-                before
-            } else {
-                start
-            };
-        }
-        before = start;
+    // A grapheme boundary is a char boundary: look from the char `offset` falls in, so only the
+    // clusters around it are read, whatever the text's length.
+    let floor = (0..=offset)
+        .rev()
+        .find(|&i| text.is_char_boundary(i))
+        .unwrap_or(0);
+    let cursor = || GraphemeCursor::new(floor, text.len(), true);
+    let on_boundary = cursor().is_boundary(text, 0).unwrap_or(true);
+    if on_boundary && floor == offset {
+        return offset;
     }
-    if offset - before <= text.len() - offset {
+    let before = if on_boundary {
+        floor
+    } else {
+        cursor().prev_boundary(text, 0).ok().flatten().unwrap_or(0)
+    };
+    let after = cursor()
+        .next_boundary(text, 0)
+        .ok()
+        .flatten()
+        .unwrap_or(text.len());
+    if offset - before <= after - offset {
         before
     } else {
-        text.len()
+        after
     }
 }
 
@@ -270,28 +278,41 @@ fn run_of(piece: &str) -> Run {
     }
 }
 
-/// ASCII punctuation, general punctuation (dashes, quotes, ellipsis) and CJK punctuation.
+/// ASCII and Latin-1 punctuation, general punctuation (dashes, quotes, ellipsis), CJK and
+/// full-width punctuation.
 fn is_punctuation(c: char) -> bool {
     c.is_ascii_punctuation()
+        || matches!(
+            c,
+            '\u{A1}' | '\u{A7}' | '\u{AB}' | '\u{B6}' | '\u{B7}' | '\u{BB}' | '\u{BF}'
+        )
         || ('\u{2010}'..='\u{2027}').contains(&c)
+        || ('\u{2030}'..='\u{205E}').contains(&c)
         || ('\u{3001}'..='\u{3003}').contains(&c)
         || ('\u{3008}'..='\u{3011}').contains(&c)
+        || ('\u{FF01}'..='\u{FF0F}').contains(&c)
+        || ('\u{FF1A}'..='\u{FF20}').contains(&c)
+        || ('\u{FF3B}'..='\u{FF40}').contains(&c)
+        || ('\u{FF5B}'..='\u{FF65}').contains(&c)
 }
 
-/// The word around `offset` by Unicode word bounds: a word, a whitespace run or a punctuation run
-/// (R4). At `text.len()` the last run; `0..0` for empty text.
+/// The word around `offset` by Unicode word bounds, inside its `\n`-delimited line: a word, a
+/// whitespace run or a punctuation run (R4). At a line's end the line's last run; empty at an
+/// empty line and for empty text.
 pub fn word_at(text: &str, offset: usize) -> Range<usize> {
-    let offset = snap(text, offset);
+    let line = source_line_at(text, offset);
+    let (base, offset) = (line.start, snap(text, offset) - line.start);
+    let text = &text[line];
     let pieces: Vec<(usize, &str)> = text.split_word_bound_indices().collect();
     let Some(at) = pieces
         .iter()
         .position(|(start, piece)| offset < start + piece.len())
         .or_else(|| pieces.len().checked_sub(1))
     else {
-        return 0..0;
+        return base..base;
     };
     let run = run_of(pieces[at].1);
-    let span = |i: usize| pieces[i].0..pieces[i].0 + pieces[i].1.len();
+    let span = |i: usize| base + pieces[i].0..base + pieces[i].0 + pieces[i].1.len();
     if run == Run::Word {
         return span(at);
     }

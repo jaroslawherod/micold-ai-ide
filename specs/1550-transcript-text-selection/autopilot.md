@@ -59,6 +59,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- Review A M1 #1 (Selection does not snap; TextPos fields public): the contract fixes `pub` fields and `start(at, granularity, expand)` without the text; snapping happens where the text is known, `TextPos::in_text` (doc now says so). The hit mapper (M3) builds positions with it.
+- Review A M1 #3 (`u16` path segments overflow past 65,535 lines): data-model.md fixes `Vec<u16>`; a code block or tool output is one unit (R2), so lines are not path segments; diffs are capped by `review::limits`.
+- Review A M1 #5 (`in_row` re-computes `bounds()`): MINOR, a handful of small clones per row; revisit in M4a's budget test if it shows.
+- Review A M1 #8 (S-5 test holds by construction): it checks that entry ids by key stay put while every recorded fixture streams (a transcript property, not the selection's) and that the selected text of a growing entry is unchanged; `copy_text` stability needs `units()`, which is M2's.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 

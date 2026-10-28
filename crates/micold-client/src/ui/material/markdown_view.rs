@@ -222,17 +222,14 @@ impl<M: Clone + 'static> Draw<M> {
             None => GUTTER,
         };
         column(items.iter().zip(0u64..).map(|(item, k)| {
-            let gutter: Element<'static, M> = match (item.task, start) {
-                (Some(done), _) => {
+            let gutter: Element<'static, M> = match item.task {
+                Some(done) => {
                     let glyph = if done { Icon::TaskDone } else { Icon::TaskOpen };
                     icon(glyph, TypeRole::Body.size(), tint)
                 }
-                (None, Some(_)) => Text::new(list_marker(start, k), TypeRole::Body, r)
+                None => Text::new(list_marker(start, k), TypeRole::Body, r)
                     .tint(tint)
                     .wrapping(Wrapping::None)
-                    .into(),
-                (None, None) => Text::new(list_marker(None, k), TypeRole::Body, r)
-                    .tint(tint)
                     .into(),
             };
             row![
