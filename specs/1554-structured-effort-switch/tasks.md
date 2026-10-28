@@ -242,7 +242,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [x] T030 [US2] User guide `docs/user-guide/worktrees-and-sessions.md` *Commands, the model and
   effort*: `/effort <level>`, `/effort default` and `auto`, `/effort` alone opening the picker, a
   wrong value naming the accepted ones, acted on at once while busy (FR-014)
-- [ ] T031 [US2] Quickstart Part B 4–5 and 7b in light and dark theme through the `visual-pass` skill,
+- [x] T031 [US2] Quickstart Part B 4–5 and 7b in light and dark theme through the `visual-pass` skill,
   evidence in `specs/1554-structured-effort-switch/visual-pass/`
 
 ## Phase 7: Polish (close unit)

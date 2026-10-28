@@ -335,6 +335,7 @@ fn send(app: &mut App, session: SessionId) {
         }
         SendIntent::SetEffort(choice) => {
             if set_effort(app, session, choice) {
+                app.core.composers.clear_notice(session);
                 app.core
                     .composers
                     .replace_text(session, String::new(), (0, 0));
@@ -487,30 +488,62 @@ mod tests {
 
     #[test]
     fn sending_slash_effort_asks_the_service_at_once_and_is_no_user_message() {
-        let (mut app, mut rx, s) = app_with_session();
-        app.core
-            .composers
-            .edited(s, "/effort high".to_string(), (0, 12));
-        send(&mut app, s);
-        let mut asked = Vec::new();
-        while let Ok(msg) = rx.try_recv() {
-            match msg {
-                ClientMsg::SetSessionEffort { effort, .. } => asked.push(effort),
-                ClientMsg::SessionUserMessage { .. } => panic!("/effort is not a message"),
-                _ => {}
-            }
-        }
-        let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
-        assert_eq!(asked, [high], "one request, for the level");
-        assert_eq!(
+        use crate::features::composer::InputState;
+        use micold_core::protocol::messages::{InterruptAsk, TurnId, TurnPhase};
+        for busy in [false, true] {
+            let (mut app, mut rx, s) = app_with_session();
+            let phase = if busy {
+                TurnPhase::Busy {
+                    turn: TurnId(1),
+                    interrupt: InterruptAsk::default(),
+                }
+            } else {
+                TurnPhase::Idle
+            };
+            app.core.composers.input_reported(
+                s,
+                InputState {
+                    phase,
+                    hold: false,
+                    queue: vec![],
+                },
+            );
+            // A refused argument is said and kept; the corrected command clears the notice
+            // once it is sent.
             app.core
                 .composers
-                .draft(s)
-                .map(|d| d.text.clone())
-                .unwrap_or_default(),
-            "",
-            "the command is used up once sent"
-        );
+                .edited(s, "/effort extreme".to_string(), (0, 15));
+            send(&mut app, s);
+            assert!(app
+                .core
+                .composers
+                .composer(s)
+                .is_some_and(|c| c.notice.is_some()));
+            app.core
+                .composers
+                .edited(s, "/effort high".to_string(), (0, 12));
+            send(&mut app, s);
+            let mut asked = Vec::new();
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    ClientMsg::SetSessionEffort { effort, .. } => asked.push(effort),
+                    ClientMsg::SessionUserMessage { .. } => panic!("/effort is not a message"),
+                    _ => {}
+                }
+            }
+            let high = EffortChoice::Level(EffortLevel::parse("high").expect("a level"));
+            assert_eq!(asked, [high], "one request at once (busy: {busy})");
+            let composer = app.core.composers.composer(s).expect("composer");
+            assert_eq!(composer.draft.text, "", "used up once sent (busy: {busy})");
+            assert_eq!(
+                composer.notice, None,
+                "the old refusal is gone (busy: {busy})"
+            );
+            assert!(
+                composer.pending.is_none(),
+                "nothing queued or awaited as a message"
+            );
+        }
     }
 
     #[test]

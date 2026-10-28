@@ -642,6 +642,14 @@ fn slash_effort_alone_opens_the_picker_and_sends_nothing() {
         assert!(w.effort_picker.picker(s).is_some(), "the picker opened");
         assert_eq!(draft(&w, s).0, "", "the command is used up");
         w.effort_picker.close(s);
+        // A refusal said earlier is gone once the picker opens.
+        typed(&mut w, s, "/effort extreme");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        assert!(w.composers.composer(s).is_some_and(|c| c.notice.is_some()));
+        typed(&mut w, s, "/effort");
+        assert_eq!(w.send_intent(s), SendIntent::Nothing);
+        assert_eq!(w.composers.composer(s).and_then(|c| c.notice.clone()), None);
+        w.effort_picker.close(s);
     }
 }
 

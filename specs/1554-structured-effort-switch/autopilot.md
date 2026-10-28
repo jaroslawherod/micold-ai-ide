@@ -92,6 +92,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B (conformance) M4 | 1 | dc2a77a059733a63134610de1fc61550db605c2c:279bff1679ff05d45ab6a0cfa176a6bd315a336e | CLEAN. Verify: features_effort_picker 12/12, ui::transcript::entries 9/9. 1 MINOR: M4 decision reused D9 → renumbered D20 (fixed, prose only). Run by the orchestrator |
 | Full gate M4 | — | — | green on 56370ab86 (`scripts/gate.sh`), after rebase onto origin/main 3190828cb (PROTOCOL_VERSION still 73; layout_snapshot passes) |
 | M5 scoped checks | 1 | — | green: fmt, clippy `-p micold-core -p micold-client -p micold-daemon --all-targets -D warnings`; `features_command_palette` 23/23, `features_effort_picker` 16/16, `shell::composer` 5/5, `structured_effort` 28/28, `structured_commands` 9/9. Cloud: no mise, ran cargo directly; target-shared deleted first (12 GB free) |
+| A (code-review, high) M5 | 1 | 196125f1e:09d3654e6 | CLEAN: 2 MINOR — A1 no queue-edit case (`a_queued_message_edited_into_slash_effort_is_refused`), A2/B2 only idle sessions (the shell test now runs idle and busy) — fixed test-first. Run by the orchestrator |
+| B (conformance) M5 | 1 | 196125f1e:09d3654e6 | CHANGES: B1 MAJOR no M5 red→green entries in `tdd/cycle-log.md` (cycle 16 added, red observed against the pre-change arms); B2 MINOR as A2 — fixed |
+| Visual pass M5 (T031) | 1 | 09d3654e6 | PASS light and dark (`visual-pass/m5/report.md`); unoffered-level case not runnable (the CLI offers all levels), unit tests cover it. V1 (treated MAJOR): the refusal notice outlived a later successful `/effort`, an opened picker — `Composers::clear_notice` on both, test-first |
 | Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
 
 ## Declined review findings
@@ -102,7 +105,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 - **Done**: M5 T027–T030 (T031 is the orchestrator's visual pass): `SendIntent::SetEffort`, `Classified::Effort`/`EffortPicker` in `command_palette.rs` (`classify` takes the model's offered levels, `effort_offered` in `effort_picker.rs`), routed in `shell/composer.rs` `send`; daemon `UserMessageRefusal::EffortIsTheApps` (core `user_message.rs`, `state.rs` `refuse_app_handled`, which also covers a queue edit); guide paragraph "`/effort` in the message box". Previous PR #1596 merged (196125f1e).
-- **Next step**: review A (high) and B on `origin/main...HEAD`, visual pass T031 (quickstart Part B 4–5, 7b), full gate, PR body in the scratchpad `pr-1554-m5-body.md`.
+- **Next step**: full gate, PR body in the scratchpad `pr-1554-m5-body.md`; the orchestrator opens the PR.
 - **Main paths**: `crates/micold-client/src/features/command_palette.rs`, `features/composer.rs`, `shell/composer.rs`, `crates/micold-daemon/src/state.rs`, `crates/micold-core/src/structured/user_message.rs`, tests `features_command_palette.rs`, `structured_effort.rs`.
 - **Open findings**: none.
 

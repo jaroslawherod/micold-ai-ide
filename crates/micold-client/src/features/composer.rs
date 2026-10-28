@@ -685,6 +685,11 @@ impl State {
         composer.remote = Some(input);
     }
 
+    /// Drop `session`'s notice: what it said no longer holds (a refused `/effort` since corrected).
+    pub fn clear_notice(&mut self, session: SessionId) {
+        self.entry(session).notice = None;
+    }
+
     /// Put `notice` on `session`'s composer (a queue request's refusal).
     pub fn notice(&mut self, session: SessionId, notice: String) {
         self.entry(session).notice = Some(notice);
@@ -1000,6 +1005,7 @@ impl crate::app::State {
                 SendIntent::Nothing
             }
             Classified::EffortPicker => {
+                self.composers.clear_notice(session);
                 self.composers.replace_text(session, String::new(), (0, 0));
                 self.open_effort_picker(session);
                 SendIntent::Nothing

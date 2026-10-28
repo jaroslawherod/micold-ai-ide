@@ -1263,3 +1263,41 @@ async fn slash_effort_sent_as_a_message_is_refused_and_never_reaches_the_cli() {
     assert!(effort_notes(&history).is_empty(), "no effort note");
     assert_eq!(rig.effort(0), EffortChoice::Default);
 }
+
+/// M5 review A1 (FR-007, SC-003): a queued message edited into `/effort high` is refused with the
+/// same sentence, keeps its text, and reaches the CLI as it was.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_queued_message_edited_into_slash_effort_is_refused() {
+    let rig = Rig::structured(1);
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    rig.start_turns(0, "").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(say(2, id, "queued"), 2).await);
+    let (entries, _) = rig
+        .state
+        .change_queue(id, |input| {
+            Ok(input.queued().map(|q| q.id).collect::<Vec<_>>())
+        })
+        .expect("the queue");
+    let edit = ClientMsg::QueueEdit {
+        req: 3,
+        session: id,
+        entry: entries[0],
+        text: "/effort high".into(),
+        keep: vec![],
+    };
+    let answer = window.request(edit, 3).await;
+    let (_, message) = refused(&answer);
+    assert!(
+        message.contains("/effort is handled by the app"),
+        "{message}"
+    );
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    eventually("the queued message delivered as it was", || {
+        stdin_lines(dir).len() == 2
+    });
+    assert_eq!(stdin_kinds(dir), ["one", "queued"]);
+    std::fs::write(dir.join("turn-2"), "").unwrap();
+}

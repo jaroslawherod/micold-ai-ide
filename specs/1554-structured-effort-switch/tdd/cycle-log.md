@@ -162,3 +162,19 @@ the implementation it covers.
 - also: `session_view_has_keyboard` yields while the effort list is open, as for the model picker
   (`composer_fits` `the_open_effort_picker_keeps_the_keyboard_from_the_pane`); the composer tab
   walk and the layout fixture take the new trigger (`composer_tab`, `layout_snapshot`).
+
+### Cycle 16 — `/effort` in the composer, the daemon backstop (T027–T029)
+
+- red: written first, the client tests (`features_command_palette` `/effort` x5, `shell::composer`
+  `sending_slash_effort_asks_the_service_at_once…`) did not compile (no `SendIntent::SetEffort`,
+  `classify` took no levels). Re-run after the code against the pre-change behaviour (the
+  refusal arm `Effort(_) => Ok(())`, no notice clearing): `structured_effort`
+  `slash_effort_sent_as_a_message_is_refused_and_never_reaches_the_cli` and
+  `a_queued_message_edited_into_slash_effort_is_refused` failed (`refused: OperationOk … Ack`: the
+  message was accepted); `slash_effort_alone_opens_the_picker_and_sends_nothing` failed on the
+  refusal notice outliving the opened picker (review V1).
+- green: `SendIntent::SetEffort`, `Classified::Effort`/`EffortPicker`, `effort_offered`, the
+  `send` arm in `shell/composer.rs`, `UserMessageRefusal::EffortIsTheApps` in `refuse_app_handled`
+  (also the queue edit), `Composers::clear_notice` on a sent `/effort` and an opened picker.
+- guide: T030 paragraph "`/effort` in the message box". No test.
+
