@@ -18,6 +18,7 @@ mod parse;
 pub mod permission;
 mod saved;
 mod saved_queue;
+pub mod selection;
 pub(crate) mod sync;
 pub mod transcript;
 mod turn;

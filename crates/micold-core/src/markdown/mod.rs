@@ -17,8 +17,12 @@ use std::vec::IntoIter;
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Options, Parser, Tag};
 
-pub use block::{Align, Block, CodeBlock, CodeId, Inlines, Link, ListItem, Span, Style};
+pub use block::{
+    list_marker, Align, Block, CodeBlock, CodeId, Inlines, Link, ListItem, Span, Style,
+};
 pub use fence::fence_token;
+
+pub use inline::shown_text;
 
 use inline::{is_inline, is_inline_end, lf, Inline};
 
@@ -510,7 +514,7 @@ fn fence_closed(src: &str, nested: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::split::{cuts, last_complete_line};
-    use super::{Block, CodeBlock, Document};
+    use super::{list_marker, shown_text, Block, CodeBlock, Document, Inlines};
 
     #[test]
     fn a_text_is_cut_at_each_top_level_block_line() {
@@ -627,5 +631,48 @@ mod tests {
             })
             .collect();
         assert_eq!(text, "![a tea");
+    }
+
+    /// The inlines of the one paragraph or heading `text` parses to.
+    fn inlines(text: &str) -> Inlines {
+        match Document::parse(text, false).blocks() {
+            [Block::Paragraph { text } | Block::Heading { text, .. }] => text.clone(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn shown_text_is_the_inline_text_without_markers_or_link_targets() {
+        assert_eq!(
+            shown_text(&inlines("a *b* _c_ **d** __e__ `f g` ~~h~~")),
+            "a b c d e f g h",
+            "no emphasis markers, no backticks"
+        );
+        assert_eq!(
+            shown_text(&inlines("see [the docs](https://example.com/x) now")),
+            "see the docs now",
+            "a link is its shown text, never its target"
+        );
+        assert_eq!(
+            shown_text(&inlines("<https://example.com>")),
+            "https://example.com"
+        );
+        assert_eq!(shown_text(&inlines("## Title *here*")), "Title here");
+        assert_eq!(
+            shown_text(&inlines("one\ntwo  \nthree\\\nfour")),
+            "one two\nthree\nfour",
+            "a soft break is a space and a hard break a line break, as drawn"
+        );
+        assert_eq!(shown_text(&Vec::new()), "");
+    }
+
+    #[test]
+    fn list_markers_are_drawn_as_a_bullet_or_the_items_number() {
+        assert_eq!(list_marker(None, 0), "\u{2022}");
+        assert_eq!(list_marker(None, 5), "\u{2022}");
+        assert_eq!(list_marker(Some(1), 0), "1.");
+        assert_eq!(list_marker(Some(1), 2), "3.");
+        assert_eq!(list_marker(Some(7), 0), "7.");
+        assert_eq!(list_marker(Some(7), 3), "10.");
     }
 }

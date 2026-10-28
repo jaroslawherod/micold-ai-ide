@@ -9,14 +9,29 @@ pub const SUMMARY_MAX_CHARS: usize = 240;
 /// `key: value, …` summary of the input, else the input text itself; on one line, cut with `…`.
 pub fn input_summary(name: &str, input_json: &str) -> String {
     let text = match serde_json::from_str::<Value>(input_json) {
-        Ok(Value::Object(input)) => work_field(name)
-            .and_then(|field| input.get(field))
-            .and_then(Value::as_str)
+        Ok(Value::Object(input)) => work_str(name, &input)
             .map(str::to_string)
             .unwrap_or_else(|| generic(&input)),
         _ => input_json.to_string(),
     };
     one_line(&text)
+}
+
+/// The full value the summary is drawn from (feature 1550 FR-015): the work field's string,
+/// uncut and on all its lines; `None` for a tool without one, a missing or non-string field and
+/// input that is not a JSON object.
+pub fn work_value(name: &str, input_json: &str) -> Option<String> {
+    match serde_json::from_str::<Value>(input_json) {
+        Ok(Value::Object(input)) => work_str(name, &input).map(str::to_string),
+        _ => None,
+    }
+}
+
+/// The string in `input`'s work field, when the tool has one and it holds a string.
+fn work_str<'a>(name: &str, input: &'a Map<String, Value>) -> Option<&'a str> {
+    work_field(name)
+        .and_then(|field| input.get(field))
+        .and_then(Value::as_str)
 }
 
 /// The input field that names a common tool's work.
@@ -153,5 +168,54 @@ mod tests {
             exact,
             "one that fits is not cut"
         );
+    }
+
+    #[test]
+    fn work_value_is_the_work_field_uncut_on_all_its_lines() {
+        let long = format!("cat {}", "x/".repeat(SUMMARY_MAX_CHARS));
+        for (name, field) in [
+            ("Bash", "command"),
+            ("Read", "file_path"),
+            ("Write", "file_path"),
+            ("Edit", "file_path"),
+            ("MultiEdit", "file_path"),
+            ("NotebookEdit", "notebook_path"),
+            ("Grep", "pattern"),
+            ("Glob", "pattern"),
+            ("WebFetch", "url"),
+            ("WebSearch", "query"),
+            ("Task", "description"),
+            ("Agent", "description"),
+        ] {
+            for value in ["one", "cd x &&\n\tcargo   test\n", long.as_str()] {
+                let input = serde_json::json!({ field: value, "other": "o" }).to_string();
+                assert_eq!(
+                    work_value(name, &input).as_deref(),
+                    Some(value),
+                    "{name}: {value:?}"
+                );
+            }
+        }
+        assert!(
+            long.chars().count() > SUMMARY_MAX_CHARS,
+            "longer than the cut"
+        );
+    }
+
+    #[test]
+    fn work_value_is_none_without_a_work_field() {
+        assert_eq!(
+            work_value("mcp__x__y", r#"{"command":"ls"}"#),
+            None,
+            "no work field"
+        );
+        assert_eq!(work_value("Bash", r#"{"cmd":"ls"}"#), None, "missing");
+        assert_eq!(
+            work_value("Read", r#"{"file_path":7}"#),
+            None,
+            "not a string"
+        );
+        assert_eq!(work_value("Bash", r#"{"command": "l"#), None, "malformed");
+        assert_eq!(work_value("Bash", "null"), None, "not an object");
     }
 }

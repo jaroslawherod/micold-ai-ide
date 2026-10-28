@@ -36,7 +36,7 @@ notices and plain blocks are the existing `footer_view`, `compacted_text` and `p
 
 ## Phase 1: Setup
 
-- [ ] T001 Add the module `crates/micold-core/src/structured/selection.rs` (module doc pointing to
+- [x] T001 Add the module `crates/micold-core/src/structured/selection.rs` (module doc pointing to
   `specs/1550-transcript-text-selection/contracts/selection-model.md`), `pub mod selection;` in
   `crates/micold-core/src/structured/mod.rs`, and the integration test file
   `crates/micold-core/tests/structured_selection.rs` using the transcript fixture helpers of
@@ -50,7 +50,7 @@ notices and plain blocks are the existing `footer_view`, `compacted_text` and `p
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T002 [P] Position tests in `crates/micold-core/tests/structured_selection.rs`
+- [x] T002 [P] Position tests in `crates/micold-core/tests/structured_selection.rs`
   (contracts/selection-model.md *S-1*, *S-4*; data-model.md *RowPos*, *TextPos*):
   `RowPos::Omitted < Entry(a, Body) < Entry(a, Prompt(0)) < Entry(a, Prompt(1)) < Entry(b, Body) <
   End(0) < End(1)` for `a < b`; `TextPath` orders lexicographically (`[1] < [1, 0] < [2]`);
@@ -59,7 +59,7 @@ notices and plain blocks are the existing `footer_view`, `compacted_text` and `p
   request block, list positions in drawing order; `snap` returns a grapheme boundary on CJK, emoji
   ZWJ sequence and combining-mark fixtures, leaves a boundary unchanged and clamps an offset past
   the end to `len`
-- [ ] T003 Selection tests in the `tests` module of `crates/micold-core/src/structured/selection.rs`
+- [x] T003 Selection tests in the `tests` module of `crates/micold-core/src/structured/selection.rs`
   (contracts/selection-model.md *API (core)*; data-model.md *Selection*, *RowSelection*):
   `Selection::start` then `extend` backwards gives normalised `bounds()`; `is_empty` iff the
   expanded start equals the end; `in_row` gives `Whole` for a row strictly inside, `From`/`To` for
@@ -67,7 +67,7 @@ notices and plain blocks are the existing `footer_view`, `compacted_text` and `p
   variant with a path before, equal to and after each end, clamped to `len`, and `None` for an
   empty slice
 
-- [ ] T004 Stability tests in `crates/micold-core/tests/structured_selection.rs`
+- [x] T004 Stability tests in `crates/micold-core/tests/structured_selection.rs`
   (contracts/selection-model.md *S-5*, FR-019, SC-005): on a transcript built from a recorded
   fixture, a selection's `bounds()` and its `in_row` parts for every entry in range are unchanged
   after appending entries, after growing the last entry past the focus, and after changing an
@@ -75,11 +75,11 @@ notices and plain blocks are the existing `footer_view`, `compacted_text` and `p
 
 ### Implementation
 
-- [ ] T005 Implement `TextPath(Vec<u16>)`, `Under { Body, Prompt(u32) }`, `RowPos { Omitted,
+- [x] T005 Implement `TextPath(Vec<u16>)`, `Under { Body, Prompt(u32) }`, `RowPos { Omitted,
   Entry(EntryId, Under), End(u32) }`, `TextPos { row, path, offset }` (derived `Ord` in field
   order), `snap` (`unicode-segmentation`) in `crates/micold-core/src/structured/selection.rs`;
   T002 passes
-- [ ] T006 Implement `Granularity { Char, Word, Line }`, `Selection { anchor, focus, granularity,
+- [x] T006 Implement `Granularity { Char, Word, Line }`, `Selection { anchor, focus, granularity,
   dragging }` with `start`, `extend`, `is_empty`, `bounds`, `in_row`, and `RowSelection { Whole,
   From(TextPath, usize), To(TextPath, usize), Within((TextPath, usize), (TextPath, usize)) }`
   (`Hash` + `Eq`, it joins the entry's `lazy` key) and `range_in` in
@@ -100,14 +100,14 @@ micold-core --lib markdown structured::selection`.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T007 [P] [US1] Shown-text tests in the `tests` module of `crates/micold-core/src/markdown/mod.rs`
+- [x] T007 [P] [US1] Shown-text tests in the `tests` module of `crates/micold-core/src/markdown/mod.rs`
   (contracts/selection-model.md *S-3*, research R2, R3, FR-011): `shown_text(&Inlines)` drops `*`,
   `_` and backticks of emphasis, strong and inline code, keeps a link's shown text and never its
   target, joins soft and hard breaks as the view draws them; `list_marker(start, k)` is `"•"` for a
   bullet list and `"{start + k}."` for an ordered one (`start` 1 and 7)
 ### Implementation
 
-- [ ] T008 [US1] Implement `shown_text` in `crates/micold-core/src/markdown/inline.rs` and
+- [x] T008 [US1] Implement `shown_text` in `crates/micold-core/src/markdown/inline.rs` and
   `list_marker` in `crates/micold-core/src/markdown/block.rs`, both re-exported from
   `crates/micold-core/src/markdown/mod.rs`; `crates/micold-client/src/ui/material/markdown_view.rs`
   `list` draws `micold_core::markdown::list_marker` instead of its own format (no visual change:
@@ -125,7 +125,7 @@ micold-core --lib markdown structured::selection`.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T009 [US4] Granularity tests in `crates/micold-core/tests/structured_selection.rs`
+- [x] T009 [US4] Granularity tests in `crates/micold-core/tests/structured_selection.rs`
   (contracts/selection-model.md *S-11*, research R4, FR-005): `word_at` selects a word, a
   whitespace run and a punctuation run as their own runs, a CJK word and an emoji whole, and works
   at offset 0 and `len`; `source_line_at` gives the `\n`-delimited line, the last line without a
@@ -135,7 +135,7 @@ micold-core --lib markdown structured::selection`.
 
 ### Implementation
 
-- [ ] T010 [US4] Implement `word_at` (`split_word_bound_indices`), `source_line_at` and the
+- [x] T010 [US4] Implement `word_at` (`split_word_bound_indices`), `source_line_at` and the
   granularity expansion in `Selection::start`, `extend` and `bounds` in
   `crates/micold-core/src/structured/selection.rs`; T009 passes
 
@@ -149,7 +149,7 @@ micold-core --lib markdown structured::selection`.
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T011 [P] [US3] `work_value` tests in the `tests` module of
+- [x] T011 [P] [US3] `work_value` tests in the `tests` module of
   `crates/micold-core/src/structured/transcript/summary.rs` (data-model.md *Copyable value*,
   research R10, FR-015): for every tool `work_field` names, `work_value(name, input_json)` is that
   field's string uncut, multi-line commands on all their lines, longer than the summary's cut;
@@ -157,7 +157,7 @@ micold-core --lib markdown structured::selection`.
 
 ### Implementation
 
-- [ ] T012 [US3] Implement `work_value(name, input_json) -> Option<String>` in
+- [x] T012 [US3] Implement `work_value(name, input_json) -> Option<String>` in
   `crates/micold-core/src/structured/transcript/summary.rs`, reading the field through the existing
   `work_field` (no second field table); T011 passes
 

@@ -4,6 +4,7 @@
 
 #![allow(dead_code)]
 
+use micold_core::structured::transcript::Transcript;
 use micold_core::structured::{
     parse_line, ContentBlock, LineSplitter, SequencedEvent, StructuredEvent,
 };
@@ -91,6 +92,22 @@ pub fn sequenced(events: impl IntoIterator<Item = StructuredEvent>) -> Vec<Seque
         .zip(0u64..)
         .map(|(event, seq)| SequencedEvent { seq, event })
         .collect()
+}
+
+/// A transcript built from `events` in one history message.
+pub fn built(events: &[SequencedEvent]) -> Transcript {
+    let mut transcript = Transcript::new();
+    transcript.apply(0, events, false);
+    transcript
+}
+
+/// A transcript built from `events` one live message at a time, as they stream.
+pub fn replayed(events: &[SequencedEvent]) -> Transcript {
+    let mut transcript = Transcript::new();
+    for event in events {
+        transcript.apply(0, std::slice::from_ref(event), true);
+    }
+    transcript
 }
 
 // ---------------------------------------------------------------------------------------

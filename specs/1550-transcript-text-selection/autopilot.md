@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: tasks
-- **Next step**: design PR (orchestrator opens it), then milestone M1
+- **Phase**: M1
+- **Next step**: M1 PR (pushed; orchestrator opens it), then milestone M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1582 | design (spec, plan, tasks) | merged | 5ce410f219e38800d89f0936dbf9f48a96041cb1 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — | todo |
+| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — (pushed, orchestrator opens) | review-ready |
 | M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | todo |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
@@ -55,9 +56,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 3974e3a581dc83999537a082f2459b51cb3471c0:6e22abe4c36f2ceabc272035bb95f51647ae92db | CHANGES: 1 MAJOR, 2 MINOR (all fixed: TranscriptView defined, retain_shown session/Primary mapping, prompt rows inside bounds clear) |
 | Plan | 3 | 57e895f188c87b43d22698f2f2c2c221b9539a4e:99112b227c7c36a8e9e407663569d56e06d8c413 | CLEAN (1 MINOR fixed, prose only: sessions from Workspace::session_ids_of_project) |
 | Tasks | 1 | 91e2a3d9cf7b87ce83bcc7e5e0c7510556892560:12b46edb6afe9910d2dcd96175cf67c05102539a | CLEAN (3 MINOR fixed, prose only: checklist ticked, CopySelection stub noted in T016, M4b Verify records Part B 1–5 visual pass) |
+| Review A M1 (code-review high) | 1 | no snapshot (HEAD 350eb1157) | 10 findings: 6 fixed in 75cbb5030 (word_at inside its line, snap via GraphemeCursor, full-width punctuation, unsnapped test offset, list marker arms merged, shared work_str), 4 declined (below) |
+| Review B M1 | 1 | 55ede43b68b9972806d53205fc373e5003804172:75cbb5030640e4bb0c886ec779d3a90794010ddf | CLEAN (1 MINOR fixed: tdd/cycle-log.md written from recovered red evidence) |
 
 ## Declined review findings
 
+- M1 gate: `scripts/gate.sh` green at 341ed42d1 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`: the container's disk filled at 0 MB with the default profile). No visual pass: nothing visible changed (list markers draw the same glyphs).
+
+- Review A M1 #1 (Selection does not snap; TextPos fields public): the contract fixes `pub` fields and `start(at, granularity, expand)` without the text; snapping happens where the text is known, `TextPos::in_text` (doc now says so). The hit mapper (M3) builds positions with it.
+- Review A M1 #3 (`u16` path segments overflow past 65,535 lines): data-model.md fixes `Vec<u16>`; a code block or tool output is one unit (R2), so lines are not path segments; diffs are capped by `review::limits`.
+- Review A M1 #5 (`in_row` re-computes `bounds()`): MINOR, a handful of small clones per row; revisit in M4a's budget test if it shows.
+- Review A M1 #8 (S-5 test holds by construction): it checks that entry ids by key stay put while every recorded fixture streams (a transcript property, not the selection's) and that the selected text of a growing entry is unchanged; `copy_text` stability needs `units()`, which is M2's.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
