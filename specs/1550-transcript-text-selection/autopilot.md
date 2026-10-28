@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M5
-- **Next step**: M5 verify (scoped gate + Review A, Review B, T049 visual pass, full gate, PR body); see *Handover*
+- **Next step**: M5 T049 visual pass (release build), full gate result, push, PR body; see *Handover*
 
 ## Pull requests
 
@@ -123,18 +123,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 unit 1 handed over at the context cap (195k) after implementing. Done: T044–T048 (code, tests,
-docs), committed. Green locally: `features_transcript_rich` 24, `ui::material::inline_diff` 9,
-`layout_snapshot` 171 (incl. new `inline_diff_path_copy_fits`), the whole `cargo test -p
-micold-client` run (its one red, `feature_registration_cost`, fixed after). Not yet run: clippy,
-`scripts/gate.sh`. Next: scoped gate with Review A (code-review high) on `origin/main...HEAD`;
-Review B (sonnet, conformance); T049 visual pass (quickstart Part B 1–9, M5's new steps 6–9: header,
-input, result and diff-path controls by pointer and Tab+Enter, "Copied" only on itself; streaming;
-light/dark, CJK; panes/windows) in the real client under Xvfb as M4b did, evidence in
-`visual-pass/m5-*.png` + `m5-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`; tick T049;
-full gate; PR body at the orchestrator's scratchpad path. Thread follow-up: thread cards stay
-unselectable (record for a separate issue); their copy controls do work (root fallback), untested
-at the App level.
+M5 unit 2 handed over at the context cap (200k). Done: scoped gate green; Review A r1 (CHANGES: F1
+header control split the header, F4 dup lookup; fixed) and r2 (sonnet, CLEAN); Review B (CHANGES: F1
+tool-card controls untested through the view, F2 root thread-copy arm untested; fixed with
+`transcript_rich_renderers` tests (press/Enter/Space) and an App-level test in
+`features_structured_insights`, mutant reds logged in `tdd/cycle-log.md`). All in 79f1ffd04 (local,
+not pushed). `origin/main` merged: already up to date at 79f1ffd04.
+
+Running when handed over: full `scripts/gate.sh` at 79f1ffd04, detached, log
+`/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/full-gate-1.log` (ends `GATE_EXIT=<n>`; reniced 19). If red, fix, re-run.
+
+Next: T049 visual pass (quickstart Part B 6–9), then push and the PR body. Setup kept in
+`/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/vp5`: `env.sh` (display 78 released; re-claim one), fixtures in `fx/` (`bash`, `fail` (failed
+Bash card), `cjk`, `stream` (a reply cut after its last text delta, stays streaming: send it last),
+plus `edit`, `md` replies), `proj/` with `.fake-stream`, `pathbin/claude` stand-in, data dir via
+`MICOLD_DATA_DIR`. Create the session with the sidebar's `+` beside Default, then "Open in
+structured view". **Use a release build** (as M4b did): the debug client under lavapipe ran at 100%
+CPU and showed input seconds late, so its observations are unreliable. Seen with the debug build,
+to re-check: the header `ToolValue` control copied `<CWD>/notes.txt` by pointer (2 of 3 tries);
+Enter on the focused input control copied the input JSON; pointer presses on the unfolded card's
+input and result controls never wrote the clipboard (the press focused the control and highlighted
+the input text, as if the selection area took it); no "Copied" was ever drawn on any control (check
+a #940 code block's control too, to tell an Xvfb read-back problem from an M5 one). Clicking a card
+header body does not toggle it; its chevron does. Thread cards stay unselectable (separate issue).
 
 ## Open escalation
 
