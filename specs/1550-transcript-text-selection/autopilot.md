@@ -56,6 +56,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M4b visual pass (real client, Xvfb, the daemon tests' `claude` stand-in replaying recorded fixtures): Part B 1–5 pass, and the folded summary highlight; record in `visual-pass/m4b-visual-pass.md`, copies in `/mnt/project-files/issue-1550/`. Only one interrupt was sent in the whole pass (the no-selection Ctrl+C), none from the copies.
 
+- M4b gate: `scripts/gate.sh` green at 2787890f0 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`). Its first two runs were red on `feature_registration_cost` (the menu surface names `TranscriptMsg`: allowed with its reason) and `popover_displacement` (the new popover's row: closes nothing, closed by nothing).
+
 ## Tasks-unit notes
 
 - speckit-analyze (2026-10-28): 0 CRITICAL, 0 HIGH. Fixed C1 (stability test moved before the Selection impl), C2 (T018/T019 test and wiring split), C3 (state, SelectableText and entry-view tasks split), D1, U1 (spec FR-011 states the tab/line table rule of research R3), U2 (contrast gate also checks the highlight differs from each surface), U4 (spec Terms: image caption selectable), I2/I3 (plan Delivery *Satisfies* and file tree aligned with tasks). Left: U3, U5, I1, I4 (LOW).
