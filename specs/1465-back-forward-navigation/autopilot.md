@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m5 (M5, stacked on 1465-m4; M4 on 1465-m4, stacked on 1465-m3; M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M5 implemented (T034–T036 ticked, TDD cycle 18); gate running, then visual-pass and reviews A and B
-- **Next step**: full gate, visual-pass (review-shortcut-sheet, -single-keys-off; light and dark), review A and B on M5 range, pr-title-m5.md and pr-body-m5.md
+- **Phase**: M5 implemented (T034–T036 ticked, TDD cycle 18); full gate green at be9d666d3; visual-pass and reviews A and B round 1 pending
+- **Next step**: visual-pass (review-shortcut-sheet, -single-keys-off; light and dark), review A and B on range 27327176c..HEAD, then pr-title-m5.md and pr-body-m5.md
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
 | M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
 | M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate green, reviews pending |
-| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | implemented, gate running |
+| M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | implemented, gate green, visual-pass and reviews pending |
 
 ## Decisions
 
