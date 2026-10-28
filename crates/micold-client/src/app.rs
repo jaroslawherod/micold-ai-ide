@@ -629,7 +629,22 @@ impl State {
         self.session.active.is_some()
             && !self.session.terminal_released
             && self.window.focused_field.is_none()
-            && !self.any_surface_takes_keyboard()
+            && self.session_view_has_keyboard()
+    }
+
+    /// Whether the active session's transcript holds the keyboard (feature 1550, FR-019a): it is
+    /// the focused field and nothing floats over it or replaces it on screen, so its copy keys,
+    /// select-all and Escape are its own and not a dialog's or a view's.
+    pub fn transcript_focused(&self) -> bool {
+        self.session.active.is_some_and(|id| {
+            self.window.focused_field == Some(crate::features::window::FieldId::Transcript(id))
+        }) && self.session_view_has_keyboard()
+    }
+
+    /// Nothing takes the keyboard from the active session's pane: no floating surface, picker,
+    /// Settings, Changes, Compare or Overview over it or in its place.
+    fn session_view_has_keyboard(&self) -> bool {
+        !self.any_surface_takes_keyboard()
             // #943: the model picker's field takes the keyboard from the composer, whose text
             // area then reports no focus; while it is open the keys are the picker's.
             && !self
@@ -1200,8 +1215,12 @@ impl State {
         use crate::features::structured_transcript::TranscriptMsg;
         match msg {
             TranscriptMsg::Select(msg) => return self.update_selection(msg),
-            // Feature 1550: folding or unfolding a card a selection holds part of clears it.
-            TranscriptMsg::Toggle { session, ref key } => {
+            // Feature 1550: folding or unfolding a card a selection holds part of clears it, and so
+            // does showing a part of it in full, which changes the text it draws there (FR-019).
+            TranscriptMsg::Toggle { session, ref key }
+            | TranscriptMsg::ShowInFull {
+                session, ref key, ..
+            } => {
                 let id = self
                     .structured_transcript
                     .transcript(session)
@@ -1234,6 +1253,13 @@ impl State {
         msg: crate::features::transcript_selection::SelectMsg,
     ) -> crate::features::structured_transcript::Effect {
         let session = msg.session();
+        // The menu's Copy and Select all give the transcript the keyboard again (FR-019a), even
+        // when there is nothing to copy; a copy key or Ctrl+A already comes from it.
+        let refocus = matches!(
+            msg,
+            crate::features::transcript_selection::SelectMsg::CopySelection { .. }
+                | crate::features::transcript_selection::SelectMsg::SelectAll { .. }
+        );
         let view = transcript_view_of(
             &self.structured_transcript,
             &self.transcript_rich,
@@ -1242,10 +1268,12 @@ impl State {
             session,
         );
         let copy = self.transcript_selection.update(msg, view.as_ref());
+        if refocus || copy.is_some() {
+            self.window.focused_field = Some(crate::features::window::FieldId::Transcript(session));
+        }
         let Some(text) = copy else {
             return crate::features::structured_transcript::Effect::default();
         };
-        self.window.focused_field = Some(crate::features::window::FieldId::Transcript(session));
         let ticket = self.transcript_rich.copy_selection(session, text.clone());
         crate::features::structured_transcript::Effect {
             outcomes: vec![crate::features::Outcome::ClipboardWriteChecked { text, ticket }],
@@ -2490,6 +2518,25 @@ fn field_blurred(state: &mut State, id: crate::features::window::FieldId) {
     }
 }
 
+/// What `session`'s transcript draws, from the window's parts: the root's borrow of each, so a
+/// caller can still change the selection state beside it (feature 1550).
+fn transcript_view_of<'a>(
+    transcripts: &'a crate::features::structured_transcript::State,
+    rich: &'a crate::features::transcript_rich::RichCache,
+    prompts: &'a crate::features::permission_prompts::State,
+    insights: &'a crate::features::structured_insights::State,
+    session: micold_core::session::SessionId,
+) -> Option<crate::features::transcript_selection::TranscriptView<'a>> {
+    Some(crate::features::transcript_selection::TranscriptView {
+        session,
+        transcript: transcripts.transcript(session)?,
+        open: transcripts.open_cards(session)?,
+        rich,
+        prompts: Some(prompts),
+        insights: Some(insights),
+    })
+}
+
 #[cfg(test)]
 mod review_tab_tests {
     use super::State;
@@ -2541,23 +2588,4 @@ mod review_tab_tests {
         );
         assert_eq!(state.review_watch_entry(), None);
     }
-}
-
-/// What `session`'s transcript draws, from the window's parts: the root's borrow of each, so a
-/// caller can still change the selection state beside it (feature 1550).
-fn transcript_view_of<'a>(
-    transcripts: &'a crate::features::structured_transcript::State,
-    rich: &'a crate::features::transcript_rich::RichCache,
-    prompts: &'a crate::features::permission_prompts::State,
-    insights: &'a crate::features::structured_insights::State,
-    session: micold_core::session::SessionId,
-) -> Option<crate::features::transcript_selection::TranscriptView<'a>> {
-    Some(crate::features::transcript_selection::TranscriptView {
-        session,
-        transcript: transcripts.transcript(session)?,
-        open: transcripts.open_cards(session)?,
-        rich,
-        prompts: Some(prompts),
-        insights: Some(insights),
-    })
 }

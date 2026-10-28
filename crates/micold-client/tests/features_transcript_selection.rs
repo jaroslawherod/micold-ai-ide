@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use micold_client::app::State as App;
 use micold_client::features::permission_prompts::State as Prompts;
 use micold_client::features::structured_transcript::TranscriptMsg;
-use micold_client::features::transcript_rich::{DerivedBody, RichCache};
+use micold_client::features::transcript_rich::{DerivedBody, Part, RichCache};
 use micold_client::features::transcript_selection::shown::{
     footer_view, hunk_title, omitted_text, resolution_label, structured_input, unshown_caption,
     INPUT_CUT, PLAN_TITLE,
@@ -1106,4 +1106,74 @@ fn forgetting_a_session_releases_its_transcripts_focus() {
     assert_eq!(app.window.focused_field, Some(FieldId::Transcript(s)));
     app.forget_structured(s);
     assert_eq!(app.window.focused_field, None);
+}
+
+/// S-12: bounds that differ but cover no text (the end of one row to the start of the next) copy
+/// nothing, so the clipboard is not emptied.
+#[test]
+fn a_selection_that_covers_no_text_copies_nothing() {
+    let (mut app, s) = app_with([user("hello"), user("second")]);
+    drag(&mut app, s, e(0, 5), e(1, 0));
+    assert!(app.transcript_selection.selecting(s));
+    assert_eq!(copied(&app, s).as_deref(), Some(""));
+    assert!(send(&mut app, SelectMsg::CopySelection { session: s }).is_empty());
+}
+
+/// FR-019a: the menu's Copy with nothing to copy, and its Select all, still give the transcript
+/// the keyboard.
+#[test]
+fn the_menus_copy_and_select_all_focus_the_transcript_without_a_selection() {
+    let copy = |session| SelectMsg::CopySelection { session };
+    let select_all = |session| SelectMsg::SelectAll { session };
+    for msg in [copy, select_all] {
+        let (mut app, s) = app_with([user("hello world")]);
+        send(
+            &mut app,
+            SelectMsg::Context {
+                session: s,
+                origin: (1, 1),
+            },
+        );
+        let _ = send(&mut app, msg(s));
+        assert_eq!(app.window.focused_field, Some(FieldId::Transcript(s)));
+    }
+}
+
+/// FR-019a with #941 FR-012: the transcript holds the keyboard only while it is the focused field
+/// and no view replaces it, so a busy turn's Escape is not heard over the Overview.
+#[test]
+fn the_transcript_holds_the_keyboard_only_while_nothing_replaces_it() {
+    let (mut app, s) = app_with([user("hello world")]);
+    app.session.active = Some(s);
+    assert!(!app.transcript_focused(), "not the focused field");
+    app.window.focused_field = Some(FieldId::Transcript(s));
+    assert!(app.transcript_focused());
+    app.overview.open = true;
+    assert!(!app.transcript_focused(), "the Overview takes the keyboard");
+}
+
+/// FR-019: Show in full on an entry the selection holds part of changes the text it draws there,
+/// so it clears the selection like a toggle; one outside the range keeps it.
+#[test]
+fn show_in_full_in_range_clears_it_and_one_outside_keeps_it() {
+    let (mut app, s) = app_with([
+        tool_use("toolu_a", "Bash", r#"{"command":"ls"}"#),
+        tool_use("toolu_b", "Bash", r#"{"command":"pwd"}"#),
+    ]);
+    drag(&mut app, s, e(0, 0), e(0, 3));
+    app.update_transcript(TranscriptMsg::ShowInFull {
+        session: s,
+        key: EntryKey::Tool("toolu_b".into()),
+        part: Part::Diff,
+    });
+    assert!(app.transcript_selection.selecting(s), "outside the range");
+    app.update_transcript(TranscriptMsg::ShowInFull {
+        session: s,
+        key: EntryKey::Tool("toolu_a".into()),
+        part: Part::Diff,
+    });
+    assert!(
+        app.transcript_selection.selection(s).is_none(),
+        "in the range"
+    );
 }

@@ -234,8 +234,9 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   BUG-1403 cases updated to the new signature with unchanged results
 - [x] T021 [US2] Implement `transcript_key(press, phase, selecting, focused, mac)` and
   `KeyIntent::{CopySelection, SelectAll}` in `crates/micold-client/src/features/composer.rs`;
-  `FieldId::Transcript(SessionId)` in `crates/micold-client/src/features/window.rs`, joined in
-  `crates/micold-client/src/ui/focus.rs`; `transcript_interrupt` becomes `transcript_keys` in
+  `FieldId::Transcript(SessionId)` in `crates/micold-client/src/features/window.rs` (its join in
+  `crates/micold-client/src/ui/focus.rs` is T041's: nothing reports the transcript's focus before
+  `SelectionArea`); `transcript_interrupt` becomes `transcript_keys` in
   `crates/micold-client/src/ui/composer.rs`, subscribed while the active session's turn can be
   interrupted or `focused_field == Some(FieldId::Transcript(session))`, its one call site passing
   `cfg!(target_os = "macos")`; T020 passes
@@ -251,7 +252,8 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   `Copying` ticket record in `crates/micold-client/src/features/transcript_rich.rs` (the tool and
   diff targets follow in T044); the copy outcome and the failure notice through
   `Composers::notice` in `crates/micold-client/src/features/transcript_selection.rs` and
-  `crates/micold-client/src/shell/transcript.rs`; T022 passes
+  `crates/micold-client/src/app.rs` (the shell's existing `shell/clipboard.rs` performs the
+  checked write); T022 passes
 
 **Checkpoint**: the selection, its clearing, its copied text and the copy keys work in the state;
 nothing is drawn.

@@ -894,7 +894,9 @@ impl State {
                 let s = self.sessions.get_mut(&session)?;
                 s.menu = None;
                 let selection = s.selection.as_ref().filter(|sel| !sel.is_empty())?;
-                Some(copy_text(view?, selection))
+                // Bounds that differ can still cover no text (an offset at a unit's end, a
+                // skipped block): copying that would empty the clipboard (S-12).
+                Some(copy_text(view?, selection)).filter(|text| !text.is_empty())
             }
             SelectMsg::SelectAll { .. } => {
                 if let Some(s) = self.sessions.get_mut(&session) {

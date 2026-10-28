@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M2
-- **Next step**: M2 gate and reviews (A, B)
+- **Next step**: M2 PR (pushed; orchestrator opens it)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
-| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | in progress |
+| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | pending (pushed) | review |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
@@ -63,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 91e2a3d9cf7b87ce83bcc7e5e0c7510556892560:12b46edb6afe9910d2dcd96175cf67c05102539a | CLEAN (3 MINOR fixed, prose only: checklist ticked, CopySelection stub noted in T016, M4b Verify records Part B 1–5 visual pass) |
 | Review A M1 (code-review high) | 1 | no snapshot (HEAD 350eb1157) | 10 findings: 6 fixed in 75cbb5030 (word_at inside its line, snap via GraphemeCursor, full-width punctuation, unsnapped test offset, list marker arms merged, shared work_str), 4 declined (below) |
 | Review B M1 | 1 | 55ede43b68b9972806d53205fc373e5003804172:75cbb5030640e4bb0c886ec779d3a90794010ddf | CLEAN (1 MINOR fixed: tdd/cycle-log.md written from recovered red evidence) |
+| Review A M2 (code-review high) | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | 1 BLOCKER, 1 MAJOR, 8 MINOR: fixed BLOCKER (unfocused transcript listener heard a busy turn's Escape/Ctrl+C over dialogs and views: `transcript_keys(state, interrupt)` + `State::transcript_focused`), MAJOR (empty copy text no longer written), MINOR F6 (Show in full clears like a toggle), F7 (menu Copy/Select all refocus), F10 (T021/T023 wording, prose only); 5 MINOR declined (below). No re-review: no BLOCKER/MAJOR left open, fixes tested red→green |
+| Review B M2 | 1 | 7ab3116b4a9b005b9490425ae1a0d2fbb1ce2c15:0c4b3eeccae6405f5dc9285e9a9edf579dfdc70d | CLEAN; Verify pass (28/40/18/2); 1 MINOR fixed, prose only (T021 focus.rs join named as T041's) |
 
 ## Declined review findings
 
@@ -74,14 +76,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Review A M1 #8 (S-5 test holds by construction): it checks that entry ids by key stay put while every recorded fixture streams (a transcript property, not the selection's) and that the selected text of a growing entry is unchanged; `copy_text` stability needs `units()`, which is M2's.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A F3 | `Press { clicks }` vs `Hit { click }` granularity | MINOR, contract shape for M4b's wiring: `armed` only records that the area saw the press; `Hit.click` is the gesture's count as the widget reports it. Revisit when M3/M4b wire the widget. |
+| M2 | A F4, F5 | `noted`/`prompt_rows` per hit and per message; `placed()` per row | MINOR, performance: M4a's budget test (T033–T038) measures it and caches if it shows. |
+| M2 | A F8 | empty plain-text unit for an empty underived entry | MINOR: units mirror what is drawn; whether the plain renderer draws an empty line is checked by M4a's parity test. |
+| M2 | A F9 | `clear()` keeps `menu` | MINOR: the menu's Select all stays valid over a cleared selection and its Copy writes nothing; M4b's menu closes on outside clicks (`MenuDismissed`). |
 
 ## Handover
 
-- **Done**: M2 implemented and committed (`fc6e5ebb9`): T013–T023 ticked, `tdd/cycle-log.md` M2 rows written (compile-fail red, four mutants caught). Verify tests green: `features_transcript_selection` 28, `features_composer` 40, `features_transcript_rich` 18, `features_are_render_free` 2; guards `feature_registration_cost`, `feature_write_isolation` (allowlist and MUTATORS/READERS entries added), `field_focus_call_sites`, `features_structured_transcript`, `transcript_pane` green.
-- **In flight**: a full gate (`scripts/gate.sh`) was started detached on `fc6e5ebb9`, log `/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/gate-m2-fc6e5eb.log` (ends `GATE_EXIT=<n>`); disk had 8.2 GB free when it started — if it died of `No space left`, wipe `target-shared/` and rerun.
-- **Next**: verify.md from step 1: review A (`code-review` high) on `origin/main...HEAD`, review B (conformance, sonnet), fixes, full gate green on the final tree, then pr.md up to the push (`git push -u origin claude/project-thread-zj503u`, no PR: body to `/tmp/claude-0/-home-user-micold-ai-ide/2be7159f-6751-53a3-9b6d-59890a96757f/scratchpad/pr-1550-m2-body.md`, `Refs #1550`). No visual pass: nothing draws the selection in M2.
-- **Open findings**: none yet (no review has run).
-- **PR**: none.
+None.
 
 ## Open escalation
 
@@ -89,6 +91,6 @@ None.
 
 ## Follow-ups not done
 
-- T021's join of `FieldId::Transcript` in `ui/focus.rs` waits for the widget that reports it: `SelectionArea` (M3) placed in the transcript (M4b) is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
+- T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
 - #944's subagent threads drawn inside entries (X3, X5) are not units: M4a's parity test decides whether they become selectable.
