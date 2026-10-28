@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: tasks (design PR)
-- **Next step**: merge design PR, then M1
+- **Phase**: implement M1 (reviews pending)
+- **Next step**: M1 reviews A and B, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1553 | Design | open | … |
+| #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
 
 ## Milestones
 

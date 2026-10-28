@@ -44,6 +44,13 @@ pub const NOT_CONNECTED: &str = "Not connected to the session service: the draft
 /// See [`NOT_CONNECTED`].
 pub const NOT_RUNNING: &str = "The session is not running: the draft is kept.";
 
+/// The notice of a drop refused because the session cannot accept input (FR-011): the count of
+/// files and why.
+pub fn drop_refused(count: usize) -> String {
+    let files = if count == 1 { "file" } else { "files" };
+    format!("{count} {files} not attached: the session is not accepting input")
+}
+
 /// The notice of a queue edit whose entry was sent or removed meanwhile.
 pub const EDIT_GONE: &str = "The queued message was sent or removed before the edit was saved.";
 
@@ -523,6 +530,12 @@ impl State {
         }
     }
 
+    /// Whether `session` can take input at all: the session half of [`State::can_send`], with no
+    /// connection and no draft asked of it (FR-011).
+    pub fn accepts_input(&self, session: SessionId) -> bool {
+        self.unavailable(session, true).is_none()
+    }
+
     /// Whether the draft can be sent: sendable, connected, running and no send waiting (FR-004,
     /// FR-006). A busy session takes it into its queue.
     pub fn can_send(&self, session: SessionId, connected: bool) -> bool {
@@ -723,9 +736,18 @@ impl State {
 
     /// Files dropped on `session`'s pane (FR-026 to FR-029): each picture read is admitted in
     /// order, the other paths are inserted at the caret as a terminal drop of the same files
-    /// inserts them, and every refusal is named in the notice.
-    pub fn apply_drop(&mut self, session: SessionId, files: DroppedFiles) {
+    /// inserts them, and every refusal is named in the notice. A session that cannot accept input
+    /// (`can_accept` false) takes nothing and says so; an empty drop changes nothing (FR-011, FR-016).
+    pub fn apply_drop(&mut self, session: SessionId, files: DroppedFiles, can_accept: bool) {
+        let count = files.plan.images.len() + files.plan.paths.len();
+        if count == 0 {
+            return;
+        }
         let composer = self.entry(session);
+        if !can_accept {
+            composer.notice = Some(drop_refused(count));
+            return;
+        }
         let mut refusals: Vec<String> = Vec::new();
         for (path, read) in files.plan.images.iter().zip(files.reads) {
             let name = file_name(path);

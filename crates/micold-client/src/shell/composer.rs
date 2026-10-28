@@ -121,7 +121,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
         }
         Msg::QueueEditCancelled(session) => app.core.composers.queue_edit_done(session),
-        Msg::Dropped { session, files } => app.core.composers.apply_drop(session, *files),
+        Msg::Dropped { session, files } => {
+            let can_accept = app.core.composers.accepts_input(session);
+            app.core.composers.apply_drop(session, *files, can_accept);
+        }
         Msg::PaletteClicked { session, row } => app.core.palette_clicked(session, row),
         Msg::ModelPickerRequested(session) => app.core.open_model_picker(session),
         Msg::ModelPickerTyped { session, text } => app.core.model_picker_typed(session, text),
