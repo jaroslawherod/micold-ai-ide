@@ -263,15 +263,21 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
             let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
             let screen = Rectangle::with_size(window);
             assert_order(name, &records, &area);
+            let mut touch_checked = 0;
             for (what, part) in strip_parts(&records) {
                 // New session and the split buttons are never squeezed under a touch target (FR-012).
-                if what == "New session" || what == "split buttons" {
+                if what == "strip New session" || what == "strip split buttons" {
+                    touch_checked += 1;
                     assert!(
                         part.width >= micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET - TOLERANCE,
                         "{name} {theme:?} {window:?}: the {what} {part:?} is narrower than the touch target"
                     );
                 }
             }
+            assert_eq!(
+                touch_checked, 2,
+                "{name} {theme:?} {window:?}: the touch-target check ran on New session and the split buttons"
+            );
             let mut parts = header_parts(&records);
             assert!(
                 parts.len() >= 2,

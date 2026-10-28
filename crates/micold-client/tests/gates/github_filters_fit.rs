@@ -191,6 +191,40 @@ fn the_panel_stacks_its_fields_and_wraps_six_chips_inside_it() {
     );
 }
 
+/// T059 (US6, selector-ui §2 rows 4–6, §5): the panel's six rows stack in order under the button,
+/// the Assignee, Author and Milestone fields after the labels and the State row, each whole inside
+/// the dialog and the window.
+#[test]
+fn the_six_row_panel_stacks_assignee_author_and_milestone_inside_the_window() {
+    let drawn = painted(&covered("add-worktree-dialog-github-filters-panel"));
+    let top = |content: &str| {
+        drawn
+            .iter()
+            .filter(|d| d.content == content)
+            .min_by(|a, b| a.origin.y.total_cmp(&b.origin.y))
+            .unwrap_or_else(|| panic!("{content:?} is painted"))
+    };
+    let mut above = top("Exclude labels").origin.y;
+    let state = top("Closed");
+    assert!(
+        state.origin.y > above,
+        "the State row is not under Exclude labels"
+    );
+    above = state.origin.y;
+    for title in ["Assignee", "Author", "Milestone"] {
+        let field = top(title);
+        assert!(
+            field.origin.y > above,
+            "{title:?} ({:.1}) is not under the row above it ({above:.1})",
+            field.origin.y
+        );
+        assert_whole(field);
+        assert_inside(field);
+        assert_in_window(field);
+        above = field.origin.y;
+    }
+}
+
 /// T043 (US3 AS1, selector-ui §1, §5): in advanced mode the switch heads the picker, the Query input
 /// and **Run** share one row in place of the Filters button and the active line, and the cap
 /// caption of a sorted query keeps one line under the search; the footer stays reachable.

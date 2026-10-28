@@ -9,10 +9,11 @@ use micold_core::github::{
     FakeIssueSource, GithubRepo, Issue, IssueLoadError, IssuePage, NamePage, ISSUE_LOAD_CAP,
 };
 use micold_core::github_filter::{
-    load_filtered, load_label_choices, parse_search_page, BasicFilters, FilterFailure,
-    GithubFilter, IssueState, LabelChoices, LabelName, QueryRefusal, RememberedSelector,
-    ScopedSearch, SelectorChange, UserQuery, NOT_ACCEPTED, SEARCH_FILTERED_QUERY,
-    SEARCH_PAGE_QUERY,
+    load_filtered, load_label_choices, load_milestone_choices, parse_people, parse_search_page,
+    Assignee, Author, BasicFilters, FilterFailure, GithubFilter, IssueState, LabelChoices,
+    LabelName, Login, Milestone, MilestoneChoices, MilestoneTitle, QueryRefusal,
+    RememberedSelector, ScopedSearch, SelectorChange, UserQuery, NOT_ACCEPTED,
+    SEARCH_FILTERED_QUERY, SEARCH_PAGE_QUERY,
 };
 use micold_core::jira_query::QueryMode;
 use micold_core::store::{github_selector_path, project_id_of};
@@ -885,5 +886,256 @@ fn each_project_remembers_its_selector_in_its_own_file() {
     assert_ne!(
         github_selector_path(dir, project),
         github_selector_path(dir, std::path::Path::new("/work/b"))
+    );
+}
+
+// US6 (T053): assignee, author and milestone
+
+fn login(text: &str) -> Login {
+    Login::parse(text).unwrap_or_else(|| panic!("{text:?} is a login"))
+}
+
+fn milestone(title: &str) -> MilestoneTitle {
+    MilestoneTitle::parse(title).unwrap_or_else(|| panic!("{title:?} is a milestone title"))
+}
+
+/// search-rules §5: 1–39 ASCII letters, digits and single inner hyphens.
+#[test]
+fn a_login_is_letters_digits_and_single_inner_hyphens() {
+    let longest = "a".repeat(39);
+    for valid in ["octocat", "octo-cat", "a", "Octo-Cat-42", longest.as_str()] {
+        assert_eq!(
+            Login::parse(valid)
+                .map(|l| l.as_str().to_string())
+                .as_deref(),
+            Some(valid),
+            "{valid:?}"
+        );
+    }
+    let too_long = "a".repeat(40);
+    for invalid in [
+        "-octo",
+        "octo-",
+        "oc--to",
+        "octo cat",
+        "octo:cat",
+        too_long.as_str(),
+        "",
+        "octo\"",
+        "ö",
+        "@me",
+    ] {
+        assert_eq!(Login::parse(invalid), None, "{invalid:?}");
+    }
+}
+
+/// data-model §1, FR-006: non-empty, no `"`, no control character, and (as a label) no `\`.
+#[test]
+fn a_milestone_title_is_any_non_empty_title_without_a_quote_backslash_or_control_character() {
+    for valid in [
+        "v2.4",
+        "Sprint 12: polish",
+        "(wip)",
+        "日本語",
+        " lead space",
+    ] {
+        assert_eq!(
+            MilestoneTitle::parse(valid)
+                .map(|t| t.as_str().to_string())
+                .as_deref(),
+            Some(valid),
+            "{valid:?}"
+        );
+    }
+    for invalid in ["", "say \"hi\"", "tab\there", "foo\\", "a\\b"] {
+        assert_eq!(MilestoneTitle::parse(invalid), None, "{invalid:?}");
+    }
+}
+
+fn us6_filters() -> BasicFilters {
+    let mut filters = BasicFilters::default();
+    filters.set_assignee(Some(Assignee::Me));
+    filters.set_author(Some(Author::User(login("octo-cat"))));
+    filters.set_milestone(Some(Milestone::Titled(milestone("v2.4"))));
+    filters
+}
+
+#[test]
+fn each_us6_value_counts_once_and_makes_the_filter_not_default() {
+    let mut filters = BasicFilters::default();
+    filters.set_assignee(Some(Assignee::Nobody));
+    assert!(!filters.is_default());
+    assert_eq!(filters.chosen_count(), 1);
+    assert_eq!(filters.assignee(), Some(&Assignee::Nobody));
+    filters.set_assignee(None);
+    assert!(filters.is_default());
+    filters.set_author(Some(Author::Me));
+    assert!(!filters.is_default());
+    filters.set_author(None);
+    filters.set_milestone(Some(Milestone::Nobody));
+    assert!(!filters.is_default());
+    assert_eq!(filters.milestone(), Some(&Milestone::Nobody));
+    filters.set_milestone(None);
+    assert!(filters.is_default());
+
+    let mut all = us6_filters();
+    all.exclude_label(label("blocked"));
+    assert_eq!(all.chosen_count(), 4);
+    assert_eq!(all.author(), Some(&Author::User(login("octo-cat"))));
+    assert!(all.cleared().is_default());
+}
+
+/// data-model §2: the US6 parts follow the state, in order.
+#[test]
+fn the_active_line_names_the_us6_parts_after_the_state() {
+    let mut filters = us6_filters();
+    filters.exclude_label(label("blocked"));
+    filters.set_state(IssueState::Closed);
+    assert_eq!(
+        filters.described().as_deref(),
+        Some(
+            "Excluding labels blocked; Closed issues; Assigned to me; By octo-cat; Milestone v2.4"
+        )
+    );
+    let mut others = BasicFilters::default();
+    others.set_assignee(Some(Assignee::Nobody));
+    others.set_author(Some(Author::Me));
+    others.set_milestone(Some(Milestone::Nobody));
+    assert_eq!(
+        others.described().as_deref(),
+        Some("No assignee; By me; No milestone")
+    );
+    let mut person = BasicFilters::default();
+    person.set_assignee(Some(Assignee::User(login("hubot"))));
+    assert_eq!(person.described().as_deref(), Some("Assigned to hubot"));
+}
+
+/// search-rules §4, the two US6 rows: after the label terms, before the sort.
+#[test]
+fn the_us6_values_are_scoped_after_the_labels() {
+    assert_eq!(
+        listing(&GithubFilter::Basic(us6_filters())),
+        "repo:acme/app is:issue is:open assignee:@me author:octo-cat milestone:\"v2.4\" sort:updated-desc"
+    );
+    let mut nobody = BasicFilters::default();
+    nobody.set_assignee(Some(Assignee::Nobody));
+    nobody.set_milestone(Some(Milestone::Nobody));
+    assert_eq!(
+        listing(&GithubFilter::Basic(nobody)),
+        "repo:acme/app is:issue is:open no:assignee no:milestone sort:updated-desc"
+    );
+    let mut people = excluding(&["blocked"]);
+    people.set_assignee(Some(Assignee::User(login("hubot"))));
+    people.set_author(Some(Author::Me));
+    assert_eq!(
+        listing(&GithubFilter::Basic(people)),
+        "repo:acme/app is:issue is:open -label:\"blocked\" assignee:hubot author:@me sort:updated-desc"
+    );
+}
+
+/// FR-021: a file written before US6 (M3–M6) reads unchanged; the three values round-trip; an
+/// invalid one is dropped.
+#[test]
+fn the_us6_values_are_remembered_and_older_files_read_unchanged() {
+    let older = RememberedSelector::from_json(
+        br#"{"mode":"advanced","basic":{"include":["bug"],"exclude":[],"state":"closed"},"query":"label:a","ran":true}"#,
+    );
+    assert_eq!(labels(older.basic.include()), ["bug"]);
+    assert_eq!(older.basic.state(), IssueState::Closed);
+    assert_eq!(older.basic.assignee(), None);
+    assert_eq!(older.basic.author(), None);
+    assert_eq!(older.basic.milestone(), None);
+    assert_eq!(older.query, "label:a");
+
+    let held = RememberedSelector::default().with_change(&SelectorChange::Basic(us6_filters()));
+    let read = RememberedSelector::from_json(&held.to_json());
+    assert_eq!(read, held);
+    let mut nobody = BasicFilters::default();
+    nobody.set_assignee(Some(Assignee::Nobody));
+    nobody.set_milestone(Some(Milestone::Nobody));
+    let round: BasicFilters =
+        serde_json::from_slice(&serde_json::to_vec(&nobody).unwrap()).unwrap();
+    assert_eq!(round, nobody);
+    let mut person = BasicFilters::default();
+    person.set_assignee(Some(Assignee::User(login("hubot"))));
+    let round: BasicFilters =
+        serde_json::from_slice(&serde_json::to_vec(&person).unwrap()).unwrap();
+    assert_eq!(round, person);
+
+    // The default filter is written as before US6: no new key.
+    let written = String::from_utf8(serde_json::to_vec(&BasicFilters::default()).unwrap()).unwrap();
+    assert!(!written.contains("assignee"), "{written}");
+
+    let invalid: BasicFilters = serde_json::from_value(json!({
+        "assignee": {"user": "-bad"},
+        "author": "sideways",
+        "milestone": {"titled": "say \"hi\""}
+    }))
+    .expect("lenient");
+    assert_eq!(invalid, BasicFilters::default());
+}
+
+#[test]
+fn us6_values_never_print_a_login_or_title() {
+    let mut filters = BasicFilters::default();
+    filters.set_assignee(Some(Assignee::User(login("secret-assignee"))));
+    filters.set_author(Some(Author::User(login("secret-author"))));
+    filters.set_milestone(Some(Milestone::Titled(milestone("secret-milestone"))));
+    let printed = format!(
+        "{filters:?} {:?} {:?}",
+        login("secret"),
+        milestone("secret")
+    );
+    assert!(!printed.contains("secret"), "{printed}");
+}
+
+#[test]
+fn milestone_choices_are_sorted_by_title_and_quoted_titles_not_offered() {
+    let source = FakeIssueSource::new().with_milestones(vec![
+        names(&["v2.4", "alpha", "say \"hi\""], Some("C1")),
+        names(&["Beta", "v1.0", "alpha"], None),
+    ]);
+    let choices: MilestoneChoices = load_milestone_choices(&source, &repo()).expect("choices");
+    let titles: Vec<&str> = choices
+        .milestones
+        .iter()
+        .map(MilestoneTitle::as_str)
+        .collect();
+    assert_eq!(titles, ["alpha", "Beta", "v1.0", "v2.4"]);
+    assert_eq!(choices.not_offered, 1);
+    assert_eq!(source.milestone_calls(), [None, Some("C1".to_string())]);
+
+    let failing = FakeIssueSource::new().with_milestones(vec![Err(IssueLoadError::RateLimited)]);
+    assert_eq!(
+        load_milestone_choices(&failing, &repo()).unwrap_err(),
+        IssueLoadError::RateLimited
+    );
+}
+
+/// data-model §6: people with a valid login, in GitHub's order; a redacted `Debug`.
+#[test]
+fn people_skip_invalid_logins_and_never_print_one() {
+    let answer = json!({"data": {"repository": {"assignableUsers": {"nodes": [
+        {"login": "octocat", "name": "The Octocat"},
+        {"login": "octo-cat", "name": ""},
+        {"login": "-bad", "name": "Bad"},
+        {"login": "hubot", "name": null},
+        {"name": "No login"}
+    ]}}}});
+    let people = parse_people(answer.to_string().as_bytes()).expect("people");
+    let logins: Vec<&str> = people.iter().map(|p| p.login.as_str()).collect();
+    assert_eq!(logins, ["octocat", "octo-cat", "hubot"]);
+    let named: Vec<Option<&str>> = people.iter().map(|p| p.name.as_deref()).collect();
+    assert_eq!(named, [Some("The Octocat"), None, None]);
+    let printed = format!("{people:?}");
+    assert!(
+        !printed.contains("octo") && !printed.contains("hubot"),
+        "{printed}"
+    );
+
+    let refused = json!({"data": null, "errors": [{"type": "RATE_LIMITED", "message": "slow"}]});
+    assert_eq!(
+        parse_people(refused.to_string().as_bytes()).unwrap_err(),
+        IssueLoadError::RateLimited
     );
 }

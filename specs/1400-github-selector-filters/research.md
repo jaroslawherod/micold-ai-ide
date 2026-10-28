@@ -138,7 +138,7 @@ track.
 ## R6 — Basic filter values are quoted and constructed only by validation
 
 **Decision.** `LabelName::parse` and `MilestoneTitle::parse` (US6) refuse an empty name and any
-name holding `"` or a control character (`LabelName` also `\`, as typed words drop it: if GitHub
+name holding `"` or a control character (both also `\`, as typed words drop it: if GitHub
 read `\"` as an escape the quote would stay open; M1 review A F1); every accepted value is sent as `label:"<name>"`. `Login`
 (US6) accepts 1–39 ASCII letters, digits and single inner hyphens (no leading, trailing or double
 hyphen), sent bare. `Assignee::Me`/`Author::Me` send `@me`. A label GitHub returns that fails
@@ -289,7 +289,8 @@ into one function both call. No new widget.
 
 **Why.** Principle VIII: the panel, fields, chips and status chip exist; multi-value labels are
 chips under a typeahead, a pattern `ToggleChip` already supports with `trailing_icon`. The panel
-floats (1185 D15), so chips cost the tallest dialog no height.
+floats (1185 D15), so chips cost the tallest dialog no height. Its list caps at 12 menu items
+(`FILTERS_PANEL_HEIGHT`, shared with Jira's Filters panel, M7); taller content scrolls inside it.
 
 **Rejected.** (a) A new multi-select widget: one use, and `Typeahead` + `ToggleChip` already
 compose it. (b) A "Closed" word in the details line: the row already has a status slot built for

@@ -48,7 +48,7 @@ Paths: `C` = `crates/micold-client`. Gates: `C/tests/gates/session_area_fits.rs`
 
 ## Phase 6: Polish
 
-- [ ] T019 Run quickstart Part A and the Part B visual pass (`visual-pass` skill), save screenshots under `specs/1463-compact-session-header/visual-pass/` (done by the close unit in the close PR; changes no code, so it is in no milestone).
+- [X] T019 Run quickstart Part A and the Part B visual pass (`visual-pass` skill), save screenshots under `specs/1463-compact-session-header/visual-pass/` (done by the close unit in the close PR; changes no code, so it is in no milestone). (Done in M1 and M2 as partial passes, see `visual-pass/` and the ledger follow-ups; no new pass at close.)
 
 ## Dependencies
 
@@ -105,3 +105,11 @@ Test-strength findings of `tdd/verification.md` (verdict FAIL). The missing red 
 - [X] T026 Finding 11: add micold-material unit tests for `GiveWayRow` (`shorten` yields before `keep`, ranks in order) and `Button::density` (height at DENSE vs STANDARD). Proof: mutants `Shorten(rank)` -> `Keep` and density ignored fail `cargo test -p micold-material`.
 - [X] T027 Finding 12: add a layout case where words and the switch slot both overflow and assert which shortens first. Proof: mutant `.shorten(1, words)` -> `.shorten(0, words)` fails.
 - [X] T028 Finding 13: add a direct test that `tab::SESSION_WIDTH` still equals its recorded value (FR-011), or note it is guarded only by the tab snapshots.
+
+## Phase 8: TDD remediation (re-audit after M3)
+
+Verdict FAIL (`tdd/verification.md`, `verified_at` 2ac41d5a0): the feature is not done until T029 is cleared.
+
+- [X] T029 Finding 1 (HIGH): in `C/tests/gates/session_area_fits.rs:266-273` match the real part names `"strip New session"` and `"strip split buttons"` (see `strip_parts`, `:149-159`) and fail when neither part was checked. Proof: `cargo test -p micold-client --test layout_snapshot` green, and the mutant `MIN_TOUCH_TARGET - TOLERANCE` -> `100000.0` fails it.
+- [X] T030 Finding 2 (MED): assert literal DENSE/STANDARD button heights in `C/../micold-material/src/button.rs:799` instead of `density::height(..)`. Proof: `cargo test -p micold-material` green; mutating `density::height` fails. (Done: literal assertions added; the `density::height` mutant was not re-run.)
+- [X] T031 Finding 4 (MED): add an M3 section to `specs/1463-compact-session-header/tdd/cycle-log.md` listing, per T021-T027, the mutant and the failing test observed. Proof: each mutant re-run and recorded. (Done: section added; T021, T024, T027 and the rank-tie mutants were not re-run, see the log.)

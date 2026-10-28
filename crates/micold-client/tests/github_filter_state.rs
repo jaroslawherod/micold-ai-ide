@@ -2053,3 +2053,486 @@ fn what_a_session_remembers_reopens_the_same_form() {
     let (_, _, search) = again.worktree_form.github_filtered_load().unwrap();
     assert_eq!(search.as_str(), advanced("label:bug"));
 }
+
+// --- T057: assignee, author and milestone (US6) -------------------------------------------
+
+use micold_client::features::worktree_form::github_filter::{ValueAction, ValueField};
+use micold_core::github_filter::{
+    load_milestone_choices, Assignee, Author, Login, Milestone, MilestoneTitle, Person,
+};
+
+fn login(text: &str) -> Login {
+    Login::parse(text).expect("a valid login")
+}
+
+fn person(text: &str, name: Option<&str>) -> Person {
+    Person {
+        login: login(text),
+        name: name.map(str::to_string),
+    }
+}
+
+fn titled(title: &str) -> Milestone {
+    Milestone::Titled(MilestoneTitle::parse(title).expect("a quotable title"))
+}
+
+fn value(state: &mut State, msg: GithubMsg) -> Vec<Outcome> {
+    remembered_by(state, msg)
+}
+
+/// What `field`'s rows say, in order.
+fn value_texts(state: &State, field: ValueField) -> Vec<String> {
+    let source = form(state).notice_source().expect("a source");
+    form(state)
+        .github_selector
+        .value_rows(field)
+        .iter()
+        .map(|row| row.label(source))
+        .collect()
+}
+
+/// Pick the first row of `field` whose action is `action`; what it remembered.
+fn pick_value(state: &mut State, field: ValueField, action: ValueAction) -> Vec<Outcome> {
+    let index = form(state)
+        .github_selector
+        .value_rows(field)
+        .iter()
+        .position(|row| row.action == action)
+        .unwrap_or_else(|| panic!("{action:?} is offered in {field:?}"));
+    value(state, GithubMsg::ValuePicked(field, index))
+}
+
+/// Type `text` into `field`, wait out the debounce and answer the people search from `fake`, as
+/// the shell does.
+fn search_people(state: &mut State, field: ValueField, text: &str, fake: &FakeIssueSource) {
+    filter(state, GithubMsg::ValueQueryChanged(field, text.into()));
+    let seq = state
+        .worktree_form
+        .pending_github_people_search()
+        .expect("a people search waits out its debounce");
+    assert_eq!(state.worktree_form.awaited_github_people_search(), None);
+    filter(state, GithubMsg::PeopleSearchDue { seq });
+    let (seq, text) = state
+        .worktree_form
+        .awaited_github_people_search()
+        .expect("the people search is due");
+    let repo = form(state).github_repo().cloned().unwrap();
+    use micold_core::github::IssueSource;
+    let result = fake.assignable_users(&repo, &text);
+    filter(state, GithubMsg::PeopleLoaded { seq, result });
+}
+
+/// The milestones `v2.4` and `alpha` loaded into the milestone field, as the shell loads them.
+fn serve_milestones(state: &mut State, titles: &[&str]) {
+    let seq = state
+        .worktree_form
+        .awaited_milestone_choices()
+        .expect("the milestones are awaited");
+    let fake = FakeIssueSource::new().with_milestones(vec![Ok(names(titles, None))]);
+    let repo = form(state).github_repo().cloned().unwrap();
+    let result = load_milestone_choices(&fake, &repo);
+    filter(state, GithubMsg::MilestonesLoaded { seq, result });
+}
+
+/// US6 AS1: the assignee field offers "Me", "No assignee", then the people one debounced search
+/// found for the typed text; a focus asks for nothing.
+#[test]
+fn the_assignee_offers_me_no_assignee_then_people_from_one_debounced_search() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    let choices_before = state.worktree_form.filter_request_seq;
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
+    assert_eq!(state.worktree_form.filter_request_seq, choices_before);
+    assert_eq!(state.worktree_form.pending_github_people_search(), None);
+    assert_eq!(state.worktree_form.awaited_milestone_choices(), None);
+    assert_eq!(
+        value_texts(&state, ValueField::Assignee),
+        ["Any assignee", "Me", "No assignee"]
+    );
+
+    // Two keystrokes: the first one's debounce ends stale and sends nothing.
+    filter(
+        &mut state,
+        GithubMsg::ValueQueryChanged(ValueField::Assignee, "oc".into()),
+    );
+    let first = state.worktree_form.pending_github_people_search().unwrap();
+    filter(
+        &mut state,
+        GithubMsg::ValueQueryChanged(ValueField::Assignee, "oct".into()),
+    );
+    let second = state.worktree_form.pending_github_people_search().unwrap();
+    assert!(second > first);
+    filter(&mut state, GithubMsg::PeopleSearchDue { seq: first });
+    assert_eq!(state.worktree_form.awaited_github_people_search(), None);
+    assert!(value_texts(&state, ValueField::Assignee).contains(&"Searching people…".to_string()));
+
+    let fake = FakeIssueSource::new().with_people(Ok(vec![
+        person("octocat", Some("The Octocat")),
+        person("octo-dog", None),
+    ]));
+    filter(&mut state, GithubMsg::PeopleSearchDue { seq: second });
+    let (seq, text) = state.worktree_form.awaited_github_people_search().unwrap();
+    assert_eq!(text, "oct");
+    let repo = form(&state).github_repo().cloned().unwrap();
+    use micold_core::github::IssueSource;
+    let result = fake.assignable_users(&repo, &text);
+    filter(&mut state, GithubMsg::PeopleLoaded { seq, result });
+    assert_eq!(
+        fake.people_calls(),
+        ["oct"],
+        "one search, for the last text"
+    );
+    assert_eq!(
+        value_texts(&state, ValueField::Assignee),
+        [
+            "Any assignee",
+            "Me",
+            "No assignee",
+            "octocat (The Octocat)",
+            "octo-dog"
+        ]
+    );
+    // Clearing the text drops the people; nothing is asked.
+    filter(
+        &mut state,
+        GithubMsg::ValueQueryChanged(ValueField::Assignee, " ".into()),
+    );
+    assert_eq!(state.worktree_form.pending_github_people_search(), None);
+    assert_eq!(
+        value_texts(&state, ValueField::Assignee),
+        ["Any assignee", "Me", "No assignee"]
+    );
+}
+
+/// US6 AS2: the author offers "Me", the people found, then "Use login <typed>" only for a valid
+/// login; picking it lists by that author.
+#[test]
+fn the_author_offers_me_people_then_a_typed_valid_login() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me"]
+    );
+    let fake = FakeIssueSource::new().with_people(Ok(vec![person("octocat", None)]));
+    search_people(&mut state, ValueField::Author, "octo-cat", &fake);
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me", "octocat", "Use login octo-cat"]
+    );
+    // A person the search found is not offered again as a typed login.
+    let fake = FakeIssueSource::new().with_people(Ok(vec![person("octocat", None)]));
+    search_people(&mut state, ValueField::Author, "octocat", &fake);
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me", "octocat"]
+    );
+    let fake = FakeIssueSource::new().with_people(Ok(Vec::new()));
+    search_people(&mut state, ValueField::Author, "-bad", &fake);
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me", "No person matches"]
+    );
+
+    let fake = FakeIssueSource::new().with_people(Ok(Vec::new()));
+    search_people(&mut state, ValueField::Author, "octo-cat", &fake);
+    let remembered = pick_value(
+        &mut state,
+        ValueField::Author,
+        ValueAction::Author(Author::User(login("octo-cat"))),
+    );
+    let mut by = BasicFilters::default();
+    by.set_author(Some(Author::User(login("octo-cat"))));
+    assert_eq!(remembered, remembers(by));
+    let (_, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(
+        search.as_str(),
+        "repo:o/r is:issue is:open author:octo-cat sort:updated-desc"
+    );
+    let field = form(&state)
+        .github_selector
+        .value_field(ValueField::Author)
+        .clone();
+    assert_eq!(field.query, "octo-cat", "the field shows the chosen author");
+    assert!(!field.open);
+}
+
+/// US6 AS3: the milestone field's first focus loads the open milestones once; it offers "No
+/// milestone" and the milestones by title, narrowed locally by the typed text.
+#[test]
+fn the_milestone_field_loads_once_and_offers_no_milestone_and_titles() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    let before = state.worktree_form.filter_request_seq;
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    assert_eq!(state.worktree_form.filter_request_seq, before + 1);
+    assert_eq!(
+        value_texts(&state, ValueField::Milestone),
+        ["Any milestone", "Loading milestones…"]
+    );
+    serve_milestones(&mut state, &["v2.4", "alpha", "Beta"]);
+    assert_eq!(
+        value_texts(&state, ValueField::Milestone),
+        ["Any milestone", "No milestone", "alpha", "Beta", "v2.4"]
+    );
+    filter(&mut state, GithubMsg::ValueDismissed(ValueField::Milestone));
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    assert_eq!(state.worktree_form.filter_request_seq, before + 1, "once");
+    assert_eq!(state.worktree_form.awaited_milestone_choices(), None);
+    filter(
+        &mut state,
+        GithubMsg::ValueQueryChanged(ValueField::Milestone, "v2".into()),
+    );
+    assert_eq!(
+        value_texts(&state, ValueField::Milestone),
+        ["Any milestone", "No milestone", "v2.4"]
+    );
+    assert_eq!(state.worktree_form.filter_request_seq, before + 1);
+}
+
+#[test]
+fn a_milestone_failure_retries_and_none_open_says_so() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    let seq = state.worktree_form.awaited_milestone_choices().unwrap();
+    filter(
+        &mut state,
+        GithubMsg::MilestonesLoaded {
+            seq,
+            result: Err(IssueLoadError::Offline),
+        },
+    );
+    let rows = form(&state)
+        .github_selector
+        .value_rows(ValueField::Milestone);
+    assert_eq!(rows.last().unwrap().action, ValueAction::Retry);
+    pick_value(&mut state, ValueField::Milestone, ValueAction::Retry);
+    serve_milestones(&mut state, &[]);
+    assert_eq!(
+        value_texts(&state, ValueField::Milestone),
+        [
+            "Any milestone",
+            "No milestone",
+            "This repository has no open milestones"
+        ]
+    );
+}
+
+/// US6 AS4, FR-021: each choice reloads once with its term ANDed with the labels and the state,
+/// and is remembered; "Any …" clears it.
+#[test]
+fn each_us6_choice_is_one_listing_anded_with_the_others_and_remembered() {
+    let mut state = shown(default_issues());
+    with_labels(&mut state);
+    pick(&mut state, LabelList::Exclude, "blocked");
+    filter(&mut state, GithubMsg::StateChosen(IssueState::Closed));
+    let mut expected = excluding_labels(&["blocked"]);
+    expected.set_state(IssueState::Closed);
+
+    let seq = state.worktree_form.issue_request_seq;
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
+    expected.set_assignee(Some(Assignee::Nobody));
+    assert_eq!(
+        pick_value(
+            &mut state,
+            ValueField::Assignee,
+            ValueAction::Assignee(Assignee::Nobody)
+        ),
+        remembers(expected.clone())
+    );
+    assert_eq!(
+        state.worktree_form.issue_request_seq,
+        seq + 1,
+        "one listing"
+    );
+    assert_eq!(
+        form(&state)
+            .github_selector
+            .value_field(ValueField::Assignee)
+            .query,
+        "No assignee"
+    );
+
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
+    expected.set_author(Some(Author::Me));
+    assert_eq!(
+        pick_value(
+            &mut state,
+            ValueField::Author,
+            ValueAction::Author(Author::Me)
+        ),
+        remembers(expected.clone())
+    );
+
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    serve_milestones(&mut state, &["v2.4"]);
+    expected.set_milestone(Some(titled("v2.4")));
+    assert_eq!(
+        pick_value(
+            &mut state,
+            ValueField::Milestone,
+            ValueAction::Milestone(titled("v2.4"))
+        ),
+        remembers(expected.clone())
+    );
+    assert_eq!(state.worktree_form.issue_request_seq, seq + 3);
+    let fake = FakeIssueSource::new().with_search_pages(vec![Ok(page(Vec::new(), 0, None))]);
+    assert!(serve(&mut state, &fake));
+    assert_eq!(
+        fake.asked_searches(),
+        ["repo:o/r is:issue is:closed -label:\"blocked\" no:assignee author:@me milestone:\"v2.4\" sort:updated-desc"]
+    );
+    assert_eq!(
+        form(&state).github_selector.active_line().as_deref(),
+        Some("Excluding labels blocked; Closed issues; No assignee; By me; Milestone v2.4")
+    );
+    assert_eq!(form(&state).github_selector.basic.chosen_count(), 5);
+
+    // The same choice again changes nothing.
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
+    assert!(pick_value(
+        &mut state,
+        ValueField::Author,
+        ValueAction::Author(Author::Me)
+    )
+    .is_empty());
+
+    // "Any …" clears each.
+    expected.set_author(None);
+    assert_eq!(
+        pick_value(&mut state, ValueField::Author, ValueAction::Any),
+        remembers(expected.clone())
+    );
+    assert_eq!(
+        form(&state)
+            .github_selector
+            .value_field(ValueField::Author)
+            .query,
+        ""
+    );
+    expected.set_assignee(None);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
+    assert_eq!(
+        pick_value(&mut state, ValueField::Assignee, ValueAction::Any),
+        remembers(expected.clone())
+    );
+    // Clear filters clears the values and their fields' text.
+    assert_eq!(
+        value(&mut state, GithubMsg::ClearedAll),
+        remembers(BasicFilters::default())
+    );
+    assert_eq!(
+        form(&state)
+            .github_selector
+            .value_field(ValueField::Milestone)
+            .query,
+        ""
+    );
+    assert_eq!(state.worktree_form.github_filtered_load(), None);
+}
+
+/// FR-021: what a session remembers of the US6 values reopens as one listing with their terms,
+/// the fields showing them.
+#[test]
+fn remembered_us6_values_reopen_with_one_listing() {
+    let mut basic = BasicFilters::default();
+    basic.set_assignee(Some(Assignee::User(login("hubot"))));
+    basic.set_author(Some(Author::Me));
+    basic.set_milestone(Some(Milestone::Nobody));
+    let before = State::default().worktree_form.issue_request_seq;
+    let state = reopened(remembering(basic));
+    let (seq, _, search) = state.worktree_form.github_filtered_load().unwrap();
+    assert_eq!(seq, before + 1);
+    assert_eq!(
+        search.as_str(),
+        "repo:o/r is:issue is:open assignee:hubot author:@me no:milestone sort:updated-desc"
+    );
+    let selector = &form(&state).github_selector;
+    assert_eq!(selector.value_field(ValueField::Assignee).query, "hubot");
+    assert_eq!(selector.value_field(ValueField::Author).query, "Me");
+    assert_eq!(
+        selector.value_field(ValueField::Milestone).query,
+        "No milestone"
+    );
+}
+
+/// Typing a chosen value's own words is not a search; the people's `Debug` names no one.
+#[test]
+fn the_chosen_value_in_the_field_is_not_a_search_and_debug_names_no_one() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Assignee));
+    pick_value(
+        &mut state,
+        ValueField::Assignee,
+        ValueAction::Assignee(Assignee::Me),
+    );
+    filter(
+        &mut state,
+        GithubMsg::ValueQueryChanged(ValueField::Assignee, "Me".into()),
+    );
+    assert_eq!(state.worktree_form.pending_github_people_search(), None);
+    let fake =
+        FakeIssueSource::new().with_people(Ok(vec![person("secret-person", Some("Secret"))]));
+    search_people(&mut state, ValueField::Assignee, "secret", &fake);
+    let printed = format!("{:?}", form(&state).github_selector);
+    assert!(
+        !printed.contains("secret") && !printed.contains("Secret"),
+        "{printed}"
+    );
+}
+
+/// M7 review A F1: GitHub logins are case-insensitive, so a typed login the search found in
+/// another case is the person found, not offered again as "Use login".
+#[test]
+fn a_typed_login_found_in_another_case_is_not_offered_again() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Author));
+    let fake = FakeIssueSource::new().with_people(Ok(vec![person("octocat", None)]));
+    search_people(&mut state, ValueField::Author, "OctoCat", &fake);
+    assert_eq!(
+        value_texts(&state, ValueField::Author),
+        ["Any author", "Me", "octocat"]
+    );
+}
+
+/// M7 review A F2: a single-value field marks its chosen row, as 1185's Jira fields do: "Any …"
+/// while nothing is chosen, else the row that chooses the value.
+#[test]
+fn a_single_value_field_marks_its_chosen_row() {
+    let mut state = shown(default_issues());
+    filter(&mut state, GithubMsg::PanelToggled);
+    let selected = |state: &State, field| form(state).github_selector.selected_value_row(field);
+    for field in ValueField::ALL {
+        assert_eq!(selected(&state, field), Some(0), "{field:?} marks Any");
+    }
+    pick_value(
+        &mut state,
+        ValueField::Assignee,
+        ValueAction::Assignee(Assignee::Nobody),
+    );
+    assert_eq!(selected(&state, ValueField::Assignee), Some(2));
+    pick_value(
+        &mut state,
+        ValueField::Author,
+        ValueAction::Author(Author::Me),
+    );
+    assert_eq!(selected(&state, ValueField::Author), Some(1));
+    filter(&mut state, GithubMsg::ValueFocused(ValueField::Milestone));
+    serve_milestones(&mut state, &["v2.4", "alpha"]);
+    pick_value(
+        &mut state,
+        ValueField::Milestone,
+        ValueAction::Milestone(titled("v2.4")),
+    );
+    let rows = form(&state)
+        .github_selector
+        .value_rows(ValueField::Milestone);
+    let marked = selected(&state, ValueField::Milestone).expect("the milestone is marked");
+    assert_eq!(rows[marked].action, ValueAction::Milestone(titled("v2.4")));
+    pick_value(&mut state, ValueField::Assignee, ValueAction::Any);
+    assert_eq!(selected(&state, ValueField::Assignee), Some(0));
+}

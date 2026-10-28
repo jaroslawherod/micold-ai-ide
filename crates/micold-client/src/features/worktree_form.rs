@@ -236,6 +236,34 @@ impl State {
         form.github_selector.awaited_labels()
     }
 
+    /// The seq the GitHub milestone choices are awaited under, while in flight (1400 US6, FR-005).
+    pub fn awaited_milestone_choices(&self) -> Option<u64> {
+        let form = self.form.as_ref()?;
+        if !form.shows_github_filters() {
+            return None;
+        }
+        form.github_selector.awaited_milestones()
+    }
+
+    /// The GitHub people search waiting out its debounce, by its seq (1400 US6).
+    pub fn pending_github_people_search(&self) -> Option<u64> {
+        let form = self.form.as_ref()?;
+        if !form.shows_github_filters() {
+            return None;
+        }
+        form.github_selector.people_pending
+    }
+
+    /// The GitHub people search in flight: its seq and the text typed into the assignee or author
+    /// field, the only text it sends (1400 US6).
+    pub fn awaited_github_people_search(&self) -> Option<(u64, String)> {
+        let form = self.form.as_ref()?;
+        if !form.shows_github_filters() {
+            return None;
+        }
+        form.github_selector.awaited_people()
+    }
+
     /// The filter-choice request the open form awaits, with its filter (feature 1185).
     pub fn awaited_choices(&self) -> Option<(FilterKind, u64)> {
         self.form.as_ref()?.jira_filters.awaited_choices()

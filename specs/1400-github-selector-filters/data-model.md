@@ -21,7 +21,7 @@ function or test names them (plan §US6 separability).
 | **US6** `Login` | `struct(String)` | Only from `Login::parse`: 1–39 ASCII letters, digits and single inner hyphens. |
 | **US6** `Assignee` | `enum { Me, Nobody, User(Login) }` | |
 | **US6** `Author` | `enum { Me, User(Login) }` | |
-| **US6** `MilestoneTitle` | `struct(String)` | Only from `MilestoneTitle::parse`: non-empty, no `"`, no control character. |
+| **US6** `MilestoneTitle` | `struct(String)` | Only from `MilestoneTitle::parse`: non-empty, no `"`, no `\`, no control character (`LabelName`'s rule, M7). |
 | **US6** `Milestone` | `enum { Nobody, Titled(MilestoneTitle) }` | |
 
 ## 2. `BasicFilters` (core) — the basic filter set (FR-003, FR-004)
@@ -154,7 +154,8 @@ Both are reset like `Failed`. `held()` is empty for both.
 | `include_field`, `exclude_field` | `FilterField` | Reuses 1185's typeahead field state. |
 | `panel_open` | `bool` | |
 | **US6** `milestones` | `ChoiceLoad<MilestoneChoices>` | |
-| **US6** `people` | `ChoiceLoad<Person>` + `people_pending: Option<u64>` | Debounced search (1185). |
+| **US6** `people` | `ChoiceLoad<Person>` + `people_pending: Option<u64>` | Debounced search (1185), only for typed text: none on focus. |
+| **US6** `people_for` | `Option<ValueField>` | The person field (Assignee or Author) the search was typed in: its people show in that field only; leaving it or choosing in it drops them. |
 | **US6** `assignee_field`, `author_field`, `milestone_field` | `FilterField` | |
 
 - `active_filter(&self) -> GithubFilter`: by the mode the list shown was asked in (`listed_for`,

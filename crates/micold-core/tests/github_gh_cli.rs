@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use micold_core::github::{
-    labels_args, list_args, search_args, GhCli, GithubRepo, Issue, IssueLoadError, IssueSource,
+    assignable_users_args, labels_args, list_args, milestones_args, search_args, GhCli, GithubRepo,
+    Issue, IssueLoadError, IssueSource,
 };
 use micold_core::github_filter::{
     search_filtered_args, search_page_args, BasicFilters, FilterFailure, GithubFilter, LabelName,
@@ -54,6 +55,10 @@ enum Then {
     SearchRejected,
     /// Print a page of labels and exit 0.
     LabelsPage,
+    /// Print a page of open milestones and exit 0 (US6).
+    MilestonesPage,
+    /// Print the assignable users found and exit 0 (US6).
+    PeoplePage,
 }
 
 /// The files the stub prints, next to it.
@@ -79,6 +84,8 @@ fn copy_fixtures(dir: &Path) {
         ("search_filtered_page.json", "search.json"),
         ("search_rejected.json", "rejected.json"),
         ("labels_page.json", "labels.json"),
+        ("milestones_page.json", "milestones.json"),
+        ("assignable_users.json", "people.json"),
     ] {
         std::fs::copy(fixture(from), dir.join(to)).unwrap();
     }
@@ -102,6 +109,8 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::SearchPage => "cat \"$dir/search.json\"",
         Then::SearchRejected => "cat \"$dir/rejected.json\"; exit 1",
         Then::LabelsPage => "cat \"$dir/labels.json\"",
+        Then::MilestonesPage => "cat \"$dir/milestones.json\"",
+        Then::PeoplePage => "cat \"$dir/people.json\"",
     };
     let script = format!(
         "#!/bin/sh\n\
@@ -168,6 +177,8 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
         Then::SearchPage => "type \"%~dp0search.json\"",
         Then::SearchRejected => "type \"%~dp0rejected.json\"\r\nexit /b 1",
         Then::LabelsPage => "type \"%~dp0labels.json\"",
+        Then::MilestonesPage => "type \"%~dp0milestones.json\"",
+        Then::PeoplePage => "type \"%~dp0people.json\"",
     };
     let script = format!(
         "@echo off\r\n\
@@ -554,6 +565,53 @@ fn a_label_page_sends_only_the_repository_and_the_cursor() {
     assert_eq!(
         expected[6..],
         ["-f", "owner=o", "-f", "name=r", "-f", "cursor=CUR"].map(str::to_string)
+    );
+    assert_args(dir.path(), &expected);
+}
+
+/// US6 (T055): a milestone page asks for open milestones and sends only the repository and the
+/// cursor.
+#[test]
+fn a_milestone_page_sends_only_the_repository_and_the_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let page = GhCli::new(stub(dir.path(), Then::MilestonesPage))
+        .milestones_page(&repo(), Some("CUR"))
+        .expect("the stub's page parses");
+    assert_eq!(page.names, ["v2.4", "Sprint 12: polish"]);
+    assert_eq!(page.next_cursor.as_deref(), Some("TUlM"));
+    let expected = milestones_args(&repo(), Some("CUR"));
+    assert_raw_variables(&expected);
+    assert!(
+        expected[5].contains("milestones(first: 100, after: $cursor, states: OPEN)"),
+        "{}",
+        expected[5]
+    );
+    assert_eq!(
+        expected[6..],
+        ["-f", "owner=o", "-f", "name=r", "-f", "cursor=CUR"].map(str::to_string)
+    );
+    assert_args(dir.path(), &expected);
+}
+
+/// US6 (T055): a people search sends the repository and the typed text as `q`, nothing else.
+#[test]
+fn a_people_search_sends_the_repository_and_the_typed_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let people = GhCli::new(stub(dir.path(), Then::PeoplePage))
+        .assignable_users(&repo(), "oct o")
+        .expect("the stub's people parse");
+    let logins: Vec<&str> = people.iter().map(|p| p.login.as_str()).collect();
+    assert_eq!(logins, ["octocat", "hubot"]);
+    let expected = assignable_users_args(&repo(), "oct o");
+    assert_raw_variables(&expected);
+    assert!(
+        expected[5].contains("assignableUsers(query: $q, first: 50)"),
+        "{}",
+        expected[5]
+    );
+    assert_eq!(
+        expected[6..],
+        ["-f", "owner=o", "-f", "name=r", "-f", "q=oct o"].map(str::to_string)
     );
     assert_args(dir.path(), &expected);
 }

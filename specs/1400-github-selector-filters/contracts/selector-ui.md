@@ -45,15 +45,20 @@ Rows, in order:
 2. **Exclude labels** — the same over `exclude`.
 3. **State** — `ToggleChip`s "Open", "Closed", "All", one active.
 4. **US6 Assignee** — `Typeahead`: "Me", "No assignee", then people matching the typed text;
-   single value; first row "Any assignee" clears.
-5. **US6 Author** — "Me", people, then "Use login <typed>" when the typed text is a valid `Login`;
-   first row "Any author".
+   single value; first row "Any assignee" clears. People are searched only for typed text, after
+   the debounce: focusing the field searches no one.
+5. **US6 Author** — "Me", people, then "Use login <typed>" when the typed text is a valid `Login`
+   that the search did not find (logins compared case-insensitively); first row "Any author".
+   People as in row 4: only for typed text, none on focus.
 6. **US6 Milestone** — "No milestone", open milestones by title; first row "Any milestone".
 
 Choice states stand in a field's list as rows (1185): "Loading labels…"; the failure notice of
 034 FR-007 with **Retry** (that field only, Edge "Choices fail to load"); "This repository has no
 labels" (field disabled); "Only the first 1,000 labels are offered"; "2 labels can't be offered
 because their names hold a quote".
+
+The panel's list caps at 12 menu items (`FILTERS_PANEL_HEIGHT`, shared with Jira's Filters panel);
+taller content (six rows and their chips) scrolls inside the panel.
 
 ## 3. List area states
 

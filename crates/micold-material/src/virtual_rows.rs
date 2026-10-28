@@ -128,6 +128,7 @@ pub struct VirtualRows<'a, M> {
     id: Option<iced::advanced::widget::Id>,
     least_width: Option<f32>,
     pane: PaneWidth,
+    clear_of_bar: bool,
 }
 
 impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
@@ -150,6 +151,7 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
             id: None,
             least_width: None,
             pane: PaneWidth::default(),
+            clear_of_bar: false,
         }
     }
 
@@ -195,6 +197,14 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
         self
     }
 
+    /// Keep the rows clear of the floating scrollbar, which is drawn over the content's right edge,
+    /// so a row's outline or a mark near its edge is not under it (#1540). Rows still fill the width
+    /// that is left.
+    pub fn clear_of_bar(mut self) -> Self {
+        self.clear_of_bar = true;
+        self
+    }
+
     /// Report the offset and the viewport height as the list scrolls.
     pub fn on_scroll(self, f: impl Fn(u32, u32) -> M + 'a) -> Self {
         self.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport))
@@ -236,6 +246,9 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
             None => Space::new().height(Length::Fixed(above)).into(),
         };
         let mut content = column![top].width(Length::Fill);
+        if list.clear_of_bar {
+            content = content.padding(iced::Padding::ZERO.right(crate::scrollable::BAR_FOOTPRINT));
+        }
         for index in rows {
             content = content.push((list.build_row)(index));
         }
@@ -357,5 +370,38 @@ mod tests {
             expected,
             "only the visible rows and the overscan"
         );
+    }
+
+    /// #1540: with `clear_of_bar` a row that fills the width ends before the scrollbar's footprint.
+    #[test]
+    fn rows_clear_of_the_bar_end_before_it() {
+        let right_edge = |clear: bool| {
+            let mut list = VirtualRows::<String>::new(
+                3,
+                ROW,
+                |_| {
+                    iced::widget::container(iced::widget::text("edge"))
+                        .width(Length::Fill)
+                        .align_right(Length::Fill)
+                        .into()
+                },
+                micold_core::tokens::LIGHT,
+            )
+            .viewport(200);
+            if clear {
+                list = list.clear_of_bar();
+            }
+            let mut mounted =
+                crate::test_support::Mounted::new_in(list, iced::Size::new(300.0, 200.0));
+            let text = mounted.painted_text();
+            let line = text.first().expect("a row is painted");
+            line.bounds.x + line.bounds.width
+        };
+        let (plain, clear) = (right_edge(false), right_edge(true));
+        assert!(
+            clear <= 300.0 - crate::scrollable::BAR_FOOTPRINT + 0.01,
+            "clear: {clear}"
+        );
+        assert!(plain > clear, "plain {plain} vs clear {clear}");
     }
 }

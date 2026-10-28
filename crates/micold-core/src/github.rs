@@ -1346,6 +1346,24 @@ pub trait IssueSource: IssueLookup {
     ) -> Result<NamePage, IssueLoadError> {
         Err(not_supported())
     }
+
+    /// One page of the repository's open milestones' titles (feature 1400 US6, research R10).
+    fn milestones_page(
+        &self,
+        _repo: &GithubRepo,
+        _cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        Err(not_supported())
+    }
+
+    /// The repository's assignable users whose login or name matches `text` (feature 1400 US6).
+    fn assignable_users(
+        &self,
+        _repo: &GithubRepo,
+        _text: &str,
+    ) -> Result<Vec<crate::github_filter::Person>, IssueLoadError> {
+        Err(not_supported())
+    }
 }
 
 /// What an [`IssueSource`] without filtered requests answers them with.
@@ -1353,7 +1371,7 @@ fn not_supported() -> IssueLoadError {
     IssueLoadError::Other("not supported".into())
 }
 
-/// One page of names (labels) read from a repository connection (feature 1400).
+/// One page of names (labels, milestone titles) read from a repository connection (feature 1400).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NamePage {
     /// The names, as GitHub spells them, in its order.
@@ -1444,6 +1462,38 @@ pub const LABELS_QUERY: &str = concat!(
 /// machine (feature 1400 contracts/source-and-storage.md §2).
 pub fn labels_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
     page_args(LABELS_QUERY, repo, cursor)
+}
+
+/// The GraphQL document for one page of the repository's open milestones (feature 1400 US6,
+/// research R10); sorted by title locally. One line, like every query.
+pub const MILESTONES_QUERY: &str = concat!(
+    "query($owner: String!, $name: String!, $cursor: String) { ",
+    "repository(owner: $owner, name: $name) { ",
+    "milestones(first: 100, after: $cursor, states: OPEN) { ",
+    "pageInfo { hasNextPage endCursor } nodes { title } } } }"
+);
+
+/// The arguments after `gh` for one page of open milestones: only the repository and the cursor
+/// leave the machine (feature 1400 contracts/source-and-storage.md §2).
+pub fn milestones_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    page_args(MILESTONES_QUERY, repo, cursor)
+}
+
+/// The GraphQL document for the repository's assignable users matching `$q`, the first 50
+/// (feature 1400 US6, research R10). One line, like every query.
+pub const ASSIGNABLE_USERS_QUERY: &str = concat!(
+    "query($owner: String!, $name: String!, $q: String!) { ",
+    "repository(owner: $owner, name: $name) { ",
+    "assignableUsers(query: $q, first: 50) { nodes { login name } } } }"
+);
+
+/// The arguments after `gh` for a people search: the repository and the typed text, as `-f`
+/// raw strings (feature 1400 contracts/source-and-storage.md §2).
+pub fn assignable_users_args(repo: &GithubRepo, text: &str) -> Vec<String> {
+    let mut args = page_args(ASSIGNABLE_USERS_QUERY, repo, None);
+    args.push("-f".into());
+    args.push(format!("q={text}"));
+    args
 }
 
 /// Pages the description pass reads at most: as many as hold [`ISSUE_LOAD_CAP`] issues, so a load
@@ -1764,6 +1814,12 @@ pub struct FakeIssueSource {
     asked_searches: std::sync::Mutex<Vec<String>>,
     labels: std::sync::Mutex<std::collections::VecDeque<Result<NamePage, IssueLoadError>>>,
     label_calls: std::sync::Mutex<Vec<Option<String>>>,
+    milestones: std::sync::Mutex<std::collections::VecDeque<Result<NamePage, IssueLoadError>>>,
+    milestone_calls: std::sync::Mutex<Vec<Option<String>>>,
+    people: std::sync::Mutex<
+        std::collections::VecDeque<Result<Vec<crate::github_filter::Person>, IssueLoadError>>,
+    >,
+    people_calls: std::sync::Mutex<Vec<String>>,
 }
 
 impl FakeIssueSource {
@@ -1924,6 +1980,31 @@ impl FakeIssueSource {
         locked(&self.label_calls).clone()
     }
 
+    /// Answer the next unanswered `milestones_page` calls with `pages`, in order (1400 US6).
+    pub fn with_milestones(self, pages: Vec<Result<NamePage, IssueLoadError>>) -> Self {
+        locked(&self.milestones).extend(pages);
+        self
+    }
+
+    /// The cursor of every `milestones_page` call so far.
+    pub fn milestone_calls(&self) -> Vec<Option<String>> {
+        locked(&self.milestone_calls).clone()
+    }
+
+    /// Answer the next unanswered `assignable_users` call with `result` (1400 US6).
+    pub fn with_people(
+        self,
+        result: Result<Vec<crate::github_filter::Person>, IssueLoadError>,
+    ) -> Self {
+        locked(&self.people).push_back(result);
+        self
+    }
+
+    /// The text of every `assignable_users` call so far: what a people search sent.
+    pub fn people_calls(&self) -> Vec<String> {
+        locked(&self.people_calls).clone()
+    }
+
     fn lock_script(
         &self,
     ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<IssuePage, IssueLoadError>>>
@@ -2019,6 +2100,28 @@ impl IssueSource for FakeIssueSource {
         locked(&self.labels)
             .pop_front()
             .unwrap_or_else(|| Err(unscripted("label page")))
+    }
+
+    fn milestones_page(
+        &self,
+        _repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        locked(&self.milestone_calls).push(cursor.map(str::to_string));
+        locked(&self.milestones)
+            .pop_front()
+            .unwrap_or_else(|| Err(unscripted("milestone page")))
+    }
+
+    fn assignable_users(
+        &self,
+        _repo: &GithubRepo,
+        text: &str,
+    ) -> Result<Vec<crate::github_filter::Person>, IssueLoadError> {
+        locked(&self.people_calls).push(text.to_string());
+        locked(&self.people)
+            .pop_front()
+            .unwrap_or_else(|| Err(unscripted("people search")))
     }
 }
 
@@ -2411,6 +2514,28 @@ impl IssueSource for GhCli {
         self.run(
             labels_args(repo, cursor),
             crate::github_filter::parse_labels_page,
+        )
+    }
+
+    fn milestones_page(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<NamePage, IssueLoadError> {
+        self.run(
+            milestones_args(repo, cursor),
+            crate::github_filter::parse_milestones_page,
+        )
+    }
+
+    fn assignable_users(
+        &self,
+        repo: &GithubRepo,
+        text: &str,
+    ) -> Result<Vec<crate::github_filter::Person>, IssueLoadError> {
+        self.run(
+            assignable_users_args(repo, text),
+            crate::github_filter::parse_people,
         )
     }
 }

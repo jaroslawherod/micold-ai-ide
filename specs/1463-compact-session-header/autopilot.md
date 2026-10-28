@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1463
 - **Worktree branch**: feat/1463_compact-session-header-title-chips-and-changes-on
 - **Started**: 2026-10-26
-- **Phase**: milestone M3
-- **Next step**: M3 PR open; then a new close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1469 | Design | merged | |
 | #1487 | M1 | merged | 304bfb4ffa97076810692dcbe28c9a135eb63cbf |
 | #1505 | M2 | merged | e727ac22955731c40e6ea5a719038cb054309e0e |
-| #1547 | M3 | open | |
+| #1547 | M3 | merged | 2ac41d5a01b91de5af1d38c61868e930760dec31 |
+| #1585 | Close | open | |
 
 ## Milestones
 
@@ -87,3 +88,5 @@ None. (The M2 push block was stale: the remote branch was deleted after #1487 me
 ## Close unit
 
 - `speckit-tdd-verify`: FAIL on test strength (mutation 7/11; F2 HIGH, F4/F5/F10/F11/F12 survivors). The missing red phase (F1) is a recorded limitation. Remediation tasks T021–T028 cut into M3. Full suite 11541 passed; one unrelated flake `micold-core streaming_child` passed on rerun.
+
+- Close unit (2026-10-28): tdd-verify re-run FAIL on one HIGH (touch-target guard matched no part name), fixed as T029-T031; the T029 mutant (`MIN_TOUCH_TARGET - TOLERANCE` -> `100000.0`) failed `layout_snapshot` with exit 101 before the fix was restored. Converge: NONE unbuilt. Close review (sonnet): 2 MAJOR (T019, T030/T031 ticks overstated), fixed, prose only. Other mutants not re-run (build lock).

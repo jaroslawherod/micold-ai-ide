@@ -69,4 +69,19 @@ healthy; printf '#!/bin/sh\nexit 1\n' >"$work/bin/gh"
 out="$(run)"
 if has "gh is not authenticated"; then pass "unauthenticated gh named"; else fail "unauthenticated gh named" "$out"; fi
 
+# Stand-in mise: `trust --show` lists an ancestor line and the repo's own line (as ~ paths).
+stand_mise() { # <parent state> <repo state>
+  printf '#!/bin/sh\necho "~/parent: %s"\necho "%s: %s"\n' "$1" "${PWD/#$HOME/\~}" "$2" >"$work/bin/mise"
+  chmod +x "$work/bin/mise"
+}
+run_here() { env -i PATH="$work/bin:$work/sys" HOME="$HOME" EMAIL=me@x.y PWD="$PWD" "$BASH_BIN" "$SCRIPT" 2>&1 || true; }
+
+healthy; stand_mise untrusted trusted
+out="$(run_here)"
+if has PREFLIGHT-OK; then pass "untrusted parent mise config does not fail"; else fail "untrusted parent mise config does not fail" "$out"; fi
+
+healthy; stand_mise trusted untrusted
+out="$(run_here)"
+if has PREFLIGHT-FAILED && has "mise config is untrusted"; then pass "untrusted repo mise config fails"; else fail "untrusted repo mise config fails" "$out"; fi
+
 [ "$failures" -eq 0 ]
