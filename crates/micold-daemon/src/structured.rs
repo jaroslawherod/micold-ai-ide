@@ -340,24 +340,58 @@ pub fn latest_reported_models<'a>(
         .unwrap_or_default()
 }
 
-/// An `apply_flag_settings` effort request written to the CLI and not answered yet (#1554 R1, R5):
-/// the choice it applies; its `success` becomes an [`StructuredEvent::EffortChanged`] note.
+/// An `apply_flag_settings` effort request written to the CLI and not answered yet (#1554 R1, R4,
+/// R5).
 struct EffortAsk {
-    choice: EffortChoice,
+    /// The choice its answer is noted under; none for a re-apply after a model change (R4), which
+    /// is never noted.
+    choice: Option<EffortChoice>,
+    /// Written at a turn's end: its refusal is an [`StructuredEvent::EffortRefused`] note (FR-005);
+    /// an idle one's refusal is its requester's answer.
+    deferred: bool,
+    /// The level it asks for, and the level asked for before it, which stays when it is refused.
+    level: Option<EffortLevel>,
+    before: Option<EffortLevel>,
 }
 
 /// The effort requests of one process waiting for their answers, by request id.
 type EffortAsks = Mutex<HashMap<String, EffortAsk>>;
 
-/// The note the answer to `ask` becomes (#1554 FR-004): an accepted change, the choice from here
-/// on; a refusal, nothing (it is its requester's answer).
+/// The level the CLI was last asked for: launched with, or sent and not refused (#1554 R4).
+type EffortSent = Mutex<Option<EffortLevel>>;
+
+impl EffortAsk {
+    /// Its request was refused or never reached the CLI: the level asked for before it is the
+    /// CLI's again, unless a later request was sent since.
+    fn undo(&self, sent: &EffortSent) {
+        let mut sent = lock(sent);
+        if *sent == self.level {
+            *sent = self.before.clone();
+        }
+    }
+}
+
+/// The note the answer to `ask` becomes (#1554 FR-004, FR-005): an accepted change, the choice from
+/// here on; a deferred one refused, its reason; an idle refusal or a re-apply, nothing.
 fn effort_note(ask: &EffortAsk, outcome: &ControlOutcome) -> Option<StructuredEvent> {
+    let effort = ask.choice.clone()?;
     match outcome {
-        ControlOutcome::Success(_) => Some(StructuredEvent::EffortChanged {
-            effort: ask.choice.clone(),
-        }),
+        ControlOutcome::Success(_) => Some(StructuredEvent::EffortChanged { effort }),
+        ControlOutcome::Error { message, .. } if ask.deferred => {
+            Some(StructuredEvent::EffortRefused {
+                effort,
+                message: message.clone(),
+            })
+        }
         ControlOutcome::Error { .. } => None,
     }
+}
+
+/// An effort change waiting for the turn in progress to end (#1554 R1, R4): the level to ask for,
+/// and the user's choice it is noted under (none for a re-apply after a model change).
+struct PendingEffort {
+    choice: Option<EffortChoice>,
+    level: Option<EffortLevel>,
 }
 
 /// Why a running session's CLI did not change its effort (#1554 FR-005): the sentence the user is
@@ -466,9 +500,17 @@ pub struct StructuredSession {
     /// The `set_model` requests not answered yet, shared with the stdout reader, which turns each
     /// answer into its note (#943 R7).
     model_asks: Arc<ModelAsks>,
-    /// The effort requests not answered yet, shared with the stdout reader, which turns each
-    /// accepted one into its note (#1554 R5).
+    /// The effort requests not answered yet, shared with the stdout reader, which turns each answer
+    /// into its note (#1554 R5).
     effort_asks: Arc<EffortAsks>,
+    /// The effort level the CLI was last asked for (#1554 R4), shared with the stdout reader, which
+    /// puts the one before back when a request is refused.
+    effort_sent: Arc<EffortSent>,
+    /// The model the CLI runs: launched with, or the last `set_model` it accepted (#1554 R4).
+    cli_model: Arc<Mutex<ModelChoice>>,
+    /// An effort change made during a turn, written after the deferred model when it ends (#1554
+    /// R1, R4).
+    deferred_effort: Mutex<Option<PendingEffort>>,
     /// A model chosen while a turn was in progress (#943 FR-015): written before the next user
     /// message, or once the turn's `result` is in, whichever is first. A later pick replaces it.
     /// Taken only under the stdin mutex, so it is written once.
@@ -579,6 +621,10 @@ impl StructuredSession {
         let reader_asks = Arc::clone(&model_asks);
         let effort_asks: Arc<EffortAsks> = Arc::default();
         let reader_effort_asks = Arc::clone(&effort_asks);
+        let effort_sent = Arc::new(Mutex::new(spec.effort.clone()));
+        let reader_effort_sent = Arc::clone(&effort_sent);
+        let cli_model = Arc::new(Mutex::new(spec.model.clone()));
+        let reader_cli_model = Arc::clone(&cli_model);
         let mut on_event = on_event;
         let emit = Arc::new(Mutex::new(Emit {
             on_event: Box::new(move |event| {
@@ -600,6 +646,10 @@ impl StructuredSession {
                     reader_control.resolve(request_id, outcome);
                     // #943 R7: a `set_model` answer becomes its note in its place.
                     if let Some(ask) = lock(&reader_asks).remove(request_id.as_str()) {
+                        if let ControlOutcome::Success(_) = outcome {
+                            // #1554 R4: before its note, which re-applies the effort for it.
+                            *lock(&reader_cli_model) = ask.choice.clone();
+                        }
                         if let Some(note) = model_note(&ask, outcome) {
                             on_event(note);
                         }
@@ -607,6 +657,12 @@ impl StructuredSession {
                     }
                     // #1554 R5: so does an effort answer.
                     if let Some(ask) = lock(&reader_effort_asks).remove(request_id.as_str()) {
+                        if let ControlOutcome::Error { message, .. } = outcome {
+                            ask.undo(&reader_effort_sent);
+                            if ask.choice.is_none() {
+                                tracing::warn!(session = %id.0, %message, "the CLI refused the effort re-applied for its model");
+                            }
+                        }
                         if let Some(note) = effort_note(&ask, outcome) {
                             on_event(note);
                         }
@@ -671,6 +727,9 @@ impl StructuredSession {
             control,
             model_asks,
             effort_asks,
+            effort_sent,
+            cli_model,
+            deferred_effort: Mutex::new(None),
             deferred_model: Mutex::new(None),
             turn,
             emit,
@@ -765,8 +824,9 @@ impl StructuredSession {
         let line = encode_user_message(&message.text, &message.images);
         let written = {
             let mut stdin = lock(&self.stdin);
-            // A model chosen during the turn before goes first (#943 FR-015).
-            self.write_deferred_model(&mut stdin);
+            // A model chosen during the turn before goes first (#943 FR-015), then the effort
+            // (#1554 R1).
+            self.write_deferred(&mut stdin);
             let written = write_whole(&mut stdin, &line);
             if written.is_ok() {
                 // `turn`, not the turn open now: the CLI may already have ended it and a later
@@ -881,12 +941,7 @@ impl StructuredSession {
             .control
             .wait_for(&request_id)
             .ok_or(ControlFailed::Stopped)?;
-        lock(&self.effort_asks).insert(
-            request_id.clone(),
-            EffortAsk {
-                choice: choice.clone(),
-            },
-        );
+        self.note_effort_ask(&request_id, Some(choice.clone()), level.cloned(), false);
         if let Err(err) = self.write_line(&encode_apply_effort(&request_id, level)) {
             self.forget_effort_ask(&request_id);
             return Err(ControlFailed::Unsent(err));
@@ -913,22 +968,106 @@ impl StructuredSession {
 
     fn forget_effort_ask(&self, request_id: &str) {
         self.control.forget(request_id);
-        lock(&self.effort_asks).remove(request_id);
+        if let Some(ask) = lock(&self.effort_asks).remove(request_id) {
+            ask.undo(&self.effort_sent);
+        }
+    }
+
+    /// Note request `request_id`, asking for `level`, as waiting for its answer, and `level` as
+    /// the one the CLI was last asked for.
+    fn note_effort_ask(
+        &self,
+        request_id: &str,
+        choice: Option<EffortChoice>,
+        level: Option<EffortLevel>,
+        deferred: bool,
+    ) {
+        let before = std::mem::replace(&mut *lock(&self.effort_sent), level.clone());
+        lock(&self.effort_asks).insert(
+            request_id.to_owned(),
+            EffortAsk {
+                choice,
+                deferred,
+                level,
+                before,
+            },
+        );
+    }
+
+    /// Ask the CLI for effort `level` for the user's `choice` once the turn in progress is over
+    /// (#1554 R1, FR-004): after the deferred model, before the next user message or at the turn's
+    /// `result` ([`Self::flush_deferred`]). Replaces a change deferred before and not written yet.
+    pub fn defer_effort(&self, choice: &EffortChoice, level: Option<&EffortLevel>) {
+        *lock(&self.deferred_effort) = Some(PendingEffort {
+            choice: Some(choice.clone()),
+            level: level.cloned(),
+        });
+    }
+
+    /// Make `level` the effort the CLI is asked for once no turn is open, with no note (#1554 R4:
+    /// the level the choice gives for a new model): a change still deferred takes it in place of
+    /// its own; otherwise one is deferred, unless `level` is what the CLI was last asked for.
+    pub fn defer_effort_level(&self, level: Option<EffortLevel>) {
+        let mut deferred = lock(&self.deferred_effort);
+        match deferred.as_mut() {
+            Some(pending) => pending.level = level,
+            None if *lock(&self.effort_sent) != level => {
+                *deferred = Some(PendingEffort {
+                    choice: None,
+                    level,
+                });
+            }
+            None => {}
+        }
+    }
+
+    /// [`Self::defer_effort_level`], then written at once when no turn is open (#1554 R4).
+    pub fn reapply_effort(&self, level: Option<EffortLevel>) {
+        self.defer_effort_level(level);
+        self.flush_deferred();
+    }
+
+    /// The model the CLI runs: the one it was launched with, or the last it accepted (#1554 R4).
+    pub fn cli_model(&self) -> ModelChoice {
+        lock(&self.cli_model).clone()
     }
 
     /// Ask the CLI for `choice` once the turn in progress is over (#943 FR-015): before the next
-    /// user message, or at the turn's `result` ([`Self::flush_deferred_model`]). Replaces a choice
+    /// user message, or at the turn's `result` ([`Self::flush_deferred`]). Replaces a choice
     /// deferred before and not written yet.
     pub fn defer_model(&self, choice: ModelChoice) {
         *lock(&self.deferred_model) = Some(choice);
     }
 
-    /// Write the deferred model choice, if any, when no turn is open (#943 FR-015): the input
-    /// driver's step after a turn's `result`. A turn opened meanwhile writes it before its message.
-    pub fn flush_deferred_model(&self) {
+    /// Write the deferred model choice, then the deferred effort, if any, when no turn is open
+    /// (#943 FR-015, #1554 R1): the input driver's step after a turn's `result`. A turn opened
+    /// meanwhile writes them before its message.
+    pub fn flush_deferred(&self) {
         let mut stdin = lock(&self.stdin);
         if lock(&self.turn).is_idle() {
-            self.write_deferred_model(&mut stdin);
+            self.write_deferred(&mut stdin);
+        }
+    }
+
+    /// Write the deferred model, then the deferred effort, on `stdin`, whose mutex the caller holds.
+    fn write_deferred(&self, stdin: &mut Option<ChildStdin>) {
+        self.write_deferred_model(stdin);
+        self.write_deferred_effort(stdin);
+    }
+
+    /// Write the deferred effort as an `apply_flag_settings` request on `stdin`, whose mutex the
+    /// caller holds; its answer is an `EffortChanged` or `EffortRefused` note (none for a re-apply).
+    /// A failed write is logged: the choice stays saved for the next launch.
+    fn write_deferred_effort(&self, stdin: &mut Option<ChildStdin>) {
+        let Some(PendingEffort { choice, level }) = lock(&self.deferred_effort).take() else {
+            return;
+        };
+        let request_id = next_request_id();
+        let line = encode_apply_effort(&request_id, level.as_ref());
+        self.note_effort_ask(&request_id, choice, level, true);
+        if let Err(err) = write_whole(stdin, &line) {
+            self.forget_effort_ask(&request_id);
+            tracing::warn!(session = %self.id.0, %err, "the deferred effort change could not be written");
         }
     }
 

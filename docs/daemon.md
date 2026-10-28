@@ -314,8 +314,14 @@ then, and a stored choice never stops a launch. What happens depends on the sess
   `EffortChanged` note goes into the event history, and the request is answered `OperationOk`. If
   the CLI refuses, does not answer, or ends first, the request is answered `OperationError` with
   the reason, and the choice stays as it was.
-- **Running a turn.** For now the request is answered `OperationError` (`Busy`, "The session is
-  busy; the effort can be changed when the turn ends"). Nothing is saved or written.
+- **Running a turn.** The choice is saved, every window gets the new catalog, and the request is
+  answered `OperationOk` at once. The turn in progress is not interrupted and keeps its level. The
+  `apply_flag_settings` request is written when the turn's result arrives, or just before the next
+  message if one is sent first, and always after a `set_model` request picked during the same turn.
+  A later pick during the same turn replaces the earlier one, so only the last is written. The
+  CLI's answer becomes an `EffortChanged` note, or an `EffortRefused` note with its reason, in which
+  case the choice goes back to what it was, unless another pick came since. A pending permission
+  request is left pending.
 - **Not running.** The choice is saved, an `EffortChanged` note naming the saved choice goes into
   the event history, and the request is answered `OperationOk`. The next launch uses it. A pick of
   the choice already saved writes no note, and a late answer to an earlier pick never replaces it.
@@ -327,6 +333,15 @@ then, and a stored choice never stops a launch. What happens depends on the sess
 
 As with models, of two picks sent one after the other the second wins. Each session has its own
 choice: a pick never reaches another session's CLI.
+
+The level the CLI should use depends on the model too. When the CLI accepts a model change, or
+refuses one deferred past a turn, the daemon works out the level for the model the CLI now has and
+the saved choice. When it differs from the level last sent, the daemon writes an
+`apply_flag_settings` request with it: `null` when the new model does not take the chosen level,
+the level again on a model that does. It is written at once when the session is idle; a model
+picked during a turn has it written at the turn's end, right after the `set_model` request. This
+re-apply adds no note: the choice did not change. With the choice `Default`, a model change writes
+nothing.
 
 After a `/clear` in a structured session, the CLI starts a new conversation and names it in its
 next session init. The daemon saves that conversation with the session, and every later launch
