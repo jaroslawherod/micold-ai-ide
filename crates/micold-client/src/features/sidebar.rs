@@ -1470,24 +1470,37 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
 /// `tooltip` with the row's full title as its first line (feature 1125, FR-012): the first line of
 /// the row is the one a narrow sidebar shortens, so the tooltip leads with it in full. A title that
 /// is the row's name or its branch is already on the tooltip's `Name` or `Branch` line, so it is not
-/// added a second time. Feature 1504 (FR-008, L3): the line after the title names its source
-/// (*From pull request #1520*); a title from the folder or the branch keeps today's tooltip.
-pub fn with_title_line(node: &WorktreeNode, title: &LocationTitle, tooltip: String) -> String {
-    let text = title.text.as_str();
-    if text == node.display_name || node.worktree.branch.as_deref() == Some(text) {
-        return tooltip;
-    }
-    match title.source.words() {
-        Some(words) => format!("{text}\n{words}\n{tooltip}"),
-        None => format!("{text}\n{tooltip}"),
-    }
+/// added a second time. Feature 1504 (FR-008, L3): the next line names the title's source (*From
+/// pull request #1520*, *Branch name*); a title from the folder names none. A rename is the row's
+/// first line and has no source, so it leads alone, as the rename did before 1504.
+pub fn with_title_line(
+    node: &WorktreeNode,
+    title: &LocationTitle,
+    renamed: Option<&str>,
+    tooltip: String,
+) -> String {
+    let (text, words) = match rename(renamed) {
+        Some(name) => (name, None),
+        None => (title.text.as_str(), title.source.words()),
+    };
+    let repeated = text == node.display_name || node.worktree.branch.as_deref() == Some(text);
+    [(!repeated).then(|| text.to_string()), words, Some(tooltip)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The user's rename of a worktree (feature 008, FR-014), when it is not blank.
+fn rename(renamed: Option<&str>) -> Option<&str> {
+    renamed.map(str::trim).filter(|name| !name.is_empty())
 }
 
 /// A worktree row's first line (feature 1125, data-model *Row text*): the user's rename of the
 /// worktree when there is one (it wins over everything the app derives), else its location title,
 /// as the Overview's card reads it (feature 1504, FR-007).
 pub fn row_title(title: &LocationTitle, renamed: Option<&str>) -> String {
-    match renamed.map(str::trim).filter(|name| !name.is_empty()) {
+    match rename(renamed) {
         Some(name) => name.to_string(),
         None => title.text.clone(),
     }

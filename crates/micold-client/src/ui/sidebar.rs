@@ -999,6 +999,7 @@ fn build_items(
                     crate::features::sidebar::with_title_line(
                         &node,
                         &location_title,
+                        state.workspace.worktree_name(&dir),
                         crate::features::sidebar::worktree_tooltip(
                             project_root,
                             wt,

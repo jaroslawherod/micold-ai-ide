@@ -189,10 +189,11 @@ Each location in the sidebar is a row of **two lines**:
 
 A line that does not fit the sidebar's width ends in an ellipsis. Hover the row for its tooltip,
 which begins with the full title, then says where the title came from (*From GitHub issue #1504*,
-*From Jira ABC-42*, *From pull request #1520*, *From the session title*), then holds the full branch
-on its `Branch` line, the name, the folder, the location and the rest it always showed. A title that
-is the branch or the name is not repeated, and has no line saying where it came from: the `Branch`
-and `Name` lines already say it.
+*From Jira ABC-42*, *From pull request #1520*, *From the session title*, *Branch name*), then holds
+the full branch on its `Branch` line, the name, the folder, the location and the rest it always
+showed. A title that is the branch or the name is not repeated above its `Branch` or `Name` line; a
+title from the branch still says *Branch name*, and a title that is the worktree's name says nothing
+more. A worktree you renamed shows your name first, with no line saying where a title came from.
 
 Small **chips** follow the second line's text:
 
