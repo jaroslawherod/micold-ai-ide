@@ -192,3 +192,14 @@ there.
   `history` → `changes` → history 28 passed, `feature_registration_cost` 7 passed, bin
   `history_tests` 4 passed.
 - T026 is prose (guide sentence); no test.
+
+### Cycle 15 — each project's last group list (T027, T030, research R5)
+
+- tests: `tests/features_runs.rs` `known_keeps_each_projects_last_group_list`,
+  `compare_of_a_group_from_the_now_active_projects_last_list_opens`.
+- red (4e7784a41, the `known` field declared with no behaviour): both FAILED — `known[/p]` was
+  `None`; Compare of P's group after the switch back stayed closed with Q's list in `groups`.
+- guard, passed on arrival: `compare_of_a_group_in_no_list_or_another_project_opens_nothing`.
+- green: `runs::routed` copies every `GroupsChanged` list into `known[active]`, and on
+  `CompareOpened` for the active project with a group missing from `groups` but in
+  `known[project]` sets `groups` from it first → features_runs 57 passed.

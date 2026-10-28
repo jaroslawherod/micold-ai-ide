@@ -1374,7 +1374,31 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             apply(&mut state.runs, msg);
             crate::features::surface_opened(state.runs.menu.is_some(), GroupContextMenu::ID)
         }
-        Msg::CompareOpened { .. } => {
+        Msg::GroupsChanged(ref groups) => {
+            // The active project's last list (feature 1465, research R5).
+            if let Some(active) = state.workspace.active.clone() {
+                state.runs.known.insert(active, groups.clone());
+            }
+            apply(&mut state.runs, msg);
+            Vec::new()
+        }
+        Msg::CompareOpened {
+            group, ref project, ..
+        } => {
+            // A Back to another project's Compare runs right after the switch, before the
+            // project's own list arrives: open it from that project's last list (1465, R5).
+            let runs = &mut state.runs;
+            if state.workspace.active.as_ref() == Some(project)
+                && !runs.groups.iter().any(|g| g.id == group)
+            {
+                if let Some(last) = runs
+                    .known
+                    .get(project)
+                    .filter(|list| list.iter().any(|g| g.id == group))
+                {
+                    runs.groups = last.clone();
+                }
+            }
             // Compare takes the Changes view's place; the root closes that view (C1).
             apply(&mut state.runs, msg);
             vec![Outcome::ChangesClosedForCompare]
