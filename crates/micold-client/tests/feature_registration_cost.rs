@@ -317,6 +317,13 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          code blocks too large to draw); read, never written (feature 1550, research R2)",
     ),
     (
+        "transcript_rich",
+        "transcript_selection",
+        "shown::unshown_caption — a tool result's copy control copies an unshown part as the \
+         caption the transcript draws for it, so the copied value and the drawn one cannot \
+         differ; a pure helper (feature 1550, data-model.md *Copyable value*)",
+    ),
+    (
         "transcript_selection",
         "permission_prompts",
         "State, Placement, Shown — request blocks and resolution rows are rows of the transcript \

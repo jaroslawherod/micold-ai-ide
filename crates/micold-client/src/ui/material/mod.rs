@@ -124,6 +124,7 @@ mod usage_indicator;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use card_grid::{CardGrid, Zoom};
 pub use change_bar::{ChangeBar, CHANGE_BAR_WIDTH};
+pub(crate) use code_block::copy_control;
 pub use code_block::CodeBlock;
 pub use command_palette::CommandPalette;
 pub use connection_banner::ConnectionBanner;

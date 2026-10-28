@@ -1648,6 +1648,23 @@ Text in a structured session's transcript can be selected and copied as in most 
 
 Each pane and each window keeps its own selection; the copy keys act on the focused one only.
 
+**Copy controls** copy one value whole, without selecting it, the way a code block's copy control
+does:
+
+- A **tool card's header** has one for the value its summary is drawn from: a Bash command, the
+  path a Read, Edit or Write touched, a search pattern, a URL. It copies the full value, on all its
+  lines, not the shortened one-line summary. A tool whose summary names no such value has none.
+- An **unfolded tool card** has one above its input, which copies the input exactly as the card
+  holds it, and, once the tool has answered, one above its result, which copies the whole result,
+  including any part scrolled out of view (a part the transcript cannot show, such as an image,
+  copies as its caption, `[image not shown]`). While a card is still running, they copy what has
+  arrived so far.
+- An **Edit, MultiEdit or Write diff** has one beside its file path, which copies the full path.
+
+Press a control, or reach it with Tab and press Enter or Space. Only the control you used confirms,
+in that window: it says **Copied** for a moment, or **Copy failed** when the clipboard did not take
+the value.
+
 #### Writing to a structured session
 
 Under the transcript sits the **composer**: a text area beside **Send**, with the session's state

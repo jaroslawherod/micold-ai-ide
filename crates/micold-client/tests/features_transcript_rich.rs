@@ -161,6 +161,13 @@ fn text_and_thinking_become_documents_and_edit_cards_diffs() {
                     assert_eq!(d.body, DerivedBody::Diff(diff));
                     diffs += 1;
                 }
+                // Feature 1550: any other tool card is held for its copy controls only.
+                EntryKind::ToolCall(_) => {
+                    assert_eq!(
+                        derived.expect("a tool card is held").body,
+                        DerivedBody::Tool
+                    );
+                }
                 _ => assert!(derived.is_none(), "{name}: nothing else is derived"),
             }
         }
@@ -224,6 +231,9 @@ fn command_output_and_a_compaction_summary_become_documents() {
                     DerivedBody::Text(Document::parse(text, false))
                 );
                 documents += 1;
+            }
+            EntryKind::ToolCall(_) => {
+                assert_eq!(derived.expect("held").body, DerivedBody::Tool);
             }
             _ => assert!(derived.is_none(), "{:?}", entry.kind()),
         }
@@ -354,7 +364,10 @@ fn sessions_and_windows_share_nothing() {
         "two windows on one session draw the same formatting"
     );
     let code = text_doc(&cache, a, &key).code_blocks().next().unwrap().0;
-    cache.copy(a, &key, code).expect("copies");
+    let entry = t.entries().next().unwrap();
+    cache
+        .copy(a, entry, CopyTarget::Code(code))
+        .expect("copies");
     assert!(cache.get(b, &key).unwrap().copy.is_empty());
     assert!(other_window.get(a, &key).unwrap().copy.is_empty());
     cache.forget(a);
@@ -572,10 +585,10 @@ fn copy(
 ) -> (String, micold_client::features::transcript_rich::Ticket) {
     let effect = state.update(
         cache,
-        TranscriptMsg::CopyCode {
+        TranscriptMsg::Copy {
             session: s,
             key: key.clone(),
-            code,
+            target: CopyTarget::Code(code),
         },
     );
     match effect.outcomes.as_slice() {
@@ -796,7 +809,10 @@ fn a_selection_copy_is_checked_once_and_touches_no_control() {
     );
     // A code block's copy is keyed by its target and still wants its confirmation timer.
     let code = text_doc(&cache, s, &key).code_blocks().next().unwrap().0;
-    let (_, ticket) = cache.copy(s, &key, code).expect("copies");
+    let entry = t.entries().next().unwrap();
+    let (_, ticket) = cache
+        .copy(s, entry, CopyTarget::Code(code))
+        .expect("copies");
     assert_eq!(
         cache
             .get(s, &key)
@@ -819,4 +835,261 @@ fn a_selection_copy_is_checked_once_and_touches_no_control() {
             held: true
         }
     );
+}
+
+// ---- T044 (feature 1550): the tool cards' and diffs' copy controls ----
+
+/// A result of tool use `id` whose content is the block list `parts`.
+fn tool_result(id: &str, parts: serde_json::Value) -> StructuredEvent {
+    let first = parts[0]["text"].as_str().unwrap_or_default().to_owned();
+    StructuredEvent::User {
+        is_synthetic: false,
+        raw: json!({"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": id, "content": parts}
+        ]}})
+        .to_string(),
+        blocks: vec![ContentBlock::ToolResult {
+            tool_use_id: id.into(),
+            content: first,
+            is_error: false,
+        }],
+        parent_tool_use_id: None,
+    }
+}
+
+/// `events` applied to one session, refreshed into a fresh cache.
+fn session_of(events: Vec<StructuredEvent>) -> (State, RichCache, SessionId) {
+    let s = SessionId::new();
+    let mut state = State::default();
+    let mut cache = RichCache::default();
+    state.apply(s, 0, &sequenced(events), false);
+    cache.refresh(s, state.transcript(s).unwrap(), &GRAMMAR);
+    (state, cache, s)
+}
+
+/// The key of `s`'s tool card `id`.
+fn card_key(state: &State, s: SessionId, id: &str) -> EntryKey {
+    state
+        .transcript(s)
+        .unwrap()
+        .entries()
+        .find(|e| matches!(e.kind(), EntryKind::ToolCall(card) if card.id == id))
+        .expect("the card")
+        .key()
+        .clone()
+}
+
+/// What a `TranscriptMsg::Copy` of `target` on `key` writes, with its ticket; `None` when it
+/// writes nothing.
+fn copy_of(
+    state: &mut State,
+    cache: &mut RichCache,
+    s: SessionId,
+    key: &EntryKey,
+    target: CopyTarget,
+) -> Option<(String, micold_client::features::transcript_rich::Ticket)> {
+    let effect = state.update(
+        cache,
+        TranscriptMsg::Copy {
+            session: s,
+            key: key.clone(),
+            target,
+        },
+    );
+    match effect.outcomes.as_slice() {
+        [] => None,
+        [Outcome::ClipboardWriteChecked { text, ticket }] => Some((text.clone(), *ticket)),
+        other => panic!("at most one checked write, got {other:?}"),
+    }
+}
+
+/// C-1, FR-015, SC-004: the header copies `work_value` uncut, on all its lines, and a tool
+/// without one has nothing to copy.
+#[test]
+fn the_header_copies_the_uncut_work_value_and_only_when_there_is_one() {
+    let command = format!(
+        "cargo test \\\n  --workspace {}\n\techo done",
+        "x".repeat(300)
+    );
+    let bash = json!({"command": command, "description": "run"}).to_string();
+    let (mut state, mut cache, s) = session_of(vec![
+        tool_use("b", "Bash", &bash),
+        tool_use("t", "TodoWrite", r#"{"todos":[]}"#),
+    ]);
+    let key = card_key(&state, s, "b");
+    let (text, ticket) = copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolValue)
+        .expect("a Bash card's command copies");
+    assert_eq!(text, command, "byte for byte, not the one-line summary");
+    assert_eq!(
+        cache.get(s, &key).unwrap().copy[&CopyTarget::ToolValue],
+        CopyState::Pending(ticket)
+    );
+    let todo = card_key(&state, s, "t");
+    assert_eq!(
+        micold_core::structured::transcript::work_value("TodoWrite", r#"{"todos":[]}"#),
+        None
+    );
+    assert!(
+        copy_of(&mut state, &mut cache, s, &todo, CopyTarget::ToolValue).is_none(),
+        "no work value: nothing to copy"
+    );
+}
+
+/// C-2, FR-016: the input copies `ToolCard::input` as held; the result copies its parts' text
+/// joined with `\n`, an unshown part as its caption, and exists only once a result exists.
+#[test]
+fn the_input_and_result_copy_what_the_card_holds() {
+    let input = r#"{"file_path": "/src/a.rs",   "limit": 5}"#;
+    let (mut state, mut cache, s) = session_of(vec![tool_use("r", "Read", input)]);
+    let key = card_key(&state, s, "r");
+    let (text, _) =
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolInput).expect("the input");
+    assert_eq!(text, input, "as held, spacing and all");
+    assert!(
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolResult).is_none(),
+        "no result yet"
+    );
+    let parts = json!([
+        {"type": "text", "text": "one\n\ttwo"},
+        {"type": "image", "source": {"type": "base64", "data": ""}},
+        {"type": "text", "text": "three"}
+    ]);
+    let (mut state, mut cache, s) =
+        session_of(vec![tool_use("r", "Read", input), tool_result("r", parts)]);
+    let key = card_key(&state, s, "r");
+    let (text, _) =
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolResult).expect("the result");
+    assert_eq!(text, "one\n\ttwo\n[image not shown]\nthree");
+}
+
+/// US3 scenario 6: while the input streams, the input copies the text received so far.
+#[test]
+fn a_streaming_input_copies_the_text_so_far() {
+    let s = SessionId::new();
+    let mut state = State::default();
+    let mut cache = RichCache::default();
+    for event in recorded("tool-turn") {
+        state.apply(s, 0, std::slice::from_ref(&event), true);
+        cache.refresh(s, state.transcript(s).unwrap(), &GRAMMAR);
+        let open = state
+            .transcript(s)
+            .unwrap()
+            .entries()
+            .find_map(|e| match e.kind() {
+                EntryKind::ToolCall(card) if card.streaming && !card.input.is_empty() => {
+                    Some((e.key().clone(), card.input.clone()))
+                }
+                _ => None,
+            });
+        if let Some((key, so_far)) = open {
+            let (text, _) = copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolInput)
+                .expect("a streaming input copies");
+            assert_eq!(text, so_far, "the input received so far");
+            return;
+        }
+    }
+    panic!("the recording streams a tool input");
+}
+
+/// C-3, FR-017: a diff's path copies `EditDiff::path`; a card without a diff has none.
+#[test]
+fn a_diffs_path_copies_the_edits_file_path() {
+    let path = "/home/u/a long/dir/src/lib.rs";
+    let (mut state, mut cache, s) = session_of(vec![
+        tool_use("e", "Edit", &edit(path, "a", "b")),
+        tool_use("b", "Bash", r#"{"command":"ls"}"#),
+    ]);
+    let key = card_key(&state, s, "e");
+    let (text, _) =
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::DiffPath).expect("the path");
+    assert_eq!(text, path);
+    let bash = card_key(&state, s, "b");
+    assert!(copy_of(&mut state, &mut cache, s, &bash, CopyTarget::DiffPath).is_none());
+}
+
+/// C-5: an empty value copies the empty string.
+#[test]
+fn an_empty_value_copies_the_empty_string() {
+    let (mut state, mut cache, s) = session_of(vec![
+        tool_use("b", "Bash", r#"{"command":""}"#),
+        tool_result("b", json!([{"type": "text", "text": ""}])),
+    ]);
+    let key = card_key(&state, s, "b");
+    for target in [CopyTarget::ToolValue, CopyTarget::ToolResult] {
+        let (text, _) = copy_of(&mut state, &mut cache, s, &key, target).expect("copies");
+        assert_eq!(text, "", "{target:?}");
+    }
+}
+
+/// C-4, FR-018: a control's state is keyed by session, entry and target in its window only; the
+/// read-back decides it and it expires after `COPY_CONFIRM` as a code block's does.
+#[test]
+fn a_controls_confirmation_is_its_own() {
+    let events = || {
+        vec![
+            tool_use("b", "Bash", r#"{"command":"ls"}"#),
+            tool_result("b", json!([{"type": "text", "text": "a.rs"}])),
+            tool_use("c", "Bash", r#"{"command":"pwd"}"#),
+        ]
+    };
+    let (mut state, mut cache, s) = session_of(events());
+    let other = SessionId::new();
+    state.apply(other, 0, &sequenced(events()), false);
+    cache.refresh(other, state.transcript(other).unwrap(), &GRAMMAR);
+    let mut other_window = cache.clone();
+    let key = card_key(&state, s, "b");
+    let (_, ticket) =
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolResult).expect("copies");
+    let checked = state.update(
+        &mut cache,
+        TranscriptMsg::CopyChecked {
+            ticket,
+            read: Some("a.rs".into()),
+        },
+    );
+    assert_eq!(
+        checked.outcomes,
+        vec![Outcome::CopyConfirmTimer {
+            ticket,
+            after: COPY_CONFIRM
+        }]
+    );
+    let d = cache.get(s, &key).unwrap();
+    assert_eq!(
+        d.copy,
+        HashMap::from([(CopyTarget::ToolResult, CopyState::Copied(ticket))]),
+        "only the activated control confirms"
+    );
+    let c = card_key(&state, s, "c");
+    assert!(
+        cache.get(s, &c).unwrap().copy.is_empty(),
+        "not another card"
+    );
+    assert!(
+        cache.get(other, &key).unwrap().copy.is_empty(),
+        "not another session"
+    );
+    assert!(
+        other_window.get(s, &key).unwrap().copy.is_empty(),
+        "not another window"
+    );
+    let failed = copy_of(
+        &mut state,
+        &mut other_window,
+        s,
+        &key,
+        CopyTarget::ToolValue,
+    )
+    .expect("copies")
+    .1;
+    assert_eq!(
+        other_window.copy_checked(failed, Some("elsewhere".into())),
+        Checked::Control
+    );
+    assert_eq!(
+        other_window.get(s, &key).unwrap().copy[&CopyTarget::ToolValue],
+        CopyState::Failed(failed)
+    );
+    state.update(&mut cache, TranscriptMsg::CopyExpired { ticket });
+    assert!(cache.get(s, &key).unwrap().copy.is_empty(), "idle again");
 }

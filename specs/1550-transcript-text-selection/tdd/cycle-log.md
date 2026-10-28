@@ -93,3 +93,18 @@ the first), one build, every new test red, then reverted.
 | T041 | `SelectionArea` around the transcript's stack (`transcript_area_id`), `TrackFocusAs` for it in `ui/focus.rs`, `Scroll::By` → `scroll_by` in `shell/transcript.rs`; folded summary highlight (`Ellipsized::highlighted`, M4a follow-up) | T039; `the_shown_part_of_a_selection_is_highlighted` | `micold-material` lib passed |
 | T042 | `ui::transcript::context_menu` on the window overlay, `TranscriptContextMenu` registered (`overlay/registry.rs`) | T040 | same |
 | T043 | user guide *Selecting and copying transcript text* | docs | `scripts/tests/*.test.sh` in the gate |
+
+## M5 (T044–T049)
+
+T044's tests were written against T046's API (the `TranscriptMsg::Copy` message and the entry-based
+`RichCache::copy` do not exist before it, so the first red is a compile failure); the behavioural
+red is a mutant run: `copy_value` answering `None` for every tool target, one build, then reverted.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T044 (red) | `ToolValue` copies `work_value` uncut and exists iff `Some`; `ToolInput` copies `ToolCard::input` as held, the text so far while it streams; `ToolResult` copies the parts `\n`-joined with `[image not shown]`, only once a result exists; `DiffPath` copies `EditDiff::path`; an empty value copies `""`; state per `(session, key, target)` per window, expiring as a code block's | mutant run: `the_header_copies_the_uncut_work_value_and_only_when_there_is_one`, `the_input_and_result_copy_what_the_card_holds`, `a_streaming_input_copies_the_text_so_far`, `an_empty_value_copies_the_empty_string`, `a_controls_confirmation_is_its_own` FAILED (5 of 24) | `features_transcript_rich` 24 passed (#940's code-copy tests unchanged but for the message's name) |
+| T045 (red) | the `DiffPath` control is one focus stop; a press, Enter and Space each send its message; it sits on the path's line, after it; at the narrowest pane it fits and the path wraps before it | compile red (no `InlineDiff::copy_path` before T047) | `ui::material::inline_diff` 9 passed; `layout_snapshot` `inline_diff_path_copy_fits` passed, fixture re-accepted (the showcase's diffs gained the control and the MultiEdit a long path) |
+| T046 | `CopyTarget::{ToolValue, ToolInput, ToolResult, DiffPath}`, `copy_value`, `DerivedBody::Tool` (every tool card is held, for its controls' state), `TranscriptMsg::Copy`; a card in a subagent's thread is copied by the root from the open threads | T044 | same |
+| T047 | `copy_control` (the code block's `IconButton` in `TakesTheKeyboard`) on the tool card header (`ToolValue`), above the unfolded input and result, and beside the diff's path (`InlineDiff::copy_path`) | T045 | same |
+| T048 | user guide *Copy controls*; #939's out-of-scope note points to #1550 | docs | `scripts/tests/*.test.sh` in the gate |
+| M5 Review B F1/F2 | the three tool-card controls through the view (header value, input, result; by press, Enter and Space; no header control without a value, no result control before a result) and the root's copy of a card in an open thread | mutant run: header and result pushes removed → `an_unfolded_tool_card_copies_its_value_input_and_result`, `a_card_has_a_header_control_only_with_a_value_and_a_result_control_only_with_a_result` FAILED; the thread arm answering nothing → `a_copy_control_on_a_card_in_an_open_thread_copies_its_value` FAILED | `transcript_rich_renderers` 9 passed, `features_structured_insights` 23 passed |

@@ -348,7 +348,8 @@ the scroll state at the end and away from it and check follow-tail.
 - Usage and context meters beyond the per-turn footer figures, the plan-usage feed, showing
   sub-agent events nested under their tool call, and background tasks (#944). This feature only
   counts sub-agent messages on their card (FR-024).
-- Searching the transcript, copying text out of it, and exporting it.
+- Searching the transcript and exporting it. Copying text out of it was out of scope here and is
+  delivered by #1550 (selection, copy keys and copy controls).
 - Remembering fold state or scroll position across application restarts.
 
 ### Key Entities
