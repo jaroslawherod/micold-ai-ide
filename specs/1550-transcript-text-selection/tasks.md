@@ -397,7 +397,7 @@ shell::transcript`; quickstart Part B steps 1–5.
   `on_release`, `on_context`, `on_focus_change` → `TranscriptMsg::Select`), joined to
   `FieldId::Transcript(session)` through `crates/micold-client/src/ui/focus.rs`; `Edge` becomes
   `scroll_by` on `transcript_scroll_id(session)` in `crates/micold-client/src/shell/transcript.rs`;
-  T039 passes
+  T039 passes. Also M4a's follow-up: a folded card's selected summary is highlighted (`Ellipsized::highlighted`)
 - [x] T042 [US4] The context menu: `micold_material::ContextMenu` with the T040 items over the
   transcript in `crates/micold-client/src/ui/transcript/mod.rs`, closing on Escape and an outside
   click (`MenuDismissed`); T040 passes

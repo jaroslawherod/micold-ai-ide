@@ -80,6 +80,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M3 (headless render) | 1 | 4de2424fc | pass: `visual/m3-visual-pass.md`, `visual/m3-selectable-leaves.png` |
 | Review A M4a (code-review high, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN: 3 MINOR, all declined or deferred (below); the five handover deviations raised nothing |
 | Review B M4a (sonnet, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN; Verify pass (parity 4, layout_snapshot 169, transcript_open_budget 6 release) |
+| Review A M4b (code-review high) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | 2 real (fixed: F1 menu not a registered surface, Escape interrupted under it; F7 summary highlight could slice off a char boundary), F2 fixed in part (one menu per window), 5 declined MINOR |
+| Review B M4b (conformance, sonnet) | 1 | 8ed12633c4299afbbc7528d8b38457dc748e0a4c:6b00d8dec2e6da6dc62eb39a23eecd4a0d0c7f5a | CHANGES: F1 MAJOR no M4b TDD log (fixed: cycle-log M4b with a mutant red run, 8 of 40 FAILED); F2 MINOR summary highlight not under a task (fixed, prose: noted under T041); F3 MINOR view wiring untested (visual pass covers it) |
 
 ## Declined review findings
 
@@ -99,6 +101,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | A F1 | `MarkdownView` holds a large code block back only with `on_show`, but drops its selectability on `large` alone | MINOR: the units side (`Units::markdown`, `derived.is_large`) also drops a large block on `large` alone, so view and copy agree (parity test); the transcript always sets `on_show`. |
 | M4a | A F2 | `thread_body` draws subagent thread cards with `row: None` (not selectable, not copied) | MINOR, deliberate per the M4a parity decision on #944's threads (X3, X5); kept in *Follow-ups not done* for M4b/M5. |
 | M4a | A F3 | `selectable_diff` rebuilds `diff_units` per draw for byte lengths | MINOR, performance: T034's slowest drag step is 27 ms against the 100 ms budget. |
+
+| M4b | A F2 (rest) | the menu draws for whichever session holds it, not only the active one | MINOR: now one menu per window (opening one closes the other); a session switch while it is open is rare and the registered surface's dismissal rules apply. |
+| M4b | A F3 | edge scroll is a fixed 12 px per frame, so its speed follows the frame rate | MINOR: frames are the area's own `motion::FRAME` wakes, not the display's refresh. |
+| M4b | A F4 | `SelectMsg::Hit.click` is no longer read | MINOR: kept as the widget's report (contract shape); the doc says the press's count decides. |
+| M4b | A F5 | edge gating split between root and `State` | fixed: `State::edge_scroll` holds the rule; the root maps it to `Scroll::By`. |
+| M4b | A F6 | a release the area never sees leaves the drag on | MINOR: X11/winit deliver the release of a press begun in the window (implicit grab); a modal opening mid-drag is not a path the UI offers. |
+| M4b | A F8 | `dragging` lags the press by one message | MINOR: the press's own hit (T-1) arrives in the same event as `on_press`, so the drag starts before any frame past the edge. |
 
 ## Handover
 
