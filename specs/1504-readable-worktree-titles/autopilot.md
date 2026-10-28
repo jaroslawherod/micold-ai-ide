@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1504
 - **Worktree branch**: claude/project-thread-t2a600
 - **Started**: 2026-10-27
-- **Phase**: close — Polish T047/T050 and the carried docs notes done on branch 1504-close (stacked on 1504-m5, PR #1580); gate green; tdd-verify and close diff review pending
-- **Next step**: orchestrator runs `speckit-tdd-verify` (autopilot-worker) and the close diff review (sonnet, specs/docs truth + test correctness), continues this unit with findings; then Phase `done`, Next step `handoff`, and the close PR is opened from scratchpad pr-title-close.md / pr-body-close.md
+- **Phase**: done — close PR ready on branch 1504-close (rebased onto origin/main 4317a0a3a); not pushed, title/body in scratchpad pr-title-close.md / pr-body-close.md
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,9 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1566 | M1 | merged | 2104379be |
 | #1568 | M2 | merged | fb29142a7 |
 | — | M3 | #1572, merged | 6f67d1beb |
-| — | M4 | #1575, merged | — |
-| — | M5 | #1580, in CI | — |
-| — | close | pending (not opened; branch 1504-close, stacked on M5) | — |
+| — | M4 | #1575, merged | 0045f46e6 |
+| — | M5 | #1580, merged | 4317a0a3a |
+| — | close | ready (branch 1504-close; the orchestrator pushes and opens it; "Fixes #1504") | — |
 
 ## Milestones
 
@@ -76,8 +76,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (scoped re-check, sonnet) | 2 | — | pending (orchestrator; fix diff `6abaeabc2..HEAD`; MINOR fixes, does not count toward the limit) |
 | M4 review B (conformance, sonnet) | 1 | 87aa43d50849718e589e6ac1d6cd152c35b98131:72832ebf85d79eeadb243dfdbe89ea30f2859b3c | CLEAN, 1 MINOR not changed (facts read twice when one message both changes the list and opens the Overview: harmless, the later round wins) |
 | M4 visual pass | 1 | 72832ebf8 | pending (quickstart §B rows F and H: card title, row first line + tooltip, header tooltip, expanded card source line; Refresh: open a PR for H → PR title; late commit in a new worktree → shown after reopening the Overview; showcase *title sources, expanded* with the Spec and Commit cards) |
-| Close: tdd-verify (autopilot-worker) | 1 | — | pending (orchestrator; `speckit-tdd-verify` on specs/1504-readable-worktree-titles, save to tdd/verification.md; speckit-converge skipped only if every milestone has a CLEAN review B — M3 round 2 and M5 B not recorded in this ledger, so run it) |
-| Close diff review (sonnet) | 1 | — | pending (orchestrator; no rubric file: correctness of the tests and truth of the docs; diff `git diff 1e4021a18..HEAD` (close docs: worktrees-and-sessions.md, settings.md, tasks.md, spec.md, quickstart.md) plus `origin/main...HEAD` for the feature) |
+| Close: tdd-verify (autopilot-worker) | 1 | b240c4c70 (`tdd/verification.md`) | FAIL on process evidence only (M1 and fix-test reds missing; no unbuilt behaviour; 3 of 3 mutants caught). Remediated with after-the-fact mutation red runs for M1 T002–T005, T009–T012, F1–F3 and M5 A1–A4, B2: 22 of 24 mutants caught, 2 survivors named in the addendum (empty branch accepted by `choose`; `worktree_tickets` passing no branch); `git diff` shows no code change |
+| Close diff review (sonnet) | 1 | `git diff 1e4021a18..HEAD` | CHANGES (2 MAJOR, 2 MINOR), all fixed: spec Status names the close PR; quickstart Part A gate claim has the row below; visual passes recorded (M3 PASS 7 of 7, M4 PASS, M5 none needed: no UI changed) and T050 ticked; M4/M5 merge SHAs filled |
+| M3 review B (conformance, sonnet) | 2 | 0348aec6b895fb6c0f147c90cfb52a4d3a7b2de6:e51e05b76a1db8c6e2f7a163b09a60dbd30c2dc7 | CLEAN (1 MINOR, no change) |
+| M5 round 2 (combined A+B, scoped, sonnet) | 2 | — | CLEAN, 1 MINOR fixed (107-column comment in `request_titles`) |
+| Close: speckit-converge | — | — | skipped: with the two rows above every milestone has a CLEAN review B (M1 r1, M2 r1 fixed then accepted, M3 r2, M4 r1, M5 r2) |
+| Close gate | — | rebased tree, diff to origin/main docs and specs only | `scripts/gate.sh` exit 0 at `1e4021a18` (before the rebase; same code tree as `4317a0a3a`); on the close diff: `scripts/tests/*.test.sh` all pass, `check-criteria-observables.sh spec.md` exit 0 (docs gate, gate.md) |
 
 ## Red runs (M5)
 

@@ -97,3 +97,40 @@ Untested criteria: SC-005 (finding 6). Tests tracing to nothing: none seen.
 - The PR bodies (#1566 onward) were not readable here; they may hold the M1 red runs.
 - Performance, flakiness and Windows/macOS legs. The ledger records unrelated flakes on the shared target during the M5 gate (`capture-harness`, `guide-own-image`, `structured_permission`), each passing alone.
 - Remediation tasks were not appended to `tasks.md`: the requester asked for the report and commit only.
+
+## Addendum (close)
+
+The verdict above stands. The missing red runs were taken after the fact on 2026-10-28, on the
+rebased close branch (`4317a0a3a` plus docs): each production line a test covers was temporarily
+changed to wrong behaviour, the test run, the failing assertion noted, and the line restored.
+`git diff` against HEAD showed no change in `crates/` afterwards. These are mutation reds, not
+test-first reds: they prove each test can fail, not that it was written first.
+
+| Covers | Mutation | Failed test (assertion) |
+| --- | --- | --- |
+| T002 | `first_line` keeps a BOM | `first_line_strips_a_bom_and_keeps_the_first_line_trimmed`, `first_line_of_nothing_is_none` |
+| T002 | `first_line` trims only the start | `first_line_strips_...` (left `"Fix the gate \r"`) |
+| T002 | `first_line` keeps an empty line | `first_line_of_nothing_is_none`, `a_blank_issue_title_counts_as_unknown` |
+| T003 | `choose` skips no blank source | `a_source_that_normalises_to_nothing_is_skipped` (left `"   "`) |
+| T003 | session before spec | `each_source_wins_over_every_lower_one_in_order` (step 2) |
+| T003 | an empty branch is accepted | **survives**: no test passes `Some("")` as the branch; the fallback to the display name for it is untested |
+| T004 | `Debug` prints the text | `a_location_titles_debug_leaves_its_text_out` |
+| T009 | `title_ticket` ignores the branch | `the_title_ticket_follows_the_contract_table` (`project-thread-t2a600` + `feat/1504-readable-titles`, left `None`) |
+| T010 | `State::issue_title` never knows a title | `a_ticket_only_in_the_branch_titles_the_card_and_the_row`, `the_folders_ticket_wins_over_the_branchs` |
+| T010 | `titles_to_fetch` asks without GitHub | `titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github` |
+| T010 | `worktree_tickets` passes no branch | **survives**: `request_titles` taking its tickets from the branch has no test; the branch ticket is tested through `title_ticket` and `titles_to_fetch` with tickets given by the test |
+| T011 | fingerprint ignores the branch | `worktrees_fingerprint_follows_the_branch` (`left != right`) |
+| T005 | `row_title` ignores a rename | `a_users_rename_wins_the_first_line_over_the_issue_title_and_the_branch` |
+| T005, T012 | `row_title` shows an empty title | `a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions` and 2 more |
+| M1 F1 | a folder ticket of neither kind stops the branch | `the_title_ticket_follows_the_contract_table` (`login_fix` + `feat/1504_x`, left `None`) |
+| M1 F2 | the person namespace is not skipped | same test (`jh/1504_x`, left `Jira("JH-1504")`) |
+| M1 F3 | Jira key rule letters only | `a_jira_key_may_carry_digits_after_its_first_letter`, same table |
+| M5 A1 | switch-off leaves the title Pending | `with_the_switch_off_the_remotes_answer_reads_no_title` |
+| M5 A2 | a clock that went back is never due | `titles_to_fetch_re_asks_a_failed_read_only_after_the_retry_interval` ("due, not stuck") |
+| M5 A3 | a Failed title is not seeded from the form | `title_answer_a_failed_title_is_seeded_from_the_form` |
+| M5 A4 | an outage does not stop the batch | `an_outage_fails_the_remaining_titles_without_asking` ("nothing else was asked") |
+| M5 B2 | `NotOpenIssue` is a failure | `a_not_open_issue_and_an_overflowing_number_are_no_issue` |
+| M5 B2 | an overflowing number is a failure | same test |
+
+Findings 1 and 2 are remediated this way, with two survivors named plainly above. SC-005 still has
+no test of its own (finding 6).
