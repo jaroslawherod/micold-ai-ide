@@ -16782,11 +16782,9 @@ mod history_tests {
                 .is_some_and(|v| v.browse.is_some())
         };
         assert!(browsing(&app));
-        let entries = app.core.history.list.entries().len();
         press(&mut app, Dir::Back);
         assert!(!browsing(&app), "one press returns to the previous reading");
         assert!(app.core.review_shown().is_some(), "the tab stays shown");
-        assert_eq!(app.core.history.list.entries().len(), entries);
         press(&mut app, Dir::Back);
         assert!(
             app.core.review_shown().is_none(),

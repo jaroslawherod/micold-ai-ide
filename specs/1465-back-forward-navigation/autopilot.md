@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m3 (M3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M3 implemented (T024–T026 ticked); scoped tests green; full gate pending
+- **Phase**: M3 implemented (T024–T026 ticked); full gate running after a root_state_is_shared fix; reviews pending
 - **Next step**: full gate on M3, then review A (code-review high) and review B (conformance) on range fa3e7bf39..HEAD, then pr-title-m3.md / pr-body-m3.md
 
 ## Pull requests
