@@ -150,3 +150,8 @@ Also fixed: `gates/issue_rows_show_all_text.rs` (M4's `a_closed_row_shows_closed
 
 Spec Edge "Empty advanced query", FR-013, search-rules §1/§4, selector-ui §1, data-model §3/§7/§10 and T050
 reworded: an empty run is not a run.
+
+### M5 review round 2 fixes (scoped re-review, sonnet: 2 MINORs)
+
+- F1 core: `RememberedSelector::with_change(Query(empty))` set `ran = true`. Test `each_change_sets_one_field` flipped to "an empty run is not a run" and "an empty run leaves the last run query". Red: `cargo test -p micold-core --test github_filter` 47 passed, 1 failed (`each_change_sets_one_field`, line 855). Green after the guard: 48 passed.
+- F2 spec: the Edge case "Empty advanced query" wrongly said 1186's Jira query behaves the same; it now says Jira runs an empty query. Prose only.

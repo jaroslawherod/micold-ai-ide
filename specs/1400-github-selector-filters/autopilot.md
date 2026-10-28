@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5-D2 | Visual F1: the Basic/Advanced chips move ~29px when toggling (the dialog re-centres as its height changes) | Not fixed in M5; Follow-up | Pre-existing dialog centring, not M5's |
 | M5-D3 | Visual F2: while a refusal, a rejection or "No issue matches this query." shows, the Issue search field is hidden | Accepted | Nothing to search; matches basic mode's error states |
 | M5-D4 | Visual pass did not exercise the search beyond a capped list in Advanced mode (fake_gh has 30 issues) | Accepted | Covered by unit tests (`the_search_beyond_carries_the_query`) |
-| M5-D5 | Visual: an empty advanced run listed every issue, closed too | Fixed; spec changed: an empty run sends nothing and shows the prompt (no query counts as run) | Orchestrator's direction; reverses Spec review round 1 F2's "a run empty query re-runs"; matches 1186's Jira query (empty `last_run` → prompt) |
+| M5-D5 | Visual: an empty advanced run listed every issue, closed too | Fixed; spec changed: an empty run sends nothing and shows the prompt (no query counts as run) | Orchestrator's direction; reverses Spec review round 1 F2's "a run empty query re-runs"; unlike 1186's Jira query, which runs an empty query (re-review round 2 F2 corrected the spec's claim); core `with_change(Query(empty))` is now a no-op (round 2 F1) |
 
 ## Review rounds
 
