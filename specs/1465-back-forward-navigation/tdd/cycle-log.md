@@ -1,18 +1,19 @@
 # Cycle Log: #1465 — Back/forward navigation
 
 Append only. Newest last. Every entry's `red` block is the evidence that the test failed without
-the implementation it covers.
+the implementation it covers. Commit citations name the copies merged to `main` (the branches were
+rebased before merging; TDD audit finding 8, close unit).
 
 ## Baseline
 
-- M1 (T001–T016) landed in `81c5982a1`, `dac1d694d`, `02623b875` (+ two test-only follow-ups) with
+- M1 (T001–T016) landed in `a3db2cf11`, `19827d5a6`, `12eb0ff5b` (+ two test-only follow-ups) with
   the tests written alongside the code, not run red first (review B M1 F1). The full gate was
-  green at `4573c0ab8`. Cycles 1–8 below are the red evidence recovered after the fact: each
+  green at `b51a349bc`. Cycles 1–8 below are the red evidence recovered after the fact: each
   behaviour's implementation was stubbed, the tests run red, the stub removed, the tests run green.
 
 ## Cycles 1–8 — M1 behaviours, red by stub (recovered evidence), grouped
 
-- Method: one temporary build at `47db7b665` with eight stubs, each switched on by the env var
+- Method: one temporary build at `384fc6401` with eight stubs, each switched on by the env var
   `TDD_STUB=<name>` and inert otherwise, so one build served every red run (each build waits on
   the shared `target-shared` lock). The stubs were never committed; `git checkout` restored the
   three client files and the core stubs were deleted by hand, then the green run below.
@@ -125,7 +126,7 @@ the implementation it covers.
 
 ## M2 — Back/Forward keys (T017–T023)
 
-Red is reproducible from commit c520924b8 (`test(1465): failing tests … stubs in keymap`): the
+Red is reproducible from commit 236a28544 (`test(1465): failing tests … stubs in keymap`): the
 tests and the stubbed `history_key` / `history_key_labels` / `history_key_label` are committed
 there.
 
@@ -133,7 +134,7 @@ there.
 
 - tests: `tests/keymap.rs` `the_platforms_back_and_forward_keys_decode`,
   `the_back_and_forward_labels_name_both_platform_forms`.
-- red (c520924b8): both FAILED (`history_key` returned `None`, labels empty); 56 passed, 3 failed
+- red (236a28544): both FAILED (`history_key` returned `None`, labels empty); 56 passed, 3 failed
   with the docs test below.
 - green: `keymap::history_key` (Alt alone on ←/→; macOS Cmd alone on physical `[`/`]` with the
   logical fallback) and the labels → keymap 58 passed (docs test still red until cycle 13).
@@ -146,7 +147,7 @@ there.
 
 - tests: `ui::app_chord_tests::the_back_and_forward_keys_press_the_history_from_the_keyboard`
   (press and repeat), `ui::overview_arrow_tests::a_back_or_forward_key_is_not_a_card_step`.
-- red (c520924b8): both FAILED (`app_chord` gave `None`; `overview_arrow` gave `CardStepped`);
+- red (236a28544): both FAILED (`app_chord` gave `None`; `overview_arrow` gave `CardStepped`);
   `near_misses_of_the_back_and_forward_keys_are_not_app_chords` passed on arrival (guard).
 - green: `app_chord` checks `history_key` after the other chords; `overview_arrow` returns `None`
   for a press it decodes → lib filter `app_chord overview_arrow history` 15 passed.
@@ -155,7 +156,7 @@ there.
 
 - tests: `tests/history.rs` `a_key_press_does_nothing_while_a_field_holds_the_keyboard`,
   `a_key_press_does_nothing_while_the_terminal_holds_the_keyboard`.
-- red (c520924b8): both FAILED at `assert_key_ignored` (the key stepped back).
+- red (236a28544): both FAILED at `assert_key_ignored` (the key stepped back).
   `a_key_press_acts_over_a_closed_comment_boxs_stale_focus`, `a_key_press_does_nothing_over_settings`
   passed on arrival (the stale-field rule and `navigation::blocked` are M1's).
 - green: `resolve` returns `Step::None` for `Source::Key` while `terminal_focused()` or
@@ -181,7 +182,7 @@ there.
 - tests: `tests/history.rs` `back_in_a_browsing_review_tab_is_the_tabs_own_back` (Button and Key →
   `Step::ReviewBack`, list untouched, `moving` unset, `apply_history` → `[Changes(BrowseBack)]`),
   `main_tests` `history_tests::back_in_a_browsed_review_tab_returns_to_the_reading_then_leaves_the_tab`.
-- red (146392a08): both FAILED (`Show(Session feat-a)` where `ReviewBack` was expected; the bin
+- red (5293c573b): both FAILED (`Show(Session feat-a)` where `ReviewBack` was expected; the bin
   test: Back left the tab with the browse still open). The root declines `Message::Changes`, so
   the history tests drive `changes::update` directly (test fixed before green; red re-confirmed
   with the implementation stashed).
@@ -197,7 +198,7 @@ there.
 
 - tests: `tests/features_runs.rs` `known_keeps_each_projects_last_group_list`,
   `compare_of_a_group_from_the_now_active_projects_last_list_opens`.
-- red (4e7784a41, the `known` field declared with no behaviour): both FAILED — `known[/p]` was
+- red (8f3da23d5, the `known` field declared with no behaviour): both FAILED — `known[/p]` was
   `None`; Compare of P's group after the switch back stayed closed with Q's list in `groups`.
 - guard, passed on arrival: `compare_of_a_group_in_no_list_or_another_project_opens_nothing`.
 - green: `runs::routed` copies every `GroupsChanged` list into `known[active]`, and on
@@ -213,7 +214,7 @@ there.
   `apply_history_switches_project_first_for_another_projects_place`; T010's
   "another project's place is gone" test replaced. The test `send` runs `Project(Reopened)` as
   `on_known_project_reopened` does (switch, drain, the lookup's worktrees delivered).
-- red (e6671778a, `press_history` taking a lookup it ignored): those five FAILED — `None` or
+- red (1a977f513, `press_history` taking a lookup it ignored): those five FAILED — `None` or
   `/repo`'s D where `/other`'s place was expected; `apply_history` without `Project(Reopened)`.
 - guards, passed on arrival (another project was always gone): 
   `an_unavailable_or_unknown_projects_places_are_skipped_and_removed`,
@@ -233,7 +234,7 @@ there.
   (P a real git repository with the worktree `w`; Back from Q's session to P's worktree session,
   Forward back to Q, Back again: no intermediate place recorded, R2),
   `back_passes_over_a_project_whose_folder_went_away`.
-- red (40a899f64, the shell passing `|_| None` and no refresh): both FAILED — Back stayed in Q
+- red (1b88d85a1, the shell passing `|_| None` and no refresh): both FAILED — Back stayed in Q
   (P's worktree read as unreadable); with P's folder deleted, Back selected P's session while Q
   stayed active (the switch refused under a target `exists` accepted).
 - guard, passed on arrival (T030/T031 already in):
@@ -249,7 +250,7 @@ there.
   `a_remote_projects_worktree_from_its_last_list_exists` (lookup `None`, as for a remote project or
   no local git), `a_press_reads_each_projects_worktrees_once` (three of /other's worktree places,
   a counting lookup), `compare_left_open_across_a_switch_is_not_recorded_under_the_new_project`.
-- red (f01738321): those four FAILED — Back passed over `w1-2` and the remote project's `w1` to
+- red (367cc2d80): those four FAILED — Back passed over `w1-2` and the remote project's `w1` to
   /repo's D; the lookup was called 3 times; `shown_place` was `Compare(7)` under /other.
 - guard, passed on arrival: `a_compare_dismissed_in_the_background_is_reopened_then_closed_by_its_list`
   (F3, accepted: pins the stale `runs.known` behaviour; data-model.md, research R5 known limit).
@@ -262,7 +263,51 @@ there.
 
 - tests: `review_keys` `the_sheet_ends_with_back_and_forward_with_single_keys_on_and_off`; the two
   existing sheet tests now expect 14 rows (single keys on) and 4 (off), Back and Forward last.
-- red (d788de35b): all three FAILED (12 rows where 14 expected; 2 where 4).
+- red (a42853b7f): all three FAILED (12 rows where 14 expected; 2 where 4).
 - green: `sheet_model` chains `history_rows()` (`history_key_label` + the U6 texts) after the
   `REVIEW_KEYS` rows → review_keys passed. Layout fixture re-recorded for the two sheet states only.
 - T036 is prose (guide sentence); no test.
+
+## Close — TDD verification remediation (`tdd/verification.md`, T039–T047)
+
+### Waiver — M1 cycles 1–8 were test-after (finding 4)
+
+- Accepted, not repairable: M1's behaviours (record, step, observe, exists, gate, apply, finish a
+  move, side-button decode) were written with their tests in one pass, and cycles 1–8 recover
+  their red by stubs only, which proves the tests can fail, not that they came first. The tests'
+  strength is covered by the stub reds above, the audit's 38 mutants and Cycle 20's additions.
+  M2–M5 and every fix since cycle 9 ran red first; later milestones of this repo must too.
+
+### Cycle 20 — test strength from the audit (findings 1, 2, 3, 5, 7, 9; 6 reverted)
+
+Pure test-strength additions: the code was already right, so each test passed on arrival. Red is
+shown against the audit's surviving mutant instead (one at a time, applied, run, restored).
+
+- tests (`c6ae51aad`, `80417ba9a`): core `forward_passes_over_an_entry_equal_to_shown_and_keeps_it`
+  (step on a thread with a 10 s bound); the two core sweeps rewritten to assert an independently
+  computed landing entry, position and kept entries for every gone subset and start (finding 7);
+  client `tests/history.rs` `forward_passes_over_the_shown_place_and_on_past_a_gone_one`,
+  `a_key_press_acts_over_a_session_fields_stale_focus_behind_the_review_tab`,
+  `the_shown_place_is_none_while_settings_is_open`, and `a_removed_worktrees_places_...` now
+  asserts the remaining entries (no `let _ = b;`); `tests/review_keys.rs`
+  `a_session_fields_stale_focus_behind_the_tab_leaves_the_keyboard_to_the_review`, and
+  `history_rows()` writes the labels out; `tests/keymap.rs` guide test checks the four sentences.
+- red against mutants:
+  - M10 (`history.rs` Forward `at = next` made Back-only): core FAILED (`step returns` timeout
+    after 10 s); client `--test history` hung on the new test (`timeout 300` exit 124).
+  - A7 (`app.rs` `Composer(_) | QueuedMessage(_) => false`): history and review_keys new tests
+    FAILED.
+  - A3 (`shown_place` Settings guard removed): `the_shown_place_is_none_while_settings_is_open`
+    FAILED.
+  - Finding 9 (`keymap::history_key_label` takes the other platform's label): review_keys
+    `the_sheet_ends_with_...` and `with_the_switch_off_...` FAILED.
+  - Finding 5 (each of the four guide sentences altered in turn): the guide test FAILED four times.
+  - M8 (position clamp removed) still survives: equivalent, as the audit judged.
+- finding 6: `634dc7518` restores `mod panes::app_with_sessions` (sessions as `start_new` makes
+  them); `panes::` and `history_tests` bin tests pass without `Idle`.
+- green: core `history::` 22 passed; client `history`, `review_keys`, `keymap` passed.
+
+- baseline, full suite (finding 7): `scripts/gate.sh` at `80417ba9a` (fmt, clippy core and
+  workspace, `cargo test --workspace`, script tests) passed: 11854 passed, 0 failed, 18 ignored
+  across 597 test binaries, then 15 script cases with 0 failures. As root it runs the six
+  permission-refusal tests as a normal user, which is why the audit's root-only run saw them fail.

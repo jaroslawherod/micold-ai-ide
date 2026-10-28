@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-10-28 — shipped in PRs #1559 (design), #1567 (M1), #1571 (M2, M3), #1574 (M4) and the M5 + close PR
 
 **Input**: GitHub issue #1465 "Back/forward navigation with mouse side buttons and Alt+←/→". Today the only "go back" is local to the Review tab (the **Back** above a browsed file), and the mouse's back/forward side buttons do nothing.
 
