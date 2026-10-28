@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M1
-- **Next step**: M1 PR (pushed; orchestrator opens it), then milestone M2
+- **Phase**: M2
+- **Next step**: M2 gate and reviews (A, B)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1582 | design (spec, plan, tasks) | merged | 5ce410f219e38800d89f0936dbf9f48a96041cb1 |
+| #1586 | M1: selection model, shown text and work_value in core | merged | f7c34e9d579bc65daea4a1bd7ca865d0ac9253ea |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Selection model, shown text and work_value in core | — (pushed, orchestrator opens) | review-ready |
-| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | todo |
+| M1 | T001–T012 | full | Selection model, shown text and work_value in core | #1586 | merged |
+| M2 | T013–T023 | full | Window selection state, clearing, copy text and copy-key arbitration (render-free) | — | in progress |
 | M3 | T024–T032 | full | SelectableText and SelectionArea components, .selectable on four leaves | — | todo |
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | — | todo |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | — | todo |
@@ -39,6 +40,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | spec | Platform behaviour? | Identical on Linux/macOS/Windows; only Cmd vs Ctrl differs; LF line breaks everywhere | agent-resolved | spec.md Terms (Copy keys), Edge Cases (Cross-platform) |
 | D5 | clarify | FR-011: copy rendered markdown as visible text or source? | Visible rendered text as drawn; links copy shown text; no emphasis/heading/fence markup | agent-resolved | spec.md FR-010 ("as shown"), SC-001; user guide code-block copy "no fences, no tag" (#940 FR-011) |
 | D6 | clarify | FR-012: copy to clipboard on drag release, like the terminal view? | No: copy only on request (copy key, context menu Copy, copy control); release never writes the clipboard | decided by user | user answer 2026-10-28 ("No, copy only on request"); spec.md FR-012 |
+
+## Milestone notes
+
+- M2 (agent-resolved): units are joined by what separates them on screen (`Joint`): a line break between lines and rows, a tab between table cells, a space between texts drawn on one line (list marker and item, a card's title and summary, a footer's status and figures). FR-010 makes only real line breaks into line breaks; research R2's "one `\n` whatever their kind" would put a marker and its item on two lines. `Unit` is a struct (`path`, `text`, `joint`, `source`) rather than the contract's `(TextPath, Cow<str>)` pair, and `TranscriptView` takes the window's `RichCache` (`rich`) and the insights rather than one entry's `Derived`.
 
 ## Tasks-unit notes
 
@@ -80,4 +85,6 @@ None.
 
 ## Follow-ups not done
 
-None.
+- T021's join of `FieldId::Transcript` in `ui/focus.rs` waits for the widget that reports it: `SelectionArea` (M3) placed in the transcript (M4b) is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.
+- `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
+- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a's parity test decides whether they become selectable.

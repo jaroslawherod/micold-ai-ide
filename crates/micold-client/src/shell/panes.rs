@@ -74,6 +74,9 @@ pub fn sync(app: &mut App) {
         }
     }
     let now = layout.terminals();
+    // Feature 1550 (FR-019): a selection lives while a pane shows its session's transcript.
+    let sessions = app.core.workspace.session_ids_of_project(&project);
+    app.core.transcript_selection_sync(&sessions, &now);
     let multi = now.len() > 1;
     let previous = match &app.viewed_terminals_sent {
         Some((p, set)) if *p == project => set.clone(),

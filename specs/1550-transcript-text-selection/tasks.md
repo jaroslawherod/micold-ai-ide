@@ -173,7 +173,7 @@ features_composer --test features_transcript_rich --test features_are_render_fre
 
 ### Tests ⚠️ write first, see them fail
 
-- [ ] T013 [US1] Copy-text tests in the new `crates/micold-client/tests/features_transcript_selection.rs`
+- [x] T013 [US1] Copy-text tests in the new `crates/micold-client/tests/features_transcript_selection.rs`
   (contracts/selection-model.md *API (client)*, *S-2*, *S-3*; data-model.md *Unit*, *TranscriptView*;
   research R2, R3; FR-002, FR-010, FR-011): `rows(view)` lists the omitted notice, each entry's
   body and the request/resolution rows under it, then the at-end request blocks, in drawing order;
@@ -186,12 +186,12 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   notice's line; a request block's descriptive text without button labels or input fields;
   `copy_text` slices the first and last unit at the two offsets and joins units and rows with one
   `\n`, never splitting a grapheme
-- [ ] T014 [US1] Implement `TranscriptView`, `rows`, `entry_units`, `units` and `copy_text` in the
+- [x] T014 [US1] Implement `TranscriptView`, `rows`, `entry_units`, `units` and `copy_text` in the
   new `crates/micold-client/src/features/transcript_selection.rs` (`pub mod` in
   `crates/micold-client/src/features/mod.rs`), assigning `TextPath`s in the renderers' drawing
   order; move or re-export `plain_text`, `footer_view` and `compacted_text` out of
   `crates/micold-client/src/ui/transcript/` so the module stays render-free; T013 passes
-- [ ] T015 [US1] State tests in `crates/micold-client/tests/features_transcript_selection.rs`
+- [x] T015 [US1] State tests in `crates/micold-client/tests/features_transcript_selection.rs`
   (contracts/selection-model.md *S-5*–*S-11*, data-model.md *State transitions*, research R7):
   `Press` then `Hit`s then `Release` holds the selection; a full turn of fixture events streamed
   after it leaves `copy_text` unchanged (SC-005); cleared after a rebuild, eviction of the anchor
@@ -205,7 +205,7 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   selects `word_at`, with a triple click the reported line in prose units and `source_line_at` in
   code and diff units (S-11); `Context` opens the menu at its origin and `MenuDismissed` closes it,
   neither changing the selection (M-3)
-- [ ] T016 [US1] Implement `State` (`HashMap<SessionId, SessionSelection { selection, rebuilds,
+- [x] T016 [US1] Implement `State` (`HashMap<SessionId, SessionSelection { selection, rebuilds,
   menu }>`), `SelectMsg { Hit, Press, Edge, Release, Context, MenuDismissed, CopySelection,
   SelectAll }` and `update` (gesture, granularity, select-all, menu) in
   `crates/micold-client/src/features/transcript_selection.rs`; `TranscriptMsg::Select(SelectMsg)`
@@ -213,33 +213,33 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   `crates/micold-client/src/app.rs`, which builds the `TranscriptView`; a `Hit` without a `Press`
   starts nothing; `CopySelection` emits nothing until T023; T015's gesture, S-7–S-11 and menu
   cases pass
-- [ ] T017 [US1] Implement the clearing rules in
+- [x] T017 [US1] Implement the clearing rules in
   `crates/micold-client/src/features/transcript_selection.rs`: `applied` after each
   `StructuredEvents` (rebuild, eviction, omitted count, and the selected substring compared only
   for changed entries in range, research R7), the prompt-change hook, the toggle hook called from
   `Toggle` in `crates/micold-client/src/features/structured_transcript.rs`, `forget` and
   `retain_shown`; the rest of T015 (S-5, S-6) passes
-- [ ] T018 [US1] Two-pane test in `crates/micold-client/tests/features_transcript_selection.rs`:
+- [x] T018 [US1] Two-pane test in `crates/micold-client/tests/features_transcript_selection.rs`:
   it drives `retain_shown` with the sessions of `Workspace::session_ids_of_project` and the shown
   `TerminalRef`s (only `SessionProcess::Primary` counts): switching one pane to another session
   clears that session's selection and keeps the other pane's, a `swap` keeps both, another
   project's selections are untouched (S-6)
-- [ ] T019 [US1] `crates/micold-client/src/shell/panes.rs` `sync` calls
+- [x] T019 [US1] `crates/micold-client/src/shell/panes.rs` `sync` calls
   `transcript_selection.retain_shown(&sessions, &now)` with the active project's sessions and its
   `SessionProcess::Primary` terminals; T018 passes
-- [ ] T020 [P] [US2] Key tests in `crates/micold-client/tests/features_composer.rs`
+- [x] T020 [P] [US2] Key tests in `crates/micold-client/tests/features_composer.rs`
   (contracts/keys-menu-copy.md *K-1*–*K-11*, research R8, FR-008, FR-009, FR-019a, SC-002):
   every row of the K table with `mac` true and false, `selecting` and `focused` each true and
   false, busy and idle; K-8 and K-11 each with `focused` true and false; the existing #941 and
   BUG-1403 cases updated to the new signature with unchanged results
-- [ ] T021 [US2] Implement `transcript_key(press, phase, selecting, focused, mac)` and
+- [x] T021 [US2] Implement `transcript_key(press, phase, selecting, focused, mac)` and
   `KeyIntent::{CopySelection, SelectAll}` in `crates/micold-client/src/features/composer.rs`;
   `FieldId::Transcript(SessionId)` in `crates/micold-client/src/features/window.rs`, joined in
   `crates/micold-client/src/ui/focus.rs`; `transcript_interrupt` becomes `transcript_keys` in
   `crates/micold-client/src/ui/composer.rs`, subscribed while the active session's turn can be
   interrupted or `focused_field == Some(FieldId::Transcript(session))`, its one call site passing
   `cfg!(target_os = "macos")`; T020 passes
-- [ ] T022 [US2] Copy tests in `crates/micold-client/tests/features_transcript_selection.rs` and
+- [x] T022 [US2] Copy tests in `crates/micold-client/tests/features_transcript_selection.rs` and
   `crates/micold-client/tests/features_transcript_rich.rs` (contracts/selection-model.md *S-12*,
   keys-menu-copy.md *M-2*, research R9, FR-008, FR-014, FR-019a): `CopySelection` with a
   non-empty selection emits `Outcome::ClipboardWriteChecked` with `copy_text` and a
@@ -247,7 +247,7 @@ features_composer --test features_transcript_rich --test features_are_render_fre
   failed or `None` read-back sets that session's composer notice ("Copy failed") and keeps the
   selection; the menu's Copy sets `focused_field` to `FieldId::Transcript(session)` and copies;
   #940's code-block copy tests pass unchanged (C-6)
-- [ ] T023 [US2] Implement `CopyTarget { Code(CodeId), Selection }` keying `Derived::copy` and the
+- [x] T023 [US2] Implement `CopyTarget { Code(CodeId), Selection }` keying `Derived::copy` and the
   `Copying` ticket record in `crates/micold-client/src/features/transcript_rich.rs` (the tool and
   diff targets follow in T044); the copy outcome and the failure notice through
   `Composers::notice` in `crates/micold-client/src/features/transcript_selection.rs` and

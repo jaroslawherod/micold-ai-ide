@@ -13,6 +13,8 @@ use micold_core::structured::transcript::{EntryKey, ResultPart};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{spacing, Roles};
 
+pub use crate::features::transcript_selection::shown::{plain_text, unshown_caption};
+
 /// What a block renderer draws: content only, emitting no message of the transcript's (R-2).
 /// `'static` because entries are drawn inside iced `lazy` (research R12): a renderer clones what it
 /// shows, and runs only when the entry's revision, its fold state or the scheme changes.
@@ -100,37 +102,6 @@ pub struct RenderCtx<'a> {
 /// so the seam's shape is unchanged.
 pub use crate::features::transcript_rich::RichCache as BlockCache;
 
-/// How many columns apart the tab stops are when a tab is laid out as spaces.
-const TAB_STOP: usize = 4;
-
-/// `text` as plain text draws it: each tab expanded to spaces up to the next tab stop, since the
-/// text stack draws a tab as a missing glyph (`Read` results are `cat -n` lines: `1\tline`).
-pub fn plain_text(text: &str) -> String {
-    if !text.contains('\t') {
-        return text.to_owned();
-    }
-    let mut out = String::with_capacity(text.len() + 8);
-    let mut column = 0;
-    for c in text.chars() {
-        match c {
-            '\t' => {
-                let pad = TAB_STOP - column % TAB_STOP;
-                out.extend(std::iter::repeat_n(' ', pad));
-                column += pad;
-            }
-            '\n' => {
-                out.push(c);
-                column = 0;
-            }
-            _ => {
-                out.push(c);
-                column += 1;
-            }
-        }
-    }
-    out
-}
-
 /// `text` at `TypeRole::Body`, wrapped to the entry's width, breaking a token with no space in it
 /// (a path, a long JSON string) rather than widening the entry.
 fn body(text: &str, roles: Roles) -> Text<'static, TranscriptMsg> {
@@ -149,11 +120,6 @@ fn plain_thinking(block: &ThinkingText<'_>, ctx: &RenderCtx<'_>) -> Block {
 
 fn plain_tool_input(block: &ToolInput<'_>, ctx: &RenderCtx<'_>) -> Block {
     body(block.input_json, ctx.roles).monospace().into()
-}
-
-/// `[image not shown]`: what a result part the transcript cannot show reads as (FR-011).
-pub fn unshown_caption(kind: &str) -> String {
-    format!("[{kind} not shown]")
 }
 
 fn plain_tool_result(block: &ToolResult<'_>, ctx: &RenderCtx<'_>) -> Block {

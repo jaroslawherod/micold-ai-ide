@@ -553,11 +553,15 @@ pub(crate) fn key_input(
     })
 }
 
-/// The keys of the active session's transcript while it shows one and its turn can be interrupted
-/// (feature 941, FR-012): `None` otherwise, so Escape stays as inert as it was.
-pub(crate) fn transcript_interrupt(state: &State) -> Option<iced::Subscription<Message>> {
+/// The keys of the active session's transcript while it shows one and either its turn can be
+/// interrupted (feature 941, FR-012) or the transcript holds the keyboard, for its copy keys and
+/// select-all (feature 1550, research R8): `None` otherwise, so Escape stays as inert as it was.
+pub(crate) fn transcript_keys(state: &State) -> Option<iced::Subscription<Message>> {
     let session = state.session.active?;
-    (crate::ui::terminal::shows_transcript(state, session) && state.composers.offers_stop(session))
+    let focused =
+        state.window.focused_field == Some(crate::features::window::FieldId::Transcript(session));
+    (crate::ui::terminal::shows_transcript(state, session)
+        && (state.composers.offers_stop(session) || focused))
         .then(|| {
             iced::keyboard::listen()
                 .with(session)

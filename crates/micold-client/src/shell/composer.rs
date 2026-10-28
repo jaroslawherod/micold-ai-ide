@@ -11,6 +11,9 @@ use micold_client::features::command_palette::{palette_key, PaletteKey, SendInte
 use micold_client::features::composer::Msg;
 use micold_client::features::composer::{composer_key, transcript_key, KeyIntent, NOT_CONNECTED};
 use micold_client::features::session::SwitchRequest;
+use micold_client::features::structured_transcript::TranscriptMsg;
+use micold_client::features::transcript_selection::SelectMsg;
+use micold_client::features::window::FieldId;
 use micold_client::ui::composer::{composer_field, model_picker_field};
 use micold_core::protocol::messages::{ClientMsg, TurnPhase};
 use micold_core::session::SessionId;
@@ -53,7 +56,20 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         }
         Msg::TranscriptKey { session, press } => {
             let phase = app.core.composers.phase(session);
-            run(app, session, transcript_key(&press, phase));
+            let selecting = app.core.transcript_selection.selecting(session);
+            let focused = app.core.window.focused_field == Some(FieldId::Transcript(session));
+            let intent =
+                transcript_key(&press, phase, selecting, focused, cfg!(target_os = "macos"));
+            // Feature 1550: the transcript's own keys are its selection's.
+            let select = match intent {
+                KeyIntent::CopySelection => Some(SelectMsg::CopySelection { session }),
+                KeyIntent::SelectAll => Some(SelectMsg::SelectAll { session }),
+                _ => None,
+            };
+            if let Some(select) = select {
+                return crate::shell::transcript::update(app, TranscriptMsg::Select(select));
+            }
+            run(app, session, intent);
         }
         Msg::Edited { session, action } => edited(app, session, &action),
         Msg::SendRequested(session) => send(app, session),
@@ -229,8 +245,8 @@ fn run(app: &mut App, session: SessionId, intent: KeyIntent) {
             }
         }
         KeyIntent::Interrupt => interrupt(app, session),
-        // The editor's own binding has it.
-        KeyIntent::Edit => {}
+        // The editor's own binding has it; the composer never yields the transcript's keys.
+        KeyIntent::Edit | KeyIntent::CopySelection | KeyIntent::SelectAll => {}
     }
 }
 

@@ -7,7 +7,8 @@ use std::collections::{HashMap, HashSet};
 
 use micold_client::features::structured_transcript::{State, TranscriptMsg};
 use micold_client::features::transcript_rich::{
-    CopyState, DerivedBody, Grammar, HighlightJob, Part, RichCache, COPY_CONFIRM,
+    Checked, CopyState, CopyTarget, DerivedBody, Grammar, HighlightJob, Part, RichCache,
+    COPY_CONFIRM,
 };
 use micold_client::features::{OpenRequest, Outcome};
 use micold_core::markdown::{CodeId, Document};
@@ -600,7 +601,7 @@ fn a_copy_writes_the_code_byte_for_byte() {
         let (text, ticket) = copy(&mut state, &mut cache, s, &key, id);
         assert_eq!(text, code, "SC-005: byte for byte");
         assert_eq!(
-            cache.get(s, &key).unwrap().copy[&id],
+            cache.get(s, &key).unwrap().copy[&CopyTarget::Code(id)],
             CopyState::Pending(ticket)
         );
     }
@@ -664,7 +665,7 @@ fn the_read_back_decides_copied_or_failed_and_asks_for_the_timer() {
             "copied" => CopyState::Copied(ticket),
             _ => CopyState::Failed(ticket),
         };
-        assert_eq!(d.copy[&id], want);
+        assert_eq!(d.copy[&CopyTarget::Code(id)], want);
     }
     assert_eq!(COPY_CONFIRM, std::time::Duration::from_secs(2));
 }
@@ -719,7 +720,7 @@ fn copy_state_is_per_session_entry_and_block() {
     copy(&mut state, &mut cache, s, &key, ids[0]);
     let d = cache.get(s, &key).unwrap();
     assert_eq!(d.copy.len(), 1, "one block");
-    assert!(!d.copy.contains_key(&ids[1]));
+    assert!(!d.copy.contains_key(&CopyTarget::Code(ids[1])));
     for e in state.transcript(other).unwrap().entries() {
         assert!(cache.get(other, e.key()).unwrap().copy.is_empty());
     }
@@ -754,4 +755,68 @@ fn only_web_and_mail_links_open() {
         assert!(effect.outcomes.is_empty(), "{url} opens nothing");
         assert_eq!(effect.scroll, None);
     }
+}
+
+// ---- #1550 T022: a selection's copy beside the code blocks' (research R9, S-12, C-6) ----
+
+/// A selection's copy takes a ticket of its own and answers its read-back once, as held or
+/// failed; it touches no code block's control.
+#[test]
+fn a_selection_copy_is_checked_once_and_touches_no_control() {
+    let s = SessionId::new();
+    let t = transcript_of([text("```rust\nfn a() {}\n```\n")]);
+    let mut cache = RichCache::default();
+    cache.refresh(s, &t, &GRAMMAR);
+    let key = t.entries().next().unwrap().key().clone();
+    let ticket = cache.copy_selection(s, "fn".into());
+    assert_eq!(
+        cache.copy_checked(ticket, Some("fn".into())),
+        Checked::Selection {
+            session: s,
+            held: true
+        }
+    );
+    assert_eq!(
+        cache.copy_checked(ticket, Some("fn".into())),
+        Checked::Stale
+    );
+    for read in [Some("other".to_owned()), None] {
+        let ticket = cache.copy_selection(s, "fn".into());
+        assert_eq!(
+            cache.copy_checked(ticket, read),
+            Checked::Selection {
+                session: s,
+                held: false
+            }
+        );
+    }
+    assert!(
+        cache.get(s, &key).unwrap().copy.is_empty(),
+        "no control changed"
+    );
+    // A code block's copy is keyed by its target and still wants its confirmation timer.
+    let code = text_doc(&cache, s, &key).code_blocks().next().unwrap().0;
+    let (_, ticket) = cache.copy(s, &key, code).expect("copies");
+    assert_eq!(
+        cache
+            .get(s, &key)
+            .unwrap()
+            .copy
+            .get(&CopyTarget::Code(code)),
+        Some(&CopyState::Pending(ticket))
+    );
+    assert_eq!(
+        cache.copy_checked(ticket, Some("fn a() {}".into())),
+        Checked::Control
+    );
+    // A selection copy outlives a refresh of its session's entries.
+    let kept = cache.copy_selection(s, "x".into());
+    cache.refresh(s, &t, &GRAMMAR);
+    assert_eq!(
+        cache.copy_checked(kept, Some("x".into())),
+        Checked::Selection {
+            session: s,
+            held: true
+        }
+    );
 }

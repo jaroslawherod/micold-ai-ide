@@ -17,30 +17,14 @@
 use iced::widget::{column, container, row, text::Wrapping};
 use iced::{Alignment, Element, Length};
 use micold_core::review::diff::{LineKind, SchemeSpans, SideSpans};
-use micold_core::structured::edit_diff::{EditDiff, EditHunk, HunkNote};
+use micold_core::structured::edit_diff::{EditDiff, EditHunk};
 use micold_core::tokens::{spacing, Roles};
 
 use super::code_block::{expand_tabs, sideways, SHOW_IN_FULL};
 use super::diff_view::{large_message, line_text, marker, tinted};
 use super::{style, Button, Text, TypeRole};
 
-/// What a hunk's note says.
-pub fn note_text(note: HunkNote) -> &'static str {
-    match note {
-        HunkNote::ReplaceAll => "Replaces every occurrence",
-        HunkNote::NoChange => "No change",
-        HunkNote::EmptyWrite => "Writes an empty file",
-        HunkNote::NewContent => "New content",
-    }
-}
-
-/// What the row under a hunk whose final newline changed says.
-pub const NO_NEWLINE: &str = "No newline at end";
-
-/// The name of hunk `ordinal` of `of`.
-pub fn hunk_title(ordinal: u32, of: u32) -> String {
-    format!("Edit {ordinal} of {of}")
-}
+pub use crate::features::transcript_selection::shown::{hunk_title, note_text, NO_NEWLINE};
 
 /// An Edit, MultiEdit or Write call's change. Builder form (Principle VIII):
 /// `InlineDiff::new(&edit_diff, roles).spans(&scheme_spans).large(on_show).into()`.

@@ -9,7 +9,7 @@
 use super::blocks::{AssistantText, Block, BlockRef, BlockRenderers, RenderCtx, ToolInput};
 use super::blocks::{ThinkingText, ToolResult};
 use crate::features::structured_transcript::TranscriptMsg;
-use crate::features::transcript_rich::{Derived, DerivedBody, Part};
+use crate::features::transcript_rich::{CopyTarget, Derived, DerivedBody, Part};
 use crate::ui::material::{InlineDiff, MarkdownView};
 use iced::widget::Space;
 use micold_core::review::diff::{SchemeSpans, Spans};
@@ -65,7 +65,7 @@ fn markdown(block: &BlockRef<'_>, muted: bool, ctx: &RenderCtx<'_>) -> Option<Bl
             part: Part::Code(code),
         })
         .code_spans(|code| d.spans.get(&Part::Code(code)))
-        .copy_state(|code| d.copy.get(&code).copied())
+        .copy_state(|code| d.copy.get(&CopyTarget::Code(code)).copied())
         .full(|code| d.full.contains(&Part::Code(code)));
     Some(view.into())
 }

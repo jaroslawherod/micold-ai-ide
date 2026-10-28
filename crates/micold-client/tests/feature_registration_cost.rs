@@ -301,6 +301,41 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          `TranscriptMsg::Insights`; the transcript's `update` never handles one: the pane's view \
          hands it to the insights feature as `session::Msg::Insights` (feature 944, D18 b)",
     ),
+    (
+        "structured_transcript",
+        "transcript_selection",
+        "SelectMsg — the selection's gestures, menu and copy come from the transcript view, whose \
+         `Block` carries only `TranscriptMsg`, so they ride in it as `TranscriptMsg::Select`; the \
+         transcript's `update` never handles one: the root applies it to the selection feature \
+         with the session's `TranscriptView` (feature 1550, data-model.md *Messages*)",
+    ),
+    (
+        "transcript_selection",
+        "transcript_rich",
+        "RichCache, Derived, DerivedBody, Part, EDIT_TOOLS — a selection copies the text the view \
+         draws, and an entry is drawn from what the render cache derived (markdown, diffs, the \
+         code blocks too large to draw); read, never written (feature 1550, research R2)",
+    ),
+    (
+        "transcript_selection",
+        "permission_prompts",
+        "State, Placement, Shown — request blocks and resolution rows are rows of the transcript \
+         whose descriptive text is selectable, placed where the prompts feature says; read, never \
+         written (feature 1550, spec Edge Cases *Permission prompts*, research R7)",
+    ),
+    (
+        "transcript_selection",
+        "structured_insights",
+        "State — a turn footer's figures and a sub-agent notice are drawn from the insights, so \
+         the copied text reads them as the view does; read, never written (feature 1550, #944 \
+         X2, X5)",
+    ),
+    (
+        "transcript_selection",
+        "session",
+        "terminal_period_marker — the terminal period's marker text is the session feature's to \
+         say; the selection copies it as drawn, a pure read (feature 1550, #943 FR-023)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

@@ -1482,9 +1482,11 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         // Feature 941 (FR-012): Escape on a busy structured session's transcript interrupts its
         // turn. The composer's own Escape is its editor's, captured there, so it never reaches
         // this listener as well.
-        return crate::ui::composer::transcript_interrupt(state).unwrap_or_else(Subscription::none);
+        return crate::ui::composer::transcript_keys(state).unwrap_or_else(Subscription::none);
     }
     let mut subs = vec![focus_traversal()];
+    // Feature 1550 (FR-019a): a transcript holding the keyboard takes its copy keys and select-all.
+    subs.extend(crate::ui::composer::transcript_keys(state));
     // Held only while Escape has something to close, so pressing it with nothing open stays as
     // inert as it was.
     if crate::app::on_escape(state).is_some() {
