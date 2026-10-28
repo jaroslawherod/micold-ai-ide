@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M3
-- **Next step**: M3 review A round 2, then full gate and PR.
+- **Phase**: M4
+- **Next step**: M4 PR: pushed, body ready; the orchestrator opens it and waits on CI, then M5.
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
 | #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 | #1591 | M2: keep the choice, launch with `--effort`, idle and stopped picks | merged | 5b7a239045d5bcf99f644b75b63c13b7fb000d74 |
+| #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
 
 ## Milestones
 
@@ -26,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
 | M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | #1591 | merged |
-| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | implemented, reviews due |
-| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
+| M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
+| M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | pending (body in scratchpad) | pushed |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
 
 ## Decisions
@@ -41,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | clarify 1 | Launch with a stored level the model is known not to support? | Launch anyway naming no level (FR-010a); CLI default applies, view says so | agent-resolved | D2, spec.md#FR-011 |
 | D6 | plan | Does a running CLI take an effort change, or must the session relaunch? (spec Assumption 1) | Running: `apply_flag_settings {"effortLevel": level|null}`; deferred to turn end when busy, like `set_model`; `--effort` at launch in both kinds | agent-resolved | research.md P-1, P-2 (recorded against the real CLI 2.1.311), R1 |
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
+| D20 | M4 | `EffortPickerState` in `composers` (plan) or its own field? | Its own field `effort_picker: effort_picker::State` on the window: the feature-isolation guard forbids a feature writing another's state and reads a field's owner from a type named `State`; data-model.md notes it | agent-resolved | `feature_write_isolation`, `feature_registration_cost` |
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
 | D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
@@ -81,6 +83,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M3 | 2 | e44e3df94b602489e795f3431c120239ce23dc28:6b469ff7e0d7deba34f905dc0cc22a089a4af3ea | CLEAN (scoped, on 0dcb153f1..6b469ff7e): round-1 findings verified fixed. 1 MINOR — F1 the idle pick cleared `EffortPicks.deferred`, dropping the revert record of a deferred pick written before it; with both refused the catalog kept the refused deferred choice. Fixed test-first (`a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both`, fails before): the idle pick keeps `deferred`, and a refused deferred pick is put back unless a later pick was *kept* (`kept`, not `latest`), so an unanswered idle pick decides by its own answer. No further round (MINOR only). Run by the orchestrator |
 | M3 scoped gate (fix diff) | 3 | — | green: fmt, clippy `-p micold-daemon --all-targets -D warnings`; `structured_effort` 27/27 (4 runs), `structured_model` 10/10, `structured_permission` 31/31, `structured_switch` 11/11 |
 | Full gate M3 | 1 | — | green: `scripts/gate.sh` at a5c9a9461 (origin/main 5b7a23904; `PROTOCOL_VERSION` there and on the branch 73) |
+| M4 scoped gate | 1 | — | red: `composer_tab` (the new trigger is one more Shift+Tab stop), then with `--no-fail-fast` `feature_registration_cost` / `feature_write_isolation` (the picker's state lived in `composers`: now the window's own `effort_picker: effort_picker::State`; `open`/`picker` classified in `state_scan`), `features_transcript_selection` (M1's `an_effort_note_copies_nothing` → `an_effort_marker_copies_its_words`), `layout_snapshot` (fixture regenerated: only the trigger's nodes added) — all fixed |
+| M4 scoped gate | 2 | — | green: fmt, clippy `-p micold-client --all-targets -D warnings`, `cargo test -p micold-client` |
+| M4 own drive of the real client | — | — | debug client + daemon under Xvfb (lavapipe), real `claude` 2.1.312 unauthenticated, scratch project: found the trigger kept `Effort: Default` after a pick (catalog sync dropped `effort`) → fixed test-first (`a_snapshot_carries_the_effort_choice_into_the_window`). Then picker open/Default current, keyboard Up + Enter, Escape, Default pick, markers, light and dark: screenshots `/mnt/project-files/issue-1554/m4-*.png`. Not the T026 pass |
+| M4 scoped gate | 3 | — | green on 279bff167 |
+| A (code-review, high) M4 | 1 | dc2a77a059733a63134610de1fc61550db605c2c:279bff1679ff05d45ab6a0cfa176a6bd315a336e | CHANGES: F1 MAJOR open picker kept the keyboard after a switch to terminal → `effort_picker_shown` (open and `offers_effort`) gates `session_view_has_keyboard`, `SwitchRequested` closes it; F2 MAJOR no note at Default on a model without effort → `availability_note` says `NO_EFFORT_NOTE` whatever the choice (FR-003, D4; no conflict); F3 MINOR a pick equal to the stale catalog choice dropped while one is in flight → `effort_picked(.., in_flight)`, the shell passes whether a `SessionEffort` is pending; F4 MINOR a stored level the model does not list had no row → appended, marked current, highlighted; F5 MINOR focus back to the composer when the list closes, `follow` on move — all fixed test-first (features_effort_picker +4, shell::composer +3). Fixes no larger than suggested: no round 2. Run by the orchestrator |
+| B (conformance) M4 | 1 | dc2a77a059733a63134610de1fc61550db605c2c:279bff1679ff05d45ab6a0cfa176a6bd315a336e | CLEAN. Verify: features_effort_picker 12/12, ui::transcript::entries 9/9. 1 MINOR: M4 decision reused D9 → renumbered D20 (fixed, prose only). Run by the orchestrator |
+| Full gate M4 | — | — | green on 56370ab86 (`scripts/gate.sh`), after rebase onto origin/main 3190828cb (PROTOCOL_VERSION still 73; layout_snapshot passes) |
+| Visual pass M4 (T026) | 1 | 279bff167 | PASS, real client under Xvfb, light and dark: S1–S6, S9 (terminal view: no trigger), S10 guide — PASS; S7 (unsupported-model note), S8 (refused pick) not run: the real CLI cannot produce them, unit tests cover them. F2/F4 change rows only on models the real CLI cannot produce: no re-run. Evidence `specs/1554-structured-effort-switch/visual-pass/`. Observation, not M4's: the transcript shows raw JSON "Raw event" blocks at session start |
 
 ## Declined review findings
 
@@ -89,10 +99,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: M3 T018–T021 (0dcb153f1); review A round 1 F1–F4 and B round 1 F1 fixed test-first (6b469ff7e); review A round 2 CLEAN, its MINOR F1 fixed test-first; scoped gate green (see *Review rounds*). Previous PR #1591 merged at 5b7a239045d5bcf99f644b75b63c13b7fb000d74.
-- **Next step**: PR open by the orchestrator (branch pushed; body in the session scratchpad `pr-1554-m3-body.md`), then CI and merge.
-- **Main paths**: `crates/micold-daemon/src/state.rs` (`EffortPicks.asking`, `pick_effort`, `finish_effort_pick`, `settle_effort_ask`, `reapply_effort`, `pick_model` busy branch), `crates/micold-daemon/src/structured.rs` (`ask_effort`, `defer_effort`), tests `crates/micold-daemon/tests/structured_effort.rs` (last four), `crates/micold-daemon/tests/structured_permission.rs` (`an_effort_pick_leaves_a_pending_request_alone`).
-- **Open findings**: none. PR: none yet.
+- **Done**: M4 T022–T026; review A round 1 F1–F5 and B's MINOR fixed (56370ab86); full gate green on 56370ab86; branch pushed. Previous PR #1594 merged at 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd.
+- **Next step**: orchestrator opens the M4 PR (title `#1554: Structured view: model reasoning effort cannot be changed (M4)`, body in the session scratchpad `pr-1554-m4-body.md`), records its number, waits on CI and merges; then M5 (T027–T031).
+- **Main paths**: `crates/micold-client/src/features/effort_picker.rs`, `src/ui/composer.rs` (`effort_control`), `src/shell/composer.rs`, `src/app.rs`, `tests/features_effort_picker.rs`, guide `docs/user-guide/worktrees-and-sessions.md`.
+- **Open findings**: none.
 
 ## Open escalation
 
@@ -102,5 +112,6 @@ None.
 
 - `pick_model` (#943, state.rs) has the pattern review A M2 F1 fixed for effort: a stopped or terminal session's stored model pick does not bump `model_picks`, so a late answer to an earlier idle pick can replace it. Out of scope for #1554.
 - Show Claude Code's resolved default level (`Default (medium)`) by reading `get_settings` → `applied.effort` after each launch and change (research R10); not in the spec.
+- Visual pass M4 observed raw JSON "Raw event" blocks in the transcript at session start; unrelated to #1554, not fixed here.
 
 Note: this unit had no Agent tool; the spec review ran as a fresh headless `claude -p` process (read-only tools) instead of an `autopilot-reviewer` subagent.

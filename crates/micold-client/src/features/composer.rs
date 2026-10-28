@@ -430,6 +430,21 @@ pub enum Msg {
     },
     /// The model picker left without a pick.
     ModelPickerClosed(SessionId),
+    /// A press on the effort trigger, or `Enter`/`Space` on it: open or close the effort picker
+    /// (#1554 FR-002).
+    EffortPickerToggled(SessionId),
+    /// The arrows in the effort picker.
+    EffortPickerMoved {
+        session: SessionId,
+        direction: micold_core::typeahead::Direction,
+    },
+    /// An effort picked: row `row`, or the highlighted one (`Enter`) when `None`.
+    EffortPicked {
+        session: SessionId,
+        row: Option<usize>,
+    },
+    /// The effort picker left without a pick.
+    EffortPickerClosed(SessionId),
     /// **Open in terminal** / **Open in structured view** chosen (#943 US4 scenarios 3, 4).
     SwitchRequested {
         session: SessionId,

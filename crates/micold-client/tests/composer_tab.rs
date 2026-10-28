@@ -255,7 +255,8 @@ fn shift_tab_from_the_text_area_reaches_send_queued_and_the_queue_actions() {
     let mut mounted = Mounted::new(view(&state));
     mounted.operate(Box::new(FocusAt(area)));
     let mut landed = Vec::new();
-    for _ in 0..6 {
+    // The status row's stops (the model, #1554's effort trigger) come before the queue's.
+    for _ in 0..7 {
         mounted.operate(Box::new(focusable::focus_previous::<()>()));
         landed.extend(mounted.focused());
     }
