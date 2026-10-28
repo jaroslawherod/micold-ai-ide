@@ -244,6 +244,7 @@ pub async fn run() -> io::Result<()> {
     spawn_plan_usage_feed(Arc::clone(&state));
     spawn_mode_reports(Arc::clone(&state));
     spawn_model_answers(Arc::clone(&state));
+    spawn_effort_answers(Arc::clone(&state));
     spawn_conversation_reports(Arc::clone(&state));
     spawn_input_driver(Arc::clone(&state));
 
@@ -414,6 +415,18 @@ pub fn spawn_model_answers(state: Arc<DaemonState>) {
         tokio::spawn(async move {
             while let Some((session, answer)) = answers.recv().await {
                 state.follow_model_answer(session, answer);
+            }
+        });
+    }
+}
+
+/// Spawn the task that follows the CLIs' answers to deferred effort changes (#1554 FR-005). Once
+/// per service: a second call finds the feed taken and does nothing.
+pub fn spawn_effort_answers(state: Arc<DaemonState>) {
+    if let Some(mut answers) = state.effort_answers().take_receiver() {
+        tokio::spawn(async move {
+            while let Some((session, answer)) = answers.recv().await {
+                state.follow_effort_answer(session, answer);
             }
         });
     }

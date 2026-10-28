@@ -201,6 +201,9 @@ pub struct DaemonState {
     /// The CLIs' answers to model changes, on their way to [`Self::follow_model_answer`] (#943
     /// FR-016): a reader never takes the state's lock.
     model_answers: crate::plan_usage::Feed<(SessionId, ModelAnswer)>,
+    /// The CLIs' answers to deferred effort changes, on their way to
+    /// [`Self::follow_effort_answer`] (#1554 FR-005): a reader never takes the state's lock.
+    effort_answers: crate::plan_usage::Feed<(SessionId, EffortAnswer)>,
     /// The conversations structured sessions' CLIs report in `init` lines that differ from the one
     /// launched, on their way to [`Self::follow_reported_conversation`] (#943 FR-005a,
     /// provisional): a reader never takes the state's lock.
@@ -932,11 +935,6 @@ pub const EFFORT_NOT_CLAUDE: &str = "Reasoning effort is for Claude Code session
 pub const TERMINAL_EFFORT_REFUSAL: &str =
     "Effort is changed from the structured view; the choice is used at the next launch";
 
-/// The answer to `SetSessionEffort` while a turn is in progress, until a busy pick is deferred to
-/// the turn's end (#1554 M2, interim): nothing is stored or written.
-pub const BUSY_EFFORT_REFUSAL: &str =
-    "The session is busy; the effort can be changed when the turn ends";
-
 /// Why a switch of kind was refused (#943 contracts/wire.md *SessionSwitchKind*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SwitchRefusal {
@@ -1035,6 +1033,20 @@ struct EffortPicks {
     latest: u64,
     /// The number of the latest pick kept in the catalog.
     kept: u64,
+    /// A pick deferred past a turn and not answered yet, with the choice it replaced.
+    deferred: Option<DeferredEffort>,
+    /// The number of the latest idle pick whose answer is awaited. Until it comes, the catalog
+    /// does not hold the choice the CLI was last asked for, so no level is re-applied from it
+    /// (#1554 R4); the answer re-applies it ([`DaemonState::finish_effort_pick`]).
+    asking: Option<u64>,
+}
+
+/// An effort pick deferred past a turn (#1554 FR-005): put back to `previous` when the CLI refuses
+/// `chosen`, unless a pick was made after pick number `pick`.
+struct DeferredEffort {
+    chosen: EffortChoice,
+    previous: EffortChoice,
+    pick: u64,
 }
 
 /// An effort pick's refusal: the kind of `OperationError` and the sentence the user is shown.
@@ -1059,6 +1071,16 @@ pub struct AskedEffort {
     child: Arc<StructuredSession>,
     request_id: String,
     answer: tokio::sync::oneshot::Receiver<micold_core::structured::ControlOutcome>,
+}
+
+/// What a structured session's CLI answered to a deferred effort change, as its note says (#1554
+/// FR-005).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EffortAnswer {
+    /// An `EffortChanged` note, for the choice named.
+    Accepted(EffortChoice),
+    /// An `EffortRefused` note, for the choice named.
+    Refused(EffortChoice),
 }
 
 /// What a structured session's CLI answered to a model change, as its note says (#943 R7).
@@ -1256,6 +1278,7 @@ impl DaemonState {
             plan_usage_feed: crate::plan_usage::Feed::default(),
             mode_reports: crate::plan_usage::Feed::default(),
             model_answers: crate::plan_usage::Feed::default(),
+            effort_answers: crate::plan_usage::Feed::default(),
             conversation_reports: crate::plan_usage::Feed::default(),
             prompt_endings: Arc::default(),
             input_feed: crate::plan_usage::Feed::default(),
@@ -4123,6 +4146,19 @@ impl DaemonState {
                 });
                 picks.kept = picks.latest;
                 child.defer_model(model.clone());
+                // #1554 R4: the level the effort choice gives on the new model goes right after it.
+                // While an idle effort pick is unanswered, its answer re-applies it instead.
+                let asking = inner
+                    .effort_picks
+                    .get(&session)
+                    .is_some_and(|picks| picks.asking.is_some());
+                if let Some((_, s)) = inner.catalog.workspace().find_session(session) {
+                    if !asking {
+                        child.defer_effort_level(Self::effort_level(
+                            inner, session, &model, &s.effort,
+                        ));
+                    }
+                }
                 drop(guard);
                 return ModelPick::Answered(self.keep_model(session, &model));
             }
@@ -4172,24 +4208,25 @@ impl DaemonState {
     }
 
     /// A session's CLI answered a model change (#943 R7): a deferred pick it refused is put back to
-    /// the choice before it, unless another pick was made since (FR-016).
+    /// the choice before it, unless another pick was made since (FR-016). Either way the effort
+    /// level is re-applied for the model the CLI runs now (#1554 R4).
     pub fn follow_model_answer(&self, session: SessionId, answer: ModelAnswer) {
         let restore = {
             let mut inner = self.lock();
-            let Some(deferred) = inner
+            let deferred = inner
                 .model_picks
                 .get_mut(&session)
-                .and_then(|picks| picks.deferred.take())
-            else {
-                return;
-            };
-            match answer {
-                ModelAnswer::Refused(model) if model == deferred.chosen.cli_value() => {
+                .and_then(|picks| picks.deferred.take());
+            match (answer, deferred) {
+                (ModelAnswer::Refused(model), Some(deferred))
+                    if model == deferred.chosen.cli_value() =>
+                {
                     Some(deferred)
                 }
-                ModelAnswer::Refused(_) | ModelAnswer::Accepted => None,
+                _ => None,
             }
         };
+        self.reapply_effort(session);
         if let Some(DeferredPick { chosen, previous }) = restore {
             let unchanged = self
                 .launch_identity(session)
@@ -4377,6 +4414,88 @@ impl DaemonState {
         delivery
     }
 
+    /// A session's CLI answered an effort change deferred past a turn (#1554 FR-005): a refused one
+    /// is put back to the choice before it, unless another pick was kept since. An idle pick
+    /// made after it and not answered yet is not one: if the CLI takes it, its answer keeps it
+    /// ([`Self::finish_effort_pick`]); if not, the CLI is still on the choice before both.
+    pub fn follow_effort_answer(&self, session: SessionId, answer: EffortAnswer) {
+        let previous = {
+            let mut inner = self.lock();
+            let Some(picks) = inner.effort_picks.get_mut(&session) else {
+                return;
+            };
+            let kept = picks.kept;
+            match (&answer, picks.deferred.take()) {
+                (EffortAnswer::Refused(effort), Some(deferred)) if *effort == deferred.chosen => {
+                    (deferred.pick == kept).then_some(deferred.previous)
+                }
+                (EffortAnswer::Accepted(effort), Some(deferred)) if *effort == deferred.chosen => {
+                    None
+                }
+                (_, deferred) => {
+                    picks.deferred = deferred;
+                    None
+                }
+            }
+        };
+        if let Some(previous) = previous {
+            if let Err(err) = self.keep_effort(session, &previous) {
+                tracing::warn!(session = %session.0, %err, "the refused effort choice was not put back");
+            }
+        }
+    }
+
+    /// The CLIs' answers to deferred effort changes, for [`crate::server::spawn_effort_answers`].
+    pub fn effort_answers(&self) -> &crate::plan_usage::Feed<(SessionId, EffortAnswer)> {
+        &self.effort_answers
+    }
+
+    /// The effort level `session`'s CLI is asked for with `model` for `choice` (#1554 R2, R4): none
+    /// for `Default`, or where the models the CLI reported say `model` does not take the level.
+    fn effort_level(
+        inner: &Inner,
+        session: SessionId,
+        model: &ModelChoice,
+        choice: &EffortChoice,
+    ) -> Option<EffortLevel> {
+        use micold_core::structured::effort::{effective_level, effort_support};
+        let models = inner
+            .event_streams
+            .get(&session)
+            .map(|stream| stream.reported_models())
+            .unwrap_or_default();
+        effective_level(choice, effort_support(&models, model)).cloned()
+    }
+
+    /// Ask `session`'s running CLI again for the level its effort choice gives on the model it runs
+    /// now, when that is not the level last sent (#1554 R4): after a model change it accepted, or
+    /// a deferred one it refused, or an idle effort pick's answer. At once when idle, else at the
+    /// turn's end; never noted. Not while an idle effort pick is unanswered: its answer does it.
+    fn reapply_effort(&self, session: SessionId) {
+        let (child, level) = {
+            let inner = self.lock();
+            if inner
+                .effort_picks
+                .get(&session)
+                .is_some_and(|picks| picks.asking.is_some())
+            {
+                return;
+            }
+            let Some(child) = Self::structured_primary(&inner, session)
+                .filter(|child| child.is_running())
+                .cloned()
+            else {
+                return;
+            };
+            let Some((_, s)) = inner.catalog.workspace().find_session(session) else {
+                return;
+            };
+            let level = Self::effort_level(&inner, session, &child.cli_model(), &s.effort);
+            (child, level)
+        };
+        child.reapply_effort(level);
+    }
+
     /// The CLIs' answers to model changes, for [`crate::server::spawn_model_answers`].
     pub fn model_answers(&self) -> &crate::plan_usage::Feed<(SessionId, ModelAnswer)> {
         &self.model_answers
@@ -4456,18 +4575,19 @@ impl DaemonState {
     /// contracts/wire.md), up to the CLI's answer: refused for an unknown session and for another
     /// CLI than Claude Code; a terminal session's is stored and answered
     /// [`TERMINAL_EFFORT_REFUSAL`]; a session not running has it stored, its note to follow
-    /// ([`EffortPick::Stored`]) when it changed, answered at once when it did not. A running idle session's CLI is asked here, with the effective
-    /// level for the session's model, before this returns, so picks sent one after another reach
-    /// it in that order; [`Self::finish_effort_pick`] waits for the answer. A busy session's is
-    /// refused with [`BUSY_EFFORT_REFUSAL`] for now (M2), nothing stored or written.
+    /// ([`EffortPick::Stored`]) when it changed, answered at once when it did not. A running idle
+    /// session's CLI is asked here, with the effective level for the session's model, before this
+    /// returns, so picks sent one after another reach it in that order;
+    /// [`Self::finish_effort_pick`] waits for the answer. A busy session's is stored and answered at
+    /// once, its CLI asked when the turn is over ([`StructuredSession::defer_effort`]), and put
+    /// back if it refuses ([`Self::follow_effort_answer`]).
     pub fn pick_effort(&self, session: SessionId, effort: EffortChoice) -> EffortPick {
         use micold_core::protocol::messages::ErrorKind;
-        use micold_core::structured::effort::{effective_level, effort_support};
         let refused = |kind, message: String| EffortPick::Answered(Err((kind, message)));
-        let (child, pick, model) = {
+        let (child, pick, level) = {
             let mut guard = self.lock();
             let inner = &mut *guard;
-            let (kind, model) = match inner.catalog.workspace().find_session(session) {
+            let (kind, model, current) = match inner.catalog.workspace().find_session(session) {
                 None => {
                     return refused(
                         ErrorKind::NotFound,
@@ -4477,7 +4597,7 @@ impl DaemonState {
                 Some((_, s)) if s.provider != AiCli::ClaudeCode => {
                     return refused(ErrorKind::Refused, EFFORT_NOT_CLAUDE.to_owned())
                 }
-                Some((_, s)) => (s.kind, s.model.clone()),
+                Some((_, s)) => (s.kind, s.model.clone(), s.effort.clone()),
             };
             let child = Self::structured_primary(inner, session)
                 .filter(|child| child.is_running())
@@ -4507,19 +4627,43 @@ impl DaemonState {
                 }
                 (SessionKind::Structured, Some(child)) => child,
             };
-            if !child.turn().is_idle() {
-                return refused(ErrorKind::Busy, BUSY_EFFORT_REFUSAL.to_owned());
-            }
+            let level = Self::effort_level(inner, session, &model, &effort);
+            let busy = !child.turn().is_idle();
             let picks = inner.effort_picks.entry(session).or_default();
+            if busy {
+                // FR-004: the turn in progress keeps its level; the pick is written at its end.
+                // The CLI ends on the stored choice unless an idle pick is still unanswered.
+                if effort == current && picks.asking.is_none() {
+                    return EffortPick::Answered(Ok(()));
+                }
+                picks.latest += 1;
+                picks.kept = picks.latest;
+                // FR-005: a refusal puts back the choice the CLI was last asked for: the one before
+                // a pick this one replaces unwritten, else the stored one.
+                let replaced = child.defer_effort(&effort, level.as_ref());
+                let previous = match picks.deferred.take() {
+                    Some(unwritten) if replaced => unwritten.previous,
+                    _ => current,
+                };
+                picks.deferred = Some(DeferredEffort {
+                    chosen: effort.clone(),
+                    previous,
+                    pick: picks.latest,
+                });
+                drop(guard);
+                return match self.keep_effort(session, &effort) {
+                    Ok(_) => EffortPick::Answered(Ok(())),
+                    Err(why) => refused(ErrorKind::Refused, why),
+                };
+            }
+            // An idle pick goes after a deferred one (`ask_effort` writes it first), and is the
+            // choice the CLI ends on until its answer. The deferred one stays for its own answer:
+            // refused, and this one too, the choice goes back to the one before both.
             picks.latest += 1;
-            (child, picks.latest, model)
+            picks.asking = Some(picks.latest);
+            (child, picks.latest, level)
         };
-        let models = self
-            .event_stream(session)
-            .map(|stream| stream.reported_models())
-            .unwrap_or_default();
-        let level = effective_level(&effort, effort_support(&models, &model));
-        match child.ask_effort(&effort, level) {
+        match child.ask_effort(&effort, level.as_ref()) {
             Ok((request_id, answer)) => EffortPick::Asked(AskedEffort {
                 session,
                 pick,
@@ -4528,17 +4672,42 @@ impl DaemonState {
                 request_id,
                 answer,
             }),
-            Err(failed) => refused(
-                ErrorKind::Refused,
-                crate::structured::effort_change_failed(&failed),
-            ),
+            Err(failed) => {
+                self.settle_effort_ask(session, pick);
+                refused(
+                    ErrorKind::Refused,
+                    crate::structured::effort_change_failed(&failed),
+                )
+            }
         }
     }
 
     /// Wait for the CLI's answer to an idle session's effort pick (FR-004, FR-005): accepted, the
     /// choice is kept and broadcast, unless a later pick was kept first; refused or unanswered,
-    /// the error is the reason and the choice stays as it was.
+    /// the error is the reason and the choice stays as it was. The answer to the latest idle pick
+    /// then re-applies the level for the model the CLI runs (R4), held back while it was awaited.
     pub async fn finish_effort_pick(&self, asked: AskedEffort) -> Result<(), EffortRefused> {
+        let (session, pick) = (asked.session, asked.pick);
+        let picked = self.keep_answered_effort(asked).await;
+        self.settle_effort_ask(session, pick);
+        picked
+    }
+
+    /// Idle effort pick number `pick` is answered, or was never sent: when it is the latest, the
+    /// level held back for it is re-applied for the choice the catalog holds now (#1554 R4).
+    fn settle_effort_ask(&self, session: SessionId, pick: u64) {
+        let settled = self
+            .lock()
+            .effort_picks
+            .get_mut(&session)
+            .is_some_and(|picks| picks.asking.take_if(|asking| *asking == pick).is_some());
+        if settled {
+            self.reapply_effort(session);
+        }
+    }
+
+    /// [`Self::finish_effort_pick`] up to keeping the choice.
+    async fn keep_answered_effort(&self, asked: AskedEffort) -> Result<(), EffortRefused> {
         let AskedEffort {
             session,
             pick,
@@ -6403,6 +6572,7 @@ impl DaemonState {
         // reports the new mode right after its `success` (P-9), which puts it back.
         let modes = self.mode_reports.sender();
         let answers = self.model_answers.sender();
+        let effort_answers = self.effort_answers.sender();
         // The conversation this run continues; an `init` naming another one (after a `/clear`) is
         // kept for every later launch (#943 FR-005a).
         let conversations = self.conversation_reports.sender();
@@ -6455,6 +6625,12 @@ impl DaemonState {
                 }
                 StructuredEvent::ModelRefused { model, .. } => {
                     let _ = answers.send((id, ModelAnswer::Refused(model.clone())));
+                }
+                StructuredEvent::EffortChanged { effort } => {
+                    let _ = effort_answers.send((id, EffortAnswer::Accepted(effort.clone())));
+                }
+                StructuredEvent::EffortRefused { effort, .. } => {
+                    let _ = effort_answers.send((id, EffortAnswer::Refused(effort.clone())));
                 }
                 _ => {}
             }
@@ -8339,14 +8515,15 @@ impl DaemonState {
             let activity = Self::follow_turn(inner, session, delivery.is_some(), ended);
             Self::save_queue_locked(inner, session);
             Self::broadcast_input(inner, session);
-            // A model picked during the turn goes out now (#943 FR-015); a delivery writes it first.
+            // A model and an effort picked during the turn go out now (#943 FR-015, #1554 R1); a
+            // delivery writes them first.
             let flush = Self::structured_primary(inner, session)
                 .filter(|child| ended && child.serial() == closed.process)
                 .cloned();
             drop(guard);
             self.after_turn_activity(activity);
             if let Some(child) = flush {
-                child.flush_deferred_model();
+                child.flush_deferred();
             }
             delivery
         };

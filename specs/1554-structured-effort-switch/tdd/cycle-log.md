@@ -100,3 +100,35 @@ the implementation it covers.
 ### Cycle 9 — docs (T017)
 
 - `docs/daemon.md`: `SetSessionEffort` beside `SetSessionModel`. No test.
+
+## M3 — daemon: a pick during a turn, and a model change (T018–T021)
+
+- runs: `cargo test -p micold-daemon --test structured_effort`, `--test structured_permission`.
+
+### Cycle 10 — a busy pick deferred to the turn's end; refused, put back (T018, T020)
+
+- red: with `spawn_effort_answers` and `follow_effort_answer` as empty stubs (so the tests
+  compiled), `a_busy_pick_is_answered_at_once_and_written_at_the_turns_end`,
+  `of_two_picks_in_one_turn_only_the_last_is_written`,
+  `a_deferred_pick_claude_refuses_is_a_note_and_the_choice_goes_back` and
+  `a_refused_deferred_pick_is_not_put_back_over_a_later_pick` failed at their first busy pick:
+  `OperationError` (`Busy`), M2's interim refusal. `an_effort_pick_leaves_a_pending_request_alone`
+  (structured_permission) passed already: the session is idle while the request is pending.
+- green: `StructuredSession::defer_effort`, `deferred_effort`, the turn-end `flush_deferred`
+  (model, then effort), `EffortAsk { deferred }` → `EffortRefused`, `EffortPicks.deferred`,
+  `follow_effort_answer` over the new `effort_answers` feed. The interim test
+  `a_busy_sessions_pick_is_refused_for_now` is gone.
+
+### Cycle 11 — a model change re-applies the level (T019, T020)
+
+- red (same stubs): `a_model_change_reapplies_the_effective_level_without_a_note` ("the null line
+  never happened") and `a_model_change_during_a_turn_reapplies_the_level_at_the_turns_end` (no
+  `apply_flag_settings` between `set_model` and the next message) failed;
+  `with_the_default_choice_a_model_change_writes_no_effort` passed (nothing to write either way).
+- green: `follow_model_answer` re-applies for the model the CLI runs (`cli_model`, set by the
+  reader on an accepted `set_model`); a busy model pick defers the level for the new model right
+  after it (`defer_effort_level`). 22/22.
+
+### Cycle 12 — docs (T021)
+
+- `docs/daemon.md`: a busy pick, `EffortRefused`, the re-apply after a model change. No test.
