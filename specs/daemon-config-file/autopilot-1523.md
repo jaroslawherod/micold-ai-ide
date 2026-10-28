@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1551 | Design (milestones for Issue 2) | merged | 2b6335441e102258eb42b66f6cb607dc8e70d31c |
+| #1600 | M1 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T005–T013, T087 | full | Schema V1–V19, `config check`, user guide | — | in progress |
+| M1 | T005–T013, T087 | full | Schema V1–V19, `config check`, user guide | #1600 | in review |
 
 ## Decisions
 
