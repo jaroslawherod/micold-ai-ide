@@ -101,6 +101,7 @@ Reducer (`titles_to_fetch`, `TitleLookup`) was written with the shell mapping st
   above. The round 1 fix tests (A1 switch-off drops pending, A2 clock back, A3 seed from Failed,
   A4 outage short-circuit, B2 NotOpenIssue/overflow) were written together with the fix, with no
   separate red run; stated plainly. The feature records no tdd/cycle-log file.
+- Full gate green after the round 1 fixes (GATE_EXIT=0).
 - Round 1: review A CHANGES (7 MINOR, all fixed: A1 switch-off removes Pending, A2 `now < at`
   due, A3 seed Failed from the form, A4 outage stops the batch, A5 rig helper, A6 comments, A7 docs);
   review B CHANGES (1 MAJOR, 3 MINOR, all fixed). Round 2 pending (scoped, sonnet).
