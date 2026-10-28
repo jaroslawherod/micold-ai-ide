@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1465
 - **Worktree branch**: 1465-m4 (M4, stacked on 1465-m3; M3 on 1465-m3, stacked on 1465-m2; M2 on 1465-m2, stacked on 1465-m1; M1 on 1465-m1, design on claude/project-thread-e4cve5)
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented (T027–T033 ticked, TDD cycles 15–17); full gate running; reviews A and B round 1 pending
+- **Phase**: M4 implemented (T027–T033 ticked, TDD cycles 15–17); full gate green (scripts/gate.sh at dd6b10896 + ledger, 75974ce87); reviews A and B round 1 pending (snapshot 5fb76795f85b2c0114f83b6245805dab20a57b40:75974ce8725a33caed3f0dc316e755deed529399)
 - **Next step**: full gate on M4, then review A (code-review high) and review B (conformance) on range 9b3e348bb..HEAD, then pr-title-m4.md / pr-body-m4.md
 
 ## Pull requests
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Mouse side buttons walk the history in the active project (other projects' places passed over as gone until M4) | #1567 | merged |
 | M2 | T017–T023 | full | Alt+←/→ (Cmd+[ / Cmd+]) walk it unless a field or terminal holds the keyboard; guide table | M2+M3 PR | reviews clean, PR being opened |
 | M3 | T024–T026 | light | The Review tab's own Back first | M2+M3 PR | reviews clean (B: 1 MINOR, applied in M4), PR being opened |
-| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate running, reviews pending |
+| M4 | T027–T033 | full | Back/Forward across projects, skipping their gone places | — | implemented, gate green, reviews pending |
 | M5 | T034–T036 | light | The Review sheet lists Back and Forward | — | planned |
 
 ## Decisions
