@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M6
-- **Next step**: M6 (T052–T055: split-pane copy key, diff anchors), then a new close unit (speckit-tdd-verify and speckit-converge were not run by the first close unit: M6 was already known, so they run once, after it)
+- **Next step**: M6 PR (pushed, body written; orchestrator opens it, waits on CI, merges), then a new close unit (speckit-tdd-verify and speckit-converge were not run by the first close unit: M6 was already known, so they run once, after it)
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | #1597 | merged |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | #1601 | merged |
-| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | — | in progress (handover) |
+| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | — | pushed, PR to open |
 
 ## Decisions
 
@@ -99,12 +99,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M6 (scoped, sonnet) | 2 | efdf193fd0886ebb5faaab45c69715611a497247:92be93d4edf52c06dea6f501f1e629c5ffffdb7d → 4869290e3 | CLEAN: F1 fix holds, F2–F5 reasons stand |
 | Visual pass M6 (real client, release, Xvfb) | 1 | 4869290e3 + working tree | first build: fast diff drag anchored at `banana` but ended ~80 px low (a redraw taught a shift while moves were queued); fixed (shift learned only from a redraw at the last batch's end, test `a_redraw_ahead_of_the_moves_shifts_nothing`); re-run on the fixed build: all pass, `visual-pass/m6-visual-pass.md` |
 | Review B M6 (+ scoped A on the visual-pass fix, sonnet) | 2 | 0941dc532406cf4a87bb5c7c958e0b81e9ceba1c:4869290e3a45e8eda60c2834bc4a4ebd76526b54 → a13d780a4 | CHANGES: F1 MAJOR after a wheel scroll under a still pointer the shift was not learned (fixed: two redraws in a row at one cursor outside a gesture teach it; test `a_press_after_a_scroll_with_no_move_lands_where_it_happened`, red without); F2 MINOR covered by F1. Round 1 fixes hold. Verify: features_transcript_selection 40, inline_diff 11, selection_area 10 passed |
+| Review B M6 (sonnet) | 3 | cfd0531b24f10f5dcfab3cdd917f0a3b6f9abc39:565f9ba5d88c09f5aa380d77a7a302ea566fd2eb | CLEAN; Verify selection_area 11 passed. F1 MINOR (an unpressed redraw repeat with moves queued could teach a stale shift; nothing outside a drag publishes on redraw today) noted, not fixed |
 
 ## Declined review findings
 
 - Review A M5 F2 (MINOR): `work_value` re-parses a card's input JSON on each rebuild of that card to decide the header control. A rebuild happens only when the entry's revision changes (cached elsewhere), and the summary needs the same parse; a `has_work_value` in core would change core's `ToolCard`, outside M5. Follow-up if a profile shows it.
 - Review A M5 F3 (MINOR): `transcript_rich` → `transcript_selection::shown::unshown_caption` is allowlisted in `feature_registration_cost` with its reason: one caption shared by what is shown and what is copied, so they cannot drift.
 
+- M6 gate: `scripts/gate.sh` green at 565f9ba5d (after merging origin/main), with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`.
 - M1 gate: `scripts/gate.sh` green at 341ed42d1 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`: the container's disk filled at 0 MB with the default profile). No visual pass: nothing visible changed (list markers draw the same glyphs).
 
 - Review A M1 #1 (Selection does not snap; TextPos fields public): the contract fixes `pub` fields and `start(at, granularity, expand)` without the text; snapping happens where the text is known, `TextPos::in_text` (doc now says so). The hit mapper (M3) builds positions with it.
@@ -134,32 +136,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 unit 1 (context over 150k after implementing). Done, committed locally (not pushed, no PR):
-- 607bd17b8 T052–T053: `shell::transcript::update` focuses the pane showing the session on a
-  `SelectMsg::Press` (new `shell::panes::focus_pane_showing`): the selection area captures the
-  press, so the pane's `mouse_area` FocusPane never fired and `session.active` stayed the other
-  pane's. `ui::composer::transcript_keys_session` split out of `transcript_keys` for the test.
-  Test: `tests::panes::a_drag_in_either_pane_of_a_split_gives_that_pane_the_copy_key`
-  (main_tests.rs; red on main for the reason: listener `None`).
-- 8bfc401d8 T054 + T055 code: root cause of the diff anchor is not the scrollable: iced_winit
-  hands every event of a batch `window.state.cursor()` (where the batch ended), so a fast drag's
-  press landed where the drag got to. `SelectionArea` now tracks the pointer from `CursorMoved`
-  and forwards each mouse event at its own place; `Selectable` answers a dragged pointer right of
-  one of its lines with that line's end. Tests in `ui/material/inline_diff.rs`:
-  `a_fast_drag_on_diff_lines_anchors_at_the_press`, `a_drag_right_of_a_short_diff_line_selects_to_its_end`
-  (both red without the fix). contracts/selectable-text.md T-2/A-2 updated. T052–T054 ticked;
-  T055 stays open until the visual pass is recorded.
-- Checked green locally: `cargo test -p micold-material`, `-p micold-client --lib`, `--bin micold-ai-ide`.
-
-Next: scoped gate (`scripts/autopilot/scoped-gate.sh`) with review A (high) in its shadow; review B
-(conformance, sonnet); visual pass via the `visual-pass` skill in an autopilot-worker writing
-`visual-pass/m6-visual-pass.md` (quickstart Part B steps 1 and 9: split-pane Ctrl+C in both panes,
-a fast drag banana→fig on the edit-turn diff anchors at banana, a same-line drag right of a short
-diff line selects to its end; screenshots also to /mnt/project-files/issue-1550/); tick T055;
-full gate (`scripts/gate.sh`) after `git fetch origin && git merge origin/main`; push with
-`git push -u origin claude/project-thread-zj503u`; PR body to the scratchpad path the orchestrator
-gave (`pr-1550-m6-body.md`), title `#1550: Structured view: text and values cannot be selected or
-copied (M6)`, `Refs #1550`.
+None.
 
 ## Open escalation
 
