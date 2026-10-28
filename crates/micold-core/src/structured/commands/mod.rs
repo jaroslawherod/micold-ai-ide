@@ -25,6 +25,10 @@ pub const EFFORT_COMMAND: &str = "effort";
 /// (#1554 FR-009).
 const EFFORT_DESCRIPTION: &str = "Set the reasoning effort for later turns";
 
+/// What the palette shows as `/effort`'s argument, in place of the CLI's hint: the values
+/// `parse_effort_arg` takes, not the CLI's `auto` or `ultracode` (#1554 FR-007).
+const EFFORT_ARGUMENT_HINT: &str = "<default|low|medium|high|xhigh|max>";
+
 /// The commands the app handles itself: each is one [`CommandKind::App`] entry, whether or not
 /// the CLI reports it (FR-009).
 pub const APP_COMMANDS: [&str; 2] = [MODEL_COMMAND, EFFORT_COMMAND];
@@ -219,9 +223,10 @@ fn completed(
 ) -> CommandList {
     for command in &mut commands {
         if command.kind == CommandKind::App {
-            // `/effort` takes the app's words (#1554 R6); `/model` keeps the CLI's.
+            // `/effort` takes the app's words and hint (#1554 R6); `/model` keeps the CLI's.
             if command.name == EFFORT_COMMAND {
                 command.description = Some(EFFORT_DESCRIPTION.to_string());
+                command.argument_hint = Some(EFFORT_ARGUMENT_HINT.to_string());
             }
             continue;
         }
@@ -255,6 +260,9 @@ fn completed(
         {
             let mut command = bare(name.to_string(), CommandKind::App);
             command.description = Some(app_description(name).to_string());
+            if name == EFFORT_COMMAND {
+                command.argument_hint = Some(EFFORT_ARGUMENT_HINT.to_string());
+            }
             commands.push(command);
         }
     }
@@ -304,10 +312,16 @@ pub fn parse_initialize(outcome: &ControlOutcome) -> (Vec<ReportedCommand>, Vec<
 }
 
 /// A reported model's `supportsEffort` and `supportedEffortLevels` (#1554 R2): `None` (unknown)
-/// unless both are there, a boolean and a list; a name [`EffortLevel::parse`] refuses, or one
-/// already listed, is dropped.
+/// unless `supportsEffort` is a boolean and, when `true`, the levels are a list; `false` alone
+/// means no effort. A name [`EffortLevel::parse`] refuses, or one already listed, is dropped.
 fn effort_support_of(model: &Value) -> Option<EffortSupport> {
     let supported = model["supportsEffort"].as_bool()?;
+    if !supported {
+        return Some(EffortSupport {
+            supported,
+            levels: Vec::new(),
+        });
+    }
     let names = model["supportedEffortLevels"].as_array()?;
     let mut levels: Vec<EffortLevel> = Vec::new();
     for level in names

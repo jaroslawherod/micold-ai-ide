@@ -56,3 +56,11 @@ the implementation it covers.
 
 - `PROTOCOL_VERSION` 71 → 72; `the_protocol_version_is_72` and `FEATURE_026_PROTOCOL_VERSION`
   re-pinned. Structural; no red.
+
+### Cycle 6 — review A M1 findings
+
+- red: `effort_is_the_apps_command_once_with_its_description` (the entry's hint was the CLI's
+  `<low|medium|high|xhigh|max|auto|ultracode [on|off]>`) and
+  `effort_fields_that_are_missing_or_unusable_give_unknown_support_or_are_dropped` (a model with
+  `supportsEffort: false` and no list read `None`) failed.
+- green: `/effort` takes the app's argument hint; `supportsEffort: false` alone gives no effort.

@@ -294,6 +294,7 @@ fn with_neither_source_the_list_is_the_fallback() {
 
 /// #1554 T004: what `/effort` is in the palette (FR-009).
 const EFFORT_DESCRIPTION: &str = "Set the reasoning effort for later turns";
+const EFFORT_ARGUMENT_HINT: &str = "<default|low|medium|high|xhigh|max>";
 
 fn the_effort_entry(list: &CommandList) {
     let entries: Vec<_> = list
@@ -304,6 +305,11 @@ fn the_effort_entry(list: &CommandList) {
     assert_eq!(entries.len(), 1, "/effort once: {entries:?}");
     assert_eq!(entries[0].kind, CommandKind::App);
     assert_eq!(entries[0].description.as_deref(), Some(EFFORT_DESCRIPTION));
+    assert_eq!(
+        entries[0].argument_hint.as_deref(),
+        Some(EFFORT_ARGUMENT_HINT),
+        "the app's values, not the CLI's"
+    );
     assert_eq!(entries[0].terminal_only, None);
 }
 
@@ -336,6 +342,7 @@ fn effort_fields_that_are_missing_or_unusable_give_unknown_support_or_are_droppe
             {"value": "only-flag", "supportsEffort": true},
             {"value": "only-levels", "supportedEffortLevels": ["low"]},
             {"value": "unsupported", "supportsEffort": false, "supportedEffortLevels": []},
+            {"value": "unsupported-no-list", "supportsEffort": false},
             {"value": "odd", "supportsEffort": true,
              "supportedEffortLevels": ["High", "auto", "ultracode", "x-high", 3, "", "max"]},
             {"value": "not-bool", "supportsEffort": "yes", "supportedEffortLevels": ["low"]},
@@ -360,13 +367,16 @@ fn effort_fields_that_are_missing_or_unusable_give_unknown_support_or_are_droppe
     assert_eq!(effort("only-flag"), None);
     assert_eq!(effort("only-levels"), None);
     assert_eq!(effort("not-bool"), None);
-    assert_eq!(
-        effort("unsupported"),
-        Some(EffortSupport {
-            supported: false,
-            levels: vec![],
-        })
-    );
+    for unsupported in ["unsupported", "unsupported-no-list"] {
+        assert_eq!(
+            effort(unsupported),
+            Some(EffortSupport {
+                supported: false,
+                levels: vec![],
+            }),
+            "{unsupported}"
+        );
+    }
     assert_eq!(
         effort("odd"),
         Some(EffortSupport {
