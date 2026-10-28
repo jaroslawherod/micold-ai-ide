@@ -1703,6 +1703,12 @@ impl State {
             // left to reset.
             self.worktree.delete_target = None;
         }
+        // The active project's last list (feature 1465, research R5).
+        if let Some(active) = self.workspace.active.clone() {
+            self.worktree
+                .known
+                .insert(active, names.iter().cloned().collect());
+        }
         // Prune rename overrides for the active project's worktrees that are gone (FR-015).
         if let Some(active) = self.workspace.active.clone() {
             if let Some(map) = self.workspace.worktree_names.get_mut(&active) {
@@ -2068,7 +2074,14 @@ impl State {
         let project = self.workspace.active.clone()?;
         let view = if self.overview.open {
             View::Overview
-        } else if let Some(compare) = &self.runs.compare {
+        } else if let Some(compare) = self
+            .runs
+            .compare
+            .as_ref()
+            .filter(|compare| compare.project == project)
+        {
+            // Left open across a switch until the new project's list closes it: not a place of
+            // the new project (review A M4 F4).
             View::Compare(compare.group)
         } else if let Some((_, location)) = self.review_shown() {
             View::Review(location.clone())

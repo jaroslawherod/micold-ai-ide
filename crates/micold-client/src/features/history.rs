@@ -12,8 +12,9 @@ use micold_core::history::{Dir, History, Place, View};
 use micold_core::session::SessionLocation;
 
 /// The worktrees of a project that is not active, by `dir_name` (research R5): the shell reads
-/// them from disk as a project switch does, tests pass a map. `None`: unreadable, so that
-/// project's worktree places count as gone.
+/// them from disk as a project switch does, tests pass a map. `None`: unreadable (a remote
+/// project, no local git). Either way `exists` adds the project's last list
+/// (`worktree.known`), which alone names its included worktrees; a press reads each project once.
 pub type Lookup<'a> = &'a dyn Fn(&Path) -> Option<Vec<String>>;
 
 /// The window's history (FR-001), on the root as `history`.
@@ -75,8 +76,18 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg, lookup: Lookup) -> Step {
     {
         return Step::ReviewBack;
     }
+    // One read per project for the whole press: the shell's lookup runs `git worktree list` on
+    // the UI thread, and `step` may try many entries (review A M4 F2).
+    let cache = std::cell::RefCell::new(std::collections::HashMap::new());
+    let cached = |project: &Path| {
+        cache
+            .borrow_mut()
+            .entry(project.to_path_buf())
+            .or_insert_with(|| lookup(project))
+            .clone()
+    };
     let mut list = std::mem::take(&mut app.history.list);
-    let found = list.step(dir, shown.as_ref(), |p| exists(app, p, lookup));
+    let found = list.step(dir, shown.as_ref(), |p| exists(app, p, &cached));
     app.history.list = list;
     match found {
         Some(place) => {
@@ -89,7 +100,7 @@ pub fn resolve(app: &mut crate::app::State, msg: Msg, lookup: Lookup) -> Step {
 
 /// Whether `place` can still be shown (research R5), in any project: the project known and
 /// available (or the active one); its location listed (`worktree.worktrees` for the active project,
-/// `lookup` for another); a session not archived there; a Compare group in that project's last
+/// its last list `worktree.known` or `lookup` for another); a session not archived there; a Compare group in that project's last
 /// group list (`runs.groups`, or `runs.known` for another project).
 pub fn exists(app: &crate::app::State, place: &Place, lookup: Lookup) -> bool {
     let project = &place.project;
@@ -106,7 +117,13 @@ pub fn exists(app: &crate::app::State, place: &Place, lookup: Lookup) -> bool {
         SessionLocation::Worktree(dir) if active => {
             app.worktree.worktrees.iter().any(|w| &w.dir_name == dir)
         }
-        SessionLocation::Worktree(dir) => lookup(project).is_some_and(|dirs| dirs.contains(dir)),
+        SessionLocation::Worktree(dir) => {
+            app.worktree
+                .known
+                .get(project)
+                .is_some_and(|dirs| dirs.contains(dir))
+                || lookup(project).is_some_and(|dirs| dirs.contains(dir))
+        }
     };
     match &place.view {
         View::Session { location, id } => {

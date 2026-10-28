@@ -82,7 +82,7 @@ enum Step {
 | Function | Rule | FR |
 |---|---|---|
 | `resolve(app: &mut crate::app::State, msg, lookup: &dyn Fn(&Path) -> Option<Vec<String>>) -> Step` | `navigation::blocked(app)` → `None`. `Source::Key` and (`app.terminal_focused()` or `app.live_focused_field().is_some()`) → `None`. `Back`, shown place a Review tab, `changes::can_go_back` on its view → `ReviewBack`. Else, with the borrows split — `let shown = app.shown_place(); let mut list = std::mem::take(&mut app.history.list); let found = list.step(dir, shown.as_ref(), \|p\| exists(app, p, lookup)); app.history.list = list;` (`exists` takes `&State` and reads nothing of `history`) — `Show(p)` with `moving = true`, or `None`. | 006, 008–012 |
-| `exists(app: &crate::app::State, place, lookup) -> bool` | research R5; the shell refreshes availability before `resolve` (U2). `lookup(project)` gives the worktree directories of a non-active project (`None` = unreadable → its worktree locations count as gone). | 006, edge *Gone targets* |
+| `exists(app: &crate::app::State, place, lookup) -> bool` | research R5; the shell refreshes availability before `resolve` (U2). `lookup(project)` gives the worktree `dir_name`s of a non-active project (`None` = unreadable: a remote project, no local git); a `Worktree(dir)` of that project exists when `dir` is in `worktree.known[project]` or in `lookup(project)`. `resolve` reads `lookup` at most once per project per press. | 006, edge *Gone targets* |
 | `observe(state, shown: Option<Place>)` | `moving` → nothing. `Some(p)` → `list.record(p)`. `None` → nothing. | 002, 003 |
 | `finish(state, shown)` | `moving = false`, then `observe(state, shown)`. | 007, research R2 |
 
@@ -104,6 +104,22 @@ enum Step {
 | `routed`, `Msg::GroupsChanged(groups)` | as today, and `known[workspace.active] = groups` |
 | `routed`, `Msg::CompareOpened { group, project }` | when `project` is active and `group` is not in `groups` but is in `known[project]`: `groups = known[project].clone()` first; then as today |
 | project removed from the workspace | `known[P]` is left as is, not pruned: `exists` rejects every place of a project that is not known and available before it reads `known`, so a removed project's list is never read; if P is re-added in the same launch, `known[P]` is its last list, the same narrowed limit as research R5, and P's first `GroupsChanged` replaces it |
+
+| a group dismissed while P was in the background (review A M4 F3, accepted) | `known[P]` still lists it: Back opens Compare from it, P's own `GroupsChanged` closes it (`compare_groups_changed`), and the place shown next is recorded like any app move, which cuts the forward entries off (research R5 known limit; pinned by `tests/history.rs::a_compare_dismissed_in_the_background_is_reopened_then_closed_by_its_list`) |
+
+## Client — `micold-client/src/features/worktree.rs` and `State::set_worktrees` (changed)
+
+| Item | Rule |
+|---|---|
+| `State.known: BTreeMap<PathBuf, Vec<String>>` | each project's last worktree list this launch, by `dir_name` (research R5) |
+| `app::State::set_worktrees(worktrees)` | as today, and `worktree.known[workspace.active] = ` the new list's `dir_name`s, whether the local seed or the daemon's push (the push follows the seed, so the last write is the daemon's) |
+| project removed from the workspace | as `runs.known`: left as is, never read while the project is not known and available |
+
+## Root — `State::shown_place` (changed)
+
+`Compare(group)` only while `runs.compare.project` is the active project: a Compare left open
+across a project switch, until the new project's list closes it, is not a place of that project
+(review A M4 F4); the order falls through to the Review tab and the session.
 
 ## Root — the live focused field
 

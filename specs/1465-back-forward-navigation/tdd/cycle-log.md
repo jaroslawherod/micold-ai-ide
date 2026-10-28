@@ -241,3 +241,19 @@ there.
 - green: `shell::history::update` runs `workspace.refresh_availability(scanner)` first and passes
   `discover_worktrees(git, project)`'s `dir_name`s as the lookup → bin `history_tests` 7 passed.
 - T033 is prose (guide sentence); no test.
+
+### Cycle 18 — review A M4 round 1: known worktrees, one read per press, Compare's project (F1, F2, F4; F3 pinned)
+
+- tests: `tests/history.rs` `another_projects_included_worktree_from_its_last_list_exists` (an
+  included worktree `w1-2` only the daemon's list names; the local lookup lists `w1`),
+  `a_remote_projects_worktree_from_its_last_list_exists` (lookup `None`, as for a remote project or
+  no local git), `a_press_reads_each_projects_worktrees_once` (three of /other's worktree places,
+  a counting lookup), `compare_left_open_across_a_switch_is_not_recorded_under_the_new_project`.
+- red (f01738321): those four FAILED — Back passed over `w1-2` and the remote project's `w1` to
+  /repo's D; the lookup was called 3 times; `shown_place` was `Compare(7)` under /other.
+- guard, passed on arrival: `a_compare_dismissed_in_the_background_is_reopened_then_closed_by_its_list`
+  (F3, accepted: pins the stale `runs.known` behaviour; data-model.md, research R5 known limit).
+- green: `worktree::State.known` (each project's last `dir_name`s), written for the active project
+  in `State::set_worktrees`; `exists` accepts another project's `Worktree(dir)` in
+  `known[project]` or `lookup(project)`; `resolve` caches `lookup` per project for the press;
+  `shown_place` reports Compare only while `compare.project` is active → history 39 passed.

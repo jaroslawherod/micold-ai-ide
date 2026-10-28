@@ -78,13 +78,20 @@ with the code it was checked against.
     project `exists` accepts is one the switch accepts and `Project(Reopened)` is never refused
     under a target that `list.pos` already points at;
   - location: `Default` always; `Worktree(dir)` listed in `worktree.worktrees` for the active
-    project, or in `lookup(project)` for another;
+    project, or for another in its last list `worktree.known[project]` or in `lookup(project)`.
+    `worktree.known` is written for the active project by every `set_worktrees`, so it ends on the
+    daemon's list, the only one that names an included worktree (whose `dir_name` `reconcile` may
+    uniquify) and the only one for a remote project or a client without local git, where the
+    local read gives nothing. A press reads each project's `lookup` once (review A M4 F1, F2);
   - session: a non-archived record in `workspace.sessions[project]` at that location ("stopped" is
     `CloseRequested`, which archives: `features/session.rs` 1468, 1982);
   - Review: its location exists; Overview: its project; Compare: its group in that project's last
     group list: `runs.groups` for the active project, `runs.known[project]` for another (below).
   The shell passes `|project| discover_worktrees(git, project)` (`shell/workspace.rs` 91), the same
-  synchronous local read a project switch runs; tests pass a map.
+  synchronous local read a project switch runs; tests pass a map. A worktree removed while its
+  project was in the background still counts as existing from `known` until that project is active
+  again: Back switches to it and its session is gone (archived) or its Review tab shows nothing,
+  the same one-view cost as the Compare limit below.
 - **Rationale**: FR-006 says Back lands on an entry whose target exists. Checking after a project
   switch would leave the window in the other project when the target turned out gone, which is a
   move the user did not ask for. The worktree list of a non-active project is not in `State`

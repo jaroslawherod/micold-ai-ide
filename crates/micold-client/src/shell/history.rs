@@ -3,7 +3,8 @@
 //! Availability is refreshed first, and another project's worktrees are read from disk as a
 //! project switch reads them (research R5). The root resolves the press (`State::press_history`)
 //! and names the messages that show its target (`State::apply_history`); they run through the
-//! root `update`, so each takes its full path, and `State::finish_history_move` turns observation back on once they have.
+//! root `update`, so each takes its full path, and `State::finish_history_move` turns observation
+//! back on once they have.
 
 use iced::Task;
 use micold_client::app::Message;
