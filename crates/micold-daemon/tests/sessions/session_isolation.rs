@@ -127,6 +127,7 @@ fn two_sessions_in_one_worktree_on_different_clis_share_nothing() {
         mode: LaunchMode::Fresh,
         env: vec![("TERM".to_string(), "xterm-256color".to_string())],
         model: Default::default(),
+        effort: Default::default(),
     };
     let claude = spec(AiCli::ClaudeCode, claude_id);
     let copilot = spec(AiCli::Copilot, copilot_id);

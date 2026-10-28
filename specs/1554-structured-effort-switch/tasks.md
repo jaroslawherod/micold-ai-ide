@@ -105,7 +105,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 3: Daemon — keep the choice, launch with it, apply it when idle (M2; US3, US1 scenarios 3, 6, 7)
 
-- [ ] T011 [P] [US3] Tests: in `core/tests/session_store.rs`, `StoredSession.effort` round-trips a
+- [x] T011 [P] [US3] Tests: in `core/tests/session_store.rs`, `StoredSession.effort` round-trips a
   level, a legacy record without the field reads `Default`, `Default` is not written
   (`skip_serializing_if`), a stored name `EffortLevel` refuses reads `Default`, `schema_version` is
   unchanged; unit tests in `core/src/provider.rs` and `core/src/terminal.rs`: Claude's `effort_args`
@@ -114,20 +114,20 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `core/tests/protocol_roundtrip.rs`, `SetSessionEffort { req, session, effort }` and
   `SessionSummary.effort` round-trip and a summary without the field decodes as `Default`
   (FR-010, FR-011, FR-012)
-- [ ] T012 [US3] Implement T011: `Session.effort` (`Default` for a new session) in
+- [x] T012 [US3] Implement T011: `Session.effort` (`Default` for a new session) in
   `core/src/session.rs`; `StoredSession.effort` in `core/src/store.rs`; `LaunchSpec.effort:
   Option<EffortLevel>` and the `effort_args` call in `terminal::launch_args`
   (`core/src/terminal.rs`); `AiCliProvider::effort_args` (default none, Claude `--effort`) in
   `core/src/provider.rs`; `SessionSummary.effort` and `ClientMsg::SetSessionEffort` in
   `core/src/protocol/messages.rs`; `PROTOCOL_VERSION` +1 and `core/tests/schema_hash.rs` re-pinned
   (contracts/wire.md *Changed (M2)*, *New (M2)*)
-- [ ] T013 [P] [US1] Extend the stand-in in `daemon/tests/support/structured.rs` (research R9): an
+- [x] T013 [P] [US1] Extend the stand-in in `daemon/tests/support/structured.rs` (research R9): an
   `efforts <level>…` directive answering every later `apply_flag_settings` from the stdin reader —
   a listed level or `null` → `success` with no `response` body, anything else → `error`
   "apply_flag_settings: …", `efforts` alone refuses all; an `initialize-effort <value>
   <none|level,…>` directive rewriting that model's `supportsEffort`/`supportedEffortLevels` in the
   replayed `initialize` answer (`none` → `supportsEffort: false`)
-- [ ] T014 [US1] [US3] Tests in `daemon/tests/structured_effort.rs` (new) against the stand-in: an
+- [x] T014 [US1] [US3] Tests in `daemon/tests/structured_effort.rs` (new) against the stand-in: an
   idle running session picked `high` → one `apply_flag_settings {"effortLevel":"high"}` line, the
   same pid, no `--resume`, an `EffortChanged` note, `OperationOk`, and two connected clients both
   see `SessionSummary.effort` `high` within 1 s (US1 scenario 3, SC-001, SC-002); picking `Default`
@@ -143,7 +143,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   session B's choice and stdin untouched (US3 scenario 4); a running busy session in M2 →
   `OperationError` ("The session is busy; the effort can be changed when the turn ends"), nothing
   stored or written (interim, replaced by M3)
-- [ ] T015 [US3] Tests in `daemon/tests/structured_effort.rs` for launches (SC-004): `xhigh` stored
+- [x] T015 [US3] Tests in `daemon/tests/structured_effort.rs` for launches (SC-004): `xhigh` stored
   while not running, then started → argv has `--effort xhigh`; restarted → `--effort xhigh` and
   `--resume` the same conversation; restored after a daemon restart → `--effort xhigh`; switched to
   the terminal (PTY stand-in) → the terminal argv has `--effort xhigh`; switched back → again; a
@@ -151,14 +151,14 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   stored `max`, restart) → no `--effort`, the session runs (FR-010a); a new session → no
   `--effort` (FR-011); every existing structured and terminal argv assertion passes unchanged
   (SC-006)
-- [ ] T016 Implement T014–T015: `Catalog::set_effort` in `daemon/src/catalog.rs`; `reported_models()`
+- [x] T016 Implement T014–T015: `Catalog::set_effort` in `daemon/src/catalog.rs`; `reported_models()`
   beside `EventStream::command_list()`, `StructuredSession::ask_effort` / `effort_answer` and
   `EffortAsk` in `daemon/src/structured.rs` (over `send_control`, as `ask_model` / `model_answer`);
   `DaemonState::pick_effort` with `EffortPicks { latest, kept }` and `SpawnPlan.effort` (the
   effective level from the latest `CommandsReported` models and the record's model choice, R3) in
   `daemon/src/state.rs`; `LaunchSpec.effort` in `daemon/src/ops.rs` `start_with_prompt`; dispatch of
   `SetSessionEffort` in `daemon/src/server.rs`; `SessionSummary.effort` filled from the record
-- [ ] T017 [P] Describe `SetSessionEffort`, its answers per session state, `--effort` at launch, the
+- [x] T017 [P] Describe `SetSessionEffort`, its answers per session state, `--effort` at launch, the
   effective level (FR-010a) and the `apply_flag_settings` request beside the `SetSessionModel`
   section of `docs/daemon.md`
 

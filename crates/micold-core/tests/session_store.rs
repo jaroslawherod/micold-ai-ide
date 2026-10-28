@@ -8,6 +8,7 @@ use micold_core::session::{
     SessionLocation, TerminalMode,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
+use micold_core::structured::effort::{EffortChoice, EffortLevel};
 use micold_core::structured::model::{ModelChoice, ModelName};
 use micold_core::workspace::Workspace;
 use std::collections::BTreeMap;
@@ -353,6 +354,57 @@ fn a_record_written_before_model_choices_loads_default() {
     assert_eq!(loaded.status, LoadStatus::Loaded);
     let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
     assert_eq!(session.model, ModelChoice::Default, "FR-017");
+}
+
+/// #1554 T011 (FR-010): a session's effort choice, saved and loaded back; `Default` is not written,
+/// so a record is written exactly as before the feature and `schema_version` stays 1.
+#[test]
+fn an_effort_level_round_trips_and_default_is_not_written() {
+    let high = EffortChoice::Level(EffortLevel::parse("high").unwrap());
+    let (back, written) = round_trip_structured(|session| session.effort = high.clone());
+    assert_eq!(back.effort, high, "FR-010");
+    let value: serde_json::Value = serde_json::from_str(&written).unwrap();
+    assert_eq!(value["schema_version"], 1, "{written}");
+    assert_eq!(
+        value["sessions"][0]["effort"],
+        serde_json::json!({ "Level": "high" })
+    );
+    let (back, written) = round_trip_structured(|session| session.effort = EffortChoice::Default);
+    assert_eq!(back.effort, EffortChoice::Default);
+    assert!(
+        !written.contains("\"effort\""),
+        "a Default session is written exactly as before the feature: {written}"
+    );
+}
+
+/// #1554 T011 (FR-010, FR-011): a record from before the feature loads `Default`, and so does one
+/// whose stored level the app does not accept; the rest of the record still loads.
+#[test]
+fn a_record_without_an_effort_or_with_a_bad_level_loads_default() {
+    for effort in [
+        "",
+        r#","effort":{"Level":"two words"}"#,
+        r#","effort":"nonsense""#,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("projects.json");
+        std::fs::write(
+            &file,
+            format!(
+                r#"{{"schema_version":1,"last_active":null,"projects":[{{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{{"id":"00000000-0000-0000-0000-000000001554","worktree_dir":"feat-x","title":null,"kind":"Structured","model":{{"Named":"haiku"}}{effort}}}]}}]}}"#
+            ),
+        )
+        .unwrap();
+        let loaded = JsonFileStore::at(file).load();
+        assert_eq!(loaded.status, LoadStatus::Loaded, "{effort}");
+        let session = &loaded.workspace.sessions.get(&PathBuf::from("/p")).unwrap()[0];
+        assert_eq!(session.effort, EffortChoice::Default, "{effort}");
+        assert_eq!(
+            session.model,
+            ModelChoice::Named(ModelName::parse("haiku").unwrap()),
+            "the rest of the record loads: {effort}"
+        );
+    }
 }
 
 /// #943 T039 (FR-005a, provisional M5): the conversation a `/clear` started is saved with the

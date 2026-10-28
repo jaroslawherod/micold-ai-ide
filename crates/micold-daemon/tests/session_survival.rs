@@ -288,6 +288,7 @@ fn a_copilot_session_survives_a_daemon_restart_on_the_cli_it_was_started_on() {
             mode: LaunchMode::Resume,
             env: Vec::new(),
             model: Default::default(),
+            effort: Default::default(),
         })
     };
     assert_eq!(

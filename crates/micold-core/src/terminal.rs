@@ -46,6 +46,10 @@ pub struct LaunchSpec {
     /// The session's model choice (#943 FR-017), launched as the provider's
     /// [`model_args`](crate::provider::AiCliProvider::model_args).
     pub model: crate::structured::model::ModelChoice,
+    /// The **effective** effort level at this launch (#1554 FR-010, FR-010a, research R3): the
+    /// session's choice when the model is not known not to take it, else `None`, launched as the
+    /// provider's [`effort_args`](crate::provider::AiCliProvider::effort_args) after the model.
+    pub effort: Option<crate::structured::effort::EffortLevel>,
 }
 
 /// Build the AI CLI argument vector for a launch spec. Pure, so the fresh/resume flag choice is
@@ -63,6 +67,7 @@ pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
     };
     let mut args = provider.launch_args_in(provider.config_dir().as_deref(), id, spec.mode);
     args.extend(provider.model_args(&spec.model));
+    args.extend(provider.effort_args(spec.effort.as_ref()));
     args
 }
 
@@ -231,5 +236,37 @@ mod shell_kind_tests {
         };
         assert_eq!(ShellKind::detect("/opt/weird/nushell-ish"), expected);
         assert_eq!(ShellKind::detect(""), expected);
+    }
+}
+
+#[cfg(test)]
+mod launch_args_tests {
+    use super::{launch_args, LaunchMode, LaunchSpec};
+    use crate::session::AiCli;
+    use crate::structured::effort::EffortLevel;
+    use uuid::Uuid;
+
+    /// #1554 T011 (FR-012): a stored level reaches only Claude Code's argv; every other CLI's
+    /// launch is what it was before the feature.
+    #[test]
+    fn an_effort_level_adds_nothing_to_another_clis_launch() {
+        for which in AiCli::ALL {
+            let spec = |effort| LaunchSpec {
+                cwd: "/w".into(),
+                session_id: Uuid::from_u128(1),
+                resume_handle: Uuid::from_u128(1),
+                provider: which,
+                mode: LaunchMode::Fresh,
+                env: Vec::new(),
+                model: Default::default(),
+                effort,
+            };
+            let with = launch_args(&spec(Some(EffortLevel::parse("max").unwrap())));
+            let without = launch_args(&spec(None));
+            match which {
+                AiCli::ClaudeCode => assert_eq!(with[with.len() - 2..], ["--effort", "max"]),
+                _ => assert_eq!(with, without, "{which:?}"),
+            }
+        }
     }
 }

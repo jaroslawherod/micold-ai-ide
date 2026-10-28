@@ -629,6 +629,7 @@ fn a_created_session_records_the_cli_the_client_chose() {
             mode: micold_core::terminal::LaunchMode::Fresh,
             env: Vec::new(),
             model: Default::default(),
+            effort: Default::default(),
         })
     };
     assert_eq!(

@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M1
-- **Next step**: orchestrator opens the M1 PR (branch pushed; body in the session scratchpad `pr-1554-m1-body.md`), waits on CI and merges; then M2.
+- **Phase**: M2
+- **Next step**: reviews A and B of M2 (orchestrator), then the full gate and the M2 PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1556 | Design: spec, clarifications, plan, research, contracts, tasks | merged | f2b9dd525fbafe99dfd929bcb9392d17a33a98b4 |
+| #1587 | M1: core levels, support, control lines, `/effort`, notes, recordings | merged | b18b611d1b354c734a745165d7afb83ccb178e2a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | pending (branch pushed) | reviews done; full gate green; PR to open |
-| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | pending |
+| M1 | T001–T010 | full | Core: levels, support, control lines, `/effort` classification, notes and markers; recordings | #1587 | merged |
+| M2 | T011–T017 | full | Daemon: keep the choice, launch with `--effort`, apply to an idle or stopped session | — | implemented; reviews due |
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | — | pending |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | — | pending |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | — | pending |
@@ -42,6 +43,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
 | D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
+| D11 | M2 | `OperationError` kind of the interim busy refusal (contracts/wire.md names only the sentence) | `Busy`; unknown session `NotFound`, every other refusal `Refused` | agent-resolved | crates/micold-daemon/src/state.rs `pick_effort`, test `a_busy_sessions_pick_is_refused_for_now` |
+| D12 | M2 | When is an idle pick's `EffortChanged` note written? | From the CLI's `success`, in its answer's place in the history (as `ModelChanged`); a stopped session's pick from the daemon, once stored (`note_effort_changed`, off the connection loop: it may read a saved history) | agent-resolved | data-model *State transitions*; structured.rs `effort_note` |
+| D13 | M2 | Effective level at a launch after a daemon restart, before the history is loaded | `launch_effort` reads the latest `CommandsReported` from the saved history when none is in memory, so FR-010a holds after a restore too | agent-resolved | test `a_stored_level_the_model_does_not_take_launches_with_none` |
 
 ## Review rounds
 
