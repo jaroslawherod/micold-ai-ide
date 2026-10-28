@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use micold_core::github::{
-    assignable_users_args, labels_args, list_args, milestones_args, search_args, GhCli, GithubRepo, Issue, IssueLoadError, IssueSource,
+    assignable_users_args, labels_args, list_args, milestones_args, search_args, GhCli, GithubRepo,
+    Issue, IssueLoadError, IssueSource,
 };
 use micold_core::github_filter::{
     search_filtered_args, search_page_args, BasicFilters, FilterFailure, GithubFilter, LabelName,

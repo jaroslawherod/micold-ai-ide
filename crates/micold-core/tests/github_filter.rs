@@ -905,7 +905,9 @@ fn a_login_is_letters_digits_and_single_inner_hyphens() {
     let longest = "a".repeat(39);
     for valid in ["octocat", "octo-cat", "a", "Octo-Cat-42", longest.as_str()] {
         assert_eq!(
-            Login::parse(valid).map(|l| l.as_str().to_string()).as_deref(),
+            Login::parse(valid)
+                .map(|l| l.as_str().to_string())
+                .as_deref(),
             Some(valid),
             "{valid:?}"
         );
@@ -930,7 +932,13 @@ fn a_login_is_letters_digits_and_single_inner_hyphens() {
 /// data-model §1, FR-006: non-empty, no `"`, no control character, and (as a label) no `\`.
 #[test]
 fn a_milestone_title_is_any_non_empty_title_without_a_quote_backslash_or_control_character() {
-    for valid in ["v2.4", "Sprint 12: polish", "(wip)", "日本語", " lead space"] {
+    for valid in [
+        "v2.4",
+        "Sprint 12: polish",
+        "(wip)",
+        "日本語",
+        " lead space",
+    ] {
         assert_eq!(
             MilestoneTitle::parse(valid)
                 .map(|t| t.as_str().to_string())
@@ -985,7 +993,9 @@ fn the_active_line_names_the_us6_parts_after_the_state() {
     filters.set_state(IssueState::Closed);
     assert_eq!(
         filters.described().as_deref(),
-        Some("Excluding labels blocked; Closed issues; Assigned to me; By octo-cat; Milestone v2.4")
+        Some(
+            "Excluding labels blocked; Closed issues; Assigned to me; By octo-cat; Milestone v2.4"
+        )
     );
     let mut others = BasicFilters::default();
     others.set_assignee(Some(Assignee::Nobody));
@@ -1118,7 +1128,10 @@ fn people_skip_invalid_logins_and_never_print_one() {
     let named: Vec<Option<&str>> = people.iter().map(|p| p.name.as_deref()).collect();
     assert_eq!(named, [Some("The Octocat"), None, None]);
     let printed = format!("{people:?}");
-    assert!(!printed.contains("octo") && !printed.contains("hubot"), "{printed}");
+    assert!(
+        !printed.contains("octo") && !printed.contains("hubot"),
+        "{printed}"
+    );
 
     let refused = json!({"data": null, "errors": [{"type": "RATE_LIMITED", "message": "slow"}]});
     assert_eq!(
