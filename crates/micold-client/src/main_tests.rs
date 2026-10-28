@@ -7708,6 +7708,20 @@ mod issue_source {
         );
     }
 
+    /// FR-002, US1.1: a GitHub ticket named only in the branch (the folder names none) is asked
+    /// for when the Overview opens.
+    #[test]
+    fn title_answer_a_ticket_only_in_the_branch_is_asked_for() {
+        let mut rig = titles_rig(true);
+        rig.app.core.worktree.worktrees[0].dir_name = "wt-b".into();
+        let work = crate::shell::issues::on_overview_opened(&mut rig.app);
+        settle(&mut rig.app, work);
+        let sent = remote_lists_sent(&mut rig.rx);
+        assert_eq!(sent.len(), 1, "the remotes are asked for");
+        answer_remotes(&mut rig.app, sent[0].0, github_remote());
+        assert_eq!(rig.source.lookup_calls(), vec![("o/r".to_string(), 42)]);
+    }
+
     /// On: the same steps read the title (the default is unchanged).
     #[test]
     fn with_the_switch_on_the_overview_still_reads_its_titles() {

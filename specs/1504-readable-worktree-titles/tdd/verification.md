@@ -113,12 +113,12 @@ test-first reds: they prove each test can fail, not that it was written first.
 | T002 | `first_line` keeps an empty line | `first_line_of_nothing_is_none`, `a_blank_issue_title_counts_as_unknown` |
 | T003 | `choose` skips no blank source | `a_source_that_normalises_to_nothing_is_skipped` (left `"   "`) |
 | T003 | session before spec | `each_source_wins_over_every_lower_one_in_order` (step 2) |
-| T003 | an empty branch is accepted | **survives**: no test passes `Some("")` as the branch; the fallback to the display name for it is untested |
+| T003 | an empty branch is accepted | survived; killed by new test `an_empty_branch_falls_through_to_the_folder` (left `(Branch, "")`), see below |
 | T004 | `Debug` prints the text | `a_location_titles_debug_leaves_its_text_out` |
 | T009 | `title_ticket` ignores the branch | `the_title_ticket_follows_the_contract_table` (`project-thread-t2a600` + `feat/1504-readable-titles`, left `None`) |
 | T010 | `State::issue_title` never knows a title | `a_ticket_only_in_the_branch_titles_the_card_and_the_row`, `the_folders_ticket_wins_over_the_branchs` |
 | T010 | `titles_to_fetch` asks without GitHub | `titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github` |
-| T010 | `worktree_tickets` passes no branch | **survives**: `request_titles` taking its tickets from the branch has no test; the branch ticket is tested through `title_ticket` and `titles_to_fetch` with tickets given by the test |
+| T010 | `worktree_tickets` passes no branch | survived; killed by new test `title_answer_a_ticket_only_in_the_branch_is_asked_for` (left `[]`), see below |
 | T011 | fingerprint ignores the branch | `worktrees_fingerprint_follows_the_branch` (`left != right`) |
 | T005 | `row_title` ignores a rename | `a_users_rename_wins_the_first_line_over_the_issue_title_and_the_branch` |
 | T005, T012 | `row_title` shows an empty title | `a_worktree_with_a_known_issue_title_reads_title_then_short_branch_and_sessions` and 2 more |
@@ -132,5 +132,15 @@ test-first reds: they prove each test can fail, not that it was written first.
 | M5 B2 | `NotOpenIssue` is a failure | `a_not_open_issue_and_an_overflowing_number_are_no_issue` |
 | M5 B2 | an overflowing number is a failure | same test |
 
-Findings 1 and 2 are remediated this way, with two survivors named plainly above. SC-005 still has
+Findings 1 and 2 are remediated this way. The two survivors were then killed by new tests (close.md
+rule 3), each shown red against its mutant and green on the real code:
+
+- `location_title::tests::an_empty_branch_falls_through_to_the_folder` (L1: a source that
+  normalises to nothing is skipped, which covers an empty branch): red with the branch filter
+  removed, `left: (Branch, "")`.
+- `main_tests::issue_source::title_answer_a_ticket_only_in_the_branch_is_asked_for` (FR-002,
+  US1.1: folder `wt-b`, branch `feat/42_crash`, the Overview opens, GitHub is asked for #42): red
+  with `worktree_tickets` passing no branch, `left: []`.
+
+All 24 mutants are now caught. SC-005 still has
 no test of its own (finding 6).
