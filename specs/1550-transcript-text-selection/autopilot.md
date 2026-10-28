@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: clarify
-- **Next step**: clarify unit, continued with the user's answer to the open escalation (FR-012): apply it to spec.md, record it in Clarifications and Decisions, run another clarify round if it changed a requirement, then plan
+- **Phase**: plan
+- **Next step**: plan unit: write plan.md for specs/1550-transcript-text-selection/spec.md (clarify done, no markers left)
 
 ## Pull requests
 
@@ -31,6 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | spec | Which values get copy controls? | Tool card identifying value (header), full input, full result, diff file path; code blocks keep #940's control; no whole-message control | agent-resolved | spec.md FR-015–FR-018 |
 | D4 | spec | Platform behaviour? | Identical on Linux/macOS/Windows; only Cmd vs Ctrl differs; LF line breaks everywhere | agent-resolved | spec.md Terms (Copy keys), Edge Cases (Cross-platform) |
 | D5 | clarify | FR-011: copy rendered markdown as visible text or source? | Visible rendered text as drawn; links copy shown text; no emphasis/heading/fence markup | agent-resolved | spec.md FR-010 ("as shown"), SC-001; user guide code-block copy "no fences, no tag" (#940 FR-011) |
+| D6 | clarify | FR-012: copy to clipboard on drag release, like the terminal view? | No: copy only on request (copy key, context menu Copy, copy control); release never writes the clipboard | decided by user | user answer 2026-10-28 ("No, copy only on request"); spec.md FR-012 |
 
 ## Review rounds
 
@@ -50,19 +51,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product decision the repo does not settle):
-
-- **Q (FR-012)**: When the user releases the pointer at the end of a drag in the structured
-  transcript, should the selection also be copied to the clipboard automatically?
-  - **(Recommended) No: copy only on a copy key, the context menu's Copy, or a copy control.** The
-    issue's "Expected" names Ctrl+C / Cmd+C as the copy action, not release; FR-004 already guards
-    the clipboard against plain clicks; the structured view is a document view (like a browser or
-    editor), where selecting never overwrites the clipboard, and auto-copy would silently replace
-    clipboard contents the user meant to paste into the composer.
-  - **Yes: copy on release, as the terminal view does** (docs/user-guide/worktrees-and-sessions.md
-    "the selection is copied to the clipboard automatically on release";
-    specs/006-real-terminal-emulator/spec.md FR-013). Consistent between the two session views;
-    empty selections never write (006 FR-013c).
+None.
 
 ## Follow-ups not done
 

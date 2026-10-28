@@ -47,6 +47,10 @@ is selected; BUG-1403).
   specs/1550-transcript-text-selection/spec.md#functional-requirements FR-010 "the selected text as
   shown" and SC-001 "matches the shown text character for character";
   docs/user-guide/worktrees-and-sessions.md code-block copy "no fences, no tag" (#940 FR-011))_
+- Q: Does releasing the pointer at the end of a drag also copy the selection to the clipboard, as
+  the terminal view does? → A: No. Finishing a selection never writes the clipboard; copying
+  happens only with Ctrl+C / Cmd+C, the context menu's Copy, or a copy control (FR-012).
+  _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -261,10 +265,10 @@ highlighted; right-click and choose Copy, and check the clipboard.
   (`*`, `_`, `` ` ``), heading `#`s, code fences or link targets; a link copies its shown text. List
   bullets and numbers, block-quote marks and table cells are copied as the characters the view
   draws for them, so the pasted text matches what is shown (FR-010, SC-001).
-- **FR-012**: Releasing the pointer at the end of a drag
-  [NEEDS CLARIFICATION: must also copy the selection to the clipboard automatically, as the
-  terminal view does, or must leave the clipboard unchanged until a copy key, menu or control is
-  used?].
+- **FR-012**: Releasing the pointer at the end of a drag (or a double- or triple-click selection)
+  MUST NOT change the clipboard. The selection is copied only on request: a copy key (FR-008), the
+  context menu's **Copy** (FR-013) or a copy control (FR-015–FR-018). This differs from the
+  terminal view, which copies on release.
 - **FR-013**: A right-click anywhere inside the transcript, on text or on a control, MUST open a
   menu with **Copy** (enabled only while a selection exists; copies it) and **Select all** (as
   FR-006); the right-click itself MUST NOT change or clear the selection, wherever it lands. The menu
