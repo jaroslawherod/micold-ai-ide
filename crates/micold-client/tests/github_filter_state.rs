@@ -388,7 +388,7 @@ fn a_label_chosen_in_one_list_moves_when_chosen_in_the_other() {
 }
 
 /// US1 AS5: removing one value keeps the others; Clear filters is 034's listing again.
-/// US1 AS6, FR-007: the active line names the active filters and is gone after Clear filters.
+/// US1 AS6, FR-007: the active line is gone after Clear filters (the naming half is in `the_statement_names_the_filter_while_one_is_active`).
 #[test]
 fn removing_a_value_and_clear_filters() {
     let mut state = excluding_both(vec![issue(42, "Crash on open", &["bug"])], true);
