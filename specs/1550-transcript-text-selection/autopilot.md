@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: M4a
-- **Next step**: M4a verify + reviews + gate, continuing the Handover
+- **Next step**: M4a PR (pushed; orchestrator opens it from the body in its scratchpad), then M4b
 
 ## Pull requests
 
@@ -75,6 +75,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 (scoped, sonnet) | 2 | d371bebf0d185118d9af6c681062e861aae0da8a:4de2424fca9a9a44108a5c0ea28f5e30e29cf581 | CLEAN: F1–F3 fixes hold, F4's reason stands, the `wake_at` edge-scroll change is sound |
 | Review B M3 (sonnet) | 1 | d371bebf0d185118d9af6c681062e861aae0da8a:4de2424fca9a9a44108a5c0ea28f5e30e29cf581 | CLEAN; Verify pass (material lib 441, client `ui::material` 648; showcase_completeness 46, material_builder_api 13 unfiltered) |
 | Visual pass M3 (headless render) | 1 | 4de2424fc | pass: `visual/m3-visual-pass.md`, `visual/m3-selectable-leaves.png` |
+| Review A M4a (code-review high, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN: 3 MINOR, all declined or deferred (below); the five handover deviations raised nothing |
+| Review B M4a (sonnet, headless) | 1 | c075d239edb9fb5794a20938776e24b2e64ec5ca:5868b588e642776496bfb67358be5e2e420e8e09 | CLEAN; Verify pass (parity 4, layout_snapshot 169, transcript_open_budget 6 release) |
 
 ## Declined review findings
 
@@ -91,14 +93,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A F8 | empty plain-text unit for an empty underived entry | MINOR: units mirror what is drawn; whether the plain renderer draws an empty line is checked by M4a's parity test. |
 | M2 | A F9 | `clear()` keeps `menu` | MINOR: the menu's Select all stays valid over a cleared selection and its Copy writes nothing; M4b's menu closes on outside clicks (`MenuDismissed`). |
 | M3 | A F4 | `SelectionArea` and each `Selectable` count clicks separately: a second click in an adjacent unit within 300 ms gives `on_press(2)` but `Hit.click: Single` | MINOR, same question as M2 A F3: the contract gives both counts (`on_press(clicks)`, `Hit.click`); which one the model trusts is M4b's wiring (M2's `hit` could start from `armed`'s count). Noted in *Follow-ups not done*. |
+| M4a | A F1 | `MarkdownView` holds a large code block back only with `on_show`, but drops its selectability on `large` alone | MINOR: the units side (`Units::markdown`, `derived.is_large`) also drops a large block on `large` alone, so view and copy agree (parity test); the transcript always sets `on_show`. |
+| M4a | A F2 | `thread_body` draws subagent thread cards with `row: None` (not selectable, not copied) | MINOR, deliberate per the M4a parity decision on #944's threads (X3, X5); kept in *Follow-ups not done* for M4b/M5. |
+| M4a | A F3 | `selectable_diff` rebuilds `diff_units` per draw for byte lengths | MINOR, performance: T034's slowest drag step is 27 ms against the 100 ms budget. |
 
 ## Handover
 
-M4a unit 2 (2026-10-28) implemented T033–T038 through a headless implementer (brief kept in the session scratchpad) and hit the 150k cap before verify. Done, committed locally, not pushed: 70fbacd3b (selectable leaves, parity test T033, T035–T038) and b2f976e21 (T034 budgets: select-all + copy 0.85 ms, slowest drag step 27 ms, release). Tasks T033–T038 ticked; tdd/cycle-log.md has an M4a section. Implementer's reported results: parity 4/4 over 35 fixtures (RICH/PLAIN, folded/open), layout_snapshot 169, features_transcript_selection 33, transcript_rich_renderers 7, showcase_completeness 46, material lib 442, client lib 1021, core selection 11; fmt + clippy clean.
-
-Next: verify.md (Verify commands of M4a), then Review A + B in fresh contexts (review.md), `scripts/gate.sh` after `git fetch origin && git merge origin/main`, push `claude/project-thread-zj503u`, write the PR body to the scratchpad path the orchestrator gave (no PR opened here).
-
-Reviewers should look hard at these deviations: (1) M3's `Selectable` now returns its child's layout node instead of wrapping it (so layout_snapshot paths stay unchanged) — check draw/update/operate/mouse_interaction pass `layout` consistently and hit-testing still uses the right bounds; (2) `PromptCard` gained `title_text`/`note_text` hooks for request titles and the Always allow note; (3) `Units::header` now drops the summary `[1]` when the card is open (two M2 tests changed); (4) `RowSelection::clip` (core) keys each settled markdown block's lazy; (5) the showcase `request_view` draws its request selectable at `End(0)`. Follow-up for M4b: a folded card's summary (Ellipsized) answers hits but draws no highlight.
+None.
 
 ## Open escalation
 
@@ -110,4 +111,5 @@ None.
 - `SelectMsg::Edge` changes no state in M2: the edge scroll is the shell's (M4b).
 - M3 A F4: the area's `on_press(clicks)` and a unit's `Hit.click` are counted separately; M4b decides which the model trusts (M2's `hit` starts from `Hit.click`).
 - M3 A F3 residual: a selected proportional `Text` is drawn as rich text (Advanced shaping, kerning) while an unselected one is the text widget (Auto shaping), so selecting kerned text can shift glyphs by subpixels, and in a rare case re-wrap a line. The measure follows the drawn child in both states. The visual pass of M4b/M5 should look for it.
-- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a's parity test decides whether they become selectable.
+- #944's subagent threads drawn inside entries (X3, X5) are not units: M4a draws them with `row: None` (neither selectable nor copied; M4a Review A F2). M4b/M5 decide whether they become units.
+- M4a: a folded card's summary (Ellipsized) answers hits but draws no highlight (M4b).
