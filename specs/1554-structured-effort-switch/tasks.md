@@ -250,6 +250,27 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [ ] T032 Run quickstart Part A and record the results in
   `specs/1554-structured-effort-switch/quickstart.md`
 
+## Phase 8: Daemon — a refused deferred pick is never asked again (M6; FR-005, found at close)
+
+Found by the close unit's quickstart Part A run: `a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both`
+failed about once in 100 runs with `efforts_asked` `[Some("low"), Some("high"), Some("low")]`.
+The idle pick's answer is settled (`settle_effort_ask` → `reapply_effort`, state.rs) before the
+deferred pick's refusal, written and answered first, has put the catalog's choice back, so the
+re-apply asks the CLI again for the refused deferred level.
+
+- [x] T033 [US1] Test in `daemon/tests/structured_effort.rs` that makes the order deterministic:
+  the idle pick's answer settled while the deferred pick's refusal is not yet handled (hold that
+  answer, as `hold_turn_end` holds the turn's end) → no `apply_flag_settings` for the refused
+  deferred level after the two picks; once the refusal is handled the choice is the one before
+  both, and the CLI is asked at most for that level (FR-005). Fails on main
+- [x] T034 Implement T033 in `daemon/src/state.rs`: `reapply_effort` does not re-apply a level
+  whose deferred pick is written and unanswered; the deferred answer's handling re-applies the
+  choice the catalog then holds when an idle settle was held back for it
+- [x] T035 [P] Stand-in (`daemon/tests/support/structured.rs`): the script's leading `models` and
+  `efforts` directives take effect before stdin is read, so a request written as soon as the
+  process started is answered (closes the `Rig::start` race behind the "the CLI's answer never
+  happened" and "Claude did not answer the effort change" flakes in `structured_effort`)
+
 ---
 
 ## Dependencies & Execution Order
@@ -258,7 +279,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - M1 (Phases 1–2) → M2 (Phase 3) → M3 (Phase 4) → M4 (Phase 5) → M5 (Phase 6). Each milestone
   builds only on earlier ones.
 - Within a phase, each implementation task follows the test tasks it names.
-- T032 runs in the close unit after M5.
+- M6 (Phase 8) after M5. T032 runs in the close unit after M6.
 
 ## Parallel Opportunities
 
@@ -353,3 +374,15 @@ the `docs-not-needed` label (M1 touches `micold-user-facing` client files only t
   micold-daemon --test structured_effort`; quickstart Part B 4–5, 7b
 - **Depends on**: M4
 - **Tier**: light
+
+### M6 — A refused deferred pick is never asked again
+
+- **Tasks**: T033–T035
+- **Deliverable**: when the CLI refuses a deferred pick and an idle pick made after it, the daemon
+  never asks the CLI again for the refused deferred level, whatever order the two answers are
+  handled in; the effort tests no longer race the stand-in's start
+- **Satisfies**: FR-005; SC-006 (the gate stays green)
+- **Verify**: `cargo test -p micold-daemon --test structured_effort` (the T033 test, and the whole
+  binary in a loop of 100 runs with no failure)
+- **Depends on**: M5
+- **Tier**: full (concurrency in `state.rs`)

@@ -110,6 +110,17 @@ static EFFORTS: Mutex<Option<Vec<String>>> = Mutex::new(None);
 /// The `initialize-effort` directives so far: a model's value and its effort fields' JSON.
 static INITIALIZE_EFFORTS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 
+/// Run a `models` or `efforts` directive: set its accept list. `false` for any other directive.
+fn set_answers(cmd: &str, arg: &str) -> bool {
+    let accept = Some(arg.split_whitespace().map(str::to_string).collect());
+    match cmd {
+        "models" => *MODELS.accept.lock().unwrap() = accept,
+        "efforts" => *EFFORTS.lock().unwrap() = accept,
+        _ => return false,
+    }
+    true
+}
+
 /// Answer an `apply_flag_settings` request when the `efforts` directive ran; `false` leaves it to
 /// the script.
 fn answer_apply_effort(line: &str) -> bool {
@@ -250,6 +261,16 @@ fn main() {
         let _ = writeln!(f, "start {}", std::process::id());
     }
 
+    let script = std::fs::read_to_string(".fake-stream").unwrap_or_default();
+    // The script's leading `models` and `efforts` lines take effect before stdin is read, so a
+    // request written as soon as the process started is answered as the script says.
+    for line in script.lines() {
+        let (cmd, arg) = line.split_once(' ').unwrap_or((line, ""));
+        if !set_answers(cmd, arg) {
+            break;
+        }
+    }
+
     let (lines_tx, lines_rx) = mpsc::channel::<String>();
     let (init_tx, init_rx) = mpsc::channel::<String>();
     std::thread::spawn(move || {
@@ -280,7 +301,6 @@ fn main() {
         }
     });
 
-    let script = std::fs::read_to_string(".fake-stream").unwrap_or_default();
     let mut out = std::io::stdout();
     let mut replies: Vec<(String, String)> = Vec::new();
     for line in script.lines() {
@@ -305,12 +325,8 @@ fn main() {
                 std::process::exit(arg.parse().unwrap_or(0));
             }
             "control" => control(&lines_rx, &mut out, arg),
-            "models" => {
-                *MODELS.accept.lock().unwrap() =
-                    Some(arg.split_whitespace().map(str::to_string).collect());
-            }
-            "efforts" => {
-                *EFFORTS.lock().unwrap() = Some(arg.split_whitespace().map(str::to_string).collect());
+            "models" | "efforts" => {
+                set_answers(cmd, arg);
             }
             "initialize-effort" => {
                 let (value, levels) = arg.split_once(' ').unwrap_or((arg, "none"));

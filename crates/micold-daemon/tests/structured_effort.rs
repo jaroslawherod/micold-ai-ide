@@ -231,10 +231,23 @@ fn daemon(store: &Path, history: &Path) -> Arc<DaemonState> {
 
 /// [`daemon`] with no input driver: the test takes the turn ends and hands them on.
 fn undriven(store: &Path, history: &Path) -> Arc<DaemonState> {
+    let state = unanswered(store, history);
+    micold_daemon::server::spawn_effort_answers(Arc::clone(&state));
+    state
+}
+
+/// A daemon that follows the CLIs' answers to model changes and nothing else.
+fn unanswered(store: &Path, history: &Path) -> Arc<DaemonState> {
     let state = Arc::new(DaemonState::new(load_catalog(store)));
     state.set_history_store(HistoryStore::new(history.to_path_buf(), true));
     micold_daemon::server::spawn_model_answers(Arc::clone(&state));
-    micold_daemon::server::spawn_effort_answers(Arc::clone(&state));
+    state
+}
+
+/// [`daemon`] whose CLIs' answers to deferred effort changes the test takes and hands on.
+fn effort_answers_held(store: &Path, history: &Path) -> Arc<DaemonState> {
+    let state = unanswered(store, history);
+    micold_daemon::server::spawn_input_driver(Arc::clone(&state));
     state
 }
 
@@ -325,6 +338,16 @@ impl Rig {
     /// One structured session over [`undriven`].
     fn undriven() -> Self {
         Self::build(1, AiCli::ClaudeCode, SessionKind::Structured, undriven)
+    }
+
+    /// One structured session over [`effort_answers_held`].
+    fn effort_answers_held() -> Self {
+        Self::build(
+            1,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+            effort_answers_held,
+        )
     }
 
     fn build(
@@ -1131,6 +1154,49 @@ async fn a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level
     );
     assert!(asked[2..].iter().all(Option::is_none), "{asked:?}");
     assert_eq!(rig.effort(0), EffortChoice::Default);
+}
+
+/// M6 T033 (FR-005): an idle pick refused while the refusal of the deferred pick before it is not
+/// yet handled never has the CLI asked again for the refused deferred level, which the catalog
+/// still holds then; once that refusal is handled the choice is the one before both.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_never_asks_it_again() {
+    use micold_daemon::state::EffortAnswer;
+    let rig = Rig::effort_answers_held();
+    let (id, dir) = (rig.ids[0], rig.dir(0));
+    let mut answers = rig
+        .state
+        .effort_answers()
+        .take_receiver()
+        .expect("the effort answers");
+    rig.start_turns(0, "efforts medium\n").await;
+    let mut window = Window::connect(&rig.state).await;
+    assert_ok(&window.request(say(1, id, "one"), 1).await);
+    eventually("the message on stdin", || stdin_lines(dir).len() == 1);
+    assert_ok(&window.request(pick(2, id, &level("low")), 2).await);
+    std::fs::write(dir.join("turn-1"), "").unwrap();
+    let held = tokio::time::timeout(Duration::from_secs(15), answers.recv())
+        .await
+        .expect("the deferred pick is answered")
+        .expect("the feed is open");
+    assert_eq!(held, (id, EffortAnswer::Refused(level("low"))));
+    let answer = window.request(pick(3, id, &level("high")), 3).await;
+    assert_eq!(refused(&answer).0, ErrorKind::Refused, "{answer:?}");
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        efforts_asked(dir),
+        [Some("low".to_owned()), Some("high".to_owned())],
+        "the refused deferred level is not asked for again"
+    );
+    rig.state.follow_effort_answer(held.0, held.1);
+    assert_eq!(rig.effort(0), EffortChoice::Default);
+    std::thread::sleep(Duration::from_millis(200));
+    let asked = efforts_asked(dir);
+    assert_eq!(
+        asked[..2],
+        [Some("low".to_owned()), Some("high".to_owned())]
+    );
+    assert!(asked[2..].iter().all(Option::is_none), "{asked:?}");
 }
 
 /// M3 review (research R4): a model change answered while an idle pick's answer is awaited
