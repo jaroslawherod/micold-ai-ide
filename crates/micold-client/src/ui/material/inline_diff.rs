@@ -10,7 +10,9 @@
 //! changed, a marked "No newline at end" row says which side lacks it.
 //!
 //! Over the size limits the caller says so with [`InlineDiff::large`]: the diff view's
-//! `large_message` counts and **Show in full** take the hunks' place (FR-019).
+//! `large_message` counts and **Show in full** take the hunks' place (FR-019). With
+//! [`InlineDiff::copy_path`] the path has the code block's copy control beside it (feature 1550,
+//! FR-017).
 //!
 //! Everything shown is owned, so the element is `'static` and can sit inside iced `lazy`.
 
@@ -23,9 +25,11 @@ use micold_core::review::diff::{LineKind, SchemeSpans, SideSpans};
 use micold_core::structured::edit_diff::{EditDiff, EditHunk};
 use micold_core::tokens::{spacing, Roles};
 
+use crate::features::transcript_rich::CopyState;
+
 use super::code_block::{
-    code_shape, drawn_range, expand_tabs, in_line, selectable_line, sideways, MakeSelectable,
-    SHOW_IN_FULL,
+    code_shape, copy_control, drawn_range, expand_tabs, in_line, selectable_line, sideways,
+    MakeSelectable, SHOW_IN_FULL,
 };
 use super::diff_view::{large_message, line_text, line_text_selected, marker, tinted};
 use super::selectable_text::{Hit, Measure};
@@ -41,6 +45,7 @@ pub struct InlineDiff<'a, M> {
     spans: Option<SideSpans>,
     large: Option<M>,
     select: Option<SelectPart<M>>,
+    copy_path: Option<(Option<CopyState>, M)>,
 }
 
 /// A selectable piece of an inline diff, each its own unit (feature 1550, R2): the path, hunk
@@ -70,7 +75,15 @@ impl<'a, M: Clone + 'static> InlineDiff<'a, M> {
             spans: None,
             large: None,
             select: None,
+            copy_path: None,
         }
+    }
+
+    /// The path's copy control (feature 1550, FR-017): what the last copy came to (`None` is
+    /// idle), and what a press, Enter or Space sends. It sits beside the path.
+    pub fn copy_path(mut self, state: Option<CopyState>, on_copy: M) -> Self {
+        self.copy_path = Some((state, on_copy));
+        self
     }
 
     /// The lines' syntax colours in the current scheme: every hunk's lines in order, numbered from
@@ -243,7 +256,17 @@ impl<'a, 'b, M: Clone + 'static> From<InlineDiff<'a, M>> for Element<'b, M> {
         let path = Text::new(diff.path.clone(), TypeRole::Label, r)
             .monospace()
             .wrapping(Wrapping::WordOrGlyph);
-        let mut parts = column![part_text(path, DiffPart::Path, select)].spacing(spacing::SM);
+        let path: Element<'static, M> = match view.copy_path {
+            Some((state, on_copy)) => row![
+                part_text(path.width(Length::Fill), DiffPart::Path, select),
+                copy_control(state, on_copy, r),
+            ]
+            .spacing(spacing::SM)
+            .align_y(Alignment::Center)
+            .into(),
+            None => part_text(path, DiffPart::Path, select),
+        };
+        let mut parts = column![path].spacing(spacing::SM);
         match view.large {
             Some(on_show) => {
                 parts = parts.push(
@@ -277,8 +300,14 @@ impl<'a, 'b, M: Clone + 'static> From<InlineDiff<'a, M>> for Element<'b, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{roles, Mounted, ShownTexts};
+    use super::super::code_block::tests::{glyph_at, release};
+    use super::super::code_block::COPIED;
+    use super::super::test_support::{named_key, roles, Focusables, Mounted, ShownTexts};
     use super::*;
+    use crate::features::transcript_rich::Ticket;
+    use crate::icons::Icon;
+    use iced::advanced::mouse;
+    use iced::keyboard::key::Named;
     use iced::Point;
     use micold_core::structured::edit_diff::edit_diff;
 
@@ -435,5 +464,54 @@ mod tests {
             line.bounds.y + line.bounds.height / 2.0,
         );
         assert_eq!(m.press(at), vec!["Lines(0) 4".to_owned()]);
+    }
+
+    fn with_copy(diff: &EditDiff, state: Option<CopyState>) -> InlineDiff<'_, String> {
+        InlineDiff::new(diff, roles()).copy_path(state, "copy path".to_string())
+    }
+
+    /// Feature 1550 (C-3, C-4, FR-017, FR-018): the path's copy control is the diff's one
+    /// keyboard focus stop, and a press, Enter and Space each send its message.
+    #[test]
+    fn the_path_copy_control_copies_by_pointer_enter_and_space() {
+        let diff = short_and_long();
+        let mut m = Mounted::new(with_copy(&diff, None));
+        assert_eq!(m.drive(Focusables(0)), Some(1), "one focus stop");
+        let at = glyph_at(&mut m, Icon::Copy);
+        let mut out = m.press(at);
+        out.extend(release(&mut m, at));
+        assert_eq!(out, vec!["copy path".to_string()], "the pointer copies");
+        for key in [Named::Enter, Named::Space] {
+            let mut m = Mounted::new(with_copy(&diff, None));
+            m.focus_next();
+            let out = m.send(named_key(key), mouse::Cursor::Unavailable);
+            assert_eq!(out, vec!["copy path".to_string()], "{key:?} copies");
+        }
+    }
+
+    /// Feature 1550 (C-3, FR-018): the control sits on the path's line, after it, and confirms as
+    /// the code block's does; without one the diff has no focus stop.
+    #[test]
+    fn the_path_copy_control_sits_beside_the_path_and_confirms() {
+        let diff = short_and_long();
+        let copied = Some(CopyState::Copied(Ticket::posed(1)));
+        let mut m = Mounted::new(with_copy(&diff, copied));
+        let painted = m.painted_text();
+        let find = |content: &str| {
+            painted
+                .iter()
+                .find(|p| p.content == content)
+                .unwrap_or_else(|| panic!("`{content}` is painted: {painted:?}"))
+                .bounds
+        };
+        let (path, words) = (find("src/a.rs"), find(COPIED));
+        let middle = words.y + words.height / 2.0;
+        assert!(
+            middle > path.y && middle < path.y + path.height,
+            "on the path's line: {path:?} {words:?}"
+        );
+        assert!(words.x > path.x, "after the path: {path:?} {words:?}");
+        let mut plain = Mounted::new(InlineDiff::<String>::new(&diff, roles()));
+        assert_eq!(plain.drive(Focusables(0)), Some(0), "no control, no stop");
     }
 }

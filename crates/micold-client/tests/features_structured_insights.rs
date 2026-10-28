@@ -509,3 +509,58 @@ fn forgetting_a_structured_session_drops_it_from_both_features() {
     assert!(app.structured_transcript.transcript(s).is_none());
     assert!(app.structured_insights.insights(s).is_none());
 }
+
+/// Feature 1550 (FR-015, FR-018): a copy control on a card in an open subagent thread copies that
+/// card's value through the root, which finds the entry in the thread; once the thread folds, the
+/// key is held nowhere and the copy asks for nothing.
+#[test]
+fn a_copy_control_on_a_card_in_an_open_thread_copies_its_value() {
+    use micold_client::features::structured_transcript::TranscriptMsg;
+    use micold_client::features::transcript_rich::CopyTarget;
+    use micold_client::features::Outcome;
+
+    let (mut app, s) = (App::default(), SessionId::new());
+    let events = seq(
+        0,
+        [
+            tool_use("p", "Agent", "{}"),
+            with_parent(tool_use("b", "Bash", r#"{"command":"ls -la /tmp"}"#), "p"),
+        ],
+    );
+    let _jobs = app.structured_events(s, 0, &events, false, &micold_client::ui::syntax::GRAMMAR);
+    let toggle = |app: &mut App| {
+        app.update(Message::Session(SessionMsg::Insights(
+            InsightsMsg::ToggleThread {
+                session: s,
+                parent: "p".into(),
+            },
+        )))
+    };
+    let copy = || TranscriptMsg::Copy {
+        session: s,
+        key: EntryKey::Tool("b".into()),
+        target: CopyTarget::ToolValue,
+    };
+    toggle(&mut app);
+    assert!(
+        app.structured_transcript
+            .transcript(s)
+            .and_then(|t| t.entry(&EntryKey::Tool("b".into())))
+            .is_none(),
+        "the card is the thread's, not the main transcript's"
+    );
+    let effect = app.update_transcript(copy());
+    assert!(
+        matches!(
+            effect.outcomes.as_slice(),
+            [Outcome::ClipboardWriteChecked { text, .. }] if text == "ls -la /tmp"
+        ),
+        "the thread's card copies its command: {effect:?}"
+    );
+    toggle(&mut app);
+    assert!(app.structured_insights.thread(s, "p").is_none());
+    assert!(
+        app.update_transcript(copy()).outcomes.is_empty(),
+        "a folded thread's card is held nowhere: nothing to copy"
+    );
+}

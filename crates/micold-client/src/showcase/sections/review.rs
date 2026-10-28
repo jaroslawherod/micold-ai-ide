@@ -920,7 +920,7 @@ fn edit_input(pose: DiffPose) -> (&'static str, &'static str) {
         ),
         DiffPose::MultiEdit => (
             "MultiEdit",
-            r#"{"file_path":"src/main.rs","edits":[{"old_string":"let port = 8080;","new_string":"let port = config.port;"},{"old_string":"println!(\"started\");","new_string":"println!(\"started on {port}\");\nlog::info!(\"listening\");"}]}"#,
+            r#"{"file_path":"crates/server/src/listener/configuration/main.rs","edits":[{"old_string":"let port = 8080;","new_string":"let port = config.port;"},{"old_string":"println!(\"started\");","new_string":"println!(\"started on {port}\");\nlog::info!(\"listening\");"}]}"#,
         ),
         DiffPose::Write => (
             "Write",
@@ -968,7 +968,10 @@ static EDIT_DIFFS: LazyLock<
 pub fn inline_diff_sample(pose: DiffPose, roles: Roles) -> Element<'static, Message> {
     let (diff, spans) = &EDIT_DIFFS[pose as usize];
     let spans = &spans[usize::from(roles.scheme() == ColorScheme::Dark)];
-    let view = InlineDiff::new(diff, roles).spans(spans);
+    // Feature 1550 (FR-017): the path's copy control, idle.
+    let view = InlineDiff::new(diff, roles)
+        .spans(spans)
+        .copy_path(None, Message::NoOp);
     match pose {
         DiffPose::Large => view.large(Message::NoOp).into(),
         _ => view.into(),

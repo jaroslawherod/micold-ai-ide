@@ -11,7 +11,7 @@ use std::cell::Cell;
 
 use iced::Size;
 use micold_client::features::structured_transcript::State;
-use micold_client::features::transcript_rich::DerivedBody;
+use micold_client::features::transcript_rich::{CopyTarget, DerivedBody};
 use micold_client::ui::syntax::GRAMMAR;
 use micold_client::ui::transcript::{
     edit_meta, tool_header_counted, AssistantText, Block, BlockCache, BlockRef, BlockRenderers,
@@ -497,16 +497,17 @@ fn the_lazy_key_changes_with_the_stamp_and_only_then() {
     assert!(frame(&cache) > 0, "the first frame draws the reply");
     assert_eq!(frame(&cache), 0, "nothing changed: no entry is rebuilt");
 
-    let (key, code) = entries(&state, session)
+    let (entry, code) = entries(&state, session)
         .into_iter()
         .find_map(|e| match cache.get(session, e.key()).map(|d| &d.body) {
-            Some(DerivedBody::Text(doc)) => doc.code_blocks().next().map(|(id, ..)| (e.key(), id)),
+            Some(DerivedBody::Text(doc)) => doc.code_blocks().next().map(|(id, ..)| (e, id)),
             _ => None,
         })
         .expect("markdown-turn's reply holds a code block");
+    let key = entry.key();
     let stamp = cache.get(session, key).unwrap().stamp;
     cache
-        .copy(session, key, code)
+        .copy(session, entry, CopyTarget::Code(code))
         .expect("the code block copies");
     assert_ne!(
         cache.get(session, key).unwrap().stamp,
@@ -519,4 +520,109 @@ fn the_lazy_key_changes_with_the_stamp_and_only_then() {
         "the stamp changed: that entry, and only it, is rebuilt"
     );
     assert_eq!(frame(&cache), 0, "and not again");
+}
+
+/// The `Copy` targets `lines`' view (every card unfolded) sends: by a press on each painted copy
+/// glyph, then by Enter and by Space on each keyboard focus stop.
+fn copy_targets(lines: &[String]) -> [Vec<String>; 3] {
+    use iced::advanced::mouse;
+    use iced::keyboard::key::Named;
+    use iced::mouse::Button;
+    use iced::{Event, Point};
+    use micold_client::icons::Icon;
+    use micold_material::test_support::{named_key, Focusables, Mounted as Live};
+
+    let session = SessionId::new();
+    let (mut state, cache) = replayed(session, lines);
+    open_every_card(&mut state, session);
+    let renderers = BlockRenderers::RICH;
+    let mount = || {
+        Live::new_in(
+            view_of(&state, session, &renderers, &cache).map(|m| format!("{m:?}")),
+            ROOM,
+        )
+    };
+    let copies = |out: Vec<String>| -> Vec<String> {
+        out.into_iter()
+            .filter(|m| m.starts_with("Copy {"))
+            .map(|m| {
+                m.rsplit("target: ")
+                    .next()
+                    .unwrap()
+                    .trim_end_matches(" }")
+                    .to_owned()
+            })
+            .collect()
+    };
+    let glyph = Icon::Copy.glyph().to_string();
+    let mut m = mount();
+    let at: Vec<Point> = m
+        .painted_text()
+        .into_iter()
+        .filter(|p| p.content == glyph)
+        .map(|p| Point::new(p.bounds.center_x(), p.bounds.center_y()))
+        .collect();
+    let mut pressed = Vec::new();
+    for at in at {
+        let mut m = mount();
+        let mut out = m.press(at);
+        out.extend(m.send(
+            Event::Mouse(mouse::Event::ButtonReleased(Button::Left)),
+            mouse::Cursor::Available(at),
+        ));
+        pressed.extend(copies(out));
+    }
+    let stops = mount().drive(Focusables(0)).unwrap_or(0);
+    let keyed = |key: Named| {
+        (0..stops)
+            .flat_map(|i| {
+                let mut m = mount();
+                for _ in 0..=i {
+                    m.focus_next();
+                }
+                copies(m.send(named_key(key), mouse::Cursor::Unavailable))
+            })
+            .collect::<Vec<_>>()
+    };
+    [pressed, keyed(Named::Enter), keyed(Named::Space)]
+}
+
+/// Feature 1550 (US3 scenarios 1–3 and 5, FR-015, FR-016, FR-018, C-1, C-2, C-4): an unfolded
+/// tool card with a result has three copy controls, its header's value, its input and its result,
+/// each sending its own target by a press, by Enter and by Space, and nothing else copies.
+#[test]
+fn an_unfolded_tool_card_copies_its_value_input_and_result() {
+    let want = ["ToolValue", "ToolInput", "ToolResult"];
+    for (how, got) in ["press", "Enter", "Space"]
+        .into_iter()
+        .zip(copy_targets(&fixture_lines("tool-turn")))
+    {
+        assert_eq!(got, want, "by {how}");
+    }
+}
+
+/// Feature 1550 (FR-015, FR-016, C-1, C-2): a tool whose summary shows no value has no header
+/// control, and before its result arrives a card has no result control.
+#[test]
+fn a_card_has_a_header_control_only_with_a_value_and_a_result_control_only_with_a_result() {
+    let unnamed: Vec<String> = fixture_lines("tool-turn")
+        .into_iter()
+        .map(|l| l.replace("\"name\":\"Read\"", "\"name\":\"Lookup\""))
+        .collect();
+    let [pressed, ..] = copy_targets(&unnamed);
+    assert_eq!(
+        pressed,
+        ["ToolInput", "ToolResult"],
+        "no value, no header control"
+    );
+    let before_result: Vec<String> = fixture_lines("tool-turn")
+        .into_iter()
+        .take_while(|l| !l.contains("\"type\":\"tool_result\""))
+        .collect();
+    let [pressed, ..] = copy_targets(&before_result);
+    assert_eq!(
+        pressed,
+        ["ToolValue", "ToolInput"],
+        "no result, no result control"
+    );
 }
