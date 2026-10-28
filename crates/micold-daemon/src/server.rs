@@ -904,14 +904,13 @@ where
                 crate::state::EffortPick::Answered(result) => {
                     state.send(id, effort_answer(req, result))
                 }
-                crate::state::EffortPick::Stored(effort) => {
+                crate::state::EffortPick::Stored => {
                     let state = Arc::clone(state);
                     tokio::spawn(async move {
                         let noted = Arc::clone(&state);
-                        let _ = tokio::task::spawn_blocking(move || {
-                            noted.note_effort_changed(session, effort)
-                        })
-                        .await;
+                        let _ =
+                            tokio::task::spawn_blocking(move || noted.note_effort_changed(session))
+                                .await;
                         state.send(id, effort_answer(req, Ok(())));
                     });
                 }

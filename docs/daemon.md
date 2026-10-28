@@ -316,8 +316,9 @@ then, and a stored choice never stops a launch. What happens depends on the sess
   the reason, and the choice stays as it was.
 - **Running a turn.** For now the request is answered `OperationError` (`Busy`, "The session is
   busy; the effort can be changed when the turn ends"). Nothing is saved or written.
-- **Not running.** The choice is saved, an `EffortChanged` note goes into the event history, and the
-  request is answered `OperationOk`. The next launch uses it.
+- **Not running.** The choice is saved, an `EffortChanged` note naming the saved choice goes into
+  the event history, and the request is answered `OperationOk`. The next launch uses it. A pick of
+  the choice already saved writes no note, and a late answer to an earlier pick never replaces it.
 - **A terminal session.** The choice is saved for the next launch and the request is answered
   `OperationError` (`Refused`, "Effort is changed from the structured view; the choice is used at
   the next launch").

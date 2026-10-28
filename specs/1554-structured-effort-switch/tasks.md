@@ -156,7 +156,8 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
   `EffortAsk` in `daemon/src/structured.rs` (over `send_control`, as `ask_model` / `model_answer`);
   `DaemonState::pick_effort` with `EffortPicks { latest, kept }` and `SpawnPlan.effort` (the
   effective level from the latest `CommandsReported` models and the record's model choice, R3) in
-  `daemon/src/state.rs`; `LaunchSpec.effort` in `daemon/src/ops.rs` `start_with_prompt`; dispatch of
+  `daemon/src/state.rs`; `LaunchSpec.effort` at both `LaunchSpec` sites in `daemon/src/state.rs`
+  (`start_session_gated`, `respawn_primary`); dispatch of
   `SetSessionEffort` in `daemon/src/server.rs`; `SessionSummary.effort` filled from the record
 - [x] T017 [P] Describe `SetSessionEffort`, its answers per session state, `--effort` at launch, the
   effective level (FR-010a) and the `apply_flag_settings` request beside the `SetSessionModel`
