@@ -34,9 +34,17 @@ String`, and `structured::transcript::summary::work_value(name, input_json) -> O
 
 ```rust
 pub fn entry_units<'a>(entry: &'a Entry, open: bool, derived: Option<&'a Derived>) -> Vec<(TextPath, Cow<'a, str>)>;
-pub fn units<'a>(row: &RowPos, view: &'a TranscriptView<'a>) -> Vec<(TextPath, Cow<'a, str>)>; // every row kind
-pub fn retain_shown(&mut self, project: &Path, shown: &[TerminalRef]);
-pub fn copy_text(transcript: &Transcript, open: &HashSet<EntryKey>, cache: &RichCache, sel: &Selection) -> String;
+pub struct TranscriptView<'a> {                  // new: what the view draws for one session, render-free
+    pub transcript: &'a Transcript,               // entries, omitted count (Row::Omitted)
+    pub open: &'a HashSet<EntryKey>,              // fold state (structured_transcript)
+    pub cache: Option<&'a Derived>,              // the session's RichCache entries (transcript_rich)
+    pub prompts: Option<&'a permission_prompts::State>, // placed request blocks and resolutions (#942)
+    pub session: SessionId,
+}
+pub fn rows(view: &TranscriptView) -> Vec<RowPos>;  // every row in drawing order, as ui/transcript draws them
+pub fn units<'a>(row: &RowPos, view: &TranscriptView<'a>) -> Vec<(TextPath, Cow<'a, str>)>; // every row kind
+pub fn retain_shown(&mut self, sessions: &[SessionId], shown: &[TerminalRef]);
+pub fn copy_text(view: &TranscriptView, sel: &Selection) -> String;
 impl State { pub fn update(&mut self, msg: SelectMsg, ...) -> Effect; pub fn applied(&mut self, session, transcript, ...); }
 ```
 
@@ -60,8 +68,9 @@ impl State { pub fn update(&mut self, msg: SelectMsg, ...) -> Effect; pub fn app
 - **S-5 Stability**: appending entries, growing an entry after the focus, or changing entries
   outside the range leaves `anchor`, `focus` and `copy_text` unchanged. FR-019, SC-005.
 - **S-6 Clearing**: the selection is `None` after a rebuild, the eviction of its anchor or focus
-  entry, a change of the omitted count while an endpoint is in the omitted notice, a change of the
-  placed request list while a prompt row is in range, a toggle of an entry in range, a change of
+  entry, a change of the omitted count while an endpoint is in the omitted notice, a prompt row
+  (`Under::Prompt`, `End`) appearing, leaving or changing at or between `bounds()` (so a request
+  block newly drawn inside the range never alters `copy_text` silently, S-5), a toggle of an entry in range, a change of
   the selected substring of an entry in range, `forget(session)`, or `retain_shown` without the
   session (no pane shows it). A test with two panes: switching one pane to another session clears
   that session's selection and leaves the other pane's; a `swap` keeps both. FR-019.

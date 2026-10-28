@@ -200,11 +200,15 @@ screen rectangles from the tree each frame, the very coupling R5 avoids).
 **Decision**: `features/transcript_selection.rs` clears a session's selection when: the transcript
 rebuilds (`Transcript::rebuilds()` changed), the anchor or focus entry is evicted from the front
 (FR-020 bound), an endpoint lies in the omitted notice and the omitted count changes (its text
-changed), the placed request list changes while a prompt row (`Under::Prompt`, `End`) is in range
-(their indices shifted), a card holding part of the range is folded or unfolded (`TranscriptMsg::Toggle` on an
+changed), a prompt row (`Under::Prompt`, `End`) appears, leaves or changes at or between the
+selection's bounds (indices shifted or text added inside the range; compared on the placed list
+before and after each prompt message), a card holding part of the range is folded or unfolded (`TranscriptMsg::Toggle` on an
 entry in range), no pane of the project's layout shows the session any more (`shell/panes.rs::sync`, run after
 every message, already computes the shown terminals as `now`; it calls
-`transcript_selection.retain_shown(project, &now)` *(new)*, which covers `show_or_focus`,
+`transcript_selection.retain_shown(&sessions, &now)` *(new)*, `sessions` the project's sessions
+(`app.core.workspace.sessions[project]`) and `now` filtered to `SessionProcess::Primary` terminals
+(the pane that draws a session's transcript), so a selection is dropped only for this project's
+sessions no pane shows; which covers `show_or_focus`,
 `PaneMsg::Show`, `close` and `prune` in one place; `swap` keeps the session shown and its
 selection), or the window forgets the session. After each applied `StructuredEvents` message,
 for each entry **in range whose revision changed**, it compares the selected substring of that entry

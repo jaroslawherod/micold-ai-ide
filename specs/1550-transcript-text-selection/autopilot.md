@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
 - **Phase**: plan
-- **Next step**: plan unit: plan review round 2 (scoped, sonnet) on the F1–F5 fixes
+- **Next step**: plan unit: plan review round 3 (scoped, sonnet) on the round 2 fixes
 
 ## Pull requests
 
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 14b551961ac69d5a737bde175d79033eaadcc4f0:828bc8e24442d9c9685869c35fe69134934bd233 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Spec | 2 | 80048701cd16dc386ae196e8da6d4dd7a429becb:828bc8e24442d9c9685869c35fe69134934bd233 | CLEAN (2 MINOR fixed: rewrap, US2 scenario 6 for FR-019a) |
 | Plan | 1 | 94244e6c1589e20bfeeeb532e3c9cd56beb33cee:783f9af1dc50a9469289c5e39f0e25d6a0ad62d2 | CHANGES: 2 MAJOR, 3 MINOR (all fixed: F1 RowPos row key, F2 M4 split into M4a/M4b, F3 retain_shown in shell/panes.rs::sync, F4 `focused` input to transcript_key, F5 EditDiff::path) |
+| Plan | 2 | 3974e3a581dc83999537a082f2459b51cb3471c0:6e22abe4c36f2ceabc272035bb95f51647ae92db | CHANGES: 1 MAJOR, 2 MINOR (all fixed: TranscriptView defined, retain_shown session/Primary mapping, prompt rows inside bounds clear) |
 
 ## Declined review findings
 

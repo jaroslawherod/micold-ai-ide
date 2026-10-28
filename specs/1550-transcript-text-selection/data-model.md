@@ -90,14 +90,27 @@ Per window, `HashMap<SessionId, SessionSelection>`:
 
 A session's entry is dropped when no pane of its project's layout shows it any more (FR-019 "pane
 switches to another session"): `shell/panes.rs::sync`, which runs after every message and already
-computes the layout's shown terminals (`now`), calls `transcript_selection.retain_shown(project,
-&now)` *(new)*. That one call covers every way a pane changes session (`show_or_focus`,
+computes the layout's shown terminals (`now`), calls `transcript_selection.retain_shown(&sessions,
+&now)` *(new)*: `sessions` is the active project's sessions (`app.core.workspace.sessions[project]`,
+so no project field is stored), and a session is kept iff `now` holds a `TerminalRef { session,
+process: SessionProcess::Primary }` (the pane drawing its transcript; a pane on one of its shells
+does not count). That one call covers every way a pane changes session (`show_or_focus`,
 `PaneMsg::Show`, `close`, `prune`); `swap` keeps the session shown and keeps its selection; a
 project switch leaves the other project's layout, and so its selections, as they are.
 
 The window's transcript focus is not here: it is `features/window.rs` `State::focused_field ==
 Some(FieldId::Transcript(session))` *(new variant)*, joined through `ui/focus.rs` like every other
 field (R5, R8).
+
+## TranscriptView *(new, `features/transcript_selection.rs`)*
+
+The render-free inputs that decide what one session's transcript draws, borrowed from the window
+state: `transcript: &Transcript` (entries, omitted count), `open: &HashSet<EntryKey>` (fold state,
+`features/structured_transcript.rs`), `cache: Option<&Derived>` (the session's `RichCache` entries,
+`features/transcript_rich.rs`), `prompts: Option<&permission_prompts::State>` (placed request
+blocks and resolution rows, #942), `session`. `rows(view)` lists the `RowPos`es in drawing order,
+from the same inputs `ui/transcript/mod.rs` uses; `units(row, view)` and `copy_text(view, sel)`
+read only this. Built in `app.rs` where the selection messages are applied; owned by M2.
 
 ## Unit *(new, `features/transcript_selection.rs::units`)*
 

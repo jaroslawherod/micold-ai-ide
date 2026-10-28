@@ -129,7 +129,7 @@ crates/micold-client/src/
 ├── ui/material/markdown_view.rs         # .selection(..)/.on_hit(..): TextPath per inline run, marker, cell
 ├── ui/material/code_block.rs            # selectable lines (full line text)
 ├── ui/material/inline_diff.rs           # selectable path/labels/lines; DiffPath copy control
-├── shell/panes.rs                      # sync: retain_shown(project, &now) drops selections no pane shows
+├── shell/panes.rs                      # sync: retain_shown(&sessions, &now) drops selections no pane shows
 ├── shell/transcript.rs                  # Edge → scroll_by on transcript_scroll_id; copy outcome
 └── showcase/                            # entries for the two components
 crates/micold-client/tests/
