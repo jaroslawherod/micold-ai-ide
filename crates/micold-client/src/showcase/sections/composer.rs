@@ -85,7 +85,9 @@ pub fn attachment_chip_sample<'a>(roles: Roles) -> Element<'a, Message> {
 }
 
 /// `AttachmentChip` — a dropped picture in the draft: its preview, its name, and the remove
-/// control (hover it for its label); then a name too long for the chip, cut.
+/// control (hover it for its label); a name too long for the chip, cut; then the composer's
+/// **Add attachment** button, enabled and inert (#1464 FR-014; hover shows the tooltip, Tab
+/// reaches it, Enter or Space presses it).
 pub fn attachment_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -98,6 +100,16 @@ pub fn attachment_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
                 "a long file name",
                 AttachmentChip::new(LONG_ATTACHMENT_NAME, PREVIEW.clone(), roles)
                     .on_remove(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "Add attachment, enabled",
+                crate::ui::composer::attach_button(roles, Some(Message::NoOp)),
+                roles,
+            ),
+            posed(
+                "Add attachment, disabled",
+                crate::ui::composer::attach_button(roles, None),
                 roles,
             ),
         ],
@@ -237,26 +249,5 @@ pub fn command_palette<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
             ),
         ],
         Layout::FullWidth,
-    )
-}
-
-/// The composer's **Add attachment** button (#1464 FR-014): enabled, and inert while the session
-/// cannot accept input or a picker is open. Hover shows the tooltip; Tab reaches it, and Enter or
-/// Space presses it (quickstart B, T040).
-pub fn attach_button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    arrange(
-        vec![
-            posed(
-                "enabled",
-                crate::ui::composer::attach_button(roles, Some(Message::NoOp)),
-                roles,
-            ),
-            posed(
-                "disabled",
-                crate::ui::composer::attach_button(roles, None),
-                roles,
-            ),
-        ],
-        Layout::Inline,
     )
 }
