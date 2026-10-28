@@ -163,15 +163,10 @@ impl Selection {
 
     /// The selected range, normalised (start before end) and expanded by the granularity.
     pub fn bounds(&self) -> (TextPos, TextPos) {
-        let (first, last) = if self.anchor.at <= self.focus.at {
-            (&self.anchor, &self.focus)
-        } else {
-            (&self.focus, &self.anchor)
-        };
-        let (start, end) = (first.start(), last.end());
-        // Two ends in one word or line: the expansion of the later end may start earlier.
-        let start = start.min(last.start());
-        let end = end.max(first.end());
+        // Each end covers its word or line; the selection runs from the earlier start to the
+        // later end, whichever end the gesture started at.
+        let start = self.anchor.start().min(self.focus.start());
+        let end = self.anchor.end().max(self.focus.end());
         (start, end)
     }
 
