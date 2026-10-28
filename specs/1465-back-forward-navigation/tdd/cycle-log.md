@@ -226,3 +226,18 @@ there.
   Forward, which is the shell's `Selected` arm (covered in `main_tests`, T029).
 - decision: the lookup lists `dir_name`s, not paths: a `SessionLocation::Worktree` holds the
   `dir_name` identity, which `reconcile` may disambiguate for included worktrees.
+
+### Cycle 17 — the shell reads availability and other projects' worktrees (T029, T032, U2)
+
+- tests: `main_tests` `history_tests::back_across_projects_switches_project_and_records_nothing_between`
+  (P a real git repository with the worktree `w`; Back from Q's session to P's worktree session,
+  Forward back to Q, Back again: no intermediate place recorded, R2),
+  `back_passes_over_a_project_whose_folder_went_away`.
+- red (40a899f64, the shell passing `|_| None` and no refresh): both FAILED — Back stayed in Q
+  (P's worktree read as unreadable); with P's folder deleted, Back selected P's session while Q
+  stayed active (the switch refused under a target `exists` accepted).
+- guard, passed on arrival (T030/T031 already in):
+  `back_to_another_projects_compare_reopens_it_and_forward_returns`.
+- green: `shell::history::update` runs `workspace.refresh_availability(scanner)` first and passes
+  `discover_worktrees(git, project)`'s `dir_name`s as the lookup → bin `history_tests` 7 passed.
+- T033 is prose (guide sentence); no test.
