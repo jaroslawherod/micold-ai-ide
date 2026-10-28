@@ -37,6 +37,6 @@ Mutants were hand-made (no mutation tool). Each row says who saw the failure; ro
 | T026 | `GiveWayRow` `Shorten(rank)` -> `Keep`; density ignored | the new `GiveWayRow` and `Button::density` unit tests | M3 review B |
 | T025 | `caption: None` | `switch_offer_of` held-queue test | tdd-verify at close |
 | T022 | tiled padding `[XS,SM]` -> `[SM,SM]` | `a_tiled_pane_still_has_its_switch_row` | tdd-verify at close |
-| T029 | touch-target threshold -> `100000.0` | `layout_snapshot`: "the strip New session ... is narrower than the touch target" (the guard had matched `"New session"`, never the real part name `"strip New session"`, so it ran on nothing; now also asserts it ran on two parts) | close unit |
+| T029 | touch-target threshold -> `100000.0` | `layout_snapshot`: "the strip New session ... is narrower than the touch target" (the guard had matched `"New session"`, never the real part name `"strip New session"`, so it ran on nothing; now also asserts it ran on two parts) | close unit (command `cargo test -p micold-client --test layout_snapshot` with line 272 set to `100000.0`, exit 101, recorded in the ledger) |
 | T030 | `density::height` | button test now compares literal 40 and 28 dp | not re-run |
 | T021, T024, T027, rank tie | | | not re-run at close (build lock held by other worktrees for 40+ minutes) |
