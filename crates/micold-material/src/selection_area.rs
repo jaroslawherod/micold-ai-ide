@@ -7,7 +7,8 @@
 //!   nothing from the area: controls come first (FR-004).
 //! - **A-2**: an uncaptured left press inside takes keyboard focus and publishes `on_press` with
 //!   the click count, *before* whatever the children published for the same press, so the
-//!   gesture's first hit lands in a gesture already begun (FR-007).
+//!   gesture's first hit lands in a gesture already begun (FR-007). The children see each mouse
+//!   event where it happened, not where the runtime's batch of events ended (#1550 M6).
 //! - **A-3**: while `dragging` and the pointer is above (below) the bounds, the children see the
 //!   pointer clamped to the top (bottom) row, so the unit at the edge keeps answering, and the area
 //!   publishes `on_edge(Up)` (`Down`) on each frame it requests, a frame ahead through
@@ -122,6 +123,15 @@ struct State {
     /// A left press inside started a gesture that has not been released.
     pressed: bool,
     previous: Option<mouse::Click>,
+    /// Where the last move put the pointer, in the window's coordinates.
+    pointer: Option<Point>,
+    /// From the window's coordinates to the area's: a scrollable around the area shifts the
+    /// cursor it hands down by its offset, while a move's `position` stays the window's.
+    shift: Vector,
+    /// The cursor handed down with the last event that was not a redraw: where its batch ended.
+    batch_end: Option<Point>,
+    /// The cursor handed down with the last redraw.
+    last_redraw: Option<Point>,
 }
 
 impl operation::Focusable for State {
@@ -245,6 +255,43 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for SelectionArea
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+        // The runtime hands every event of a batch the cursor where the batch ended, so in a fast
+        // drag the press would land where the drag got to (#1550 M6). Each event is seen at its
+        // own place instead: a move where it went, a press or release where the last move left the
+        // pointer. A frame's redraw is a batch of its own, so when its cursor is where the last
+        // batch ended (no moves the area has not seen yet), that cursor less the pointer is what a
+        // scrollable around the area shifts positions by. A scroll under a still pointer (a wheel)
+        // changes that cursor with no move: two redraws in a row at one cursor outside a gesture
+        // teach the new shift too (inside one, a redraw repeats while it publishes hits).
+        let at = {
+            let state = tree.state.downcast_mut::<State>();
+            match event {
+                Event::Window(iced::window::Event::RedrawRequested(_)) => {
+                    let given = cursor.position();
+                    if let (Some(given), Some(pointer)) = (given, state.pointer) {
+                        let still = !state.pressed && state.last_redraw == Some(given);
+                        if still || state.batch_end == Some(given) {
+                            state.shift = given - pointer;
+                        }
+                    }
+                    state.last_redraw = given;
+                }
+                Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    state.pointer = Some(*position);
+                    state.batch_end = cursor.position();
+                }
+                Event::Mouse(mouse::Event::CursorLeft) => {
+                    state.pointer = None;
+                    state.batch_end = None;
+                }
+                _ => state.batch_end = cursor.position(),
+            }
+            state.pointer.map(|p| p + state.shift)
+        };
+        let cursor = match (cursor, at) {
+            (mouse::Cursor::Available(_), Some(p)) => mouse::Cursor::Available(p),
+            _ => cursor,
+        };
         let edge = cursor
             .position()
             .filter(|_| self.dragging)
@@ -437,6 +484,91 @@ mod tests {
         release(&mut m, Point::new(2.0, TEXT_ROW / 2.0));
         let again = m.press(Point::new(2.0, TEXT_ROW / 2.0));
         assert_eq!(again[0], "press 2", "a second click in place");
+    }
+
+    /// A-2: inside a scrolled scrollable the cursor handed down is shifted by the offset while a
+    /// move's position stays the window's; a press in a batch that ends further on still lands
+    /// where it happened, in the area's coordinates (#1550 M6).
+    #[test]
+    fn a_press_in_a_scrolled_area_lands_where_it_happened() {
+        let mut m = mounted(false);
+        let scrolled = Vector::new(0.0, 300.0);
+        let at = Point::new(2.0, TEXT_ROW / 2.0);
+        let moved = |p: Point| {
+            Event::Mouse(mouse::Event::CursorMoved {
+                position: p - scrolled,
+            })
+        };
+        m.send(moved(at), mouse::Cursor::Available(at));
+        m.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Available(at),
+        );
+        // One batch: the press, then the drag's move, all handed the cursor where it ended.
+        let end = Point::new(250.0, TEXT_ROW / 2.0);
+        let out = press_with(&mut m, mouse::Button::Left, end);
+        assert_eq!(out, vec!["press 1", "focus true", "hit t 0"]);
+    }
+
+    /// A-2: a redraw can come while moves the area has not seen yet wait (its cursor is already
+    /// where they go); it teaches no shift then, so the press after them lands where it happened.
+    #[test]
+    fn a_redraw_ahead_of_the_moves_shifts_nothing() {
+        let row = TEXT_ROW / 2.0;
+        let (a, b, c) = (
+            Point::new(2.0, row),
+            Point::new(20.0, row),
+            Point::new(40.0, row),
+        );
+        let expected = mounted(false).press(c);
+        let mut m = mounted(false);
+        let moved = |p: Point| Event::Mouse(mouse::Event::CursorMoved { position: p });
+        let redraw = || {
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            ))
+        };
+        m.send(moved(a), mouse::Cursor::Available(a));
+        m.send(redraw(), mouse::Cursor::Available(a));
+        m.send(moved(b), mouse::Cursor::Available(b));
+        // The window's cursor is already at `c`; the move there is still queued.
+        m.send(redraw(), mouse::Cursor::Available(c));
+        m.send(moved(c), mouse::Cursor::Available(c));
+        assert_eq!(press_with(&mut m, mouse::Button::Left, c), expected);
+    }
+
+    /// A-2: a wheel scroll under a still pointer shifts the cursor handed down with no move; two
+    /// redraws at the new cursor teach the new shift, so a press without a move lands right.
+    #[test]
+    fn a_press_after_a_scroll_with_no_move_lands_where_it_happened() {
+        let mut m = mounted(false);
+        let at = Point::new(2.0, TEXT_ROW / 2.0);
+        let scrolled = Vector::new(0.0, 300.0);
+        let redraw = || {
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            ))
+        };
+        // Before the scroll the window position is the area's (no shift); the scroll then brings
+        // the text's start under the still pointer.
+        let before = at - scrolled;
+        m.send(
+            Event::Mouse(mouse::Event::CursorMoved { position: before }),
+            mouse::Cursor::Available(before),
+        );
+        m.send(redraw(), mouse::Cursor::Available(before));
+        // The wheel event is handed the old offset.
+        let wheel = mouse::ScrollDelta::Lines { x: 0.0, y: -3.0 };
+        m.send(
+            Event::Mouse(mouse::Event::WheelScrolled { delta: wheel }),
+            mouse::Cursor::Available(before),
+        );
+        m.send(redraw(), mouse::Cursor::Available(at));
+        m.send(redraw(), mouse::Cursor::Available(at));
+        let out = press_with(&mut m, mouse::Button::Left, at);
+        assert_eq!(out, vec!["press 1", "focus true", "hit t 0"]);
     }
 
     /// A-2: a press outside the area gives the focus up.

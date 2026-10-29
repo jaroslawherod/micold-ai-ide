@@ -108,3 +108,15 @@ red is a mutant run: `copy_value` answering `None` for every tool target, one bu
 | T047 | `copy_control` (the code block's `IconButton` in `TakesTheKeyboard`) on the tool card header (`ToolValue`), above the unfolded input and result, and beside the diff's path (`InlineDiff::copy_path`) | T045 | same |
 | T048 | user guide *Copy controls*; #939's out-of-scope note points to #1550 | docs | `scripts/tests/*.test.sh` in the gate |
 | M5 Review B F1/F2 | the three tool-card controls through the view (header value, input, result; by press, Enter and Space; no header control without a value, no result control before a result) and the root's copy of a card in an open thread | mutant run: header and result pushes removed → `an_unfolded_tool_card_copies_its_value_input_and_result`, `a_card_has_a_header_control_only_with_a_value_and_a_result_control_only_with_a_result` FAILED; the thread arm answering nothing → `a_copy_control_on_a_card_in_an_open_thread_copies_its_value` FAILED | `transcript_rich_renderers` 9 passed, `features_structured_insights` 23 passed |
+
+## M6 (T052–T055)
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T052 (red) | in a two-pane split, a press and drag in the pane that is not active, then Ctrl+C, copies that pane's selection and interrupts nothing; the same in the other pane; `transcript_keys` listens for the pressed pane's session | run on the pre-fix tree: `a_drag_in_either_pane_of_a_split_gives_that_pane_the_copy_key` FAILED, the listener's session `None` for the pressed pane | `--bin micold-ai-ide` passed |
+| T053 | `shell::transcript::update` focuses the pane showing the session on `SelectMsg::Press` (`shell::panes::focus_pane_showing`) | T052 | same |
+| T054 (red) | a fast drag on diff lines (press, moves and release in one batch, all handed the batch's end) anchors at the press; a same-line drag ending right of a short diff line selects to its end | without the fix: `a_fast_drag_on_diff_lines_anchors_at_the_press` and `a_drag_right_of_a_short_diff_line_selects_to_its_end` FAILED | `ui::material::inline_diff` passed |
+| T055 | `SelectionArea` forwards each mouse event at its own place (tracked from `CursorMoved`); `Selectable` answers a dragged pointer right of a line with that line's end | T054 | same |
+| M6 Review A F1 | inside a scrolled scrollable a press lands where it happened (the shift learned from a frame's redraw) | without learning the shift: `a_press_in_a_scrolled_area_lands_where_it_happened` FAILED (`left: []`) | `micold-material` `selection_area` 10 passed |
+| M6 visual pass | a redraw that comes while moves wait teaches no shift (a fast drag's end landed ~80 px low in the real client) | with the shift learned at every redraw: `a_redraw_ahead_of_the_moves_shifts_nothing` FAILED (`left: ["press 1", "focus true"]`) | same |
+| M6 Review B round 2 F1 | a wheel scroll under a still pointer teaches the new shift (two redraws at one cursor outside a gesture), so a press with no move after it lands where it happened | without the still-pointer rule: `a_press_after_a_scroll_with_no_move_lands_where_it_happened` FAILED (`left: []`) | `selection_area` 11 passed |
