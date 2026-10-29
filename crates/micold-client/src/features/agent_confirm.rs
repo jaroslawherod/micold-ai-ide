@@ -40,6 +40,7 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::protocol::messages::ConfirmOperation;
+use micold_core::worktree::loss::sanitize_entry;
 use std::path::PathBuf;
 
 /// One agent request waiting for the user's answer: what the dialog needs to name it.
@@ -249,7 +250,7 @@ pub fn loss_sections(prompt: &Prompt) -> Vec<LossSection> {
         ));
     }
     if !loss.files.is_empty() {
-        let mut rows = loss.files.clone();
+        let mut rows: Vec<String> = loss.files.iter().map(|f| sanitize_entry(f)).collect();
         rows.extend(more(loss.files_more));
         let total = loss.files.len() + loss.files_more as usize;
         sections.push((format!("Uncommitted changes ({total})"), rows));
@@ -258,7 +259,7 @@ pub fn loss_sections(prompt: &Prompt) -> Vec<LossSection> {
         let mut rows: Vec<String> = loss
             .commits
             .iter()
-            .map(|c| format!("{} {}", c.short_hash, c.subject))
+            .map(|c| sanitize_entry(&format!("{} {}", c.short_hash, c.subject)))
             .collect();
         rows.extend(more(loss.commits_more));
         let total = loss.commits.len() + loss.commits_more as usize;

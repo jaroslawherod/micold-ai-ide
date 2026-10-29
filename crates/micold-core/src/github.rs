@@ -916,7 +916,7 @@ impl Iterator for VisibleChars<'_> {
 /// format characters that hide or direct the text around them. The standard library knows no
 /// general category, so the format characters are named by their ranges. The joiners are not
 /// among them ([`is_joiner`]).
-fn is_invisible(c: char) -> bool {
+pub(crate) fn is_invisible(c: char) -> bool {
     c.is_control()
         || matches!(
             c,

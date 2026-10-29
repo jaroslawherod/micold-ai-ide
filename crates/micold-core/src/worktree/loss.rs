@@ -15,6 +15,30 @@ pub struct WorktreeLoss {
     pub commits: Vec<LossCommit>,
 }
 
+/// Longest a path or subject is shown in the prompt, in characters.
+pub const LOSS_ENTRY_CHARS: usize = 200;
+
+/// `text` made safe to show in the confirmation: each control or bidi/format character becomes
+/// `?` (the asking session controls file names and subjects, and could otherwise fake or hide
+/// rows), and an entry over [`LOSS_ENTRY_CHARS`] is cut with `…`.
+pub fn sanitize_entry(text: &str) -> String {
+    let mut out: String = text
+        .chars()
+        .take(LOSS_ENTRY_CHARS)
+        .map(|c| {
+            if crate::github::is_invisible(c) {
+                '?'
+            } else {
+                c
+            }
+        })
+        .collect();
+    if text.chars().nth(LOSS_ENTRY_CHARS).is_some() {
+        out.push('…');
+    }
+    out
+}
+
 /// The paths of `git status --porcelain=v1 -z` output. Each entry is `XY path`; a rename or copy
 /// is followed by a second entry holding the original path, which is skipped.
 pub fn parse_status_z(raw: &str) -> Vec<String> {

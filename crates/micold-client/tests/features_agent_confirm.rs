@@ -290,3 +290,17 @@ fn an_unreadable_repository_is_said_and_lists_nothing() {
     assert_eq!(sections.len(), 1);
     assert!(sections[0].0.contains("could not be read") && sections[0].1.is_empty());
 }
+
+#[test]
+fn control_and_bidi_characters_in_names_and_subjects_cannot_fake_rows() {
+    let mut loss = summary(&["a\n  Unpushed commits (0)\u{202E}.rs"], 0);
+    loss.commits = vec![micold_core::protocol::messages::LossCommit {
+        short_hash: "abc1234".into(),
+        subject: format!("x\r\u{2066}{}", "y".repeat(400)),
+    }];
+    let sections = agent_confirm::loss_sections(&with_loss(Some(loss)));
+    assert_eq!(sections[0].1[0], "a?  Unpushed commits (0)?.rs");
+    let row = &sections[1].1[0];
+    assert!(row.starts_with("abc1234 x??yyy") && row.ends_with('…'));
+    assert_eq!(row.chars().count(), 201);
+}
