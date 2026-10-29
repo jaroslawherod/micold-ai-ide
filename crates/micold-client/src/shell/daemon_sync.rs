@@ -6004,7 +6004,7 @@ pub(crate) mod tests {
                 reason: "directory in use".to_string(),
             },
         );
-        let visible = app.core.visible().expect("a notice is shown");
+        let visible = app.core.notifications.queue.visible().expect("a notice is shown");
         assert!(visible.message.contains("Feat X"), "{}", visible.message);
         assert!(
             visible.message.contains("directory in use"),

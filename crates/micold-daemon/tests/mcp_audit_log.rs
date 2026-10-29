@@ -509,7 +509,7 @@ async fn every_logged_failure_carries_one_of_the_six_categories() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_accepted_self_delete_is_audited_and_a_failed_deferred_step_adds_an_error_line() {
     use std::os::unix::fs::PermissionsExt;
-    let caller = sid(73);
+    let caller = sid(76);
     let f = fixture(caller).await;
     // A parent git cannot remove the worktree from makes the deferred step fail; root is not
     // stopped by it, so the failure line is then not expected.
