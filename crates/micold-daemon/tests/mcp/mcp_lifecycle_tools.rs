@@ -1130,7 +1130,7 @@ async fn a_hangup_after_the_accept_still_runs_the_removal() {
     use tokio::io::AsyncWriteExt;
     let f = Fixture::new().await;
     answering_window(&f.state, true);
-    let request = self_delete_request(f);
+    let request = self_delete_request(&f);
     let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
     stream.write_all(request.as_bytes()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(400)).await;
