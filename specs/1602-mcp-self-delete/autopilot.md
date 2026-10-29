@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
 - **Phase**: milestone M2 (gate and reviews)
-- **Next step**: M2 reviews A and B, full gate, visual pass (Part B steps 1, 2, 6), PR; then M3.
+- **Next step**: M2 PR (CI and merge); then M3.
 
 ## Pull requests
 
@@ -51,6 +51,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+## M2 review notes
+
+- Review A round 1 (snapshot 6a557439:d7f3f461): fixed the unpushed-commits upstream bug (log now `HEAD --not --remotes`, no upstream branch), and the index lock (`--no-optional-locks`). Declined (MINOR, accepted): commits listed even with `delete_branch=false` (over-warns, safe direction); partial result when `git log` fails (whole read reports unreadable); no cancel/timeout on the git read (as other daemon git calls); `--untracked-files=all` cost on huge trees; `LossSummary` vs `WorktreeLoss` duplication and `ask_user` arg count (M3 adds variants).
+- Security finding (coordinator, MEDIUM): fixed. File names and subjects are shown through `worktree::loss::sanitize_entry` (control and bidi/format chars become `?`, reusing `github::is_invisible`; 200-char cap); test `control_and_bidi_characters_in_names_and_subjects_cannot_fake_rows`.
+
+- Review B (sonnet): CLEAN; Verify green. Visual pass (headless render, evidence `visual-pass-m2.md`): PASS. Cosmetic, accepted: "… and 10 more" sits below the fold until the list scrolls; the scrollbar thumb overlaps the last character of the longest rows.
 
 ## Handover
 
