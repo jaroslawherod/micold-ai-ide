@@ -180,9 +180,9 @@ impl Deferred {
         tracing::info!(
             target: "micold::mcp",
             caller = %caller.0,
-            op = "delete_worktree",
+            op = %"delete_worktree",
             target = %dir_name,
-            outcome = "error",
+            outcome = %"error",
             "tool call"
         );
         state.broadcast(DaemonMsg::DeferredActionFailed {

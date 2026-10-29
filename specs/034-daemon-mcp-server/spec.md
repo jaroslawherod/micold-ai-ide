@@ -373,8 +373,10 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   others. The request is refused by policy ("declined by the user") if the user declines, and fails
   with "needs confirmation" if no answer arrives within 60 seconds or no window is attached. A
   request that is refused, conflicts, or would change nothing is answered without a prompt.
-- **FR-015**: An agent MUST NOT stop, delete, or delete the hosting worktree of its own calling
-  session through the tool server; such a request MUST be refused by policy. `send_session_input`,
+- **FR-015**: An agent MUST NOT stop or delete its own calling session through the tool server;
+  such a request MUST be refused by policy. _(Amended by #1602 FR-017: `delete_worktree` of the
+  caller's own worktree is allowed after the user's confirmation, and the removal is deferred until
+  the result is delivered; see specs/1602-mcp-self-delete.)_ `send_session_input`,
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
   as invalid input.
 - **FR-015a**: When the calling session is a Default session (it runs in the project root),
@@ -428,7 +430,7 @@ for the project root.
 | `read_session_output` | Recent terminal text of another session (FR-012, FR-016) | session ref, line count | plain-text lines, whether output was truncated | read-only; gated by FR-016 |
 | `create_worktree` | Create a worktree as the create-worktree dialog does | branch name, optional worktree name, mode (new branch / existing local branch / track remote branch), remote (for track remote branch) | worktree ref, branch, path | mutating; available to a Default session too (FR-015a) |
 | `rename_worktree` | Change a worktree's display name | worktree ref, new display name | updated worktree row | mutating; refused from a Default session (FR-015a) |
-| `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); refused for the caller's own worktree (FR-015) and from a Default session (FR-015a) |
+| `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); the caller's own worktree needs the user's confirmation and is removed after the result is delivered (#1602 FR-017); refused from a Default session (FR-015a) |
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
 | `start_session` | Start or resume an `Idle`, `Failed` or `InterruptedResumable` session | session ref | lifecycle after the request | mutating |
 | `stop_session` | Stop a session: end its processes, leaving it `Idle` and resumable | session ref | lifecycle after the request | destructive for other sessions (FR-014); refused for self (FR-015) |

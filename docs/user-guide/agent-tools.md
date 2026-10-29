@@ -167,7 +167,13 @@ the assistant gives up waiting (its session is stopped, or it cancels the reques
 and nothing is done.
 
 Requests that would be refused anyway never show a dialog. A session cannot stop, interrupt or
-delete itself, or delete the worktree it runs in; ask from another session, or use the sidebar.
+delete itself; ask from another session, or use the sidebar.
+
+A session can delete the worktree it runs in with `delete_worktree`, after you allow it. The dialog
+says the session is asking to delete its own worktree and that the session ends. The assistant gets
+the answer `scheduled` first, then the session stops and the worktree is removed. If the removal
+fails, the app shows a notice that names the worktree and the reason, and the daemon log records it.
+Deny, or no answer within 60 seconds, leaves the worktree and the session untouched.
 
 ### Sub-agent runs
 
