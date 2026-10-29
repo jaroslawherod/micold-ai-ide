@@ -212,8 +212,11 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
                 // `DELIVERY_GRACE`, then run it on its own task (#1602, FR-003).
                 // Spawned before the wait so a dropped connection task cannot lose it.
                 tokio::spawn(async move {
-                    let _ = stream.shutdown().await;
-                    let _ = tokio::time::timeout(DELIVERY_GRACE, peer_closed(&mut stream)).await;
+                    let _ = tokio::time::timeout(DELIVERY_GRACE, async {
+                        let _ = stream.shutdown().await;
+                        peer_closed(&mut stream).await
+                    })
+                    .await;
                     deferred.run(&state).await
                 });
             }
