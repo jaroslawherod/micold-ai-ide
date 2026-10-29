@@ -13,7 +13,8 @@ use std::path::PathBuf;
 
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::policy::{
-    decide, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
+    decide, is_self_targeted, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision,
+    TargetFacts,
 };
 use micold_core::mcp::tools::{
     CreateWorktreeRequest, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
@@ -266,16 +267,34 @@ fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_oper
     }
 }
 
-/// U109
+/// U109 (#1602): the caller's own worktree gets the same confirmation as any other.
 #[test]
-fn deleting_the_callers_own_worktree_is_refused_by_policy() {
-    let error = refusal(decide_for(in_worktree("b"), &delete_worktree("b")));
-    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
-    assert!(
-        error.message.contains("runs in"),
-        "the refusal says why: {}",
-        error.message
-    );
+fn deleting_the_callers_own_worktree_waits_for_confirmation_and_is_self_targeted() {
+    let own = delete_worktree("b");
+    assert!(matches!(
+        decide_for(in_worktree("b"), &own),
+        PolicyDecision::Confirm(ConfirmedOp::DeleteWorktree { .. })
+    ));
+    assert!(is_self_targeted(&caller(in_worktree("b")), &own));
+    assert!(!is_self_targeted(
+        &caller(in_worktree("a")),
+        &delete_worktree("b")
+    ));
+    assert!(!is_self_targeted(&caller(SessionLocation::Default), &own));
+}
+
+#[test]
+fn the_delete_worktree_description_allows_self_delete_with_confirmation() {
+    let catalog = micold_core::mcp::tools::catalog();
+    let tool = catalog["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "delete_worktree")
+        .unwrap();
+    let text = tool["description"].as_str().unwrap();
+    assert!(!text.contains("own worktree cannot"), "{text}");
+    assert!(text.contains("scheduled") && text.contains("confirms"), "{text}");
 }
 
 /// U110: the confirmation carries the options the user is asked to allow.

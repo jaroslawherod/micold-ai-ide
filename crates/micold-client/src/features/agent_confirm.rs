@@ -58,6 +58,8 @@ pub struct Prompt {
     pub operation: ConfirmOperation,
     /// The target's display name: a worktree's display name or a session's label.
     pub target_label: String,
+    /// The calling session is one of the sessions the operation ends (#1602).
+    pub self_targeted: bool,
 }
 
 /// What this feature remembers: the prompts awaiting an answer here, in arrival order.
@@ -216,6 +218,13 @@ pub fn operation_phrase(operation: &ConfirmOperation) -> String {
         ConfirmOperation::InterruptSession => "interrupt session".to_string(),
         ConfirmOperation::SendInput => "type into session".to_string(),
     }
+}
+
+/// The dialog's line saying the asking session ends, when it does (#1602).
+pub fn self_targeted_note(prompt: &Prompt) -> Option<&'static str> {
+    prompt
+        .self_targeted
+        .then_some("The session that asked ends after you allow this.")
 }
 
 /// The dialog's headline: who asks, to do what, to which target.

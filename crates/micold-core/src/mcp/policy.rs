@@ -111,8 +111,18 @@ const PRINCIPLE_III: &str = "a session running in the project root (Default) may
 const CROSS_SESSION_OFF: &str = "reading and typing into other sessions is turned off in Settings \
     (\"Let agents read and type into other sessions\")";
 
+/// Whether `operation` ends the caller's own session: a delete of the worktree it runs in (#1602).
+/// The prompt says so, and the daemon replies first and acts after.
+pub fn is_self_targeted(caller: &Caller, operation: &Operation) -> bool {
+    matches!(
+        operation,
+        Operation::DeleteWorktree { worktree: WorktreeRef::Named(name), .. }
+            if matches!(&caller.location, SessionLocation::Worktree(mine) if mine == name)
+    )
+}
+
 /// Decide `operation` for `caller`. The refusals come first: Principle III for a Default caller
-/// (FR-015a), then the caller's own session or hosting worktree (FR-015), then the cross-session
+/// (FR-015a), then the caller's own session (FR-015), then the cross-session
 /// option at Off (FR-016); only then does an operation wait for the user (FR-014). `access` is the
 /// FR-016 option as it is for this request.
 pub fn decide(
@@ -130,12 +140,6 @@ pub fn decide(
             if caller.is_default() =>
         {
             refused(PRINCIPLE_III)
-        }
-        Operation::DeleteWorktree {
-            worktree: WorktreeRef::Named(name),
-            ..
-        } if matches!(&caller.location, SessionLocation::Worktree(mine) if mine == name) => {
-            refused("the calling session runs in this worktree, so it may not delete it")
         }
         Operation::StopSession { session } if is_me(session) => {
             refused("a session may not stop itself; the user can stop it from the sidebar")

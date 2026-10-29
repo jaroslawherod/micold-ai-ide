@@ -35,7 +35,7 @@ use micold_core::mcp::tools::{
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::prompt_template::PromptTemplate;
 use micold_core::protocol::messages::{
-    ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
+    ActivitySignal, ConfirmOperation, DaemonMsg, ProjectSnapshot, SessionSummary, WireLifecycle,
     WorktreeStatus,
 };
 use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
@@ -70,7 +70,7 @@ pub async fn call(
     name: String,
     arguments: Value,
     hangup: CancellationToken,
-) -> Result<Value, OpError> {
+) -> (Result<Value, OpError>, Option<Deferred>) {
     // The first-prompt bound is counted from here, the request (FR-017).
     let asked = tokio::time::Instant::now();
     let parsed = parse_call(&name, &arguments);
@@ -80,7 +80,27 @@ pub async fn call(
             .map(Operation::audit_target)
             .unwrap_or_default()
     });
+    let mut deferred = None;
     let result = match parsed {
+        Ok(Operation::DeleteWorktree {
+            worktree,
+            stop_sessions,
+            delete_branch,
+        }) => {
+            delete_worktree(
+                &state,
+                caller,
+                worktree,
+                stop_sessions,
+                delete_branch,
+                &hangup,
+            )
+            .await
+            .map(|(value, later)| {
+                deferred = later;
+                value
+            })
+        }
         Ok(operation) => dispatch(state, caller, operation, asked, &hangup).await,
         Err(error) => Err(error),
     };
@@ -98,7 +118,79 @@ pub async fn call(
             "tool call"
         );
     }
-    result
+    (result, deferred)
+}
+
+/// An accepted operation that ends the caller's own session, run only after the tool's result has
+/// been written to the agent (#1602, FR-003): the caller is killed by it. Built only after the
+/// user's confirmation returned `Ok`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Deferred {
+    DeleteWorktree {
+        caller: SessionId,
+        project: std::path::PathBuf,
+        dir_name: String,
+        delete_branch: bool,
+        /// The worktree's display name, for the failure notice.
+        label: String,
+    },
+}
+
+impl Deferred {
+    /// Do it. A failure is logged, audited as an `error` line, and shown in every window (FR-009,
+    /// FR-010); there is no retry and no rollback.
+    pub async fn run(self, state: &Arc<DaemonState>) {
+        let Self::DeleteWorktree {
+            caller,
+            project,
+            dir_name,
+            delete_branch,
+            label,
+        } = self;
+        let reason = match ops::delete_worktree(
+            state,
+            project.clone(),
+            dir_name.clone(),
+            true,
+            delete_branch,
+        )
+        .await
+        {
+            Ok(deleted) if deleted.leftovers.is_empty() && !deleted.branch_delete_failed => return,
+            Ok(deleted) if !deleted.leftovers.is_empty() => format!(
+                "the worktree was deregistered but its directory could not be fully removed: {}",
+                deleted
+                    .leftovers
+                    .iter()
+                    .map(|l| native(&l.path))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Ok(_) => "the worktree was removed but its branch could not be deleted".to_string(),
+            Err(ops::DeleteFailure::NotARepository) => {
+                "this project is not a git repository".to_string()
+            }
+            Err(ops::DeleteFailure::LiveSessions(_)) => {
+                "a session in it could not be stopped".to_string()
+            }
+            Err(ops::DeleteFailure::Git(e)) => format!("git failed to remove the worktree: {e}"),
+            Err(ops::DeleteFailure::Task(e)) => format!("the worktree delete failed: {e}"),
+        };
+        tracing::error!(project = %project.display(), worktree = %dir_name, %reason, "deferred worktree delete failed");
+        tracing::info!(
+            target: "micold::mcp",
+            caller = %caller.0,
+            op = "delete_worktree",
+            target = %dir_name,
+            outcome = "error",
+            "tool call"
+        );
+        state.broadcast(DaemonMsg::DeferredActionFailed {
+            project,
+            subject: label,
+            reason,
+        });
+    }
 }
 
 async fn dispatch(
@@ -130,21 +222,6 @@ async fn dispatch(
         }
         Operation::DeleteSession { session } => {
             delete_session(&state, caller, session, hangup).await
-        }
-        Operation::DeleteWorktree {
-            worktree,
-            stop_sessions,
-            delete_branch,
-        } => {
-            delete_worktree(
-                &state,
-                caller,
-                worktree,
-                stop_sessions,
-                delete_branch,
-                hangup,
-            )
-            .await
         }
         Operation::SendSessionInput { session, text } => {
             send_session_input(&state, caller, session, text, hangup).await
@@ -385,6 +462,7 @@ async fn ask_user(
     op: ConfirmedOp,
     target: ConfirmTarget,
     target_label: String,
+    self_targeted: bool,
     hangup: &CancellationToken,
 ) -> Result<(), OpError> {
     let caller_label = project
@@ -400,6 +478,8 @@ async fn ask_user(
         operation: wire_operation(op),
         target,
         target_label,
+        loss: None,
+        self_targeted,
     };
     tokio::select! {
         outcome = state.confirm(request) => outcome.into_result(),
@@ -456,6 +536,7 @@ async fn confirm_session_op(
         op,
         ConfirmTarget::Session(summary.id),
         label,
+        false,
         hangup,
     )
     .await
@@ -585,7 +666,7 @@ async fn delete_worktree(
     stop_sessions: bool,
     delete_branch: bool,
     hangup: &CancellationToken,
-) -> Result<Value, OpError> {
+) -> Result<(Value, Option<Deferred>), OpError> {
     let WorktreeRef::Named(dir_name) = worktree.clone() else {
         return Err(OpError::invalid_input(
             "\"default\" is the project root, not a worktree; it cannot be deleted",
@@ -604,14 +685,13 @@ async fn delete_worktree(
         Ok((who, project, wt))
     })
     .await?;
-    let confirm = policy_for(
-        &who,
-        &Operation::DeleteWorktree {
-            worktree,
-            stop_sessions,
-            delete_branch,
-        },
-    )?;
+    let operation = Operation::DeleteWorktree {
+        worktree,
+        stop_sessions,
+        delete_branch,
+    };
+    let confirm = policy_for(&who, &operation)?;
+    let own = policy::is_self_targeted(&who, &operation);
     let live = state.worktree_live_sessions(&project.path, &dir_name);
     if !live.is_empty() && !stop_sessions {
         return Err(live_sessions_conflict(&project, &dir_name, &live));
@@ -626,9 +706,28 @@ async fn delete_worktree(
                 dir_name: dir_name.clone(),
             },
             wt.display_name.clone(),
+            own,
             hangup,
         )
         .await?;
+    }
+    // The caller is a session of this worktree: answer first, and let the connection handler end
+    // it afterwards (FR-003).
+    if own {
+        let value = json!({
+            "scheduled": true,
+            "removed": dir_name,
+            "directory": native(&wt.path),
+            "branch_will_be_deleted": delete_branch && wt.branch.is_some(),
+        });
+        let later = Deferred::DeleteWorktree {
+            caller,
+            project: project.path.clone(),
+            dir_name,
+            delete_branch,
+            label: wt.display_name.clone(),
+        };
+        return Ok((value, Some(later)));
     }
     match ops::delete_worktree(
         state,
@@ -639,15 +738,18 @@ async fn delete_worktree(
     )
     .await
     {
-        Ok(deleted) => Ok(json!({
-            "removed": dir_name,
-            "branch_deleted": delete_branch && wt.branch.is_some() && !deleted.branch_delete_failed,
-            "leftovers": deleted
-                .leftovers
-                .iter()
-                .map(|l| native(&l.path))
-                .collect::<Vec<_>>(),
-        })),
+        Ok(deleted) => Ok((
+            json!({
+                "removed": dir_name,
+                "branch_deleted": delete_branch && wt.branch.is_some() && !deleted.branch_delete_failed,
+                "leftovers": deleted
+                    .leftovers
+                    .iter()
+                    .map(|l| native(&l.path))
+                    .collect::<Vec<_>>(),
+            }),
+            None,
+        )),
         Err(ops::DeleteFailure::LiveSessions(live)) => {
             Err(live_sessions_conflict(&project, &dir_name, &live))
         }

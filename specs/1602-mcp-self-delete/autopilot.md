@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1611 | Design | open | … |
+| #1611 | Design | merged | 8e3d084ba79f31d3db24ed3bf6e46b74590b087d |
 
 ## Milestones
 
@@ -50,8 +50,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 implement step, unit 1 (context over 150k). Branch reset to origin/main after #1611 (merge SHA 8e3d084ba79f31d3db24ed3bf6e46b74590b087d). WIP committed locally, nothing pushed, no PR, no review run, no task ticked.
+
+Done in code (all compiles with `cargo check --workspace --all-targets`): wire (`LossSummary`, `LossCommit`, `loss` + `self_targeted` on `ConfirmationRequested`, `DeferredActionFailed`, version 74, tests pin 74, roundtrip cases); `policy.rs` (own-worktree refusal dropped, `is_self_targeted`); `core/mcp/tools.rs` description; daemon `confirm.rs`, `tools.rs` (`Deferred`, `call` returns `(Result, Option<Deferred>)`, own delete returns `scheduled`), `server.rs` (generic `until_answered`, `DELIVERY_GRACE` 2 s, shutdown + peer close then spawn `Deferred::run`); client (`Prompt.self_targeted`, `self_targeted_note`, dialog line, `DeferredActionFailed` to `notify_error`); fixtures updated.
+Tests written: `mcp_lifecycle_tools.rs` (11 new, all 35 green incl. T007 open-handle, reply-first, hangup, failed deferred), `mcp_policy.rs`, `features_agent_confirm.rs`, client unit test in `daemon_sync.rs` (`a_deferred_action_failure_raises_a_notice...`, not yet seen to run: it sits in the bin target, run `cargo test -p micold-client --bin <bin> a_deferred_action` or find the right target).
+
+Open, next steps:
+1. `mcp_audit_log.rs`: new test `an_accepted_self_delete_is_audited...` fails at line ~540, and existing `a_prompt_never_reaches_the_log` (line ~420) now fails: likely its delete_worktree/own-worktree call became a self-delete (accepted, scheduled) or the 0o500 lock leaked across tests; diagnose with `cargo test -p micold-daemon --test mcp_audit_log`. `good_call` uses worktree `c` for delete_worktree; `failing_call` own-worktree entry was removed.
+2. `mcp_policy.rs` description test: fixed by removing the "cannot be deleted;" assert; re-run `cargo test -p micold-core --test mcp_policy`.
+3. T005 deviation: reply-before-stop, 2 s grace, hangup, failed-deferred tests live in `mcp_lifecycle_tools.rs` (the Fixture is there), not `mcp_confirmations.rs`. T006 decline audit line is the generic refusal line, covered by existing tests; accept + deferred `error` line in `mcp_audit_log.rs`.
+4. T016 docs not done: `docs/user-guide/agent-tools.md`; amend `specs/034-daemon-mcp-server/spec.md` (FR-014, FR-015) and `contracts/mcp-tools.md` for the delete case. Also `grep -rn "own worktree" docs` for stale statements.
+5. Remaining: tick T001–T014 and T016 in tasks.md (T015 only when Windows CI of the M1 PR is green; extend `ops.rs` retry only if T007 fails there), `mise run gate`, review A (`code-review` high) then review B (conformance) per tasks/verify.md, visual pass for the dialog line, PR via tasks/pr.md. No red-phase evidence was recorded (tests written beside the code): note that in the PR body.
+6. Orchestrator: check the Windows job on M1's PR for T007/T015.
 
 ## Open escalation
 

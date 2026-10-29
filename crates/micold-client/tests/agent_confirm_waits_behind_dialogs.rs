@@ -19,6 +19,7 @@ fn prompt(id: u64) -> Prompt {
         caller_label: "planner".to_string(),
         operation: ConfirmOperation::DeleteSession,
         target_label: "reviewer".to_string(),
+        self_targeted: false,
     }
 }
 

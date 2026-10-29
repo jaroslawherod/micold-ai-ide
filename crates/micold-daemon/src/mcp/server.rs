@@ -17,7 +17,7 @@ use std::sync::Arc;
 use micold_core::mcp::errors::{tool_failure, tool_success};
 use micold_core::mcp::jsonrpc::{self, Route};
 use micold_core::session::SessionId;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
 
@@ -27,6 +27,10 @@ use crate::state::DaemonState;
 
 /// The largest request body the endpoint reads (contracts/binding.md §3).
 pub const MAX_BODY: usize = 1024 * 1024;
+
+/// How long the daemon waits, after writing a self-targeted call's reply, for the agent to close its
+/// side before it acts anyway (#1602, research R2). Keeps SC-001's 10 s with margin.
+pub const DELIVERY_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The one route.
 const PATH: &str = "/mcp";
@@ -183,19 +187,34 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
             name,
             arguments,
         } => {
-            let result = until_answered(&mut stream, |hangup| async move {
-                match super::tools::call(state, caller, name, arguments, hangup).await {
-                    Ok(output) => tool_success(&output),
-                    Err(error) => tool_failure(&error),
+            let called = until_answered(&mut stream, |hangup| {
+                let state = Arc::clone(&state);
+                async move {
+                    match super::tools::call(state, caller, name, arguments, hangup).await {
+                        (Ok(output), deferred) => (tool_success(&output), deferred),
+                        (Err(error), deferred) => (tool_failure(&error), deferred),
+                    }
                 }
             })
-            .await
-            .unwrap_or_else(|| {
-                tool_failure(&micold_core::mcp::errors::OpError::service_error(
-                    "the tool call failed unexpectedly",
-                ))
+            .await;
+            let (result, deferred) = called.unwrap_or_else(|| {
+                (
+                    tool_failure(&micold_core::mcp::errors::OpError::service_error(
+                        "the tool call failed unexpectedly",
+                    )),
+                    None,
+                )
             });
-            reply(&mut stream, 200, "OK", &jsonrpc::result(id, result)).await
+            let written = reply(&mut stream, 200, "OK", &jsonrpc::result(id, result)).await;
+            if let Some(deferred) = deferred {
+                // The user already confirmed: it runs whether or not the reply was delivered.
+                // Wait for the agent to close its side (proof it read the reply), at most
+                // `DELIVERY_GRACE`, then run it on its own task (#1602, FR-003).
+                let _ = stream.shutdown().await;
+                let _ = tokio::time::timeout(DELIVERY_GRACE, peer_closed(&mut stream)).await;
+                tokio::spawn(async move { deferred.run(&state).await });
+            }
+            written
         }
         // A structured session's permission request, held until the user decides (#942 R4).
         Route::Prompt {
@@ -223,10 +242,11 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
 /// for the user (a confirmation, a permission request) is abandoned, and a call already past that
 /// point finishes. The reply is still written: a client that only half-closed (shut its sending
 /// side) still reads it, and for a gone one the write just fails.
-async fn until_answered<F, Fut>(stream: &mut TcpStream, call: F) -> Option<serde_json::Value>
+async fn until_answered<T, F, Fut>(stream: &mut TcpStream, call: F) -> Option<T>
 where
+    T: Send + 'static,
     F: FnOnce(CancellationToken) -> Fut,
-    Fut: std::future::Future<Output = serde_json::Value> + Send + 'static,
+    Fut: std::future::Future<Output = T> + Send + 'static,
 {
     let hangup = CancellationToken::new();
     let mut call = tokio::spawn(call(hangup.clone()));

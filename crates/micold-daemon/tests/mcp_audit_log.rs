@@ -300,8 +300,6 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
         )],
         "delete_worktree" => vec![
             (json!({"worktree": "nope"}), ErrorCategory::NotFound),
-            // The caller's own worktree (FR-015).
-            (json!({"worktree": "b"}), ErrorCategory::RefusedByPolicy),
         ],
         "stop_session" | "delete_session" => vec![
             (
@@ -502,4 +500,44 @@ async fn every_logged_failure_carries_one_of_the_six_categories() {
         assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");
         assert_eq!(outcome, category.as_str(), "{tool}: {line}");
     }
+}
+
+/// #1602 FR-010: an accepted self-delete writes one `ok` line when the result is produced (the
+/// decline is the generic refusal line), and, when its deferred removal then fails, one more with
+/// outcome `error`.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_accepted_self_delete_is_audited_and_a_failed_deferred_step_adds_an_error_line() {
+    use std::os::unix::fs::PermissionsExt;
+    let caller = sid(73);
+    let f = fixture(caller).await;
+    // A parent git cannot remove the worktree from makes the deferred step fail; root is not
+    // stopped by it, so the failure line is then not expected.
+    let parent = f._project.path().join(".claude/worktrees");
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let locked = std::fs::File::create(parent.join("probe")).is_err();
+    let before = audit_lines(caller).len();
+    let result = f
+        .call(
+            caller,
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true}),
+        )
+        .await;
+    assert_eq!(result["isError"], json!(false), "{result}");
+    let first = audit_lines(caller)[before].clone();
+    assert_eq!(field(&first, "op"), Some("delete_worktree"), "{first}");
+    assert_eq!(field(&first, "outcome"), Some("ok"), "{first}");
+    if locked {
+        for _ in 0..150 {
+            if audit_lines(caller).len() > before + 1 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        let lines = audit_lines(caller);
+        assert_eq!(lines.len(), before + 2, "{lines:#?}");
+        assert_eq!(field(&lines[before + 1], "outcome"), Some("error"));
+    }
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
 }

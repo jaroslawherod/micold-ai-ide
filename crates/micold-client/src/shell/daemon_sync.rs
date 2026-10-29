@@ -2243,6 +2243,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             caller_label,
             operation,
             target_label,
+            self_targeted,
             ..
         } => {
             app.core
@@ -2254,9 +2255,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         session: caller,
                         operation,
                         target_label,
+                        self_targeted,
                     },
                 )));
         }
+        // An accepted agent operation the daemon ran after replying failed (#1602, FR-009).
+        DaemonMsg::DeferredActionFailed {
+            subject, reason, ..
+        } => app
+            .core
+            .notify_error(format!("Could not finish removing “{subject}”: {reason}")),
         DaemonMsg::ConfirmationWithdrawn { id } => {
             app.core
                 .update(Message::AgentConfirm(AgentConfirmMsg::Withdrawn(id)));
@@ -5982,6 +5990,29 @@ pub(crate) mod tests {
         assert_eq!(visible.message, "Worktree directory is missing");
     }
 
+    /// #1602 FR-009: a failed deferred removal raises an error notice naming the worktree and the
+    /// reason.
+    #[test]
+    fn a_deferred_action_failure_raises_a_notice_naming_the_worktree_and_reason() {
+        let (mut app, _rx) = connected_app();
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::DeferredActionFailed {
+                project: PathBuf::from("/repo/p"),
+                subject: "Feat X".to_string(),
+                reason: "directory in use".to_string(),
+            },
+        );
+        let visible = app.core.visible().expect("a notice is shown");
+        assert!(visible.message.contains("Feat X"), "{}", visible.message);
+        assert!(
+            visible.message.contains("directory in use"),
+            "{}",
+            visible.message
+        );
+    }
+
     /// A `ConfirmationRequested` for a delete-worktree request, as the daemon sends it.
     fn confirmation_requested(id: u64) -> DaemonMsg {
         DaemonMsg::ConfirmationRequested {
@@ -5995,6 +6026,8 @@ pub(crate) mod tests {
             },
             target_label: "feat-x".to_string(),
             expires_in_ms: 60_000,
+            loss: None,
+            self_targeted: false,
         }
     }
 
