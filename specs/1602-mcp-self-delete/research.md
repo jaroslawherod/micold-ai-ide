@@ -9,7 +9,7 @@ Each decision: what, why, rejected alternatives. Paths checked against the tree.
 `PolicyDecision::Confirm`. A pure helper `is_self_targeted(&Caller, &Operation) -> bool` (caller's session id
 equals the target, or the target worktree is the caller's `SessionLocation::Worktree`) feeds the prompt and
 the deferral. The Default guard arm stays first, so `delete_worktree` from Default is still refused
-(FR-007) while `stop_session` on itself from Default is allowed (FR-015a).
+(FR-007) while `stop_session` on itself from Default is allowed (FR-016).
 
 **Rationale**: one pure, table-tested function is how 034 holds all policy (034 plan summary). The
 live-session conflict needs no change: the caller is a live session of W, so `stop_sessions: false` already
@@ -110,5 +110,5 @@ repo's duplication budget, CLAUDE.md).
 **Decision**: update `docs/user-guide/agent-tools.md`, the descriptions at
 `micold-core/src/mcp/tools.rs` (the `delete_worktree` text "\"default\" and the calling session's own
 worktree cannot be deleted" and the `stop_session` text "A session cannot stop ..."), the `delete_session`
-text, and 034's `spec.md` FR-014 and FR-015 and `contracts/mcp-tools.md` (FR-014a). Interrupt, send and
+text, and 034's `spec.md` FR-014 and FR-015 and `contracts/mcp-tools.md` (FR-017). Interrupt, send and
 read self-refusals stay documented.

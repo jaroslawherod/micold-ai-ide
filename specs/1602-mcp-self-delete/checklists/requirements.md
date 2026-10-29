@@ -10,7 +10,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 open: story 4 scope, deferred-failure reporting; both go to the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (both resolved in clarify, spec Clarifications C1, C2)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Acceptance scenarios are defined

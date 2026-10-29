@@ -70,7 +70,7 @@ The existing refusals that protect the project root and other users of the workt
 
 **Acceptance Scenarios**:
 
-1. **Given** the caller is a Default session (runs in the project root), **When** it calls `delete_worktree` for any worktree, including with `worktree: "default"`, **Then** the call is refused by policy (FR-015a) with no prompt.
+1. **Given** the caller is a Default session (runs in the project root), **When** it calls `delete_worktree` for any worktree, including with `worktree: "default"`, **Then** the call is refused by policy (034 FR-015a) with no prompt.
 2. **Given** the caller's own worktree is named, **When** the worktree no longer exists or is outside the caller's project, **Then** the call fails "not found" with no prompt.
 
 ---
@@ -119,8 +119,8 @@ The existing refusals that protect the project root and other users of the workt
 - **FR-010**: Every accepted or refused self-delete MUST write the audit line 034 FR-018 requires for mutating tools.
 - **FR-011**: `stop_session` and `delete_session` MUST accept an omitted id or the caller's own id, MUST ask the user to confirm, and MUST follow FR-003 (result first, then the action). `interrupt_session`, `send_session_input` and `read_session_output` on the caller itself MUST stay refused as invalid input.
 - **FR-012**: The tool descriptions in `tools/list` and the user documentation of the MCP tools MUST describe the new behavior and drop the statements that a session cannot stop or delete itself or its own worktree.
-- **FR-014a**: Feature 034's FR-014 (destructive operations), FR-015 (self-targeted refusals) and its tool table MUST be amended alongside FR-012 to match this feature.
-- **FR-015a**: A Default session MAY stop or delete itself under story 4 (Principle III forbids only modifying or removing worktrees); FR-007 is unchanged.
+- **FR-017**: Feature 034's FR-014 (destructive operations), FR-015 (self-targeted refusals) and its tool table MUST be amended alongside FR-012 to match this feature.
+- **FR-016**: A Default session MAY stop or delete itself under story 4 (Principle III forbids only modifying or removing worktrees); FR-007 is unchanged.
 - **FR-013**: The tools' behavior for a target other than the caller (another session, another worktree) MUST be unchanged except for FR-006.
 
 ### Key Entities
