@@ -247,7 +247,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 ## Phase 7: Polish (close unit)
 
-- [ ] T032 Run quickstart Part A and record the results in
+- [x] T032 Run quickstart Part A and record the results in
   `specs/1554-structured-effort-switch/quickstart.md`
 
 ## Phase 8: Daemon — a refused deferred pick is never asked again (M6; FR-005, found at close)
@@ -386,3 +386,16 @@ the `docs-not-needed` label (M1 touches `micold-user-facing` client files only t
   binary in a loop of 100 runs with no failure)
 - **Depends on**: M5
 - **Tier**: full (concurrency in `state.rs`)
+
+---
+
+## Phase 9: TDD remediation (from `tdd/verification.md`, verdict FAIL)
+
+The feature is not done until T036 and T037 are cleared.
+
+- [x] T036 (cycle 18; `one_sessions_pick_never_touches_another` has no mutant, stays test-after) Finding 1 (HIGH): for each of the 15 untracked tests at `daemon/tests/structured_effort.rs:570,593,621,633,649,667,688,698,713,733,1098,1128,1205,1234,1258`, record a red against the pre-change behavior (revert or mutate the implementation, run, restore) in `tdd/cycle-log.md`. Done when each name appears with its failing output and `scripts/build-lock.sh cargo test -p micold-daemon --test structured_effort` shows 30 passed.
+- [x] T037 Finding 2 (HIGH): the same for `client/tests/features_effort_picker.rs:281,351` and `client/src/shell/composer.rs:599,619,634`. Done when the cycle log names them with failing output.
+- [x] T038 Finding 4 (MED): run deliberate mutants for `effective_level`, `parse_effort_arg`, `follow_model_answer` (`state.rs:4235`) and `reapply_effort` (`state.rs:4525`), each restored and re-verified; record in `tdd/verification.md`.
+- [x] T039 Finding 6 (MED): at `structured_effort.rs:1155,1199` assert the exact `efforts_asked` list; done when the test passes 100 runs in a loop.
+- [x] T040 (dropped, ledger D22: `tdd/verification.md`'s traceability table is the record) Finding 8 (MED): add `tdd/test-list.md` with ids, `traces` and states for T002-T033.
+

@@ -1146,13 +1146,15 @@ async fn a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level
         rig.effort(0) == EffortChoice::Default
     });
     std::thread::sleep(Duration::from_millis(200));
-    // A re-apply after the idle answer may ask again for the level before both: never another.
+    // The CLI is asked once more for the level before both when the stand-in's refusal of the
+    // deferred `low` is read (undoing the last level sent) before the idle `high` is written, else
+    // not at all: never another level, never twice.
     let asked = efforts_asked(dir);
-    assert_eq!(
-        asked[..2],
-        [Some("low".to_owned()), Some("high".to_owned())]
+    let both = [Some("low".to_owned()), Some("high".to_owned())];
+    assert!(
+        asked == both || asked[..] == [both[0].clone(), both[1].clone(), None],
+        "{asked:?}"
     );
-    assert!(asked[2..].iter().all(Option::is_none), "{asked:?}");
     assert_eq!(rig.effort(0), EffortChoice::Default);
 }
 
@@ -1191,12 +1193,11 @@ async fn a_refused_idle_pick_settled_before_the_deferred_refusal_is_handled_neve
     rig.state.follow_effort_answer(held.0, held.1);
     assert_eq!(rig.effort(0), EffortChoice::Default);
     std::thread::sleep(Duration::from_millis(200));
-    let asked = efforts_asked(dir);
     assert_eq!(
-        asked[..2],
-        [Some("low".to_owned()), Some("high".to_owned())]
+        efforts_asked(dir),
+        [Some("low".to_owned()), Some("high".to_owned())],
+        "nothing more: the CLI is still on the level before both"
     );
-    assert!(asked[2..].iter().all(Option::is_none), "{asked:?}");
 }
 
 /// M3 review (research R4): a model change answered while an idle pick's answer is awaited

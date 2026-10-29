@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1554
 - **Worktree branch**: claude/project-thread-carlvm
 - **Started**: 2026-10-27
-- **Phase**: M6
-- **Next step**: M6 review A round 2 (scoped to the fix diff), then the orchestrator opens the PR (body in the scratchpad) and merges; then a new close unit (speckit-tdd-verify, speckit-converge, T032, close review, gate, close PR).
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1594 | M3: busy pick deferred to turn end; re-apply on model change | merged | 7d6cf7d9cf6ef951cde54357bc1fa4c3b6c574bd |
 | #1596 | M4: effort picker beside the model, the marker, guide | merged | 196125f1e73f88e639035794414eb651ada04dfe |
 | #1599 | M5: `/effort` in the composer, daemon backstop, guide | merged | 5a109a9617e2bd48578b77236d51ae1ec3ba1a86 |
+| #1604 | M6: a refused deferred pick is never asked again; stand-in start race | merged | 946232f2cd4d214b68a2f9f5c4d50a41b81b67c7 |
+| close PR (opened by the orchestrator) | Close: Part A results, TDD verification remediation, spec closed | open | — |
 
 ## Milestones
 
@@ -32,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018–T021 | full | Daemon: busy pick deferred to turn end; re-apply on model change | #1594 | merged |
 | M4 | T022–T026 | full | Window: effort picker beside the model, the marker; guide | #1596 | merged |
 | M5 | T027–T031 | light | `/effort` in the composer; daemon backstop; guide | #1599 | merged |
-| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | — | implemented, gate green, PR to open |
+| M6 | T033–T035 | full | A refused deferred pick is never asked again; stand-in start race closed (found at close) | #1604 | merged |
 
 ## Decisions
 
@@ -47,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | plan | Spec Assumption 3 says the CLI does not report the level in use | Wrong for 2.1.311 (`get_settings` → `applied.effort`); design unchanged, the view shows the choice; follow-up noted | agent-resolved | research.md R10 |
 | D20 | M4 | `EffortPickerState` in `composers` (plan) or its own field? | Its own field `effort_picker: effort_picker::State` on the window: the feature-isolation guard forbids a feature writing another's state and reads a field's owner from a type named `State`; data-model.md notes it | agent-resolved | `feature_write_isolation`, `feature_registration_cost` |
 | D21 | close | A race found by the close unit's quickstart Part A run in shipped M3 behaviour: fix it in the close PR or in a milestone? | A new milestone M6 (close.md step 2): it changes daemon concurrency, which is not Polish; the stand-in fix (T035, tests only) ships with it | agent-resolved | `[Some("low"), Some("high"), Some("low")]` from `a_refused_idle_pick_after_a_refused_deferred_one_goes_back_to_the_level_before_both`, 2 of about 250 runs |
+| D22 | close | speckit-tdd-verify FAIL: Phase 9 (T036–T040) a new milestone or close-unit work? | Close-unit work (close.md step 3): evidence and test strength only, no behaviour. Reds shown after the fact by mutants (cycle 18), T039 assertions tightened, T040 dropped (the traceability table in verification.md is the record); findings 5, 7, 11 kept and noted | agent-resolved | `tdd/verification.md` *Remediation* |
 | D8 | tasks | Plan named four milestones; how many? | Five: daemon split along US1 scenario 4 (busy → M3, the 943 model milestone was ~1,470 lines), window split by story (M4 picker, M5 `/effort`) so no UI is half-wired; plan *Delivery* and contracts/wire.md updated (plan fixed) | agent-resolved | tasks.md *Milestones*; milestones.md rules 3, 6 |
 | D9 | M1 | `effective_level` for a model that reports `supportsEffort: true` but no levels | Treated as levels unknown: the chosen level applies, matching `offered_levels`, which offers all five then (data-model's "`supported && levels ∋ l`" would offer a level that never applies) | agent-resolved | crates/micold-core/src/structured/effort.rs `EffortSupport::takes`, test `the_effective_level_is_the_choice_where_the_model_takes_it` |
 | D10 | M1 | `/effort`'s palette entry: whose words? | The app's description and argument hint (`<default\|low\|medium\|high\|xhigh\|max>`) replace the CLI's (FR-007, FR-009, R6): the CLI's `argumentHint` lists `auto` and `ultracode [on\|off]`, which `parse_effort_arg` refuses (review A M1 F1) | agent-resolved | crates/micold-core/src/structured/commands/mod.rs `completed`, test `effort_is_the_apps_command_once_with_its_description` |
@@ -107,6 +110,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A (code-review, high) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CHANGES: A1 MAJOR race narrowed not closed (`follow_effort_answer` took the deferred pick and put the choice back under two locks; a failed put back still re-applied) → choice put back under the lock that takes the pick, no re-apply on failure; A2 MINOR a deferred write that failed held re-applies → `effort_pick_written` false on a failed write; A3 MINOR stale `reapply_held` → reset by an unheld re-apply and a replacing busy pick. All fixed (cycle log 17: why no new test). Run by the orchestrator |
 | B (conformance) M6 | 1 | 0f9844c05a6d4d29924cf4bb927578fa3f260cca:f348ed2981aa0fba2075de0c70d4953d40b4b38d | CLEAN, 2 MINOR: B1 as A3 (fixed); B2 record the 100-run Verify (B ran 40, 0 failures; recorded here, re-run after the fix). Run by the orchestrator |
 | M6 after review fixes | 1 | — | `structured_effort` 30/30, the whole binary 100 runs in a loop with no failure (Verify); full gate `scripts/gate.sh` green on the fix tree (parent f348ed298) |
+| Close: quickstart Part A (T032) | 2 | — | all green on main 946232f2c (results in quickstart.md); `structured_effort` 30/30 plus 60 runs in a loop with no failure |
+| speckit-tdd-verify | 1 | f2b9dd525..946232f2c | FAIL: 2 HIGH (20 tests with no logged red), 6 MED, 3 LOW. Run by the orchestrator. Remediated in the close unit (D22): 19 of 20 shown red by mutants, 4 strength mutants killed, findings 6, 9, 10 fixed |
+| Close review | 1 | 2a207f2c9737953a8c01a555fa8115748c312d3e:558ccaeb220b301dbd8719c58d89c16d09b297ad | CLEAN, 3 MINOR — F1 the trailing-null cause in the test comment and verification.md (the stand-in's refusal read before the idle write), F2 cycle 18 rows given failing lines and names, D9 row added, F3 quickstart gate row and spec Status worded true — all fixed, prose only. Run by the orchestrator |
+| Full gate close | 1 | — | green: `scripts/gate.sh` on e2c0f51c8 (run by the orchestrator after a container restart killed the unit's run); after it only comments, docs and the ledger changed |
 
 ## Declined review findings
 
@@ -126,5 +133,9 @@ None.
 - `pick_model` (#943, state.rs) has the pattern review A M2 F1 fixed for effort: a stopped or terminal session's stored model pick does not bump `model_picks`, so a late answer to an earlier idle pick can replace it. Out of scope for #1554.
 - Show Claude Code's resolved default level (`Default (medium)`) by reading `get_settings` → `applied.effort` after each launch and change (research R10); not in the spec.
 - Visual pass M4 observed raw JSON "Raw event" blocks in the transcript at session start; unrelated to #1554, not fixed here.
+- M6 review A round 2 (low): if `catalog.set_effort` fails after a refusal in `follow_effort_answer` (state.rs), the held re-apply is dropped and the catalog keeps the refused level while the CLI stays on the previous one.
+- M6 review A round 2 (low, pre-existing): in `write_deferred_effort` (structured.rs ~1079–1087) `take()` runs before `effort_pick_sent.store(true)`, a narrow window where a concurrent re-apply writes the catalog's level after the pick.
+- tdd-verify finding 5: five `structured_effort` tests drive `pick_effort` / `finish_effort_pick` / `follow_effort_answer` directly (they force interleavings the wire cannot order).
+- tdd-verify finding 7: 15 fixed 200–300 ms `thread::sleep` waits for negative assertions in `structured_effort.rs`; the rig has no event to wait on instead.
 
 Note: this unit had no Agent tool; the spec review ran as a fresh headless `claude -p` process (read-only tools) instead of an `autopilot-reviewer` subagent.
