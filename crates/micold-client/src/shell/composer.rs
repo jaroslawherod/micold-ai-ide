@@ -50,11 +50,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             let (caret, lines) = (editor.caret(), editor.line_count());
             let selecting = editor.has_selection();
             let phase = app.core.composers.phase(session);
-            run(
-                app,
-                session,
-                composer_key(&press, caret, lines, composing, selecting, phase),
-            );
+            let intent = composer_key(&press, caret, lines, composing, selecting, phase);
+            // The chord is the button's: one path to the picker (#1464 FR-010).
+            if intent == KeyIntent::Attach {
+                return update(app, Msg::AttachRequested(session));
+            }
+            run(app, session, intent);
         }
         Msg::TranscriptKey { session, press } => {
             let phase = app.core.composers.phase(session);
@@ -319,8 +320,9 @@ fn run(app: &mut App, session: SessionId, intent: KeyIntent) {
             }
         }
         KeyIntent::Interrupt => interrupt(app, session),
-        // The editor's own binding has it; the composer never yields the transcript's keys.
-        KeyIntent::Edit | KeyIntent::CopySelection | KeyIntent::SelectAll => {}
+        // Attach is routed to `AttachRequested` before `run`; the editor's own binding has the
+        // rest, and the composer never yields the transcript's keys.
+        KeyIntent::Attach | KeyIntent::Edit | KeyIntent::CopySelection | KeyIntent::SelectAll => {}
     }
 }
 

@@ -73,6 +73,8 @@ pub enum KeyIntent {
     CopySelection,
     /// Select all of the focused transcript (feature 1550, FR-006).
     SelectAll,
+    /// Open the **Add attachment** picker (#1464 FR-010): Ctrl+Shift+A, Cmd+Shift+A on macOS.
+    Attach,
 }
 
 fn is_busy(phase: TurnPhase) -> bool {
@@ -88,10 +90,25 @@ fn is_ctrl_c(press: &KeyInput) -> bool {
     press.mods.is_ctrl_only() && matches!(press.key, Key::Char('c' | 'C'))
 }
 
+/// The **Add attachment** chord (#1464 FR-010): Cmd+Shift+A on macOS, Ctrl+Shift+A elsewhere.
+fn is_attach_key(press: &KeyInput) -> bool {
+    let mods = if cfg!(target_os = "macos") {
+        Mods {
+            logo: true,
+            shift: true,
+            ..Mods::NONE
+        }
+    } else {
+        CTRL_SHIFT
+    };
+    is_char(press, 'a', mods)
+}
+
 /// What `press` means in a composer whose caret is at `caret` in a draft of `lines` lines, while
 /// an IME composition is open (`composing`) or not, with text selected in the editor (`selecting`) or not,
 /// for a session in `phase` (FR-002, FR-012,
-/// FR-023). No key needs a platform modifier (R12).
+/// FR-023). No key needs a platform modifier (R12) except **Add attachment**'s chord (#1464
+/// FR-010), checked before the non-plain guard.
 pub fn composer_key(
     press: &KeyInput,
     caret: (usize, usize),
@@ -109,6 +126,9 @@ pub fn composer_key(
         } else {
             KeyIntent::Edit
         };
+    }
+    if is_attach_key(press) {
+        return KeyIntent::Attach;
     }
     if !plain(press) {
         return KeyIntent::Edit;

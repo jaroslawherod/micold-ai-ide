@@ -467,7 +467,11 @@ pub fn palette_of<'a, M: Clone + 'a>(
 }
 
 /// The **Add attachment** button's tooltip (#1464 FR-006).
-pub const ATTACH_TOOLTIP: &str = "Add attachment";
+pub const ATTACH_TOOLTIP: &str = if cfg!(target_os = "macos") {
+    "Add attachment (Cmd+Shift+A)"
+} else {
+    "Add attachment (Ctrl+Shift+A)"
+};
 
 /// The **Add attachment** icon button with its tooltip, pressing `press`; inert without one. Also
 /// posed by the showcase (#1464 FR-014).

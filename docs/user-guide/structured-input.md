@@ -29,7 +29,8 @@ A drop that carries no files, such as dragged text, changes nothing and shows no
 ## The Add attachment button
 
 If you would rather not drag, click the paperclip **Add attachment** button in the composer row,
-just before **Send** (hover it for its name). The system file picker opens and lets you choose
+just before **Send** (hover it for its name and shortcut). With the cursor in the message box you
+can press **Ctrl+Shift+A** (**Cmd+Shift+A** on macOS) instead. The system file picker opens and lets you choose
 several files at once; the interface stays usable while it is open.
 
 - **Confirm** the choice and the files are handled exactly as if you had dropped them, in the order
