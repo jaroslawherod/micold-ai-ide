@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1550
 - **Worktree branch**: claude/project-thread-zj503u
 - **Started**: 2026-10-27
-- **Phase**: M6
-- **Next step**: M6 PR (pushed, body written; orchestrator opens it, waits on CI, merges), then a new close unit (speckit-tdd-verify and speckit-converge were not run by the first close unit: M6 was already known, so they run once, after it)
+- **Phase**: done
+- **Next step**: handoff (the close PR is the run's last; the run ends when it merges)
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1595 | M4a: selectable leaves in the transcript, parity and budget | merged | 9df69fa710e866a99c1f1d3c2d5b9027181f595c |
 | #1597 | M4b: selection, edge scroll, menu and copy keys in the transcript | merged | 84bca0374abaa1b9891b471c0c63546cea6474f7 |
 | #1601 | M5: copy controls, docs, visual pass | merged | c99e47aa18ac402d66ba30a06de62d367f62339c |
+| #1605 | M6: split-pane copy key and diff anchors | merged | 85da6ddaaa112c15572ed112d76e4fb4af534045 |
+| close | close the spec: TDD remediation tests (T056–T060), Polish (T050–T051), Status Closed; `Fixes #1550` | pushed, orchestrator opens it | — |
 
 ## Milestones
 
@@ -34,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | T033–T038 | full | Selectable leaves in the transcript, parity and budget (not user-visible) | #1595 | merged |
 | M4b | T039–T043 | full | Selection, edge scroll, menu and copy keys in the transcript; user guide | #1597 | merged |
 | M5 | T044–T049 | full | Copy controls, docs, visual pass | #1601 | merged |
-| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | — | pushed, PR to open |
+| M6 | T052–T055 | full | Split-pane copy key and diff anchors (close unit's cut, from M5's visual pass) | #1605 | merged |
 
 ## Decisions
 
@@ -62,6 +64,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M4b gate: `scripts/gate.sh` green at 2787890f0 (run with `CARGO_PROFILE_{DEV,TEST}_DEBUG=0 CARGO_INCREMENTAL=0`). Its first two runs were red on `feature_registration_cost` (the menu surface names `TranscriptMsg`: allowed with its reason) and `popover_displacement` (the new popover's row: closes nothing, closed by nothing).
 
 - M5 (agent-resolved): every tool card now has a `Derived` (`DerivedBody::Tool` for non-edit tools) so its copy controls' state lives in `Derived::copy` and the entry's lazy key picks up the stamp; `RichCache::copy(session, &Entry, CopyTarget)` computes the value with `copy_value` (pub). `TranscriptMsg::CopyCode` → `Copy { session, key, target }`; the transcript feature copies main-transcript entries, the root (`App::update_transcript`) copies a card in an open subagent thread (`Effect::copy`). All controls are `code_block::copy_control` (now `pub(crate)`): `ToolValue` in the header's trailing row (iff `work_value` is `Some`), `ToolInput`/`ToolResult` right-aligned above the input/result, `DiffPath` via `InlineDiff::copy_path`. The showcase's diffs show the idle control and the MultiEdit pose has a long path (layout fixture re-accepted). `transcript_rich` → `transcript_selection::shown::unshown_caption` allowed in `feature_registration_cost`.
+
+- Close unit (part 2): **speckit-converge** (M4b and M5 had no CLEAN review B): CONVERGED, tasks.md unchanged; every FR-001–FR-021, SC-001–SC-006 and US1–US4 scenario built and tested; subagent thread rows (#944) left for a separate issue (no FR names threads). **speckit-tdd-verify** (`tdd/verification.md`, of a8101e75c): FAIL, two surviving deliberate mutants (snap tie rule, verbatim tool-input copy) and 12 behaviours test-after by history; no unbuilt behaviour. Remediation Phase 13 T056–T060, test code only, each new assertion red under its mutant: T056 `snap_takes_the_earlier_boundary_on_a_tie` (core), T057 `an_input_with_edge_whitespace_copies_untrimmed` + streaming test against a literal (client), T058 split-grapheme assertion is exactly `"th"`, T059 the edge test pins `y == bottom` (material, red at `selection_area.rs:603`). Findings 3, 6, 8 (history, re-accepted fixture, release-only budgets) stay as they are; no `tdd/test-list.md` (the cycle log names tasks.md as the list).
+- T050 quickstart Part A: `scripts/gate.sh` green on the close tree (base a8101e75c + the close diff): structured_selection 14, features_transcript_selection 40, features_composer 46, features_transcript_rich 25, transcript_selection_parity 4, showcase_completeness 46, material_builder_api 13, tokens_contrast 11, no FAILED in 603 test results; release `transcript_open_budget` 6 passed (select-all + copy, drag step). T051: the converge above.
 
 ## Tasks-unit notes
 
@@ -100,6 +105,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M6 (real client, release, Xvfb) | 1 | 4869290e3 + working tree | first build: fast diff drag anchored at `banana` but ended ~80 px low (a redraw taught a shift while moves were queued); fixed (shift learned only from a redraw at the last batch's end, test `a_redraw_ahead_of_the_moves_shifts_nothing`); re-run on the fixed build: all pass, `visual-pass/m6-visual-pass.md` |
 | Review B M6 (+ scoped A on the visual-pass fix, sonnet) | 2 | 0941dc532406cf4a87bb5c7c958e0b81e9ceba1c:4869290e3a45e8eda60c2834bc4a4ebd76526b54 → a13d780a4 | CHANGES: F1 MAJOR after a wheel scroll under a still pointer the shift was not learned (fixed: two redraws in a row at one cursor outside a gesture teach it; test `a_press_after_a_scroll_with_no_move_lands_where_it_happened`, red without); F2 MINOR covered by F1. Round 1 fixes hold. Verify: features_transcript_selection 40, inline_diff 11, selection_area 10 passed |
 | Review B M6 (sonnet) | 3 | cfd0531b24f10f5dcfab3cdd917f0a3b6f9abc39:565f9ba5d88c09f5aa380d77a7a302ea566fd2eb | CLEAN; Verify selection_area 11 passed. F1 MINOR (an unpressed redraw repeat with moves queued could teach a stale shift; nothing outside a drag publishes on redraw today) noted, not fixed |
+| Close review (diff: tests, docs) | 1 | a708b699a9eee01a790a93e037b9bc707931c864:a8101e75c8f01e23d7b6e301d9f14dfa170e2075 | CHANGES: F1/F2 MAJOR ledger lacked the T050/T051 results and its Next step was stale (fixed: close notes above, Phase done), F3 MINOR Status names the close PR before it exists (declined: set in the PR's own commit), F4 MINOR verification.md read as an open FAIL (fixed: Remediation note) |
+| Close review (sonnet, fix diff) | 2 | a708b699a9eee01a790a93e037b9bc707931c864:a8101e75c8f01e23d7b6e301d9f14dfa170e2075 → 65508fece | CLEAN |
 
 ## Declined review findings
 
@@ -133,6 +140,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | A F3 | a drag that ends right of the hunk's `sideways` viewport gets no cursor, so it does not reach the line's end | MINOR: the fix answers the end of a line for a pointer right of the text inside the viewport (the case the visual pass saw); past the viewport the area's clamp and the next move cover it. |
 | M6 | A F4 | `state.pointer` can go stale when an ancestor or overlay takes moves | MINOR: the shift learned at each redraw absorbs a stale pointer (shift = given − pointer), so the next press without a move lands at the frame's cursor, as before M6. |
 | M6 | A F5 | the batch-cursor fix lives in `SelectionArea` only, not in a root wrapper for every widget | MINOR, altitude: no other widget has shown the symptom; a root-level fix is out of #1550's scope. |
+| close | review F3 | spec Status names the close PR before it exists | MINOR: the Status is set in the close PR's own commit and is true when it merges. |
 
 ## Handover
 
@@ -144,7 +152,7 @@ None.
 
 ## Follow-ups not done
 
-- **Pre-existing, not #1550 (separate GitHub issue)**: *Tool card darkens cumulatively on hover and stays dark*. Repro (Linux, Xvfb + lavapipe): open a structured session, get a tool card (e.g. a Bash call), unfold it with its chevron, hover the chevron (or, from M5 on, a copy control): the whole card darkens with a translucent layer that gets darker on later frames and stays after the pointer leaves; texts drawn later show as light patches; fold+unfold resets it. The pre-M5 client (84bca0374) does the same (mean grey 0.853 → 0.772 → 0.727) and its sidebar went fully black the same way, so it predates M5 (suspect a state layer drawn without a clear, or lavapipe). Evidence: `visual-pass/m5-tool-card-darkening.png`, `visual-pass/m5-darkening-pre-m5.png`.
+- **Pre-existing, not #1550 (separate GitHub issue; title and body ready in the close unit's scratchpad `issue-darkening.md`, not filed)**: *Tool card darkens cumulatively on hover and stays dark*. Repro (Linux, Xvfb + lavapipe): open a structured session, get a tool card (e.g. a Bash call), unfold it with its chevron, hover the chevron (or, from M5 on, a copy control): the whole card darkens with a translucent layer that gets darker on later frames and stays after the pointer leaves; texts drawn later show as light patches; fold+unfold resets it. The pre-M5 client (84bca0374) does the same (mean grey 0.853 → 0.772 → 0.727) and its sidebar went fully black the same way, so it predates M5 (suspect a state layer drawn without a clear, or lavapipe). Evidence: `visual-pass/m5-tool-card-darkening.png`, `visual-pass/m5-darkening-pre-m5.png`.
 - **M5 visual pass, step 9 FAIL (M4b code, needs a fix in #1550; cut into M6, T052–T053)**: in a two-pane split of two structured sessions, Ctrl+C after a drag-selection copies nothing in either pane (menu Copy works; single pane works). Likely cause: `ui::composer::transcript_keys` subscribes only for `state.session.active` and requires `App::transcript_focused()` (`focused_field == Transcript(active)`), while `App::update_selection`'s press sets `focused_field = Transcript(pressed session)` without focusing that pane (`shell::panes::focus_pane` is what moves `session.active`). Fix: key the subscription off the focused transcript's session (or focus the pane on a transcript press), with an App-level test: two panes, press in the non-active pane, Ctrl+C copies it.
 - **M5 visual pass, minor (M4 code; cut into M6, T054–T055)**: on a diff's lines the selection anchors where the drag first moves, not at the press (a fast drag from `banana` started at `fig`), and a same-line drag ending right of a short diff line's end selects nothing. Prose, code results and raw events anchor at the press. Suspect the diff's `sideways` scrollable taking the press.
 - T021's join of `FieldId::Transcript` in `ui/focus.rs` is T041's (M4b; tasks.md now says so): `SelectionArea` placed in the transcript is the first thing that can take and report the transcript's focus; M2 adds the variant, the key arbitration, the subscription and the menu Copy's focus.

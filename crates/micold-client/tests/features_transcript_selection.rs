@@ -548,10 +548,10 @@ fn copy_text_slices_the_ends_and_joins_rows_with_a_line_break() {
     let view = held.view();
     let sel = selection(at(held.body(0), &[0], 6), at(held.body(2), &[0], 5));
     assert_eq!(copy_text(&view, &sel), "line\nsecond\nthi\u{301}");
-    // An offset inside a grapheme (between `i` and its combining accent) never splits it.
+    // An offset inside a grapheme (between `i` and its combining accent) never splits it: it snaps
+    // to the nearer boundary, here the one before the `i` (1 byte away; the other is 2).
     let inside = selection(at(held.body(2), &[0], 0), at(held.body(2), &[0], 3));
-    let copied = copy_text(&view, &inside);
-    assert!(copied == "thi\u{301}" || copied == "th", "{copied:?}");
+    assert_eq!(copy_text(&view, &inside), "th");
     // Backwards is the same range.
     let back = selection(at(held.body(2), &[0], 5), at(held.body(0), &[0], 6));
     assert_eq!(copy_text(&view, &back), "line\nsecond\nthi\u{301}");

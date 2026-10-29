@@ -487,8 +487,8 @@ pane") and FR-001's anchor on diff lines.
 
 ## Phase 11: Polish (close unit; no code)
 
-- [ ] T050 Run quickstart Part A in full and the gate; record the results in the ledger
-- [ ] T051 Converge: check every FR and SC of spec.md against plan *Requirement Coverage* and the
+- [x] T050 Run quickstart Part A in full and the gate; record the results in the ledger
+- [x] T051 Converge: check every FR and SC of spec.md against plan *Requirement Coverage* and the
   merged tests; tick the tasks
 
 ---
@@ -626,3 +626,15 @@ depends on nothing beyond `main` and the earlier milestones (research R13).
   in a split (label `docs-not-needed`)
 
 Polish (T050–T051) changes no code: the close unit does it in the close PR.
+
+---
+
+## Phase 13: TDD remediation
+
+From `tdd/verification.md` (verdict FAIL: two surviving mutants, findings 1 and 2). Test code only; each new assertion fails under its mutant.
+
+- [x] T056 Pin `snap`'s tie rule: add `snap(family, 10) == 1` (and a CJK/combining tie) in `crates/micold-core/tests/structured_selection.rs`; mutant `<=` to `<` at `selection.rs:301` must fail it (finding 1; `cargo test -p micold-core --test structured_selection`)
+- [x] T057 Pin the tool-input copy byte for byte: a `ToolInput` test with leading/trailing whitespace and a newline in `crates/micold-client/tests/features_transcript_rich.rs:941`, and assert the streaming test against a literal, not `card.input`; mutant `.trim()` at `transcript_rich.rs:682` must fail (finding 2)
+- [x] T058 Assert the one grapheme result at `crates/micold-client/tests/features_transcript_selection.rs:554` instead of `a || b` (finding 4)
+- [x] T059 Pin the bottom-edge pixel in `crates/micold-material/src/selection_area.rs` tests (`past` at `:155`, finding 5)
+- [x] T060 Run T050/T051 (finding 7). No `tdd/test-list.md`: `tdd/cycle-log.md` names tasks.md's test tasks as the list, so a second list would only repeat them
