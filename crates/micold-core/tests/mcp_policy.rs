@@ -13,8 +13,7 @@ use std::path::PathBuf;
 
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::mcp::policy::{
-    decide, is_self_targeted, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision,
-    TargetFacts,
+    decide, is_self_targeted, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
 };
 use micold_core::mcp::tools::{
     CreateWorktreeRequest, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
@@ -294,7 +293,10 @@ fn the_delete_worktree_description_allows_self_delete_with_confirmation() {
         .unwrap();
     let text = tool["description"].as_str().unwrap();
     assert!(!text.contains("own worktree cannot"), "{text}");
-    assert!(text.contains("scheduled") && text.contains("confirms"), "{text}");
+    assert!(
+        text.contains("scheduled") && text.contains("confirms"),
+        "{text}"
+    );
 }
 
 /// U110: the confirmation carries the options the user is asked to allow.
