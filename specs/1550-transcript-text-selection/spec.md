@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-10-29 — shipped in PRs #1582 (design), #1586, #1590, #1593, #1595, #1597, #1601, #1605 and the close PR
 
 **Input**: GitHub issue #1550 "Structured view: text and values cannot be selected or copied"
 (labels: bug, flow:bug; switched to flow:feature). In the structured session view, transcript text

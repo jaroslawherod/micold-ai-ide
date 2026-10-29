@@ -962,6 +962,17 @@ fn the_input_and_result_copy_what_the_card_holds() {
     assert_eq!(text, "one\n\ttwo\n[image not shown]\nthree");
 }
 
+/// SC-004: the input copies byte for byte, never trimmed or reflowed.
+#[test]
+fn an_input_with_edge_whitespace_copies_untrimmed() {
+    let (mut state, mut cache, s) =
+        session_of(vec![tool_use("r", "Bash", "  {\"command\":\n \"ls\"}\t\n")]);
+    let key = card_key(&state, s, "r");
+    let (text, _) =
+        copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolInput).expect("the input");
+    assert_eq!(text, "  {\"command\":\n \"ls\"}\t\n");
+}
+
 /// US3 scenario 6: while the input streams, the input copies the text received so far.
 #[test]
 fn a_streaming_input_copies_the_text_so_far() {
@@ -977,14 +988,14 @@ fn a_streaming_input_copies_the_text_so_far() {
             .entries()
             .find_map(|e| match e.kind() {
                 EntryKind::ToolCall(card) if card.streaming && !card.input.is_empty() => {
-                    Some((e.key().clone(), card.input.clone()))
+                    Some(e.key().clone())
                 }
                 _ => None,
             });
-        if let Some((key, so_far)) = open {
+        if let Some(key) = open {
             let (text, _) = copy_of(&mut state, &mut cache, s, &key, CopyTarget::ToolInput)
                 .expect("a streaming input copies");
-            assert_eq!(text, so_far, "the input received so far");
+            assert_eq!(text, "{\"file_path\": \"<CWD", "the input received so far");
             return;
         }
     }

@@ -176,6 +176,15 @@ fn snap_returns_the_nearest_grapheme_boundary() {
 }
 
 #[test]
+fn snap_takes_the_earlier_boundary_on_a_tie() {
+    let family = "a\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}b";
+    assert_eq!(snap(family, 10), 1, "midway between 1 and 19");
+    assert_eq!(snap("\u{1F600}", 2), 0, "midway inside one emoji");
+    // か + U+3099 (combining voiced mark): offset 3 is a char boundary, not a grapheme one.
+    assert_eq!(snap("か\u{3099}", 3), 0, "midway inside a CJK cluster");
+}
+
+#[test]
 fn a_position_built_in_a_text_is_snapped() {
     let at = TextPos::in_text(RowPos::End(0), TextPath::new([0]), "日本語", 4);
     assert_eq!(at.offset, 3);

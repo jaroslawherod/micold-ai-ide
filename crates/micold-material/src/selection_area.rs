@@ -594,6 +594,18 @@ mod tests {
         let below = Point::new(2.0, bounds.y + bounds.height + 40.0);
         let (out, _) = m.tick(std::time::Instant::now(), mouse::Cursor::Available(below));
         assert!(out.contains(&"edge Down".to_owned()), "{out:?}");
+        // The bottom pixel row is `bottom - 1`: a pointer exactly at `bottom` is already past it.
+        let bottom = bounds.y + bounds.height;
+        let (out, _) = m.tick(
+            std::time::Instant::now(),
+            mouse::Cursor::Available(Point::new(2.0, bottom)),
+        );
+        assert!(out.contains(&"edge Down".to_owned()), "{out:?}");
+        let (out, _) = m.tick(
+            std::time::Instant::now(),
+            mouse::Cursor::Available(Point::new(2.0, bottom - 1.0)),
+        );
+        assert!(!out.contains(&"edge Down".to_owned()), "{out:?}");
 
         // The text at the top row answers the clamped pointer during a drag.
         let mut m = Mounted::new_in(area(true), Size::new(300.0, 120.0));
