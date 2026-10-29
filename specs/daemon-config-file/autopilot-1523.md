@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1551 | Design (milestones for Issue 2) | merged | 2b6335441e102258eb42b66f6cb607dc8e70d31c |
 | #1600 | M1 | merged | 2d2d95f3fae526ce5fcff1f4f34c63d838d9004c |
-| close | Close (tests strength, spec Closed) | open | — |
+| #1614 | Close (tests strength, spec Closed) | open | — |
 
 ## Milestones
 
