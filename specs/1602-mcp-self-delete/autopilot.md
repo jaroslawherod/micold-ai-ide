@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
 - **Phase**: spec
-- **Next step**: Run the clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (story 4 scope; deferred-failure reporting).
+- **Next step**: Apply the user's answers to the 2 markers (clarify, continued). Was: run the clarify unit: resolve the 2 [NEEDS CLARIFICATION] markers in spec.md (story 4 scope; deferred-failure reporting).
 
 ## Pull requests
 
@@ -48,7 +48,9 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+Clarify round 1 (2026-10-29), repo does not settle either question (034 has no notice mechanism; issue says "Optionally"):
+1. Story 4 (`stop_session`/`delete_session` on self) in scope? Recommended: yes.
+2. Failed deferred removal reported how? Recommended: app notice naming W and reason, plus daemon log; session stays stopped.
 
 ## Follow-ups not done
 
