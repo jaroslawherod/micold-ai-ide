@@ -453,6 +453,7 @@ fn wire_operation(op: ConfirmedOp) -> ConfirmOperation {
 /// Ask the user, in every window, to allow `op` on `target` (FR-014), naming the calling session,
 /// the operation and the target. `Ok` means allowed; every other answer is the call's failure. An
 /// agent that hangs up meanwhile abandons the request: the prompt is withdrawn and nothing is done.
+#[allow(clippy::too_many_arguments)] // one confirmation: caller, target, loss, grace and hangup are all distinct inputs
 async fn ask_user(
     state: &DaemonState,
     who: &Caller,
