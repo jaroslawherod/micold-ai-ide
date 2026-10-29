@@ -1027,7 +1027,7 @@ async fn a_declined_or_unasked_self_delete_changes_nothing() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_self_delete_without_stop_sessions_is_the_live_sessions_conflict() {
     let f = Fixture::new().await;
-    f.start(CALLER).await;
+    f.start(IDLE).await;
     let asked = answering_window(&f.state, true);
     let error = f
         .err(CALLER, "delete_worktree", json!({"worktree": "b"}))
@@ -1035,7 +1035,7 @@ async fn a_self_delete_without_stop_sessions_is_the_live_sessions_conflict() {
     assert_eq!(error["category"], "conflict", "{error}");
     assert_eq!(asked.load(Ordering::SeqCst), 0);
     assert!(f.worktree_dir("b").is_dir());
-    if let Some(pty) = f.state.live_session(sid(CALLER)) {
+    if let Some(pty) = f.state.live_session(sid(IDLE)) {
         let _ = pty.kill();
     }
 }
