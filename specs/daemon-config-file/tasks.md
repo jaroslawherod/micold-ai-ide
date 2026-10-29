@@ -308,3 +308,19 @@ with T087 in place, and no acceptance scenario separates the keys cleanly.
 - **Verify**: `cargo test -p micold-core daemon_config` and `cargo test -p micold-daemon --test config_check`; `micold-daemon config check crates/micold-core/tests/fixtures/daemon_config/host.toml` exits 0
 - **Depends on**: —
 - **Tier**: full
+
+## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
+
+Verdict FAIL: Issue 2 is not done until findings 1-5 are cleared. Verify each with
+`scripts/build-lock.sh cargo test -p micold-core --lib daemon_config` and
+`scripts/build-lock.sh cargo test -p micold-daemon --test config_check`.
+
+- [x] T107 [US1] Finding 1: make `expect` in `crates/micold-core/src/daemon_config/tests.rs:40` return the error and assert `line`, `column` and `key` for V2-V5, V7, V9, V10, V12-V19 (one position assertion per rule, or a table-driven test); done when every rule row in the verification table has line and column
+- [x] T108 [US1] Finding 2: replace the V5 needle `"a"` (`tests.rs:290`) with the key `github.tokens[1].name` and assert the first-entry line; make `several_semantic_errors_are_all_reported` (`:621`) assert the two rule ids V16 and V4
+- [x] T109 [US1] Finding 3: add tests for `listen.socket` on container/kubernetes and `listen.tcp` on host/ssh (V3); mutant `validate.rs:520` `if sandbox` to `if false` must now fail
+- [x] T110 [US1] Finding 4: add a table-driven V4 test over every path key in `validate.rs:551-600` (relative path refused naming the key); mutant dropping `git.known_hosts_file` must now fail
+- [x] T111 [US1] Finding 5: add a `config check` test with a warning-only file (host, V7 `version` warning on a pi CLI) asserting exit 0, the warning on stderr and the view on stdout in `crates/micold-daemon/tests/config_check.rs`; mutant `failed = !findings.is_empty()` must now fail
+- [x] T112 [US1] Finding 6, 7: tighten the `idle_stop` assertion (`tests.rs:575-581`) to the exact message and assert more than `schema: 1` for each fixture in `tests/config_check.rs:28-42` and kind-specific content in `tests.rs:54-64`
+- [x] T113 [US1] Finding 11: add `config check` tests for `--kind` with a bad value, `--kind` with no value, an unknown flag, and two files (exit 2, usage or message)
+- [x] T114 [US1] Finding 10: correct the `traces` in `specs/daemon-config-file/tdd/test-list.md` (A2, U20 to FR-017; U3 to FR-003; U4-U14 to the rule's FR) and set `spec_criteria`
+- [ ] T115 (partly done: per-kind messages, rule messages; cfg!(windows) constant and secret-file helper left as LOW) [US1] Findings 8, 9, 12: give the four-examples loop a per-kind message, replace the `cfg!(windows)` expected value with a named per-platform constant, add rule messages to bare `assert_eq!`s, and reuse one secret-file helper

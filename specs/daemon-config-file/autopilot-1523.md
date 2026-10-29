@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1523
 - **Worktree branch**: feat/1523_daemon-configuration-schema-and-micold-daemon
 - **Started**: 2026-10-27
-- **Phase**: milestone M1
-- **Next step**: wait for CI on the M1 PR, merge (orchestrator)
+- **Phase**: done
+- **Next step**: handoff (merge close PR)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1551 | Design (milestones for Issue 2) | merged | 2b6335441e102258eb42b66f6cb607dc8e70d31c |
-| #1600 | M1 | open | — |
+| #1600 | M1 | merged | 2d2d95f3fae526ce5fcff1f4f34c63d838d9004c |
+| close | Close (tests strength, spec Closed) | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T005–T013, T087 | full | Schema V1–V19, `config check`, user guide | #1600 | in review |
+| M1 | T005–T013, T087 | full | Schema V1–V19, `config check`, user guide | #1600 | merged |
 
 ## Decisions
 
@@ -42,6 +43,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 2 | b98bb4c1:53ad9c6b | CLEAN; 2 MINOR left as is (V18 `.`; idle_stop u64 overflow message) |
 | M1 B (conformance, sonnet) | 1 | - | cycle 20 lacked red; fixed (stub-red 10/10 fail, green 10/10), Verify observed: daemon test 10 pass, `config check host.toml` exit 0 |
 | M1 B | 2 | b98bb4c1:53ad9c6b | CLEAN |
+| Close tdd-verify | 1 | - | FAIL (3 of 4 mutants survived, only V1 asserted a column); test-strength fixes F1-F7, F11 by workers, no behaviour gap |
+| Close review | 1 | 01bf8b74:2d2d95f3 | CHANGES: 1 MAJOR (V14/V15/V17 positions, fixed: key+line+column asserted), 3 MINOR (T111 wording fixed; others left); fix is test-only, scoped gate/full gate rerun; round 2 below |
+| Close review | 2 | d34d8b99:2d2d95f3 | CLEAN (sonnet; fix diff, test-core 1912 pass) |
 
 ## Declined review findings
 
@@ -57,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None.
 
-RED CI attempt 1 (run 40756285827, Windows): tests-only fix, TOML literal strings for paths and the Windows default shell in the defaults test. Gate green.
+(resolved) RED CI attempt 1 (run 40756285827, Windows): tests-only fix, TOML literal strings for paths and the Windows default shell in the defaults test. Gate green.
 
 ## Open escalation
 
@@ -67,3 +71,5 @@ None.
 
 - Milestones live in tasks.md under "Issue 2 (#1523)" headings; other sub-issues add their own.
 - TDD test list (speckit-tdd-plan) deliberately not generated here; each milestone's implement run derives it for Issue 2.
+- `scripts/autopilot/resume.sh` reports LEDGER-ON-MAIN for this ledger even while the branch holds a newer copy; not fixed here (follow-up).
+- Converge skipped: review B was CLEAN (round 2) for M1, the only milestone.

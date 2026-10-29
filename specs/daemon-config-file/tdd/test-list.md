@@ -2,7 +2,7 @@
 feature: daemon-config-file
 loop: inside-out
 profile: .specify/memory/tdd-profile.md
-spec_criteria: 0
+spec_criteria: 5
 planned_at: 2b6335441
 updated_at: 2b6335441
 suite_baseline: unknown
@@ -16,10 +16,10 @@ and `micold-daemon config check`. Issues 3-15 add their own behaviors under thei
 | ID | Behavior | Traces to | State |
 |---|---|---|---|
 | A1 | The four contract §3 examples parse; `config check` exits 0 on each | US1, FR-001 | DONE |
-| A2 | An invalid file exits 2 with `file:line:col` per error | US1, FR-003, FR-018 | DONE |
+| A2 | An invalid file exits 2 with `file:line:col` per error | US1, FR-003, FR-017 | DONE |
 | U1 | Defaults per kind (data_dir, idle_stop, isolate_host_helpers, ssh.dir, clone_root, startup) | FR-001 | DONE |
 | U2 | V1 unknown key (nested, array table, top level, retired `git.base`) | FR-003 | DONE |
-| U3 | V2 schema missing / newer (names both) | FR-004 | DONE |
+| U3 | V2 schema missing / newer (names both) | FR-003 | DONE |
 | U4 | V3 listen shape and kind | FR-017 | DONE |
 | U5 | V4 relative path / `~` | FR-017 | DONE |
 | U6 | V5 duplicates; V6 equal-specificity tokens accepted | FR-017 | DONE |
@@ -36,4 +36,4 @@ and `micold-daemon config check`. Issues 3-15 add their own behaviors under thei
 | U17 | V18 session.files / ssh key rules | FR-042 | DONE |
 | U18 | V19 machine sign-in kind and exclusivity | FR-042 | DONE |
 | U19 | SC-005: Debug/Display of config, SecretPath, view never show content | SC-005 | DONE |
-| U20 | `config check` flags: --kind, --files, usage, unreadable file | FR-018 | DONE |
+| U20 | `config check` flags: --kind, --files, usage, unreadable file | FR-017 | DONE |

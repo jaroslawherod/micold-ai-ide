@@ -27,7 +27,34 @@ fn text(bytes: &[u8]) -> String {
 
 #[test]
 fn a_valid_file_exits_zero_and_prints_the_resolved_view() {
-    for name in ["host.toml", "ssh.toml", "container.toml", "kubernetes.toml"] {
+    let expected = [
+        (
+            "host.toml",
+            ["daemon: This computer (host)", "listen: socket auto"],
+        ),
+        (
+            "ssh.toml",
+            [
+                "daemon: build-box (ssh)",
+                "storage.clone_root: /home/jaro/src",
+            ],
+        ),
+        (
+            "container.toml",
+            [
+                "daemon: podman-sandbox (container)",
+                "session.env: RUST_LOG=info",
+            ],
+        ),
+        (
+            "kubernetes.toml",
+            [
+                "daemon: k8s-dev (kubernetes)",
+                "storage.clone_root: /data/repos",
+            ],
+        ),
+    ];
+    for (name, lines) in expected {
         let file = fixture(name);
         let output = check(&[file.to_str().unwrap()]);
         assert_eq!(
@@ -37,9 +64,31 @@ fn a_valid_file_exits_zero_and_prints_the_resolved_view() {
             text(&output.stderr)
         );
         let stdout = text(&output.stdout);
-        assert!(stdout.contains("schema: 1"), "{stdout}");
-        assert!(stdout.contains("daemon: "), "{stdout}");
+        assert!(stdout.contains("schema: 1"), "{name}: {stdout}");
+        for line in lines {
+            assert!(
+                stdout.contains(line),
+                "{name}: missing `{line}` in {stdout}"
+            );
+        }
     }
+}
+
+#[test]
+fn a_warning_only_file_exits_zero_and_prints_the_resolved_view() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("daemon.toml");
+    std::fs::write(
+        &file,
+        "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n\
+         [[ai.cli]]\nid = \"pi\"\nversion = \"1.2.3\"\n",
+    )
+    .unwrap();
+    let output = check(&[file.to_str().unwrap()]);
+    let stderr = text(&output.stderr);
+    assert!(stderr.contains("warning: "), "{stderr}");
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert!(text(&output.stdout).contains("daemon: t (host)"));
 }
 
 #[test]
@@ -169,4 +218,23 @@ fn a_bad_command_prints_usage_and_exits_two() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(text(&output.stderr).contains("usage:"));
+}
+
+#[test]
+fn bad_arguments_print_a_usage_message_and_exit_two() {
+    let file = fixture("host.toml");
+    let file = file.to_str().unwrap();
+    let cases: [&[&str]; 4] = [
+        &[file, "--kind", "bogus"],
+        &[file, "--kind"],
+        &[file, "--bogus"],
+        &[file, file],
+    ];
+    for args in cases {
+        let output = check(args);
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+        assert!(stderr.contains("kind"), "{args:?}: {stderr}");
+        assert!(text(&output.stdout).is_empty(), "{args:?}");
+    }
 }
