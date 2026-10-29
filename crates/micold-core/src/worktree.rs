@@ -6,6 +6,8 @@
 //! The one exception is [`discover`], the I/O convenience that pairs the git query with a directory
 //! listing before delegating to the pure [`reconcile`].
 
+pub mod loss;
+
 use crate::git::Git;
 use crate::naming::DerivedNames;
 use serde::{Deserialize, Serialize};

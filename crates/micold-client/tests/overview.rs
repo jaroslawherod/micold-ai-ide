@@ -117,6 +117,7 @@ fn prompt(session: &Session) -> Prompt {
         operation: ConfirmOperation::DeleteSession,
         target_label: "x".to_string(),
         self_targeted: false,
+        loss: None,
     }
 }
 

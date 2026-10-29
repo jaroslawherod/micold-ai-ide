@@ -20,6 +20,7 @@ fn prompt(id: u64) -> Prompt {
         operation: ConfirmOperation::DeleteSession,
         target_label: "reviewer".to_string(),
         self_targeted: false,
+        loss: None,
     }
 }
 

@@ -244,6 +244,11 @@ pub trait Git {
     /// a detached `HEAD`, without a review base, with no commit of its own, on error or timeout.
     /// Read-only.
     fn own_commit_subject(&self, dir: &Path) -> Option<String>;
+
+    /// What deleting the worktree at `dir` would lose (#1602, FR-006): its changed and untracked
+    /// files, and its commits not on the branch's upstream, else on no remote-tracking branch.
+    /// Two local git calls, no remote. An error means git could not be read.
+    fn worktree_loss(&self, dir: &Path) -> io::Result<crate::worktree::loss::WorktreeLoss>;
 }
 
 /// One remote of a repository, as its own config names it (feature 034, research R5).
@@ -852,6 +857,27 @@ impl Git for GitCli {
     fn own_commit_subject(&self, dir: &Path) -> Option<String> {
         GitCli::own_commit_subject(self, dir)
     }
+
+    fn worktree_loss(&self, dir: &Path) -> io::Result<crate::worktree::loss::WorktreeLoss> {
+        use crate::worktree::loss::{parse_log, parse_status_z};
+        let status = run_git(
+            dir,
+            &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        )?;
+        let log = ["--format=%h%x00%s"];
+        let commits = if run_git(dir, &["rev-parse", "--verify", "-q", "@{upstream}"]).is_ok() {
+            run_git(dir, &[&["log"][..], &log, &["@{upstream}..HEAD"]].concat())?
+        } else {
+            run_git(
+                dir,
+                &[&["log"][..], &log, &["HEAD", "--not", "--remotes"]].concat(),
+            )?
+        };
+        Ok(crate::worktree::loss::WorktreeLoss {
+            files: parse_status_z(&status),
+            commits: parse_log(&commits),
+        })
+    }
 }
 
 /// How many of a failed fetch's output lines are retained for its error message. Generous, because
@@ -1000,6 +1026,9 @@ struct FakeState {
     /// worktree dir -> the subject `own_commit_subject` answers, as scripted (feature 1504); an
     /// unscripted dir has no commit of its own.
     own_commits: BTreeMap<PathBuf, String>,
+    /// worktree dir -> the answer `worktree_loss` gives, as scripted (#1602); an unscripted dir
+    /// fails, as a git that cannot read it.
+    losses: BTreeMap<PathBuf, crate::worktree::loss::WorktreeLoss>,
 }
 
 impl FakeGit {
@@ -1028,6 +1057,16 @@ impl FakeGit {
             .borrow_mut()
             .whole_changes
             .insert(dir.into(), change);
+        self
+    }
+
+    /// Script what [`Git::worktree_loss`] answers for `dir` (#1602).
+    pub fn with_loss(
+        self,
+        dir: impl Into<PathBuf>,
+        loss: crate::worktree::loss::WorktreeLoss,
+    ) -> Self {
+        self.inner.borrow_mut().losses.insert(dir.into(), loss);
         self
     }
 
@@ -1654,5 +1693,15 @@ impl Git for FakeGit {
     /// The subject scripted by [`FakeGit::with_own_commit`], else none.
     fn own_commit_subject(&self, dir: &Path) -> Option<String> {
         self.inner.borrow().own_commits.get(dir).cloned()
+    }
+
+    /// The loss scripted by [`FakeGit::with_loss`], else a failure.
+    fn worktree_loss(&self, dir: &Path) -> io::Result<crate::worktree::loss::WorktreeLoss> {
+        self.inner
+            .borrow()
+            .losses
+            .get(dir)
+            .cloned()
+            .ok_or_else(|| io::Error::other("no loss scripted"))
     }
 }

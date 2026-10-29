@@ -24,7 +24,9 @@ use conn::connect;
 use futures_util::SinkExt;
 use mcp_support::*;
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, WireLifecycle};
+use micold_core::protocol::messages::{
+    CatalogSnapshot, ClientMsg, ConfirmOperation, DaemonMsg, LossSummary, WireLifecycle,
+};
 use micold_core::session::{AiCli, SessionId, SessionLifecycle, TerminalMode};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -1222,4 +1224,111 @@ async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
         "{subject}: {reason}"
     );
     assert!(f.worktree_dir("b").is_dir(), "the worktree is still there");
+}
+
+// ---------------------------------------------------------------------------------------------
+// M2 (#1602, FR-006, FR-013, SC-003): the delete prompt lists what would be lost.
+// ---------------------------------------------------------------------------------------------
+
+/// The loss the prompt of `delete_worktree` for `worktree` carries; the user declines.
+async fn prompt_loss_for(
+    f: &Fixture,
+    worktree: &str,
+    stop_sessions: bool,
+) -> (ConfirmOperation, Option<LossSummary>) {
+    let mut window = fake_window(&f.state);
+    let (prompt, _) = tokio::join!(
+        async {
+            let (id, msg) = next_prompt(&mut window).await;
+            f.state.answer_confirmation(id, false);
+            msg
+        },
+        f.err(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": worktree, "stop_sessions": stop_sessions}),
+        )
+    );
+    let DaemonMsg::ConfirmationRequested {
+        operation, loss, ..
+    } = prompt
+    else {
+        unreachable!()
+    };
+    (operation, loss)
+}
+
+/// Mark every commit so far as pushed: a remote-tracking ref at `HEAD`, as a fetch leaves.
+fn mark_pushed(f: &Fixture) {
+    git(
+        f.project(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+}
+
+/// Scenarios 1, 2, 5 and the live-sessions line: another worktree's prompt lists its edited and
+/// untracked files and its unpushed commits, and its operation says the sessions stop.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_prompt_lists_changed_files_and_unpushed_commits_of_another_worktree() {
+    let f = Fixture::new().await;
+    mark_pushed(&f);
+    let d = f.worktree_dir("d");
+    std::fs::write(d.join("untracked.txt"), "u").unwrap();
+    std::fs::write(d.join("edited.txt"), "1").unwrap();
+    git(&d, &["add", "edited.txt"]);
+    git(&d, &["commit", "-q", "-m", "add edited"]);
+    std::fs::write(d.join("edited.txt"), "2").unwrap();
+
+    let (operation, loss) = prompt_loss_for(&f, "d", true).await;
+
+    assert!(matches!(
+        operation,
+        ConfirmOperation::DeleteWorktree {
+            stop_sessions: true,
+            ..
+        }
+    ));
+    let loss = loss.expect("a worktree delete carries its loss");
+    let mut files = loss.files.clone();
+    files.sort();
+    assert_eq!(files, ["edited.txt", "untracked.txt"], "{loss:?}");
+    assert_eq!(loss.commits.len(), 1, "{loss:?}");
+    assert_eq!(loss.commits[0].subject, "add edited");
+    assert!(!loss.unreadable);
+    assert!(f.worktree_dir("d").exists(), "declining changed nothing");
+}
+
+/// Scenario 3: a clean, fully pushed worktree has an empty loss, which the dialog shows as nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_prompt_of_a_clean_pushed_worktree_lists_nothing() {
+    let f = Fixture::new().await;
+    mark_pushed(&f);
+    let (_, loss) = prompt_loss_for(&f, "d", false).await;
+    assert!(loss.expect("Some").is_empty());
+}
+
+/// SC-003: more than 50 files are bounded, with the rest counted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_prompt_bounds_the_file_list_and_counts_the_rest() {
+    let f = Fixture::new().await;
+    mark_pushed(&f);
+    for i in 0..53 {
+        std::fs::write(f.worktree_dir("d").join(format!("f{i:02}.txt")), "x").unwrap();
+    }
+    let (_, loss) = prompt_loss_for(&f, "d", false).await;
+    let loss = loss.expect("Some");
+    assert_eq!((loss.files.len(), loss.files_more), (50, 3));
+}
+
+/// Scenario 4: allowing a prompt that lists work deletes as without a list.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn allowing_a_prompt_that_lists_work_deletes_the_worktree() {
+    let f = Fixture::new().await;
+    std::fs::write(f.worktree_dir("d").join("u.txt"), "x").unwrap();
+    answering_window(&f.state, true);
+    let out = f
+        .ok(CALLER, "delete_worktree", json!({"worktree": "d"}))
+        .await;
+    assert_eq!(out["removed"], "d", "{out}");
+    assert!(!f.worktree_dir("d").exists());
 }

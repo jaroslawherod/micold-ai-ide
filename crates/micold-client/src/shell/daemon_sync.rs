@@ -2243,6 +2243,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             caller_label,
             operation,
             target_label,
+            loss,
             self_targeted,
             ..
         } => {
@@ -2256,6 +2257,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         operation,
                         target_label,
                         self_targeted,
+                        loss,
                     },
                 )));
         }

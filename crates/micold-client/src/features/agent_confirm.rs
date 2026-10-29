@@ -60,6 +60,8 @@ pub struct Prompt {
     pub target_label: String,
     /// The calling session is one of the sessions the operation ends (#1602).
     pub self_targeted: bool,
+    /// What deleting the worktree would lose; `Some` for a worktree delete only (#1602).
+    pub loss: Option<micold_core::protocol::messages::LossSummary>,
 }
 
 /// What this feature remembers: the prompts awaiting an answer here, in arrival order.
@@ -225,6 +227,44 @@ pub fn self_targeted_note(prompt: &Prompt) -> Option<&'static str> {
     prompt
         .self_targeted
         .then_some("The session that asked ends after you allow this.")
+}
+
+/// A heading and its rows in the delete prompt's loss list (#1602, FR-006).
+pub type LossSection = (String, Vec<String>);
+
+/// What the delete prompt lists under the headline: the uncommitted files and the unpushed
+/// commits, each as a heading with its rows (a last row counts what the bound left out), and one
+/// line when git could not be read. Empty when nothing would be lost (FR-006).
+pub fn loss_sections(prompt: &Prompt) -> Vec<LossSection> {
+    let Some(loss) = &prompt.loss else {
+        return Vec::new();
+    };
+    let more = |n: u32| (n > 0).then(|| format!("… and {n} more"));
+    let mut sections = Vec::new();
+    if loss.unreadable {
+        sections.push((
+            "Git could not be read, so changes and unpushed commits may be missing here."
+                .to_string(),
+            Vec::new(),
+        ));
+    }
+    if !loss.files.is_empty() {
+        let mut rows = loss.files.clone();
+        rows.extend(more(loss.files_more));
+        let total = loss.files.len() + loss.files_more as usize;
+        sections.push((format!("Uncommitted changes ({total})"), rows));
+    }
+    if !loss.commits.is_empty() {
+        let mut rows: Vec<String> = loss
+            .commits
+            .iter()
+            .map(|c| format!("{} {}", c.short_hash, c.subject))
+            .collect();
+        rows.extend(more(loss.commits_more));
+        let total = loss.commits.len() + loss.commits_more as usize;
+        sections.push((format!("Unpushed commits ({total})"), rows));
+    }
+    sections
 }
 
 /// The dialog's headline: who asks, to do what, to which target.

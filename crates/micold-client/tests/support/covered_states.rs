@@ -3277,6 +3277,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                             },
                         target_label: "feat-login-page".to_string(),
                         self_targeted: false,
+                        loss: None,
                     }];
                 StateUnderTest::new(state)
             },
