@@ -37,11 +37,11 @@ None. The change extends existing crates (plan: no new crate or module tree).
 
 ### Tests (write first, see them fail)
 
-- [ ] T003 [P] [US3] Policy table tests in `core/mcp/policy.rs`: own worktree delete is `Confirm`, not `Refuse`; Default caller still refused `delete_worktree` and `rename_worktree`; `interrupt`, `send`, `read` on self still refused; `is_self_targeted` true only for the caller's own worktree.
+- [ ] T003 [P] [US3] Policy table tests in `core/mcp/policy.rs`: own worktree delete is `Confirm`, not `Refuse`; Default caller still refused `delete_worktree` and `rename_worktree`; the `delete_worktree` description in `tools/list` no longer says a session cannot stop or delete itself and mentions the confirmation (covers T014); `interrupt`, `send`, `read` on self still refused; `is_self_targeted` true only for the caller's own worktree.
 - [ ] T004 [P] [US1] [US3] Daemon integration tests in `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`: accept self-delete (result `scheduled`, session stopped, directory and branch gone, SC-001); `delete_branch: false` keeps the branch; decline and timeout change nothing (SC-002); `stop_sessions` false gives the live-sessions conflict with no prompt; unknown worktree gives `not_found` with no prompt; no attached window gives `needs_confirmation`; the result also names the directory and `branch_will_be_deleted` (FR-008); the prompt names that other sessions in W will stop; `branch_delete_failed` still counts the removal as done; the prompt withdrawn when another session deletes or renames W, or the caller closes while pending, runs no deferred step; Default caller refused with no prompt (SC-004).
 - [ ] T005 [P] [US1] Daemon integration tests in `crates/micold-daemon/tests/mcp/mcp_confirmations.rs`: reply written before the stop; peer-close grace of 2 s; hangup still runs the deferred step; failed deferred removal (fault injected through `FakeGit`, or a read-only parent dir on Unix) logs an error and broadcasts `DeferredActionFailed`.
 - [ ] T006 [P] [US1] Audit tests in `crates/micold-daemon/tests/mcp_audit_log.rs` (FR-010): one line on accept, decline, and a failed deferred step (extra `error` line).
-- [ ] T007 [P] [US1] Open-handle test (R6, SC-006) in `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`: hold an open file handle inside W, released 4 s after the accept (longer than the current retry window of about 3 s); assert W is gone afterwards on all platforms. It only bites on Windows; its CI job is the proof.
+- [ ] T007 [US1] Open-handle test (R6, SC-006) in `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`: hold an open file handle inside W, released 4 s after the accept (longer than the current retry window of about 3 s); assert W is gone afterwards on all platforms. It only bites on Windows; its CI job is the proof.
 - [ ] T008 [P] [US1] Client tests in `crates/micold-client/tests/features_agent_confirm.rs`: the dialog shows a line that the asking session ends when `self_targeted`; `DeferredActionFailed` raises `notify_error` naming the worktree and the reason.
 
 ### Implementation
@@ -122,7 +122,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T016
 - **Deliverable**: A session can call `delete_worktree` on its own worktree with `stop_sessions: true`; after the user accepts it gets a `scheduled` result, then the session stops and the worktree and branch are removed; a failed removal logs and shows an app notice; a Default session is still refused.
 - **Satisfies**: US1 acceptance scenarios 1–6; US3 acceptance scenarios 1–2; FR-001, FR-002, FR-003, FR-004, FR-005, FR-007, FR-008, FR-009, FR-010, FR-012, FR-017 (delete case), FR-016; SC-001, SC-002, SC-004, SC-006
-- **Verify**: `mise run gate`; the Windows CI job runs the T007 open-handle test; quickstart Part B steps 3–5 and 8 (Default part)
+- **Verify**: `mise run gate`; the Windows CI job runs the T007 open-handle test; quickstart Part B steps 3–5, 7 and 8 (Default part)
 - **Depends on**: —
 - **Tier**: full
 
