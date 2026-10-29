@@ -8,6 +8,13 @@
 
 **Input**: GitHub issue #1602 — "MCP: let a session stop itself and delete its own worktree (after confirmation)". Labels: enhancement, flow:feature.
 
+## Clarifications
+
+### Session 2026-10-29
+
+- Q: Is story 4 (`stop_session`/`delete_session` on self) in scope? → A: Yes, same confirmation and deferred execution. _(decided by user)_
+- Q: How is a failed deferred stop or removal reported? → A: App notice naming W and the reason, plus a daemon log entry; the session stays stopped. _(decided by user)_
+
 ## Background
 
 The daemon's MCP server (feature 034-daemon-mcp-server) refuses by policy (FR-015) any request by which a session stops itself, deletes itself, or deletes the worktree it runs in: `stop_session` and `delete_session` on the caller's own id, and `delete_worktree` on the caller's own worktree. An agent that finishes its work (for example a speckit-autopilot run whose pull requests are merged) can therefore only tell the user to close the session and delete the worktree by hand, or to ask another session to do it. The refusal exists because an operation that kills the caller while it waits for the answer would lose the answer. It is not a statement that a session may never end itself.
@@ -70,9 +77,9 @@ The existing refusals that protect the project root and other users of the workt
 
 ### User Story 4 - A session stops or deletes only itself (Priority: P3)
 
-`stop_session` and `delete_session` accept no id, or the caller's own id, and act on the calling session with the same confirmation and deferred execution. [NEEDS CLARIFICATION: Is this story in scope, or only `delete_worktree`? The issue says "Optionally". Recommended: include it; a session that wants to end without removing its worktree has no other route.]
+`stop_session` and `delete_session` accept no id, or the caller's own id, and act on the calling session with the same confirmation and deferred execution.
 
-**Why this priority**: Optional in the issue; the `delete_worktree` path covers the main need.
+**Why this priority**: Optional in the issue, in scope by decision; the `delete_worktree` path covers the main need.
 
 **Independent Test**: From session S, call `stop_session` without an id, accept, and check S's result arrived before S stopped.
 
@@ -87,7 +94,7 @@ The existing refusals that protect the project root and other users of the workt
 ### Edge Cases
 
 - **Answer lost on stop**: the result must be delivered before the caller stops. The caller receives the success result before it stops; if its connection is already closed, the confirmed stop and removal still happen.
-- **Deferred step fails** (git error removing W, the branch is not deletable, a leftover file): the agent is gone and cannot be told. [NEEDS CLARIFICATION: How is the failure reported? Recommended: the app shows a notice naming W and the reason, and the daemon logs it; the session stays stopped.]
+- **Deferred step fails** (git error removing W, the branch is not deletable, a leftover file): the agent is gone and cannot be told. The daemon logs the failure and the app shows a notice naming W and the reason; the session stays stopped.
 - **Other sessions in W**: with `stop_sessions: true` they stop as for any worktree delete; the prompt names that sessions will stop.
 - **Concurrency (Principle II)**: another session in the project deletes or renames W while the prompt is pending: the request ends "not found" or is withdrawn as FR-014 already specifies, and the deferred step never runs. Two sessions in W both asking: the first accepted deletion wins; the other gets "not found" or its caller stops with the first.
 - **Caller closed while prompt pending**: the prompt is withdrawn (existing behavior) and nothing runs.
@@ -108,9 +115,9 @@ The existing refusals that protect the project root and other users of the workt
 - **FR-006**: The confirmation prompt of every `delete_worktree` MUST list the worktree's uncommitted changes (changed and untracked files) and its unpushed commits, and MUST show neither list when there are none.
 - **FR-007**: A Default session MUST keep being refused `delete_worktree` and `rename_worktree` by policy (034 FR-015a); `worktree: "default"` MUST stay invalid input.
 - **FR-008**: The result of an accepted self-delete MUST say that the stop and removal are scheduled, not that they are done, and MUST report the worktree directory name and whether the branch will be deleted.
-- **FR-009**: A failure of the deferred stop or removal MUST be recorded in the daemon log and shown to the user in the app. The agent is not expected to receive it. (See the clarification marker in Edge Cases.)
+- **FR-009**: A failure of the deferred stop or removal MUST be recorded in the daemon log and shown to the user in the app. The agent is not expected to receive it. The app notice names the worktree and the reason; the session stays stopped.
 - **FR-010**: Every accepted or refused self-delete MUST write the audit line 034 FR-018 requires for mutating tools.
-- **FR-011**: If story 4 is in scope: `stop_session` and `delete_session` MUST accept an omitted id or the caller's own id, MUST ask the user to confirm, and MUST follow FR-003 (result first, then the action). `interrupt_session`, `send_session_input` and `read_session_output` on the caller itself MUST stay refused as invalid input.
+- **FR-011**: `stop_session` and `delete_session` MUST accept an omitted id or the caller's own id, MUST ask the user to confirm, and MUST follow FR-003 (result first, then the action). `interrupt_session`, `send_session_input` and `read_session_output` on the caller itself MUST stay refused as invalid input.
 - **FR-012**: The tool descriptions in `tools/list` and the user documentation of the MCP tools MUST describe the new behavior and drop the statements that a session cannot stop or delete itself or its own worktree.
 - **FR-014a**: Feature 034's FR-014 (destructive operations), FR-015 (self-targeted refusals) and its tool table MUST be amended alongside FR-012 to match this feature.
 - **FR-015a**: A Default session MAY stop or delete itself under story 4 (Principle III forbids only modifying or removing worktrees); FR-007 is unchanged.
