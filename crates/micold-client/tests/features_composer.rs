@@ -329,6 +329,75 @@ fn no_composer_key_needs_a_platform_modifier() {
     }
 }
 
+/// The platform's attach chord letter press: Cmd+Shift+A on macOS, Ctrl+Shift+A elsewhere.
+fn attach_chord(c: char) -> KeyInput {
+    let mut mods = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    if cfg!(target_os = "macos") {
+        mods.logo = true;
+    } else {
+        mods.ctrl = true;
+    }
+    KeyInput {
+        key: Key::Char(c),
+        mods,
+        text: None,
+        physical: PhysicalKey::Other,
+    }
+}
+
+#[test]
+fn the_attach_chord_opens_the_picker_and_near_misses_are_the_editors() {
+    for c in ['a', 'A'] {
+        assert_eq!(
+            composer_key(&attach_chord(c), (0, 0), 1, false, false, busy()),
+            KeyIntent::Attach
+        );
+    }
+    let near_misses = [
+        KeyInput {
+            mods: Mods::NONE,
+            ..attach_chord('a')
+        },
+        KeyInput {
+            mods: Mods {
+                ctrl: true,
+                ..Mods::NONE
+            },
+            ..attach_chord('a')
+        },
+        KeyInput {
+            mods: Mods {
+                logo: true,
+                ..Mods::NONE
+            },
+            ..attach_chord('a')
+        },
+        KeyInput {
+            mods: Mods {
+                alt: true,
+                ..attach_chord('a').mods
+            },
+            ..attach_chord('a')
+        },
+        attach_chord('b'),
+    ];
+    for press in near_misses {
+        assert_eq!(
+            composer_key(&press, (0, 0), 1, false, false, busy()),
+            KeyIntent::Edit,
+            "{press:?}"
+        );
+    }
+    // An IME composition keeps the chord.
+    assert_eq!(
+        composer_key(&attach_chord('a'), (0, 0), 1, true, false, busy()),
+        KeyIntent::Edit
+    );
+}
+
 #[test]
 fn other_keys_are_the_editors() {
     let typed = KeyInput {

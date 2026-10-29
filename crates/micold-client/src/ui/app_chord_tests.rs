@@ -131,6 +131,12 @@ fn other_keys_are_not_app_chords() {
     assert!(app_chord(primary_shift("e", Code::KeyE)).is_none());
 }
 
+/// FR-010: the attach chord is the focused composer's, never an app chord.
+#[test]
+fn the_attach_chord_is_left_to_the_composer() {
+    assert!(app_chord(primary_shift("a", Code::KeyA)).is_none());
+}
+
 // ---- `card_menu_key` (feature 972, FR-010): the open card menu's keys ----
 
 fn named_key(key: keyboard::key::Named, modifiers: Modifiers) -> keyboard::Event {

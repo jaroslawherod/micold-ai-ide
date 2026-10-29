@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M2 PR open
-- **Next step**: merge M2 PR, then M3
+- **Phase**: M3 PR open
+- **Next step**: merge M3 PR, then M4
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
 | #1589 | M1 | merged | 506cceb6986e4db6f8b78b4fe665d71a464a2165 |
-| #1603 | M2 | open | … |
+| #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
-| M2 | T010–T019 | full | Add attachment button and picker | #1603 | pr-open |
-| M3 | T020–T023 | full | Attach shortcut | #… | pending |
+| M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
+| M3 | T020–T023 | full | Attach shortcut | #PR | pr-open |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
 | M5 | T034–T039 | full | Drop-target cue | #… | pending |
 
@@ -71,3 +71,8 @@ None.
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+
+## M3 notes
+
+- Review A (high) round 1: 10 findings, nearly all M2 code (picker failure silent, picker_open never reset, forgotten-session late result, read_picked duplication, parentless dialog, shell tests). Declined for M3 as out of scope (merged in M2). Declined: chord skips `update` post-processing (same early return as the button path); non-Latin layouts (same `is_char` convention as the other composer chords). Fixed: none needed. Chord label duplicated in tooltip and `is_attach_key`: MINOR, left.
+- Review B (sonnet) round 1: could not run Verify (build lock held ~35 min by another worktree); diff read found nothing else. Verify covered by the full gate.

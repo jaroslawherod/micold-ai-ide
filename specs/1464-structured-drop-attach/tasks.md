@@ -55,10 +55,10 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 **Independent Test**: with the composer focused press Ctrl+Shift+A (Cmd+Shift+A on macOS); the picker opens.
 
-- [ ] T020 [P] [US4] Failing tests: `composer_key` gives `KeyIntent::Attach` for the chord (Cmd on macOS via `logo`, Ctrl elsewhere) and `Edit` for plain `a` and `Ctrl+A`, in `crates/micold-client/tests/features_composer.rs`; and in `crates/micold-client/src/ui/app_chord_tests.rs` the app-level chord handler leaves Ctrl/Cmd+Shift+A to the focused composer (FR-010)
-- [ ] T021 [US4] `KeyIntent::Attach` checked before the non-plain guard in `composer_key` (amend the R12 comment) in `crates/micold-client/src/features/composer.rs`; map it to `AttachRequested` in `src/shell/composer.rs`
-- [ ] T022 [US4] Tooltip text "Add attachment (Ctrl+Shift+A)" / "(Cmd+Shift+A)" per platform in `crates/micold-client/src/ui/composer.rs`
-- [ ] T023 [US4] User guide: the shortcut in `docs/user-guide/structured-input.md`
+- [x] T020 [P] [US4] Failing tests: `composer_key` gives `KeyIntent::Attach` for the chord (Cmd on macOS via `logo`, Ctrl elsewhere) and `Edit` for plain `a` and `Ctrl+A`, in `crates/micold-client/tests/features_composer.rs`; and in `crates/micold-client/src/ui/app_chord_tests.rs` the app-level chord handler leaves Ctrl/Cmd+Shift+A to the focused composer (FR-010)
+- [x] T021 [US4] `KeyIntent::Attach` checked before the non-plain guard in `composer_key` (amend the R12 comment) in `crates/micold-client/src/features/composer.rs`; map it to `AttachRequested` in `src/shell/composer.rs`
+- [x] T022 [US4] Tooltip text "Add attachment (Ctrl+Shift+A)" / "(Cmd+Shift+A)" per platform in `crates/micold-client/src/ui/composer.rs`
+- [x] T023 [US4] User guide: the shortcut in `docs/user-guide/structured-input.md`
 
 ## Phase 6: User Story 4b - shortcut sheet and `/shortcuts` (P2)
 
