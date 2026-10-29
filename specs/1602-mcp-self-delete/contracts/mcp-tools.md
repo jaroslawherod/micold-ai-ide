@@ -1,4 +1,4 @@
-# Contract: tool-surface delta (amends 034 `contracts/mcp-tools.md`, FR-014a)
+# Contract: tool-surface delta (amends 034 `contracts/mcp-tools.md`, FR-017)
 
 ## `delete_worktree`
 

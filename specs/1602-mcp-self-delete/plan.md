@@ -39,7 +39,7 @@ Wire change: one protocol bump, 73 to 74 (two fields on `ConfirmationRequested`,
 
 **Constraints**: local git only, no remote contact (Principle IV). The prompt keeps the 60 s timeout. A list shows at most 50 entries plus a count (SC-003).
 
-**Scale/Scope**: about 8 source files, 1 protocol bump, 1 user-guide page, amendments to 034 spec and contracts.
+**Scale/Scope**: about 15 files including tests, 1 protocol bump, 1 user-guide page, amendments to 034 spec and contracts.
 
 ## Constitution Check
 
@@ -49,11 +49,11 @@ Wire change: one protocol bump, 73 to 74 (two fields on `ConfirmationRequested`,
 |---|---|---|
 | I. Test-First | PASS | Every code unit has a named failing test first in the Test strategy table; tasks order test tasks before code. |
 | II. Multi-Session | PASS | Deferred action addresses one session id and one `(project, dir_name)`. Concurrent delete or rename of W withdraws the pending prompt through the existing `worktree_gone` and `session_gone` paths (spec Edge Cases). No shared state added. |
-| III. Worktree Integration | PASS | The app, not a manual git step, removes W. Default session refusal (FR-007) is unchanged. A Default session stopping or deleting itself touches no worktree (FR-015a). |
+| III. Worktree Integration | PASS | The app, not a manual git step, removes W. Default session refusal (FR-007) is unchanged. A Default session stopping or deleting itself touches no worktree (FR-016). |
 | IV. Local-First | PASS | `git status` and `git log` read local refs only. No network. |
 | V. Rust + iced | PASS | Self-targeting is a typed flag on the decision (`PolicyDecision::Confirm`), the deferred step an enum `Deferred`, so "result before action" is the only constructible order. |
 | VI. Cross-Platform | PASS, one risk | Removal reuses `ops::delete_worktree`, whose 3 s retry handles Windows handles held by killed shells. See research R6 for the residual risk and its test. |
-| VII. Documentation | PASS | `docs/user-guide/agent-tools.md`, tool descriptions in `tools/list`, 034 amendments (FR-012, FR-014a) are tasks in the same PR. |
+| VII. Documentation | PASS | `docs/user-guide/agent-tools.md`, tool descriptions in `tools/list`, 034 amendments (FR-012, FR-017) are tasks in the same PR. |
 | VIII. Reusable UI | PASS | The loss list is added to the existing `ui/confirm_agent_request.rs` dialog using shared material primitives; no new dialog type (spec Assumptions). Task checks for an existing bounded-list widget before adding one. |
 
 ## Requirement map
@@ -68,9 +68,9 @@ Wire change: one protocol bump, 73 to 74 (two fields on `ConfirmationRequested`,
 | FR-009 | `Deferred::run` failure path: `tracing::error!` plus `DaemonMsg::DeferredActionFailed`; client `notify_error`. R5. |
 | FR-010 | Existing audit line in `tools::call` (written when the result is produced, before the deferred step); `target` for stop and delete of self names the session. |
 | FR-011 | `decide` self branches; `parse_call` optional id; `interrupt`, `send`, `read` self refusals untouched. [contracts/mcp-tools.md](./contracts/mcp-tools.md). |
-| FR-012, FR-014a | `micold-core/src/mcp/tools.rs` descriptions and schema; `docs/user-guide/agent-tools.md`; `specs/034-daemon-mcp-server/{spec.md,contracts/mcp-tools.md}` amendment. |
+| FR-012, FR-017 | `micold-core/src/mcp/tools.rs` descriptions and schema; `docs/user-guide/agent-tools.md`; `specs/034-daemon-mcp-server/{spec.md,contracts/mcp-tools.md}` amendment. |
 | FR-013 | Non-self paths keep their code; regression tests in 034's suites stay green (SC-005). |
-| FR-015a | `decide`: the Default guard stays on `RenameWorktree` and `DeleteWorktree` only. |
+| FR-016 | `decide`: the Default guard stays on `RenameWorktree` and `DeleteWorktree` only. |
 
 ## Test strategy
 
@@ -87,7 +87,7 @@ Wire change: one protocol bump, 73 to 74 (two fields on `ConfirmationRequested`,
 | Prompt lists files and commits, none when clean, bounded list, other worktree too | daemon integration plus client | daemon test reads the broadcast prompt; `features_agent_confirm.rs` checks the dialog |
 | Dialog layout of the list and the self-targeted line | geometry gates, quickstart §B | new `crates/micold-client/tests/confirm_agent_loss_list_geometry.rs`, then visual pass |
 | Audit line (FR-010) on accept, decline and a failed deferred step | daemon integration | `daemon/tests/mcp_audit_log.rs` |
-| Default session stops or deletes itself after confirmation, no worktree touched (FR-015a, story 4); policy-table case for it | daemon integration, core unit | `daemon/tests/mcp/mcp_lifecycle_tools.rs`, `policy.rs` tests |
+| Default session stops or deletes itself after confirmation, no worktree touched (FR-016, story 4); policy-table case for it | daemon integration, core unit | `daemon/tests/mcp/mcp_lifecycle_tools.rs`, `crates/micold-core/tests/mcp_policy.rs` |
 | Windows open-handle removal | CI Windows job | the daemon integration test above, run on all three platforms (SC-006) |
 
 ## Project Structure
