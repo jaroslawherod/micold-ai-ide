@@ -21,6 +21,7 @@ fn prompt(id: u64, target: &str) -> Prompt {
         },
         target_label: target.to_string(),
         self_targeted: false,
+        loss: None,
     }
 }
 
@@ -233,4 +234,59 @@ fn a_self_targeted_prompt_says_the_asking_session_ends() {
     assert!(agent_confirm::self_targeted_note(&p)
         .unwrap()
         .contains("session that asked ends"));
+}
+
+fn with_loss(loss: Option<micold_core::protocol::messages::LossSummary>) -> Prompt {
+    Prompt {
+        loss,
+        ..prompt(1, "feat-x")
+    }
+}
+
+fn summary(files: &[&str], files_more: u32) -> micold_core::protocol::messages::LossSummary {
+    micold_core::protocol::messages::LossSummary {
+        files: files.iter().map(|f| f.to_string()).collect(),
+        files_more,
+        commits: Vec::new(),
+        commits_more: 0,
+        unreadable: false,
+    }
+}
+
+#[test]
+fn a_prompt_without_loss_or_with_an_empty_one_lists_nothing() {
+    assert!(agent_confirm::loss_sections(&with_loss(None)).is_empty());
+    assert!(agent_confirm::loss_sections(&with_loss(Some(summary(&[], 0)))).is_empty());
+}
+
+#[test]
+fn the_dialog_lists_files_and_commits_with_the_count_left_out() {
+    let mut loss = summary(&["a.rs", "b.rs"], 3);
+    loss.commits = vec![micold_core::protocol::messages::LossCommit {
+        short_hash: "abc1234".into(),
+        subject: "fix it".into(),
+    }];
+    let sections = agent_confirm::loss_sections(&with_loss(Some(loss)));
+    assert_eq!(
+        sections,
+        vec![
+            (
+                "Uncommitted changes (5)".to_string(),
+                vec!["a.rs".into(), "b.rs".into(), "… and 3 more".into()]
+            ),
+            (
+                "Unpushed commits (1)".to_string(),
+                vec!["abc1234 fix it".into()]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn an_unreadable_repository_is_said_and_lists_nothing() {
+    let mut loss = summary(&[], 0);
+    loss.unreadable = true;
+    let sections = agent_confirm::loss_sections(&with_loss(Some(loss)));
+    assert_eq!(sections.len(), 1);
+    assert!(sections[0].0.contains("could not be read") && sections[0].1.is_empty());
 }

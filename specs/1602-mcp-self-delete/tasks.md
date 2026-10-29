@@ -65,18 +65,18 @@ None. The change extends existing crates (plan: no new crate or module tree).
 
 ### Tests (write first)
 
-- [ ] T017 [P] [US2] Parser unit tests in `core/worktree/loss.rs` (new file, `mod loss;` in `core/worktree.rs`): `status --porcelain -z` and log parsing, 50-entry bound, `*_more` counts, `unreadable`.
-- [ ] T018 [P] [US2] Integration tests for `GitCli::worktree_loss` on a real temp repo in `crates/micold-core/tests/worktree_loss.rs`: dirty, untracked, upstream ahead, no upstream, clean, non-repo.
-- [ ] T019 [P] [US2] Daemon tests in `crates/micold-daemon/tests/mcp/mcp_confirmations.rs`: the broadcast prompt lists files and commits, nothing when clean, bounded list, another worktree's delete too (scenarios 1 to 5).
-- [ ] T020 [P] [US2] Client tests: `crates/micold-client/tests/features_agent_confirm.rs` (dialog lists files and commits, nothing when empty, "unreadable" line) and new `crates/micold-client/tests/confirm_agent_loss_list_geometry.rs` (list layout).
+- [x] T017 [P] [US2] Parser unit tests in `core/worktree/loss.rs` (new file, `mod loss;` in `core/worktree.rs`): `status --porcelain -z` and log parsing, 50-entry bound, `*_more` counts, `unreadable`.
+- [x] T018 [P] [US2] Integration tests for `GitCli::worktree_loss` on a real temp repo in `crates/micold-core/tests/worktree_loss.rs`: dirty, untracked, upstream ahead, no upstream, clean, non-repo.
+- [x] T019 [P] [US2] Daemon tests in `crates/micold-daemon/tests/mcp/mcp_confirmations.rs`: the broadcast prompt lists files and commits, nothing when clean, bounded list, another worktree's delete too (scenarios 1 to 5).
+- [x] T020 [P] [US2] Client tests: `crates/micold-client/tests/features_agent_confirm.rs` (dialog lists files and commits, nothing when empty, "unreadable" line) and new `crates/micold-client/tests/confirm_agent_loss_list_geometry.rs` (list layout).
 
 ### Implementation
 
-- [ ] T021 [US2] `core/worktree/loss.rs`: `WorktreeLoss`, parsers and `LossSummary::bounded` (50 entries plus count).
-- [ ] T022 [US2] `Git::worktree_loss` in `core/git.rs` for `GitCli` (two local git calls, no remote) and `FakeGit`.
-- [ ] T023 [US2] `daemon/mcp/tools.rs::delete_worktree` reads the loss at prompt time and sets `ConfirmRequest.loss` for every delete (FR-006).
-- [ ] T024 [US2] Dialog list in `client/ui/confirm_agent_request.rs` and its `Prompt` field; first `grep -n` for an existing bounded-list widget in `micold-material` and reuse it (Principle VIII).
-- [ ] T025 [US2] Docs: `docs/user-guide/agent-tools.md` loss list in the prompt; amend `specs/034-daemon-mcp-server/contracts/mcp-tools.md` for the prompt content.
+- [x] T021 [US2] `core/worktree/loss.rs`: `WorktreeLoss`, parsers and `LossSummary::bounded` (50 entries plus count).
+- [x] T022 [US2] `Git::worktree_loss` in `core/git.rs` for `GitCli` (two local git calls, no remote) and `FakeGit`.
+- [x] T023 [US2] `daemon/mcp/tools.rs::delete_worktree` reads the loss at prompt time and sets `ConfirmRequest.loss` for every delete (FR-006).
+- [x] T024 [US2] Dialog list in `client/ui/confirm_agent_request.rs` and its `Prompt` field; first `grep -n` for an existing bounded-list widget in `micold-material` and reuse it (Principle VIII).
+- [x] T025 [US2] Docs: `docs/user-guide/agent-tools.md` loss list in the prompt; amend `specs/034-daemon-mcp-server/contracts/mcp-tools.md` for the prompt content.
 
 **Checkpoint**: Every `delete_worktree` prompt shows what would be lost.
 

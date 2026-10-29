@@ -35,8 +35,8 @@ use micold_core::mcp::tools::{
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::prompt_template::PromptTemplate;
 use micold_core::protocol::messages::{
-    ActivitySignal, ConfirmOperation, DaemonMsg, ProjectSnapshot, SessionSummary, WireLifecycle,
-    WorktreeStatus,
+    ActivitySignal, ConfirmOperation, DaemonMsg, LossSummary, ProjectSnapshot, SessionSummary,
+    WireLifecycle, WorktreeStatus,
 };
 use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
@@ -461,6 +461,7 @@ async fn ask_user(
     op: ConfirmedOp,
     target: ConfirmTarget,
     target_label: String,
+    loss: Option<LossSummary>,
     self_targeted: bool,
     hangup: &CancellationToken,
 ) -> Result<(), OpError> {
@@ -477,7 +478,7 @@ async fn ask_user(
         operation: wire_operation(op),
         target,
         target_label,
-        loss: None,
+        loss,
         self_targeted,
     };
     tokio::select! {
@@ -535,6 +536,7 @@ async fn confirm_session_op(
         op,
         ConfirmTarget::Session(summary.id),
         label,
+        None,
         false,
         hangup,
     )
@@ -702,6 +704,7 @@ async fn delete_worktree(
         return Err(error);
     }
     if let Some(op) = confirm {
+        let loss = worktree_loss(wt.path.clone()).await;
         ask_user(
             state,
             &who,
@@ -711,6 +714,7 @@ async fn delete_worktree(
                 dir_name: dir_name.clone(),
             },
             wt.display_name.clone(),
+            Some(loss),
             own,
             hangup,
         )
@@ -767,6 +771,20 @@ async fn delete_worktree(
         Err(ops::DeleteFailure::Task(e)) => Err(OpError::service_error(format!(
             "the worktree delete failed: {e}"
         ))),
+    }
+}
+
+/// What deleting the worktree at `path` would lose, read when the prompt opens (FR-006). A git
+/// that cannot be read gives an `unreadable` summary: the user may still decide.
+async fn worktree_loss(path: std::path::PathBuf) -> LossSummary {
+    let read = tokio::task::spawn_blocking(move || GitCli::new().worktree_loss(&path)).await;
+    match read {
+        Ok(Ok(loss)) => LossSummary::bounded(loss),
+        Ok(Err(e)) => {
+            tracing::warn!(error = %e, "could not read what a worktree delete would lose");
+            LossSummary::unreadable()
+        }
+        Err(_) => LossSummary::unreadable(),
     }
 }
 

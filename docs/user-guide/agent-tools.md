@@ -169,6 +169,12 @@ and nothing is done.
 Requests that would be refused anyway never show a dialog. A session cannot stop, interrupt or
 delete itself; ask from another session, or use the sidebar.
 
+The dialog for `delete_worktree` also lists what the deletion would lose: the worktree's changed and
+untracked files, and its commits that are on no remote branch (the branch's upstream, when it has
+one). It shows the first 50 of each and counts the rest. A worktree with nothing to lose shows no
+list. If git cannot be read, the dialog says so, and you can still decide. This holds for any
+worktree an assistant asks to delete, not only its own.
+
 A session can delete the worktree it runs in with `delete_worktree`, after you allow it. The dialog
 says the session is asking to delete its own worktree and that the session ends. The assistant gets
 the answer `scheduled` first, then the session stops and the worktree is removed. If the removal

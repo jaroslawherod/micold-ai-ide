@@ -9,15 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1602
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
-- **Phase**: milestone M1 (PR open)
-- **Next step**: CI and merge M1 (check Windows job for T007/T015); then M2.
+- **Phase**: milestone M2 (gate and reviews)
+- **Next step**: M2 reviews A and B, full gate, visual pass (Part B steps 1, 2, 6), PR; then M3.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1611 | Design | merged | 8e3d084ba79f31d3db24ed3bf6e46b74590b087d |
-| #1613 | M1 | open | |
+| #1613 | M1 | merged (after red-CI attempt 1, see Follow-ups) | 4edaaa6af88c38edd080d3351da4e7fcfa3d655e |
 
 ## Milestones
 
@@ -25,8 +25,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | C1 | clarify | Story 4 (stop/delete self) in scope? | Yes | user | spec.md Clarifications |
 | C2 | clarify | Failed deferred removal reported how? | App notice naming W and reason, plus daemon log | user | spec.md Clarifications |
-| M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | in review |
-| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #… | pending |
+| M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | merged |
+| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #… | in progress |
 | M3 | T026–T030 | full | Session stops or deletes only itself | #… | pending |
 
 ## Decisions
@@ -63,7 +63,10 @@ None.
 ## Follow-ups not done
 
 - M1 has 16 tasks (over the 10-task guide): it is Foundational (wire bump) plus two P1 stories sharing `decide` and `Deferred`; no acceptance-scenario split gives a observable deliverable. Accepted.
-- R6: T007 open-handle test; T015 extends the `ops.rs` retry bound only if the Windows CI job of M1's PR fails. Orchestrator: check the Windows job on M1.
+- R6 closed: the Windows job of #1613 was green, so T015 was ticked and `ops.rs` is unchanged.
+- #1613 red-CI attempt 1: `a_self_delete_without_stop_sessions_is_the_live_sessions_conflict` started a Claude Code session, which CI lacks. Fixed in 0202ed576: it starts a shell session IDLE instead. Merged at 4edaaa6af.
 - Spec FR ids renamed: local FR-014a to FR-017, FR-015a to FR-016 (034's FR-015a keeps its name).
 
 M1 reviews: A (code-review high) round 1: fixed spawn-before-grace and own-session hint. B (conformance, sonnet) round 1: added hangup-while-pending test, shutdown inside the timeout. Visual pass PASS (specs/1602-mcp-self-delete/visual-pass-m1.md). No red-phase evidence (tests written beside code).
+
+M2: T019's daemon tests are in `mcp_lifecycle_tools.rs` (the fixture lives there), not `mcp_confirmations.rs`. "Prompt names other sessions" (moved from M1 review B) is met by the headline's ", stopping its sessions" and a daemon test asserting `stop_sessions: true` in the broadcast. No red-phase evidence (tests written beside code).
