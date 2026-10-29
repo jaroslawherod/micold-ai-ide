@@ -210,9 +210,12 @@ async fn handle_connection(mut stream: TcpStream, state: Arc<DaemonState>) -> io
                 // The user already confirmed: it runs whether or not the reply was delivered.
                 // Wait for the agent to close its side (proof it read the reply), at most
                 // `DELIVERY_GRACE`, then run it on its own task (#1602, FR-003).
-                let _ = stream.shutdown().await;
-                let _ = tokio::time::timeout(DELIVERY_GRACE, peer_closed(&mut stream)).await;
-                tokio::spawn(async move { deferred.run(&state).await });
+                // Spawned before the wait so a dropped connection task cannot lose it.
+                tokio::spawn(async move {
+                    let _ = stream.shutdown().await;
+                    let _ = tokio::time::timeout(DELIVERY_GRACE, peer_closed(&mut stream)).await;
+                    deferred.run(&state).await
+                });
             }
             written
         }

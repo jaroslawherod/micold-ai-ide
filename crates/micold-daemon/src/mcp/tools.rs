@@ -693,7 +693,13 @@ async fn delete_worktree(
     let own = policy::is_self_targeted(&who, &operation);
     let live = state.worktree_live_sessions(&project.path, &dir_name);
     if !live.is_empty() && !stop_sessions {
-        return Err(live_sessions_conflict(&project, &dir_name, &live));
+        let mut error = live_sessions_conflict(&project, &dir_name, &live);
+        if own {
+            error
+                .message
+                .push_str(" (your own session is one of them: pass stop_sessions: true)");
+        }
+        return Err(error);
     }
     if let Some(op) = confirm {
         ask_user(
