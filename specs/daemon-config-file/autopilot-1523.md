@@ -57,6 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None.
 
+RED CI attempt 1 (run 40756285827, Windows): tests-only fix, TOML literal strings for paths and the Windows default shell in the defaults test. Gate green.
+
 ## Open escalation
 
 None.

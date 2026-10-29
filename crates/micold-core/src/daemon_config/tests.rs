@@ -131,7 +131,12 @@ fn defaults_for_tokens_clis_and_startup() {
     assert_eq!(startup.on_failure, OnFailure::Refuse);
     assert_eq!(startup.run, RunPolicy::EveryStart);
     assert!(startup.export_env);
-    assert_eq!(startup.shell, PathBuf::from("/bin/sh"));
+    let shell = if cfg!(windows) {
+        "powershell.exe"
+    } else {
+        "/bin/sh"
+    };
+    assert_eq!(startup.shell, PathBuf::from(shell));
 }
 
 #[test]
@@ -695,7 +700,7 @@ fn v17_a_placed_mcp_config_that_defines_micold_is_refused() {
     let file = dir.path().join("mcp.json");
     std::fs::write(&file, r#"{"mcpServers":{"micold":{"command":"x"}}}"#).unwrap();
     let body = format!(
-        "[[ai.cli]]\nid = \"claude_code\"\nplace = [{{ file = \"{}\", as = \".mcp.json\" }}]\n",
+        "[[ai.cli]]\nid = \"claude_code\"\nplace = [{{ file = '{}', as = \".mcp.json\" }}]\n",
         file.display()
     );
     let text = container(&body);
@@ -710,7 +715,7 @@ fn v17_a_placed_file_without_that_server_passes() {
     let file = dir.path().join("mcp.json");
     std::fs::write(&file, r#"{"mcpServers":{"other":{}}}"#).unwrap();
     let body = format!(
-        "[[ai.cli]]\nid = \"claude_code\"\nplace = [{{ file = \"{}\", as = \".mcp.json\" }}]\n",
+        "[[ai.cli]]\nid = \"claude_code\"\nplace = [{{ file = '{}', as = \".mcp.json\" }}]\n",
         file.display()
     );
     let text = container(&body);
@@ -727,7 +732,7 @@ fn debug_and_display_never_contain_a_secrets_content() {
     let file = dir.path().join("tok");
     std::fs::write(&file, "s3cr3t-value\n").unwrap();
     let body = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{0}\"\n[session.secret_env]\nNPM = \"{0}\"\n",
+        "[[github.tokens]]\nname = \"a\"\ntoken_file = '{0}'\n[session.secret_env]\nNPM = '{0}'\n",
         file.display()
     );
     let config = ok(&host(&body));
