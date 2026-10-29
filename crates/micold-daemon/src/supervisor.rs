@@ -339,8 +339,12 @@ pub(crate) fn container_git_edits(
         );
     }
     if identity_exists {
-        let copy = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
-            .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE);
+        // A container path is always Linux: spelled with `/`, not the host's separator.
+        let copy = format!(
+            "{}/{}",
+            micold_core::ssh::argv::CONTAINER_DATA_DIR,
+            micold_core::sandbox::SANDBOX_GITCONFIG_FILE
+        );
         edits.push(EnvEdit::Set("GIT_CONFIG_GLOBAL".into(), copy.into()));
     }
     edits
