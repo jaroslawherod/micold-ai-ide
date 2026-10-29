@@ -86,21 +86,19 @@ pub async fn call(
             worktree,
             stop_sessions,
             delete_branch,
-        }) => {
-            delete_worktree(
-                &state,
-                caller,
-                worktree,
-                stop_sessions,
-                delete_branch,
-                &hangup,
-            )
-            .await
-            .map(|(value, later)| {
-                deferred = later;
-                value
-            })
-        }
+        }) => delete_worktree(
+            &state,
+            caller,
+            worktree,
+            stop_sessions,
+            delete_branch,
+            &hangup,
+        )
+        .await
+        .map(|(value, later)| {
+            deferred = later;
+            value
+        }),
         Ok(operation) => dispatch(state, caller, operation, asked, &hangup).await,
         Err(error) => Err(error),
     };

@@ -1202,6 +1202,9 @@ async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
         unreachable!()
     };
     std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
-    assert!(!subject.is_empty() && !reason.is_empty(), "{subject}: {reason}");
+    assert!(
+        !subject.is_empty() && !reason.is_empty(),
+        "{subject}: {reason}"
+    );
     assert!(f.worktree_dir("b").is_dir(), "the worktree is still there");
 }

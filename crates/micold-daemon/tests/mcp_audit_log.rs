@@ -298,9 +298,7 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
             json!({"session": sid(99).0.to_string()}),
             ErrorCategory::NotFound,
         )],
-        "delete_worktree" => vec![
-            (json!({"worktree": "nope"}), ErrorCategory::NotFound),
-        ],
+        "delete_worktree" => vec![(json!({"worktree": "nope"}), ErrorCategory::NotFound)],
         "stop_session" | "delete_session" => vec![
             (
                 json!({"session": sid(99).0.to_string()}),
