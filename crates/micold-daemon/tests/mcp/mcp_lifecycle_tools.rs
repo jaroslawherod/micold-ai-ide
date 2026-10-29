@@ -1069,20 +1069,24 @@ async fn a_self_delete_removes_the_worktree_although_a_handle_stays_open_for_fou
 /// Send a self-delete of worktree `b` as CALLER on a raw connection (with a shell of `b` running
 /// and a window that allows it), returning the connection once the daemon has written its reply.
 #[cfg(unix)]
-async fn raw_self_delete(f: &Fixture) -> (tokio::net::TcpStream, String) {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    f.start(IDLE).await;
-    answering_window(&f.state, true);
+fn self_delete_request(f: &Fixture) -> String {
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
         "name": "delete_worktree", "arguments": {"worktree": "b", "stop_sessions": true}}})
     .to_string();
-    let request = format!(
+    format!(
         "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
          Authorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{body}",
         f.addr,
         credential(&f.state, sid(CALLER)),
         body.len()
-    );
+    )
+}
+
+async fn raw_self_delete(f: &Fixture) -> (tokio::net::TcpStream, String) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    f.start(IDLE).await;
+    answering_window(&f.state, true);
+    let request = self_delete_request(f);
     let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
     stream.write_all(request.as_bytes()).await.unwrap();
     // The daemon half-closes after its reply, so this ends with the reply; our side stays open.
@@ -1126,21 +1130,32 @@ async fn a_hangup_after_the_accept_still_runs_the_removal() {
     use tokio::io::AsyncWriteExt;
     let f = Fixture::new().await;
     answering_window(&f.state, true);
-    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
-        "name": "delete_worktree", "arguments": {"worktree": "b", "stop_sessions": true}}})
-    .to_string();
-    let request = format!(
-        "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
-         Authorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{body}",
-        f.addr,
-        credential(&f.state, sid(CALLER)),
-        body.len()
-    );
+    let request = self_delete_request(f);
     let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
     stream.write_all(request.as_bytes()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(400)).await;
     drop(stream);
     assert!(gone_within(&f.worktree_dir("b")).await);
+}
+
+/// #1602 FR-005: the caller closes while the prompt is pending, so nothing is removed or stopped.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hangup_while_the_prompt_is_pending_removes_nothing() {
+    use tokio::io::AsyncWriteExt;
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    let _silent = fake_window(&f.state);
+    let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+    stream
+        .write_all(self_delete_request(&f).as_bytes())
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    drop(stream);
+    tokio::time::sleep(Duration::from_millis(3500)).await;
+    assert!(f.worktree_dir("b").is_dir() && f.has_branch("b"));
+    assert!(f.state.live_session(sid(IDLE)).is_some());
 }
 
 /// A parent directory git cannot remove a worktree from, or `None` when this process is not stopped
