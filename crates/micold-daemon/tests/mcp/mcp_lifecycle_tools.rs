@@ -821,8 +821,8 @@ async fn with_no_window_a_destructive_request_needs_confirmation() {
     assert!(f.state.live_session(sid(IDLE)).is_some(), "still running");
 }
 
-/// A17 (US3 s5; FR-015): a session may not stop or delete itself or delete its own worktree, nor
-/// interrupt itself; nobody is asked and nothing changes.
+/// A17 (US3 s5; FR-015): a session may not stop or delete itself, nor interrupt itself; nobody is
+/// asked and nothing changes. (Its own worktree is deletable since #1602: see `self_delete_*`.)
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_targets_are_refused_without_a_prompt() {
     let f = Fixture::new().await;
@@ -830,16 +830,6 @@ async fn self_targets_are_refused_without_a_prompt() {
     for (tool, args, category) in [
         ("stop_session", target(CALLER), "refused_by_policy"),
         ("delete_session", target(CALLER), "refused_by_policy"),
-        (
-            "delete_worktree",
-            json!({"worktree": "b"}),
-            "refused_by_policy",
-        ),
-        (
-            "delete_worktree",
-            json!({"worktree": "b", "stop_sessions": true}),
-            "refused_by_policy",
-        ),
         ("interrupt_session", target(CALLER), "invalid_input"),
     ] {
         let error = f.err(CALLER, tool, args.clone()).await;
@@ -936,4 +926,282 @@ async fn stop_keeps_a_failed_session_failed_and_does_not_touch_a_deleted_one() {
         !f.state.stop_session(sid(IDLE)),
         "a deleted session is not stopped"
     );
+}
+
+/// Poll until `path` no longer exists, up to 15 s.
+async fn gone_within(path: &std::path::Path) -> bool {
+    for _ in 0..150 {
+        if !path.exists() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    false
+}
+
+/// #1602 US1 s1, s2 (SC-001, FR-003, FR-008): the caller deletes its own worktree; the prompt says
+/// the asking session ends, the result says "scheduled", and afterwards the directory and branch
+/// are gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_accepted_self_delete_replies_scheduled_then_removes_the_worktree_and_branch() {
+    let f = Fixture::new().await;
+    let mut window = fake_window(&f.state);
+    let st = Arc::clone(&f.state);
+    let prompt = tokio::spawn(async move {
+        let (id, msg) = next_prompt(&mut window).await;
+        st.answer_confirmation(id, true);
+        msg
+    });
+
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true}),
+        )
+        .await;
+
+    assert_eq!(out["scheduled"], true, "{out}");
+    assert_eq!(out["removed"], "b", "{out}");
+    assert_eq!(out["branch_will_be_deleted"], true, "{out}");
+    assert!(
+        out["directory"].as_str().unwrap().ends_with('b'),
+        "names the directory: {out}"
+    );
+    let DaemonMsg::ConfirmationRequested {
+        self_targeted,
+        operation,
+        ..
+    } = prompt.await.unwrap()
+    else {
+        unreachable!()
+    };
+    assert!(self_targeted, "the dialog says the asking session ends");
+    assert!(matches!(
+        operation,
+        micold_core::protocol::messages::ConfirmOperation::DeleteWorktree {
+            stop_sessions: true,
+            ..
+        }
+    ));
+    assert!(gone_within(&f.worktree_dir("b")).await, "the worktree goes");
+    assert!(!f.has_branch("b"), "its branch goes");
+}
+
+/// #1602 US1 s3: `delete_branch: false` keeps the branch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_accepted_self_delete_without_delete_branch_keeps_the_branch() {
+    let f = Fixture::new().await;
+    answering_window(&f.state, true);
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true, "delete_branch": false}),
+        )
+        .await;
+    assert_eq!(out["branch_will_be_deleted"], false, "{out}");
+    assert!(gone_within(&f.worktree_dir("b")).await);
+    assert!(f.has_branch("b"), "the branch is kept");
+}
+
+/// #1602 US1 s4, s5 (SC-002): a decline and a missing window change nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_declined_or_unasked_self_delete_changes_nothing() {
+    let f = Fixture::new().await;
+    let args = json!({"worktree": "b", "stop_sessions": true});
+    let none = f.err(CALLER, "delete_worktree", args.clone()).await;
+    assert_eq!(none["category"], "needs_confirmation", "{none}");
+    let asked = answering_window(&f.state, false);
+    let declined = f.err(CALLER, "delete_worktree", args).await;
+    assert_eq!(declined["category"], "refused_by_policy", "{declined}");
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(f.worktree_dir("b").is_dir());
+    assert!(f.has_branch("b"));
+}
+
+/// #1602 US1 s6: the caller is a live session of its worktree, so without `stop_sessions` the
+/// call is the live-sessions conflict and nobody is asked.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_delete_without_stop_sessions_is_the_live_sessions_conflict() {
+    let f = Fixture::new().await;
+    f.start(CALLER).await;
+    let asked = answering_window(&f.state, true);
+    let error = f
+        .err(CALLER, "delete_worktree", json!({"worktree": "b"}))
+        .await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+    assert!(f.worktree_dir("b").is_dir());
+    if let Some(pty) = f.state.live_session(sid(CALLER)) {
+        let _ = pty.kill();
+    }
+}
+
+/// #1602 R6, SC-006: a file handle open inside the worktree, released 4 s after the accept (longer
+/// than the removal's retry window of about 3 s), must not leave the directory behind. Only Windows
+/// refuses to delete an open directory, so its CI job is the proof.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_delete_removes_the_worktree_although_a_handle_stays_open_for_four_seconds() {
+    let f = Fixture::new().await;
+    answering_window(&f.state, true);
+    let held = std::fs::File::create(f.worktree_dir("b").join("held.txt")).unwrap();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(4)).await;
+        drop(held);
+    });
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true}),
+        )
+        .await;
+    assert_eq!(out["scheduled"], true, "{out}");
+    assert!(
+        gone_within(&f.worktree_dir("b")).await,
+        "the worktree is gone after the handle closes"
+    );
+}
+
+/// Send a self-delete of worktree `b` as CALLER on a raw connection (with a shell of `b` running
+/// and a window that allows it), returning the connection once the daemon has written its reply.
+#[cfg(unix)]
+async fn raw_self_delete(f: &Fixture) -> (tokio::net::TcpStream, String) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    f.start(IDLE).await;
+    answering_window(&f.state, true);
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+        "name": "delete_worktree", "arguments": {"worktree": "b", "stop_sessions": true}}})
+    .to_string();
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
+         Authorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{body}",
+        f.addr,
+        credential(&f.state, sid(CALLER)),
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+    stream.write_all(request.as_bytes()).await.unwrap();
+    // The daemon half-closes after its reply, so this ends with the reply; our side stays open.
+    let mut reply = Vec::new();
+    stream.read_to_end(&mut reply).await.unwrap();
+    (stream, String::from_utf8_lossy(&reply).into_owned())
+}
+
+/// #1602 FR-003 (R2): the reply is written first, and the daemon waits for the agent to close its
+/// side (at most 2 s) before it stops the sessions.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_delete_stops_the_sessions_only_after_the_reply_and_the_peer_close() {
+    let f = Fixture::new().await;
+    let (stream, reply) = raw_self_delete(&f).await;
+    assert!(reply.contains("scheduled"), "{reply}");
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    assert!(
+        f.state.live_session(sid(IDLE)).is_some() && f.worktree_dir("b").is_dir(),
+        "nothing is stopped while the agent has not closed its side"
+    );
+    drop(stream);
+    assert!(gone_within(&f.worktree_dir("b")).await);
+    assert!(f.state.live_session(sid(IDLE)).is_none());
+}
+
+/// #1602 R2: without a close, the daemon acts after the 2 s grace anyway.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_delete_runs_after_the_grace_when_the_agent_never_closes() {
+    let f = Fixture::new().await;
+    let (_stream, _reply) = raw_self_delete(&f).await;
+    assert!(gone_within(&f.worktree_dir("b")).await, "{}", "after 2 s");
+}
+
+/// #1602 R2: an agent that hangs up after the user accepted, without reading, still has the
+/// confirmed removal done.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hangup_after_the_accept_still_runs_the_removal() {
+    use tokio::io::AsyncWriteExt;
+    let f = Fixture::new().await;
+    answering_window(&f.state, true);
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+        "name": "delete_worktree", "arguments": {"worktree": "b", "stop_sessions": true}}})
+    .to_string();
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
+         Authorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{body}",
+        f.addr,
+        credential(&f.state, sid(CALLER)),
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
+    stream.write_all(request.as_bytes()).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    drop(stream);
+    assert!(gone_within(&f.worktree_dir("b")).await);
+}
+
+/// A parent directory git cannot remove a worktree from, or `None` when this process is not stopped
+/// by that (root).
+#[cfg(unix)]
+fn lock_worktrees_dir(f: &Fixture) -> Option<std::path::PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let parent = f.project().join(".claude/worktrees");
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    if std::fs::File::create(parent.join("probe")).is_ok() {
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let _ = std::fs::remove_file(parent.join("probe"));
+        return None;
+    }
+    Some(parent)
+}
+
+/// #1602 FR-009 (R5): a deferred removal that fails is reported to every window, naming the
+/// worktree and the reason, and leaves the worktree where it was.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new().await;
+    let Some(parent) = lock_worktrees_dir(&f) else {
+        return;
+    };
+    let mut window = fake_window(&f.state);
+    let st = Arc::clone(&f.state);
+    let notice = tokio::spawn(async move {
+        let wait = async {
+            while let Some(frame) = window.recv().await {
+                match frame {
+                    Frame::Control(DaemonMsg::ConfirmationRequested { id, .. }) => {
+                        st.answer_confirmation(id, true)
+                    }
+                    Frame::Control(msg @ DaemonMsg::DeferredActionFailed { .. }) => return msg,
+                    _ => {}
+                }
+            }
+            panic!("window closed");
+        };
+        tokio::time::timeout(Duration::from_secs(15), wait)
+            .await
+            .expect("a failure notice within 15 s")
+    });
+    let out = f
+        .ok(
+            CALLER,
+            "delete_worktree",
+            json!({"worktree": "b", "stop_sessions": true}),
+        )
+        .await;
+    assert_eq!(out["scheduled"], true, "{out}");
+    let DaemonMsg::DeferredActionFailed {
+        subject, reason, ..
+    } = notice.await.unwrap()
+    else {
+        unreachable!()
+    };
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(!subject.is_empty() && !reason.is_empty(), "{subject}: {reason}");
+    assert!(f.worktree_dir("b").is_dir(), "the worktree is still there");
 }

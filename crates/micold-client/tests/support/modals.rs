@@ -164,6 +164,7 @@ pub fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
         caller_label: "planner".to_string(),
         operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
         target_label: "reviewer".to_string(),
+        self_targeted: false,
     }
 }
 

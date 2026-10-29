@@ -20,6 +20,7 @@ fn prompt(id: u64, target: &str) -> Prompt {
             delete_branch: false,
         },
         target_label: target.to_string(),
+        self_targeted: false,
     }
 }
 
@@ -222,4 +223,14 @@ fn every_operation_has_its_own_phrase() {
             "type into session",
         ]
     );
+}
+
+#[test]
+fn a_self_targeted_prompt_says_the_asking_session_ends() {
+    let mut p = prompt(1, "feat-x");
+    assert_eq!(agent_confirm::self_targeted_note(&p), None);
+    p.self_targeted = true;
+    assert!(agent_confirm::self_targeted_note(&p)
+        .unwrap()
+        .contains("session that asked ends"));
 }

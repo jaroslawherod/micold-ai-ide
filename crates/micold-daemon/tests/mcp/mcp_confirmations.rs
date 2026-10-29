@@ -56,6 +56,8 @@ fn stop_request() -> ConfirmRequest {
         operation: ConfirmOperation::StopSession,
         target: ConfirmTarget::Session(sid(TARGET)),
         target_label: "reviewer".into(),
+        loss: None,
+        self_targeted: false,
     }
 }
 
@@ -72,6 +74,8 @@ fn delete_worktree_request() -> ConfirmRequest {
             dir_name: "feat-x".into(),
         },
         target_label: "Feat X".into(),
+        loss: None,
+        self_targeted: false,
     }
 }
 

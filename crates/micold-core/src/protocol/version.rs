@@ -256,7 +256,10 @@
 ///
 /// And 72 → 73 for #1554's effort choice (M2): `effort` on `SessionSummary` and
 /// `ClientMsg::SetSessionEffort`, which shift the postcard layout.
-pub const PROTOCOL_VERSION: u32 = 73;
+///
+/// And 73 → 74 for #1602's self-delete: `loss` and `self_targeted` on
+/// `DaemonMsg::ConfirmationRequested`, `DaemonMsg::DeferredActionFailed`, `LossSummary`.
+pub const PROTOCOL_VERSION: u32 = 74;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

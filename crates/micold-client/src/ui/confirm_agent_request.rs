@@ -19,10 +19,13 @@ pub fn modal<'a>(prompt: &Prompt, scheme: ColorScheme) -> Element<'a, Message> {
     let body = "An AI session asked for this. Nothing changes unless you allow it; if nobody \
                 answers within 60 seconds, the request fails.";
 
-    let fields = column![
+    let mut fields = column![
         Text::new(agent_confirm::headline(prompt), TypeRole::Headline, r),
         Text::new(body, TypeRole::Body, r).muted(),
     ];
+    if let Some(note) = agent_confirm::self_targeted_note(prompt) {
+        fields = fields.push(Text::new(note, TypeRole::Body, r));
+    }
 
     material::dialog::confirm(
         r,

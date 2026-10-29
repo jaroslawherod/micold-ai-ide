@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use micold_core::mcp::errors::{ErrorCategory, OpError};
-use micold_core::protocol::messages::{ConfirmOperation, DaemonMsg};
+use micold_core::protocol::messages::{ConfirmOperation, DaemonMsg, LossSummary};
 use micold_core::session::SessionId;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
@@ -46,6 +46,10 @@ pub struct ConfirmRequest {
     pub target: ConfirmTarget,
     /// The target's display name, named in the prompt.
     pub target_label: String,
+    /// What the delete would lose; `Some` for a worktree delete only.
+    pub loss: Option<LossSummary>,
+    /// The caller is one of the sessions the operation ends.
+    pub self_targeted: bool,
 }
 
 /// How a confirmation ended. The first transition wins; later ones are no-ops.
@@ -199,5 +203,7 @@ fn prompt(id: u64, pending: &Pending, now: Instant) -> DaemonMsg {
         operation: request.operation,
         target_label: request.target_label.clone(),
         expires_in_ms: u32::try_from(left.as_millis()).unwrap_or(u32::MAX),
+        loss: request.loss.clone(),
+        self_targeted: request.self_targeted,
     }
 }

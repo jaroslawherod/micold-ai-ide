@@ -585,8 +585,10 @@ const TOOLS: &[Tool] = &[
         name: "delete_worktree",
         description: "Delete a worktree and, unless delete_branch is false, its branch, after the \
             user confirms in an app window. A worktree with live sessions is refused unless \
-            stop_sessions is true. \"default\" and the calling session's own worktree cannot be \
-            deleted; a session running in the project root (Default) is refused.",
+            stop_sessions is true. \"default\" cannot be deleted; a session running in the project root \
+            (Default) is refused. A session may delete its own worktree with stop_sessions true: \
+            after the user confirms, the result says the stop and removal are scheduled, then the \
+            app ends the session and removes the worktree.",
         properties: || {
             json!({
                 "worktree": worktree_property(),

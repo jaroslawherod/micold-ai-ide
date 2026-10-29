@@ -1417,6 +1417,20 @@ pub enum DaemonMsg {
         target_label: String,
         /// Milliseconds left of the 60 s the prompt waits for an answer.
         expires_in_ms: u32,
+        /// What deleting the worktree would lose; `Some` for a worktree delete only (#1602).
+        loss: Option<LossSummary>,
+        /// The caller is one of the sessions the operation ends: the dialog says so (#1602).
+        self_targeted: bool,
+    },
+    /// An accepted operation the daemon ran after replying to the agent failed (#1602, FR-009).
+    /// Sent to every window, never replayed and never answered.
+    DeferredActionFailed {
+        /// The project the operation belonged to.
+        project: PathBuf,
+        /// The worktree's display name, or the session's label.
+        subject: String,
+        /// Why it failed.
+        reason: String,
     },
     /// The prompt is resolved (answered, expired, abandoned, or its target is gone); every window
     /// closes it.
@@ -1671,6 +1685,31 @@ pub enum ConfirmOperation {
     InterruptSession,
     /// Type into another session (FR-016 "Confirm each send").
     SendInput,
+}
+
+/// What deleting a worktree would lose, read when the prompt opens (#1602). Each list is bounded;
+/// `*_more` counts what was left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LossSummary {
+    /// Changed and untracked files.
+    pub files: Vec<String>,
+    /// Files beyond `files`.
+    pub files_more: u32,
+    /// Commits on no remote-tracking branch.
+    pub commits: Vec<LossCommit>,
+    /// Commits beyond `commits`.
+    pub commits_more: u32,
+    /// Git could not be read; the lists may be incomplete.
+    pub unreadable: bool,
+}
+
+/// One unpushed commit in a [`LossSummary`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LossCommit {
+    /// Abbreviated hash.
+    pub short_hash: String,
+    /// First line of the message.
+    pub subject: String,
 }
 
 /// Why a handshake or attach was refused (contracts/messages.md).

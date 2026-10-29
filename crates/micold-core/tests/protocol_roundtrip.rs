@@ -843,6 +843,17 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             },
             target_label: "feat-x".into(),
             expires_in_ms: 60_000,
+            loss: Some(micold_core::protocol::messages::LossSummary {
+                files: vec!["src/a.rs".into()],
+                files_more: 3,
+                commits: vec![micold_core::protocol::messages::LossCommit {
+                    short_hash: "abc1234".into(),
+                    subject: "wip".into(),
+                }],
+                commits_more: 0,
+                unreadable: false,
+            }),
+            self_targeted: true,
         },
         DaemonMsg::ConfirmationRequested {
             id: 2,
@@ -852,6 +863,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             operation: ConfirmOperation::DeleteSession,
             target_label: "reviewer".into(),
             expires_in_ms: 59_000,
+            loss: None,
+            self_targeted: false,
         },
         DaemonMsg::ConfirmationRequested {
             id: 3,
@@ -861,6 +874,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             operation: ConfirmOperation::StopSession,
             target_label: "reviewer".into(),
             expires_in_ms: 1,
+            loss: None,
+            self_targeted: false,
         },
         DaemonMsg::ConfirmationRequested {
             id: 4,
@@ -870,6 +885,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             operation: ConfirmOperation::InterruptSession,
             target_label: "reviewer".into(),
             expires_in_ms: 0,
+            loss: None,
+            self_targeted: false,
         },
         DaemonMsg::ConfirmationRequested {
             id: 5,
@@ -879,6 +896,13 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             operation: ConfirmOperation::SendInput,
             target_label: "reviewer".into(),
             expires_in_ms: 30_000,
+            loss: None,
+            self_targeted: false,
+        },
+        DaemonMsg::DeferredActionFailed {
+            project: PathBuf::from("/a"),
+            subject: "Feat X".into(),
+            reason: "directory in use".into(),
         },
         DaemonMsg::ConfirmationWithdrawn { id: 1 },
         DaemonMsg::SessionErrorNotice {
@@ -961,8 +985,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_73() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 73);
+fn the_protocol_version_is_74() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 74);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
