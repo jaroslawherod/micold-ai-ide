@@ -862,17 +862,20 @@ impl Git for GitCli {
         use crate::worktree::loss::{parse_log, parse_status_z};
         let status = run_git(
             dir,
-            &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            &[
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+            ],
         )?;
-        let log = ["--format=%h%x00%s"];
-        let commits = if run_git(dir, &["rev-parse", "--verify", "-q", "@{upstream}"]).is_ok() {
-            run_git(dir, &[&["log"][..], &log, &["@{upstream}..HEAD"]].concat())?
-        } else {
-            run_git(
-                dir,
-                &[&["log"][..], &log, &["HEAD", "--not", "--remotes"]].concat(),
-            )?
-        };
+        // On no remote-tracking branch, whatever the branch's upstream is: a branch cut from
+        // origin/main tracks it, and its pushed commits are not lost.
+        let commits = run_git(
+            dir,
+            &["log", "--format=%h%x00%s", "HEAD", "--not", "--remotes"],
+        )?;
         Ok(crate::worktree::loss::WorktreeLoss {
             files: parse_status_z(&status),
             commits: parse_log(&commits),
