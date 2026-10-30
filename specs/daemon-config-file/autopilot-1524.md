@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1524_the-daemon-loads-its-configuration-file-and
 - **Started**: 2026-10-30
 - **Phase**: implement M1
-- **Next step**: M1 implement (test-first), gate, reviews, PR
+- **Next step**: push the branch and open the M1 PR (blocked, see Open escalation)
 
 ## Pull requests
 
@@ -51,7 +51,7 @@ None.
 
 ## Open escalation
 
-None.
+M1 is implemented, reviewed and gated (`mise run gate` green before a rebase onto origin/main, whose 4 new commits touch only client composer files and other specs). The push is blocked: `git push --force-with-lease -u origin HEAD` is rejected as stale because the remote branch `feat/1524_...` still holds the merged design PR's commits, and the explicit-lease force push was denied by the permission classifier. Needed: permission to force-push this branch (or delete the stale remote branch), then push and `gh pr create` with the body prepared in the scratchpad. A hook may also want the gate re-run on the rebased tree.
 
 ## Follow-ups not done
 
