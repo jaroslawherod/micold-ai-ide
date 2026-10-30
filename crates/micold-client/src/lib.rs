@@ -13,6 +13,7 @@ pub mod app;
 /// so `tests/` can drive the daemon → wire → client join (see the module docs).
 pub mod catalog_sync;
 pub mod daemon;
+pub mod daemon_config_render;
 pub mod features;
 pub mod grid;
 pub use micold_material::icons;

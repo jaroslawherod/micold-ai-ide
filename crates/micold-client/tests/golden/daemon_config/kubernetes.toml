@@ -1,0 +1,17 @@
+# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.
+schema = 1
+
+[daemon]
+name = "Pod"
+kind = "kubernetes"
+time_zone = "UTC"
+idle_stop = "off"
+
+[listen]
+tcp = "0.0.0.0:7000"
+
+[auth]
+client_token_file = "/run/micold/secrets/client-token"
+
+[storage]
+clone_root = "/data/repos"
