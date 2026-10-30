@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1602
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
-- **Phase**: milestone M3 (gate and reviews)
-- **Next step**: M3 PR CI and merge (orchestrator); then close.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1611 | Design | merged | 8e3d084ba79f31d3db24ed3bf6e46b74590b087d |
 | #1613 | M1 | merged (after red-CI attempt 1, see Follow-ups) | 4edaaa6af88c38edd080d3351da4e7fcfa3d655e |
 | #1619 | M2 | merged | c5f574866db5b3fa94c867b526305caa8505a67f |
-| #1621 | M3 | open | |
+| #1621 | M3 | merged | 93ce38cfb0a1bb95fd2c7d471ab780b80e8e135d |
+| close | Close | open | |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | C2 | clarify | Failed deferred removal reported how? | App notice naming W and reason, plus daemon log | user | spec.md Clarifications |
 | M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | merged |
 | M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #1619 | merged |
-| M3 | T026–T030 | full | Session stops or deletes only itself | #1621 | PR open |
+| M3 | T026–T030 | full | Session stops or deletes only itself | #1621 | merged |
 
 ## Decisions
 
@@ -44,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | d0f9fbb3c51a39e109610a93625505f8ad347b7d:2d2d95f3fae526ce5fcff1f4f34c63d838d9004c | CLEAN (3 MINOR, fixed, prose only) |
 | Tasks review | 1 | ea532f26d9ac361d50a41e909238a78bbe29234d:c73cbe1c7de743d075350c08c55a3ca9392d718b | CLEAN (3 MINOR fixed, prose only: T007 [P], M1 Verify step 7, T003 description test) |
 | Plan review | 2 (scoped, sonnet) | d39a7dfcbc667917467e82b2b58c34ddfb9b6c65:8e4b6b4b0c4feab124dfc49f3c7d767bd6fcb81e | CLEAN (1 MINOR fixed, prose only: policy test path) |
+| Close review | 1 | a1f9099c:93ce38cf | CHANGES (1 MAJOR fixed: absence waits in decline tests) |
+| Close review | 2 (scoped, sonnet) | working tree after fix | CLEAN |
 | Plan review | 1 | 0b78d32b342988dd1f35378088cb36a84b3aa567:9dff441a2bbac0be6f7d913c2c0e5dc53484cc7b | CHANGES (3 MAJOR, 3 MINOR, all fixed, prose only: test rows, until_answered plumbing note, R6 wording) |
 
 ## Declined review findings
@@ -84,3 +87,5 @@ M2: T019's daemon tests are in `mcp_lifecycle_tools.rs` (the fixture lives there
 
 M3: Review A round 1 (snapshot 1ebce221:c5f57486): fixed F1 (MAJOR): the stop no-op test counted PTYs and skipped a structured session; now `DaemonState::session_has_process`. No structured-session test (CI has no Claude Code CLI). Audit target of an omitted id is `self`. No red-phase evidence (tests written beside code).
 Follow-up (declined in #1619, not done): the delete prompt does not count ignored files; needs a `LossSummary` field and a wire change.
+
+Close: speckit-converge found no unbuilt behaviour. speckit-tdd-verify FAIL (7 findings, `tdd/verification.md`); T031-T037 fixed as tests plus a notice wording change (client notice now "Could not finish the requested action on …"). Windows job of #1613 and #1621 green (T035). Three non-absence sleeps remain in mcp_lifecycle_tools.rs on purpose. Mutation score from 8 hand-made mutants (profile has no tool).

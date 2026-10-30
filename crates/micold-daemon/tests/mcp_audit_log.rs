@@ -519,17 +519,15 @@ async fn a_self_stop_and_a_self_delete_are_audited_once() {
 /// #1602 FR-010: an accepted self-delete writes one `ok` line when the result is produced (the
 /// decline is the generic refusal line), and, when its deferred removal then fails, one more with
 /// outcome `error`.
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_accepted_self_delete_is_audited_and_a_failed_deferred_step_adds_an_error_line() {
-    use std::os::unix::fs::PermissionsExt;
     let caller = sid(76);
     let f = fixture(caller).await;
-    // A parent git cannot remove the worktree from makes the deferred step fail; root is not
-    // stopped by it, so the failure line is then not expected.
-    let parent = f._project.path().join(".claude/worktrees");
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
-    let locked = std::fs::File::create(parent.join("probe")).is_err();
+    // A locked worktree makes the deferred step fail for every user, root included.
+    git(
+        f._project.path(),
+        &["worktree", "lock", ".claude/worktrees/b"],
+    );
     let before = audit_lines(caller).len();
     let result = f
         .call(
@@ -542,16 +540,14 @@ async fn an_accepted_self_delete_is_audited_and_a_failed_deferred_step_adds_an_e
     let first = audit_lines(caller)[before].clone();
     assert_eq!(field(&first, "op"), Some("delete_worktree"), "{first}");
     assert_eq!(field(&first, "outcome"), Some("ok"), "{first}");
-    if locked {
-        for _ in 0..150 {
-            if audit_lines(caller).len() > before + 1 {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-        let lines = audit_lines(caller);
-        assert_eq!(lines.len(), before + 2, "{lines:#?}");
-        assert_eq!(field(&lines[before + 1], "outcome"), Some("error"));
-    }
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(
+        wait_until(std::time::Duration::from_secs(15), || audit_lines(caller)
+            .len()
+            > before + 1)
+        .await,
+        "the failed deferred step is audited"
+    );
+    let lines = audit_lines(caller);
+    assert_eq!(lines.len(), before + 2, "{lines:#?}");
+    assert_eq!(field(&lines[before + 1], "outcome"), Some("error"));
 }
