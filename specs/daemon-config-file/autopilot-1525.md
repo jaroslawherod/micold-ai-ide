@@ -45,7 +45,7 @@ None.
 
 ## Handover
 
-None.
+M1 implemented (T021-T024a ticked, tests green: render 4, stable 2, validate 5; user guide edited; cycle-log entry 21), uncommitted-then-committed on the branch, NOT pushed, no PR. Review A done (CLEAN, 3 MINOR; F1/F2 handled with a comment, F3 accepted: delivery calls `validate_config`). Scoped gate was started (log in the dead unit's scratchpad; rerun `scripts/autopilot/scoped-gate.sh` detached). Next: scoped gate green, review B (conformance, sonnet, once), full `mise run gate`, then pr.md (milestone PR, title `feat(daemon-config-file): render each daemon's configuration from Settings (#1525)`). No visual pass needed beyond a caution line in the Daemons row (optional). Note the build lock was heavily contended by the #1524 worktree's gate.
 
 ## Open escalation
 

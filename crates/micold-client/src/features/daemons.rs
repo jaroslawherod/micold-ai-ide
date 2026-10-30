@@ -410,6 +410,9 @@ pub struct State {
     /// The AI CLIs whose install failed at each daemon's last start; they outlive the start so the
     /// connected row keeps saying so, and the next start clears them (feature 806, FR-012).
     install_warnings: BTreeMap<DaemonId, Vec<String>>,
+    /// The errors of each daemon's rendered configuration file at the last check; a daemon with
+    /// an empty list was checked and is valid (#1525, FR-013f).
+    config_errors: BTreeMap<DaemonId, Vec<String>>,
     /// The repository path typed under each remote daemon (feature 489, FR-012).
     pub repositories: BTreeMap<DaemonId, String>,
     /// The sentence under the repository field the last refused add was about.
@@ -640,6 +643,49 @@ fn mismatched_container(model: &Model<'_>, id: DaemonId) -> bool {
         )
 }
 
+/// Render `settings` as daemon `id`'s configuration file and check it with the check of
+/// `micold-daemon config check`. The file to deliver, or `None` with the errors recorded for the
+/// daemon's row in Settings → Daemons: an invalid file is not delivered (#1525, FR-013f).
+pub fn validate_config(
+    state: &mut State,
+    id: DaemonId,
+    settings: &crate::daemon_config_render::DaemonSettings,
+    kind: micold_core::daemon_config::Kind,
+) -> Option<String> {
+    match crate::daemon_config_render::prepare(settings, kind) {
+        Ok(text) => {
+            state.config_errors.insert(id, Vec::new());
+            Some(text)
+        }
+        Err(errors) => {
+            let lines = errors.iter().map(ToString::to_string).collect();
+            state.config_errors.insert(id, lines);
+            None
+        }
+    }
+}
+
+/// Check every configured daemon's file again, after the registry changed.
+fn check_configs(state: &mut State, registry: &DaemonRegistry) {
+    state
+        .config_errors
+        .retain(|id, _| registry.get(*id).is_some());
+    for entry in registry.entries() {
+        if let Some((settings, kind)) =
+            crate::daemon_config_render::DaemonSettings::from_entry(entry)
+        {
+            validate_config(state, entry.id, &settings, kind);
+        }
+    }
+}
+
+impl State {
+    /// Whether daemon `id`'s configuration file has been checked.
+    pub fn config_checked(&self, id: DaemonId) -> bool {
+        self.config_errors.contains_key(&id)
+    }
+}
+
 /// The list, its empty state and the daemons a worktree can bind to.
 pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
     let rows = model
@@ -699,6 +745,11 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             replace_offered: replace_offered(model, entry.id)
                 && !state.replacing.contains(&entry.id),
             replacing: state.replacing.contains(&entry.id),
+            config_errors: state
+                .config_errors
+                .get(&entry.id)
+                .cloned()
+                .unwrap_or_default(),
             install_warnings: state
                 .install_warnings
                 .get(&entry.id)
@@ -2023,6 +2074,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::Saved => match save(state, model) {
             Ok(out) => {
                 state.form_error = None;
+                check_configs(state, model.registry);
                 return out;
             }
             Err(error) => state.form_error = Some(error),

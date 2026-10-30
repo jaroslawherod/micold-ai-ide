@@ -1,0 +1,22 @@
+# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.
+schema = 1
+
+[daemon]
+name = "Remote box"
+kind = "ssh"
+home = "/home/dev"
+idle_stop = 900
+log = "debug"
+
+[listen]
+socket = "/run/user/1000/micold.sock"
+
+[storage]
+clone_root = "/home/dev/repos"
+
+[[projects]]
+path = "/home/dev/repos/app"
+
+[[projects]]
+path = "/home/dev/repos/lib"
+remote = "https://github.com/acme/lib.git"

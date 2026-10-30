@@ -886,6 +886,9 @@ pub struct DaemonView {
     pub stopped_reason: Option<String>,
     /// One line per project of a sandboxed daemon about its git credential (#1002, FR-013).
     pub credential_lines: Vec<CredentialLine>,
+    /// What stopped the daemon's configuration file from being delivered: one line per error of
+    /// the check `micold-daemon config check` runs (FR-013f). Empty when the file is valid.
+    pub config_errors: Vec<String>,
 }
 
 /// A line of a daemon's row about one project's git credential (#1002, FR-013, FR-008).

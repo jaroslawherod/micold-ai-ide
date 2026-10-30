@@ -266,6 +266,10 @@ fn daemon_row<'a>(
     for warning in &view.install_warnings {
         body = body.push(caution(warning.clone(), roles));
     }
+    // Why the daemon's configuration file is not delivered (FR-013f).
+    for error in &view.config_errors {
+        body = body.push(caution(error.clone(), roles));
+    }
     // The git credential of each project of a sandboxed daemon (#1002, FR-013).
     for line in &view.credential_lines {
         body = body.push(if line.warning {

@@ -19,6 +19,11 @@ reports the first such error. Without `--files` the files the configuration name
 yet; with it, a missing script, settings file or client-token file is an error, and a secret file
 readable by others is a warning on a host or SSH daemon and an error in a container or pod.
 
+Settings writes the file for you. For each daemon the application renders the file from Settings,
+with the same key order every time, and checks it with the same check as `micold-daemon config
+check` before it uses it. When the check finds an error, the file is not delivered and Settings →
+Daemons shows each error under that daemon's row; fix the setting it names and the error goes away.
+
 ## Rules for every key
 
 - Every table refuses keys it does not know: `daemon.toml:14: unknown key "listne" in [daemon]`.
