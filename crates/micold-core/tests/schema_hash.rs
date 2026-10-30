@@ -342,7 +342,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// `ReportedModel.effort`.
 ///
 /// And 72 → 73 for #1554's effort choice (M2): `SessionSummary.effort`, `ClientMsg::SetSessionEffort`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 74;
+///
+/// And 73 → 74 for #1602's self-delete; 74 → 75 for #1524's `config` diagnostic section
+/// (`ConfigRequest`, `Config`, `ConfigChanged`).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 75;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

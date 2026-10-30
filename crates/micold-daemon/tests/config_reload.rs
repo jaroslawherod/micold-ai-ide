@@ -388,3 +388,19 @@ fn a_reload_never_writes_the_config_or_a_secret() {
 
     assert_eq!(before, (stamp(&file), stamp(&secret)));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_busy_directory_does_not_postpone_a_reload_past_5_seconds() {
+    let (dir, file, runtime) = setup(&host("1", "info", ""));
+    let _task = settled(&runtime, WatchMode::Full).await;
+    let noise = dir.path().join("noise.log");
+    let writer = tokio::spawn(async move {
+        for i in 0..200 {
+            let _ = std::fs::write(&noise, i.to_string());
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    });
+    replace(&file, &host("2", "info", ""));
+    assert!(applied_within(&runtime, "2", Duration::from_secs(5)).await);
+    writer.abort();
+}

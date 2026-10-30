@@ -230,7 +230,10 @@ pub fn load_file(path: &Path) -> Result<LoadedFile, LoadError> {
             }
         }
     })?;
-    let text = String::from_utf8_lossy(&bytes);
+    let text = String::from_utf8(bytes.clone()).map_err(|_| LoadError::Unreadable {
+        path: path.to_path_buf(),
+        error: std::io::Error::new(std::io::ErrorKind::InvalidData, "the file is not UTF-8"),
+    })?;
     let origin = path.display().to_string();
     let (config, findings) = validate_text(&text, &origin).map_err(LoadError::Invalid)?;
     let secrets: Vec<&Path> = daemon_config::secret_entries(&config)

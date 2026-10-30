@@ -23,6 +23,8 @@ use crate::config_load::{fingerprint, load_file, validate_text, LoadError, Loade
 pub const POLL_INTERVAL: Duration = Duration::from_secs(2);
 /// How long watch events are collected before the file is read.
 pub const DEBOUNCE: Duration = Duration::from_millis(250);
+/// The longest events are collected before the file is read anyway.
+pub const DEBOUNCE_LIMIT: Duration = Duration::from_secs(1);
 /// How long a secret named by a new configuration may stay missing before it is reported.
 pub const SECRET_GRACE: Duration = Duration::from_secs(120);
 
@@ -300,8 +302,15 @@ impl ConfigRuntime {
                 tokio::select! {
                     _ = poll.tick() => {}
                     Some(()) = changes.recv() => {
+                        // Bounded, so a busy directory cannot postpone the reload past 5 s.
+                        let deadline = tokio::time::Instant::now() + DEBOUNCE_LIMIT;
                         while let Ok(Some(())) =
-                            tokio::time::timeout(DEBOUNCE, changes.recv()).await {}
+                            tokio::time::timeout_at(deadline.min(tokio::time::Instant::now() + DEBOUNCE), changes.recv()).await
+                        {
+                            if tokio::time::Instant::now() >= deadline {
+                                break;
+                            }
+                        }
                     }
                 }
                 runtime.check(Instant::now());
