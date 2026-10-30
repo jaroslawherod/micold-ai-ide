@@ -145,6 +145,44 @@ Absent means no start script.
 | `env_file` | none | Secret. `KEY=VALUE` lines visible to the script only. |
 | `export_env` | `true` | Variables the script exports reach the daemon and its sessions. |
 
+## Loading and live reload
+
+`micold-daemon [--config <path>] [--kind host|ssh|container|kubernetes]` reads the file at start.
+
+- **Where the file is.** `--config <path>` wins. Without it, each kind has a default location: a
+  host process reads `<data dir>/daemon.toml`, an SSH host `~/.micold/remote/daemon.toml`, a
+  container or pod `/run/micold/config/daemon.toml`. Without `--kind`, the first of those that holds
+  a file decides.
+- **No file.** A host process without a file runs on its defaults, as before. For a daemon of
+  another kind (`--kind ssh|container|kubernetes`) a missing file is fatal: the daemon exits and the
+  reason, with the path it looked at, goes to its log. A `--config` naming a file that is missing or
+  invalid is fatal for every kind.
+- **The file wins over the old variables.** Every value the file sets (`daemon.data_dir`,
+  `daemon.home`, `daemon.image`, `daemon.idle_stop`, `daemon.log`, `daemon.time_zone`,
+  `listen.tcp`, `auth.client_token_file`, `storage.clone_root`) beats the matching `MICOLD_*`
+  variable (`TZ` for the time zone). A value the file leaves out still comes from the variable until
+  the variables are retired.
+- **A daemon started from inside a session.** A session's environment carries
+  `MICOLD_DAEMON_CONFIG`. A daemon started there refuses the default location and exits naming
+  `--config`: start it with `--config <path>`.
+- **Live reload.** The daemon watches the directory of the file and of every secret file it names,
+  and re-reads them every 2 seconds as a fallback (bind mounts from a VM and network filesystems
+  send no events). A change is in use within 5 seconds, with no restart. A Kubernetes ConfigMap or
+  Secret update is seen too. The daemon never writes the file or a secret.
+- **Which keys need a restart.** `[github.tokens]`, `[git]`, `[[ai.cli]]`, `[ai]`, `[session]` and
+  `[[projects]]` are live. `[daemon]`, `[listen]`, `[auth]`, `[ssh]`, `[storage]` and `[startup]`
+  are read once: after an edit the daemon keeps running on the old values and reports
+  `restart_needed`, naming the keys.
+- **An invalid edit keeps the last good configuration.** A file with a syntax error, a failing rule
+  or a secret file it cannot read is ignored whole: no key of it is applied, the daemon logs why and
+  reports it as `last_error`. A removed file keeps the last configuration. A secret file that is not
+  there yet is waited for and reported only if it is still missing after 120 seconds.
+- **The `config` diagnostic section.** The daemon reports the file path, its schema and kind, the
+  hash of what is in force (`applied_hash`), every resolved value as `micold-daemon config check`
+  prints it, `restart_needed` with the keys, and `last_error`. A secret is shown as a path and
+  whether it is readable, never its content. On Windows the mode check does not apply and a secret
+  is shown as `readable, ACL not checked`.
+
 ## Examples
 
 Four complete files, one per kind, are in the repository under

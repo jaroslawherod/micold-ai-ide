@@ -21,7 +21,7 @@ mod validate;
 #[cfg(test)]
 mod tests;
 
-pub use files::check_files;
+pub use files::{check_files, secret_entries};
 pub use resolved::{resolved_view, ResolvedView, SecretState, SecretStatus};
 pub use secret::{SecretPath, SecretValue};
 pub use validate::{diagnose, parse, ConfigError, Severity};

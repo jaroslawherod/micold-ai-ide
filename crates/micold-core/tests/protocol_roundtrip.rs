@@ -44,6 +44,20 @@ fn sid() -> SessionId {
     SessionId::from_uuid(Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788))
 }
 
+/// #1524 (T016a, contract §5): the daemon's `config` diagnostic section.
+fn config_status() -> micold_core::protocol::messages::ConfigStatus {
+    micold_core::protocol::messages::ConfigStatus {
+        path: PathBuf::from("/run/micold/config/daemon.toml"),
+        schema: 1,
+        kind: "container".into(),
+        applied_hash: "ab12".repeat(16),
+        resolved: "daemon: sandbox (container)\n".into(),
+        restart_needed: true,
+        changed_restart_keys: vec!["daemon.log".into()],
+        last_error: Some("daemon.toml:3:1: unknown key".into()),
+    }
+}
+
 fn json_roundtrip<T>(value: &T)
 where
     T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
@@ -425,6 +439,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             diff_layout: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
+        ClientMsg::ConfigRequest { req: 13 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
         ClientMsg::SetLogLevel {
             req: 12,
@@ -914,6 +929,17 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             path: Some(PathBuf::from("/var/log/micold/daemon.log")),
             sink: LogSink::File,
         },
+        DaemonMsg::Config {
+            req: 13,
+            status: Some(config_status()),
+        },
+        DaemonMsg::Config {
+            req: 14,
+            status: None,
+        },
+        DaemonMsg::ConfigChanged {
+            status: Some(config_status()),
+        },
         DaemonMsg::RecentErrors {
             req: 11,
             entries: vec![LogEntry {
@@ -985,8 +1011,8 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 }
 
 #[test]
-fn the_protocol_version_is_74() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 74);
+fn the_protocol_version_is_75() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 75);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a

@@ -56,9 +56,7 @@ pub const LISTEN_ADDR_ENV: &str = "MICOLD_LISTEN_ADDR";
 
 /// The address to listen on, when this daemon is containerised.
 fn tcp_listen_addr() -> Option<String> {
-    std::env::var(LISTEN_ADDR_ENV)
-        .ok()
-        .filter(|v| !v.is_empty())
+    crate::settings::current().listen_tcp.clone()
 }
 
 /// Serve over loopback TCP (feature 027).
@@ -109,6 +107,28 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Reload the configuration file while the daemon runs (#1524, research D5) and push each change
+/// to every client, so Settings shows a rejected file without a refresh.
+fn start_config_reload(state: &Arc<DaemonState>) {
+    let Some(loaded) = crate::config_watch::take_startup_file() else {
+        return;
+    };
+    tracing::info!(path = %loaded.path.display(), kind = loaded.config.daemon.kind.as_str(), "configuration loaded");
+    for warning in &loaded.warnings {
+        tracing::warn!(%warning, "configuration warning");
+    }
+    let runtime = Arc::new(crate::config_watch::ConfigRuntime::new(loaded));
+    let pushing = Arc::clone(state);
+    runtime.on_change(Box::new(move |status| {
+        pushing.broadcast(DaemonMsg::ConfigChanged {
+            status: Some(status.clone()),
+        });
+    }));
+    state.set_config(Arc::clone(&runtime));
+    // The task lives as long as the runtime does.
+    drop(runtime.spawn(crate::config_watch::WatchMode::Full));
+}
+
 /// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
 ///
 /// The path comes from the environment because the container is what supplies it: the runtime
@@ -120,17 +140,16 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
 /// turn a misconfigured mount into an open port, silently, inside the feature whose purpose is
 /// containment.
 fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
-    let Some(path) = std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV) else {
+    let Some(path) = crate::settings::current().token_file.clone() else {
         return Ok(());
     };
-    let path = std::path::PathBuf::from(path);
     state.set_auth_token(&path).map_err(|e| {
         io::Error::new(
             e.kind(),
             format!(
-                "{} names {} but it could not be read: {e}",
+                "the authentication token file {} (`auth.client_token_file` or {}) could not be read: {e}",
+                path.display(),
                 micold_core::protocol::auth::TOKEN_PATH_ENV,
-                path.display()
             ),
         )
     })?;
@@ -175,6 +194,7 @@ pub async fn run() -> io::Result<()> {
         tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     }
     let state = Arc::new(DaemonState::new(catalog));
+    start_config_reload(&state);
     // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
     // `SetLogLevel` RPCs can serve it (FR-043–046).
     state.set_diagnostics(logging);
@@ -1107,6 +1127,15 @@ where
                     .map(|d| (d.path.clone(), d.sink))
                     .unwrap_or((None, LogSink::Stderr));
                 state.send(id, DaemonMsg::LogLocation { req, path, sink });
+            }
+            ClientMsg::ConfigRequest { req } => {
+                state.send(
+                    id,
+                    DaemonMsg::Config {
+                        req,
+                        status: state.config_status(),
+                    },
+                );
             }
             ClientMsg::RecentErrorsRequest { req, limit } => {
                 let entries = state
@@ -2186,7 +2215,7 @@ where
             ClientMsg::RepoClone { url, dest } => {
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
-                    let root = crate::repo_clone::root_from_env();
+                    let root = crate::repo_clone::configured_root();
                     let asked = dest.clone();
                     let done = tokio::task::spawn_blocking(move || {
                         crate::repo_clone::ensure_clone(root.as_deref(), &url, &dest)

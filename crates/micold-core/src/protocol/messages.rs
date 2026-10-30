@@ -882,6 +882,11 @@ pub enum ClientMsg {
         /// Correlation id.
         req: u64,
     },
+    /// Ask for the daemon's `config` diagnostic section (#1524, contract §5).
+    ConfigRequest {
+        /// Correlation id.
+        req: u64,
+    },
     /// Ask for the most recent daemon error entries.
     RecentErrorsRequest {
         /// Correlation id.
@@ -1475,6 +1480,19 @@ pub enum DaemonMsg {
         path: Option<PathBuf>,
         /// The active sink.
         sink: LogSink,
+    },
+    /// The daemon's `config` section; `None` when it runs without a configuration file.
+    Config {
+        /// Correlation id.
+        req: u64,
+        /// The status.
+        status: Option<ConfigStatus>,
+    },
+    /// Pushed to every client when the configuration file was applied or rejected (#1524), so
+    /// Settings shows a rejected file without a refresh.
+    ConfigChanged {
+        /// The new status.
+        status: Option<ConfigStatus>,
     },
     /// Recent daemon error entries.
     RecentErrors {
@@ -2420,6 +2438,29 @@ pub enum LogSink {
     Journald,
     /// A rotating file.
     File,
+}
+
+/// The daemon's configuration file as it is in force (#1524, data-model *ConfigStatus*): never a
+/// secret's content, only its path and whether it is readable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigStatus {
+    /// The file the daemon loaded.
+    pub path: PathBuf,
+    /// The file's `schema`.
+    pub schema: u32,
+    /// `daemon.kind`.
+    pub kind: String,
+    /// SHA-256 (hex) of the configuration and every secret it names, as last applied. The
+    /// application compares it with the hash of what it delivered.
+    pub applied_hash: String,
+    /// Every resolved value, as `micold-daemon config check` prints it.
+    pub resolved: String,
+    /// A restart-only key changed since this process started.
+    pub restart_needed: bool,
+    /// The restart-only keys that changed, as `daemon.log`.
+    pub changed_restart_keys: Vec<String>,
+    /// Why the last change was not applied (the previous configuration is still in force).
+    pub last_error: Option<String>,
 }
 
 /// A single log entry surfaced to the diagnostics UI. MUST NOT contain terminal content or user

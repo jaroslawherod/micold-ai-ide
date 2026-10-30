@@ -132,6 +132,9 @@ pub struct DaemonState {
     /// signal. When present, `start_session` writes each AI-CLI session a `--settings` file pointing
     /// `claude`'s lifecycle hooks at it.
     hooks: std::sync::OnceLock<crate::hooks::HookReceiver>,
+    /// The configuration file in force and the machinery that reloads it (#1524); absent when the
+    /// daemon runs without a file.
+    config: std::sync::OnceLock<Arc<crate::config_watch::ConfigRuntime>>,
     /// Each prepared session's worktree guard, frozen when its settings file is written (feature
     /// 1210, research R7). Its own mutex: the hook receiver reads it on every `PreToolUse`, and it
     /// is never held across anything else.
@@ -806,7 +809,7 @@ fn attempted(outcome: &micold_core::env_include::EnvIncludeOutcome) -> SpawnEnv 
 
 /// The image this service's sessions run in: `MICOLD_IMAGE_REFERENCE`, empty on the host.
 pub(crate) fn image_reference() -> String {
-    std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default()
+    crate::settings::current().image.clone()
 }
 
 /// The `HOME` a container daemon must run with: `MICOLD_HOME` when the daemon is in a container
@@ -828,7 +831,10 @@ fn container_home_fix(
 pub fn align_container_home() {
     let fix = container_home_fix(
         &image_reference(),
-        std::env::var_os("MICOLD_HOME").as_deref(),
+        crate::settings::current()
+            .home
+            .as_deref()
+            .map(Path::as_os_str),
         std::env::var_os("HOME").as_deref(),
     );
     if let Some(home) = fix {
@@ -1263,6 +1269,7 @@ impl DaemonState {
             git_targets: Mutex::new(None),
             ssh_github_aliases: Mutex::new(std::collections::BTreeSet::new()),
             hooks: std::sync::OnceLock::new(),
+            config: std::sync::OnceLock::new(),
             guards: Mutex::new(HashMap::new()),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
@@ -1644,6 +1651,16 @@ impl DaemonState {
         // Sessions prepared from now on follow the stored plan-usage switch (feature 490).
         receiver.set_plan_usage(self.lock().catalog.plan_usage_enabled());
         let _ = self.hooks.set(receiver);
+    }
+
+    /// Record the configuration runtime at startup (#1524). A no-op if already set.
+    pub fn set_config(&self, runtime: Arc<crate::config_watch::ConfigRuntime>) {
+        let _ = self.config.set(runtime);
+    }
+
+    /// The `config` section of the diagnostic (contract §5); `None` without a configuration file.
+    pub fn config_status(&self) -> Option<micold_core::protocol::messages::ConfigStatus> {
+        self.config.get().map(|runtime| runtime.status())
     }
 
     /// Record the tool server at startup so AI-CLI spawns can be bound to it (feature 034). A no-op

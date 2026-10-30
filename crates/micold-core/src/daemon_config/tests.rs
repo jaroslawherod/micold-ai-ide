@@ -190,6 +190,18 @@ fn the_resolved_view_shows_a_readable_secret_with_its_mode() {
     assert!(!text.contains("s3cr3t-value"));
 }
 
+/// #1524 T016a/T089: where modes are not checked (Windows) the diagnostic says so instead of
+/// printing a mode.
+#[test]
+fn a_secret_whose_mode_is_not_checked_says_acl_not_checked() {
+    let status = SecretStatus {
+        path: "C:/secrets/token".into(),
+        state: SecretState::Readable { mode: None },
+    };
+    let text = status.to_string();
+    assert!(text.contains("readable, ACL not checked"), "{text}");
+}
+
 // --- T007: V1-V19 ---
 
 #[test]

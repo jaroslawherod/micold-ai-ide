@@ -125,3 +125,54 @@ async fn recent_errors_is_empty_when_diagnostics_are_unset() {
         other => panic!("expected RecentErrors, got {other:?}"),
     }
 }
+
+/// #1524 T016a: the `config` section is served, and a rejected file is pushed without a request.
+#[tokio::test]
+async fn the_config_section_is_served_and_a_rejected_file_is_pushed() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("daemon.toml");
+    let valid = "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n";
+    std::fs::write(&file, valid).unwrap();
+    let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
+    let mut client = connect(&state).await;
+
+    // Without a file the section is absent.
+    client
+        .send(Frame::Control(ClientMsg::ConfigRequest { req: 7 }))
+        .await
+        .unwrap();
+    match next_control(&mut client).await {
+        DaemonMsg::Config { req, status } => assert_eq!((req, status), (7, None)),
+        other => panic!("expected Config, got {other:?}"),
+    }
+
+    let runtime = Arc::new(micold_daemon::config_watch::ConfigRuntime::open(&file).unwrap());
+    let pushing = Arc::clone(&state);
+    runtime.on_change(Box::new(move |status| {
+        pushing.broadcast(DaemonMsg::ConfigChanged {
+            status: Some(status.clone()),
+        });
+    }));
+    state.set_config(Arc::clone(&runtime));
+    client
+        .send(Frame::Control(ClientMsg::ConfigRequest { req: 8 }))
+        .await
+        .unwrap();
+    match next_control(&mut client).await {
+        DaemonMsg::Config { req, status } => {
+            let status = status.expect("a daemon with a file reports it");
+            assert_eq!((req, status.path.as_path()), (8, file.as_path()));
+            assert_eq!(status.last_error, None);
+        }
+        other => panic!("expected Config, got {other:?}"),
+    }
+
+    std::fs::write(&file, "schema = 1\n[daemon\n").unwrap();
+    runtime.check(std::time::Instant::now());
+    match next_control(&mut client).await {
+        DaemonMsg::ConfigChanged { status } => {
+            assert!(status.unwrap().last_error.is_some());
+        }
+        other => panic!("expected ConfigChanged, got {other:?}"),
+    }
+}

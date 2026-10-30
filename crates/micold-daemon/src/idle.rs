@@ -157,9 +157,9 @@ pub use micold_core::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 /// start. The variable is a test and packaging affordance; a typo in it must not be the reason a
 /// user's service will not come up.
 pub fn configured_window() -> Option<IdleWindow> {
-    match std::env::var(IDLE_STOP_ENV) {
-        Err(_) => Some(IdleWindow::default()),
-        Ok(raw) => match parse_window(&raw) {
+    match crate::settings::current().idle_stop.clone() {
+        None => Some(IdleWindow::default()),
+        Some(raw) => match parse_window(&raw) {
             Ok(window) => window,
             Err(reason) => {
                 tracing::warn!(

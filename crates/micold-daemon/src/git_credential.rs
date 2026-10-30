@@ -41,9 +41,22 @@ pub fn credential_root() -> Option<PathBuf> {
     if let Some(root) = std::env::var_os(ROOT_ENV).filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(root));
     }
-    let sandboxed = !crate::state::image_reference().is_empty()
-        || std::env::var_os(micold_core::kube::credentials::POD_ENV).is_some()
-        || std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV).is_some();
+    credential_root_of(&crate::settings::current())
+}
+
+/// [`credential_root`] without the test override: a daemon with a configuration file is sandboxed
+/// exactly when `daemon.kind` is `container` or `kubernetes` (#1524). One without a file still
+/// infers it from the old variables, until they are retired.
+pub fn credential_root_of(settings: &crate::settings::DaemonSettings) -> Option<PathBuf> {
+    use micold_core::daemon_config::Kind;
+    let sandboxed = match settings.kind {
+        Some(kind) => matches!(kind, Kind::Container | Kind::Kubernetes),
+        None => {
+            !settings.image.is_empty()
+                || settings.token_file.is_some()
+                || std::env::var_os(micold_core::kube::credentials::POD_ENV).is_some()
+        }
+    };
     sandboxed.then(|| PathBuf::from(GIT_CREDENTIAL_ROOT))
 }
 

@@ -14,11 +14,9 @@ use micold_core::protocol::messages::CloneFailureWire;
 /// The environment variable naming the directory every clone must lie under.
 pub const ROOT_ENV: &str = "MICOLD_REPOS_ROOT";
 
-/// The configured clone root, when the environment names one.
-pub fn root_from_env() -> Option<PathBuf> {
-    std::env::var_os(ROOT_ENV)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
+/// The configured clone root: `storage.clone_root` of the configuration file, else the variable.
+pub fn configured_root() -> Option<PathBuf> {
+    crate::settings::current().clone_root.clone()
 }
 
 fn lock_for(dest: &Path) -> Arc<Mutex<()>> {

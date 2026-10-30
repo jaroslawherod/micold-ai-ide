@@ -70,6 +70,24 @@ fn main() {
 /// stuck disk never finishes (feature 041, stop-request contract §4). Everything the stop needs has
 /// finished by the time `run` returns, so what is left is given 5 s and then left behind.
 fn start() -> std::io::Result<()> {
+    // The configuration file (#1524) is read before the runtime has threads: its values reach the
+    // process's environment and the settings every later read goes through.
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let args = micold_daemon::config_load::parse_args(&args)
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+    let defaults =
+        micold_daemon::config_load::DefaultLocations::system(micold_core::paths::data_dir());
+    let startup = micold_daemon::config_load::load_startup(
+        &args,
+        &micold_daemon::settings::process_env,
+        &defaults,
+    )
+    .map_err(std::io::Error::other)?;
+    startup.settings.apply_to_process();
+    micold_daemon::settings::install(startup.settings);
+    if let Some(file) = startup.file {
+        micold_daemon::config_watch::keep_startup_file(file);
+    }
     // Before the runtime has threads: a container daemon runs with the container's home (#1459).
     micold_daemon::state::align_container_home();
     let runtime = tokio::runtime::Builder::new_multi_thread()
