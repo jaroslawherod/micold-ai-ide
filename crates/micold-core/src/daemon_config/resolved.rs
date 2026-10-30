@@ -157,7 +157,7 @@ impl std::fmt::Display for SecretStatus {
             SecretState::Readable { mode: Some(mode) } => {
                 write!(f, "{path} (readable, {mode:04o})")
             }
-            SecretState::Readable { mode: None } => write!(f, "{path} (readable)"),
+            SecretState::Readable { mode: None } => write!(f, "{path} (readable, ACL not checked)"),
             SecretState::Missing => write!(f, "{path} (missing)"),
             SecretState::Unreadable => write!(f, "{path} (unreadable)"),
         }

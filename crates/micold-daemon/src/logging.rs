@@ -247,7 +247,11 @@ pub fn default_log_path() -> Option<PathBuf> {
 }
 
 fn base_filter() -> EnvFilter {
-    EnvFilter::try_from_env(LOG_ENV).unwrap_or_else(|_| EnvFilter::new("info"))
+    crate::settings::current()
+        .log
+        .as_deref()
+        .and_then(|directives| EnvFilter::try_new(directives).ok())
+        .unwrap_or_else(|| EnvFilter::new("info"))
 }
 
 /// Initialise tracing for this process. Idempotent per process (a second call is an error from

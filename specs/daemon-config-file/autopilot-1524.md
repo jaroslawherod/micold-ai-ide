@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1524
 - **Worktree branch**: feat/1524_the-daemon-loads-its-configuration-file-and
 - **Started**: 2026-10-30
-- **Phase**: tasks
-- **Next step**: handoff (merge design PR, then M1)
+- **Phase**: implement M1
+- **Next step**: M1 implement (test-first), gate, reviews, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1616 | Design (milestones for Issue 3) | open | — |
+| #1616 | Design (milestones for Issue 3) | merged | b6f32a1a7feabb6a2fedfd5b4c1b0ed5d7dedf2a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T014–T020, T015a, T016a, T019a, T019b, T020a, T088, T089 | full | Daemon loads config file, live reload, `config` diagnostic | — | pending |
+| M1 | T014–T020, T015a, T016a, T019a, T019b, T020a, T088, T089 | full | Daemon loads config file, live reload, `config` diagnostic | — | in progress |
 
 ## Decisions
 

@@ -41,3 +41,20 @@ Append only. Newest last.
   save test used a host runtime the World already holds. Fixed; `cargo test -p micold-client --test
   daemon_config_render --test daemon_config_stable --test daemon_config_validate`: 4 + 2 + 5 passed.
 - refactor: none needed.
+
+## Issue 3 (#1524) M1: load, live reload, `config` diagnostic
+
+- tests first, in this order: `crates/micold-core/tests/protocol_roundtrip.rs` (the `config`
+  messages, version 75) and `daemon_config/tests.rs` (ACL line), then `crates/micold-daemon/tests/config_load.rs`
+  (19) and `config_reload.rs` (16), then the `config` RPC test in `tests/sessions/diagnostics.rs`.
+- red: the first `cargo test -p micold-daemon --test config_load --test config_reload` after the
+  new modules existed as signatures failed on 3 of 19 (test-fixture mistakes: a sandbox file needs
+  `[listen]` and `[auth]`); `settings.rs` was written before its tests (the rest of the modules after).
+  No separate red run per test: the tests could not compile before `config_load`, `config_watch`
+  and `settings` existed.
+- found by the tests: the watcher woke on its own reads (`notify` reports `Access` events), so the
+  debounce never ended and `a_changed_secret_is_in_use_within_5_seconds` failed; the watcher now
+  ignores access events.
+- green: `cargo test -p micold-daemon --test config_load --test config_reload` 19 + 16 passed;
+  `--test sessions diagnostics` 3 passed; `cargo test -p micold-core --lib --tests` all passed.
+- T019b is a guard test (green once T019a landed, by design).

@@ -54,43 +54,7 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
     }
 
     // V14: a secret must be owner-only.
-    let mut secrets: Vec<(String, &Path)> = Vec::new();
-    if let Some(p) = config
-        .auth
-        .as_ref()
-        .and_then(|a| a.client_token_file.as_ref())
-    {
-        secrets.push(("auth.client_token_file".into(), p.path()));
-    }
-    if let Some(p) = &config.git.ssh_key_file {
-        secrets.push(("git.ssh_key_file".into(), p.path()));
-    }
-    if let Some(p) = &config.git.signing_key_file {
-        secrets.push(("git.signing_key_file".into(), p.path()));
-    }
-    for (i, token) in config.github.tokens.iter().enumerate() {
-        secrets.push((
-            format!("github.tokens[{i}].token_file"),
-            token.token_file.path(),
-        ));
-    }
-    for (i, cli) in config.ai.cli.iter().enumerate() {
-        for (key, secret) in [
-            ("sign_in_file", &cli.sign_in_file),
-            ("token_file", &cli.token_file),
-            ("api_key_file", &cli.api_key_file),
-        ] {
-            if let Some(p) = secret {
-                secrets.push((format!("ai.cli[{i}].{key}"), p.path()));
-            }
-        }
-    }
-    for (name, secret) in &config.session.secret_env {
-        secrets.push((format!("session.secret_env.{name}"), secret.path()));
-    }
-    if let Some(p) = config.startup.as_ref().and_then(|s| s.env_file.as_ref()) {
-        secrets.push(("startup.env_file".into(), p.path()));
-    }
+    let secrets = secret_entries(config);
     for (key, path) in secrets {
         match super::resolved::mode_of(path) {
             Some(Some(mode)) if mode & 0o077 != 0 => {
@@ -131,4 +95,47 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
         }
     }
     out
+}
+
+/// Every secret file `config` names, with the key that names it (`github.tokens[0].token_file`).
+/// The daemon watches and hashes exactly these (research D5); V14 checks their modes.
+pub fn secret_entries(config: &DaemonConfig) -> Vec<(String, &Path)> {
+    let mut secrets: Vec<(String, &Path)> = Vec::new();
+    if let Some(p) = config
+        .auth
+        .as_ref()
+        .and_then(|a| a.client_token_file.as_ref())
+    {
+        secrets.push(("auth.client_token_file".into(), p.path()));
+    }
+    if let Some(p) = &config.git.ssh_key_file {
+        secrets.push(("git.ssh_key_file".into(), p.path()));
+    }
+    if let Some(p) = &config.git.signing_key_file {
+        secrets.push(("git.signing_key_file".into(), p.path()));
+    }
+    for (i, token) in config.github.tokens.iter().enumerate() {
+        secrets.push((
+            format!("github.tokens[{i}].token_file"),
+            token.token_file.path(),
+        ));
+    }
+    for (i, cli) in config.ai.cli.iter().enumerate() {
+        for (key, secret) in [
+            ("sign_in_file", &cli.sign_in_file),
+            ("token_file", &cli.token_file),
+            ("api_key_file", &cli.api_key_file),
+        ] {
+            if let Some(p) = secret {
+                secrets.push((format!("ai.cli[{i}].{key}"), p.path()));
+            }
+        }
+    }
+    for (name, secret) in &config.session.secret_env {
+        secrets.push((format!("session.secret_env.{name}"), secret.path()));
+    }
+    if let Some(p) = config.startup.as_ref().and_then(|s| s.env_file.as_ref()) {
+        secrets.push(("startup.env_file".into(), p.path()));
+    }
+    secrets
 }

@@ -19,8 +19,20 @@ pub fn project_dirs() -> Option<ProjectDirs> {
 /// fail under `/var/lib`).
 pub const DATA_DIR_ENV: &str = "MICOLD_DATA_DIR";
 
+/// The data directory the daemon's configuration file names (`daemon.data_dir`, #1524): it wins
+/// over [`DATA_DIR_ENV`]. Set once, at start, before anything reads the directory.
+static CONFIGURED_DATA_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Makes `dir` this process's data directory, ahead of the variable. The first call wins.
+pub fn set_data_dir(dir: PathBuf) {
+    let _ = CONFIGURED_DATA_DIR.set(dir);
+}
+
 fn data_dir_override() -> Option<PathBuf> {
-    override_from(std::env::var_os(DATA_DIR_ENV))
+    CONFIGURED_DATA_DIR
+        .get()
+        .cloned()
+        .or_else(|| override_from(std::env::var_os(DATA_DIR_ENV)))
 }
 
 fn override_from(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
