@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
 - **Phase**: milestone M2 (gate and reviews)
-- **Next step**: M2 PR (CI and merge); then M3.
+- **Next step**: M2 PR CI and merge (orchestrator); then M3.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | C1 | clarify | Story 4 (stop/delete self) in scope? | Yes | user | spec.md Clarifications |
 | C2 | clarify | Failed deferred removal reported how? | App notice naming W and reason, plus daemon log | user | spec.md Clarifications |
 | M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | merged |
-| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #… | in progress |
+| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #PRNUM | PR open |
 | M3 | T026–T030 | full | Session stops or deletes only itself | #… | pending |
 
 ## Decisions
