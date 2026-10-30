@@ -237,10 +237,10 @@ fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_oper
             additional: Default::default(),
         },
         Operation::StopSession {
-            session: session(OTHER),
+            session: Some(session(OTHER)),
         },
         Operation::StopSession {
-            session: session(ME),
+            session: Some(session(ME)),
         },
         Operation::InterruptSession {
             session: session(OTHER),
@@ -249,10 +249,10 @@ fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_oper
             session: session(ME),
         },
         Operation::DeleteSession {
-            session: session(OTHER),
+            session: Some(session(OTHER)),
         },
         Operation::DeleteSession {
-            session: session(ME),
+            session: Some(session(ME)),
         },
         Operation::GetSession {
             session: session(OTHER),
@@ -311,46 +311,48 @@ fn deleting_another_worktree_waits_for_confirmation() {
     );
 }
 
-/// U111
+/// U111: a session may stop itself (#1602, FR-011), by an omitted id or its own; the user confirms.
 #[test]
-fn stop_session_on_self_is_refused_and_on_another_session_confirmed() {
-    let error = refusal(decide_for(
-        in_worktree("b"),
-        &Operation::StopSession {
-            session: session(ME),
-        },
-    ));
-    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
-    assert_eq!(
-        decide_for(
-            in_worktree("b"),
-            &Operation::StopSession {
-                session: session(OTHER)
-            }
-        ),
-        PolicyDecision::Confirm(ConfirmedOp::StopSession)
-    );
+fn stop_session_on_self_or_another_session_is_confirmed() {
+    for session in [None, Some(session(ME)), Some(session(OTHER))] {
+        for location in [in_worktree("b"), SessionLocation::Default] {
+            assert_eq!(
+                decide_for(location, &Operation::StopSession { session }),
+                PolicyDecision::Confirm(ConfirmedOp::StopSession)
+            );
+        }
+    }
 }
 
 /// U112
 #[test]
-fn delete_session_on_self_is_refused_and_on_another_session_confirmed() {
-    let error = refusal(decide_for(
-        in_worktree("b"),
-        &Operation::DeleteSession {
-            session: session(ME),
-        },
-    ));
-    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
-    assert_eq!(
-        decide_for(
-            in_worktree("b"),
-            &Operation::DeleteSession {
-                session: session(OTHER)
-            }
-        ),
-        PolicyDecision::Confirm(ConfirmedOp::DeleteSession)
-    );
+fn delete_session_on_self_or_another_session_is_confirmed() {
+    for session in [None, Some(session(ME)), Some(session(OTHER))] {
+        for location in [in_worktree("b"), SessionLocation::Default] {
+            assert_eq!(
+                decide_for(location, &Operation::DeleteSession { session }),
+                PolicyDecision::Confirm(ConfirmedOp::DeleteSession)
+            );
+        }
+    }
+}
+
+/// The prompt and the deferred path treat an omitted or own id as the caller itself.
+#[test]
+fn a_stop_or_delete_of_the_caller_is_self_targeted() {
+    let me = caller(in_worktree("b"));
+    for (session, own) in [
+        (None, true),
+        (Some(session(ME)), true),
+        (Some(session(OTHER)), false),
+    ] {
+        for op in [
+            Operation::StopSession { session },
+            Operation::DeleteSession { session },
+        ] {
+            assert_eq!(is_self_targeted(&me, &op), own, "{op:?}");
+        }
+    }
 }
 
 /// U113: interrupting its own turn would abort the call awaiting the result (decision D2).
@@ -488,7 +490,7 @@ fn the_option_changes_no_decision_but_the_cross_session_tools() {
             additional: Default::default(),
         },
         Operation::StopSession {
-            session: session(OTHER),
+            session: Some(session(OTHER)),
         },
         create_worktree(),
     ] {

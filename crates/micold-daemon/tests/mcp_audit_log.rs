@@ -299,16 +299,10 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
             ErrorCategory::NotFound,
         )],
         "delete_worktree" => vec![(json!({"worktree": "nope"}), ErrorCategory::NotFound)],
-        "stop_session" | "delete_session" => vec![
-            (
-                json!({"session": sid(99).0.to_string()}),
-                ErrorCategory::NotFound,
-            ),
-            (
-                json!({"session": caller.0.to_string()}),
-                ErrorCategory::RefusedByPolicy,
-            ),
-        ],
+        "stop_session" | "delete_session" => vec![(
+            json!({"session": sid(99).0.to_string()}),
+            ErrorCategory::NotFound,
+        )],
         "interrupt_session" => vec![(
             json!({"session": caller.0.to_string()}),
             ErrorCategory::InvalidInput,
@@ -497,6 +491,28 @@ async fn every_logged_failure_carries_one_of_the_six_categories() {
         );
         assert_eq!(field(line, "op"), Some(tool.as_str()), "{line}");
         assert_eq!(outcome, category.as_str(), "{tool}: {line}");
+    }
+}
+
+/// #1602 FR-011: a session stopping or deleting itself with no id writes one `ok` line naming
+/// `self`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_stop_and_a_self_delete_are_audited_once() {
+    let caller = sid(77);
+    let f = fixture(caller).await;
+    for (who, tool) in [
+        (sibling(caller, SHELL), "stop_session"),
+        (sibling(caller, DOOMED), "delete_session"),
+    ] {
+        let before = audit_lines(who).len();
+        let result = f.call(who, tool, json!({})).await;
+        assert_eq!(result["isError"], json!(false), "{tool}: {result}");
+        let lines = audit_lines(who);
+        assert_eq!(lines.len(), before + 1, "{tool}: {lines:#?}");
+        let line = lines.last().unwrap();
+        assert_eq!(field(line, "op"), Some(tool), "{line}");
+        assert_eq!(field(line, "target"), Some("self"), "{line}");
+        assert_eq!(field(line, "outcome"), Some("ok"), "{line}");
     }
 }
 

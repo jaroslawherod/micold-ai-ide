@@ -148,9 +148,9 @@ These tools stop or remove something, so each request waits until you allow it:
 
 | Tool | What it does once you allow it |
 |---|---|
-| `stop_session` | Stops another session: its processes end, every window shows it idle, and its conversation can be resumed later with `start_session`. A session that is already stopped is left as it is, and nobody is asked |
+| `stop_session` | Stops a session (another one, or the assistant's own, see below): its processes end, every window shows it idle, and its conversation can be resumed later with `start_session`. A session that is already stopped is left as it is, and nobody is asked |
 | `interrupt_session` | Types **Ctrl-C** into another running session, as if you pressed it in its terminal. The session keeps running. A session that is not running is refused, and nobody is asked |
-| `delete_session` | Removes another session, as removing it from the sidebar does |
+| `delete_session` | Removes a session (another one, or the assistant's own), as removing it from the sidebar does |
 | `delete_worktree` | Deletes a worktree and, unless the assistant asks to keep it, its branch. A worktree with running sessions is refused, naming them, unless the assistant asks to stop them (`stop_sessions`); nobody is asked then |
 
 When the assistant asks, **every open window** shows a dialog naming the session that asks, what it
@@ -166,8 +166,8 @@ or the session that asked, goes away while the dialog is open; the dialog then c
 the assistant gives up waiting (its session is stopped, or it cancels the request), the dialog closes
 and nothing is done.
 
-Requests that would be refused anyway never show a dialog. A session cannot stop, interrupt or
-delete itself; ask from another session, or use the sidebar.
+Requests that would be refused anyway never show a dialog. A session cannot interrupt itself, or
+read or type into itself.
 
 The dialog for `delete_worktree` also lists what the deletion would lose: the worktree's changed and
 untracked files, and its commits that are on no remote branch (the branch's upstream, when it has
@@ -180,6 +180,12 @@ says the session is asking to delete its own worktree and that the session ends.
 the answer `scheduled` first, then the session stops and the worktree is removed. If the removal
 fails, the app shows a notice that names the worktree and the reason, and the daemon log records it.
 Deny, or no answer within 60 seconds, leaves the worktree and the session untouched.
+
+A session can also stop or delete itself with `stop_session` or `delete_session`, leaving out the
+session id or giving its own. The dialog names the session as both the one that asks and the one
+affected. The assistant gets the answer `scheduled` first, then the session stops (it stays
+resumable) or is deleted. A session running in the project folder can do this too; no worktree is
+touched. Deny, or no answer within 60 seconds, leaves the session running.
 
 ### Sub-agent runs
 

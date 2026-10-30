@@ -187,14 +187,16 @@ pub enum Operation {
         /// 776, FR-015): `allow_additional_session`, default `No`.
         additional: crate::occupancy::Additional,
     },
+    /// `None` is the calling session itself (#1602, FR-011).
     StopSession {
-        session: SessionRef,
+        session: Option<SessionRef>,
     },
     InterruptSession {
         session: SessionRef,
     },
+    /// `None` is the calling session itself (#1602, FR-011).
     DeleteSession {
-        session: SessionRef,
+        session: Option<SessionRef>,
     },
     /// Sessions in the provider stores that the catalog does not hold, newest first (FR-011).
     ListResumableSessions {
@@ -344,9 +346,10 @@ impl Operation {
             | Operation::ReadSessionOutput { session, .. }
             | Operation::SendSessionInput { session, .. }
             | Operation::StartSession { session, .. }
-            | Operation::StopSession { session }
-            | Operation::InterruptSession { session }
-            | Operation::DeleteSession { session } => session.0.to_string(),
+            | Operation::InterruptSession { session } => session.0.to_string(),
+            Operation::StopSession { session } | Operation::DeleteSession { session } => session
+                .map(|s| s.0.to_string())
+                .unwrap_or_else(|| "self".to_string()),
             Operation::CreateWorktree(request) => request.audit_target(),
             Operation::ReportReviewComment { comment, .. } => comment.to_string(),
             Operation::CreateSession { worktree, .. }
@@ -382,6 +385,11 @@ pub fn is_mutating_tool(tool: &str) -> bool {
 
 fn no_properties() -> Value {
     json!({})
+}
+
+fn optional_session_property() -> Value {
+    json!({"session": {"type": "string", "format": "uuid",
+        "description": "A session id from list_sessions; omitted, the calling session."}})
 }
 
 fn session_property() -> Value {
@@ -661,11 +669,12 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "stop_session",
-        description: "Stop another session of the project after the user confirms in an app \
-            window: its processes end, it becomes idle and stays resumable. A session cannot stop \
-            itself.",
-        properties: session_property,
-        required: &["session"],
+        description: "Stop a session of the project after the user confirms in an app window: \
+            its processes end, it becomes idle and stays resumable. Omit session, or pass your \
+            own id, to stop the calling session: you get the result first, then the app stops \
+            you.",
+        properties: optional_session_property,
+        required: &[],
         read_only: false,
         destructive: true,
         shipped: true,
@@ -728,10 +737,11 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "delete_session",
-        description: "Delete another session of the project after the user confirms in an app \
-            window. A session cannot delete itself.",
-        properties: session_property,
-        required: &["session"],
+        description: "Delete a session of the project after the user confirms in an app window. \
+            Omit session, or pass your own id, to delete the calling session: you get the result \
+            first, then the app stops and removes you.",
+        properties: optional_session_property,
+        required: &[],
         read_only: false,
         destructive: true,
         shipped: true,
@@ -857,13 +867,13 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
                 .into(),
         },
         "stop_session" => Operation::StopSession {
-            session: required_session(args, "session")?,
+            session: optional_session(args, "session")?,
         },
         "interrupt_session" => Operation::InterruptSession {
             session: required_session(args, "session")?,
         },
         "delete_session" => Operation::DeleteSession {
-            session: required_session(args, "session")?,
+            session: optional_session(args, "session")?,
         },
         "list_resumable_sessions" => Operation::ListResumableSessions {
             limit: bounded_count(
@@ -1125,6 +1135,14 @@ fn required_session(args: &Map<String, Value>, key: &str) -> Result<SessionRef, 
         .and_then(|s| Uuid::parse_str(s).ok())
         .map(SessionRef)
         .ok_or_else(|| OpError::invalid_input(format!("{key} must be a session id (a UUID)")))
+}
+
+/// A session id that may be left out (the caller itself); present, it must be a UUID.
+fn optional_session(args: &Map<String, Value>, key: &str) -> Result<Option<SessionRef>, OpError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(_) => required_session(args, key).map(Some),
+    }
 }
 
 fn required_string(args: &Map<String, Value>, key: &str) -> Result<String, OpError> {

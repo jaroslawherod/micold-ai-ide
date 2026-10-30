@@ -99,6 +99,22 @@ pub async fn call(
             deferred = later;
             value
         }),
+        Ok(Operation::StopSession { session }) => {
+            session_lifecycle(&state, caller, session, false, &hangup)
+                .await
+                .map(|(value, later)| {
+                    deferred = later;
+                    value
+                })
+        }
+        Ok(Operation::DeleteSession { session }) => {
+            session_lifecycle(&state, caller, session, true, &hangup)
+                .await
+                .map(|(value, later)| {
+                    deferred = later;
+                    value
+                })
+        }
         Ok(operation) => dispatch(state, caller, operation, asked, &hangup).await,
         Err(error) => Err(error),
     };
@@ -132,19 +148,43 @@ pub enum Deferred {
         /// The worktree's display name, for the failure notice.
         label: String,
     },
+    /// The caller stopped itself (#1602, FR-011).
+    StopSession {
+        caller: SessionId,
+        project: std::path::PathBuf,
+        label: String,
+    },
+    /// The caller deleted itself (#1602, FR-011).
+    DeleteSession {
+        caller: SessionId,
+        project: std::path::PathBuf,
+        label: String,
+    },
 }
 
 impl Deferred {
     /// Do it. A failure is logged, audited as an `error` line, and shown in every window (FR-009,
     /// FR-010); there is no retry and no rollback.
     pub async fn run(self, state: &Arc<DaemonState>) {
-        let Self::DeleteWorktree {
-            caller,
-            project,
-            dir_name,
-            delete_branch,
-            label,
-        } = self;
+        let (caller, project, dir_name, delete_branch, label) = match self {
+            Self::DeleteWorktree {
+                caller,
+                project,
+                dir_name,
+                delete_branch,
+                label,
+            } => (caller, project, dir_name, delete_branch, label),
+            Self::StopSession {
+                caller,
+                project,
+                label,
+            } => return Self::run_session(state, caller, project, label, false).await,
+            Self::DeleteSession {
+                caller,
+                project,
+                label,
+            } => return Self::run_session(state, caller, project, label, true).await,
+        };
         let reason = match ops::delete_worktree(
             state,
             project.clone(),
@@ -191,6 +231,42 @@ impl Deferred {
     }
 }
 
+impl Deferred {
+    /// Stop or delete the caller's own session. A failure is logged, audited and shown, as for a
+    /// worktree delete (FR-009).
+    async fn run_session(
+        state: &Arc<DaemonState>,
+        caller: SessionId,
+        project: std::path::PathBuf,
+        label: String,
+        delete: bool,
+    ) {
+        let (op, done) = if delete {
+            (
+                "delete_session",
+                perform_delete_session(state, caller).await,
+            )
+        } else {
+            ("stop_session", perform_stop_session(state, caller).await)
+        };
+        let Err(error) = done else { return };
+        tracing::error!(session = %caller.0, op, reason = %error.message, "deferred session action failed");
+        tracing::info!(
+            target: "micold::mcp",
+            caller = %caller.0,
+            op,
+            target = %"self",
+            outcome = %"error",
+            "tool call"
+        );
+        state.broadcast(DaemonMsg::DeferredActionFailed {
+            project,
+            subject: label,
+            reason: error.message,
+        });
+    }
+}
+
 async fn dispatch(
     state: Arc<DaemonState>,
     caller: SessionId,
@@ -214,12 +290,8 @@ async fn dispatch(
             worktree,
             display_name,
         } => rename_worktree(&state, caller, worktree, display_name).await,
-        Operation::StopSession { session } => stop_session(&state, caller, session, hangup).await,
         Operation::InterruptSession { session } => {
             interrupt_session(&state, caller, session, hangup).await
-        }
-        Operation::DeleteSession { session } => {
-            delete_session(&state, caller, session, hangup).await
         }
         Operation::SendSessionInput { session, text } => {
             send_session_input(&state, caller, session, text, hangup).await
@@ -563,22 +635,82 @@ async fn session_row_now(
     .await
 }
 
-/// `stop_session` (contracts/mcp-tools.md): scope, then policy (a session may not stop itself,
-/// FR-015), then the no-op for a session with no process (FR-012a), then the user's confirmation,
-/// then the sidebar's own stop: processes end, the record is `Idle` in every window, and the
-/// conversation stays resumable (US3 s2).
-async fn stop_session(
+/// `stop_session` and `delete_session` (contracts/mcp-tools.md): scope, then policy, then (stop
+/// only) the no-op for a session with no process (FR-012a), then the user's confirmation, then
+/// the sidebar's own stop or delete. An omitted id or the caller's own is the caller itself
+/// (#1602, FR-011): the result is returned first and the action is deferred (FR-003).
+async fn session_lifecycle(
     state: &Arc<DaemonState>,
     caller: SessionId,
-    target: SessionRef,
+    target: Option<SessionRef>,
+    delete: bool,
     hangup: &CancellationToken,
-) -> Result<Value, OpError> {
+) -> Result<(Value, Option<Deferred>), OpError> {
+    let target = target.unwrap_or(SessionRef(caller.0));
     let (session, who, project, summary) = session_target(state, caller, target).await?;
-    let confirm = policy_for(&who, &Operation::StopSession { session: target })?;
-    if state.session_ptys(session).is_empty() {
-        return Ok(json!({ "lifecycle": lifecycle_name(&summary.lifecycle) }));
+    let operation = if delete {
+        Operation::DeleteSession {
+            session: Some(target),
+        }
+    } else {
+        Operation::StopSession {
+            session: Some(target),
+        }
+    };
+    let confirm = policy_for(&who, &operation)?;
+    let own = policy::is_self_targeted(&who, &operation);
+    if !delete && !state.session_has_process(session) {
+        return Ok((
+            json!({ "lifecycle": lifecycle_name(&summary.lifecycle) }),
+            None,
+        ));
     }
-    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
+    if let Some(op) = confirm {
+        let label = summary.title.display().to_string();
+        ask_user(
+            state,
+            &who,
+            &project,
+            op,
+            ConfirmTarget::Session(summary.id),
+            label,
+            None,
+            own,
+            hangup,
+        )
+        .await?;
+    }
+    if own {
+        let label = summary.title.display().to_string();
+        let later = if delete {
+            Deferred::DeleteSession {
+                caller,
+                project: project.path.clone(),
+                label,
+            }
+        } else {
+            Deferred::StopSession {
+                caller,
+                project: project.path.clone(),
+                label,
+            }
+        };
+        return Ok((json!({ "scheduled": true }), Some(later)));
+    }
+    let value = if delete {
+        perform_delete_session(state, session).await?
+    } else {
+        perform_stop_session(state, session).await?
+    };
+    Ok((value, None))
+}
+
+/// The sidebar's own stop: processes end, the record is `Idle` in every window, and the
+/// conversation stays resumable (US3 s2).
+async fn perform_stop_session(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+) -> Result<Value, OpError> {
     let st = Arc::clone(state);
     if !blocking(move || Ok(st.stop_session(session))).await? {
         return Err(OpError::not_found(format!(
@@ -626,18 +758,12 @@ async fn interrupt_session(
     Ok(json!({}))
 }
 
-/// `delete_session` (contracts/mcp-tools.md): scope, then policy (a session may not delete
-/// itself, FR-015), then the user's confirmation, then the sidebar's own delete: the record is
-/// archived, its processes end, its credential is revoked, and every window is told.
-async fn delete_session(
+/// The sidebar's own delete: the record is archived, its processes end, its credential is
+/// revoked, and every window is told.
+async fn perform_delete_session(
     state: &Arc<DaemonState>,
-    caller: SessionId,
-    target: SessionRef,
-    hangup: &CancellationToken,
+    session: SessionId,
 ) -> Result<Value, OpError> {
-    let (session, who, project, summary) = session_target(state, caller, target).await?;
-    let confirm = policy_for(&who, &Operation::DeleteSession { session: target })?;
-    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
     let st = Arc::clone(state);
     let (owner, ptys) = blocking(move || {
         st.delete_session(session)

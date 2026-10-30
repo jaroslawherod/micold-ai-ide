@@ -664,12 +664,15 @@ fn destructive_hint_is_set_on_exactly_the_destructive_tools() {
 #[test]
 fn the_destructive_tools_are_callable_from_m5() {
     for name in DESTRUCTIVE {
-        let message = invalid(name, json!({}));
+        // stop_session and delete_session may omit the session (the caller itself, #1602).
+        let message = invalid(name, json!({"session": "not-a-uuid"}));
         assert!(!message.contains("unknown tool"), "{name}: {message}");
     }
     assert_eq!(
         parse_call("stop_session", &json!({"session": S})).unwrap(),
-        Operation::StopSession { session: s7() },
+        Operation::StopSession {
+            session: Some(s7())
+        },
     );
 }
 
@@ -683,18 +686,37 @@ fn the_session_lifecycle_tools_take_a_session_id() {
                 additional: Additional::No,
             },
         ),
-        ("stop_session", Operation::StopSession { session: s7() }),
+        (
+            "stop_session",
+            Operation::StopSession {
+                session: Some(s7()),
+            },
+        ),
         (
             "interrupt_session",
             Operation::InterruptSession { session: s7() },
         ),
-        ("delete_session", Operation::DeleteSession { session: s7() }),
+        (
+            "delete_session",
+            Operation::DeleteSession {
+                session: Some(s7()),
+            },
+        ),
     ] {
         assert_eq!(
             parse_operation(name, &json!({"session": S})).unwrap(),
             expected
         );
-        invalid_any(name, json!({}));
+        if name.starts_with("stop") || name.starts_with("delete") {
+            // The caller itself (#1602, FR-011): an omitted session parses as `None`.
+            assert!(matches!(
+                parse_operation(name, &json!({})),
+                Ok(Operation::StopSession { session: None }
+                    | Operation::DeleteSession { session: None })
+            ));
+        } else {
+            invalid_any(name, json!({}));
+        }
         invalid_any(name, json!({"session": "not-a-uuid"}));
     }
     assert_eq!(
