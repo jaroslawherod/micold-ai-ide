@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-29
 
-**Status**: Closed 2026-10-30 — shipped in PRs #1611, #1613, #1619, #1621, and the close PR
+**Status**: Closed 2026-10-30 — shipped in PRs #1611, #1613, #1619, #1621, and #1622
 
 **Input**: GitHub issue #1602 — "MCP: let a session stop itself and delete its own worktree (after confirmation)". Labels: enhancement, flow:feature.
 
