@@ -58,3 +58,13 @@ Append only. Newest last.
 - green: `cargo test -p micold-daemon --test config_load --test config_reload` 19 + 16 passed;
   `--test sessions diagnostics` 3 passed; `cargo test -p micold-core --lib --tests` all passed.
 - T019b is a guard test (green once T019a landed, by design).
+- review B asked for red evidence; mutation checks on the green tree (each reverted): file-over-env
+  order swapped in `settings.rs` -> `every_value_the_file_sets_beats_the_variable_for_it` fails;
+  `restart_keys` filtered to nothing -> `a_restart_key_change_sets_restart_needed_and_names_the_key`
+  fails; sandbox decided by image instead of `daemon.kind` -> `the_credential_root_follows_the_kind...`
+  fails.
+- review A fix (debounce unbounded under a busy directory): `a_busy_directory_does_not_postpone_a_reload_past_5_seconds`
+  added with the bound (`DEBOUNCE_LIMIT` 1 s); startup and reload now both refuse non-UTF-8.
+- OS-neutral: the watcher, loader and settings have no `cfg(target_os)` arms; they watch parent
+  directories on every OS (T089), and the poll covers a backend that misses events. The Windows
+  "ACL not checked" line is `SecretStatus`'s display for an unchecked mode, tested on Linux.

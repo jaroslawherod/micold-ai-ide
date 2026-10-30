@@ -38,12 +38,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Tasks 1524 | 1 | b37eaff2:02497c0c | CHANGES: 2 MAJOR (no tests for diagnostic and credential_root: added T015a, T016a), 2 MINOR (T019b marked guard test, T089 moved after T020); test-task additions, no further round (round limit not reached; sibling pattern) |
 | Tasks 1524 | 2 | adf7e0fe:a4f36020 | CLEAN (sonnet, fix diff); 2 MINOR fixed, prose/markers only (T015a/T016a not [P], milestone prose) |
-| Review A M1 | 1 | 82be00e2:27264b75 | running |
-| Review B M1 | 1 | 82be00e2:27264b75 | running |
+| Review A M1 | 1 | 82be00e2:27264b75 | CHANGES: 1 MAJOR (unbounded debounce: fixed, test added), 2 MINOR (UTF-8 decode fixed; blocking read in task declined) |
+| Review B M1 | 1 | 82be00e2:27264b75 | CHANGES: 2 MAJOR (red evidence: mutation checks recorded; task file lists amended), 1 MINOR (OS-neutral noted in cycle log); Verify run by me: 19 + 17 pass |
 
 ## Declined review findings
 
-None.
+- Review A F3 (blocking `std::fs::read` on the 2 s poll inside a tokio task): declined, MINOR; the files are a few hundred bytes and a stalled mount only delays the reload task, not sessions. Revisit with `spawn_blocking` if a field report shows it.
 
 ## Handover
 
@@ -54,5 +54,7 @@ None.
 None.
 
 ## Follow-ups not done
+
+- Without a file and without `--kind`, a sandbox daemon still starts from the old `MICOLD_*` variables (transition, D11); flipping that to fatal belongs to issue 15.
 
 - Previous PR #1614 (close of #1523) is merged on main.
