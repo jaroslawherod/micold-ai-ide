@@ -85,9 +85,11 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 ## Issue 4 — feat: the app renders each daemon's configuration from Settings (needs 2)
 
 - [ ] T021 [P] [US1] Failing golden tests in `crates/micold-client/tests/daemon_config_render.rs`: one Settings fixture per kind renders byte-for-byte to `crates/micold-client/tests/golden/daemon_config/{host,ssh,container,kubernetes}.toml`; `parse(render(x))` round-trips; the output passes `validate`
-- [ ] T022 [P] [US1] Failing test: rendering twice gives identical bytes (stable key order), so delivery writes only on change (research D10)
+- [ ] T022 [P] [US1] Failing test in `crates/micold-client/tests/daemon_config_stable.rs`: rendering twice gives identical bytes (stable key order), so delivery writes only on change (research D10)
+- [ ] T022a [P] [US1] Failing test in `crates/micold-client/tests/daemon_config_validate.rs`: an invalid Settings fixture yields the `validate` errors (same check as `micold-daemon config check`), is not delivered, and its errors reach the Settings → Daemons view model (FR-013f)
 - [ ] T023 [US1] Implement `render(&DaemonSettings, Kind) -> String` with the header comment in `crates/micold-client/src/daemon_config_render.rs`, reading the daemon entry from `crates/micold-core/src/daemons.rs`
 - [ ] T024 [US1] Run `validate` on the rendered file before delivery and show errors in Settings → Daemons (`crates/micold-client/src/ui/settings/daemons.rs`) — the same check as `micold-daemon config check`; an invalid file is not delivered
+- [ ] T024a [US1] Document in `docs/user-guide/daemon-configuration.md` that Settings renders each daemon's file, validates it with the same check as `micold-daemon config check`, and shows errors in Settings → Daemons without delivering an invalid file (user-guide gate, Constitution VII)
 
 ---
 
@@ -297,7 +299,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
-the milestones of **Issue 2 (#1523)** and **Issue 3 (#1524)**; the sub-issue that owns another group adds its own
+the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)** and **Issue 4 (#1525)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -322,6 +324,19 @@ acceptance scenario separates them without a half-wired daemon.
 - **Deliverable**: `micold-daemon --config <path>` (else the kind's default location) takes every start-up value from the file, reloads it live from a directory watcher plus a 2 s hash poll within 5 s, keeps the last good configuration on an invalid edit, flags restart-only keys, never opens the config or a secret for writing, and its diagnostic gains a `config` section.
 - **Satisfies**: US1; FR-002, FR-006, FR-012, FR-026, FR-027, FR-028, FR-041, SC-004
 - **Verify**: `cargo test -p micold-daemon --test config_load --test config_reload`; `cargo test -p micold-core protocol`
+- **Depends on**: Issue 2 (#1523), merged
+- **Tier**: full
+
+### Issue 4 (#1525) — M1 — The app renders each daemon's configuration from Settings 🎯 MVP
+
+One milestone: render (T021–T023) and the validate-before-delivery check with its Settings → Daemons errors (T024)
+share `DaemonSettings` and the rendered text, and the errors are only meaningful for a rendered file, so no acceptance
+scenario separates them without a half-wired UI. Delivery of the rendered file is Issues 5–7, so nothing is written to disk here.
+
+- **Tasks**: T021–T024, T022a, T024a
+- **Deliverable**: `render(&DaemonSettings, Kind) -> String` renders one Settings fixture per kind byte-for-byte to its golden file, identically on a second call, and the file is validated with the `micold-daemon config check` check; a file that fails is not delivered and its errors show in Settings → Daemons.
+- **Satisfies**: US1; FR-005, FR-013f
+- **Verify**: `cargo test -p micold-client --test daemon_config_render`; `cargo test -p micold-client --test daemon_config_stable --test daemon_config_validate`
 - **Depends on**: Issue 2 (#1523), merged
 - **Tier**: full
 
