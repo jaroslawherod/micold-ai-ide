@@ -864,14 +864,18 @@ async fn self_targets_of_the_other_tools_are_refused_without_a_prompt() {
 
 /// Wait until `f` no longer knows session `n` (deleted), within 5 s.
 async fn gone_from_catalog(f: &Fixture, n: u128) -> bool {
-    for _ in 0..100 {
-        let out = f.err(CALLER, "get_session", target(n)).await;
-        if out["category"] == "not_found" {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    false
+    wait_until(Duration::from_secs(5), || {
+        lifecycle_in(&f.state.catalog_snapshot(), sid(n)).is_none()
+    })
+    .await
+}
+
+/// Wait until session `n` has no live process, within 5 s.
+async fn stopped(f: &Fixture, n: u128) -> bool {
+    wait_until(Duration::from_secs(5), || {
+        f.state.live_session(sid(n)).is_none()
+    })
+    .await
 }
 
 /// #1602 US4 s1 (FR-011): a session stops itself by an omitted id or its own; the prompt names it
@@ -897,13 +901,7 @@ async fn an_accepted_self_stop_replies_scheduled_then_stops_the_session() {
             unreachable!()
         };
         assert!(self_targeted, "the prompt says the session ends itself");
-        for _ in 0..100 {
-            if f.state.live_session(sid(IDLE)).is_none() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        assert!(f.state.live_session(sid(IDLE)).is_none(), "it was stopped");
+        assert!(stopped(&f, IDLE).await, "it was stopped");
         assert_eq!(f.lifecycle_of(IDLE).await, "idle");
         assert!(f.worktree_dir("b").is_dir(), "its worktree is untouched");
     }
@@ -943,7 +941,14 @@ async fn a_declined_or_unasked_self_stop_or_delete_keeps_the_session_running() {
         assert_eq!(declined["category"], "refused_by_policy", "{declined}");
     }
     assert_eq!(asked.load(Ordering::SeqCst), 2);
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !wait_until(Duration::from_secs(1), || f
+            .state
+            .live_session(sid(IDLE))
+            .is_none())
+        .await,
+        "a declined stop or delete must not stop the session later"
+    );
     assert!(f.state.live_session(sid(IDLE)).is_some(), "still running");
     assert_eq!(f.lifecycle_of(IDLE).await, "running");
 }
@@ -959,13 +964,7 @@ async fn a_default_session_stops_itself_and_touches_no_worktree() {
     let out = f.ok(DEFAULT_SHELL, "stop_session", json!({})).await;
 
     assert_eq!(out, json!({"scheduled": true}));
-    for _ in 0..100 {
-        if f.state.live_session(sid(DEFAULT_SHELL)).is_none() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert!(f.state.live_session(sid(DEFAULT_SHELL)).is_none());
+    assert!(stopped(&f, DEFAULT_SHELL).await);
     for w in ["b", "c", "d"] {
         assert!(f.worktree_dir(w).is_dir(), "{w}");
     }
@@ -1061,13 +1060,7 @@ async fn stop_keeps_a_failed_session_failed_and_does_not_touch_a_deleted_one() {
 
 /// Poll until `path` no longer exists, up to 15 s.
 async fn gone_within(path: &std::path::Path) -> bool {
-    for _ in 0..150 {
-        if !path.exists() {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    false
+    wait_until(Duration::from_secs(15), || !path.exists()).await
 }
 
 /// #1602 US1 s1, s2 (SC-001, FR-003, FR-008): the caller deletes its own worktree; the prompt says
@@ -1147,7 +1140,10 @@ async fn a_declined_or_unasked_self_delete_changes_nothing() {
     let declined = f.err(CALLER, "delete_worktree", args).await;
     assert_eq!(declined["category"], "refused_by_policy", "{declined}");
     assert_eq!(asked.load(Ordering::SeqCst), 1);
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !wait_until(Duration::from_secs(1), || !f.worktree_dir("b").is_dir()).await,
+        "a declined delete must not remove the worktree later"
+    );
     assert!(f.worktree_dir("b").is_dir());
     assert!(f.has_branch("b"));
 }
@@ -1234,9 +1230,11 @@ async fn a_self_delete_stops_the_sessions_only_after_the_reply_and_the_peer_clos
     let f = Fixture::new().await;
     let (stream, reply) = raw_self_delete(&f).await;
     assert!(reply.contains("scheduled"), "{reply}");
-    tokio::time::sleep(Duration::from_millis(1000)).await;
     assert!(
-        f.state.live_session(sid(IDLE)).is_some() && f.worktree_dir("b").is_dir(),
+        !wait_until(Duration::from_secs(1), || {
+            f.state.live_session(sid(IDLE)).is_none() || !f.worktree_dir("b").is_dir()
+        })
+        .await,
         "nothing is stopped while the agent has not closed its side"
     );
     drop(stream);
@@ -1260,11 +1258,14 @@ async fn a_self_delete_runs_after_the_grace_when_the_agent_never_closes() {
 async fn a_hangup_after_the_accept_still_runs_the_removal() {
     use tokio::io::AsyncWriteExt;
     let f = Fixture::new().await;
-    answering_window(&f.state, true);
-    let request = self_delete_request(&f);
+    let mut window = fake_window(&f.state);
     let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
-    stream.write_all(request.as_bytes()).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    stream
+        .write_all(self_delete_request(&f).as_bytes())
+        .await
+        .unwrap();
+    let (id, _) = next_prompt(&mut window).await;
+    f.state.answer_confirmation(id, true);
     drop(stream);
     assert!(gone_within(&f.worktree_dir("b")).await);
 }
@@ -1276,44 +1277,34 @@ async fn a_hangup_while_the_prompt_is_pending_removes_nothing() {
     use tokio::io::AsyncWriteExt;
     let f = Fixture::new().await;
     f.start(IDLE).await;
-    let _silent = fake_window(&f.state);
+    let mut window = fake_window(&f.state);
     let mut stream = tokio::net::TcpStream::connect(f.addr).await.unwrap();
     stream
         .write_all(self_delete_request(&f).as_bytes())
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    next_prompt(&mut window).await;
     drop(stream);
-    tokio::time::sleep(Duration::from_millis(3500)).await;
+    let withdrawn = async {
+        while let Some(frame) = window.recv().await {
+            if matches!(
+                frame,
+                Frame::Control(DaemonMsg::ConfirmationWithdrawn { .. })
+            ) {
+                return;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), withdrawn)
+        .await
+        .expect("the pending prompt is withdrawn after the hangup");
     assert!(f.worktree_dir("b").is_dir() && f.has_branch("b"));
     assert!(f.state.live_session(sid(IDLE)).is_some());
 }
 
-/// A parent directory git cannot remove a worktree from, or `None` when this process is not stopped
-/// by that (root).
-#[cfg(unix)]
-fn lock_worktrees_dir(f: &Fixture) -> Option<std::path::PathBuf> {
-    use std::os::unix::fs::PermissionsExt;
-    let parent = f.project().join(".claude/worktrees");
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
-    if std::fs::File::create(parent.join("probe")).is_ok() {
-        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let _ = std::fs::remove_file(parent.join("probe"));
-        return None;
-    }
-    Some(parent)
-}
-
-/// #1602 FR-009 (R5): a deferred removal that fails is reported to every window, naming the
-/// worktree and the reason, and leaves the worktree where it was.
-#[cfg(unix)]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
-    use std::os::unix::fs::PermissionsExt;
-    let f = Fixture::new().await;
-    let Some(parent) = lock_worktrees_dir(&f) else {
-        return;
-    };
+/// Accept a self-delete of worktree `b` (stopping its sessions) and return the `DeferredActionFailed`
+/// every window then gets as `(subject, reason)`.
+async fn self_delete_failure(f: &Fixture) -> (String, String) {
     let mut window = fake_window(&f.state);
     let st = Arc::clone(&f.state);
     let notice = tokio::spawn(async move {
@@ -1347,12 +1338,52 @@ async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
     else {
         unreachable!()
     };
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+    (subject, reason)
+}
+
+/// #1602 FR-009 (R5): a deferred removal that fails is reported to every window, naming the
+/// worktree and the reason, and leaves the worktree where it was. A locked worktree makes git
+/// refuse the removal for every user, root included.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_deferred_removal_is_broadcast_to_every_window() {
+    let f = Fixture::new().await;
+    git(
+        f.project(),
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "held",
+            ".claude/worktrees/b",
+        ],
+    );
+
+    let (subject, reason) = self_delete_failure(&f).await;
+
+    assert_eq!(subject, "b");
     assert!(
-        !subject.is_empty() && !reason.is_empty(),
-        "{subject}: {reason}"
+        reason.starts_with("git failed to remove the worktree:") && reason.contains("lock"),
+        "{reason}"
     );
     assert!(f.worktree_dir("b").is_dir(), "the worktree is still there");
+}
+
+/// #1602 FR-009 (T004): the worktree goes but its branch cannot be deleted (a stale ref lock), so
+/// the windows are told, naming the worktree.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_self_delete_whose_branch_cannot_be_deleted_is_reported_to_every_window() {
+    let f = Fixture::new().await;
+    std::fs::write(f.project().join(".git/refs/heads/b.lock"), "").unwrap();
+
+    let (subject, reason) = self_delete_failure(&f).await;
+
+    assert_eq!(subject, "b");
+    assert_eq!(
+        reason,
+        "the worktree was removed but its branch could not be deleted"
+    );
+    assert!(!f.worktree_dir("b").exists(), "the worktree is removed");
+    assert!(f.has_branch("b"), "the branch stays");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1460,4 +1491,18 @@ async fn allowing_a_prompt_that_lists_work_deletes_the_worktree() {
         .await;
     assert_eq!(out["removed"], "d", "{out}");
     assert!(!f.worktree_dir("d").exists());
+}
+
+/// FR-006: when git cannot read the worktree (its `.git` link points nowhere), the prompt says the
+/// state is unreadable instead of showing an empty loss.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_prompt_of_a_worktree_git_cannot_read_says_so() {
+    let f = Fixture::new().await;
+    std::fs::write(
+        f.worktree_dir("d").join(".git"),
+        "gitdir: /nonexistent/gitdir\n",
+    )
+    .unwrap();
+    let (_, loss) = prompt_loss_for(&f, "d", false).await;
+    assert!(loss.expect("Some").unreadable);
 }

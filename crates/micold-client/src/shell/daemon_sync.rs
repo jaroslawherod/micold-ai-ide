@@ -2264,9 +2264,9 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         // An accepted agent operation the daemon ran after replying failed (#1602, FR-009).
         DaemonMsg::DeferredActionFailed {
             subject, reason, ..
-        } => app
-            .core
-            .notify_error(format!("Could not finish removing “{subject}”: {reason}")),
+        } => app.core.notify_error(format!(
+            "Could not finish the requested action on “{subject}”: {reason}"
+        )),
         DaemonMsg::ConfirmationWithdrawn { id } => {
             app.core
                 .update(Message::AgentConfirm(AgentConfirmMsg::Withdrawn(id)));
@@ -5992,32 +5992,32 @@ pub(crate) mod tests {
         assert_eq!(visible.message, "Worktree directory is missing");
     }
 
-    /// #1602 FR-009: a failed deferred removal raises an error notice naming the worktree and the
-    /// reason.
+    /// #1602 FR-009: a failed deferred action (worktree removal, self stop, or self delete-session)
+    /// raises an error notice naming the subject and the reason.
     #[test]
-    fn a_deferred_action_failure_raises_a_notice_naming_the_worktree_and_reason() {
-        let (mut app, _rx) = connected_app();
-        let _ = on_daemon_event(
-            &mut app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::DeferredActionFailed {
-                project: PathBuf::from("/repo/p"),
-                subject: "Feat X".to_string(),
-                reason: "directory in use".to_string(),
-            },
-        );
-        let visible = app
-            .core
-            .notifications
-            .queue
-            .visible()
-            .expect("a notice is shown");
-        assert!(visible.message.contains("Feat X"), "{}", visible.message);
-        assert!(
-            visible.message.contains("directory in use"),
-            "{}",
-            visible.message
-        );
+    fn a_deferred_action_failure_raises_a_notice_naming_the_subject_and_reason() {
+        for (subject, reason) in [("Feat X", "directory in use"), ("planner", "stop refused")] {
+            let (mut app, _rx) = connected_app();
+            let _ = on_daemon_event(
+                &mut app,
+                micold_core::daemons::DaemonId(1),
+                DaemonMsg::DeferredActionFailed {
+                    project: PathBuf::from("/repo/p"),
+                    subject: subject.to_string(),
+                    reason: reason.to_string(),
+                },
+            );
+            let visible = app
+                .core
+                .notifications
+                .queue
+                .visible()
+                .expect("a notice is shown");
+            assert_eq!(
+                visible.message,
+                format!("Could not finish the requested action on “{subject}”: {reason}")
+            );
+        }
     }
 
     /// A `ConfirmationRequested` for a delete-worktree request, as the daemon sends it.

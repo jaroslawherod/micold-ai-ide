@@ -1,19 +1,10 @@
 //! `GitCli::worktree_loss` against a real repository (#1602, FR-006).
 
-use std::path::Path;
-use std::process::Command;
-
 use micold_core::git::{Git, GitCli};
 
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .expect("git runs");
-    assert!(out.status.success(), "git {args:?} failed: {out:?}");
-}
+#[path = "support/attach_fixture.rs"]
+mod attach_fixture;
+use attach_fixture::git;
 
 /// A repository with one commit; with `upstream`, a bare remote it is pushed to.
 fn repo(upstream: bool) -> (tempfile::TempDir, std::path::PathBuf) {

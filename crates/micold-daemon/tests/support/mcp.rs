@@ -256,3 +256,18 @@ pub fn log_lines_for(session: SessionId) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
+
+/// Poll `cond` every 50 ms until it holds or `within` passes; whether it held. For an absence
+/// check, `assert!(!wait_until(..))` returns at once if the unwanted thing happens.
+pub async fn wait_until(within: std::time::Duration, mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + within;
+    loop {
+        if cond() {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
