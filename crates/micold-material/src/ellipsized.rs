@@ -364,7 +364,12 @@ fn fit(content: &str, available: f32, measure: impl Fn(&str) -> f32) -> String {
             high = mid - 1;
         }
     }
-    shortened(low)
+    let cut = shortened(low);
+    // Not even the ellipsis fits: draw nothing rather than paint it past the label's clip.
+    if low == 0 && measure(&cut) > available {
+        return String::new();
+    }
+    cut
 }
 
 /// [`fit`] for a path: the longest tail of `content` that fits after an ellipsis, as long as the
@@ -495,8 +500,10 @@ mod tests {
     /// Degenerate widths must still terminate and still produce something drawable, rather than
     /// panicking on an empty range or looping.
     #[test]
-    fn no_room_at_all_yields_just_the_ellipsis() {
-        assert_eq!(fit("session", 0.0, monospace), "…");
+    fn no_room_at_all_yields_nothing_and_room_for_the_ellipsis_alone_yields_it() {
+        assert_eq!(fit("session", 0.0, monospace), "");
+        assert_eq!(fit("session", 0.5, monospace), "");
+        assert_eq!(fit("session", 1.0, monospace), "…");
         assert_eq!(fit("", 0.0, monospace), "");
     }
 
