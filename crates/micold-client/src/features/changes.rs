@@ -55,7 +55,8 @@ mod stale;
 
 pub use keys::{
     composer_press, current_header_row, hunk_controls, jump_entries, key_pressed, review_holder,
-    sheet_model, shortcut_sheet, with_key_hint, SheetModel, NEXT_HUNK, PREVIOUS_HUNK, SEND_TOOLTIP,
+    sheet_model, shortcut_sheet, with_key_hint, SheetGroup, SheetModel, COMPOSER_GROUP,
+    COMPOSER_KEYS, NEXT_HUNK, PREVIOUS_HUNK, REVIEW_GROUP, SEND_TOOLTIP,
 };
 use micold_core::review::keys::{Press, ReviewAction};
 use micold_core::review::navigate::Edge;
@@ -3817,12 +3818,13 @@ crate::floating_surface!(
 
 impl crate::overlay::registry::Registered for ShortcutSheet {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        state
-            .changes
-            .tabs
-            .shown_view()
-            .is_some_and(|view| view.sheet_open)
-            .then_some(ShortcutSheet)
+        (state.shortcuts_open
+            || state
+                .changes
+                .tabs
+                .shown_view()
+                .is_some_and(|view| view.sheet_open))
+        .then_some(ShortcutSheet)
     }
 }
 

@@ -467,34 +467,89 @@ pub fn composer_press(press: &Press, single_keys: bool) -> Option<Msg> {
     }
 }
 
-/// What the shortcut sheet lists (FR-012, FR-022, contract K4a): each row's key in the running
-/// platform's form with its text, in table order, and the note shown while the single keys are off.
+/// The title of the sheet's group of the Review tab's keys.
+pub const REVIEW_GROUP: &str = "Review";
+/// The title of the sheet's group of the structured composer's keys (#1464 FR-010).
+pub const COMPOSER_GROUP: &str = "Composer";
+
+/// The structured composer's keys on the sheet (#1464 FR-010): `(Linux/Windows form, macOS form,
+/// what it does)`. The attach chord is `composer::is_attach_key`.
+pub const COMPOSER_KEYS: [(&str, &str, &str); 1] =
+    [("Ctrl+Shift+A", "Cmd+Shift+A", "Add attachment")];
+
+/// One titled group of the shortcut sheet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetGroup {
+    pub title: &'static str,
+    /// `(key, what it does)` in the running platform's form.
+    pub rows: Vec<(String, &'static str)>,
+}
+
+/// What the shortcut sheet lists (FR-012, FR-022, contract K4a; #1464 FR-010): the groups
+/// [`REVIEW_GROUP`] (only with a Review view; each row's key in table order, then Back and
+/// Forward) and [`COMPOSER_GROUP`], and the note shown while the single keys are off.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SheetModel {
-    /// `(key, what it does)`, in [`micold_core::review::keys::REVIEW_KEYS`]' order, then Back and
-    /// Forward.
-    pub rows: Vec<(String, &'static str)>,
-    /// [`micold_core::review::keys::SINGLE_KEYS_OFF_NOTE`] while the single-key switch is off.
+    pub groups: Vec<SheetGroup>,
+    /// [`micold_core::review::keys::SINGLE_KEYS_OFF_NOTE`] while the single-key switch is off and
+    /// the Review group is listed.
     pub note: Option<&'static str>,
 }
 
-/// The shortcut sheet's content while it is open, for the window's single-key switch.
-pub fn shortcut_sheet(app: &crate::app::State) -> Option<SheetModel> {
-    app.changes
-        .tabs
-        .shown_view()
-        .filter(|view| view.sheet_open)?;
-    Some(sheet_model(app.settings.review_single_keys))
+impl SheetModel {
+    /// The rows of the group titled `title`, empty when it is not listed.
+    pub fn rows_of(&self, title: &str) -> &[(String, &'static str)] {
+        self.groups
+            .iter()
+            .find(|group| group.title == title)
+            .map_or(&[], |group| group.rows.as_slice())
+    }
 }
 
-/// The sheet's content with the single-key switch at `single_keys` (contract K4a).
-pub fn sheet_model(single_keys: bool) -> SheetModel {
-    SheetModel {
-        rows: sheet_rows(single_keys)
-            .map(|row| (platform_label(row), row.sheet))
-            .chain(history_rows())
+/// The shortcut sheet's content while it is open: over a shown Review tab (opened there, or by
+/// `/shortcuts`) it lists the Review keys too; the window's single-key switch applies.
+pub fn shortcut_sheet(app: &crate::app::State) -> Option<SheetModel> {
+    let view = app.changes.tabs.shown_view();
+    let review = view.is_some();
+    if !(app.shortcuts_open || view.is_some_and(|view| view.sheet_open)) {
+        return None;
+    }
+    Some(sheet_model(app.settings.review_single_keys, review))
+}
+
+/// The sheet's content with the single-key switch at `single_keys` (contract K4a), with the Review
+/// group when `review`.
+pub fn sheet_model(single_keys: bool, review: bool) -> SheetModel {
+    let mut groups = Vec::new();
+    if review {
+        groups.push(SheetGroup {
+            title: REVIEW_GROUP,
+            rows: sheet_rows(single_keys)
+                .map(|row| (platform_label(row), row.sheet))
+                .chain(history_rows())
+                .collect(),
+        });
+    }
+    groups.push(SheetGroup {
+        title: COMPOSER_GROUP,
+        rows: COMPOSER_KEYS
+            .iter()
+            .map(|&(other, mac, text)| {
+                (
+                    if cfg!(target_os = "macos") {
+                        mac
+                    } else {
+                        other
+                    }
+                    .to_owned(),
+                    text,
+                )
+            })
             .collect(),
-        note: (!single_keys).then_some(SINGLE_KEYS_OFF_NOTE),
+    });
+    SheetModel {
+        groups,
+        note: (review && !single_keys).then_some(SINGLE_KEYS_OFF_NOTE),
     }
 }
 
@@ -549,4 +604,29 @@ pub fn current_header_row(view: &OpenView, layout: DiffLayout) -> Option<usize> 
 /// Whether the diff header shows the previous / next hunk controls: a diff with hunks is shown.
 pub fn hunk_controls(view: &OpenView) -> bool {
     matches!(diff_body(view), DiffBody::Diff(_)) && !shown_hunks(view).is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1464 T026 (FR-010): the sheet groups "Review" (only with a Review view) and "Composer".
+    #[test]
+    fn the_sheet_groups_review_only_with_a_review_view_and_always_the_composer() {
+        let titles = |model: &SheetModel| model.groups.iter().map(|g| g.title).collect::<Vec<_>>();
+        let with_review = sheet_model(true, true);
+        assert_eq!(titles(&with_review), [REVIEW_GROUP, COMPOSER_GROUP]);
+        let alone = sheet_model(false, false);
+        assert_eq!(titles(&alone), [COMPOSER_GROUP]);
+        assert_eq!(alone.note, None, "the note is about the Review keys");
+        let attach = if cfg!(target_os = "macos") {
+            "Cmd+Shift+A"
+        } else {
+            "Ctrl+Shift+A"
+        };
+        assert_eq!(
+            alone.rows_of(COMPOSER_GROUP),
+            [(attach.to_owned(), "Add attachment")]
+        );
+    }
 }

@@ -41,3 +41,11 @@ several files at once; the interface stays usable while it is open.
   is not accepting input. If the session stops accepting input while the picker is open, the files
   you chose are not attached and a notice says so.
 - Each session has its own picker: what you choose goes to the session whose button you pressed.
+
+## Finding the shortcut
+
+Type **/shortcuts** in the message box and send it to open the shortcut sheet, the same dialog the
+Review tab's **Keyboard shortcuts** item opens. Its **Composer** group lists **Add attachment**
+with its shortcut (**Ctrl+Shift+A**, **Cmd+Shift+A** on macOS); when a Review tab is shown it also
+lists the **Review** group. Nothing is sent to Claude Code, and the command is cleared from the
+message box. Press **Escape** or **Close** to dismiss the sheet.

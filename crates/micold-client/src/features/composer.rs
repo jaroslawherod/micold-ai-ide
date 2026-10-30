@@ -1089,6 +1089,11 @@ impl crate::app::State {
                 self.composers.notice(session, refusal.to_string());
                 SendIntent::Nothing
             }
+            Classified::Shortcuts => {
+                self.composers.clear_notice(session);
+                self.composers.replace_text(session, String::new(), (0, 0));
+                SendIntent::ShowShortcuts
+            }
             Classified::TerminalOnly { command, reason } => {
                 self.offer_switch(session, SessionKind::Terminal, Some(command), reason);
                 SendIntent::Nothing

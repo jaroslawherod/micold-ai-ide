@@ -29,9 +29,15 @@ const EFFORT_DESCRIPTION: &str = "Set the reasoning effort for later turns";
 /// `parse_effort_arg` takes, not the CLI's `auto` or `ultracode` (#1554 FR-007).
 const EFFORT_ARGUMENT_HINT: &str = "<default|low|medium|high|xhigh|max>";
 
+/// The app's shortcuts command: it opens the shortcut sheet and is never sent (#1464 FR-010).
+pub const SHORTCUTS_COMMAND: &str = "shortcuts";
+
+/// What the palette says of `/shortcuts`.
+const SHORTCUTS_DESCRIPTION: &str = "Show the keyboard shortcuts";
+
 /// The commands the app handles itself: each is one [`CommandKind::App`] entry, whether or not
 /// the CLI reports it (FR-009).
-pub const APP_COMMANDS: [&str; 2] = [MODEL_COMMAND, EFFORT_COMMAND];
+pub const APP_COMMANDS: [&str; 3] = [MODEL_COMMAND, EFFORT_COMMAND, SHORTCUTS_COMMAND];
 
 /// The longest description kept from the CLI's answer, in bytes (data-model *Events*).
 pub const MAX_DESCRIPTION_BYTES: usize = 512;
@@ -207,10 +213,10 @@ fn is_app_command(name: &str) -> bool {
 
 /// The app's words for an app command the list adds.
 fn app_description(name: &str) -> &'static str {
-    if name == EFFORT_COMMAND {
-        EFFORT_DESCRIPTION
-    } else {
-        MODEL_DESCRIPTION
+    match name {
+        EFFORT_COMMAND => EFFORT_DESCRIPTION,
+        SHORTCUTS_COMMAND => SHORTCUTS_DESCRIPTION,
+        _ => MODEL_DESCRIPTION,
     }
 }
 
@@ -365,6 +371,8 @@ pub enum DraftCommand {
     Model(Option<String>),
     /// `/effort`: opens the effort picker, or picks the argument given, as typed (#1554 FR-007).
     Effort(Option<String>),
+    /// `/shortcuts`: opens the shortcut sheet (#1464 FR-010).
+    Shortcuts,
     /// A terminal-only command, by the name typed: offers **Open in terminal**.
     TerminalOnly(String),
 }
@@ -403,6 +411,7 @@ pub fn classify_draft(text: &str, list: &CommandList) -> DraftCommand {
     match invocation.name.as_str() {
         MODEL_COMMAND => return DraftCommand::Model(arg),
         EFFORT_COMMAND => return DraftCommand::Effort(arg),
+        SHORTCUTS_COMMAND => return DraftCommand::Shortcuts,
         _ => {}
     }
     let terminal_only = list

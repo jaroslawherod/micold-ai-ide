@@ -323,6 +323,10 @@ async fn model_and_terminal_only_commands_are_refused_and_never_reach_the_cli() 
         ("/model".into(), "/model is handled by the app".into()),
         ("/model haiku".into(), "/model is handled by the app".into()),
         ("/settings".into(), "/settings needs the terminal".into()),
+        (
+            "/shortcuts".into(),
+            "/shortcuts is handled by the app".into(),
+        ),
     ];
     for entry in TERMINAL_ONLY {
         refused.push((

@@ -727,6 +727,7 @@ async fn refused_and_idle_switches_change_nothing() {
         (2, SessionKind::Structured, Some("/mcp")),
         (3, SessionKind::Terminal, Some("/compact")),
         (4, SessionKind::Terminal, Some("hello")),
+        (6, SessionKind::Terminal, Some("/shortcuts")),
     ] {
         let answer = window.request(switch(req, id, to, command), req).await;
         assert_eq!(refused_as(&answer), ErrorKind::InvalidInput, "{answer:?}");

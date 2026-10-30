@@ -649,7 +649,17 @@ pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
             posed(
                 "shortcut sheet",
                 crate::ui::shortcut_sheet::sheet(
-                    crate::features::changes::sheet_model(true),
+                    crate::features::changes::sheet_model(true, true),
+                    Message::NoOp,
+                    roles,
+                ),
+                roles,
+            ),
+            // #1464 (FR-010): `/shortcuts` in a session with no Review view lists only the composer.
+            posed(
+                "shortcut sheet, composer only",
+                crate::ui::shortcut_sheet::sheet(
+                    crate::features::changes::sheet_model(true, false),
                     Message::NoOp,
                     roles,
                 ),
@@ -658,7 +668,7 @@ pub fn review_bar<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Eleme
             posed(
                 "shortcut sheet, single keys off",
                 crate::ui::shortcut_sheet::sheet(
-                    crate::features::changes::sheet_model(false),
+                    crate::features::changes::sheet_model(false, true),
                     Message::NoOp,
                     roles,
                 ),

@@ -367,6 +367,10 @@ fn send(app: &mut App, session: SessionId) {
             }
             return;
         }
+        SendIntent::ShowShortcuts => {
+            app.core.update(Message::ShortcutsToggled(true));
+            return;
+        }
         SendIntent::SetEffort(choice) => {
             if set_effort(app, session, choice) {
                 app.core.composers.clear_notice(session);

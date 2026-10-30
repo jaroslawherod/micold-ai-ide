@@ -391,6 +391,8 @@ pub enum SendIntent {
     /// `/effort <level>`: ask the service to run the session with this effort, at once, busy or
     /// not (#1554 FR-007, FR-008).
     SetEffort(EffortChoice),
+    /// `/shortcuts`: the shell opens the shortcut sheet; nothing is sent (#1464 FR-010).
+    ShowShortcuts,
 }
 
 /// The palettes and model pickers open in this window, per session.
@@ -531,6 +533,7 @@ pub(crate) fn classify(text: &str, list: &CommandList, offered: &[EffortLevel]) 
         DraftCommand::Send => Classified::Message,
         DraftCommand::Effort(None) => Classified::EffortPicker,
         DraftCommand::Effort(Some(arg)) => Classified::Effort(parse_effort_arg(&arg, offered)),
+        DraftCommand::Shortcuts => Classified::Shortcuts,
         DraftCommand::Model(None) => Classified::Picker,
         DraftCommand::Model(Some(name)) => Classified::Model(model_choice(&name)),
         DraftCommand::TerminalOnly(name) => {
@@ -554,7 +557,12 @@ pub(crate) enum Classified {
     Model(Result<ModelChoice, ModelRefusal>),
     EffortPicker,
     Effort(Result<EffortChoice, EffortArgError>),
-    TerminalOnly { command: String, reason: String },
+    /// `/shortcuts`: open the shortcut sheet (#1464 FR-010).
+    Shortcuts,
+    TerminalOnly {
+        command: String,
+        reason: String,
+    },
 }
 
 impl crate::app::State {
@@ -580,5 +588,24 @@ impl crate::app::State {
             .transcript(session)
             .and_then(|t| t.session_model());
         model_header(reported.as_deref(), &self.model_choice(session))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1464 T026 (FR-010): `/shortcuts` opens the shortcut sheet, in any list.
+    #[test]
+    fn slash_shortcuts_is_classified_as_the_sheet() {
+        let list = CommandList::fallback();
+        assert!(matches!(
+            classify("/shortcuts", &list, &[]),
+            Classified::Shortcuts
+        ));
+        assert!(matches!(
+            classify("/shortcutsx", &list, &[]),
+            Classified::Message
+        ));
     }
 }
