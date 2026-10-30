@@ -18,15 +18,16 @@ pub struct WorktreeLoss {
 /// Longest a path or subject is shown in the prompt, in characters.
 pub const LOSS_ENTRY_CHARS: usize = 200;
 
-/// `text` made safe to show in the confirmation: each control or bidi/format character becomes
-/// `?` (the asking session controls file names and subjects, and could otherwise fake or hide
+/// `text` made safe to show in the confirmation: each control, bidi/format or line/paragraph
+/// separator character becomes `?` (the asking session controls file names and subjects, and could otherwise fake or hide
 /// rows), and an entry over [`LOSS_ENTRY_CHARS`] is cut with `…`.
 pub fn sanitize_entry(text: &str) -> String {
     let mut out: String = text
         .chars()
         .take(LOSS_ENTRY_CHARS)
         .map(|c| {
-            if crate::github::is_invisible(c) {
+            // U+2028 and U+2029 (Zl, Zp) break a line in a text shaper but are not control chars.
+            if crate::github::is_invisible(c) || matches!(c, '\u{2028}' | '\u{2029}') {
                 '?'
             } else {
                 c
