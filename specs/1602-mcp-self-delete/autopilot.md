@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1611 | Design | merged | 8e3d084ba79f31d3db24ed3bf6e46b74590b087d |
 | #1613 | M1 | merged (after red-CI attempt 1, see Follow-ups) | 4edaaa6af88c38edd080d3351da4e7fcfa3d655e |
 | #1619 | M2 | merged | c5f574866db5b3fa94c867b526305caa8505a67f |
+| #1621 | M3 | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | C2 | clarify | Failed deferred removal reported how? | App notice naming W and reason, plus daemon log | user | spec.md Clarifications |
 | M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | merged |
 | M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #1619 | merged |
-| M3 | T026–T030 | full | Session stops or deletes only itself | #… | in review |
+| M3 | T026–T030 | full | Session stops or deletes only itself | #1621 | PR open |
 
 ## Decisions
 
