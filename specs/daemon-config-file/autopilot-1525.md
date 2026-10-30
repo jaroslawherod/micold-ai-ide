@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | — | pending |
+| M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | open | pr |
 
 ## Decisions
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M1 review B | 1 | d1f11923:84c91cfc | CLEAN (2 MINOR accepted) |
 | Tasks 1525 | 1 | b494679f:b6f32a1a | CHANGES: 2 MAJOR (no failing test for validate/UI: added T022a; T022 had no file: given one), 2 MINOR (Verify made runnable; F4 accepted, rebase); test-task additions, no further round |
 
 ## Declined review findings
@@ -45,7 +46,7 @@ None.
 
 ## Handover
 
-M1 implemented (T021-T024a ticked, tests green: render 4, stable 2, validate 5; user guide edited; cycle-log entry 21), uncommitted-then-committed on the branch, NOT pushed, no PR. Review A done (CLEAN, 3 MINOR; F1/F2 handled with a comment, F3 accepted: delivery calls `validate_config`). Scoped gate was started (log in the dead unit's scratchpad; rerun `scripts/autopilot/scoped-gate.sh` detached). Next: scoped gate green, review B (conformance, sonnet, once), full `mise run gate`, then pr.md (milestone PR, title `feat(daemon-config-file): render each daemon's configuration from Settings (#1525)`). No visual pass needed beyond a caution line in the Daemons row (optional). Note the build lock was heavily contended by the #1524 worktree's gate.
+None.
 
 ## Open escalation
 
