@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1524_the-daemon-loads-its-configuration-file-and
 - **Started**: 2026-10-30
 - **Phase**: tasks
-- **Next step**: review milestones, open design PR
+- **Next step**: handoff (merge design PR, then M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| — | Design (milestones for Issue 3) | pending | — |
+| #1616 | Design (milestones for Issue 3) | open | — |
 
 ## Milestones
 
