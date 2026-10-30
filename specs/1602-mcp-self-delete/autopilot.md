@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1602
 - **Worktree branch**: feat/1602_mcp-let-a-session-stop-itself-and-delete-its-own
 - **Started**: 2026-10-29
-- **Phase**: milestone M2 (gate and reviews)
-- **Next step**: M2 PR CI and merge (orchestrator); then M3.
+- **Phase**: milestone M3 (gate and reviews)
+- **Next step**: M3 PR CI and merge (orchestrator); then close.
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1611 | Design | merged | 8e3d084ba79f31d3db24ed3bf6e46b74590b087d |
 | #1613 | M1 | merged (after red-CI attempt 1, see Follow-ups) | 4edaaa6af88c38edd080d3351da4e7fcfa3d655e |
-| #1619 | M2 | open | |
+| #1619 | M2 | merged | c5f574866db5b3fa94c867b526305caa8505a67f |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | C1 | clarify | Story 4 (stop/delete self) in scope? | Yes | user | spec.md Clarifications |
 | C2 | clarify | Failed deferred removal reported how? | App notice naming W and reason, plus daemon log | user | spec.md Clarifications |
 | M1 | T001–T016 | full | Own-worktree delete after confirmation (incl. wire bump 74, open-handle test) | #1613 | merged |
-| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #1619 | PR open |
-| M3 | T026–T030 | full | Session stops or deletes only itself | #… | pending |
+| M2 | T017–T025 | full | Delete prompt lists uncommitted files and unpushed commits | #1619 | merged |
+| M3 | T026–T030 | full | Session stops or deletes only itself | #… | in review |
 
 ## Decisions
 
@@ -80,3 +80,6 @@ None.
 M1 reviews: A (code-review high) round 1: fixed spawn-before-grace and own-session hint. B (conformance, sonnet) round 1: added hangup-while-pending test, shutdown inside the timeout. Visual pass PASS (specs/1602-mcp-self-delete/visual-pass-m1.md). No red-phase evidence (tests written beside code).
 
 M2: T019's daemon tests are in `mcp_lifecycle_tools.rs` (the fixture lives there), not `mcp_confirmations.rs`. "Prompt names other sessions" (moved from M1 review B) is met by the headline's ", stopping its sessions" and a daemon test asserting `stop_sessions: true` in the broadcast. No red-phase evidence (tests written beside code).
+
+M3: Review A round 1 (snapshot 1ebce221:c5f57486): fixed F1 (MAJOR): the stop no-op test counted PTYs and skipped a structured session; now `DaemonState::session_has_process`. No structured-session test (CI has no Claude Code CLI). Audit target of an omitted id is `self`. No red-phase evidence (tests written beside code).
+Follow-up (declined in #1619, not done): the delete prompt does not count ignored files; needs a `LossSummary` field and a wire change.

@@ -88,14 +88,14 @@ None. The change extends existing crates (plan: no new crate or module tree).
 
 ### Tests (write first)
 
-- [ ] T026 [P] [US4] Core tests: `parse_call` accepts an omitted `session` for `stop_session` and `delete_session` (`core/mcp/tools.rs`); policy table cases for self stop and delete, including a Default caller allowed (`core/mcp/policy.rs`, FR-016).
-- [ ] T027 [P] [US4] Daemon tests in `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`: stop and delete of self (omitted id and own id) return `scheduled` first then act; decline and timeout keep the session running; a Default session stops itself with no worktree touched; audit line (extend `crates/micold-daemon/tests/mcp_audit_log.rs`).
+- [x] T026 [P] [US4] Core tests: `parse_call` accepts an omitted `session` for `stop_session` and `delete_session` (`core/mcp/tools.rs`); policy table cases for self stop and delete, including a Default caller allowed (`core/mcp/policy.rs`, FR-016).
+- [x] T027 [P] [US4] Daemon tests in `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`: stop and delete of self (omitted id and own id) return `scheduled` first then act; decline and timeout keep the session running; a Default session stops itself with no worktree touched; audit line (extend `crates/micold-daemon/tests/mcp_audit_log.rs`).
 
 ### Implementation
 
-- [ ] T028 [US4] `core/mcp/tools.rs` schema and descriptions (optional `session`, drop "cannot stop or delete itself"); `core/mcp/policy.rs` `decide` returns `Confirm` for self `stop_session` and `delete_session` (FR-011).
-- [ ] T029 [US4] `daemon/mcp/tools.rs`: extract `perform_stop_session` and `perform_delete_session` (R7); an omitted id means the caller; self-targeted calls build `Deferred::StopSession` or `Deferred::DeleteSession` and return `{ scheduled: true }`.
-- [ ] T030 [US4] Docs: `docs/user-guide/agent-tools.md` (stop or delete self); amend `specs/034-daemon-mcp-server/spec.md` (FR-015 tool table) and `specs/034-daemon-mcp-server/contracts/mcp-tools.md`.
+- [x] T028 [US4] `core/mcp/tools.rs` schema and descriptions (optional `session`, drop "cannot stop or delete itself"); `core/mcp/policy.rs` `decide` returns `Confirm` for self `stop_session` and `delete_session` (FR-011).
+- [x] T029 [US4] `daemon/mcp/tools.rs`: extract `perform_stop_session` and `perform_delete_session` (R7); an omitted id means the caller; self-targeted calls build `Deferred::StopSession` or `Deferred::DeleteSession` and return `{ scheduled: true }`.
+- [x] T030 [US4] Docs: `docs/user-guide/agent-tools.md` (stop or delete self); amend `specs/034-daemon-mcp-server/spec.md` (FR-015 tool table) and `specs/034-daemon-mcp-server/contracts/mcp-tools.md`.
 
 ## Phase 6: Polish
 

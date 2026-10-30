@@ -111,14 +111,20 @@ const PRINCIPLE_III: &str = "a session running in the project root (Default) may
 const CROSS_SESSION_OFF: &str = "reading and typing into other sessions is turned off in Settings \
     (\"Let agents read and type into other sessions\")";
 
-/// Whether `operation` ends the caller's own session: a delete of the worktree it runs in (#1602).
-/// The prompt says so, and the daemon replies first and acts after.
+/// Whether `operation` ends the caller's own session: a delete of the worktree it runs in, or a
+/// stop or delete of itself, by an omitted id or its own (#1602). The prompt says so, and the
+/// daemon replies first and acts after.
 pub fn is_self_targeted(caller: &Caller, operation: &Operation) -> bool {
-    matches!(
-        operation,
-        Operation::DeleteWorktree { worktree: WorktreeRef::Named(name), .. }
-            if matches!(&caller.location, SessionLocation::Worktree(mine) if mine == name)
-    )
+    match operation {
+        Operation::DeleteWorktree {
+            worktree: WorktreeRef::Named(name),
+            ..
+        } => matches!(&caller.location, SessionLocation::Worktree(mine) if mine == name),
+        Operation::StopSession { session } | Operation::DeleteSession { session } => {
+            session.as_ref().is_none_or(|s| s.0 == caller.session.0)
+        }
+        _ => false,
+    }
 }
 
 /// Decide `operation` for `caller`. The refusals come first: Principle III for a Default caller
@@ -140,12 +146,6 @@ pub fn decide(
             if caller.is_default() =>
         {
             refused(PRINCIPLE_III)
-        }
-        Operation::StopSession { session } if is_me(session) => {
-            refused("a session may not stop itself; the user can stop it from the sidebar")
-        }
-        Operation::DeleteSession { session } if is_me(session) => {
-            refused("a session may not delete itself; the user can delete it from the sidebar")
         }
         Operation::InterruptSession { session } if is_me(session) => {
             PolicyDecision::Refuse(OpError::invalid_input(

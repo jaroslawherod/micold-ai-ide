@@ -38,10 +38,10 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `delete_worktree` | `{worktree, stop_sessions?: bool=false, delete_branch?: bool=true}` | `{removed: ref, branch_deleted: bool, leftovers:[path]}` | Default caller → refused_by_policy; caller's own worktree → allowed after **confirm**, result `scheduled`, removal deferred (#1602 FR-017); `default` → invalid_input; live sessions and `!stop_sessions` → conflict naming them; then **confirm** (FR-014); the prompt lists the worktree's uncommitted files and unpushed commits, at most 50 each plus a count (#1602 FR-006) |
 | `create_session` | `{worktree, ai_cli?: claude_code|copilot|pi, prompt?: string}` | `{session, lifecycle, prompt_delivered: bool|null, prompt_reason?: string}` | CLI availability checked **before** the record is created: not installed → service_error naming it, no record (US2 s5); `null` when no prompt was given |
 | `start_session` | `{session}` | `{lifecycle}` | already Starting/Running/Restarting → success, unchanged (FR-012a) |
-| `stop_session` | `{session}` | `{lifecycle}` | self → refused_by_policy (FR-015); Idle → success, unchanged; other session → **confirm**; effect: processes end, record `idle`, catalog broadcast |
+| `stop_session` | `{session?}` | `{lifecycle}` | omitted or own id → allowed after **confirm**, result `{scheduled: true}`, stop deferred (#1602 FR-011); Idle → success, unchanged; other session → **confirm**; effect: processes end, record `idle`, catalog broadcast |
 | `interrupt_session` | `{session}` | `{}` | self → invalid_input (FR-015); not running → conflict (FR-012a); other session → **confirm** |
 | `send_session_input` | `{session, text}` | `{}` | self → invalid_input; empty, or line breaks only → invalid_input (FR-012a); a control character other than a line break or a tab → invalid_input; FR-016: Auto → proceed, Confirm each send → **confirm**, Off → refused_by_policy; not running → conflict naming `start_session`; the CLI would ask to trust the folder → conflict (below) |
-| `delete_session` | `{session}` | `{}` | self → refused_by_policy (FR-015); then **confirm** |
+| `delete_session` | `{session?}` | `{}` | omitted or own id → allowed after **confirm**, result `{scheduled: true}`, delete deferred (#1602 FR-011); otherwise **confirm** |
 
 Order of checks: the arguments alone (invalid_input) → scope (not_found) → input validation that needs
 the target (invalid_input) → policy (refused_by_policy) → state conflicts (conflict) and no-ops →

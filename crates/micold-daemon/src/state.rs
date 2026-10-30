@@ -8765,6 +8765,15 @@ impl DaemonState {
         live.procs.get(&live.attached).and_then(Proc::pty).cloned()
     }
 
+    /// Whether the daemon hosts any process of `session`, a structured one included (a PTY count
+    /// misses it).
+    pub fn session_has_process(&self, session: SessionId) -> bool {
+        self.lock()
+            .sessions
+            .get(&session)
+            .is_some_and(|l| !l.procs.is_empty())
+    }
+
     /// Every one of a session's process PTY handles (for a resize that must reach all of them, not
     /// just the attached one). Empty if the session isn't live.
     pub fn session_ptys(&self, session: SessionId) -> Vec<Arc<PtySession>> {

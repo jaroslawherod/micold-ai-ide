@@ -208,9 +208,10 @@ sidebar; the stop and the delete follow FR-014.
    changes.
 4. **Given** any operation FR-014 classifies as destructive, **When** the agent invokes it,
    **Then** the policy of FR-014 applies before anything is changed.
-5. **Given** the calling session, **When** its agent invokes `stop_session`, `delete_session`, or
-   `delete_worktree` on its own session or hosting worktree, **Then** the operation is refused
-   (FR-015).
+5. **Given** the calling session, **When** its agent invokes `interrupt_session` on its own
+   session, **Then** the operation is refused (FR-015). _(Amended by #1602: `stop_session`,
+   `delete_session` and `delete_worktree` of its own session or worktree are allowed after the
+   user's confirmation.)_
 6. **Given** a Default session (running in the project root), **When** its agent invokes
    `rename_worktree` or `delete_worktree`, **Then** the operation is refused by policy (FR-015a,
    Principle III). **When** it invokes `create_worktree`, **Then** the worktree is created as it
@@ -365,18 +366,20 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 - **FR-013**: Every failed operation MUST return a reason category (not found, invalid input,
   conflict, refused by policy, needs confirmation, service error) and a human-readable message; it
   MUST leave nothing half-done.
-- **FR-014**: The destructive operations are exactly: `delete_worktree`, `delete_session`, and
-  `stop_session` or `interrupt_session` on a session other than the caller. They MUST follow one
+- **FR-014**: The destructive operations are exactly: `delete_worktree`, `delete_session`,
+  `stop_session`, and `interrupt_session` on a session other than the caller. _(Amended by #1602
+  FR-017: `stop_session` and `delete_session` also accept the caller itself.)_ They MUST follow one
   policy: each request waits for the user to confirm it in an application window, which names the
   calling session, the operation and its target. Nothing changes until the user confirms. The
   prompt appears in every connected window; the first answer applies and withdraws it from the
   others. The request is refused by policy ("declined by the user") if the user declines, and fails
   with "needs confirmation" if no answer arrives within 60 seconds or no window is attached. A
   request that is refused, conflicts, or would change nothing is answered without a prompt.
-- **FR-015**: An agent MUST NOT stop or delete its own calling session through the tool server;
-  such a request MUST be refused by policy. _(Amended by #1602 FR-017: `delete_worktree` of the
-  caller's own worktree is allowed after the user's confirmation, and the removal is deferred until
-  the result is delivered; see specs/1602-mcp-self-delete.)_ `send_session_input`,
+- **FR-015**: ~~An agent MUST NOT stop or delete its own calling session through the tool server;
+  such a request MUST be refused by policy.~~ _(Amended by #1602 FR-017: `delete_worktree` of the
+  caller's own worktree, and `stop_session` and `delete_session` of the caller's own session, are
+  allowed after the user's confirmation, and the action is deferred until the result is delivered;
+  see specs/1602-mcp-self-delete.)_ `send_session_input`,
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
   as invalid input.
 - **FR-015a**: When the calling session is a Default session (it runs in the project root),
@@ -433,10 +436,10 @@ for the project root.
 | `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); the caller's own worktree needs the user's confirmation and is removed after the result is delivered (#1602 FR-017); refused from a Default session (FR-015a) |
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
 | `start_session` | Start or resume an `Idle`, `Failed` or `InterruptedResumable` session | session ref | lifecycle after the request | mutating |
-| `stop_session` | Stop a session: end its processes, leaving it `Idle` and resumable | session ref | lifecycle after the request | destructive for other sessions (FR-014); refused for self (FR-015) |
+| `stop_session` | Stop a session: end its processes, leaving it `Idle` and resumable | session ref | lifecycle after the request | destructive (FR-014); self allowed after confirmation (#1602 FR-011) |
 | `interrupt_session` | Deliver an interrupt keystroke to a session | session ref | acknowledgement | mutating; destructive for other sessions (FR-014); refused for self (FR-015) |
 | `send_session_input` | Type and submit text into another session's primary process | session ref, text | acknowledgement | mutating; gated by FR-016 |
-| `delete_session` | Delete a session record (stopping it first) | session ref | acknowledgement | destructive (FR-014); refused for self (FR-015) |
+| `delete_session` | Delete a session record (stopping it first) | session ref | acknowledgement | destructive (FR-014); self allowed after confirmation (#1602 FR-011) |
 
 Operations deliberately **not** offered: adding, removing or renaming projects; changing Settings;
 force-killing a session; opening, closing or restarting Regular-terminal shell instances; claiming,

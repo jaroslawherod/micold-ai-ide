@@ -48,6 +48,8 @@ const RESTARTING: u128 = 24;
 const UNRESUMABLE: u128 = 25;
 /// An idle shell session in worktree `c`.
 const IN_C: u128 = 30;
+/// An idle shell session in the project root (Default).
+const DEFAULT_SHELL: u128 = 31;
 
 struct Fixture {
     state: Arc<DaemonState>,
@@ -101,6 +103,12 @@ impl Fixture {
             session(
                 sid(IN_C),
                 Some("c"),
+                TerminalMode::Regular,
+                AiCli::ClaudeCode,
+            ),
+            session(
+                sid(DEFAULT_SHELL),
+                None,
                 TerminalMode::Regular,
                 AiCli::ClaudeCode,
             ),
@@ -189,7 +197,15 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        for n in [IDLE, FAILED, RESUMABLE, STARTING, RESTARTING, IN_C] {
+        for n in [
+            IDLE,
+            FAILED,
+            RESUMABLE,
+            STARTING,
+            RESTARTING,
+            IN_C,
+            DEFAULT_SHELL,
+        ] {
             if let Some(pty) = self.state.live_session(sid(n)) {
                 let _ = pty.kill();
             }
@@ -823,23 +839,136 @@ async fn with_no_window_a_destructive_request_needs_confirmation() {
     assert!(f.state.live_session(sid(IDLE)).is_some(), "still running");
 }
 
-/// A17 (US3 s5; FR-015): a session may not stop or delete itself, nor interrupt itself; nobody is
-/// asked and nothing changes. (Its own worktree is deletable since #1602: see `self_delete_*`.)
+/// A17 (US3 s5; FR-015, #1602 FR-011): a session may not interrupt, read or type into itself;
+/// nobody is asked and nothing changes. (Its own stop and delete are allowed since #1602: see
+/// `self_stop_*` and `self_delete_*`.)
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn self_targets_are_refused_without_a_prompt() {
+async fn self_targets_of_the_other_tools_are_refused_without_a_prompt() {
     let f = Fixture::new().await;
     let asked = answering_window(&f.state, true);
-    for (tool, args, category) in [
-        ("stop_session", target(CALLER), "refused_by_policy"),
-        ("delete_session", target(CALLER), "refused_by_policy"),
-        ("interrupt_session", target(CALLER), "invalid_input"),
+    for (tool, args) in [
+        ("interrupt_session", target(CALLER)),
+        ("read_session_output", target(CALLER)),
+        (
+            "send_session_input",
+            json!({"session": sid(CALLER).0.to_string(), "text": "hi"}),
+        ),
     ] {
         let error = f.err(CALLER, tool, args.clone()).await;
-        assert_eq!(error["category"], category, "{tool} {args}: {error}");
+        assert_eq!(error["category"], "invalid_input", "{tool} {args}: {error}");
     }
     assert_eq!(asked.load(Ordering::SeqCst), 0, "no prompt for a refusal");
     assert!(f.worktree_dir("b").is_dir());
     assert_eq!(f.lifecycle_of(CALLER).await, "idle");
+}
+
+/// Wait until `f` no longer knows session `n` (deleted), within 5 s.
+async fn gone_from_catalog(f: &Fixture, n: u128) -> bool {
+    for _ in 0..100 {
+        let out = f.err(CALLER, "get_session", target(n)).await;
+        if out["category"] == "not_found" {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// #1602 US4 s1 (FR-011): a session stops itself by an omitted id or its own; the prompt names it
+/// as caller and target, the result says "scheduled", and then it is idle and resumable.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_accepted_self_stop_replies_scheduled_then_stops_the_session() {
+    for args in [json!({}), target(IDLE)] {
+        let f = Fixture::new().await;
+        f.start(IDLE).await;
+        let mut window = fake_window(&f.state);
+        let st = Arc::clone(&f.state);
+        let prompt = tokio::spawn(async move {
+            let (id, msg) = next_prompt(&mut window).await;
+            st.answer_confirmation(id, true);
+            msg
+        });
+
+        let out = f.ok(IDLE, "stop_session", args).await;
+
+        assert_eq!(out, json!({"scheduled": true}));
+        let DaemonMsg::ConfirmationRequested { self_targeted, .. } = prompt.await.unwrap() else {
+            unreachable!()
+        };
+        assert!(self_targeted, "the prompt says the session ends itself");
+        for _ in 0..100 {
+            if f.state.live_session(sid(IDLE)).is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(f.state.live_session(sid(IDLE)).is_none(), "it was stopped");
+        assert_eq!(f.lifecycle_of(IDLE).await, "idle");
+        assert!(f.worktree_dir("b").is_dir(), "its worktree is untouched");
+    }
+}
+
+/// #1602 US4 s2 (FR-011): a session deletes itself; the result comes first, then it is gone.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_accepted_self_delete_session_replies_scheduled_then_removes_the_session() {
+    for args in [json!({}), target(IDLE)] {
+        let f = Fixture::new().await;
+        f.start(IDLE).await;
+        answering_window(&f.state, true);
+
+        let out = f.ok(IDLE, "delete_session", args).await;
+
+        assert_eq!(out, json!({"scheduled": true}));
+        assert!(gone_from_catalog(&f, IDLE).await, "the session is deleted");
+        assert!(f.state.live_session(sid(IDLE)).is_none());
+        assert!(f.worktree_dir("b").is_dir(), "its worktree is untouched");
+    }
+}
+
+/// #1602 US4 s3: a decline and a missing window leave the session running.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_declined_or_unasked_self_stop_or_delete_keeps_the_session_running() {
+    let f = Fixture::new().await;
+    f.start(IDLE).await;
+    for tool in ["stop_session", "delete_session"] {
+        let none = f.err(IDLE, tool, json!({})).await;
+        assert_eq!(none["category"], "needs_confirmation", "{none}");
+    }
+    let asked = answering_window(&f.state, false);
+    for tool in ["stop_session", "delete_session"] {
+        let declined = f.err(IDLE, tool, json!({})).await;
+        assert_eq!(declined["category"], "refused_by_policy", "{declined}");
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 2);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(f.state.live_session(sid(IDLE)).is_some(), "still running");
+    assert_eq!(f.lifecycle_of(IDLE).await, "running");
+}
+
+/// #1602 FR-016: a Default session stops itself; no worktree is touched.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_default_session_stops_itself_and_touches_no_worktree() {
+    let f = Fixture::new().await;
+    f.start(DEFAULT_SHELL).await;
+    answering_window(&f.state, true);
+
+    let out = f.ok(DEFAULT_SHELL, "stop_session", json!({})).await;
+
+    assert_eq!(out, json!({"scheduled": true}));
+    for _ in 0..100 {
+        if f.state.live_session(sid(DEFAULT_SHELL)).is_none() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(f.state.live_session(sid(DEFAULT_SHELL)).is_none());
+    for w in ["b", "c", "d"] {
+        assert!(f.worktree_dir(w).is_dir(), "{w}");
+    }
 }
 
 /// A18 (US3 s6; FR-015a): a Default session may not delete a worktree; nobody is asked.
