@@ -60,6 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - Review B (sonnet): CLEAN; Verify green. Visual pass (headless render, evidence `visual-pass-m2.md`): PASS. Cosmetic, accepted: "… and 10 more" sits below the fold until the list scrolls; the scrollbar thumb overlaps the last character of the longest rows.
 
+- Security review of PR #1619 (MEDIUM x2). (1) Fixed: `sanitize_entry` also replaces U+2028 and U+2029; both added to `control_and_bidi_characters_in_names_and_subjects_cannot_fake_rows`. (2) Declined, all three: (a) ignored files: listing them puts build output (`target/`, `node_modules/`) in every worktree's prompt and defeats FR-006's "no list when nothing is lost"; a count line needs a `LossSummary` field (wire change) and a spec decision; a follow-up if wanted. (b) a session writing `refs/remotes/*` to hide its commits: the session can already run any git command in its own worktree, and the prompt is advisory for the user's own session; no git read can tell a forged remote ref from a real one. (c) re-reading the loss before the delete: the asking session is blocked on this very confirmation, and a second read would need a re-prompt flow in M1's `decide`; out of M2 scope.
+
 ## Handover
 
 None.
