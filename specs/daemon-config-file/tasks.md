@@ -68,14 +68,17 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T014 [P] [US1] Failing tests in `crates/micold-daemon/tests/config_load.rs`: `--config <path>` wins; else the kind's default location (research D3); no file is fine for host and fatal for the other kinds, logged
 - [ ] T015 [P] [US1] Failing test: every value today read from `MICOLD_DATA_DIR`, `MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`, `MICOLD_TOKEN_PATH`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_REPOS_ROOT`, `MICOLD_LOG`, `TZ` comes from the file when the file sets it (file > env during the transition, research D11)
 - [ ] T016 [P] [US1] Failing tests in `crates/micold-daemon/tests/config_reload.rs` for the data-model state machine: a live key change applies without restart; a restart key change sets `restart_needed` and names the key; a parse error keeps the last config and reports `last_error`; a removed file keeps the last config; an invalid new file (bad TOML, failing rule, unreadable secret) keeps the old config whole — no key of the new one applied; a config naming a not-yet-present secret is retried and reported after 120 s; a rename-replaced file, a Kubernetes-style `..data` symlink swap, and a change with no watch event (poll only) are each in use within 5 s (SC-004)
+- [ ] T015a [P] [US1] Failing test in `crates/micold-daemon/tests/config_load.rs`: `credential_root()` is the sandbox root for `daemon.kind` container and kubernetes and not for host, whatever the sandbox inference would say (T018)
+- [ ] T016a [P] [US1] Failing tests for the diagnostic `config` section (contract §5): path, applied_hash, last_error, restart_needed; "ACL not checked" on Windows instead of the V14 mode check (T089); protocol round-trip and version in `crates/micold-daemon/tests/config_reload.rs` and the `micold-core` protocol tests (`crates/micold-core/src/protocol/`)
 - [ ] T017 [US1] Route every start-up read through one `DaemonSettings` built from the file in `crates/micold-daemon/src/main.rs`, `crates/micold-core/src/paths.rs`, `crates/micold-core/src/spawn.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-daemon/src/state.rs`, `crates/micold-daemon/src/repo_clone.rs`
 - [ ] T018 [US1] Replace the sandbox inference in `credential_root()` (`crates/micold-daemon/src/git_credential.rs:40-47`) with `daemon.kind` in {container, kubernetes}
 - [ ] T019 [US1] Add `crates/micold-daemon/src/config_watch.rs`: a `notify` watcher on the **directory** of the file and of every named secret file (never the file itself, so renames and the ConfigMap/Secret `..data` symlink swap are seen), debounce 250 ms, apply live keys (contract R7), diff restart keys (research D5)
 - [ ] T019a [US1] In `crates/micold-daemon/src/config_watch.rs`: a 2 s content-hash poll (SHA-256 of the config and every named secret) as the always-on fallback for bind mounts from a VM, network filesystems and a failed watcher; one change source deduplicated by the hash; atomic swap of the whole configuration (`Arc`) only after parse + validate + secrets readable; `ConfigStatus.applied_hash` and `last_error` pushed in the daemon's status so Settings shows a rejected file without a refresh
-- [ ] T019b [US1] Test in `crates/micold-daemon/tests/config_reload.rs` that the daemon never opens the config or a secret for writing (all secret files `0400` in the test; every reload and every git/`gh` credential call succeeds; bytes and mtimes unchanged) — FR-025, SC-008
+- [ ] T019b [US1] Guard test (passes once T019a lands; written first, green is the proof) in `crates/micold-daemon/tests/config_reload.rs` that the daemon never opens the config or a secret for writing (all secret files `0400` in the test; every reload and every git/`gh` credential call succeeds; bytes and mtimes unchanged) — FR-025, SC-008
 - [ ] T088 [US1] Nested daemon (D15 row 16): with `MICOLD_DAEMON_CONFIG` in its environment the daemon refuses the default location and exits naming `--config`; test in `crates/micold-daemon/tests/config_load.rs`
-- [ ] T089 [US1] Windows/macOS (D15 row 15): the watcher in `crates/micold-daemon/src/config_watch.rs` watches parent directories on every OS; the diagnostic reports "ACL not checked" on Windows instead of the V14 mode check
 - [ ] T020 [US1] Add a `config` section to the daemon diagnostic (contract §5) in `crates/micold-daemon/src/runtime_status.rs` and its protocol type in `crates/micold-core/src/protocol/messages.rs`; protocol version bump in `crates/micold-core/src/protocol/version.rs`
+- [ ] T020a [US1] Document loading and live reload in `docs/user-guide/daemon-configuration.md`: `--config` and the default location per kind, the file winning over `MICOLD_*` variables, the 5 s reload window, which keys need a restart, an invalid edit keeping the last good configuration, `MICOLD_DAEMON_CONFIG` requiring `--config`, the `config` diagnostic section (user-guide gate, Constitution VII)
+- [ ] T089 [US1] Windows/macOS (D15 row 15): the watcher in `crates/micold-daemon/src/config_watch.rs` watches parent directories on every OS; the diagnostic reports "ACL not checked" on Windows instead of the V14 mode check
 
 ---
 
@@ -294,7 +297,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
-the milestones of **Issue 2 (#1523)**; the sub-issue that owns another group adds its own
+the milestones of **Issue 2 (#1523)** and **Issue 3 (#1524)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -307,6 +310,19 @@ with T087 in place, and no acceptance scenario separates the keys cleanly.
 - **Satisfies**: US1; FR-001, FR-003, FR-004, FR-017, FR-018, FR-032, FR-042, SC-005
 - **Verify**: `cargo test -p micold-core daemon_config` and `cargo test -p micold-daemon --test config_check`; `micold-daemon config check crates/micold-core/tests/fixtures/daemon_config/host.toml` exits 0
 - **Depends on**: —
+- **Tier**: full
+
+### Issue 3 (#1524) — M1 — The daemon loads its configuration file and reloads it live 🎯 MVP
+
+One milestone: loading (T014, T015, T017, T018, T088) and reload (T016, T019, T019a, T019b, T089) share
+`DaemonSettings` and the atomic `Arc` swap, and the diagnostic (T020) reports the reload status, so no
+acceptance scenario separates them without a half-wired daemon.
+
+- **Tasks**: T014–T020, T015a, T016a, T019a, T019b, T020a, T088, T089
+- **Deliverable**: `micold-daemon --config <path>` (else the kind's default location) takes every start-up value from the file, reloads it live from a directory watcher plus a 2 s hash poll within 5 s, keeps the last good configuration on an invalid edit, flags restart-only keys, never opens the config or a secret for writing, and its diagnostic gains a `config` section.
+- **Satisfies**: US1; FR-002, FR-006, FR-012, FR-026, FR-027, FR-028, FR-041, SC-004
+- **Verify**: `cargo test -p micold-daemon --test config_load --test config_reload`; `cargo test -p micold-core protocol`
+- **Depends on**: Issue 2 (#1523), merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
