@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks 1524 | 1 | b37eaff2:02497c0c | CHANGES: 2 MAJOR (no tests for diagnostic and credential_root: added T015a, T016a), 2 MINOR (T019b marked guard test, T089 moved after T020); test-task additions, no further round (round limit not reached; sibling pattern) |
+| Tasks 1524 | 2 | adf7e0fe:a4f36020 | CLEAN (sonnet, fix diff); 2 MINOR fixed, prose/markers only (T015a/T016a not [P], milestone prose) |
 
 ## Declined review findings
 
