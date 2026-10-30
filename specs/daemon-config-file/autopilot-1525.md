@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1525_the-app-renders-each-daemon-s-configuration-from
 - **Started**: 2026-10-30
 - **Phase**: tasks
-- **Next step**: review tasks, gate, open design PR
+- **Next step**: handoff (merge design PR, then M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| — | Design (milestones for Issue 4) | not opened | — |
+| #1617 | Design (milestones for Issue 4) | open | — |
 
 ## Milestones
 
