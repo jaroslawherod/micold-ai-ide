@@ -4363,12 +4363,13 @@ impl DaemonState {
         }
         match classify_draft(command, &Self::command_list_of(inner, session)) {
             DraftCommand::TerminalOnly(_) => Ok(()),
-            DraftCommand::Send | DraftCommand::Model(_) | DraftCommand::Effort(_) => {
-                Err(SwitchRefusal::BadCommand(
-                    "The command of a switch to the terminal must be one that needs the terminal"
-                        .into(),
-                ))
-            }
+            DraftCommand::Send
+            | DraftCommand::Model(_)
+            | DraftCommand::Effort(_)
+            | DraftCommand::Shortcuts => Err(SwitchRefusal::BadCommand(
+                "The command of a switch to the terminal must be one that needs the terminal"
+                    .into(),
+            )),
         }
     }
 
@@ -8494,6 +8495,7 @@ impl DaemonState {
             DraftCommand::Send => Ok(()),
             DraftCommand::Effort(_) => Err(UserMessageRefusal::EffortIsTheApps),
             DraftCommand::Model(_) => Err(UserMessageRefusal::ModelIsTheApps),
+            DraftCommand::Shortcuts => Err(UserMessageRefusal::ShortcutsIsTheApps),
             DraftCommand::TerminalOnly(name) => Err(UserMessageRefusal::NeedsTerminal(name)),
         }
     }

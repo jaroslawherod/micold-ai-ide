@@ -1049,7 +1049,7 @@ fn question_mark_opens_the_sheet_which_holds_the_keyboard_until_closed() {
     assert_eq!(app.changes, before, "`j` does not move the selection");
     let model = shortcut_sheet(&app).expect("drawn while open");
     assert_eq!(
-        model.rows.len(),
+        model.rows_of("Review").len(),
         14,
         "every row of the table, then Back and Forward"
     );
@@ -1088,7 +1088,9 @@ fn history_rows() -> [(String, &'static str); 2] {
 #[test]
 fn the_sheet_ends_with_back_and_forward_with_single_keys_on_and_off() {
     for single_keys in [true, false] {
-        let rows = changes::sheet_model(single_keys).rows;
+        let rows = changes::sheet_model(single_keys, true)
+            .rows_of("Review")
+            .to_vec();
         let tail = &rows[rows.len() - 2..];
         assert_eq!(tail, history_rows(), "single keys {single_keys}");
     }
@@ -1126,9 +1128,9 @@ fn with_the_switch_off_the_sheet_lists_only_the_chords() {
         })
         .collect();
     want.extend(history_rows());
-    assert_eq!(model.rows, want);
+    assert_eq!(model.rows_of("Review"), want);
     assert_eq!(
-        model.rows.len(),
+        model.rows_of("Review").len(),
         4,
         "the send and save-comment chords, Back and Forward"
     );

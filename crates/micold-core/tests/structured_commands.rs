@@ -3,7 +3,8 @@
 //! and the terminal-only list. Fixtures: `tests/fixtures/stream-json/README.md`.
 
 use micold_core::structured::commands::{
-    parse_initialize, CommandKind, CommandList, ListSource, BUILT_INS, TERMINAL_ONLY,
+    classify_draft, parse_initialize, CommandKind, CommandList, DraftCommand, ListSource,
+    BUILT_INS, TERMINAL_ONLY,
 };
 use micold_core::structured::effort::{EffortLevel, EffortSupport, EFFORT_LEVELS};
 use micold_core::structured::{
@@ -400,4 +401,21 @@ fn effort_is_the_apps_command_once_with_its_description() {
     the_effort_entry(&CommandList::fallback());
     let list = CommandList::from_history(&spawned_history());
     assert_eq!(kinds_of(&list, "model"), [CommandKind::App]);
+}
+
+/// #1464 T024 (FR-010): `/shortcuts` is the app's command in every list, and sending it is the
+/// app's, never the CLI's.
+#[test]
+fn shortcuts_is_the_apps_command_in_every_list() {
+    let reported_list = CommandList::from_history(&spawned_history());
+    let fallback = CommandList::fallback();
+    for list in [&reported_list, &fallback] {
+        assert_eq!(kinds_of(list, "shortcuts"), [CommandKind::App]);
+        assert_eq!(classify_draft("/shortcuts", list), DraftCommand::Shortcuts);
+        assert_eq!(
+            classify_draft("/shortcuts  ", list),
+            DraftCommand::Shortcuts
+        );
+        assert_eq!(classify_draft("/shortcutsx", list), DraftCommand::Send);
+    }
 }

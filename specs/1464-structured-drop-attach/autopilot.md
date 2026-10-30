@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M3 PR open
-- **Next step**: merge M3 PR, then M4
+- **Phase**: M4 implemented, unverified (handover)
+- **Next step**: M4 gate, reviews, PR
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1553 | Design | merged | 828bc8e24442d9c9685869c35fe69134934bd233 |
 | #1589 | M1 | merged | 506cceb6986e4db6f8b78b4fe665d71a464a2165 |
 | #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
+| #1618 | M3 | merged | be05cf1862a71d8d8736ffd4e86a26801b5cd0ca |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
-| M3 | T020–T023 | full | Attach shortcut | #1618 | pr-open |
+| M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
 | M5 | T034–T039 | full | Drop-target cue | #… | pending |
 
@@ -62,7 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 (T024-T033) is implemented and ticked in tasks.md, committed locally (not pushed, no PR), NOT yet built or tested: every build waited 40+ min on the shared build lock behind other worktrees' gates. Review A (high, subagent, snapshot 6a754a32:be05cf18) ran on the uncommitted diff: CLEAN, one MINOR (the Review `?` toggle in keys.rs ToggleSheet does not clear `State.shortcuts_open`; optional). Next steps: (1) run Verify: `cargo test -p micold-core --test structured_commands`, `-p micold-daemon`, `-p micold-client --test features_composer --test review_keys --test features_command_palette --test overlay_registry`, `-p micold-client --lib`; fix compile errors and test fallout (SheetModel is now `groups` + `rows_of(title)`; `sheet_model(single_keys, review)`; covered_states / showcase / catalogue posed-name checks may need the new "shortcut sheet, composer only" pose); (2) scoped gate, review B (sonnet), visual pass of the sheet showcase poses; (3) full gate `mise run gate`; (4) PR `feat(1464): /shortcuts opens the shortcut sheet with the attach chord (#1464)`. Daemon tests were added to crates/micold-daemon/tests/structured_commands.rs and structured_switch.rs (not state.rs).
 
 ## Open escalation
 

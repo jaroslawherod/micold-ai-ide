@@ -1415,3 +1415,20 @@ fn button_press_picker_requested_then_picked_is_the_whole_flow() {
     assert_eq!(state.draft(s).unwrap().images.len(), 1);
     assert!(state.can_attach(s), "the button is back");
 }
+
+/// #1464 T026 (FR-010): sending `/shortcuts` asks the shell to show the sheet, uses the draft up
+/// and sends nothing.
+#[test]
+fn sending_slash_shortcuts_shows_the_sheet_and_sends_nothing() {
+    use micold_client::features::command_palette::SendIntent;
+    let session = session_of(SessionKind::Structured);
+    let s = session.id;
+    let mut w = window_with(vec![session]);
+    w.composers.edited(s, "/shortcuts".into(), (0, 10));
+    assert_eq!(w.send_intent(s), SendIntent::ShowShortcuts);
+    assert_eq!(
+        w.composers.draft(s).map(|d| d.text.as_str()),
+        Some(""),
+        "the command is used up"
+    );
+}

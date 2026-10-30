@@ -34,18 +34,26 @@ pub fn dialog<'a>(
 
 /// The sheet's surface over `model`; **Close** sends `close`.
 pub fn sheet<'a, M: Clone + 'a>(model: SheetModel, close: M, r: Roles) -> Element<'a, M> {
-    let rows = model.rows.into_iter().map(|(key, text)| {
-        row![
-            container(Keycap::new(key, r)).width(Length::Fixed(KEY_WIDTH)),
-            Text::new(text, TypeRole::Body, r),
+    let groups = model.groups.into_iter().map(|group| {
+        let rows = group.rows.into_iter().map(|(key, text)| {
+            row![
+                container(Keycap::new(key, r)).width(Length::Fixed(KEY_WIDTH)),
+                Text::new(text, TypeRole::Body, r),
+            ]
+            .spacing(spacing::MD)
+            .align_y(Alignment::Center)
+            .into()
+        });
+        column![
+            Text::new(group.title, TypeRole::Section, r),
+            Column::with_children(rows).spacing(spacing::SM),
         ]
-        .spacing(spacing::MD)
-        .align_y(Alignment::Center)
+        .spacing(spacing::SM)
         .into()
     });
     let mut fields = dialog::fields(column![
         Text::new(TITLE, TypeRole::Headline, r),
-        Column::with_children(rows).spacing(spacing::SM),
+        Column::with_children(groups).spacing(spacing::LG),
     ]);
     if let Some(note) = model.note {
         fields = fields.push(Text::new(note, TypeRole::Body, r).muted());
