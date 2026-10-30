@@ -68,8 +68,8 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T014 [P] [US1] Failing tests in `crates/micold-daemon/tests/config_load.rs`: `--config <path>` wins; else the kind's default location (research D3); no file is fine for host and fatal for the other kinds, logged
 - [ ] T015 [P] [US1] Failing test: every value today read from `MICOLD_DATA_DIR`, `MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`, `MICOLD_TOKEN_PATH`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_REPOS_ROOT`, `MICOLD_LOG`, `TZ` comes from the file when the file sets it (file > env during the transition, research D11)
 - [ ] T016 [P] [US1] Failing tests in `crates/micold-daemon/tests/config_reload.rs` for the data-model state machine: a live key change applies without restart; a restart key change sets `restart_needed` and names the key; a parse error keeps the last config and reports `last_error`; a removed file keeps the last config; an invalid new file (bad TOML, failing rule, unreadable secret) keeps the old config whole — no key of the new one applied; a config naming a not-yet-present secret is retried and reported after 120 s; a rename-replaced file, a Kubernetes-style `..data` symlink swap, and a change with no watch event (poll only) are each in use within 5 s (SC-004)
-- [ ] T015a [P] [US1] Failing test in `crates/micold-daemon/tests/config_load.rs`: `credential_root()` is the sandbox root for `daemon.kind` container and kubernetes and not for host, whatever the sandbox inference would say (T018)
-- [ ] T016a [P] [US1] Failing tests for the diagnostic `config` section (contract §5): path, applied_hash, last_error, restart_needed; "ACL not checked" on Windows instead of the V14 mode check (T089); protocol round-trip and version in `crates/micold-daemon/tests/config_reload.rs` and the `micold-core` protocol tests (`crates/micold-core/src/protocol/`)
+- [ ] T015a [US1] Failing test in `crates/micold-daemon/tests/config_load.rs`: `credential_root()` is the sandbox root for `daemon.kind` container and kubernetes and not for host, whatever the sandbox inference would say (T018)
+- [ ] T016a [US1] Failing tests for the diagnostic `config` section (contract §5): path, applied_hash, last_error, restart_needed; "ACL not checked" on Windows instead of the V14 mode check (T089); protocol round-trip and version in `crates/micold-daemon/tests/config_reload.rs` and the `micold-core` protocol tests (`crates/micold-core/src/protocol/`)
 - [ ] T017 [US1] Route every start-up read through one `DaemonSettings` built from the file in `crates/micold-daemon/src/main.rs`, `crates/micold-core/src/paths.rs`, `crates/micold-core/src/spawn.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-daemon/src/state.rs`, `crates/micold-daemon/src/repo_clone.rs`
 - [ ] T018 [US1] Replace the sandbox inference in `credential_root()` (`crates/micold-daemon/src/git_credential.rs:40-47`) with `daemon.kind` in {container, kubernetes}
 - [ ] T019 [US1] Add `crates/micold-daemon/src/config_watch.rs`: a `notify` watcher on the **directory** of the file and of every named secret file (never the file itself, so renames and the ConfigMap/Secret `..data` symlink swap are seen), debounce 250 ms, apply live keys (contract R7), diff restart keys (research D5)
@@ -314,7 +314,7 @@ with T087 in place, and no acceptance scenario separates the keys cleanly.
 
 ### Issue 3 (#1524) — M1 — The daemon loads its configuration file and reloads it live 🎯 MVP
 
-One milestone: loading (T014, T015, T017, T018, T088) and reload (T016, T019, T019a, T019b, T089) share
+One milestone: loading (T014, T015, T015a, T017, T018, T088) and reload (T016, T016a, T019, T019a, T019b, T089) share
 `DaemonSettings` and the atomic `Arc` swap, and the diagnostic (T020) reports the reload status, so no
 acceptance scenario separates them without a half-wired daemon.
 
