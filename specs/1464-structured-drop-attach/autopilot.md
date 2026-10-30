@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
-| M3 | T020–T023 | full | Attach shortcut | #PR | pr-open |
+| M3 | T020–T023 | full | Attach shortcut | #1618 | pr-open |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
 | M5 | T034–T039 | full | Drop-target cue | #… | pending |
 
