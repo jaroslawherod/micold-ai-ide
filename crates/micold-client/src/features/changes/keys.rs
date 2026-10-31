@@ -511,7 +511,7 @@ impl SheetModel {
 pub fn shortcut_sheet(app: &crate::app::State) -> Option<SheetModel> {
     let view = app.changes.tabs.shown_view();
     let review = view.is_some();
-    if !(app.shortcuts_open || view.is_some_and(|view| view.sheet_open)) {
+    if !(app.changes.sheet_from_composer || view.is_some_and(|view| view.sheet_open)) {
         return None;
     }
     Some(sheet_model(app.settings.review_single_keys, review))

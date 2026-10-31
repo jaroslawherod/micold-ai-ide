@@ -362,9 +362,6 @@ pub enum Message {
         forward: bool,
     },
 
-    /// `/shortcuts` opens the shortcut sheet; `false` closes it (#1464 FR-010).
-    ShortcutsToggled(bool),
-
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
 }
@@ -472,8 +469,6 @@ pub struct State {
     pub structured_insights: crate::features::structured_insights::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
-    /// The shortcut sheet was opened by `/shortcuts` (#1464 FR-010); closing the sheet clears it.
-    pub shortcuts_open: bool,
     /// Each structured session's composer in this window (feature 941) -- see
     /// [`crate::features::composer::State`].
     pub composers: crate::features::composer::State,
@@ -1437,15 +1432,11 @@ impl State {
                 | crate::features::changes::Msg::OverflowDismissed
                 // #1274: the shortcut sheet is a registered dialog, opened and closed as pure state.
                 | crate::features::changes::Msg::ShortcutsOpened
+                | crate::features::changes::Msg::ShortcutsShown
                 | crate::features::changes::Msg::ShortcutsClosed),
             ) => {
-                // The sheet `/shortcuts` opened closes with the Review tab's own flag (#1464).
-                if matches!(msg, crate::features::changes::Msg::ShortcutsClosed) {
-                    self.shortcuts_open = false;
-                }
                 let _ = crate::features::changes::update(&mut self.changes, msg);
             }
-            Message::ShortcutsToggled(open) => self.shortcuts_open = open,
             // #942: the Bypass mode confirmation is a registered dialog too; closing it (Escape,
             // the scrim, another dialog opening) sends nothing, so it is pure state here.
             Message::PermissionPrompts(crate::features::permission_prompts::Msg::ModeCancelled) => {
@@ -2652,19 +2643,18 @@ mod review_tab_tests {
 #[cfg(test)]
 mod shortcuts_sheet_tests {
     use super::*;
-    use crate::features::changes::{Msg, ShortcutSheet};
-    use crate::overlay::registry::Registered;
+    use crate::features::changes::{shortcut_sheet, Msg};
 
     /// #1464 T026 (FR-010): `/shortcuts` opens the sheet with no Review view, and closing it
-    /// clears both flags.
+    /// clears the flag.
     #[test]
     fn shortcuts_toggled_opens_the_sheet_and_closing_clears_both_flags() {
         let mut state = State::default();
-        assert!(ShortcutSheet::open_in(&state).is_none());
-        state.update(Message::ShortcutsToggled(true));
-        assert!(ShortcutSheet::open_in(&state).is_some());
+        assert!(shortcut_sheet(&state).is_none());
+        state.update(Message::Changes(Msg::ShortcutsShown));
+        assert!(shortcut_sheet(&state).is_some());
         state.update(Message::Changes(Msg::ShortcutsClosed));
-        assert!(!state.shortcuts_open);
-        assert!(ShortcutSheet::open_in(&state).is_none());
+        assert!(!state.changes.sheet_from_composer);
+        assert!(shortcut_sheet(&state).is_none());
     }
 }

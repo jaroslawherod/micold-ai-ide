@@ -368,7 +368,9 @@ fn send(app: &mut App, session: SessionId) {
             return;
         }
         SendIntent::ShowShortcuts => {
-            app.core.update(Message::ShortcutsToggled(true));
+            app.core.update(Message::Changes(
+                micold_client::features::changes::Msg::ShortcutsShown,
+            ));
             return;
         }
         SendIntent::SetEffort(choice) => {
