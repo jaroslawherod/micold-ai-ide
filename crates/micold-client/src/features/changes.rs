@@ -1441,6 +1441,9 @@ pub struct ReviewView {
 /// What this window holds about the Changes view.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
+    /// The shortcut sheet was opened by `/shortcuts` in the composer (#1464 FR-010), with or
+    /// without a Review view; closing the sheet clears it.
+    pub sheet_from_composer: bool,
     /// The Review tabs of this window, each keeping its location's view; at most one is shown
     /// (feature 1269, R6). Every message of the view acts on the shown one.
     pub tabs: ReviewTabs<OpenView>,
@@ -1828,6 +1831,8 @@ pub enum Msg {
     ShortcutsOpened,
     /// Esc or a click outside the shortcut sheet: it closes (#1274 FR-012).
     ShortcutsClosed,
+    /// `/shortcuts` in the composer: open the shortcut sheet over whatever is shown (#1464 FR-010).
+    ShortcutsShown,
     /// A send of `worktree_dir` of `project` failed with `message` (FR-006, R10). Sent by the
     /// shell, which also shows today's error snackbar.
     SendFailed {
@@ -2972,7 +2977,12 @@ fn apply(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
+        Msg::ShortcutsShown => {
+            state.sheet_from_composer = true;
+            Effect::None
+        }
         Msg::ShortcutsClosed => {
+            state.sheet_from_composer = false;
             if let Some(view) = state.tabs.shown_view_mut() {
                 view.sheet_open = false;
             }
@@ -3818,7 +3828,7 @@ crate::floating_surface!(
 
 impl crate::overlay::registry::Registered for ShortcutSheet {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        (state.shortcuts_open
+        (state.changes.sheet_from_composer
             || state
                 .changes
                 .tabs

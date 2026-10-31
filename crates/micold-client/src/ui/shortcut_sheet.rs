@@ -46,14 +46,14 @@ pub fn sheet<'a, M: Clone + 'a>(model: SheetModel, close: M, r: Roles) -> Elemen
         });
         column![
             Text::new(group.title, TypeRole::Section, r),
-            Column::with_children(rows).spacing(spacing::SM),
+            Column::with_children(rows).spacing(0),
         ]
         .spacing(spacing::SM)
         .into()
     });
     let mut fields = dialog::fields(column![
         Text::new(TITLE, TypeRole::Headline, r),
-        Column::with_children(groups).spacing(spacing::LG),
+        Column::with_children(groups).spacing(spacing::MD),
     ]);
     if let Some(note) = model.note {
         fields = fields.push(Text::new(note, TypeRole::Body, r).muted());
