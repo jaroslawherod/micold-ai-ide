@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1535
 - **Worktree branch**: feat/1535_read-what-a-daemon-was-given
 - **Started**: 2026-11-01
-- **Phase**: tasks
-- **Next step**: handoff (merge design PR, then M1)
+- **Phase**: milestone M1
+- **Next step**: handoff (wait on CI, merge M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1629 | Design (milestones for Issue 14) | open | — |
+| #1629 | Design (milestones for Issue 14) | merged | 44cf9d37c8b416b545a9c8e6cd1b4fb3bc9e429b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | — | pending |
+| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | — | CLEAN (1 MINOR: comment added, prose only) |
 
 ## Decisions
 
@@ -38,6 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks 1535 | 1 | ce0ffba1:dbb82d13 | CLEAN (1 MINOR fixed, prose only) |
+| M1 B | 1 | (part 1) | CHANGES: test gaps (view, secret, reducer); fixed in 4591aad7e |
+| M1 B | 2 | 1a970730:b5c8c822 | CLEAN (1 MINOR: comment added, prose only) |
 
 ## Declined review findings
 
