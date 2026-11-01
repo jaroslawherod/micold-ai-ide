@@ -232,6 +232,7 @@ pub struct SplitView<'a, M> {
     children: Vec<Element<'a, M>>,
     on_event: Option<Box<dyn Fn(SplitEvent) -> M + 'a>>,
     on_file_drop: Option<Box<dyn Fn(PaneId, std::path::PathBuf) -> M + 'a>>,
+    on_file_hover: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
 impl<'a, M> SplitView<'a, M> {
@@ -250,6 +251,7 @@ impl<'a, M> SplitView<'a, M> {
             children,
             on_event: None,
             on_file_drop: None,
+            on_file_hover: None,
         }
     }
 
@@ -257,6 +259,13 @@ impl<'a, M> SplitView<'a, M> {
     /// FR-005). A drop outside every pane is not reported. One call per file, in drop order.
     pub fn on_file_drop(mut self, f: impl Fn(PaneId, std::path::PathBuf) -> M + 'a) -> Self {
         self.on_file_drop = Some(Box::new(f));
+        self
+    }
+
+    /// Report files hovering over the window (`true`) and the hover ending, by the drag leaving or
+    /// the drop (`false`) (#1464, FR-005). Where the windowing system reports no hover, never called.
+    pub fn on_file_hover(mut self, f: impl Fn(bool) -> M + 'a) -> Self {
+        self.on_file_hover = Some(Box::new(f));
         self
     }
 
@@ -409,6 +418,15 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
                 tree.state.downcast_mut::<State>().pointer = None;
             }
             _ => {}
+        }
+        if let (Event::Window(window_event), Some(f)) = (event, &self.on_file_hover) {
+            match window_event {
+                iced::window::Event::FileHovered(_) => shell.publish(f(true)),
+                iced::window::Event::FilesHoveredLeft | iced::window::Event::FileDropped(_) => {
+                    shell.publish(f(false));
+                }
+                _ => {}
+            }
         }
         if let (Event::Window(iced::window::Event::FileDropped(path)), Some(f)) =
             (event, &self.on_file_drop)

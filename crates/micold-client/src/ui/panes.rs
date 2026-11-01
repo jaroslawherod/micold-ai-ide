@@ -257,7 +257,13 @@ pub fn view<'a>(
                 // A structured session's primary draws no terminal: its pane is the transcript
                 // (feature 939, FR-001, research R15).
                 Some(t) if is_structured_primary(state, t) => {
-                    transcript_body(state, t.session, scheme)
+                    let transcript = transcript_body(state, t.session, scheme);
+                    // #1464 FR-005: files hovering over the window mark the pane that takes them.
+                    if crate::features::session::shows_drop_cue(state, t) {
+                        micold_material::drop_cue(transcript, r)
+                    } else {
+                        transcript
+                    }
                 }
                 Some(t) => match area.grids.get(&t) {
                     Some(grid) => {
@@ -314,7 +320,8 @@ pub fn view<'a>(
         .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))))
         .on_file_drop(|pane, path| {
             Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path)))
-        });
+        })
+        .on_file_hover(|on| Message::Session(SessionMsg::Pane(PaneMsg::FilesHovering(on))));
     match area.refusal {
         // Over the panes, not above them: a row above would resize every pane, and the
         // measurement that follows would dismiss the reason before it was read.

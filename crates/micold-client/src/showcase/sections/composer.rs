@@ -117,6 +117,32 @@ pub fn attachment_chip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
     )
 }
 
+/// `drop_cue` — a pane body as it is, then under the cue shown while files are dragged over the
+/// window (#1464 FR-005, FR-014): the outline and tint of the accent, over the same box.
+pub fn drop_cue<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let pane = || {
+        container(crate::ui::material::Text::new(
+            "A structured session's pane",
+            crate::ui::material::TypeRole::Body,
+            roles,
+        ))
+        .padding(micold_core::tokens::spacing::LG)
+        .width(Length::Fixed(WIDTH))
+        .height(Length::Fixed(96.0))
+    };
+    arrange(
+        vec![
+            posed("a pane without the cue", pane(), roles),
+            posed(
+                "the same pane while files hover over it",
+                crate::ui::material::drop_cue(pane(), roles),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `QueueRow` — the first queued message with its three actions; a long two-line message with
 /// pictures, cut to one line; and a row without Move to composer, as while the draft holds text.
 pub fn queue_row<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {

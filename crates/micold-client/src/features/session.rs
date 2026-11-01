@@ -115,6 +115,11 @@ pub struct State {
     /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
     /// frame where the viewport has a width.
     pub pending_tab_reveal: bool,
+    /// Whether files are being dragged over the window (#1464, FR-005): set by the window's file
+    /// hover, cleared when the drag leaves and when the files drop. The window reports no pointer
+    /// position during a drag, so this is window-level, and the cue marks every pane that accepts
+    /// the drop ([`shows_drop_cue`]).
+    pub files_hovering: bool,
     /// Whether that reveal measures from the strip's start rather than from
     /// `tab_strip_scroll_offset` (feature 1269, visual pass): set when the shown location changes,
     /// because the offset then belongs to the strip that was left, and a reveal measured from it
@@ -1877,6 +1882,9 @@ pub enum PaneMsg {
     /// A file was dropped on the window while the pointer was over `pane` (feature 487). Files of
     /// one drop arrive one by one; the shell gathers them before inserting.
     FileDropped(micold_core::pane_layout::PaneId, std::path::PathBuf),
+    /// Files started (`true`) or stopped (`false`, on leave or drop) hovering over the window
+    /// (#1464, FR-005): the drop-target cue shows while it is `true`.
+    FilesHovering(bool),
     /// The files of a drop have all arrived (feature 487): insert them as one.
     DropsSettled,
     /// `pane` was laid out at `cols` x `rows` (FR-014): its terminal's PTY is resized to it.
@@ -2253,6 +2261,18 @@ pub fn target_of(
         Some(Some(t)) if state.is_structured_primary(t) => DropTarget::Composer(t.session),
         Some(Some(t)) => DropTarget::Terminal(t),
     }
+}
+
+/// Whether the pane showing `terminal` wears the drop-target cue (#1464, FR-005): files hover over
+/// the window and the pane is a structured session's transcript that can take input. A terminal,
+/// an empty pane and a session that cannot accept input get none.
+pub fn shows_drop_cue(
+    state: &crate::app::State,
+    terminal: micold_core::protocol::messages::TerminalRef,
+) -> bool {
+    state.session.files_hovering
+        && state.is_structured_primary(terminal)
+        && state.composers.accepts_input(terminal.session)
 }
 
 fn insertion_notice(message: String) -> crate::features::Outcome {

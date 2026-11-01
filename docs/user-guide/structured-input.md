@@ -8,6 +8,10 @@ Drop one or more files anywhere on the session's view: over the transcript or ov
 files go to that session's composer only. Nothing is typed into a terminal, even when a terminal
 pane sits beside the session.
 
+While you drag files over the window, each structured session that can take input is outlined and
+tinted in the accent colour; the outline goes when you drag out again or drop. Some systems do not
+report a drag until it ends: there is then no outline, and the drop works just the same.
+
 - **Pictures** (PNG, JPEG, GIF, WebP) become attachment chips in the composer and are sent with your
   next message.
 - **Other files and folders** are inserted into the draft as quoted paths at the caret, the same
