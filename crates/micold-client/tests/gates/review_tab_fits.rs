@@ -4,7 +4,7 @@
 //! Every review state the contract lists, by the name its slice registered it under, in light and
 //! in dark, at `MIN_WINDOW_SIZE` and at the fixture's window: no text is painted wider than its
 //! clip; no node escapes its parent beyond the overhangs `gates/containment.rs` declares (and, at
-//! the smallest window, those [`SMALLEST_WINDOW`] declares, filed as #1474); the review bar ends at or above the status bar and both lie inside the
+//! the smallest window, those [`SMALLEST_WINDOW`] declares as scrolling); the review bar ends at or above the status bar and both lie inside the
 //! window; an open drawer lies inside the diff pane, which is as wide as with the drawer closed (an
 //! overlay, not a push); the status bar keeps its invariants (`status_bar_fits.rs`); and the
 //! session area's header and strip fit (`session_area_fits.rs`).
@@ -119,11 +119,10 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 /// is allowed. Each entry must keep firing in each of its states, or it is widening the gate
 /// silently: drop a state once its node fits there, and the entry once no state is left.
 ///
-/// The first three are scrolling, not defects: content taller than the `Scrollable` that shows it,
-/// as `gates/containment.rs`'s scroll exemptions. The rest are the review tab squeezed at 640×480,
-/// filed as #1474 rather than fixed here. M3's visual-pass fixes moved a draft row's Edit and
-/// Delete onto their own line; the draft-row entries cover only that line's overhang at 640×480
-/// (it fits at 1280×800), not a new layout of the review tab.
+/// The first three are scrolling, not defects: content taller or wider than the `Scrollable` that
+/// shows it, as `gates/containment.rs`'s scroll exemptions. The last is the drawer's draft and
+/// reply rows, still a few pixels past a narrow drawer at 640x480 after the sidebar strip (#1474);
+/// the next milestone fixes them and deletes the entries.
 const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     (
         &[
@@ -166,98 +165,11 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
     ),
     (
-        &["changes-review-held"],
-        "0/0/0/1/1/2/0/0/2/0/0/0",
-        "right",
-        "base",
-        // Beside the stale notice the header's third child is the source control, not the progress
-        // slot: its label and chevron run past it. Not the progress slot; remains for #1474.
-        "#1474: the source control's label and chevron past it, beside the stale notice",
-    ),
-    (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
-            "changes-tree-filter",
-            "review-drag-composer",
-            "review-shortcut-sheet",
-            "review-source-open",
-            "review-two-worktrees",
-        ],
-        "0/0/0/1/1/2/1/1/0/0/0",
-        "bottom",
-        "base",
-        "#1474: the diff header's wrapped controls below their row",
-    ),
-    (
-        &["changes-tree-filter", "review-two-worktrees"],
-        "0/0/0/1/1/2/1/1/0/0/1/0/0",
-        "bottom",
-        "base",
-        "#1474: the diff's loading placeholder past its box",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies", "review-empty"],
-        "0/0/0/1/1/2/1/1/1/0/0/0/0",
-        "right",
-        "base",
-        "#1474: the drawer's header past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies", "review-empty"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/0/0/0/0/1/0",
-        "right",
-        "base",
-        "#1474: a draft or reply row's controls past a narrow drawer",
-    ),
-    (
         &["drawer-drafts", "drawer-replies", "review-empty"],
         "0/0/0/1/1/2/1/1/1/0/0/1/0/0/0/1/0/0/1/0",
         "right",
         "base",
-        "#1474: a draft or reply row's controls past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/0",
-        "right",
-        "base",
-        "#1474: a draft or reply row past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/0/0/2",
-        "right",
-        "base",
-        "#1474: a draft or reply row's controls past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/1/0/2",
-        "right",
-        "base",
-        "#1474: a draft row's Edit and Delete past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/2/0/2",
-        "right",
-        "base",
-        "#1474: a draft row's Edit and Delete past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/1/0/0",
-        "right",
-        "base",
-        "#1474: a draft or reply row past a narrow drawer",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0/2/0/0",
-        "right",
-        "base",
-        "#1474: a draft or reply row past a narrow drawer",
+        "#1474 (M2): a draft or reply row's controls, 4px and 8px past a narrow drawer",
     ),
 ];
 
@@ -320,6 +232,39 @@ fn laid_out(
     lay::text_overflows_settled_at(lay::view_of(&under), &mut lay::renderer(), window)
 }
 
+/// The sidebar drawer's box, the row's first child.
+const SIDEBAR_DRAWER: &[usize] = &[0, 0, 1, 0];
+/// The main area beside the sidebar drawer: the row's second child.
+const MAIN_AREA: &[usize] = &[0, 0, 1, 1];
+/// The collapsed strip's width.
+const STRIP: f32 = 32.0;
+
+/// FR-011, SC-004: at `MIN_WINDOW_SIZE` the sidebar drawer is the strip and the main area is
+/// `width - STRIP` wide; at `WINDOW` the sidebar is expanded, so the two runs differ.
+fn premise_sidebar(what: &str, records: &[LayoutRecord], window: Size) {
+    let drawer = at(records, SIDEBAR_DRAWER).expect("the sidebar drawer is laid out");
+    let main = at(records, MAIN_AREA).expect("the main area is laid out");
+    if window == MIN_WINDOW_SIZE {
+        assert!(
+            (drawer.width - STRIP).abs() <= TOLERANCE,
+            "{what}: premise: the sidebar is the {STRIP}px strip, not {}px",
+            drawer.width
+        );
+        assert!(
+            (main.width - (window.width - STRIP)).abs() <= TOLERANCE,
+            "{what}: premise: the main area is {}px wide, not {}px",
+            main.width,
+            window.width - STRIP
+        );
+    } else {
+        assert!(
+            drawer.width > STRIP + TOLERANCE,
+            "{what}: premise: the sidebar is expanded, not {}px",
+            drawer.width
+        );
+    }
+}
+
 /// What one review state named `name` breaks, in `theme` at `window`, against its own build: one
 /// line per finding, empty when it fits. The status bar's own check panics on its own.
 fn findings(
@@ -331,6 +276,7 @@ fn findings(
     let what = format!("{name} {theme:?} {window:?}");
     let build = covered(name).build;
     let (overflows, records) = laid_out(build(), theme, window);
+    premise_sidebar(&what, &records, window);
     let mut found = Vec::new();
     let mut check = |holds: bool, finding: String| {
         if !holds {

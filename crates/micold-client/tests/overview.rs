@@ -509,6 +509,42 @@ fn opening_changes_leaves_full_screen() {
     assert!(!state.overview.full_screen());
 }
 
+/// Feature 1474 (FR-005): closing full screen shows the sidebar as the current width says.
+#[test]
+fn closing_full_screen_at_a_narrow_width_shows_the_strip() {
+    let mut state = project_with(vec![]);
+    state.update(Message::Window(
+        micold_client::features::window::Msg::Resized {
+            width: 640,
+            height: 480,
+        },
+    ));
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    toggle_full_screen(&mut state);
+    assert!(state.sidebar_hidden());
+    assert!(!state.sidebar.hidden);
+}
+
+#[test]
+fn closing_full_screen_at_a_wide_width_returns_the_sidebar_expanded() {
+    let mut state = project_with(vec![]);
+    state.update(Message::Window(
+        micold_client::features::window::Msg::Resized {
+            width: 1000,
+            height: 700,
+        },
+    ));
+    let width = state.sidebar.width;
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    assert!(state.overview.full_screen());
+    toggle_full_screen(&mut state);
+    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar.hidden);
+    assert_eq!(state.sidebar.width, width);
+}
+
 // ---- Feature 813 M2 (T026): pull request counts and the unknown mark ----
 
 fn counts(open: u8, merged: u8) -> PrCounts {

@@ -2027,6 +2027,7 @@ pub fn interpret(
             state.session.pending_tab_reveal = true;
             return outcomes;
         }
+        Outcome::CompactWidthLeft => crate::features::sidebar::compact_width_left(state),
         Outcome::ChangesClosedForCompare => {
             // Feature 813 (FR-023): Compare takes the main area from the Overview too; feature
             // 1269 (U2): the shown review is hidden, kept.
@@ -2272,6 +2273,17 @@ pub enum KeyRouting {
 }
 
 impl State {
+    /// Whether the sidebar shows as its collapsed strip (feature 1474): below the compact width it
+    /// does unless the user expanded it there; otherwise it is the stored `sidebar.hidden`.
+    #[must_use]
+    pub fn sidebar_hidden(&self) -> bool {
+        if self.window.compact() {
+            !self.sidebar.compact_open
+        } else {
+            self.sidebar.hidden
+        }
+    }
+
     /// The place the main area shows (feature 1465, research R3), in the order it draws: none
     /// while Settings is open or no project is active; else the Overview, Compare, the shown
     /// Review tab, the current session; else none.

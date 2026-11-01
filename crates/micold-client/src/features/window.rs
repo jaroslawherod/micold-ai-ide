@@ -69,6 +69,19 @@
 
 use micold_core::install_location::InstallLocation;
 
+/// Below this width, in logical pixels, the window is compact and the sidebar shows as its strip
+/// (feature 1474, FR-001).
+pub const COMPACT_WIDTH: u16 = 720;
+
+impl State {
+    /// Whether the window is narrower than [`COMPACT_WIDTH`]. `(0, 0)` is "not reported", not compact.
+    #[must_use]
+    pub fn compact(&self) -> bool {
+        let width = self.window_size.0;
+        width != 0 && width < COMPACT_WIDTH
+    }
+}
+
 /// What this feature remembers (feature 028, contract S1).
 ///
 /// The fields keep the names they had as flat members of `app::State`, and the reducers below
@@ -344,10 +357,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             focus_within_changed(state, region, within);
             Vec::new()
         }
-        Msg::Resized { width, height } => {
-            resized(state, width, height);
-            Vec::new()
-        }
+        Msg::Resized { width, height } => resized(state, width, height),
         Msg::InstallLocationReported(location) => {
             install_location_reported(state, location);
             Vec::new()
@@ -404,8 +414,22 @@ pub fn field_focus_cleared(state: &mut crate::app::State) {
 ///
 /// Used to clamp a context menu so it cannot open off-screen. `(0, 0)` means "not reported yet",
 /// which disables clamping rather than pinning every menu to the origin.
-pub fn resized(state: &mut crate::app::State, width: u16, height: u16) {
+///
+/// Leaving compact width ends an expansion the user made at compact width (feature 1474, FR-003);
+/// the sidebar owns that override, so this reports [`Outcome::CompactWidthLeft`] for the root to
+/// route. `hidden` and `width` are never written.
+pub fn resized(
+    state: &mut crate::app::State,
+    width: u16,
+    height: u16,
+) -> Vec<crate::features::Outcome> {
     state.window.window_size = (width, height);
+    // An unreported size (0, 0) is neither compact nor wide: it leaves the override alone.
+    if width >= COMPACT_WIDTH {
+        vec![crate::features::Outcome::CompactWidthLeft]
+    } else {
+        Vec::new()
+    }
 }
 
 /// Where this executable is running from, as the boot path found it (feature 028, FR-019).

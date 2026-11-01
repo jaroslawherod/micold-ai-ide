@@ -113,6 +113,37 @@ fn the_window_size_is_recorded_as_reported() {
     assert_eq!(st.window.window_size, (1280, 720));
 }
 
+/// Feature 1474 (FR-001): compact below 720, and an unreported size is not compact.
+#[test]
+fn compact_is_below_720_and_not_for_an_unreported_size() {
+    let mut st = State::default();
+    assert!(!st.window.compact());
+    window::resized(&mut st, 719, 480);
+    assert!(st.window.compact());
+    window::resized(&mut st, window::COMPACT_WIDTH, 480);
+    assert!(!st.window.compact());
+    window::resized(&mut st, 0, 0);
+    assert!(!st.window.compact());
+}
+
+/// Feature 1474 (FR-003): leaving compact width clears the compact override and writes nothing else.
+#[test]
+fn leaving_compact_width_clears_the_override_only() {
+    use micold_client::features::Outcome;
+    let mut st = State::default();
+    assert!(window::resized(&mut st, 640, 480).is_empty());
+    assert!(
+        window::resized(&mut st, 700, 480).is_empty(),
+        "still compact"
+    );
+    assert!(matches!(
+        window::resized(&mut st, 720, 480).as_slice(),
+        [Outcome::CompactWidthLeft]
+    ));
+    // An unreported size is not a wide window: it leaves the override alone.
+    assert!(window::resized(&mut st, 0, 0).is_empty());
+}
+
 #[test]
 fn a_copy_that_is_not_installed_blocks_the_session_ui() {
     // FR-019. Both non-`Installed` answers block, for the same reason and with different

@@ -125,6 +125,9 @@ pub struct State {
     pub filters: BTreeSet<TagFilter>,
     /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
     pub hidden: bool,
+    /// The user expanded the sidebar at compact width (feature 1474). Transient; cleared when the
+    /// window is no longer compact. Never written to `hidden`.
+    pub compact_open: bool,
     /// How far the worktree sidebar is scrolled, in logical pixels.
     ///
     /// The app bar's elevation derives from this and nothing else (FR-025a) — see
@@ -2254,12 +2257,22 @@ pub fn more_menu_chosen(state: &mut crate::app::State) {
 
 /// The sidebar was collapsed or revealed.
 pub fn toggled(state: &mut crate::app::State) {
-    state.sidebar.hidden = !state.sidebar.hidden;
+    if state.window.compact() {
+        state.sidebar.compact_open = !state.sidebar.compact_open;
+    } else {
+        state.sidebar.hidden = !state.sidebar.hidden;
+    }
 }
 
 /// The sidebar's drag handle moved (feature 007).
 pub fn drag_moved(state: &mut crate::app::State, x: u16) {
     state.sidebar.width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
+}
+
+/// The sidebar's answer to `Outcome::CompactWidthLeft` (feature 1474, FR-003): an expansion the
+/// user made at compact width ends when the window is no longer compact.
+pub fn compact_width_left(state: &mut crate::app::State) {
+    state.sidebar.compact_open = false;
 }
 
 /// The worktree list was replaced; drop expansion for rows that no longer exist (T066).

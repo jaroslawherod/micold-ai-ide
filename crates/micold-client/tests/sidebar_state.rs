@@ -43,6 +43,114 @@ fn toggling_hides_and_shows() {
     assert!(!state.sidebar.hidden);
 }
 
+fn resize(state: &mut State, width: u16, height: u16) {
+    state.update(Message::Window(
+        micold_client::features::window::Msg::Resized { width, height },
+    ));
+}
+
+fn toggle(state: &mut State) {
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
+}
+
+/// Feature 1474 (FR-001 to FR-004): the sidebar gives way below 720px and comes back as the user
+/// left it; the stored `hidden` and `width` never change on a resize.
+#[test]
+fn the_sidebar_collapses_below_720_and_returns_as_left() {
+    let mut state = State::default();
+    let width = state.sidebar.width;
+    resize(&mut state, 1000, 700);
+    assert!(!state.sidebar_hidden());
+    resize(&mut state, 640, 480);
+    assert!(state.sidebar_hidden());
+    resize(&mut state, 720, 480);
+    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar.hidden);
+    assert_eq!(state.sidebar.width, width);
+}
+
+#[test]
+fn the_boundary_is_719_compact_720_not() {
+    let mut state = State::default();
+    resize(&mut state, 719, 480);
+    assert!(state.sidebar_hidden());
+    resize(&mut state, 720, 480);
+    assert!(!state.sidebar_hidden());
+}
+
+#[test]
+fn a_hidden_sidebar_stays_hidden_through_a_narrow_window() {
+    let mut state = State::default();
+    resize(&mut state, 1000, 700);
+    toggle(&mut state);
+    assert!(state.sidebar_hidden());
+    resize(&mut state, 640, 480);
+    assert!(state.sidebar_hidden());
+    resize(&mut state, 1000, 700);
+    assert!(state.sidebar_hidden());
+    assert!(state.sidebar.hidden);
+}
+
+#[test]
+fn starting_narrow_shows_the_strip_without_touching_the_stored_state() {
+    let mut state = State::default();
+    resize(&mut state, 640, 480);
+    assert!(state.sidebar_hidden());
+    assert!(!state.sidebar.hidden);
+}
+
+#[test]
+fn an_unreported_size_is_not_compact() {
+    let mut state = State::default();
+    resize(&mut state, 0, 0);
+    assert!(!state.sidebar_hidden());
+}
+
+#[test]
+fn show_at_compact_width_holds_until_the_window_is_widened() {
+    let mut state = State::default();
+    resize(&mut state, 640, 480);
+    toggle(&mut state);
+    assert!(!state.sidebar_hidden());
+    resize(&mut state, 650, 480);
+    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar.hidden, "the toggle did not write hidden");
+    resize(&mut state, 720, 480);
+    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar.compact_open);
+    resize(&mut state, 640, 480);
+    assert!(state.sidebar_hidden(), "a fresh crossing collapses again");
+}
+
+#[test]
+fn hide_after_show_at_compact_width_returns_to_the_strip() {
+    let mut state = State::default();
+    resize(&mut state, 640, 480);
+    toggle(&mut state);
+    toggle(&mut state);
+    assert!(state.sidebar_hidden());
+    assert!(!state.sidebar.hidden);
+}
+
+#[test]
+fn a_toggle_at_720_or_wider_flips_the_stored_state() {
+    let mut state = State::default();
+    resize(&mut state, 1000, 700);
+    toggle(&mut state);
+    assert!(state.sidebar.hidden);
+    assert!(!state.sidebar.compact_open);
+}
+
+#[test]
+fn two_states_are_independent() {
+    let mut narrow = State::default();
+    let mut wide = State::default();
+    resize(&mut narrow, 640, 480);
+    resize(&mut wide, 1000, 700);
+    assert!(narrow.sidebar_hidden());
+    assert!(!wide.sidebar_hidden());
+}
+
 /// The drag protocol changed with feature 017 (T041): the resize handle owns the drag itself, so
 /// there is no longer a start or an end to report and no `sidebar_dragging` flag to gate on. A
 /// width message *is* the drag — the handle only speaks while it is being moved.

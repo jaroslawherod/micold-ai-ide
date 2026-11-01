@@ -133,6 +133,8 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // Feature 1474: `window.compact`, whether the window is narrower than the compact width.
+    "compact",
     // #1554: `effort_picker.picker`, a session's open effort picker.
     "picker",
     // Feature 1269: `changes.tabs.shown_key`, the shown Review tab's location, and

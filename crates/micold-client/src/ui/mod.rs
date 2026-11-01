@@ -487,7 +487,7 @@ pub fn view_with<'a>(
             sidebar::view(state, scheme),
             sidebar::collapsed_strip(scheme),
         )
-        .open(!state.sidebar.hidden)
+        .open(!state.sidebar_hidden())
         // Full screen slides the whole drawer off without touching the sidebar's own state
         // (feature 970, FR-009); every way out of the Overview clears it through `full_screen()`.
         .retracted(flags.retracted)
@@ -1750,7 +1750,7 @@ mod overview_arrow_tests;
 /// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
 /// resize handle when expanded, or its collapsed strip.
 pub(crate) fn freed_width(state: &State) -> f32 {
-    if state.sidebar.hidden {
+    if state.sidebar_hidden() {
         crate::ui::sidebar::STRIP_WIDTH
     } else {
         f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH

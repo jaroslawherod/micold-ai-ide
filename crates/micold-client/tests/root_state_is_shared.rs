@@ -219,11 +219,6 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          which rows exist, so it survives the panel that set it being dismissed",
     ),
     (
-        "sidebar.hidden",
-        "tests/logical_state_ownership.rs::sidebar_visibility_is_application_owned — whether the \
-         sidebar is shown is the window's layout decision, not the sidebar's",
-    ),
-    (
         "window.install_location",
         "tests/features_window.rs::nothing_this_feature_does_clears_the_block — the verdict has \
          to survive every other operation the window owns, so it is asserted on `app::State` and \
