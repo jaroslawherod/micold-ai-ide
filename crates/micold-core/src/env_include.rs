@@ -955,7 +955,9 @@ mod run_and_diff_tests {
         extra: &[(String, String)],
     ) -> (ScriptRun, Vec<(Stream, String)>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join(if cfg!(windows) { "s.ps1" } else { "s.sh" });
+        let script = dir
+            .path()
+            .join(if cfg!(windows) { "s.ps1" } else { "s.sh" });
         std::fs::write(&script, body).unwrap();
         let mut seen = Vec::new();
         let result = run_and_diff(&script, &shell(), dir.path(), timeout, extra, |s, l| {
@@ -993,11 +995,7 @@ mod run_and_diff_tests {
 
         #[test]
         fn an_explicit_export_is_captured_and_an_unexported_assignment_is_not() {
-            let (r, _, _d) = run(
-                "export FOO=bar\nHIDDEN=1\n",
-                Duration::from_secs(30),
-                &[],
-            );
+            let (r, _, _d) = run("export FOO=bar\nHIDDEN=1\n", Duration::from_secs(30), &[]);
             assert_eq!(r.end, ScriptEnd::Exited(0));
             assert_eq!(export_of(&r, "FOO").as_deref(), Some("bar"));
             assert_eq!(export_of(&r, "HIDDEN"), None);
@@ -1005,11 +1003,7 @@ mod run_and_diff_tests {
 
         #[test]
         fn a_value_with_a_newline_is_captured_intact() {
-            let (r, _, _d) = run(
-                "export MULTI=\"one\ntwo\"\n",
-                Duration::from_secs(30),
-                &[],
-            );
+            let (r, _, _d) = run("export MULTI=\"one\ntwo\"\n", Duration::from_secs(30), &[]);
             assert_eq!(export_of(&r, "MULTI").as_deref(), Some("one\ntwo"));
         }
 
@@ -1109,7 +1103,11 @@ mod run_and_diff_tests {
                 &[],
                 |_, _| {},
             );
-            assert!(matches!(r.end, ScriptEnd::Exited(c) if c != 0), "{:?}", r.end);
+            assert!(
+                matches!(r.end, ScriptEnd::Exited(c) if c != 0),
+                "{:?}",
+                r.end
+            );
         }
     }
 }

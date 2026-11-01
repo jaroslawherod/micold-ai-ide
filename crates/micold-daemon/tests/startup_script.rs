@@ -181,7 +181,10 @@ fn child_side() -> bool {
     .expect("spawn the shell session");
     let deadline = Instant::now() + Duration::from_secs(20);
     while !dump.exists() {
-        assert!(Instant::now() < deadline, "the session never wrote its environment");
+        assert!(
+            Instant::now() < deadline,
+            "the session never wrote its environment"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
     let _ = shell.kill();
@@ -214,7 +217,10 @@ fn session_environment(export_env: bool) -> HashMap<String, String> {
             "--test-threads=1",
         ])
         .env(CHILD_DIR, dir.path())
-        .env("MICOLD_STARTUP_TEST_EXPORT", if export_env { "1" } else { "0" })
+        .env(
+            "MICOLD_STARTUP_TEST_EXPORT",
+            if export_env { "1" } else { "0" },
+        )
         .env("SHELL", &stand_in)
         .env("HOME", dir.path())
         .output()
@@ -251,6 +257,10 @@ fn sessions_see_the_exports_unless_export_env_is_off() {
         "the daemon's own namespace is not settable by the script"
     );
     let env = session_environment(false);
-    assert_eq!(env.get("STARTUP_TEST_FOO"), None, "export_env = false (US1.3)");
+    assert_eq!(
+        env.get("STARTUP_TEST_FOO"),
+        None,
+        "export_env = false (US1.3)"
+    );
     assert!(!env["PATH"].starts_with("/startup-test-bin"));
 }
