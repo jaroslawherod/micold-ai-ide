@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1549 | progress slot (earlier bug flow) | merged | n/a |
 | #1592 | sort chips (earlier bug flow) | merged | 3190828cbe433f90b5458ad23837e6678d1c8910 |
-| # | design (spec, plan, tasks) | open | |
+| #1626 | design (spec, plan, tasks) | open | |
 
 ## Milestones
 
