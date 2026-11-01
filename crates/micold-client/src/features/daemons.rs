@@ -2332,6 +2332,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             start(state, model, id);
         }
         Msg::Stopped(id) => {
+            state.config_status.remove(&id);
             if kube_of(model, id).is_some() {
                 return request_kube_stop(state, model, id);
             }
@@ -2411,7 +2412,11 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::RestartRequested(id) => {
             state.config_status.remove(&id);
             let mut out = reduce(state, model, Msg::Stopped(id));
-            out.extend(reduce(state, model, Msg::Started(id)));
+            // A Kubernetes stop waits for its confirmation and the pod's end: the user starts it
+            // after. Containers restart through the shell, which waits for the container.
+            if kube_of(model, id).is_none() && out.is_empty() {
+                out.extend(reduce(state, model, Msg::Started(id)));
+            }
             return out;
         }
         Msg::EventReported(id, event) => {
