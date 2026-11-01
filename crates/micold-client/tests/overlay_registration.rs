@@ -147,11 +147,14 @@ const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] = &[
 ];
 
 /// Popover-*shaped* fields that open nothing floating: the sidebar's filter accordion sits inline
-/// under the chip bar (BUG-1470), so it has no overlay to register.
+/// under the chip bar (BUG-1470), so it has no overlay to register; and the sidebar the user
+/// expanded at compact width (feature 1474), which is the drawer's own width, not a surface.
 /// `an_inline_flag_registers_no_overlay` holds this list to that.
 #[allow(clippy::type_complexity)]
-const INLINE_FLAGS: &[(&str, fn(&mut State))] =
-    &[("sidebar.filter_open", |s| s.sidebar.filter_open = true)];
+const INLINE_FLAGS: &[(&str, fn(&mut State))] = &[
+    ("sidebar.filter_open", |s| s.sidebar.filter_open = true),
+    ("sidebar.compact_open", |s| s.sidebar.compact_open = true),
+];
 
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
 ///

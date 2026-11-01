@@ -61,7 +61,9 @@ through the motion, even when the cards move to another row. To have no motion a
 
 Leaving the Overview leaves full screen in the same step: activating a card, **Escape** (with no
 card expanded), or **Ctrl+Shift+O** close the Overview and bring the
-sidebar back. The sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full
+sidebar back. The sidebar always returns exactly as you left it: collapsed or expanded, at the same width. The one
+exception is a window narrower than 720px, where the sidebar shows collapsed while the window is that narrow
+(see [Resizing and hiding the sidebar](worktrees-and-sessions.md#resizing-and-hiding-the-sidebar)). Full
 screen never changes the sidebar itself.
 
 Opening and closing [Settings](settings.md) keeps full screen, and so does switching project. The

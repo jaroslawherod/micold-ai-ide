@@ -462,6 +462,9 @@ nothing: **Attach existing…** still lists everything.
 - Hiding takes the chip bar with it, so **Refresh the worktree list** is unavailable until you
   show the sidebar again; the collapsed strip hosts only the **show** button.
 - **Show**: click the **show** button (panel-open icon) on the collapsed strip to bring it back.
+- **Narrow window**: in a window narrower than 720px the sidebar shows as the collapsed strip, so the
+  main area has the width. Widening the window to 720px or more brings the sidebar back as you left it.
+  **Show** at that width expands it until you widen the window; it does not change how you left it.
 
 ## The "Default" entry: sessions without a worktree
 

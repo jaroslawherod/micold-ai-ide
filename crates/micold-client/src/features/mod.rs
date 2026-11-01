@@ -73,6 +73,9 @@ pub enum Outcome {
     /// Compare opened (feature 483, C1): it takes the Changes view's place, so the root closes
     /// that view. `runs` owns Compare and `changes` owns the view.
     ChangesClosedForCompare,
+    /// The window left compact width (feature 1474, FR-003): the root clears the sidebar's
+    /// compact override. `window` owns the size, `sidebar` the override.
+    CompactWidthLeft,
     /// A session was selected (feature 1269, U2): the terminal takes the main area back, so the
     /// root hides the shown Review tab, kept. `session` owns the selection, `changes` the tabs.
     ReviewHidden,

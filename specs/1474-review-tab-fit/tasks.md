@@ -10,22 +10,22 @@ Stories: US1 review tab fits (P1), US2 sidebar gives way (P1), US3 open the side
 
 ## Phase 1: Foundational (reducer tests, then the compact state)
 
-- [ ] T001 [US2] Write red reducer tests for the contract's table: resize 1000/640/720/719, first report 640 and 0x0, hide at 1000 then resize, toggle at 640, toggle/resize ordering, two independent states; assert `sidebar_hidden()` and that `hidden`/`width` are unchanged (`crates/micold-client/tests/sidebar_state.rs`, `crates/micold-client/tests/features_window.rs`)
-- [ ] T002 [P] [US4] Write red full-screen tests: full screen at 640 then close gives `sidebar_hidden()` true; at 1000 with the sidebar expanded, close returns expanded, `hidden`/`width` unchanged (`crates/micold-client/tests/overview.rs`)
-- [ ] T003 [US2] Add `COMPACT_WIDTH = 720` and `window::State::compact()` (D1), with `window::resized` clearing `sidebar.compact_open` when no longer compact (`crates/micold-client/src/features/window.rs`)
-- [ ] T004 [US2] [US3] Add `sidebar::State.compact_open` and make `sidebar::toggled` flip it at compact width, else `hidden` (D2) (`crates/micold-client/src/features/sidebar.rs`)
-- [ ] T005 [US2] Add `app::State::sidebar_hidden()` and switch its two readers, the drawer `open` flag and `freed_width` (`crates/micold-client/src/app.rs`, `crates/micold-client/src/ui/mod.rs`); use `findReferences` on `sidebar.hidden` to confirm no other reader; T001 and T002 now pass
+- [x] T001 [US2] Write red reducer tests for the contract's table: resize 1000/640/720/719, first report 640 and 0x0, hide at 1000 then resize, toggle at 640, toggle/resize ordering, two independent states; assert `sidebar_hidden()` and that `hidden`/`width` are unchanged (`crates/micold-client/tests/sidebar_state.rs`, `crates/micold-client/tests/features_window.rs`)
+- [x] T002 [P] [US4] Write red full-screen tests: full screen at 640 then close gives `sidebar_hidden()` true; at 1000 with the sidebar expanded, close returns expanded, `hidden`/`width` unchanged (`crates/micold-client/tests/overview.rs`)
+- [x] T003 [US2] Add `COMPACT_WIDTH = 720` and `window::State::compact()` (D1), with `window::resized` clearing `sidebar.compact_open` when no longer compact (`crates/micold-client/src/features/window.rs`)
+- [x] T004 [US2] [US3] Add `sidebar::State.compact_open` and make `sidebar::toggled` flip it at compact width, else `hidden` (D2) (`crates/micold-client/src/features/sidebar.rs`)
+- [x] T005 [US2] Add `app::State::sidebar_hidden()` and switch its two readers, the drawer `open` flag and `freed_width` (`crates/micold-client/src/app.rs`, `crates/micold-client/src/ui/mod.rs`); use `findReferences` on `sidebar.hidden` to confirm no other reader; T001 and T002 now pass
 
 ## Phase 2: Other suites that set a 640 window (D10)
 
-- [ ] T006 [US2] Run `cargo test -p micold-client`, then `mise run gate`; list every suite broken by the strip (candidates in plan D10); fix each by setting the size to 720 or wider where it needs the sidebar, or `sidebar.compact_open = true` where it needs it at 640; the `review_tab_fits` gate failing on stale `#1474` entries is expected here and cleared by T008; record the list in `specs/1474-review-tab-fit/autopilot.md` (files: the failing suites under `crates/micold-client/tests/`)
+- [x] T006 [US2] Run `cargo test -p micold-client`, then `mise run gate`; list every suite broken by the strip (candidates in plan D10); fix each by setting the size to 720 or wider where it needs the sidebar, or `sidebar.compact_open = true` where it needs it at 640; the `review_tab_fits` gate failing on stale `#1474` entries is expected here and cleared by T008; record the list in `specs/1474-review-tab-fit/autopilot.md` (files: the failing suites under `crates/micold-client/tests/`)
 
 ## Phase 3: US2/US3 gate premise and docs
 
-- [ ] T007 [US2] Add the per-state premise to the review gate: at `MIN_WINDOW_SIZE` the sidebar drawer is the 32px strip and the main area (`REVIEW_*` ancestors) is 608px wide; at `WINDOW` the sidebar is expanded (D3, FR-011, SC-004) (`crates/micold-client/tests/gates/review_tab_fits.rs`)
-- [ ] T008 [US2] With the strip in place, delete each `#1474` entry in `SMALLEST_WINDOW` that no longer fires (the gate fails for a stale entry); re-file the stale-notice source-control entry under a new issue if it still fires (D8, FR-012) (`crates/micold-client/tests/gates/review_tab_fits.rs`)
-- [ ] T009 [P] [US2] Update the user guide: the narrow-window exception to "the sidebar always returns exactly as you left it", and the bullet in "Resizing and hiding the sidebar" (D9, FR-006) (`docs/user-guide/overview.md`, `docs/user-guide/worktrees-and-sessions.md`)
-- [ ] T010 [US2] Confirm FR-013: the `layout_snapshot` fixture at 1280x800 is unchanged with `cargo test -p micold-client --test layout_snapshot` (run only; `crates/micold-client/tests/fixtures/layout_snapshot.txt` unchanged)
+- [x] T007 [US2] Add the per-state premise to the review gate: at `MIN_WINDOW_SIZE` the sidebar drawer is the 32px strip and the main area (`REVIEW_*` ancestors) is 608px wide; at `WINDOW` the sidebar is expanded (D3, FR-011, SC-004) (`crates/micold-client/tests/gates/review_tab_fits.rs`)
+- [x] T008 [US2] With the strip in place, delete each `#1474` entry in `SMALLEST_WINDOW` that no longer fires (the gate fails for a stale entry); re-file the stale-notice source-control entry under a new issue if it still fires (D8, FR-012) (`crates/micold-client/tests/gates/review_tab_fits.rs`)
+- [x] T009 [P] [US2] Update the user guide: the narrow-window exception to "the sidebar always returns exactly as you left it", and the bullet in "Resizing and hiding the sidebar" (D9, FR-006) (`docs/user-guide/overview.md`, `docs/user-guide/worktrees-and-sessions.md`)
+- [x] T010 [US2] Confirm FR-013: the `layout_snapshot` fixture at 1280x800 is unchanged with `cargo test -p micold-client --test layout_snapshot` (run only; `crates/micold-client/tests/fixtures/layout_snapshot.txt` unchanged)
 
 **Checkpoint**: at 640 the sidebar is the strip, toggling works, 1280 is unchanged.
 

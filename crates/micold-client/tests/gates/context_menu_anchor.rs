@@ -114,6 +114,9 @@ pub(crate) fn with_worktrees(sessions: Vec<Session>, count: usize, size: iced::S
     let mut state = State {
         sidebar: sidebar::State {
             width: 260,
+            // These gates need the sidebar's rows at `MIN_WINDOW_SIZE`, where it is the strip
+            // unless the user expanded it (feature 1474).
+            compact_open: true,
             ..Default::default()
         },
 
