@@ -1067,6 +1067,17 @@ fn question_mark_opens_the_sheet_which_holds_the_keyboard_until_closed() {
     assert_eq!(review_holder(&app), Holder::Review);
 }
 
+/// #1464 FR-010: `?` closes the sheet `/shortcuts` opened over a Review view, in one press.
+#[test]
+fn question_mark_closes_the_sheet_the_composer_opened() {
+    let mut app = app_with(&["a.rs", "b.rs"]);
+    app.update_changes(Msg::ShortcutsShown);
+    assert!(shortcut_sheet(&app).is_some());
+    app.update_changes(Msg::KeyPressed(press('?')));
+    assert!(shortcut_sheet(&app).is_none(), "`?` closes it");
+    assert!(!app.changes.sheet_from_composer);
+}
+
 /// Back and Forward as the sheet ends with them (FR-014, contracts/ui.md U6). The labels are
 /// written out, not taken from the code under test.
 fn history_rows() -> [(String, &'static str); 2] {
