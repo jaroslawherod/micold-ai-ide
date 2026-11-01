@@ -40,6 +40,7 @@ pub mod server;
 pub mod settings;
 pub mod setup;
 pub mod singleton;
+pub mod startup_script;
 pub mod state;
 pub mod status_relay;
 pub mod structured;

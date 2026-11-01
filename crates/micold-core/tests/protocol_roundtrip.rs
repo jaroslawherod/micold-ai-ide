@@ -55,6 +55,12 @@ fn config_status() -> micold_core::protocol::messages::ConfigStatus {
         restart_needed: true,
         changed_restart_keys: vec!["daemon.log".into()],
         last_error: Some("daemon.toml:3:1: unknown key".into()),
+        startup: Some(micold_core::protocol::messages::StartupReport {
+            outcome: micold_core::protocol::messages::StartupOutcome::Failed,
+            reason: Some(micold_core::protocol::messages::StartupReason::Exit(1)),
+            tail: vec!["oops".into()],
+            finished_at_secs: 1_700_000_000,
+        }),
     }
 }
 
@@ -3060,4 +3066,38 @@ fn the_reviewed_marks_round_trip_on_both_wires_and_a_bad_change_id_fails_to_deco
             "{bad:?} decoded as a change id on postcard"
         );
     }
+}
+
+/// #1533: the start script's report rides `ConfigStatus.startup`, and a daemon without a
+/// `[startup]` table sends `None`.
+#[test]
+fn startup_report_round_trips_in_every_outcome_and_none_stays_none() {
+    use micold_core::protocol::messages::{StartupOutcome, StartupReason, StartupReport};
+    for (outcome, reason) in [
+        (StartupOutcome::Ok, None),
+        (StartupOutcome::Skipped, None),
+        (StartupOutcome::Warned, Some(StartupReason::Timeout)),
+        (StartupOutcome::Failed, Some(StartupReason::Signal(9))),
+        (
+            StartupOutcome::Failed,
+            Some(StartupReason::Spawn("no such shell".into())),
+        ),
+        (
+            StartupOutcome::Failed,
+            Some(StartupReason::FileMissing("/s.sh".into())),
+        ),
+    ] {
+        let report = StartupReport {
+            outcome,
+            reason,
+            tail: vec!["a".into(), String::new()],
+            finished_at_secs: 7,
+        };
+        json_roundtrip(&report);
+        postcard_roundtrip(&report);
+    }
+    let mut status = config_status();
+    status.startup = None;
+    json_roundtrip(&status);
+    postcard_roundtrip(&status);
 }

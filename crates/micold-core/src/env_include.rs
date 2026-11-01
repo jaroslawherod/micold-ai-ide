@@ -12,10 +12,11 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::process::{run_bounded, RunOutcome};
+use crate::process::{run_bounded, ExitKind, RunOutcome, Stream, StreamingChild};
 
 /// The hardcoded terminal-emulation pair every launch always carries (`main.rs`, pre-existing).
 const TERM_KEY: &str = "TERM";
@@ -493,6 +494,313 @@ pub fn snapshot_for(
     EnvIncludeSnapshot { vars, outcome }
 }
 
+// ---------------------------------------------------------------------------
+// The start script (#1533): a streaming variant of the include engine.
+// ---------------------------------------------------------------------------
+
+/// How a script run ended (#1533, contract startup-run S2 step 4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScriptEnd {
+    /// The shell exited with this status.
+    Exited(i32),
+    /// A signal ended it (Unix).
+    Signal(i32),
+    /// It was still running at the timeout; its whole process tree was killed.
+    TimedOut,
+    /// The shell could not be started, or the run could not be set up.
+    SpawnFailed(String),
+}
+
+/// What [`run_and_diff`] reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptRun {
+    pub end: ScriptEnd,
+    /// What the script exported: variables added or changed against the environment the script
+    /// started with. Empty unless it ended `Exited(0)`; a variable it unset is not reported.
+    pub exports: Vec<(OsString, OsString)>,
+}
+
+/// File names, beside the working directory, that carry the two `env -0` dumps so that stdout and
+/// stderr stay purely the script's output.
+const DUMP_FILE: &str = "startup-env.dump";
+const BEFORE_FILE: &str = "startup-env.before";
+
+/// Whether `name` can be assigned by a shell as a variable.
+fn is_shell_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Parse a NUL-delimited dump keeping the bytes of names and values as they are.
+fn parse_env_dump_os(bytes: &[u8]) -> HashMap<OsString, OsString> {
+    bytes
+        .split(|&b| b == 0)
+        .filter(|entry| !entry.is_empty())
+        .filter_map(|entry| {
+            let at = entry.iter().position(|&b| b == b'=')?;
+            Some((os_from_bytes(&entry[..at]), os_from_bytes(&entry[at + 1..])))
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+fn os_from_bytes(bytes: &[u8]) -> OsString {
+    std::os::unix::ffi::OsStringExt::from_vec(bytes.to_vec())
+}
+
+#[cfg(not(unix))]
+fn os_from_bytes(bytes: &[u8]) -> OsString {
+    OsString::from(String::from_utf8_lossy(bytes).into_owned())
+}
+
+/// Hands whole lines to a callback, per stream, as the bytes arrive; the unfinished line of a
+/// stream is handed over by [`Self::finish`].
+struct LineSplitter<F: FnMut(Stream, &str)> {
+    pending: [Vec<u8>; 2],
+    on_line: F,
+}
+
+impl<F: FnMut(Stream, &str)> LineSplitter<F> {
+    fn new(on_line: F) -> Self {
+        Self {
+            pending: [Vec::new(), Vec::new()],
+            on_line,
+        }
+    }
+
+    fn slot(stream: Stream) -> usize {
+        match stream {
+            Stream::Stdout => 0,
+            Stream::Stderr => 1,
+        }
+    }
+
+    fn push(&mut self, stream: Stream, chunk: &[u8]) {
+        let slot = Self::slot(stream);
+        self.pending[slot].extend_from_slice(chunk);
+        while let Some(at) = self.pending[slot].iter().position(|&b| b == b'\n') {
+            let rest = self.pending[slot].split_off(at + 1);
+            let mut line = std::mem::replace(&mut self.pending[slot], rest);
+            line.pop();
+            if line.last() == Some(&b'\r') {
+                line.pop();
+            }
+            (self.on_line)(stream, &String::from_utf8_lossy(&line));
+        }
+    }
+
+    fn finish(mut self) {
+        for (slot, stream) in [(0, Stream::Stdout), (1, Stream::Stderr)] {
+            if !self.pending[slot].is_empty() {
+                let line = std::mem::take(&mut self.pending[slot]);
+                (self.on_line)(stream, &String::from_utf8_lossy(&line));
+            }
+        }
+    }
+}
+
+/// The POSIX wrapper: turns each `extra_env` pair into an unexported shell variable (values reach
+/// the shell as data in its environment and are assigned without evaluation), dumps the
+/// environment, sources the script, and dumps it again from an `EXIT` trap so a script that calls
+/// `exit` is still diffed. `$1` is the script, `$2` the after dump, `$3` the before dump.
+#[cfg(not(windows))]
+const POSIX_WRAPPER: &str = r#"_micold_script=$1; _micold_dump=$2; _micold_before=$3; set --
+_micold_i=0
+while :; do
+  eval "_micold_n=\${MICOLD_XN$_micold_i-}"
+  [ -n "$_micold_n" ] || break
+  eval "_micold_v=\${MICOLD_XV$_micold_i-}"
+  eval "$_micold_n=\$_micold_v"
+  eval "unset MICOLD_XN$_micold_i MICOLD_XV$_micold_i"
+  _micold_i=$((_micold_i + 1))
+done
+unset _micold_i _micold_n _micold_v
+env -0 >"$_micold_before"
+trap '_micold_status=$?; env -0 >"$_micold_dump"; exit "$_micold_status"' EXIT
+. "$_micold_script""#;
+
+#[cfg(not(windows))]
+fn script_command(
+    script: &Path,
+    shell: &Path,
+    dump: &Path,
+    before: &Path,
+    extra_env: &[(String, String)],
+) -> Command {
+    let mut cmd = Command::new(shell);
+    remove_inherited_terminal_identity(&mut cmd, std::env::vars_os());
+    cmd.arg("-c")
+        .arg(POSIX_WRAPPER)
+        .arg("sh")
+        .arg(script)
+        .arg(dump)
+        .arg(before);
+    for (i, (name, value)) in extra_env.iter().enumerate() {
+        cmd.env(format!("MICOLD_XN{i}"), name)
+            .env(format!("MICOLD_XV{i}"), value);
+    }
+    cmd
+}
+
+/// The PowerShell wrapper: the pairs become PowerShell variables (not environment variables), the
+/// environment is written before and after dot-sourcing the script, and the script's exit status
+/// is the run's.
+#[cfg(windows)]
+const POWERSHELL_WRAPPER: &str = r#"
+$i = 0
+while ($true) {
+  $n = [Environment]::GetEnvironmentVariable("MICOLD_XN$i")
+  if (-not $n) { break }
+  Set-Variable -Name $n -Value ([Environment]::GetEnvironmentVariable("MICOLD_XV$i"))
+  Remove-Item "Env:MICOLD_XN$i", "Env:MICOLD_XV$i"
+  $i++
+}
+function Dump($path) {
+  $text = ([Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)`0" }) -join ''
+  [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))
+}
+Dump $env:MICOLD_RUN_BEFORE
+$global:LASTEXITCODE = 0
+try { . $env:MICOLD_RUN_SCRIPT } catch { [Console]::Error.WriteLine($_.Exception.Message); Dump $env:MICOLD_RUN_DUMP; exit 1 }
+$status = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+Dump $env:MICOLD_RUN_DUMP
+exit $status
+"#;
+
+#[cfg(windows)]
+fn script_command(
+    script: &Path,
+    shell: &Path,
+    dump: &Path,
+    before: &Path,
+    extra_env: &[(String, String)],
+) -> Command {
+    let mut cmd = Command::new(shell);
+    remove_inherited_terminal_identity(&mut cmd, std::env::vars_os());
+    crate::process::no_window(&mut cmd);
+    cmd.arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg(POWERSHELL_WRAPPER)
+        .env("MICOLD_RUN_SCRIPT", script)
+        .env("MICOLD_RUN_DUMP", dump)
+        .env("MICOLD_RUN_BEFORE", before);
+    for (i, (name, value)) in extra_env.iter().enumerate() {
+        cmd.env(format!("MICOLD_XN{i}"), name)
+            .env(format!("MICOLD_XV{i}"), value);
+    }
+    cmd
+}
+
+/// An empty file only its owner can use, for a dump to be written into.
+fn private_file(path: &Path) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path).map(drop)
+}
+
+/// Run `script` in `shell` from `cwd`, bounded by `timeout`, hand every line it prints to
+/// `on_line` as it prints it, and report what it exported (#1533, contract startup-run S2).
+///
+/// The script is sourced, so its `export`s land in the shell's environment, which is dumped to a
+/// file beside `cwd` before and after and diffed. `extra_env` pairs are visible to the script as
+/// plain, unexported variables: they reach the diff only if the script exports them, and their
+/// values are never evaluated (a name that is not a valid shell name is skipped). `timeout` ends
+/// the whole process tree; a child that keeps the output open does not extend the run.
+///
+/// Unlike [`resolve`], this does not run `bash -i`, and leaves stdout and stderr to the script alone.
+pub fn run_and_diff(
+    script: &Path,
+    shell: &Path,
+    cwd: &Path,
+    timeout: Duration,
+    extra_env: &[(String, String)],
+    on_line: impl FnMut(Stream, &str),
+) -> ScriptRun {
+    let failed = |message: String| ScriptRun {
+        end: ScriptEnd::SpawnFailed(message),
+        exports: Vec::new(),
+    };
+    let extra: Vec<(String, String)> = extra_env
+        .iter()
+        .filter(|(name, _)| is_shell_name(name))
+        .cloned()
+        .collect();
+    let script = match std::path::absolute(script) {
+        Ok(path) => path,
+        Err(e) => return failed(e.to_string()),
+    };
+    let dump = cwd.join(DUMP_FILE);
+    let before = cwd.join(BEFORE_FILE);
+    for file in [&dump, &before] {
+        if let Err(e) = private_file(file) {
+            return failed(format!("{}: {e}", file.display()));
+        }
+    }
+    let mut cmd = script_command(&script, shell, &dump, &before, &extra);
+    cmd.current_dir(cwd);
+    let child = match StreamingChild::spawn(cmd) {
+        Ok(child) => child,
+        Err(e) => {
+            let _ = std::fs::remove_file(&dump);
+            let _ = std::fs::remove_file(&before);
+            return failed(format!("{}: {e}", shell.display()));
+        }
+    };
+
+    // The watchdog: `done` is dropped when the run ends, which wakes it without a timeout.
+    let terminator = child.terminator();
+    let fired = Arc::new(AtomicBool::new(false));
+    let (done, stopped) = std::sync::mpsc::channel::<()>();
+    let watchdog = {
+        let fired = Arc::clone(&fired);
+        std::thread::spawn(move || {
+            if matches!(
+                stopped.recv_timeout(timeout),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                fired.store(true, Ordering::SeqCst);
+                terminator.terminate();
+            }
+        })
+    };
+    let mut lines = LineSplitter::new(on_line);
+    let kind = child.run(|stream, chunk| lines.push(stream, chunk));
+    lines.finish();
+    drop(done);
+    let _ = watchdog.join();
+
+    let end = if fired.load(Ordering::SeqCst) {
+        ScriptEnd::TimedOut
+    } else {
+        match kind {
+            ExitKind::Code(code) => ScriptEnd::Exited(code),
+            ExitKind::Signal(signal) => ScriptEnd::Signal(signal),
+            ExitKind::WaitFailed(message) => ScriptEnd::SpawnFailed(message),
+        }
+    };
+    let exports = if end == ScriptEnd::Exited(0) {
+        let base = parse_env_dump_os(&std::fs::read(&before).unwrap_or_default());
+        let after = parse_env_dump_os(&std::fs::read(&dump).unwrap_or_default());
+        let mut exports: Vec<(OsString, OsString)> = after
+            .into_iter()
+            .filter(|(k, v)| base.get(k) != Some(v))
+            .collect();
+        exports.sort();
+        exports
+    } else {
+        Vec::new()
+    };
+    let _ = std::fs::remove_file(&dump);
+    let _ = std::fs::remove_file(&before);
+    ScriptRun { end, exports }
+}
+
 #[cfg(test)]
 mod terminal_identity_tests {
     use super::*;
@@ -624,6 +932,184 @@ mod terminal_identity_tests {
                 "the {name} include shell removes the identity variables it inherits, and only \
                  those, so a script that sets one is seen to add it (contract §3)"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod run_and_diff_tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn shell() -> PathBuf {
+        PathBuf::from(if cfg!(windows) {
+            "powershell.exe"
+        } else {
+            "/bin/sh"
+        })
+    }
+
+    fn run(
+        body: &str,
+        timeout: Duration,
+        extra: &[(String, String)],
+    ) -> (ScriptRun, Vec<(Stream, String)>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join(if cfg!(windows) { "s.ps1" } else { "s.sh" });
+        std::fs::write(&script, body).unwrap();
+        let mut seen = Vec::new();
+        let result = run_and_diff(&script, &shell(), dir.path(), timeout, extra, |s, l| {
+            seen.push((s, l.to_string()))
+        });
+        (result, seen, dir)
+    }
+
+    fn export_of(run: &ScriptRun, name: &str) -> Option<String> {
+        run.exports
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.to_string_lossy().into_owned())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_powershell_script_s_env_assignment_is_captured_and_the_timeout_ends_the_job() {
+        let (result, _, _dir) = run("$env:FOO = 'bar'", Duration::from_secs(30), &[]);
+        assert_eq!(result.end, ScriptEnd::Exited(0));
+        assert_eq!(export_of(&result, "FOO").as_deref(), Some("bar"));
+        let started = Instant::now();
+        let (result, _, _dir) = run("Start-Sleep -Seconds 30", Duration::from_secs(1), &[]);
+        assert_eq!(result.end, ScriptEnd::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(not(windows))]
+    mod posix {
+        use super::*;
+
+        fn pair(n: &str, v: &str) -> (String, String) {
+            (n.to_string(), v.to_string())
+        }
+
+        #[test]
+        fn an_explicit_export_is_captured_and_an_unexported_assignment_is_not() {
+            let (r, _, _d) = run(
+                "export FOO=bar\nHIDDEN=1\n",
+                Duration::from_secs(30),
+                &[],
+            );
+            assert_eq!(r.end, ScriptEnd::Exited(0));
+            assert_eq!(export_of(&r, "FOO").as_deref(), Some("bar"));
+            assert_eq!(export_of(&r, "HIDDEN"), None);
+        }
+
+        #[test]
+        fn a_value_with_a_newline_is_captured_intact() {
+            let (r, _, _d) = run(
+                "export MULTI=\"one\ntwo\"\n",
+                Duration::from_secs(30),
+                &[],
+            );
+            assert_eq!(export_of(&r, "MULTI").as_deref(), Some("one\ntwo"));
+        }
+
+        #[test]
+        fn a_script_that_calls_exit_is_still_diffed_and_its_status_reported() {
+            let (r, _, _d) = run("export A=1\nexit 3\n", Duration::from_secs(30), &[]);
+            assert_eq!(r.end, ScriptEnd::Exited(3));
+            assert!(r.exports.is_empty(), "a failed run exports nothing");
+        }
+
+        #[test]
+        fn extra_env_is_readable_by_the_script_but_not_exported_unless_it_says_so() {
+            let extra = [pair("TOKEN", "x"), pair("OTHER", "y")];
+            let (r, seen, _d) = run(
+                "echo \"token=$TOKEN\"\nexport OTHER\n",
+                Duration::from_secs(30),
+                &extra,
+            );
+            assert_eq!(r.end, ScriptEnd::Exited(0));
+            assert!(seen.contains(&(Stream::Stdout, "token=x".to_string())));
+            assert_eq!(export_of(&r, "TOKEN"), None, "read-only use leaks nothing");
+            assert_eq!(export_of(&r, "OTHER").as_deref(), Some("y"));
+            assert_eq!(export_of(&r, "MICOLD_XN0"), None);
+        }
+
+        #[test]
+        fn extra_env_values_are_literal() {
+            let value = "$(touch pwned) `id` \"q\" 'q' # not a comment\n\nlast";
+            let (r, _, d) = run("export V\n", Duration::from_secs(30), &[pair("V", value)]);
+            assert_eq!(export_of(&r, "V").as_deref(), Some(value));
+            assert!(!d.path().join("pwned").exists());
+        }
+
+        #[test]
+        fn a_name_that_is_not_a_shell_name_is_skipped() {
+            let extra = [pair("A;touch pwned", "x"), pair("OK", "y")];
+            let (r, _, d) = run("export OK\n", Duration::from_secs(30), &extra);
+            assert_eq!(export_of(&r, "OK").as_deref(), Some("y"));
+            assert!(!d.path().join("pwned").exists());
+        }
+
+        #[test]
+        fn the_timeout_ends_the_process_group_and_a_backgrounded_child_does_not_extend_it() {
+            let started = Instant::now();
+            let (r, _, _d) = run("sleep 30 &\nsleep 30\n", Duration::from_secs(1), &[]);
+            assert_eq!(r.end, ScriptEnd::TimedOut);
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "took {:?}",
+                started.elapsed()
+            );
+            let started = Instant::now();
+            let (r, _, _d) = run("sleep 30 &\nexport A=1\n", Duration::from_secs(20), &[]);
+            assert_eq!(r.end, ScriptEnd::Exited(0));
+            assert!(started.elapsed() < Duration::from_secs(10));
+        }
+
+        #[test]
+        fn output_is_streamed_line_by_line_with_its_stream() {
+            let (r, seen, _d) = run(
+                "echo one\necho two >&2\nprintf partial\n",
+                Duration::from_secs(30),
+                &[],
+            );
+            assert_eq!(r.end, ScriptEnd::Exited(0));
+            assert!(seen.contains(&(Stream::Stdout, "one".to_string())));
+            assert!(seen.contains(&(Stream::Stderr, "two".to_string())));
+            assert!(seen.contains(&(Stream::Stdout, "partial".to_string())));
+            assert!(seen.iter().all(|(_, l)| !l.contains("MICOLD")));
+        }
+
+        #[test]
+        fn the_dump_files_are_removed_and_a_missing_shell_is_reported() {
+            let (_, _, d) = run("true\n", Duration::from_secs(30), &[]);
+            assert!(!d.path().join(DUMP_FILE).exists());
+            assert!(!d.path().join(BEFORE_FILE).exists());
+            let dir = tempfile::tempdir().unwrap();
+            let r = run_and_diff(
+                Path::new("/nonexistent"),
+                Path::new("/no/such/shell"),
+                dir.path(),
+                Duration::from_secs(5),
+                &[],
+                |_, _| {},
+            );
+            assert!(matches!(r.end, ScriptEnd::SpawnFailed(_)));
+        }
+
+        #[test]
+        fn a_script_that_does_not_exist_ends_nonzero() {
+            let dir = tempfile::tempdir().unwrap();
+            let r = run_and_diff(
+                &dir.path().join("absent.sh"),
+                &shell(),
+                dir.path(),
+                Duration::from_secs(30),
+                &[],
+                |_, _| {},
+            );
+            assert!(matches!(r.end, ScriptEnd::Exited(c) if c != 0), "{:?}", r.end);
         }
     }
 }

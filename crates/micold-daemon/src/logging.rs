@@ -246,6 +246,26 @@ pub fn default_log_path() -> Option<PathBuf> {
     micold_core::paths::data_local_dir().map(|dir| dir.join("micold-daemon.log"))
 }
 
+/// Appends `line` to the default log file, creating it and its folder. Best effort: a process that
+/// cannot write its log has nowhere better to report that. Used before the subscriber exists (a
+/// fatal start, the start script's output).
+pub fn append_line(line: &str) {
+    use std::io::Write;
+    let Some(path) = default_log_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 fn base_filter() -> EnvFilter {
     crate::settings::current()
         .log

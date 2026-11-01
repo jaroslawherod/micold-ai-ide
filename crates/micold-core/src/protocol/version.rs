@@ -262,7 +262,10 @@
 ///
 /// And 74 → 75 for #1524's `config` diagnostic section: `ClientMsg::ConfigRequest`,
 /// `DaemonMsg::Config` and `DaemonMsg::ConfigChanged`, with `ConfigStatus`.
-pub const PROTOCOL_VERSION: u32 = 75;
+///
+/// And 75 → 76 for #1533's start script: `ConfigStatus.startup` and `StartupReport`, which shift
+/// the postcard layout `ConfigStatus` carries.
+pub const PROTOCOL_VERSION: u32 = 76;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

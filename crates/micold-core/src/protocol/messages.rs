@@ -2461,6 +2461,49 @@ pub struct ConfigStatus {
     pub changed_restart_keys: Vec<String>,
     /// Why the last change was not applied (the previous configuration is still in force).
     pub last_error: Option<String>,
+    /// How this start's start script went (#1533); `None` when the file has no `[startup]` table.
+    pub startup: Option<StartupReport>,
+}
+
+/// How a run of the start script ended (#1533).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StartupOutcome {
+    /// It ran and exited 0.
+    Ok,
+    /// `run = "once_per_container"` and nothing it reads changed since the last success.
+    Skipped,
+    /// It failed and `on_failure = "warn"`: the daemon serves.
+    Warned,
+    /// It failed and `on_failure = "refuse"`.
+    Failed,
+}
+
+/// Why a run of the start script counts as a failure (#1533).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StartupReason {
+    /// The script ended with this non-zero status.
+    Exit(i32),
+    /// A signal ended it.
+    Signal(i32),
+    /// `timeout_secs` ran out.
+    Timeout,
+    /// The shell could not be started.
+    Spawn(String),
+    /// `script_file` or `env_file` could not be read.
+    FileMissing(String),
+}
+
+/// The start script's result as the daemon wrote it to `startup-result.json` and the application
+/// shows it (#1533, data-model *Startup result*).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartupReport {
+    pub outcome: StartupOutcome,
+    /// `None` for `Ok` and `Skipped`.
+    pub reason: Option<StartupReason>,
+    /// The end of the script's output: at most 200 lines of at most 4096 bytes, lossy UTF-8, no NUL.
+    pub tail: Vec<String>,
+    /// Unix seconds when the run ended; the application rejects a report older than its spawn.
+    pub finished_at_secs: u64,
 }
 
 /// A single log entry surfaced to the diagnostics UI. MUST NOT contain terminal content or user
