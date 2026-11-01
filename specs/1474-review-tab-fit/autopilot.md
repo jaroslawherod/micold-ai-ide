@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: clarify
-- **Next step**: Clarify unit (spec has no NEEDS CLARIFICATION markers; threshold 720 is D2), then plan. Plan must cover: effective-state reducer, layout harness window size (tests/support/layout.rs, covered_states.rs), diff header, placeholder, drawer, tree filter placeholder/row, docs overview.md:64 and worktrees-and-sessions.md, delete #1474 entries. Old bug-flow ledger findings: specs/quick/2026-11-01-1474-review-tab-squeezed-parts.autopilot.md (diff pane 66px at 640 with sidebar; tree filter overflowed when file column was 120)
+- **Phase**: plan
+- **Next step**: Plan unit. Clarify round 1: no critical ambiguities (CLEAN). Plan must cover: effective-state reducer, layout harness window size (tests/support/layout.rs, covered_states.rs), diff header, placeholder, drawer, tree filter placeholder/row, docs overview.md:64 and worktrees-and-sessions.md, delete #1474 entries. Old bug-flow findings: specs/quick/2026-11-01-1474-review-tab-squeezed-parts.autopilot.md
 
 ## Pull requests
 
