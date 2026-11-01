@@ -202,27 +202,19 @@ fn hovering(m: &Message) -> Option<bool> {
 /// drag leaving or by the drop, so the flag the cue reads is never left set.
 #[test]
 fn the_pane_view_reports_a_hover_start_and_its_end_by_leave_or_drop() {
-    let hovers = |event| -> Vec<bool> {
-        publish_for(&[event])
-            .iter()
-            .filter_map(hovering)
-            .collect::<Vec<_>>()
+    let hovered = |p: &str| Event::Window(window::Event::FileHovered(PathBuf::from(p)));
+    let left = || Event::Window(window::Event::FilesHoveredLeft);
+    let dropped = |p: &str| Event::Window(window::Event::FileDropped(PathBuf::from(p)));
+    let hovers = |events: &[Event]| -> Vec<bool> {
+        publish_for(events).iter().filter_map(hovering).collect()
     };
+    assert_eq!(hovers(&[hovered("/a")]), [true]);
+    assert_eq!(hovers(&[hovered("/a"), left()]), [true, false]);
+    assert_eq!(hovers(&[hovered("/a"), dropped("/a")]), [true, false]);
+    // One event per dragged file, one message per change.
     assert_eq!(
-        hovers(Event::Window(window::Event::FileHovered(PathBuf::from(
-            "/a"
-        )))),
-        [true]
-    );
-    assert_eq!(
-        hovers(Event::Window(window::Event::FilesHoveredLeft)),
-        [false]
-    );
-    assert_eq!(
-        hovers(Event::Window(window::Event::FileDropped(PathBuf::from(
-            "/a"
-        )))),
-        [false]
+        hovers(&[hovered("/a"), hovered("/b"), dropped("/a"), dropped("/b")]),
+        [true, false]
     );
 }
 

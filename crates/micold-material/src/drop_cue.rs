@@ -20,21 +20,36 @@ pub const OUTLINE: f32 = 2.0;
 /// surface, little enough to read the transcript through it.
 pub const TINT: f32 = 0.12;
 
-/// `content` with the drop-target cue over it, the size `content` has without it.
-pub fn drop_cue<'a, M: 'a>(content: impl Into<Element<'a, M>>, roles: Roles) -> Element<'a, M> {
+/// The overlay's look: the accent outline and tint while `active`, nothing while not.
+pub fn overlay_style(roles: Roles, active: bool) -> container::Style {
+    if !active {
+        return container::Style::default();
+    }
     let accent = crate::style::color(roles.primary);
+    container::Style {
+        background: Some(Background::Color(iced::Color { a: TINT, ..accent })),
+        border: Border {
+            color: accent,
+            width: OUTLINE,
+            radius: shape::SMALL.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// `content` with the drop-target cue over it while `active`, the size `content` has without it.
+///
+/// The overlay is in the tree whether or not the cue shows, so the content's widget state (a
+/// scroll offset, a focused editor) survives the cue appearing and going.
+pub fn drop_cue<'a, M: 'a>(
+    content: impl Into<Element<'a, M>>,
+    roles: Roles,
+    active: bool,
+) -> Element<'a, M> {
     let overlay = container(Space::new())
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(iced::Color { a: TINT, ..accent })),
-            border: Border {
-                color: accent,
-                width: OUTLINE,
-                radius: shape::SMALL.into(),
-            },
-            ..container::Style::default()
-        });
+        .style(move |_: &iced::Theme| overlay_style(roles, active));
     stack![content.into(), overlay].into()
 }
 
@@ -54,25 +69,46 @@ mod tests {
                 .height(Length::Fixed(80.0))
         };
         let bare = size_of::<()>(child().into(), room);
-        let cued = size_of::<()>(drop_cue(child(), roles()), room);
-        assert_eq!(bare, cued);
-        let fill = size_of::<()>(
-            drop_cue(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-                roles(),
-            ),
-            room,
-        );
-        assert_eq!(fill, room);
+        for active in [false, true] {
+            assert_eq!(
+                bare,
+                size_of::<()>(drop_cue(child(), roles(), active), room)
+            );
+        }
+        let fill = || {
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+        };
+        assert_eq!(size_of::<()>(drop_cue(fill(), roles(), true), room), room);
     }
 
-    /// The outline and the tint are the accent, so the cue is seen against the surface.
+    /// The cue is the accent as outline and as a faint tint; off, it draws nothing.
     #[test]
-    fn the_accent_differs_from_the_surface_it_tints() {
+    fn active_it_outlines_and_tints_in_the_accent_and_idle_it_draws_nothing() {
         let r = roles();
-        assert_ne!(r.primary, r.surface);
-        assert!(TINT > 0.0 && TINT < 1.0);
+        let accent = crate::style::color(r.primary);
+        let on = overlay_style(r, true);
+        assert_eq!(on.border.color, accent);
+        assert_eq!(on.border.width, OUTLINE);
+        assert_eq!(
+            on.background,
+            Some(Background::Color(iced::Color { a: TINT, ..accent }))
+        );
+        let off = overlay_style(r, false);
+        assert_eq!(off.background, None);
+        assert_eq!(off.border.width, 0.0);
+    }
+
+    /// Same widget tree on and off, so the content below keeps its state when the cue comes.
+    #[test]
+    fn the_widget_tree_has_the_same_shape_with_the_cue_on_and_off() {
+        use iced::advanced::widget::Tree;
+        let shape = |active| {
+            let element: Element<'_, ()> = drop_cue(Space::new(), roles(), active);
+            let tree = Tree::new(element.as_widget());
+            (tree.tag, tree.children.len())
+        };
+        assert_eq!(shape(false), shape(true));
     }
 }
