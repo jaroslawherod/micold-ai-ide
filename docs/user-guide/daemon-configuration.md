@@ -20,7 +20,7 @@ yet; with it, a missing script, settings file or client-token file is an error, 
 readable by others is a warning on a host or SSH daemon and an error in a container or pod.
 
 Settings renders a file for each daemon from the settings you enter for it (the data directory,
-clone root and client token file in the daemon's form, and the container image and the
+clone root and client token file in the form of an existing daemon, and the container image and the
 survive-logout choice), with the same key order every time, and checks it with the same check as
 `micold-daemon config check` when you save the daemon. When the check finds an error, Settings →
 Daemons shows each error under that daemon's row, and a file with an error is not used; fix the

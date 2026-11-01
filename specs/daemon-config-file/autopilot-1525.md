@@ -44,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B | 1 | d1f11923:84c91cfc | CLEAN (2 MINOR accepted) |
 | M2 review A (code-review high) | 1 | working tree on 22c4353f5 | 9 findings; 1 fixed (Ssh arm untested), path quoting cases and docs wording fixed, rest declined |
 | M2 review B | 1 | 46828eb8b47aa9e1fa97d24b4a4e4276814cb307:754b42e19131b49bb394e75091172bea9b260db7 | CHANGES: 2 MAJOR (docs, T119 wording), 2 MINOR; all fixed |
+| M2 review A (code-review high, D6 diff) | 2 | a0cb239a9628b026155438aa5050fed3b91f3ef2:a5d354f09bdbda4dae45a52ffb1579145a5ec3d6 | 9 findings; F1 real (from_entry used FileSettings::default(): fixed to entry.file), idle_stop precedence fixed (survive-logout wins), rest declined |
+| M2 review B (D6 diff) | 2 | same | CHANGES: 1 BLOCKER = same F1 (fixed); Verify not observed due to lock wait, rerun in scoped gate; 1 MINOR (UI test counts widgets) accepted |
 | Tasks 1525 | 1 | b494679f:b6f32a1a | CHANGES: 2 MAJOR (no failing test for validate/UI: added T022a; T022 had no file: given one), 2 MINOR (Verify made runnable; F4 accepted, rebase); test-task additions, no further round |
 
 ## Declined review findings
@@ -51,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2 A: `expected()` copies `from_entry`'s body: it is the independent assertion I4-1 asks for, and it must change with the placeholders (Issues 5-7).
 - M2 A: tree-size UI test and key-order test on Host only: accepted as proportionate (layout/tree checks; goldens cover other kinds' bytes).
 - M2 A: `read_back` belongs in the product as `from_config`: no caller needs it before Issues 5-7.
+
+- M2 A: file-only edit skips pending-edit/drift prompts: no delivery exists before Issues 5-7, nothing consumes the file yet.
+- M2 A: client_token_file override on sandbox kinds, idle_stop/projects without form fields, ProjectSetting move to core: D6 specified exactly this minimal slice.
 
 ## Handover
 

@@ -408,27 +408,34 @@ pub(crate) fn form<'a>(
     if let Some(message) = error_of(state, "runtime") {
         fields = fields.push(caution(message, roles));
     }
-    fields = fields
-        .push(
-            TextField::new("Default", &draft.data_dir, roles)
-                .label("Data directory")
-                .supporting(
-                    "Absolute path on the daemon's machine; written to its configuration file",
-                )
-                .on_input(|v| Message::Daemons(DaemonsMsg::DataDirEdited(v))),
-        )
-        .push(
-            TextField::new("Not set", &draft.clone_root, roles)
-                .label("Clone root")
-                .supporting("Absolute path projects with a remote are cloned under")
-                .on_input(|v| Message::Daemons(DaemonsMsg::CloneRootEdited(v))),
-        )
-        .push(
-            TextField::new("Default", &draft.client_token_file, roles)
-                .label("Client token file")
-                .supporting("Absolute path of the file holding the client token")
-                .on_input(|v| Message::Daemons(DaemonsMsg::ClientTokenFileEdited(v))),
-        );
+    // Only on an existing daemon: three more fields push the Kubernetes add form past one window
+    // height (daemon_form_fits), and a new daemon starts from the defaults.
+    if draft.editing.is_some() {
+        fields = fields
+            .push(
+                TextField::new("Default", &draft.data_dir, roles)
+                    .label("Data directory")
+                    .track_focus(FieldId::DaemonDataDir, focused)
+                    .supporting(
+                        "Absolute path on the daemon's machine; written to its configuration file",
+                    )
+                    .on_input(|v| Message::Daemons(DaemonsMsg::DataDirEdited(v))),
+            )
+            .push(
+                TextField::new("Not set", &draft.clone_root, roles)
+                    .label("Clone root")
+                    .track_focus(FieldId::DaemonCloneRoot, focused)
+                    .supporting("Absolute path projects with a remote are cloned under")
+                    .on_input(|v| Message::Daemons(DaemonsMsg::CloneRootEdited(v))),
+            )
+            .push(
+                TextField::new("Default", &draft.client_token_file, roles)
+                    .label("Client token file")
+                    .track_focus(FieldId::DaemonClientTokenFile, focused)
+                    .supporting("Absolute path of the file holding the client token")
+                    .on_input(|v| Message::Daemons(DaemonsMsg::ClientTokenFileEdited(v))),
+            );
+    }
     let open = |section| state.section_open(section);
     let sections: Vec<Element<'a, Message>> = match draft.runtime {
         DraftRuntime::Container => {

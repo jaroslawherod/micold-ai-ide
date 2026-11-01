@@ -97,7 +97,7 @@ impl DaemonSettings {
             _ => return None,
         };
         let sandbox = matches!(kind, Kind::Container | Kind::Kubernetes);
-        let file = &micold_core::daemons::FileSettings::default();
+        let file = &entry.file;
         let (listen, token_default) = if sandbox {
             (
                 Listen::Tcp(SANDBOX_LISTEN),
@@ -120,7 +120,7 @@ impl DaemonSettings {
         let settings = Self {
             data_dir: file.data_dir.clone(),
             image,
-            idle_stop: file.idle_stop.or(survives.then_some(IdleStopSetting::Off)),
+            idle_stop: survives.then_some(IdleStopSetting::Off).or(file.idle_stop),
             client_token_file: file.client_token_file.clone().or(token_default),
             clone_root: file.clone_root.clone(),
             projects: file.projects.clone(),
