@@ -8,20 +8,13 @@
 [build]
 jobs = 4
 
-# One target directory for the main checkout and every worktree beneath it,
-# instead of a ~30 GB target/ per branch. A relative path here resolves against
-# *this config file's* directory, and cargo merges configs from every ancestor
-# directory, so a worktree under .claude/worktrees/ inherits this same absolute
-# path -- including when it is driven by a bare `cargo`, which never sees
-# mise.toml or scripts/build-lock.sh.
-#
-# This is also the load-bearing half of the build serialisation: cargo takes an
-# exclusive lock on the target directory ("Blocking waiting for file lock on
-# build directory"), so sharing one directory means two worktrees cannot compile
-# at the same time no matter how the build was started.
-#
-# A worktree created *outside* the main checkout would not inherit this config;
-# scripts/build-lock.sh exports the same path for that case.
+# One target directory per checkout. A relative path here resolves against *this config file's*
+# directory, and the file is checked in, so a worktree resolves it to a target-shared/ beside the
+# worktree -- NOT the main checkout's. Only scripts/build-lock.sh (every `mise run` task) exports
+# CARGO_TARGET_DIR to the one shared directory and takes the repo-wide build lock; a bare `cargo`
+# in a worktree builds into a private copy and bypasses the lock. The PreToolUse hook
+# scripts/bare-cargo-hook.sh refuses that for agents; humans: use `mise run`.
+# See docs/development/shared-build.md.
 target-dir = "target-shared"
 
 [env]
