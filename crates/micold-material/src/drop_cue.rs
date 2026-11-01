@@ -7,7 +7,7 @@
 //! reads the layout sees the same rectangle with or without the cue. Where the cue shows is the
 //! caller's decision; this only draws it.
 //!
-//! Form: `drop_cue(content, roles)`.
+//! Form: `drop_cue(content, roles, active)`.
 
 use iced::widget::{container, stack, Space};
 use iced::{Background, Border, Element, Length};
