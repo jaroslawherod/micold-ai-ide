@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M4 implemented, unverified (handover)
-- **Next step**: M4 gate, reviews, PR
+- **Phase**: M4 verified, gated, reviewed; PR pending
+- **Next step**: full gate, PR, then M5
 
 ## Pull requests
 
@@ -63,11 +63,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 (T024-T033) is implemented and ticked in tasks.md, committed locally (not pushed, no PR), NOT yet built or tested: every build waited 40+ min on the shared build lock behind other worktrees' gates. Review A (high, subagent, snapshot 6a754a32:be05cf18) ran on the uncommitted diff: CLEAN, one MINOR (the Review `?` toggle in keys.rs ToggleSheet does not clear `State.shortcuts_open`; optional). Next steps: (1) run Verify: `cargo test -p micold-core --test structured_commands`, `-p micold-daemon`, `-p micold-client --test features_composer --test review_keys --test features_command_palette --test overlay_registry`, `-p micold-client --lib`; fix compile errors and test fallout (SheetModel is now `groups` + `rows_of(title)`; `sheet_model(single_keys, review)`; covered_states / showcase / catalogue posed-name checks may need the new "shortcut sheet, composer only" pose); (2) scoped gate, review B (sonnet), visual pass of the sheet showcase poses; (3) full gate `mise run gate`; (4) PR `feat(1464): /shortcuts opens the shortcut sheet with the attach chord (#1464)`. Daemon tests were added to crates/micold-daemon/tests/structured_commands.rs and structured_switch.rs (not state.rs).
+None.
 
 ## Open escalation
 
 None.
+
+## M4 notes
+
+Review A (high): CLEAN, one MINOR fixed (`?` closes a sheet `/shortcuts` opened). Review B (sonnet, snapshot 1d558f52:ddaf10cb): CLEAN; MINOR: code names differ from T026/T029/T030 wording and plan.md (`State.shortcuts_open` / `app::Message::ShortcutsToggled`): the flag lives in `changes::State.sheet_from_composer` and the message is `changes::Msg::ShortcutsShown`; behaviour identical, deviation accepted. Palette test updated for `/shortcuts` sorting last among app commands.
 
 ## Follow-ups not done
 
