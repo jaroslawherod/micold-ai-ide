@@ -99,6 +99,11 @@ impl Tail {
 /// sets them.
 pub fn exportable(name: &OsStr, value: &OsStr, ctx: &RunContext<'_>) -> bool {
     let key = name.to_string_lossy();
+    // `set_var` panics on an empty name, one containing `=`, or a NUL in name or value.
+    let bad = |s: &OsStr| s.to_string_lossy().contains(['=', '\0']);
+    if key.is_empty() || bad(name) || value.to_string_lossy().contains('\0') {
+        return false;
+    }
     if key.starts_with("MICOLD_") || key == "TERM" || key == "COLORTERM" {
         return false;
     }
@@ -246,6 +251,16 @@ mod tests {
 
     fn keeps(name: &str, value: &str, c: &RunContext<'_>) -> bool {
         exportable(OsStr::new(name), OsStr::new(value), c)
+    }
+
+    #[test]
+    fn names_and_values_set_var_would_panic_on_are_not_exported() {
+        let c = ctx(false, false);
+        assert!(!keeps("", "x", &c));
+        assert!(!keeps("A=B", "x", &c));
+        assert!(!keeps("A\0B", "x", &c));
+        assert!(!keeps("A", "x\0y", &c));
+        assert!(keeps("A", "x", &c));
     }
 
     #[test]
