@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1534
 - **Worktree branch**: feat/1534_projects-and-clone-root-from-the-configuration
 - **Started**: 2026-11-01
-- **Phase**: milestone M1 (gate and reviews)
+- **Phase**: milestone M1 (review B re-review, then PR)
 - **Next step**: milestone M1 after the design PR merges
 
 ## Pull requests
@@ -29,6 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Write a new spec for #1534? | No: reuse `specs/daemon-config-file/` (FR-014, contract #projects, tasks T078–T080 exist); per-issue ledger as for #1524/#1525 | agent-resolved | specs/daemon-config-file/autopilot-1525.md |
+| D2 | milestone | T080a (feed runtime projects into the next rendered file)? | Deferred: moved in tasks.md to just after T027 (Issue 5, which writes the daemon file); criterion 2 met at rendering level via `add_runtime_project` + golden | agent-resolved | specs/daemon-config-file/tasks.md |
+| D3 | gate | Wait on the build lock for the full gate? | No: push now, CI validates (no `autopilot-gate-ok`); fmt checked locally; red CI goes to red-ci | user | escalation answer |
 
 ## Review rounds
 
@@ -43,7 +45,7 @@ None.
 
 ## Handover
 
-M1 is committed locally (e07a105a5), not pushed, no PR. Done: T078, T078a, T079, T080 code/tests/docs; review A (all real findings fixed or recorded as follow-ups); review B (F1 cycle-log added, F2 handled by narrowing T079 and adding unticked T080a; F3 needs test output). NOT done: no cargo test/clippy has ever run on this tree (full gate sat in the build-lock queue behind other worktrees for over an hour; fmt is clean). Next: run `mise run gate` when the lock frees (or scoped gate), fix any compile/test failures (config_projects.rs, daemon_config_render.rs are unrun), then push and open the PR (title ends `(#1534)`, body ends `Refs #1534`). The auto-mode classifier refused writing the autopilot-gate-ok marker to skip the local gate, so a green `mise run gate` is required before push. Note T080a (unticked) leaves M1 not fully complete: decide with the orchestrator whether to move it to a later milestone.
+None.
 
 ## Open escalation
 

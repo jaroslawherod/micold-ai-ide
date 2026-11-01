@@ -98,6 +98,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T025 [P] [US1] Failing test in `crates/micold-client/tests/daemon_config_delivery_host.rs`: before `spawn_detached_daemon` (`crates/micold-core/src/spawn.rs`) the file is written to `<data_dir>/daemon.toml` with mode `0600` and the daemon is started with no `MICOLD_*` env
 - [ ] T026 [P] [US1] Failing test for SSH: the provisioning copy step (`crates/micold-core/src/provision/mod.rs`) uploads `~/.micold/remote/daemon.toml` and the named secrets to `~/.micold/remote/secrets/` (`0700`/`0600`); a rotated token re-copies only that file
 - [ ] T027 [US1] Implement host delivery in `crates/micold-client/src/daemon.rs` (write-if-changed)
+- [ ] T080a [US3] Feed `DaemonSettings::add_runtime_project` from the `ProjectAdd` the app sees, once the app writes the daemon file (nothing writes it yet); with a test through that path (moved from Issue 13: it needs the delivery of T027)
 - [ ] T028 [US1] Implement SSH delivery in `crates/micold-core/src/provision/mod.rs` and `crates/micold-core/src/ssh/argv.rs`; drop the env list for user hosts (`provision/mod.rs:142-153`)
 - [ ] T029 [US1] Update `docs/user-guide/remote-daemons.md` (where the file lives on the SSH host, how to edit it by hand)
 
@@ -209,7 +210,6 @@ Research D12.
 - [x] T078 [P] [US3] Failing tests in `crates/micold-daemon/tests/config_projects.rs`: `[[projects]]` are served at start; an absent `path` with `remote` and `clone_root` is cloned (`crates/micold-daemon/src/repo_clone.rs`)
 - [x] T078a [P] [US3] Failing test in `crates/micold-client/tests/daemon_config_render.rs`: a Settings value that gains a project added at runtime (`ProjectAdd`) renders it as a `[[projects]]` entry in the next rendered file, against a new golden
 - [x] T079 [US3] Implement in `crates/micold-daemon/src/state.rs` and `repo_clone.rs`; render `[[projects]]` from Settings in `crates/micold-client/src/daemon_config_render.rs`, with `DaemonSettings::add_runtime_project` for a project added at runtime (feeding it from `ProjectAdd` is T080a)
-- [ ] T080a [US3] Feed `DaemonSettings::add_runtime_project` from the `ProjectAdd` the app sees, once the app writes the daemon file (nothing writes it yet); with a test through that path
 - [x] T080 [US3] Document in `docs/user-guide/daemon-configuration.md`
 
 ---
