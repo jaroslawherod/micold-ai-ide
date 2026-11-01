@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M4 PR open, awaiting CI/merge
-- **Next step**: merge M4, then M5
+- **Phase**: M5 implemented and reviewed, waiting on a gate
+- **Next step**: scoped gate (log /tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-1464-structured-view-drag-and-drop-files-into-the/1772b713-64ef-43c6-ba98-f0a6fcdeafa8/scratchpad/gate3.log, detached, queued on the build lock) then full gate, then PR
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1589 | M1 | merged | 506cceb6986e4db6f8b78b4fe665d71a464a2165 |
 | #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
 | #1618 | M3 | merged | be05cf1862a71d8d8736ffd4e86a26801b5cd0ca |
-| #1636 | M4 | open | |
+| #1636 | M4 | merged | d965f390663fa3cb9842362d912f85c0b13d980c |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
-| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 | open |
-| M5 | T034–T039 | full | Drop-target cue | #… | pending |
+| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 | merged |
+| M5 | T034–T039 | full | Drop-target cue | #… | in progress |
 
 ## Decisions
 
@@ -51,6 +51,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 3 | 9f004f84f170c66c25c63dbacdd40c8643a97d4b:875a8a2c104e69d83fcbdf940e6cc0e2083b92b7 | CHANGES: 1 MAJOR (DraftCommand::Shortcuts + daemon arm missing from plan); plan amended, NOT re-reviewed (round limit) |
 | Tasks | 1 | b694dcd3eef0cb5fafcad7d87fed7d2281bfa2e6:323f922b2d954342de903a004936b49d6d43d82d | CHANGES: 1 MAJOR (wrong SUMMARY.md path); fixed, plus 2 MINOR Verify commands. speckit-analyze HIGH (2 daemon matches) fixed |
 | Tasks | 2 | fd3401288b5a25c44dfc88383f1f63f3b70aa2a0:319556603dad39bc016d136d66459fd8ace9ceef | CLEAN (sonnet; D7 refusal variant, FR-010, T024–T033 checked against code) |
+| M5 Review A | 1 | 10370d5ff1f0:c42242f85901 | fixed 2 real findings, declined 2 (see Handover) |
+| M5 Review B | 1 | 10370d5ff1f0:c42242f85901 | CLEAN (sonnet; Verify not run, lock) |
 | M2 Review A | 1 | 290c0fa73f22f78d3421627507d6701b0420fc86:506cceb6986e4db6f8b78b4fe665d71a464a2165 | CLEAN (code-review high); 1 MINOR (fmt) fixed |
 | M2 Review B | 1 | 8eb86d60227de3c11dc518344f55c0312a2db337:506cceb6986e4db6f8b78b4fe665d71a464a2165 | CHANGES: 1 MAJOR (composer_tab Tab order; fixed in test, full gate rerun), 2 MINOR (F2 hover/focus poses are in the entry's live list, interactive; F3 feature keeps no tdd/cycle-log, as M1) |
 | M2 Review B | 2 | 3d0f65257323d4449418f183cf0795008c08a359:bb131b4ebef02f6715de608f7d8949f4a7c320aa | CLEAN (sonnet, full re-run after rebase onto main; Verify tests green, round-1 composer_tab fix holds) |
@@ -64,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 code done and committed locally (T034-T039 ticked), not pushed. Review A (code-review high): 6 findings; fixed tree-shape change (drop_cue now always stacks, takes active flag), hover publish dedup, stronger drop_cue tests; declined: cue marks all accepting panes (by design, research R: OS gives no pointer position; picker-open nuance is best-effort), stale flag if SplitView replaced mid-drag (best-effort). Review B (sonnet): CLEAN, 3 MINOR (doc fixed; reducer arm is one assignment, accepted; no tdd/cycle-log as M1-M4), but its Verify run never got the lock. Visual pass: light scheme PASS, dark not checked (headless sway could not press the toggle); screenshots in specs/1464-structured-drop-attach/visual/. Remaining: wait for gate3.log GATE_EXIT=0 (scoped, detached, queued ~1h on build lock), then full gate (mise run gate), PR via tasks/pr.md (title feat(1464): show a drop-target cue while files hover over structured views (#1464)). Note: gate2 failed to compile (TurnPhase import), fixed in last commit.
 
 ## Open escalation
 
