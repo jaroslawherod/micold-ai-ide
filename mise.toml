@@ -220,6 +220,7 @@ fi
 #   SWEEP_ARGS='--maxsize 50GB'     mise run sweep     # bound each directory
 #   SWEEP_ARGS='--installed'        mise run sweep     # drop old toolchains
 args="${SWEEP_ARGS:-"--time 7"}"
+# Recurring (cron/systemd timer): SWEEP_ARGS='--maxsize 60GB' mise run sweep
 {{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/sweep-targets.sh $args
 """
 

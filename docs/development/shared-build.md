@@ -12,7 +12,9 @@ closest-config-wins resolution picks it. Without the export above, `cargo build`
 compiles into a `target-shared/` beside the **worktree**. Confirm which one applies with
 `cargo metadata --format-version 1 --no-deps | jq -r .target_directory`. The sharing is a property
 of the `mise run` wrapper, not of the config, which is why `mise run sweep` sweeps each worktree's
-directory too.
+directory too. In an agent session, `scripts/bare-cargo-hook.sh` (a PreToolUse hook in
+`.claude/settings.json`) refuses a bare `cargo build|test|check|clippy|run|bench` and points at
+`mise run`; `scripts/build-lock.sh cargo ...` is the ad hoc form.
 
 ## Why one directory
 
@@ -30,4 +32,5 @@ wait. `MICOLD_NO_BUILD_LOCK=1` skips it for a one-off run; cargo's own lock stil
 interactive tasks (`run`, `showcase`, `daemon`) skip it by design, since they stay in the foreground
 for as long as the app is open.
 
-Target dirs grow without bound; `mise run sweep` reclaims them.
+Target dirs grow without bound; `mise run sweep` reclaims them. Run it on a schedule with a size
+bound, e.g. `SWEEP_ARGS='--maxsize 60GB' mise run sweep` from cron or a systemd timer.
