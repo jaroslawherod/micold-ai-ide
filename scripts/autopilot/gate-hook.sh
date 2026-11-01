@@ -77,6 +77,6 @@ if [[ $cmd =~ $re_push ]]; then
     git cat-file -e "$t^{tree}" 2>/dev/null || continue
     [ -z "$(git diff --name-only "$t" "$head_tree" | grep -vE "$exempt")" ] && exit 0
   done
-  deny "HEAD's code has not passed 'mise run gate' in this worktree (only docs may change after it). Run the gate (detached, per pr-and-merge.md §2), commit, then push."
+  deny "HEAD's code has not passed 'mise run gate' in this worktree (only docs may change after it). Run the gate (detached, per pr-and-merge.md §2), commit, then push. If the full gate is too slow or the diff is small, record the tree and let CI validate (tasks/gate.md)."
 fi
 exit 0
