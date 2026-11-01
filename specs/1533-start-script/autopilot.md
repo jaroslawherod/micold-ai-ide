@@ -50,11 +50,15 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 | Tasks 1533 analyze | 1 | 43696b27:c6372cd5 | 0 CRITICAL, 1 HIGH (Windows tests/doc) fixed; MEDIUM/LOW fixed except task splitting (declined) |
 | Tasks 1533 | 1 | 43696b27:c6372cd5 | CHANGES: 1 MAJOR (M3 half-wired UI: group hidden per kind until delivery) and 3 MINOR fixed |
 | Tasks 1533 | 2 | 80d6c8d2:c6372cd5 | CHANGES: 1 MAJOR (guide task T023 moved to M4) and 2 MINOR fixed; prose/ordering only, no round 3 |
+| Code M1 A (code-review high) | 1 | 3e019daf9ea5:761a3fb9e52b | CLEAN (3 MINOR; F1 invalid env name fixed with test; F2, F3 declined, see Declined) |
+| Code M1 B (conformance) | 1 | 3e019daf9ea5:761a3fb9e52b | CHANGES: 1 MAJOR (no red evidence) answered by tdd/cycle-log.md recording the deviation (evidence only, not re-run); T004 text reworded; B could not run Verify (build lock); unit ran core + daemon startup_script tests green |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F2 timeout fires after child reaped, run reported TimedOut | Window is microseconds at the exact timeout; failing closed is acceptable; revisit in M2 with the run policies |
+| M1 | A | F3 `trap EXIT`/`exec` in the script loses exports silently | Documented limitation for the host guide (M4); the Exited(0) run still starts the daemon |
 | tasks | analyze C3 | split T008, T015, T024 | each is one cohesive file or change; no rubric item on task size |
 
 ## Handover
