@@ -1,136 +1,137 @@
 ---
 feature: daemon-config-file
-scope: Issue 2 (#1523) M1 only, tasks T005-T013 + T087
-verdict: PASS-AFTER-REMEDIATION (initial FAIL; F1-F7, F11 fixed in the close PR, remediation reviewed; F8 partial, F9, F12, F13 LOW left as T115)
-standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
-verified_at: 2d2d95f3f
-behaviors: 22
-proven: 19
-likely: 3
-test_after: 0
+scope: Issue 3 (#1524) M1 only, tasks T014-T020, T015a, T016a, T019a, T019b, T020a, T088, T089; code merged in PR #1624 (merge SHA 8d298a88dbce086d88ae937266f294e07cee7172, base b6f32a1a7)
+verdict: PASS-AFTER-REMEDIATION (initial FAIL; F2-F5 fixed in the close PR; F7, F9 not fixed; F1, F6, F8 left; F10, F11 partly fixed, see Remediation)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 367d564a3
+independent: true # auditor did not write these tests
+behaviors: 12 # test-list.md has no #1524 behaviors; 12 task-derived behaviors audited below
+proven: 0
+likely: 6
+test_after: 6
 no_test: 0
-high_smells: 2
-criteria_total: 5
-criteria_covered: 3
-mutation_score: unmeasured # no tool; 4 deliberate mutants sampled, 1 caught, 3 survived
-mutants_survived: 3
-suite: scoped only - micold-core daemon_config 63 passed 0 failed; micold-daemon config_check 10 passed 0 failed (full workspace suite not run)
+high_smells: 0
+high_findings: 6
+mutants_tried: 8
+mutants_caught: 0 # before remediation; 8 of 8 caught after, see Remediation
+criteria_covered: 6 of 8
 ---
 
-# TDD Verification: daemon configuration schema and `config check` (#1523, M1)
+# TDD verification: daemon-config-file, Issue 3 (#1524) M1
 
-**Verdict: FAIL.** Three of four deliberate mutants in DONE behaviors survived (V3 listen-kind guard,
-V4 path check on 10+ keys, `config check` exit code on warnings), and the criterion "each rule
-V1-V19 has a test naming file:line:col and the key" is met by V1 alone.
+## Verdict
 
-Audit independence: the auditor did not write these tests; every test file below was read cold at
-`2d2d95f3f`. Not a fresh-context subagent smell pass; the smell pass was done directly.
+**FAIL: all 6 deliberate mutants on the merged code survived, including the two that stop the real daemon from starting live reload, so tests marked DONE do not prove the wiring they claim.**
+
+Stage that failed: question 1 (test-first evidence is missing for #1524) and question 3 (would the tests catch a bug). On
+question 2 the tests that exist are mostly honest behavior tests with no HIGH smell. Suite state: the scoped binaries are green
+(`config_load` 19, `config_reload` 17, `config_check` 12, `sessions` 160; `config_reload` takes 2.0 s). The whole workspace
+suite was not re-run (profile baseline: 5071 passed, 343 s).
 
 ## Test-first evidence
 
-History is one feature commit (`c658624bd` adds tests, source, fixtures and docs together) followed
-by two test-only fixes (`900ae5dd4`, `2d2d95f3f`). Order cannot be seen in git; the cycle log is the
-only red evidence (self-reported).
+`tdd/test-list.md` is the #1523 list (`planned_at 2b6335441`, 22 behaviors, scope "Issue 3 adds its own behaviors under its own
+heading" but none were added). There are no #1524 behavior ids, so behaviors below are derived from the M1 tasks. Order in git:
+one commit `81a3d0067` holds every source and test file (squashed), so history cannot show order. `ea98ccd25` ("wip") and
+`4335864f1` only add tests/fixes afterwards.
 
-| Behavior | Class | Evidence |
-|---|---|---|
-| U1-U19 (58 tests) | PROVEN | cycle log: red `1 passed; 57 failed` against stubs, then green; test and source in one commit. Caveat: red is against author-written stubs |
-| 5 tests added in "review A fixes" (V5 line, V7 api_key_file, V8 element, V18 normalisation, idle_stop) | LIKELY | log gives only the green count (63 passed); no red recorded for them. Not distinguishable in history |
-| A1, A2, U20 (`config check`, 10 tests) | LIKELY | log: "written together with the wrapper; no separate red"; red obtained afterwards by stubbing `run` to `return 0`. Retroactive red, not test-first |
-| Baseline | gap | cycle log "suite: not run in full"; test list `suite_baseline: unknown`, `spec_criteria: 0` |
+| Behavior (task) | Test | Class | Why |
+|---|---|---|---|
+| `--config` / per-kind default / missing-file rules (T014) | `config_load.rs` | LIKELY | cycle log says tests first; the only red is 3 of 19 failing on fixture mistakes, not on the missing behavior; no per-test red command |
+| file beats `MICOLD_*` (T015) | `config_load.rs:341-408` | TEST_AFTER | cycle log: "`settings.rs` was written before its tests" |
+| credential root follows `daemon.kind` (T015a, T018) | `config_load.rs:412` | LIKELY | same as T014; a mutation check (sandbox by image) is recorded on the green tree |
+| state machine: live/restart/parse error/removed/invalid/secret retry (T016) | `config_reload.rs:47-206` | LIKELY | no red recorded; mutation checks on green tree only |
+| `config` diagnostic section, protocol v75 (T016a, T020) | `protocol_roundtrip.rs`, `sessions/diagnostics.rs`, `config_reload.rs:210` | LIKELY | cycle log lists them "first, in this order"; no red output |
+| watcher + 2 s poll + 5 s window (T019, T019a, SC-004) | `config_reload.rs:269-331, 392` | TEST_AFTER | log: `a_changed_secret_is_in_use_within_5_seconds` failed only after the code existed; busy-directory test added after review A |
+| never opens config/secret for writing (T019b) | `config_reload.rs:352` | NOT_APPLICABLE-by-design (guard test) | recorded as green-by-design; strength fails, see F3 |
+| nested daemon needs `--config` (T088, FR-041) | `config_load.rs:254, 285` | LIKELY | as T014 |
+| "ACL not checked" (T089) | `daemon_config/tests.rs` (new test) | TEST_AFTER | no red recorded |
+| watch parent directories on every OS (T089) | none distinguishing | TEST_AFTER | see F2 (mutant C) |
+| startup routes every read through `DaemonSettings` (T017) | `config_load.rs` (unit level only) | TEST_AFTER | `settings.rs` before tests; the wiring in `main.rs`/`server.rs` has no test, see F2 |
+| user guide (T020a) | `docs/user-guide/daemon-configuration.md` (+43 lines) | NOT_APPLICABLE | doc gate |
 
-Existing tests changed by the feature range: none weakened. `2d2d95f3f` edited three existing tests
-for Windows (`tests.rs:134-139` platform-specific shell default, `:703`, `:718`, `:735` TOML literal
-strings); assertions kept their strength. No skips, `#[ignore]`, filters, or thresholds touched.
-`tasks.md` T005-T013, T087 are all `[x]` and every list row is DONE: consistent.
+Counts: LIKELY 6, TEST_AFTER 6, PROVEN 0, NO_TEST 0 (rows above grouped; T089 counted as two).
+
+## Changes to tests that already existed
+
+No assertion was removed, loosened, skipped or excluded. Two existing tests changed, both legitimately: `protocol_roundtrip.rs`
+`the_protocol_version_is_74` -> `_75` (renamed and bumped for T020), and `schema_hash.rs` `FEATURE_026_PROTOCOL_VERSION` 74 -> 75
+(`ea98ccd25`). Both track the required version bump and keep their value check.
 
 ## Findings
 
-| # | Sev | Kind | Finding | Evidence |
+HIGH (each is a surviving mutant inside a behavior marked done, or missing evidence; any one makes the verdict FAIL):
+
+- **F1 HIGH: no #1524 test list and no per-behavior red.** `tdd/test-list.md` covers #1523 only; `tdd/cycle-log.md` "Issue 3 (#1524) M1" says "No separate red run per test", the only red was 3 fixture mistakes, and `settings.rs` precedes its tests. Source and tests landed in one commit (`81a3d0067`). Fix: add #1524 behaviors to the list; for the TEST_AFTER rows write the red by mutating (mutants below) and record it.
+- **F2 HIGH: the real daemon's start-up wiring is untested (mutants A, B, G survived).** `crates/micold-daemon/src/server.rs:197` (`start_config_reload(&state)` removed) and `server.rs:129` (`runtime.spawn(...)` replaced by `drop(runtime)`) and `crates/micold-daemon/src/main.rs:86` (`apply_to_process()` removed) all leave `config_load`, `config_reload`, `config_check` and `sessions` green. The only tests that run the binary (`config_load.rs:231, 285`) cover failure exits. No test starts the daemon with a valid file and asks `ClientMsg::ConfigRequest`, or edits the file and sees it applied. `sessions/diagnostics.rs` builds `ConfigRuntime` and calls `state.set_config` by hand, so it cannot see that `server::run` forgot to. Acceptance for FR-002, FR-006, FR-027 and SC-004 therefore never reaches the real entry point. Test files: `crates/micold-daemon/tests/config_reload.rs`, `tests/sessions/diagnostics.rs` (crate micold-daemon). Fix: one test that spawns `DAEMON_BIN --config <valid host file>`, requests `config`, rewrites the file and requires the new `applied_hash` within 5 s.
+- **F3 HIGH: the directory watcher is untested (mutant C survived).** `config_watch.rs` `rewatch` with `wanted` forced empty (no directory ever watched) passes everything. Every "within 5 seconds" test (`config_reload.rs:270, 286, 315, 393`) is satisfied by the 2 s poll alone, so `WatchMode::Full` and `PollOnly` are indistinguishable. The Kubernetes `..data` swap test, the rename test and the busy-directory test (`:393`, which exists to prove the debounce bound) cannot fail when the watcher or `DEBOUNCE_LIMIT` is broken. Fix: make `POLL_INTERVAL` injectable (or add a `WatchOnly` mode) and use a 30 s poll in these tests with a 5 s budget.
+- **F4 HIGH: restart-key diff is mostly unpinned (mutant D survived).** `config_watch.rs` `restart_keys` with `("storage.clone_root", false)` passes. Only `daemon.log` is ever changed in a test (`config_reload.rs:63`); 12 other keys (`daemon.name`, `kind`, `data_dir`, `home`, `time_zone`, `image`, `idle_stop`, `listen`, `auth`, `ssh`, `storage.clone_root`, `startup`) have no test, and no test shows a live key (e.g. `session.env`) does not set `restart_needed` together with a restart key. Fix: a table-driven test that changes each key in turn.
+- **F5 HIGH: the T019b guard cannot fail on a write attempt (mutant E survived).** Inserting `let _ = OpenOptions::new().append(true).open(&self.path)` at the top of `ConfigRuntime::look` passes: the test makes both files `0400`, so the write open fails with EACCES and the ignored error leaves bytes and mtimes unchanged (`config_reload.rs:352-390`). It also only calls `check` three times with `Outcome::Unchanged` (never an `Applied` reload, never a real git/`gh` call; `credential_root_of` only decides a root) although T019b says "every reload and every git/`gh` credential call succeeds", and as root the permission barrier is gone with no skip. Fix: make the files writable and compare bytes+mtime+inode after `Applied`, `Rejected` and `Pending` reloads, or run the daemon test under a read-only mount.
+- **F6 HIGH: FR-006 credential application is not tested.** "applying credential changes to the next git or `gh` command" has no test: `a_changed_secret_alone_is_a_change` and `:286` only see `applied_hash` change. If the use of the new secret belongs to a later issue, record it in the list as deferred; otherwise add a test that a changed token file reaches the next credential call.
+
+MED:
+
+- **F7 MED: Re-implemented expectation.** `config_reload.rs:238-247` rebuilds the hash framing (`len as u64` big-endian + bytes) the code uses, and only for a file with no secret; the "every named secret" half of the hash is covered only by "a change shows up". Assert a fixed known hex digest for a fixed file, and a different digest with a secret.
+- **F8 MED: T089 only half-tested.** The "ACL not checked" test builds `SecretStatus { mode: None }` directly (`crates/micold-core/src/daemon_config/tests.rs`, after `the_resolved_view_shows_a_readable_secret_with_its_mode`) so it does not show `mode_of` returns `None` on Windows; "watch parent directories on every OS" has no `cfg(windows/macos)` test and is covered by F3's gap. No Windows run exists.
+- **F9 MED: Sleepy/non-deterministic.** `config_reload.rs:254` fixed 300 ms sleep to "let the first poll pass", real clock and a real 5 s budget in four tests (suite cost 2 s, but flaky on a loaded host). A condition-based wait (status shows the first poll done) is better.
+
+LOW:
+
+- **F10 LOW: conditional skip.** `config_reload.rs:127-129` returns early as root, so the test silently asserts nothing there; use a visible ignore message.
+- **F11 LOW: duplicated setup.** The `[[github.tokens]]` snippet is copied at `config_reload.rs:134, 155, 195, 217, 294, 360`; `put`/`env_of` in `config_load.rs:20-60` duplicate what `tests/support/mod.rs` could host. Many assertions lack the rule message the profile asks for (`config_load.rs:92, 169, 393`).
+
+Smell catalogue result: no assertion-free, tautological, doubled-subject, over-mocked, vacuous, conditional-assert (other than F10), self-approving-snapshot or skipped test found in `config_load.rs`, `config_reload.rs`, the `diagnostics.rs` addition or the `protocol_roundtrip.rs` additions. Doubles: only real files in a tempdir and an injected `Instant` and env closure, which fits the profile (no new Fake type was hand-rolled).
+
+## Mutation results (deliberate mutants, no tool in profile)
+
+Sampled 6 mutants over 5 behaviors; all restored with `git checkout -- <file>` and the scoped suite re-run green. Suite run per mutant: `cargo test -p micold-daemon --test config_load --test config_reload --test sessions --test config_check`.
+
+| Mutant | File | Change | Result | Judgment |
 |---|---|---|---|---|
-| 1 | HIGH | test-strength | Only V1 asserts `file:line:col`. Other rules assert line for some (V2 newer, V3 two-key and tcp, V4 token_file, V7 model, V8, V13, V14, V15, V18 ssh) and never a column; V9, V10, V12, V16, V17, V19 assert neither line nor column, only that an error of that rule mentions a needle. The shared `expect` helper accepts a match on `rule` plus needle in message OR key and never checks position | `tests.rs:40-46`, V9 `:417-434`, V10 `:436-458`, V12 `:460-470`, V16 `:486-514`, V17 `:697-710`, V19 `:600-615`; full table below |
-| 2 | HIGH | test-strength | Vacuous needle: V5 searches for `"a"`, which matches the key of any `github.tokens[..].name` error and almost any message. `several_semantic_errors_are_all_reported` asserts `all.len() >= 2` without naming the rules, so two unrelated errors satisfy it | `tests.rs:290`, `:621` |
-| 3 | HIGH | test-strength | Surviving mutant M2: V3 `(true,false) if sandbox` guard replaced with `if false`; suite green. `listen.socket` on a container/kubernetes daemon and `listen.tcp` on host/ssh have no test | `validate.rs:520-531`; tests `:239-263` cover only zero keys, two keys, tcp-without-token, missing listen |
-| 4 | HIGH | test-strength | Surviving mutant M3: V4 check for `git.known_hosts_file` removed; suite green. V4 is tested on `token_file` and `clone_root` only; the ~16 other path keys (data_dir, home, socket, client_token_file, ssh.dir, projects, git.*, sign_in_file, settings_file, place.file, session.files.file, secret_env, network.ca_file) are untested | `validate.rs:551-600`; tests `:265-284` |
-| 5 | HIGH | test-strength | Surviving mutant M4: `failed = !findings.is_empty()` (a warning-only file exits 2); suite green. No test of the contract §4 case "warnings, exit 0, view printed" (V14 wide mode on host/ssh, V7 version on host) | `config_check.rs:76`; `tests/config_check.rs` has no warning case |
-| 6 | MED | test-strength | `idle_stop` bad-value assertion is an OR (`contains("idle_stop") \|\| contains("default")`), too loose to tell which message appeared; checks `errors(..).remove(0)` | `tests.rs:575-581` |
-| 7 | MED | test-strength | Four-examples test asserts only `daemon.kind` for ssh/container/kubernetes; the daemon test asserts only `schema: 1` and `daemon: ` per fixture, so a view that dropped every other section would pass | `tests.rs:54-64`, `config_check.rs:28-42` |
-| 8 | MED | style | Conditional in test mirrors the product default: `if cfg!(windows)` picks the expected shell, re-stating the implementation's own platform branch; also `assert_eq!` in the four-examples loop carries no message, so a failure does not say which kind | `tests.rs:134-139`, `:62` |
-| 9 | MED | style | Profile convention "every assertion carries a message explaining the rule" is met in about a third of assertions; `expect` failure output is good, bare `assert_eq!(error.line, ..)` is not | `tests.rs:183-184,225,249,256,269,342,479,659-660` |
-| 10 | MED | traceability | Test-list `traces` are wrong or coarse: A2 and U20 trace FR-018 (user guide) where FR-017 (`config check`) is meant; U3 traces FR-004 (no secret values) where FR-003 (schema version) is meant; U4-U14 trace FR-017 (`config check`) for the validation rules; `spec_criteria: 0` | `tdd/test-list.md` |
-| 11 | MED | behaviour gap (coverage) | `config check` flag handling has no test for `--kind` with a bad or missing value, an unexpected extra argument, or two files, though U20 lists it as DONE | `config_check.rs:35-61`, `tests/config_check.rs` |
-| 12 | LOW | duplication | The secret-file fixture (`write "s3cr3t-value"` plus chmod) is hand-built four times; `secret_file` helper is `#[cfg(unix)]` and used by two tests only | `tests.rs:161-164,633-639,731-733` |
-| 13 | LOW | process | Review-A tests (5) have no recorded red; baseline suite not recorded | `tdd/cycle-log.md` |
+| A | `crates/micold-daemon/src/server.rs:129` | `drop(runtime.spawn(..))` -> `drop(runtime)` (reload never runs in the real daemon) | SURVIVED | real defect; F2 |
+| B | `crates/micold-daemon/src/server.rs:197` | remove `start_config_reload(&state)` | SURVIVED | real defect; F2 |
+| C | `crates/micold-daemon/src/config_watch.rs` (`rewatch`) | watch no directory | SURVIVED | behavior lost, hidden by the poll; F3 |
+| D | `crates/micold-daemon/src/config_watch.rs` (`restart_keys`) | `storage.clone_root` never counted | SURVIVED | real defect; F4 |
+| E | `crates/micold-daemon/src/config_watch.rs` (`look`) | ignored append-open of the config | SURVIVED | guard too weak; F5 |
+| G | `crates/micold-daemon/src/main.rs:86` | remove `apply_to_process()` | SURVIVED | real defect; F2 |
 
-No confirmed implementation defects (behaviour gaps in the product code) were found; the survivors
-show the tests would not notice one in V3, V4 or the exit-code path. Secret scan: the only
-credential-shaped literal is the dummy `s3cr3t-value` (`tests.rs:163,636,733`,
-`tests/config_check.rs`); not a real credential.
+Score: 0 of 6 caught. Not comparable to a tool score. Mutants already recorded in the cycle log on the green tree (file/env order swapped, `restart_keys` filtered to nothing, sandbox decided by image) were not re-run; they target the strongest tests.
 
-Smell pass: no assertion-free, tautological, doubled-subject, over-mocked, self-approving-snapshot,
-skipped or `#[ignore]`d tests. Loops over inputs assert the same thing per element (acceptable).
-Determinism: temp dirs only, no clock, network, or sleep; core scoped run 0.00s, daemon 0.4s.
+## Remediation (close PR)
 
-### V1-V19 position and key assertion
+Tests only, no source change. New `crates/micold-daemon/tests/config_wiring.rs` starts the real binary with `--config`, asks `ClientMsg::ConfigRequest`, checks the file's `data_dir` is the one used, then writes bad bytes and requires the pushed rejection within 8 s (F2). `config_reload.rs` gained a changed-alone test for every restart key plus a test that live keys do not set `restart_needed` (F4), three directory-watch tests that allow only 1.5 s, which the 2 s poll cannot meet (F3), and a guard that fails on any write-open of the config or a secret, using `notify` close-write events (F5). `config_load.rs` pins `bad.toml:3:8` and `config_reload.rs` pins `daemon.toml:2:8:` (position part of F7's neighbourhood, finding "thin position assertions"). The root skip in `an_unreadable_secret_rejects_the_whole_new_file` now prints `SKIPPED` (F10, partly), and a `secret_fixture` helper replaces four duplicated secret setups (F11, partly).
 
-| Rule | Key/name asserted | Line | Column | Test |
-|---|---|---|---|---|
-| V1 | yes | yes | yes (1) | `tests.rs:179-190`; also `tests/config_check.rs` full `file:5:1:` line |
-| V2 | yes | newer only (1) | no | `:211-237` |
-| V3 | yes | 2 of 4 cases | no | `:239-263` |
-| V4 | token_file, clone_root | token_file | no | `:265-284` |
-| V5 | needle `a` (vacuous) | via message "line N" | no | `:286-329` |
-| V6 | accepted, ok | n/a | n/a | `:331-336` |
-| V7 | yes | model only | no | `:338-397` |
-| V8 | yes | yes | no | `:399-415,551-557` |
-| V9 | CLI id | no | no | `:417-434` |
-| V10 | yes | no | no | `:436-458` |
-| V11 | retired | n/a | n/a | n/a |
-| V12 | path | no | no | `:460-470` |
-| V13 | yes | yes | no | `:472-484` |
-| V14 | yes | yes (unix) | no | `:641-677` |
-| V15 | path | yes | no | `:679-695` |
-| V16 | name | no | no | `:486-514` |
-| V17 | server name | no | no | `:697-725` |
-| V18 | yes | ssh only | no | `:516-598` |
-| V19 | CLI id | no | no | `:600-615` |
+Re-run of the mutants on the remediated tests (scoped: `config_wiring`, `config_reload`, `config_load`): A, B, C, D, E, G and two extra `restart_keys` mutants (`listen`, `startup` never counted) each FAIL a test, so 8 of 8 are caught. All restored with `git checkout`. The three binaries pass unmutated (19 + 20 + 1).
 
-## Mutation results
+Left, with reason:
 
-No mutation tool in the profile (`mutation: null`). Deliberate mutants, 4 sampled across the
-highest-risk acceptance paths (listen, path, exit code, range); each restored by `git checkout` and
-the scoped suites re-run green (63 passed, 10 passed). Not exhaustive.
+- F1: the history cannot be rewritten; the cycle log says so.
+- F6: no test that a changed token file reaches the next git or `gh` call (FR-006 credential use is untested). Open test gap, not closed by this PR.
+- F7: `the_hash_is_the_sha256_of_the_config_and_what_it_names` still rebuilds the framing; no fixed-digest test was added.
+- F8: no Windows or macOS run; `mode: None` rendering only.
+- F9: `settled()` still sleeps 300 ms, and the watcher-before-the-poll tests are deliberately timing-based (a 1.5 s window against the 2 s poll). A late watcher event can only make them fail, not falsely pass. The write-open guard also waits a fixed 300 ms for `notify` events, so a very late event could give a false pass. Linux only.
+- F10, F11: the remaining occurrences (bare assertion messages) are left.
 
-| Mutant | File | Result | Judgment |
-|---|---|---|---|
-| M1 V13 `(1..=3600)` to `(1..3600)` | `validate.rs` | caught | n/a |
-| M2 V3 `(true,false) if sandbox` to `if false` | `validate.rs:520` | SURVIVED | not equivalent; finding 3 |
-| M3 V4 `known_hosts_file` unchecked | `validate.rs:588` | SURVIVED | not equivalent; finding 4 |
-| M4 exit code `!findings.is_empty()` | `config_check.rs:76` | SURVIVED | not equivalent; finding 5 |
+## Traceability
 
-Note: `specs/daemon-config-file/autopilot-1523.md` showed as modified in the tree during the audit;
-the audit did not touch it.
+| Criterion | Tests | End-to-end through the real entry point? |
+|---|---|---|
+| FR-002 find the file | `config_load.rs:74-203, 231` | partly: `load_startup` and a failing binary run; a successful start is not run (F2) |
+| FR-006 re-read on change, apply to next git/gh | `config_reload.rs:47-206, 189` | no (F2, F6) |
+| FR-012 values from the file, variables retired | `config_load.rs:341-408` | unit only (`DaemonSettings`); `main.rs` wiring unseen (F2); variable retirement is not a #1524 behavior |
+| FR-026 credentials by files only | `config_reload.rs:352` | weak guard (F5) |
+| FR-027 notice on every kind within 5 s | `config_reload.rs:269-331` | poll only; watcher unseen (F3) |
+| FR-028 atomic reload, report error | `config_reload.rs:78-122, 334`; `sessions/diagnostics.rs` (new) | `ConfigRuntime` and RPC with a hand-built runtime; not the real daemon |
+| FR-041 nested daemon | `config_load.rs:254, 285` | yes, real binary |
+| SC-004 5 s | `config_reload.rs:269-331, 392` | see FR-027 |
 
-## Traceability (issue #1523 acceptance criteria)
-
-| Criterion | Tests | Real entry point | Status |
-|---|---|---|---|
-| Four contract §3 examples parse | `the_four_contract_examples_parse`, `the_host_example_*`; daemon `a_valid_file_exits_zero_*` (4 fixtures) | `config check` binary | Covered; assertions thin (finding 7) |
-| Each rule V1-V19 names `file:line:col` and the key | see table above | core `parse` (binary only for V1, V16 PATH and V4 relative path) | NOT met except V1 (finding 1) |
-| No secret content in any Debug/Display | `debug_and_display_never_contain_a_secrets_content`, `the_resolved_view_shows_a_readable_secret_*`, daemon `a_secrets_content_is_never_printed` | binary + core | Covered |
-| `config check` exits 0 with resolved view, 2 on errors | daemon `config_check.rs` (10 tests) | binary | Partly: warning-only exit 0 untested (finding 5) |
-| `docs/user-guide/daemon-configuration.md` exists | file present, linked from `settings.md:610`, `docs/SUMMARY.md:26`, `docs/README.md:58` | n/a | Present; no test checks keys documented (docs not content-audited) |
-
-Tests tracing to nothing: none. Claimed tests that do not exist: none (all `traces` rows resolve to
-existing tests; the trace IDs themselves are wrong, finding 10).
+Tests tracing to nothing: none. Criteria with no test at all: FR-006 (credential use), FR-012 (retirement), reported as F6/table above; the other six criteria have at least a unit test.
 
 ## What was not audited
 
-- Full workspace suite and `mise run gate` (only the two scoped test targets were run; the first
-  scoped run waited 42 minutes behind other worktrees' builds).
-- Coverage (none in profile) and a full mutation sweep: 4 deliberate mutants only; `resolved.rs`,
-  `files.rs`, `secret.rs` and `mod.rs` were not mutated beyond M4's neighbour.
-- Windows behaviour (V14 "ACL not checked" diagnostic, Windows path acceptance beyond one test).
-- Accuracy of the user guide against the contract (existence and links only).
-- Other task groups and issues 3-16.
-- Commit-level ordering: history squashed into one feature commit.
+- Whole-workspace suite and the sandbox (`sandbox_real_*`) tests; only the four scoped daemon binaries and the diff were run.
+- Windows and macOS behavior (T089); no such host.
+- The `docs/user-guide/daemon-configuration.md` text against its gate (T020a), and `micold-client` changes in the same merge (#1525, #1602, #1464 files are out of scope).
+- Coverage and automatic mutation testing: none configured. The 6 mutants are a sample, not exhaustive; `settings.rs`, `config_load.rs`, `git_credential.rs`, `repo_clone.rs` and `logging.rs` got no mutants.
+- Flakiness under load: tests were run once per mutant (7 runs, all identical results).
+- Process note: during the audit another process briefly modified `crates/micold-daemon/src/main.rs` in this worktree (removing `settings::install`) and restored it; those runs may overlap that window, which could only add failures, and none appeared.

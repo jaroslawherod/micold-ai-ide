@@ -216,7 +216,10 @@ fn an_invalid_file_is_fatal_and_the_message_has_file_line_and_column() {
         matches!(error, LoadError::Invalid(_)),
         "an invalid file is its own error: {error}"
     );
-    assert!(error.to_string().contains("bad.toml:"), "{error}");
+    assert!(
+        error.to_string().contains("bad.toml:3:8"),
+        "the message names file, line and column of the bad value: {error}"
+    );
 }
 
 #[test]

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Closed 2026-10-29 — shipped in PRs #1551, #1600 (Issue 2 group); other groups open under their own sub-issues
+**Status**: Closed 2026-11-01 for the Issue 2 and Issue 3 groups — shipped in PRs #1551, #1600 (Issue 2) and #1624 and the close PR (Issue 3; FR-006 credential use untested, see tdd/verification.md F6); other groups open under their own sub-issues
 
 **Input**: User description: "Unify how configuration is passed from the application to a daemon. It
 should be passed the same way to any daemon, whether it runs on the host, in a container or in

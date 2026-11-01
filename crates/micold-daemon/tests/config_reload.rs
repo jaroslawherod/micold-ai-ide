@@ -42,6 +42,20 @@ fn mode(path: &Path, mode: u32) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
 }
 
+/// A secret file `dir/<relative>` holding `content` (owner-only on Unix), and the `[[github.tokens]]`
+/// section that names it.
+fn secret_fixture(dir: &Path, relative: &str, content: &str) -> (PathBuf, String) {
+    let secret = dir.join(relative);
+    std::fs::write(&secret, content).unwrap();
+    #[cfg(unix)]
+    mode(&secret, 0o600);
+    let named = format!(
+        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
+        secret.display()
+    );
+    (secret, named)
+}
+
 // --- T016: the state machine ---
 
 #[test]
@@ -74,6 +88,137 @@ fn a_restart_key_change_sets_restart_needed_and_names_the_key() {
     assert!(!status.restart_needed && status.changed_restart_keys.is_empty());
 }
 
+/// A minimal host file; `daemon_lines` go in `[daemon]`, `sections` follow it.
+fn file_with(name: &str, kind: &str, daemon_lines: &str, sections: &str) -> String {
+    format!(
+        "schema = 1\n[daemon]\nname = \"{name}\"\nkind = \"{kind}\"\n{daemon_lines}\n{sections}\n"
+    )
+}
+
+/// Each restart-only key (contract R7), changed alone from the minimal file, is named and flags a
+/// restart; and changing it back clears the flag.
+#[test]
+fn every_restart_key_changed_alone_sets_restart_needed_and_names_itself() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (token, _) = secret_fixture(tmp.path(), "client-token", "t\n");
+    let script = tmp.path().join("setup.sh");
+    std::fs::write(&script, "#!/bin/sh\n").unwrap();
+    let t = tmp.path().display();
+    let cases: Vec<(&str, String)> = vec![
+        ("daemon.name", file_with("other", "host", "", "")),
+        ("daemon.kind", file_with("t", "ssh", "", "")),
+        (
+            "daemon.data_dir",
+            file_with("t", "host", "data_dir = \"/tmp/d\"", ""),
+        ),
+        (
+            "daemon.home",
+            file_with("t", "host", "home = \"/tmp/h\"", ""),
+        ),
+        (
+            "daemon.time_zone",
+            file_with("t", "host", "time_zone = \"UTC\"", ""),
+        ),
+        (
+            "daemon.image",
+            file_with("t", "host", "image = \"img:1\"", ""),
+        ),
+        (
+            "daemon.idle_stop",
+            file_with("t", "host", "idle_stop = \"off\"", ""),
+        ),
+        ("daemon.log", file_with("t", "host", "log = \"debug\"", "")),
+        (
+            "listen",
+            file_with(
+                "t",
+                "host",
+                "",
+                &format!("[listen]\nsocket = \"{t}/l.sock\""),
+            ),
+        ),
+        (
+            "auth",
+            file_with(
+                "t",
+                "host",
+                "",
+                &format!("[auth]\nclient_token_file = \"{}\"", token.display()),
+            ),
+        ),
+        (
+            "ssh",
+            file_with("t", "host", "", &format!("[ssh]\ndir = \"{t}\"")),
+        ),
+        (
+            "storage.clone_root",
+            file_with("t", "host", "", "[storage]\nclone_root = \"/tmp/c\""),
+        ),
+        (
+            "startup",
+            file_with(
+                "t",
+                "host",
+                "",
+                &format!("[startup]\nscript_file = \"{}\"", script.display()),
+            ),
+        ),
+    ];
+    for (key, changed) in cases {
+        let base = file_with("t", "host", "", "");
+        let (_dir, file, runtime) = setup(&base);
+        replace(&file, &changed);
+        assert_eq!(
+            runtime.check(Instant::now()),
+            Outcome::Applied,
+            "{key}: the changed file must be valid: {:?}",
+            runtime.status().last_error
+        );
+        let status = runtime.status();
+        assert!(status.restart_needed, "{key} changed: a restart is needed");
+        assert_eq!(
+            status.changed_restart_keys,
+            vec![key.to_string()],
+            "{key} changed alone is the only key named"
+        );
+        replace(&file, &base);
+        runtime.check(Instant::now());
+        assert!(
+            !runtime.status().restart_needed,
+            "{key} changed back is no longer a difference"
+        );
+    }
+}
+
+/// Live keys (contract R7) never ask for a restart.
+#[test]
+fn live_keys_changed_do_not_set_restart_needed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_secret, token) = secret_fixture(tmp.path(), "gh-token", "t\n");
+    let live = [
+        ("session.env", "[session.env]\nB = \"2\"".to_string()),
+        ("github", token),
+        ("ai", "[ai]\ndefault = \"claude_code\"".to_string()),
+        ("git", "[git]\nssh_to_https = true".to_string()),
+    ];
+    for (key, section) in live {
+        let (_dir, file, runtime) = setup(&file_with("t", "host", "", ""));
+        replace(&file, &file_with("t", "host", "", &section));
+        assert_eq!(
+            runtime.check(Instant::now()),
+            Outcome::Applied,
+            "{key}: the changed file must be valid: {:?}",
+            runtime.status().last_error
+        );
+        let status = runtime.status();
+        assert!(
+            !status.restart_needed && status.changed_restart_keys.is_empty(),
+            "{key} is live and must not ask for a restart: {:?}",
+            status.changed_restart_keys
+        );
+    }
+}
+
 #[test]
 fn a_parse_error_keeps_the_last_configuration_and_reports_it() {
     let (_dir, file, runtime) = setup(&host("1", "info", ""));
@@ -84,7 +229,10 @@ fn a_parse_error_keeps_the_last_configuration_and_reports_it() {
     let status = runtime.status();
     assert_eq!(status.applied_hash, hash);
     let error = status.last_error.expect("the rejection is reported");
-    assert!(error.contains("daemon.toml:"), "{error}");
+    assert!(
+        error.contains("daemon.toml:2:8:"),
+        "the error names file, line and column of the break: {error}"
+    );
     // The same bad bytes are not judged again; fixing the file clears the error.
     assert_eq!(runtime.check(Instant::now()), Outcome::Unchanged);
     replace(&file, &host("3", "info", ""));
@@ -125,16 +273,13 @@ fn an_invalid_new_file_applies_none_of_its_keys() {
 #[test]
 fn an_unreadable_secret_rejects_the_whole_new_file() {
     if unsafe { libc::geteuid() } == 0 {
-        return; // root reads anything
+        // Root reads anything, so the case cannot be built; say so rather than pass silently.
+        eprintln!("SKIPPED an_unreadable_secret_rejects_the_whole_new_file: running as root");
+        return;
     }
     let (dir, file, runtime) = setup(&host("1", "info", ""));
-    let secret = dir.path().join("token");
-    std::fs::write(&secret, "s3cr3t\n").unwrap();
+    let (secret, named) = secret_fixture(dir.path(), "token", "s3cr3t\n");
     mode(&secret, 0o000);
-    let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
-        secret.display()
-    );
     replace(&file, &host("2", "info", &named));
     assert_eq!(runtime.check(Instant::now()), Outcome::Rejected);
     assert_eq!(a_of(&runtime), "1");
@@ -188,21 +333,22 @@ fn a_secret_that_is_not_there_yet_is_retried_and_reported_after_120_seconds() {
 #[test]
 fn a_changed_secret_alone_is_a_change() {
     let dir = tempfile::tempdir().unwrap();
-    let secret = dir.path().join("token");
-    std::fs::write(&secret, "one\n").unwrap();
-    #[cfg(unix)]
-    mode(&secret, 0o600);
-    let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
-        secret.display()
-    );
+    let (secret, named) = secret_fixture(dir.path(), "token", "one\n");
     let file = dir.path().join("daemon.toml");
     std::fs::write(&file, host("1", "info", &named)).unwrap();
     let runtime = ConfigRuntime::open(&file).unwrap();
     let before = runtime.status().applied_hash;
     replace(&secret, "two\n");
-    assert_eq!(runtime.check(Instant::now()), Outcome::Applied);
-    assert_ne!(runtime.status().applied_hash, before);
+    assert_eq!(
+        runtime.check(Instant::now()),
+        Outcome::Applied,
+        "a secret that changed under an unchanged file is a change"
+    );
+    assert_ne!(
+        runtime.status().applied_hash,
+        before,
+        "the applied hash follows the secret's content"
+    );
 }
 
 // --- T016a: the diagnostic section ---
@@ -210,14 +356,7 @@ fn a_changed_secret_alone_is_a_change() {
 #[test]
 fn the_status_carries_the_file_the_hash_and_never_a_secret() {
     let dir = tempfile::tempdir().unwrap();
-    let secret = dir.path().join("token");
-    std::fs::write(&secret, "s3cr3t-value\n").unwrap();
-    #[cfg(unix)]
-    mode(&secret, 0o600);
-    let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
-        secret.display()
-    );
+    let (secret, named) = secret_fixture(dir.path(), "token", "s3cr3t-value\n");
     let file = dir.path().join("daemon.toml");
     std::fs::write(&file, host("1", "info", &named)).unwrap();
     let runtime = ConfigRuntime::open(&file).unwrap();
@@ -246,7 +385,7 @@ fn the_hash_is_the_sha256_of_the_config_and_what_it_names() {
     assert_eq!(runtime.status().applied_hash, hex);
 }
 
-// --- SC-004: in use within 5 s, through the real watcher and poll ---
+// --- SC-004: in use within 5 s, through the real watcher and poll (the watcher tests beat the poll) ---
 
 /// Lets the task's immediate first poll pass, so a later change can only be found by a real source.
 async fn settled(runtime: &Arc<ConfigRuntime>, mode: WatchMode) -> tokio::task::JoinHandle<()> {
@@ -254,6 +393,10 @@ async fn settled(runtime: &Arc<ConfigRuntime>, mode: WatchMode) -> tokio::task::
     tokio::time::sleep(Duration::from_millis(300)).await;
     task
 }
+
+/// The poll runs every 2 s from the task's start and the change is made ~0.3 s in, so a change
+/// applied within this budget was found by the directory watcher: the poll cannot have run yet.
+const BEFORE_THE_POLL: Duration = Duration::from_millis(1500);
 
 async fn applied_within(runtime: &ConfigRuntime, a: &str, budget: Duration) -> bool {
     let deadline = Instant::now() + budget;
@@ -267,11 +410,14 @@ async fn applied_within(runtime: &ConfigRuntime, a: &str, budget: Duration) -> b
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_rename_replaced_file_is_in_use_within_5_seconds() {
+async fn a_rename_replaced_file_is_found_by_the_watcher_before_the_poll_runs() {
     let (_dir, file, runtime) = setup(&host("1", "info", ""));
     let _task = settled(&runtime, WatchMode::Full).await;
     replace(&file, &host("2", "info", ""));
-    assert!(applied_within(&runtime, "2", Duration::from_secs(5)).await);
+    assert!(
+        applied_within(&runtime, "2", BEFORE_THE_POLL).await,
+        "the directory watch, not the 2 s poll, must find a rename-replaced file"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -283,36 +429,33 @@ async fn a_change_with_no_watch_event_is_found_by_the_poll_within_5_seconds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_changed_secret_is_in_use_within_5_seconds() {
+async fn a_changed_secret_is_found_by_the_watcher_before_the_poll_runs() {
     let dir = tempfile::tempdir().unwrap();
     let secrets = dir.path().join("secrets");
     std::fs::create_dir(&secrets).unwrap();
-    let secret = secrets.join("token");
-    std::fs::write(&secret, "one\n").unwrap();
-    #[cfg(unix)]
-    mode(&secret, 0o600);
-    let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
-        secret.display()
-    );
+    let (secret, named) = secret_fixture(&secrets, "token", "one\n");
     let file = dir.path().join("daemon.toml");
     std::fs::write(&file, host("1", "info", &named)).unwrap();
     let runtime = Arc::new(ConfigRuntime::open(&file).unwrap());
     let before = runtime.status().applied_hash;
     let _task = settled(&runtime, WatchMode::Full).await;
     replace(&secret, "two\n");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + BEFORE_THE_POLL;
     while runtime.status().applied_hash == before && Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert_ne!(runtime.status().applied_hash, before);
+    assert_ne!(
+        runtime.status().applied_hash,
+        before,
+        "the watch on the secret's directory must find it before the poll runs"
+    );
 }
 
 /// A Kubernetes ConfigMap volume: `daemon.toml -> ..data/daemon.toml`, `..data -> ..<stamp>`, and
 /// an update writes a new stamped directory and swaps the `..data` link.
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
-async fn a_kubernetes_data_symlink_swap_is_in_use_within_5_seconds() {
+async fn a_kubernetes_data_symlink_swap_is_found_by_the_watcher_before_the_poll_runs() {
     use std::os::unix::fs::symlink;
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -327,7 +470,10 @@ async fn a_kubernetes_data_symlink_swap_is_in_use_within_5_seconds() {
     std::fs::write(root.join("..2024_b/daemon.toml"), host("2", "info", "")).unwrap();
     symlink("..2024_b", root.join("..data_tmp")).unwrap();
     std::fs::rename(root.join("..data_tmp"), root.join("..data")).unwrap();
-    assert!(applied_within(&runtime, "2", Duration::from_secs(5)).await);
+    assert!(
+        applied_within(&runtime, "2", BEFORE_THE_POLL).await,
+        "the watch on the directory must see the `..data` link swap before the poll runs"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -354,13 +500,8 @@ async fn a_rejected_file_is_pushed_to_the_listener() {
 fn a_reload_never_writes_the_config_or_a_secret() {
     use std::os::unix::fs::MetadataExt;
     let dir = tempfile::tempdir().unwrap();
-    let secret = dir.path().join("token");
-    std::fs::write(&secret, "s3cr3t\n").unwrap();
+    let (secret, named) = secret_fixture(dir.path(), "token", "s3cr3t\n");
     mode(&secret, 0o400);
-    let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
-        secret.display()
-    );
     let file = dir.path().join("daemon.toml");
     std::fs::write(&file, host("1", "info", &named)).unwrap();
     mode(&file, 0o400);
@@ -377,7 +518,11 @@ fn a_reload_never_writes_the_config_or_a_secret() {
 
     let runtime = ConfigRuntime::open(&file).unwrap();
     for _ in 0..3 {
-        assert_eq!(runtime.check(Instant::now()), Outcome::Unchanged);
+        assert_eq!(
+            runtime.check(Instant::now()),
+            Outcome::Unchanged,
+            "an untouched file is not a change"
+        );
     }
     let _ = runtime.status();
     let _ = micold_core::daemon_config::resolved_view(&runtime.current());
@@ -386,7 +531,63 @@ fn a_reload_never_writes_the_config_or_a_secret() {
         micold_daemon::settings::DaemonSettings::resolve(Some(&runtime.current()), &|_| None);
     let _ = micold_daemon::git_credential::credential_root_of(&settings);
 
-    assert_eq!(before, (stamp(&file), stamp(&secret)));
+    assert_eq!(
+        before,
+        (stamp(&file), stamp(&secret)),
+        "reading must leave content, mtime and inode as they were"
+    );
+}
+
+/// Applying a changed file and a changed secret reads both; neither may be opened for writing, not
+/// even without writing a byte (`IN_CLOSE_WRITE` fires on closing any descriptor opened to write,
+/// which no file mode can show to a root user).
+#[cfg(target_os = "linux")]
+#[test]
+fn applying_a_changed_file_and_secret_never_opens_either_for_writing() {
+    use notify::{event::AccessKind, event::AccessMode, EventKind, RecursiveMode, Watcher};
+    let dir = tempfile::tempdir().unwrap();
+    let (secret, named) = secret_fixture(dir.path(), "token", "one\n");
+    let file = dir.path().join("daemon.toml");
+    std::fs::write(&file, host("1", "info", &named)).unwrap();
+    let runtime = ConfigRuntime::open(&file).unwrap();
+    // The replacements are written first, so the only events left are the daemon's own. They stay
+    // writable on purpose: a read-only file would make a stray write-open fail instead of show.
+    let next_secret = dir.path().join("token.next");
+    let next_file = dir.path().join("daemon.toml.next");
+    std::fs::write(&next_secret, "two\n").unwrap();
+    std::fs::write(&next_file, host("2", "info", &named)).unwrap();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        let _ = tx.send(event);
+    })
+    .unwrap();
+    watcher
+        .watch(dir.path(), RecursiveMode::NonRecursive)
+        .unwrap();
+    std::fs::rename(&next_secret, &secret).unwrap();
+    std::fs::rename(&next_file, &file).unwrap();
+    assert_eq!(
+        runtime.check(Instant::now()),
+        Outcome::Applied,
+        "the changed file and secret are applied"
+    );
+    assert_eq!(a_of(&runtime), "2");
+    std::thread::sleep(Duration::from_millis(300));
+    let written: Vec<_> = rx
+        .try_iter()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            matches!(
+                e.kind,
+                EventKind::Access(AccessKind::Close(AccessMode::Write))
+            )
+        })
+        .collect();
+    assert!(
+        written.is_empty(),
+        "a file was opened for writing: {written:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
