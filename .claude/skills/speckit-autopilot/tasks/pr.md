@@ -43,7 +43,7 @@ Milestone and bugfix body (bug and chore: *Why* and how it was proven, then the 
 - Review B (conformance, sonnet): <verdict; Verify output excerpt, or "not run in this flow">
 
 ## Local gate
-`mise run gate` passed at <sha>. <macOS cross-check / sandbox / visual-pass lines, if run>
+`mise run gate` passed at <sha>. <macOS cross-check / sandbox / visual-pass lines, if run> Or, when CI validates instead: `Local gate: scoped only, full gate left to CI`.
 
 Refs #<issue>
 <session attribution URL>

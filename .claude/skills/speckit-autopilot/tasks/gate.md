@@ -19,7 +19,15 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 
 - **Free disk first.** Two milestones lost a gate to `No space left on device`: if `df` shows under
   20 GB free on the target's filesystem, run `mise run sweep` (the `reclaim-disk` skill) before you start it.
-- **Always `mise run gate`** (or the scoped gate), never the raw cargo commands: the gate hook counts
+- **Let CI validate instead** when the full gate would take too long to wait for (it is queued
+  behind another build, or past ~15 minutes), or the diff is small (a few lines, no `cfg` or
+  sandbox change, nothing visual). Run the scoped gate (fmt, plus clippy and tests of the changed
+  crates) first whenever it finishes faster than a CI round trip (a failure found locally saves the push and the wait); skip it only when it would be slow too. Then record the tree and push:
+  `git rev-parse 'HEAD^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"`. Say
+  `Local gate: scoped only, full gate left to CI` in the PR body, and treat a red CI as the gate
+  failing ([red-ci](red-ci.md)). Never do this for a diff that needs the macOS check, the sandbox
+  suite or a visual pass.
+- **Otherwise always `mise run gate`** (or the scoped gate), never the raw cargo commands: the gate hook counts
   only a green `mise run gate`, and two pushes were refused for it.
 - **Detach it.** A plain background task can be killed while it waits on the build lock.
 - **The full gate's order is CI's:** fmt → clippy (core, then workspace) → `cargo test --workspace`
