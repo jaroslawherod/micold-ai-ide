@@ -136,7 +136,7 @@ fn an_empty_query_lists_everything_grouped_by_kind_then_by_name() {
     let mut sorted = kinds.clone();
     sorted.sort();
     assert_eq!(kinds, sorted, "grouped Skill, Custom, BuiltIn, App");
-    assert_eq!(shown.last(), Some(&(CommandKind::App, "model")));
+    assert_eq!(shown.last(), Some(&(CommandKind::App, "shortcuts")));
 }
 
 /// SC-002 over one list: a name's shortest prefix no other name starts with lists it first, and
