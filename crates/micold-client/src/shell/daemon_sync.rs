@@ -2105,6 +2105,12 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 },
             );
         }
+        // The daemon's configuration file as it runs it: Daemon details shows it (#1535).
+        DaemonMsg::Config { status, .. } | DaemonMsg::ConfigChanged { status } => {
+            app.core.update(Message::Daemons(
+                micold_client::features::daemons::Msg::ConfigReported(daemon, status),
+            ));
+        }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.
         DaemonMsg::LogLocation { path, sink, .. } => {
             let where_ = match path {
@@ -2405,6 +2411,11 @@ pub fn on_connected(
         daemon,
         "connected".to_string(),
     )));
+    if let Some(outbox) = app.outbox_for(daemon) {
+        let req = app.next_req;
+        app.next_req += 1;
+        outbox.send(ClientMsg::ConfigRequest { req });
+    }
     app.disconnected.remove(&daemon);
     if is_sandbox_daemon(app, daemon) {
         app.sandbox.answered();

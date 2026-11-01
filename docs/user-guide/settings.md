@@ -512,8 +512,19 @@ it, the version it reported, a state badge (**Connected**, **Starting**, **Unrea
 | **Stop** | Disconnects from that daemon and no other |
 | **Reconnect** | Tries an unreachable or mismatched daemon again now, instead of waiting for the next automatic try |
 | **Edit** | Opens the daemon's form in a dialog, filled in |
-| **Details** | Opens a dialog with the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason. It keeps updating while it is open; **Close**, Escape or a click outside closes it. A question about a daemon's changed settings waits until the dialog is closed |
+| **Details** | Opens a dialog with the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason, followed by a **Configuration** section (see below). It keeps updating while it is open; **Close**, Escape or a click outside closes it. A question about a daemon's changed settings waits until the dialog is closed |
 | **Remove** | Asks first, see below |
+
+### Configuration in Details
+
+The **Configuration** section of a daemon's Details shows what the daemon was given:
+
+- the configuration file the application delivered (`daemon.toml`);
+- the values the daemon resolved from it, with each secret shown as a path and whether it is readable, never its content;
+- for each GitHub token, the repositories it reaches;
+- the start script's last run: when it ran, how it ended and the names of the variables it exported, never their values.
+
+When a change needs the daemon to restart, the section says which settings changed and the dialog offers **Restart to apply**, which stops the daemon and starts it again. A file the daemon could not apply shows the reason, and the daemon keeps working with the previous one.
 
 ### A container daemon of another version
 
