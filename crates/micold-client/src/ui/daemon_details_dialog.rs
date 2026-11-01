@@ -109,8 +109,41 @@ pub fn configuration_lines(status: &ConfigStatus) -> Vec<String> {
     lines
 }
 
-/// Configuration: the file the application delivered, what the daemon resolved from it, the reach
-/// of each token and the start script's last run.
+/// One line of the Configuration section: a sentence, or a block of file text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigRow {
+    Note(String),
+    Code { text: String, toml: bool },
+}
+
+/// Everything the Configuration section shows, in order: the file the application delivered, what
+/// the daemon resolved from it, the reach of each token and the start script's last run.
+pub fn configuration_rows(
+    delivered: Option<String>,
+    status: Option<&ConfigStatus>,
+) -> Vec<ConfigRow> {
+    let note = |t: &str| ConfigRow::Note(t.to_string());
+    let mut rows = Vec::new();
+    match delivered {
+        Some(text) => {
+            rows.push(note("Delivered file"));
+            rows.push(ConfigRow::Code { text, toml: true });
+        }
+        None => rows.push(note("This daemon is given no configuration file")),
+    }
+    let Some(status) = status else {
+        rows.push(note("The daemon has not reported its configuration"));
+        return rows;
+    };
+    rows.extend(configuration_lines(status).into_iter().map(ConfigRow::Note));
+    rows.push(note("Resolved values"));
+    rows.push(ConfigRow::Code {
+        text: status.resolved.clone(),
+        toml: false,
+    });
+    rows
+}
+
 fn configuration_block<'a>(
     delivered: Option<String>,
     status: Option<&ConfigStatus>,
@@ -118,25 +151,16 @@ fn configuration_block<'a>(
 ) -> Element<'a, Message> {
     let mut block =
         column![group("Configuration", roles)].spacing(micold_core::tokens::spacing::XS);
-    match delivered {
-        Some(text) => {
-            block = block.push(note("Delivered file", roles));
-            block = block.push(CodeBlock::new(text, roles).language("toml"));
-        }
-        None => block = block.push(note("This daemon is given no configuration file", roles)),
+    for row in configuration_rows(delivered, status) {
+        block = match row {
+            ConfigRow::Note(t) => block.push(note(t, roles)),
+            ConfigRow::Code { text, toml: true } => {
+                block.push(CodeBlock::new(text, roles).language("toml"))
+            }
+            ConfigRow::Code { text, .. } => block.push(CodeBlock::new(text, roles)),
+        };
     }
-    let Some(status) = status else {
-        return block
-            .push(note("The daemon has not reported its configuration", roles))
-            .into();
-    };
-    for line in configuration_lines(status) {
-        block = block.push(note(line, roles));
-    }
-    block = block.push(note("Resolved values", roles));
-    block
-        .push(CodeBlock::new(status.resolved.clone(), roles))
-        .into()
+    block.into()
 }
 
 #[cfg(test)]
@@ -189,13 +213,69 @@ mod tests {
         }
     }
 
+    fn texts(rows: &[ConfigRow]) -> String {
+        rows.iter()
+            .map(|r| match r {
+                ConfigRow::Note(t) | ConfigRow::Code { text: t, .. } => t.as_str(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The daemon reads the secret from its file and reports only the path and readability; the
+    /// delivered file names the secret's path. Feed the real value to the daemon's resolver and
+    /// show everything the dialog renders from it.
     #[test]
-    fn no_secret_value_is_in_the_rendered_text() {
-        // A secret's content is never in the status; only names and paths are.
+    fn no_secret_value_is_in_any_rendered_text() {
+        use micold_core::daemon_config;
+        let dir = std::env::temp_dir().join(format!("micold-1535-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let secret_path = dir.join("work");
+        std::fs::write(&secret_path, SECRET).unwrap();
+        let toml = format!(
+            "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[listen]\nsocket = \"auto\"\n[[github.tokens]]\nname = \"work\"\ntoken_file = \"{}\"\n",
+            secret_path.display()
+        );
+        let config = daemon_config::parse(&toml, "test").expect("the fixture parses");
         let mut s = status();
-        s.resolved.push_str("secret env: NPM_REGISTRY\n");
-        let text = configuration_lines(&s).join("\n") + &s.resolved;
-        assert!(!text.contains(SECRET));
+        s.resolved = daemon_config::resolved_view(&config).to_string();
+        let rows = configuration_rows(Some(toml.clone()), Some(&s));
+        let text = texts(&rows);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(
+            text.contains("Token work"),
+            "the fixture reached the view:\n{text}"
+        );
+        assert!(!text.contains(SECRET), "secret value shown:\n{text}");
+    }
+
+    #[test]
+    fn no_report_says_so_and_still_shows_the_delivered_file() {
+        let text = texts(&configuration_rows(Some("schema = 1\n".into()), None));
+        assert!(text.contains("Delivered file") && text.contains("schema = 1"));
+        assert!(text.contains("The daemon has not reported its configuration"));
+        assert!(!text.contains("Resolved values"));
+    }
+
+    #[test]
+    fn no_delivered_file_and_a_report_show_the_resolved_values() {
+        let rows = configuration_rows(None, Some(&status()));
+        let text = texts(&rows);
+        assert!(text.contains("This daemon is given no configuration file"));
+        assert!(!text.contains("Delivered file"));
+        assert!(text.contains("Resolved values"));
+        assert!(rows.contains(&ConfigRow::Code {
+            text: status().resolved,
+            toml: false
+        }));
+    }
+
+    #[test]
+    fn a_failed_load_is_shown_as_not_applied() {
+        let mut s = status();
+        s.last_error = Some("daemon.listen: bad port".into());
+        let text = texts(&configuration_rows(None, Some(&s)));
+        assert!(text.contains("Not applied: daemon.listen: bad port"));
     }
 
     #[test]
