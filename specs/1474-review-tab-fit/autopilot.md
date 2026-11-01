@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: plan
-- **Next step**: Plan unit. Clarify round 1: no critical ambiguities (CLEAN). Plan must cover: effective-state reducer, layout harness window size (tests/support/layout.rs, covered_states.rs), diff header, placeholder, drawer, tree filter placeholder/row, docs overview.md:64 and worktrees-and-sessions.md, delete #1474 entries. Old bug-flow findings: specs/quick/2026-11-01-1474-review-tab-squeezed-parts.autopilot.md
+- **Phase**: plan (done)
+- **Next step**: tasks unit. Plan reviewed clean (plan.md, research.md, data-model.md, quickstart.md, contracts/). Tasks must start with the reducer tests (D1, D2), then D10 audit of 640 suites, then the drawer floor (D6), header/placeholder (D4, D5) from deleted gate entries, docs (D9).
 
 ## Pull requests
 
@@ -37,6 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | d479a4fb980aed7b1d23fbfa608a58ec714398df:8d298a88dbce086d88ae937266f294e07cee7172 | CHANGES: 3 MAJOR (fixed) |
 | Spec | 2 | dc353a16f282665981ce56c92fbed4adaa868667:2eff934fc3e57811dc995beaa9e06dbb27f41556 | CLEAN (1 MINOR fixed) |
+| Plan | 1 | 04aabdf50db4f867c6c977f36de718b6cd34eaac:08b2c3758d99257ccec6a1fa67e96392653d8fb9 | CHANGES: 2 MAJOR (fixed), 3 MINOR (fixed) |
+| Plan | 2 | fbff5a3d1173541778ab6ffce9a94740c03224fb:08b2c3758d99257ccec6a1fa67e96392653d8fb9 | CLEAN (2 MINOR fixed, prose only) |
 
 
 ## Declined review findings
