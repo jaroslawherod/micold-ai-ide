@@ -300,7 +300,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
-the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)** and **Issue 13 (#1534)**; the sub-issue that owns another group adds its own
+the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -351,6 +351,19 @@ share `state.rs` and `repo_clone.rs`; no acceptance scenario separates them with
 - **Satisfies**: US3; FR-014
 - **Verify**: `cargo test -p micold-daemon --test config_projects` (served at start, clone); `cargo test -p micold-client --test daemon_config_render` (runtime-added project in the next rendered file)
 - **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525), merged
+- **Tier**: full
+
+### Issue 14 (#1535) — M1 — Read what a daemon was given 🎯 MVP
+
+One milestone: three tasks, one view. The failing view test (T081), the implementation (T082) and the
+user-guide entry (T083) share the Configuration section of Daemon details, so no acceptance scenario
+separates them (rule 3).
+
+- **Tasks**: T081–T083
+- **Deliverable**: Daemon details (opened from Settings → Daemons) → Configuration shows the delivered file, the resolved values, reach per token and the start script's last run (names of exported variables only); "Restart to apply" appears when `restart_needed`; no secret value is shown anywhere.
+- **Satisfies**: US6; FR-029, SC-005
+- **Verify**: `cargo test -p micold-client daemon_details_dialog`
+- **Depends on**: Issue 3 (#1524), merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
