@@ -197,3 +197,92 @@ Tests tracing to nothing: none. Criteria with no test: none, but "the daemon ser
 - `docs/user-guide/daemon-configuration.md` text (T080) not checked against its gate.
 - The `server.rs` background task's behavior (ordering, broadcast, errors logged) read only, not executed.
 - T080a (deferred), and whether CI's fix `1f0f2a319` matches what CI reported.
+
+---
+
+# Issue 4 (#1525) M1: render, validate before delivery, errors in Settings → Daemons
+
+```yaml
+scope: Issue 4 (#1525), T021 T022 T022a T023 T024 T024a (merge 245bce5fe, PR #1620; feature commit aad9fb137)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: faced746b
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md (none written for #1525); 11 tests audited
+proven: 0
+likely: 11
+test_after: 0
+high_findings: 2
+mutation_score: unmeasured # no tool; 2 deliberate mutants sampled, 0 caught, 2 survived
+suite: scoped - micold-client daemon_config_render 4, daemon_config_stable 2, daemon_config_validate 5 passed, 0 failed (full workspace suite not run)
+```
+
+**Verdict: FAIL.** A deliberate mutant that renders an SSH daemon as `kind = "host"` (`DaemonSettings::from_entry`)
+survives, and the "validate before delivery" criterion is met only on placeholder settings that cannot fail: nothing
+is delivered and `from_entry` never reads the daemon's real settings.
+
+Audit independence: the auditor did not write these tests; all files read cold at `faced746b`. No subagent smell pass.
+
+## Test-first evidence
+
+| Behavior | Class | Evidence |
+|---|---|---|
+| All 11 tests (T021, T022, T022a) | LIKELY | Cycle 21 log: tests written before the module, red = compile failure, "no separate stub run". Tests, source, goldens, docs and ticks are one commit (`aad9fb137`), so order is not visible in git. Red is a compile error, not a behavioural failure |
+| Baseline | gap | cycle log "suite: not run in full"; test list `suite_baseline: unknown` |
+| Test list | gap | `tdd/test-list.md` has no #1525 rows (header says "Issue 2, milestone M1"); no behavior ids and no `traces` for these tests |
+
+Existing tests changed by the feature range: none. The commit only adds test files; `daemons.rs` (core) gained one field
+and `features/daemons.rs` one state field and `Msg::Saved` call, with no assertion edited, no skip, filter or threshold
+touched. `tasks.md` T021-T024a are `[x]` and the code and tests exist: consistent.
+
+## Findings
+
+| # | Sev | Category | File | Finding |
+|---|---|---|---|---|
+| I4-1 | HIGH | test-strength | `crates/micold-client/tests/daemon_config_validate.rs:62-72`, `src/daemon_config_render.rs:91` | Surviving mutant A: `DaemonRuntime::Ssh(_) => Some((host(), Kind::Ssh))` changed to `Kind::Host`; all 11 tests green. `every_configured_daemon_renders_a_valid_file` asserts only `prepare(..).is_ok()`, and asserts `kind` for Kubernetes only. `from_entry` output (name, kind, listen, token path) is never compared to a golden or expected value for host, SSH or container |
+| I4-2 | HIGH | unbuilt behaviour | `crates/micold-client/src/daemon_config_render.rs:83-97`, `src/features/daemons.rs:669-678` | FR-013f / T024 "validate the file Settings renders, show errors, do not deliver" is wired to nothing real. (a) `from_entry` builds `DaemonSettings` from constants (`host()` = name + auto socket; `sandbox()` = placeholder port 7000 and token path) and ignores everything else the entry or Settings hold, so the checked file is never the user's file and cannot be invalid; the error path in the UI is reachable only from the test's hand-made `invalid()` fixture. (b) `check_configs` discards the `Some(text)` that `validate_config` returns, and no code delivers anything (Issues 5-7), so "an invalid file is not delivered" is a property of a function return value that no caller uses. (c) Checks run only on `Msg::Saved`, not at startup or on a load of the registry. The code comment calls the constants placeholders; tasks.md T024 and the deliverable do not |
+| I4-3 | MED | test-strength | `crates/micold-client/src/ui/settings/daemons.rs:270` | The only UI change (`for error in &view.config_errors { caution(..) }`) has no test: no test or snapshot renders the Daemons settings view with a non-empty `config_errors`. Removing the loop leaves the suite green (by inspection, not mutated; no reference to the field exists in any `tests/` file). "Show errors in Settings → Daemons" is verified only down to the view model |
+| I4-4 | MED | test-strength | `daemon_config_validate.rs:82-96` | `saving_a_daemon_checks_its_file` asserts `!out.is_empty()` and `config_checked(last entry)`. It never asserts that the stored errors are empty or what they are, and `config_checked` is true whether `validate_config` succeeded or failed. A `check_configs` that recorded wrong errors would pass |
+| I4-5 | MED | test-strength | `src/daemon_config_render.rs:181`, `daemon_config_render.rs:42-49` | Surviving mutant B: dropping `!value.contains('\'')` from `quote` (a backslash path containing `'` becomes an unparseable literal string); suite green. Only one backslash/quote test, with no apostrophe, control character, newline or empty value |
+| I4-6 | MED | test-strength | `daemon_config_render.rs:19-33` | The round-trip test compares name, kind, image, data_dir, idle_stop, listen and `projects.len()` only. `home`, `time_zone`, `log`, `client_token_file`, `ssh_dir`, `clone_root` and each project's `path`/`remote` are never read back, so a key rendered under the wrong table parses and passes. The goldens cover the bytes, but the T021 "parse(render(x)) round-trips" is not what the test shows |
+| I4-7 | MED | traceability | `tdd/test-list.md`, `tdd/cycle-log.md` | No test-list rows, no criterion mapping and no baseline for #1525 (see test-first table). FR-005 (deliver) is covered by nothing and is deferred; FR-013f is covered per I4-2 |
+| I4-8 | MED | docs | `docs/user-guide/daemon-configuration.md:22-25` | Added paragraph says Settings "writes the file for you", checks it "before it uses it" and shows each error "under that daemon's row; fix the setting it names". No file is written or used yet and no Settings field feeds the file (I4-2), so the text describes behaviour the app does not have. T024a is ticked |
+| I4-9 | LOW | test-strength | `daemon_config_stable.rs:14-17` | `rendering_twice_gives_identical_bytes` renders a pure function of the same value in one process; it would pass for any non-random implementation and cannot see a reordered key. Stability of key order is guarded by the goldens, not by this test (`a_change_to_the_settings_changes_the_bytes` is fine) |
+| I4-10 | LOW | style | `daemon_config_render.rs:35-40`, `:19-33`, `fixtures.rs:12-18` | `a_golden_file_passes_validation` duplicates `a_valid_file_is_delivered_as_rendered`; bare `assert_eq!`s (`:27`) carry no rule message (profile convention); the golden comparison prints no regeneration command, unlike the repo's `UPDATE_*_SNAPSHOT` gates (there is no regeneration path, so a golden change is hand-edited) |
+
+Smell pass: no assertion-free, tautological (except I4-9), skipped or `#[ignore]` tests; `World` fixture from
+`support/daemons_fixture.rs` is reused (no new fake); no secrets (token paths only). Deterministic: no clock, network,
+or sleep; the three test binaries run in under 1.5 s. Cost: the first scoped build waited 27 minutes behind other
+worktrees' builds.
+
+## Mutation results
+
+No mutation tool (`mutation: null`). Two deliberate mutants, each restored with `git checkout` and the scoped suites re-run
+green (4 + 2 + 5 passed). Not exhaustive; none sampled in `features/daemons.rs` or the UI.
+
+| Mutant | File | Result | Judgment |
+|---|---|---|---|
+| A `Kind::Ssh` to `Kind::Host` in `from_entry` | `daemon_config_render.rs:91` | SURVIVED | not equivalent; I4-1 |
+| B drop `!value.contains('\'')` in `quote` | `daemon_config_render.rs:181` | SURVIVED | not equivalent; I4-5 |
+
+## Traceability
+
+| Criterion | Tests | Real entry point | Status |
+|---|---|---|---|
+| T021 four kinds render byte-for-byte to goldens | `each_kind_renders_byte_for_byte_to_its_golden_file` | `render` | Covered |
+| T021 `parse(render(x))` round-trips | `the_rendered_file_parses_back_to_its_settings` | `render` + core `parse` | Partly (I4-6) |
+| T021 output passes validate | `a_golden_file_passes_validation`, `a_valid_file_is_delivered_as_rendered` | `parse`, `prepare` | Covered |
+| T022 stable bytes | `rendering_twice_*`, `a_change_to_the_settings_*` | `render` | Covered, weak (I4-9) |
+| T022a invalid yields config-check errors, not delivered | `an_invalid_file_yields_*` | `prepare` vs core `diagnose` | Covered at function level; no deliverer (I4-2) |
+| T022a / T024 errors reach Settings → Daemons | `the_errors_reach_the_daemons_view_model_*`, `saving_a_daemon_checks_its_file` | `features::daemons` view model | View model only; UI not tested (I4-3, I4-4) |
+| T023 render from the daemon entry | `every_configured_daemon_renders_a_valid_file` | `from_entry` | Weak (I4-1, I4-2) |
+| T024a docs | `docs/user-guide/daemon-configuration.md:22-25` | n/a | Present; overstates (I4-8) |
+
+Tests tracing to nothing: none. Claimed tests that do not exist: none.
+
+## What was not audited (Issue 4)
+
+- Full workspace suite and `mise run gate`; coverage (none in profile); a full mutation sweep (2 mutants; the UI loop,
+  `check_configs` `retain`, `validate_config` error mapping and `ProjectSetting` rendering were not mutated).
+- Commit-level test-first ordering (one commit).
+- Visual behaviour of the caution rows in Settings → Daemons (no visual pass run).
+- Issues 2 and 3 (#1523, #1524): their sections above were not touched. `specs/daemon-config-file/autopilot-1525.md` showed as modified in the tree; the audit did not touch it.
