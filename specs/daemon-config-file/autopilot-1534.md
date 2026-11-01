@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1534
 - **Worktree branch**: feat/1534_projects-and-clone-root-from-the-configuration
 - **Started**: 2026-11-01
-- **Phase**: milestone M1 (review B re-review, then PR)
-- **Next step**: milestone M1 after the design PR merges
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1628 | design: Issue 13 milestone | merged | 6c9d0d533e6ce0b4cbf6d62dec7a7706b9ac9d9c |
-| #1638 | M1 | open | |
+| #1638 | M1 | merged | 1f0f2a3190c1e30f1c722ba05fb9081d0baae516 |
+| close | close the spec | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T078–T080, T078a | full | `[[projects]]` served at start; absent `path` cloned under `clone_root`; runtime projects in next rendered file | #1638 | PR open |
+| M1 | T078–T080, T078a | full | `[[projects]]` served at start; absent `path` cloned under `clone_root`; runtime projects in next rendered file | #1638 | merged |
 
 ## Decisions
 
@@ -59,3 +60,4 @@ None.
 - M1 follow-up: contract R7 lists `[[projects]]` as live-reloaded; only serve-at-start is implemented and `restart_keys` does not report it. The guide says so. Live reload of `[[projects]]` is left to a later task.
 - M1 follow-up: `serve_configured_project` canonicalizes for its already-known check but `add_project` stores the path as given; a symlinked path re-activates harmlessly.
 - M1 follow-up: configured projects are served one after another (a hung clone delays the rest); `ensure_project`'s `exists()` check is outside `ensure_clone`'s per-destination lock.
+- Close: tdd-verify (static, no cargo; build lock) gave PASS_WITH_GAPS, see tdd/verification.md Issue 13 F1-F5. F1 (no test starts the daemon with `--config` `[[projects]]` and checks the real `serve_configured_projects` entry point; code exists) and F2-F4 are test-strength gaps left for a run that can build; no behaviour is missing. T080a is Issue 5's.
