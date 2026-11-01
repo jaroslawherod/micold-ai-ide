@@ -224,7 +224,8 @@ mod tests {
 
     /// The daemon reads the secret from its file and reports only the path and readability; the
     /// delivered file names the secret's path. Feed the real value to the daemon's resolver and
-    /// show everything the dialog renders from it.
+    /// show everything the dialog renders from it. It guards against the view ever reading a token
+    /// file; the status type itself holds no secret content.
     #[test]
     fn no_secret_value_is_in_any_rendered_text() {
         use micold_core::daemon_config;
