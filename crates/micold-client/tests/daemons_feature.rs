@@ -2441,3 +2441,96 @@ fn details_open_and_close_and_follow_a_new_log_line() {
     send(&mut state, &mut w, daemons::Msg::DetailsClosed);
     assert_eq!(state.details, None);
 }
+
+fn reported() -> micold_core::protocol::messages::ConfigStatus {
+    micold_core::protocol::messages::ConfigStatus {
+        path: "/run/micold/config/daemon.toml".into(),
+        schema: 1,
+        kind: "container".into(),
+        applied_hash: "ab".repeat(32),
+        resolved: "token work: /run/secrets/work (readable, 0600)\n".into(),
+        restart_needed: true,
+        changed_restart_keys: vec!["daemon.log".into()],
+        last_error: None,
+        tokens: Vec::new(),
+        startup: None,
+    }
+}
+
+/// #1535: what a daemon reports of its configuration is kept per daemon for the details, replaced
+/// by the next report and dropped when it reports none.
+#[test]
+fn a_reported_configuration_is_kept_per_daemon_replaced_and_cleared() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let (host, boxed) = (w.host, w.boxed);
+    assert_eq!(daemons::details(&state, host).config, None);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::ConfigReported(host, Some(reported())),
+    );
+    assert_eq!(daemons::details(&state, host).config, Some(reported()));
+    assert_eq!(daemons::details(&state, boxed).config, None, "per daemon");
+    let mut next = reported();
+    next.restart_needed = false;
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::ConfigReported(host, Some(next.clone())),
+    );
+    assert_eq!(daemons::details(&state, host).config, Some(next));
+    send(&mut state, &mut w, daemons::Msg::ConfigReported(host, None));
+    assert_eq!(daemons::details(&state, host).config, None);
+}
+
+/// #1535: stopping a daemon forgets its report; so does forgetting the daemon.
+#[test]
+fn stopping_a_daemon_drops_what_it_reported() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let host = w.host;
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::ConfigReported(host, Some(reported())),
+    );
+    send(&mut state, &mut w, daemons::Msg::Stopped(host));
+    assert_eq!(daemons::details(&state, host).config, None);
+}
+
+/// #1535: "Restart to apply" on a host daemon drops the stale report and stops then starts it.
+#[test]
+fn restart_to_apply_drops_the_report_and_starts_the_daemon_again() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let host = w.host;
+    send(&mut state, &mut w, daemons::Msg::Started(host));
+    let row_state = |state: &State, w: &mut World| {
+        daemons::views(state, &w.model())
+            .rows
+            .iter()
+            .find(|r| r.id == host)
+            .unwrap()
+            .state
+            .clone()
+    };
+    let running = row_state(&state, &mut w);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::ConfigReported(host, Some(reported())),
+    );
+    send(&mut state, &mut w, daemons::Msg::RestartRequested(host));
+    assert_eq!(
+        daemons::details(&state, host).config,
+        None,
+        "the old report is stale"
+    );
+    let after = row_state(&state, &mut w);
+    assert_eq!(
+        after, running,
+        "stopped and started again, not left stopped"
+    );
+    assert_ne!(after, DaemonState::Stopped);
+}

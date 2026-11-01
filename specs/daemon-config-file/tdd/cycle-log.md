@@ -84,3 +84,19 @@ Append only. Newest last.
 - red: mutant A (`Kind::Ssh` to `Kind::Host` in `from_entry`) survived the old tests (tdd-verify); the new `every_configured_daemon_renders_the_file_of_its_runtime` asserts the whole result per runtime. Mutant B (drop `!value.contains('\'')` in `quote`) survived; `a_value_that_needs_quoting_survives_the_file` covers it.
 - green: the three scoped test binaries plus the `ui::settings::daemons` unit test pass.
 - T117 built (user decision "Build the fix in M2"): `DaemonEntry` gained a `file` block, the form three fields, and `from_entry` reads them; tests in `daemon_config_validate.rs` (a relative data dir and a remote project with no clone root show their error in the row after a save). Tests were written after the code in this part, so there is no red run to record.
+
+## Issue 14 (#1535) M1: Daemon details shows what a daemon was given
+
+- part 1 wrote the view code and `configuration_lines` tests together; review B named three gaps,
+  closed here test-first on the green tree:
+  - `daemon_details_dialog.rs`: the section's content moved into the pure `configuration_rows`
+    (the widget code only draws it), so tests cover no report, no delivered file, a failed load
+    and the resolved block, not only `configuration_lines`.
+  - the tautological "no secret value" test is replaced by `no_secret_value_is_in_any_rendered_text`:
+    a real secret file holding a known value, parsed and resolved by `micold-core`, shown with the
+    delivered file; the value is absent from every rendered text.
+  - `daemons_feature.rs`: `ConfigReported` (kept per daemon, replaced, cleared on `None`),
+    `Stopped` drops the report, `RestartRequested` drops it and stops then starts a host daemon.
+- mutation checks (each reverted): dropping `config_status.remove` from `Stopped` and
+  `RestartRequested` -> `stopping_a_daemon_drops_what_it_reported` fails (2 tests fail);
+  dropping the `Started` re-issue in `RestartRequested` -> `restart_to_apply_drops_the_report_...` fails.
