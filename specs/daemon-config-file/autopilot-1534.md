@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1628 | design: Issue 13 milestone | merged | 6c9d0d533e6ce0b4cbf6d62dec7a7706b9ac9d9c |
+| #1638 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T078–T080, T078a | full | `[[projects]]` served at start; absent `path` cloned under `clone_root`; runtime projects in next rendered file | | pending |
+| M1 | T078–T080, T078a | full | `[[projects]]` served at start; absent `path` cloned under `clone_root`; runtime projects in next rendered file | #1638 | PR open |
 
 ## Decisions
 
