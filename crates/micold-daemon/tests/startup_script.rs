@@ -1,5 +1,6 @@
 //! The start script on a real daemon (#1533, M1): it runs before the daemon listens, as the daemon,
 //! in its data directory, and what it exports reaches sessions. Unix only: the script is `sh`.
+// unix-only: the start script is run through `sh`, which a Windows daemon does not have; isolates its daemon through `XDG_RUNTIME_DIR` and `XDG_DATA_HOME`, neither of which the Windows endpoint or data directory reads
 #![cfg(unix)]
 
 use std::collections::HashMap;

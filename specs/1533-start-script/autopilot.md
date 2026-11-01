@@ -36,6 +36,7 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Spec location | `specs/1533-start-script/` narrows parent `specs/daemon-config-file/` (Story 5); tasks T068-T077 stay in the parent tasks.md | agent-resolved | parent spec.md |
+| D3 | M1 | T004 says `resolve` moves onto `run_and_diff`; keep it on `run_bounded`? | Keep: `run_and_diff` is the new streaming variant for the start script; `resolve` stays on `run_bounded` per research R4 (no behaviour change to env_include resolution) | agent-resolved | research.md R4 |
 | D2 | clarify | Round 1 of speckit-clarify | No critical ambiguities; record location, inline-script storage and warning transport are plan-level | agent-resolved | spec.md |
 
 ## Review rounds
