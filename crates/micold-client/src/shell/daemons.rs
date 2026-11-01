@@ -23,6 +23,28 @@ use crate::App;
 
 /// Apply a Daemons message and carry out what it asks for.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
+    // "Restart to apply" of a container daemon: its old daemon keeps listening in the container, so
+    // the container is stopped first and the daemon started only once it is gone (#1535).
+    if let Msg::RestartRequested(id) = msg {
+        let name = app
+            .core
+            .settings
+            .daemons
+            .get(id)
+            .map(|e| e.name.as_str().to_string())
+            .unwrap_or_default();
+        if let Some(task) = stop_container_of(app, id, move |stopped| {
+            if stopped {
+                Message::Daemons(Msg::Started(id))
+            } else {
+                container_not_stopped(&name)
+            }
+        }) {
+            app.core
+                .update(Message::Daemons(Msg::ConfigReported(id, None)));
+            return task;
+        }
+    }
     // Taken before the reducer: stopping or removing a daemon drops its outbox, and its sessions
     // are stopped on it.
     let outboxes: BTreeMap<DaemonId, _> = app
