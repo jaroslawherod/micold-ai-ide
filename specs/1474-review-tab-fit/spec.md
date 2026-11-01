@@ -12,7 +12,7 @@
 
 - **Smallest window**: the window at `MIN_WINDOW_SIZE`, 640x480 logical pixels.
 - **Compact width**: a window narrower than 720 logical pixels (the **compact threshold**). Only 640 to 719 are reachable, since the window cannot be made smaller than 640.
-- **Sidebar state**: expanded (at its width) or collapsed to its thin strip, as the user set it with the hide and show buttons (persisted today).
+- **Sidebar state**: expanded (at its width) or collapsed to its thin strip, as the user set it with the hide and show buttons (the window's stored `hidden` and `width`; whether they survive a restart is not part of this feature, which only promises that a resize never writes them).
 - **Auto-collapse**: the sidebar shown as its collapsed strip because the window is at compact width, not because the user hid it.
 - **Review tab**: the Changes tab of a session area: file tree, diff pane (header row, diff, placeholder) and comments drawer.
 - **Squeezed**: a layout node laid out outside the parent that owns it, painting over its neighbours (the `escapes` check of `gates/containment.rs`).

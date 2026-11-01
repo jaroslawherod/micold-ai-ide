@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: plan (done)
-- **Next step**: tasks unit. Plan reviewed clean (plan.md, research.md, data-model.md, quickstart.md, contracts/). Tasks must start with the reducer tests (D1, D2), then D10 audit of 640 suites, then the drawer floor (D6), header/placeholder (D4, D5) from deleted gate entries, docs (D9).
+- **Phase**: tasks (done)
+- **Next step**: design PR merge, then milestone M1. T019 (quickstart §B record) is left to the close unit. Spec "persisted today" wording corrected: nothing found persisting sidebar hidden; only "a resize never writes hidden/width" is promised.
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010 | full | sidebar collapses to the strip below 720px | | pending |
+| M2 | T011–T018 | full | review tab fits at 640x480 | | pending |
 
 ## Decisions
 
