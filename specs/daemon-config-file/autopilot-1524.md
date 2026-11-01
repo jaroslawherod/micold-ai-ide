@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1616 | Design (milestones for Issue 3) | merged | b6f32a1a7feabb6a2fedfd5b4c1b0ed5d7dedf2a |
 | #1624 | M1 | merged | 8d298a88dbce086d88ae937266f294e07cee7172 |
+| #1627 | Close | open | — |
 
 ## Milestones
 
