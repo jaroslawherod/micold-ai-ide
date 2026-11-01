@@ -128,6 +128,7 @@ impl ConfigRuntime {
             restart_needed: !state.restart_keys.is_empty(),
             changed_restart_keys: state.restart_keys.clone(),
             last_error: state.last_error.clone(),
+            startup: None,
         }
     }
 

@@ -85,11 +85,39 @@ fn start() -> std::io::Result<()> {
     .map_err(std::io::Error::other)?;
     startup.settings.apply_to_process();
     micold_daemon::settings::install(startup.settings);
+    let script = startup.file.as_ref().and_then(|f| {
+        let plan = f
+            .config
+            .startup
+            .as_ref()
+            .map(micold_daemon::startup_script::StartupPlan::from_config)?;
+        Some((
+            plan,
+            f.config.daemon.time_zone.is_some(),
+            f.config.daemon.home.is_some(),
+        ))
+    });
     if let Some(file) = startup.file {
         micold_daemon::config_watch::keep_startup_file(file);
     }
     // Before the runtime has threads: a container daemon runs with the container's home (#1459).
     micold_daemon::state::align_container_home();
+    // The start script (#1533) runs here: after the home is settled, before the runtime exists (so
+    // `set_var` is sound) and so before anything listens (SC-004).
+    if let Some((plan, time_zone_configured, home_configured)) = script {
+        let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
+            std::io::Error::other("start script: no data directory can be determined")
+        })?;
+        micold_daemon::startup_script::run(
+            &plan,
+            &micold_daemon::startup_script::RunContext {
+                data_dir: &data_dir,
+                time_zone_configured,
+                home_configured,
+            },
+        )
+        .map_err(std::io::Error::other)?;
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -100,18 +128,5 @@ fn start() -> std::io::Result<()> {
 
 /// Best-effort: a daemon failing to start has nowhere better to report a failure to log.
 fn append_to_log(line: &str) {
-    use std::io::Write;
-    let Some(path) = micold_daemon::logging::default_log_path() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
-        let _ = writeln!(file, "{line}");
-    }
+    micold_daemon::logging::append_line(line);
 }
