@@ -222,8 +222,9 @@ fn the_pane_view_reports_a_hover_start_and_its_end_by_leave_or_drop() {
 /// wears the cue; a terminal pane and a session that cannot take input do not.
 #[test]
 fn only_a_structured_pane_that_accepts_input_wears_the_cue_while_files_hover() {
-    use micold_client::features::composer::{InputState, TurnPhase};
+    use micold_client::features::composer::InputState;
     use micold_client::features::session::shows_drop_cue;
+    use micold_core::protocol::messages::TurnPhase;
     use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
     let start = |kind| {
         Session::start_new_of_kind(
