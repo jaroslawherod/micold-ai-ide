@@ -206,8 +206,9 @@ Research D12.
 
 ## Issue 13 — feat: projects and clone root from the configuration (needs 3)
 
-- [ ] T078 [P] [US3] Failing tests in `crates/micold-daemon/tests/config_projects.rs`: `[[projects]]` are served at start; an absent `path` with `remote` and `clone_root` is cloned (`crates/micold-daemon/src/repo_clone.rs`); `ProjectAdd` at runtime appears in the next rendered file
-- [ ] T079 [US3] Implement in `crates/micold-daemon/src/state.rs` and `repo_clone.rs`; render `[[projects]]` from Settings in `crates/micold-client/src/daemon_config_render.rs`
+- [ ] T078 [P] [US3] Failing tests in `crates/micold-daemon/tests/config_projects.rs`: `[[projects]]` are served at start; an absent `path` with `remote` and `clone_root` is cloned (`crates/micold-daemon/src/repo_clone.rs`)
+- [ ] T078a [P] [US3] Failing test in `crates/micold-client/tests/daemon_config_render.rs`: a Settings value that gains a project added at runtime (`ProjectAdd`) renders it as a `[[projects]]` entry in the next rendered file, against a new golden
+- [ ] T079 [US3] Implement in `crates/micold-daemon/src/state.rs` and `repo_clone.rs`; render `[[projects]]` from Settings in `crates/micold-client/src/daemon_config_render.rs`, including a project the daemon reports as added at runtime (the Settings daemon entry takes the added project from the `ProjectAdd` the app already sees)
 - [ ] T080 [US3] Document in `docs/user-guide/daemon-configuration.md`
 
 ---
@@ -299,7 +300,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
-the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)** and **Issue 4 (#1525)**; the sub-issue that owns another group adds its own
+the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)** and **Issue 13 (#1534)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -338,6 +339,18 @@ scenario separates them without a half-wired UI. Delivery of the rendered file i
 - **Satisfies**: US1; FR-005, FR-013f
 - **Verify**: `cargo test -p micold-client --test daemon_config_render`; `cargo test -p micold-client --test daemon_config_stable --test daemon_config_validate`
 - **Depends on**: Issue 2 (#1523), merged
+- **Tier**: full
+
+### Issue 13 (#1534) — M1 — Projects and clone root from the configuration
+
+One milestone: serving `[[projects]]` (T078 test, T079 implement), cloning under `clone_root` and rendering added projects
+share `state.rs` and `repo_clone.rs`; no acceptance scenario separates them without a half-wired daemon. T080 (user guide) travels with it.
+
+- **Tasks**: T078–T080, T078a
+- **Deliverable**: the daemon serves the `[[projects]]` of its configuration at start; a project with `remote` and no `path` is cloned under `[storage] clone_root`; a project added at runtime (`ProjectAdd`) appears in the next file rendered from Settings; `docs/user-guide/daemon-configuration.md` documents `[[projects]]` and `clone_root`.
+- **Satisfies**: US3; FR-014
+- **Verify**: `cargo test -p micold-daemon --test config_projects` (served at start, clone); `cargo test -p micold-client --test daemon_config_render` (runtime-added project in the next rendered file)
+- **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525), merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
