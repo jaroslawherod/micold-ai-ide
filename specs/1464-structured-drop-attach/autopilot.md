@@ -63,7 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 is implemented, verified (core/daemon/client suites green), Review A CLEAN, Review B CLEAN (MINORs accepted, see M4 notes), visual pass PASS (specs/1464-structured-drop-attach/visual-pass-m4.md), layout snapshot regenerated. All committed locally on the branch (rebased on origin/main after #1618); NOT pushed, no PR. Remaining: a green full `mise run gate` and the PR. Gate runs 2-5 failed on non-diff causes: (a) pr_status flake `pr_list_read_a_second_ask_shares_the_read_under_way` (timeout under load), (b) `-p micold-daemon --test version_mismatch_resolves` and `--test autospawn` failed with "VersionMismatch client 74 daemon 75" (the spawned daemon binary in the shared target-shared came from another worktree, e.g. feat-1524, not this tree; this diff does not touch the protocol). Next step: rebuild this tree's daemon (`scripts/build-lock.sh cargo build -p micold-daemon` or `cargo test -p micold-daemon --test autospawn` alone) so the binary matches, confirm those two tests pass, then rerun `mise run gate` (detached, wait on the build lock; hold.sh STOPs after 10 holds, then wait on a background until-loop). When green: PR `feat(1464): /shortcuts opens the shortcut sheet with the attach chord (#1464)`, body per tasks/pr.md, then M5.
 
 ## Open escalation
 
