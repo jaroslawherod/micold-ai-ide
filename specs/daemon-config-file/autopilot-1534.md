@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| B (sonnet, static; no cargo run) | 2 | f64a8637aecfadfd5546cde08dd14188d0384177:e2efebf99161549e09f538b0e4b63795900e82d6 | CLEAN (1 MINOR left: canonicalize vs stored path in serve_configured_project, harmless re-activation) |
 
 ## Declined review findings
 
@@ -55,4 +56,5 @@ None.
 
 - M1 follow-up: `DaemonSettings::add_runtime_project` (client, tested with a golden) has no production caller. The client only validates a generated file (`check_configs`/`validate_config`); nothing writes the file yet, and `from_entry` carries no per-daemon project list, so there is no "next rendered file" to feed. Wiring needs the daemon catalog's projects per daemon in `State` and the file-writing path (a later milestone). The user guide says a runtime-added project is not yet written into the file.
 - M1 follow-up: contract R7 lists `[[projects]]` as live-reloaded; only serve-at-start is implemented and `restart_keys` does not report it. The guide says so. Live reload of `[[projects]]` is left to a later task.
+- M1 follow-up: `serve_configured_project` canonicalizes for its already-known check but `add_project` stores the path as given; a symlinked path re-activates harmlessly.
 - M1 follow-up: configured projects are served one after another (a hung clone delays the rest); `ensure_project`'s `exists()` check is outside `ensure_clone`'s per-destination lock.
