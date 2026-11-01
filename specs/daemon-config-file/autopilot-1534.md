@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1534
 - **Worktree branch**: feat/1534_projects-and-clone-root-from-the-configuration
 - **Started**: 2026-11-01
-- **Phase**: tasks
-- **Next step**: tasks unit: cut milestones for T078–T080 (Issue 13), then handoff
+- **Phase**: milestone M1 (design PR open)
+- **Next step**: milestone M1 after the design PR merges
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T078–T080, T078a | full | `[[projects]]` served at start; absent `path` cloned under `clone_root`; runtime projects in next rendered file | | pending |
 
 ## Decisions
 
@@ -29,6 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Write a new spec for #1534? | No: reuse `specs/daemon-config-file/` (FR-014, contract #projects, tasks T078–T080 exist); per-issue ledger as for #1524/#1525 | agent-resolved | specs/daemon-config-file/autopilot-1525.md |
 
 ## Review rounds
+
+- Tasks review round 1 (snapshot 54ec58b70e187d69795d7c6298d68365828afb6c:02ee6e4c8fbf0dc3f7f5a2f12747c0ce7baf7911): CHANGES; F1 (client-crate render test missing) fixed by T078a, F2 (MVP marker) fixed, prose-level; no re-review (speckit-analyze not run: one milestone cut over existing tasks).
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
