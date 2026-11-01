@@ -43,7 +43,7 @@ None.
 
 ## Handover
 
-None.
+M1 is committed locally (e07a105a5), not pushed, no PR. Done: T078, T078a, T079, T080 code/tests/docs; review A (all real findings fixed or recorded as follow-ups); review B (F1 cycle-log added, F2 handled by narrowing T079 and adding unticked T080a; F3 needs test output). NOT done: no cargo test/clippy has ever run on this tree (full gate sat in the build-lock queue behind other worktrees for over an hour; fmt is clean). Next: run `mise run gate` when the lock frees (or scoped gate), fix any compile/test failures (config_projects.rs, daemon_config_render.rs are unrun), then push and open the PR (title ends `(#1534)`, body ends `Refs #1534`). The auto-mode classifier refused writing the autopilot-gate-ok marker to skip the local gate, so a green `mise run gate` is required before push. Note T080a (unticked) leaves M1 not fully complete: decide with the orchestrator whether to move it to a later milestone.
 
 ## Open escalation
 
