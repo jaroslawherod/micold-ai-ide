@@ -19,10 +19,11 @@ reports the first such error. Without `--files` the files the configuration name
 yet; with it, a missing script, settings file or client-token file is an error, and a secret file
 readable by others is a warning on a host or SSH daemon and an error in a container or pod.
 
-Settings writes the file for you. For each daemon the application renders the file from Settings,
-with the same key order every time, and checks it with the same check as `micold-daemon config
-check` before it uses it. When the check finds an error, the file is not delivered and Settings →
-Daemons shows each error under that daemon's row; fix the setting it names and the error goes away.
+Settings renders a file for each daemon, with the same key order every time, and checks it with
+the same check as `micold-daemon config check` when you save a daemon. When the check finds an
+error, Settings → Daemons shows it under that daemon's row. For now the file checked is a
+placeholder for the daemon's kind: Settings does not yet fill it from the settings you enter or
+write it to the daemon. That arrives with the delivery of the file to each kind of daemon.
 
 ## Rules for every key
 

@@ -86,6 +86,11 @@ impl DaemonSettings {
 
     /// The settings and kind of a configured daemon, or `None` for a runtime this build does not
     /// know (it has no file).
+    ///
+    /// Only the name, the kind and how the daemon listens are set, from the runtime: the registry
+    /// holds none of the other settings (data directory, idle stop, projects, clone root), and
+    /// delivery (Issues 5-7) feeds them in. Until then the file checked here is this placeholder
+    /// one, so the check cannot fail on a setting the user entered.
     pub fn from_entry(entry: &DaemonEntry) -> Option<(Self, Kind)> {
         let name = entry.name.as_str();
         let host = || Self::new(name, Listen::Socket(SocketSpec::Auto));

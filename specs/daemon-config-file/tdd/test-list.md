@@ -37,3 +37,21 @@ and `micold-daemon config check`. Issues 3-15 add their own behaviors under thei
 | U18 | V19 machine sign-in kind and exclusivity | FR-042 | DONE |
 | U19 | SC-005: Debug/Display of config, SecretPath, view never show content | SC-005 | DONE |
 | U20 | `config check` flags: --kind, --files, usage, unreadable file | FR-017 | DONE |
+
+# Test list: Issue 4 (#1525), milestones M1-M2
+
+Scope: `micold-client` `daemon_config_render`, `features::daemons` config check, the Daemons row.
+Baseline: `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate` green at M2 start (4 + 2 + 5).
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| I4-A1 | Each kind renders byte for byte to its golden file | US1, FR-005 | DONE |
+| I4-A2 | A rendered file parses back to every setting it was rendered from | US1, FR-005 | DONE |
+| I4-U1 | A value with an apostrophe and a backslash, a control character, an empty value or a quote survives the file | FR-005 | DONE |
+| I4-U2 | Keys are written in the contract's fixed order | FR-005 | DONE |
+| I4-U3 | A change to the settings changes the bytes | FR-005 | DONE |
+| I4-U4 | `from_entry` gives the kind, name, listen and token path of each runtime | FR-005 | DONE |
+| I4-U5 | An invalid file yields the errors of `config check` and is not delivered | FR-013f | DONE |
+| I4-U6 | The errors reach the row's view model; a valid file clears them; a save checks the file and shows none for a valid one | FR-013f | DONE |
+| I4-U7 | Each config error adds a line to the Daemons row | FR-013f | DONE |
+| I4-D1 | `from_entry` builds the file from the daemon's real settings; checked at registry load | FR-005, FR-013f | DEFERRED to Issues 5-7 (T117) |
