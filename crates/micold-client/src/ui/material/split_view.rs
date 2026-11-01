@@ -220,6 +220,9 @@ struct State {
     /// rather than in the application: a pointer subscription would make every mouse move an
     /// `update` (`tests/idle_subscriptions.rs`), and the widget sees the moves for nothing.
     pointer: Option<Point>,
+    /// Whether files are hovering, as last published (#1464): the window reports one hover event
+    /// per file, and only a change is worth a message.
+    hovering: bool,
 }
 
 /// The panes of a layout, tiled; builder form (Principle VIII):
@@ -310,6 +313,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             ids: Vec::new(),
             gesture: Gesture::default(),
             pointer: None,
+            hovering: false,
         })
     }
 
@@ -420,12 +424,18 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
             _ => {}
         }
         if let (Event::Window(window_event), Some(f)) = (event, &self.on_file_hover) {
-            match window_event {
-                iced::window::Event::FileHovered(_) => shell.publish(f(true)),
+            // One event per dragged file: publish only when the state changes.
+            let next = match window_event {
+                iced::window::Event::FileHovered(_) => Some(true),
                 iced::window::Event::FilesHoveredLeft | iced::window::Event::FileDropped(_) => {
-                    shell.publish(f(false));
+                    Some(false)
                 }
-                _ => {}
+                _ => None,
+            };
+            let hovering = &mut tree.state.downcast_mut::<State>().hovering;
+            if let Some(next) = next.filter(|n| n != hovering) {
+                *hovering = next;
+                shell.publish(f(next));
             }
         }
         if let (Event::Window(iced::window::Event::FileDropped(path)), Some(f)) =
