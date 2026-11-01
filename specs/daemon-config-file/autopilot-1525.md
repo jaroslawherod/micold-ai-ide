@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1525
 - **Worktree branch**: feat/1525_the-app-renders-each-daemon-s-configuration-from
 - **Started**: 2026-10-30
-- **Phase**: tasks
-- **Next step**: handoff (merge design PR, then M1)
+- **Phase**: milestones
+- **Next step**: implement M2, then a new close unit
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1617 | Design (milestones for Issue 4) | open | — |
-| #1620 | M1 | open | — |
+| #1617 | Design (milestones for Issue 4) | merged | 9f6e33d41bdea3325af5084f986fc46c8843eab2 |
+| #1620 | M1 | merged | 245bce5fe3f1a46dca57e191d46977f30d07e0ef |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | open |
+| M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | merged |
+| M2 | T116–T123 | full | real-settings `from_entry`, row error test, stronger render/quote tests, docs true to what ships | — | planned |
 
 ## Decisions
 
@@ -33,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | tasks | Split Issue 4? | No: 4 tasks, one story, render and validation share the rendered text (rule 3) | agent-resolved | milestones.md rule 3 |
 | D3 | tasks | User-guide task | Added T024a to the milestone (CI user-guide gate) | agent-resolved | milestones.md rule 4 |
 | D4 | tasks | Tier | full: touches the Settings UI and a public client API; M1 is always full | agent-resolved | milestone-format.md |
+| D5 | close | Unbuilt behaviour from tdd-verify (I4-2: `from_entry` builds from constants)? | New milestone M2 = T116–T123 (tasks.md Phase 21), tier full | agent-resolved | close.md step 2; tdd/verification.md Issue 4 |
 
 ## Review rounds
 
@@ -57,3 +59,5 @@ None.
 
 - Milestones live in tasks.md under "Issue 4 (#1525)"; Issue 3's PR #1616 edits the same section, so the second to merge rebases.
 - TDD test list not generated here; the milestone's implement run derives it.
+- `scripts/autopilot/resume.sh` only finds ledgers named `autopilot.md`, so it does not find `autopilot-1525.md` (it loops on LEDGER-ON-MAIN); not fixed here, not this flow's to touch.
+- Close skipped `speckit-converge`: M1 review B was CLEAN. tdd-verify (Issue 4) verdict FAIL; mutation was by two hand-made mutants only, no full sweep.

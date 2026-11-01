@@ -367,6 +367,17 @@ separates them (rule 3).
 - **Depends on**: Issue 3 (#1524), merged
 - **Tier**: full
 
+### Issue 4 (#1525) — M2 — The Settings check validates each daemon's real settings
+
+Added by the close unit: `tdd/verification.md` (Issue 4) found that `DaemonSettings::from_entry` builds the checked file from constants, so the gate M1 shipped cannot fail on a real setting (I4-2), plus test-strength and docs findings that travel with it (rule 7).
+
+- **Tasks**: T116–T123
+- **Deliverable**: `DaemonSettings::from_entry` builds the file from the daemon's real Settings, an invalid real setting shows its `config check` error in the Settings → Daemons row (covered by a test of the row and of the stored error text), and the user guide says only what ships.
+- **Satisfies**: US1; FR-005, FR-013f
+- **Verify**: `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`; a mutant changing `Kind::Ssh` to `Kind::Host` in `from_entry` fails a test
+- **Depends on**: M1
+- **Tier**: full
+
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
 
 Verdict FAIL: Issue 2 is not done until findings 1-5 are cleared. Verify each with
@@ -382,3 +393,17 @@ Verdict FAIL: Issue 2 is not done until findings 1-5 are cleared. Verify each wi
 - [x] T113 [US1] Finding 11: add `config check` tests for `--kind` with a bad value, `--kind` with no value, an unknown flag, and two files (exit 2, usage or message)
 - [x] T114 [US1] Finding 10: correct the `traces` in `specs/daemon-config-file/tdd/test-list.md` (A2, U20 to FR-017; U3 to FR-003; U4-U14 to the rule's FR) and set `spec_criteria`
 - [ ] T115 (partly done: per-kind messages, rule messages; cfg!(windows) constant and secret-file helper left as LOW) [US1] Findings 8, 9, 12: give the four-examples loop a per-kind message, replace the `cfg!(windows)` expected value with a named per-platform constant, add rule messages to bare `assert_eq!`s, and reuse one secret-file helper
+
+## Phase 21: TDD remediation (Issue 4 / #1525, from `tdd/verification.md`, section "Issue 4")
+
+Verdict FAIL: Issue 4 is not done until I4-1 and I4-2 are cleared. Verify each with
+`scripts/build-lock.sh cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`.
+
+- [ ] T116 [US1] I4-1: assert the full `from_entry` result (kind, name, listen, token path) per runtime in `crates/micold-client/tests/daemon_config_validate.rs:62-72`; done when changing `Kind::Ssh` to `Kind::Host` at `daemon_config_render.rs:91` fails a test
+- [ ] T117 [US1] I4-2: build `DaemonSettings` from the daemon's real Settings (data dir, idle stop, projects, clone root, token file) instead of constants in `DaemonSettings::from_entry`, check at registry load as well as on `Msg::Saved`, and make `check_configs` hand the validated text to the caller; or reword T024 and the deliverable to say the gate is wired by Issues 5-7. Done when a test with an invalid real setting shows an error in the row
+- [ ] T118 [US1] I4-3: add a test or layout snapshot that renders `daemon_row` with a non-empty `config_errors` and finds each line; removing `ui/settings/daemons.rs:270-272` must fail it
+- [ ] T119 [US1] I4-4: in `saving_a_daemon_checks_its_file` assert the daemon's `config_errors` content after save (empty for a valid draft, the named error for an invalid one)
+- [ ] T120 [US1] I4-5, I4-6: add `quote` cases (apostrophe plus backslash, control character, empty) and read back `home`, `time_zone`, `log`, `client_token_file`, `ssh_dir`, `clone_root` and every project in the round-trip test; mutant B must fail
+- [ ] T121 [US1] I4-7: add the #1525 behaviors with `traces` (FR-005, FR-013f) and a baseline to `tdd/test-list.md` and `tdd/cycle-log.md`
+- [ ] T122 [US1] I4-8: reword `docs/user-guide/daemon-configuration.md:22-25` to what ships (render and check, no delivery yet) until T117 and Issues 5-7 land
+- [ ] T123 [US1] I4-9, I4-10: drop or fold the duplicate `a_golden_file_passes_validation`, give bare `assert_eq!`s a message, and replace the twice-render test with a key-order assertion
