@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1524_the-daemon-loads-its-configuration-file-and
 - **Started**: 2026-10-30
 - **Phase**: implement M1
-- **Next step**: push the branch and open the M1 PR (blocked, see Open escalation)
+- **Next step**: push the branch and open the M1 PR (rebased onto origin/main, gate rerun)
 
 ## Pull requests
 
@@ -31,6 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | tasks | Skip spec/clarify/plan? | Yes, design merged on main | agent-resolved | autopilot-1523.md D1; issue body "Plan: specs/daemon-config-file/ ... Implement test-first" |
 | D2 | tasks | Split Issue 3? | No: one milestone (shared DaemonSettings and Arc swap; no half-wired daemon) | agent-resolved | milestones.md rule 3 (about 11 tasks, one story) |
 | D3 | tasks | User-guide task | Added T020a to the milestone (CI user-guide gate) | agent-resolved | milestones.md rule 4 |
+| D4 | pr | Push rejected as stale by the old remote branch; force push? | Allowed; the stale remote branch is gone, plain `git push -u origin HEAD`, explicit-lease force push allowed if needed | user | "allow force push", 2026-10-31 |
 
 ## Review rounds
 
@@ -51,7 +52,7 @@ None.
 
 ## Open escalation
 
-M1 is implemented, reviewed and gated (`mise run gate` green before a rebase onto origin/main, whose 4 new commits touch only client composer files and other specs). The push is blocked: `git push --force-with-lease -u origin HEAD` is rejected as stale because the remote branch `feat/1524_...` still holds the merged design PR's commits, and the explicit-lease force push was denied by the permission classifier. Needed: permission to force-push this branch (or delete the stale remote branch), then push and `gh pr create` with the body prepared in the scratchpad. A hook may also want the gate re-run on the rebased tree.
+None.
 
 ## Follow-ups not done
 
