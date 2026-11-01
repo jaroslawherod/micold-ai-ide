@@ -20,13 +20,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1592 | sort chips (earlier bug flow) | merged | 3190828cbe433f90b5458ad23837e6678d1c8910 |
 | #1626 | design (spec, plan, tasks) | merged | da15ba2f441be5c938dac897b658e8f492e509db |
 | #1637 | M1 sidebar strip | merged | 9589c784105246c8e02d884b02e60afcdc9f90a6 |
+| #1641 | M2 review tab fits | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | sidebar collapses to the strip below 720px | #1637 | merged |
-| M2 | T011–T018 | full | review tab fits at 640x480 | | PR open |
+| M2 | T011–T018 | full | review tab fits at 640x480 | #1641 | PR open |
 
 ## Decisions
 
