@@ -88,7 +88,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [x] T022 [P] [US1] Failing test in `crates/micold-client/tests/daemon_config_stable.rs`: rendering twice gives identical bytes (stable key order), so delivery writes only on change (research D10)
 - [x] T022a [P] [US1] Failing test in `crates/micold-client/tests/daemon_config_validate.rs`: an invalid Settings fixture yields the `validate` errors (same check as `micold-daemon config check`), is not delivered, and its errors reach the Settings → Daemons view model (FR-013f)
 - [x] T023 [US1] Implement `render(&DaemonSettings, Kind) -> String` with the header comment in `crates/micold-client/src/daemon_config_render.rs`, reading the daemon entry from `crates/micold-core/src/daemons.rs`
-- [x] T024 [US1] Run `validate` on the rendered file before delivery and show errors in Settings → Daemons (`crates/micold-client/src/ui/settings/daemons.rs`) — the same check as `micold-daemon config check`; an invalid file is not delivered
+- [x] T024 [US1] Run `validate` on the rendered file before delivery and show errors in Settings → Daemons (`crates/micold-client/src/ui/settings/daemons.rs`) — the same check as `micold-daemon config check`; an invalid file is not delivered. (Reworded at M2: `validate_config` and the row are built and tested; the file `from_entry` checks is the runtime's placeholder file until Issues 5-7 feed it the daemon's real settings and deliver it)
 - [x] T024a [US1] Document in `docs/user-guide/daemon-configuration.md` that Settings renders each daemon's file, validates it with the same check as `micold-daemon config check`, and shows errors in Settings → Daemons without delivering an invalid file (user-guide gate, Constitution VII)
 
 ---
@@ -410,7 +410,7 @@ separates them (rule 3).
 Added by the close unit: `tdd/verification.md` (Issue 4) found that `DaemonSettings::from_entry` builds the checked file from constants, so the gate M1 shipped cannot fail on a real setting (I4-2), plus test-strength and docs findings that travel with it (rule 7).
 
 - **Tasks**: T116–T123
-- **Deliverable**: `DaemonSettings::from_entry` builds the file from the daemon's real Settings, an invalid real setting shows its `config check` error in the Settings → Daemons row (covered by a test of the row and of the stored error text), and the user guide says only what ships.
+- **Deliverable**: the Settings → Daemons gate is tested end to end as far as it is built (the rendered row lists each error, the saved row's stored errors are asserted, `from_entry`'s result is asserted per runtime), `render` is shown to round-trip every setting and every awkward string, and the user guide says only what ships. Feeding `from_entry` the daemon's real Settings and acting on the validated text is wired by the delivery issues (5-7), not here (T117 reworded, per its own alternative).
 - **Satisfies**: US1; FR-005, FR-013f
 - **Verify**: `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`; a mutant changing `Kind::Ssh` to `Kind::Host` in `from_entry` fails a test
 - **Depends on**: M1
@@ -437,11 +437,11 @@ Verdict FAIL: Issue 2 is not done until findings 1-5 are cleared. Verify each wi
 Verdict FAIL: Issue 4 is not done until I4-1 and I4-2 are cleared. Verify each with
 `scripts/build-lock.sh cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`.
 
-- [ ] T116 [US1] I4-1: assert the full `from_entry` result (kind, name, listen, token path) per runtime in `crates/micold-client/tests/daemon_config_validate.rs:62-72`; done when changing `Kind::Ssh` to `Kind::Host` at `daemon_config_render.rs:91` fails a test
-- [ ] T117 [US1] I4-2: build `DaemonSettings` from the daemon's real Settings (data dir, idle stop, projects, clone root, token file) instead of constants in `DaemonSettings::from_entry`, check at registry load as well as on `Msg::Saved`, and make `check_configs` hand the validated text to the caller; or reword T024 and the deliverable to say the gate is wired by Issues 5-7. Done when a test with an invalid real setting shows an error in the row
-- [ ] T118 [US1] I4-3: add a test or layout snapshot that renders `daemon_row` with a non-empty `config_errors` and finds each line; removing `ui/settings/daemons.rs:270-272` must fail it
-- [ ] T119 [US1] I4-4: in `saving_a_daemon_checks_its_file` assert the daemon's `config_errors` content after save (empty for a valid draft, the named error for an invalid one)
-- [ ] T120 [US1] I4-5, I4-6: add `quote` cases (apostrophe plus backslash, control character, empty) and read back `home`, `time_zone`, `log`, `client_token_file`, `ssh_dir`, `clone_root` and every project in the round-trip test; mutant B must fail
-- [ ] T121 [US1] I4-7: add the #1525 behaviors with `traces` (FR-005, FR-013f) and a baseline to `tdd/test-list.md` and `tdd/cycle-log.md`
-- [ ] T122 [US1] I4-8: reword `docs/user-guide/daemon-configuration.md:22-25` to what ships (render and check, no delivery yet) until T117 and Issues 5-7 land
-- [ ] T123 [US1] I4-9, I4-10: drop or fold the duplicate `a_golden_file_passes_validation`, give bare `assert_eq!`s a message, and replace the twice-render test with a key-order assertion
+- [x] T116 [US1] I4-1: assert the full `from_entry` result (kind, name, listen, token path) per runtime in `crates/micold-client/tests/daemon_config_validate.rs:62-72`; done when changing `Kind::Ssh` to `Kind::Host` at `daemon_config_render.rs:91` fails a test
+- [x] T117 [US1] (reworded: the gate is wired by Issues 5-7; `from_entry`'s doc says so) I4-2: build `DaemonSettings` from the daemon's real Settings (data dir, idle stop, projects, clone root, token file) instead of constants in `DaemonSettings::from_entry`, check at registry load as well as on `Msg::Saved`, and make `check_configs` hand the validated text to the caller; or reword T024 and the deliverable to say the gate is wired by Issues 5-7. Done when a test with an invalid real setting shows an error in the row
+- [x] T118 [US1] I4-3: add a test or layout snapshot that renders `daemon_row` with a non-empty `config_errors` and finds each line; removing `ui/settings/daemons.rs:270-272` must fail it
+- [x] T119 [US1] I4-4: in `saving_a_daemon_checks_its_file` assert the daemon's `config_errors` content after save (empty for a valid draft; reworded like T117: the named error for an invalid save needs real settings, Issues 5-7, and is asserted through `validate_config` in `the_errors_reach_the_daemons_view_model_and_a_valid_file_clears_them`)
+- [x] T120 [US1] I4-5, I4-6: add `quote` cases (apostrophe plus backslash, control character, empty) and read back `home`, `time_zone`, `log`, `client_token_file`, `ssh_dir`, `clone_root` and every project in the round-trip test; mutant B must fail
+- [x] T121 [US1] I4-7: add the #1525 behaviors with `traces` (FR-005, FR-013f) and a baseline to `tdd/test-list.md` and `tdd/cycle-log.md`
+- [x] T122 [US1] I4-8: reword `docs/user-guide/daemon-configuration.md:22-25` to what ships (render and check, no delivery yet) until T117 and Issues 5-7 land
+- [x] T123 [US1] I4-9, I4-10: drop or fold the duplicate `a_golden_file_passes_validation`, give bare `assert_eq!`s a message, and replace the twice-render test with a key-order assertion

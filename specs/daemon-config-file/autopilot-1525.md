@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1525_the-app-renders-each-daemon-s-configuration-from
 - **Started**: 2026-10-30
 - **Phase**: milestones
-- **Next step**: implement M2, then a new close unit
+- **Next step**: M2 PR merge, then a new close unit
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | merged |
-| M2 | T116–T123 | full | real-settings `from_entry`, row error test, stronger render/quote tests, docs true to what ships | — | planned |
+| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, docs true to what ships (T117 reworded: real-settings `from_entry` is wired by Issues 5-7) | — | in review (B fixes: docs, T119 reworded, control-char case) |
 
 ## Decisions
 
@@ -41,11 +41,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | M1 review B | 1 | d1f11923:84c91cfc | CLEAN (2 MINOR accepted) |
+| M2 review A (code-review high) | 1 | working tree on 22c4353f5 | 9 findings; 1 fixed (Ssh arm untested), path quoting cases and docs wording fixed, rest declined |
+| M2 review B | 1 | 46828eb8b47aa9e1fa97d24b4a4e4276814cb307:754b42e19131b49bb394e75091172bea9b260db7 | CHANGES: 2 MAJOR (docs, T119 wording), 2 MINOR; all fixed |
 | Tasks 1525 | 1 | b494679f:b6f32a1a | CHANGES: 2 MAJOR (no failing test for validate/UI: added T022a; T022 had no file: given one), 2 MINOR (Verify made runnable; F4 accepted, rebase); test-task additions, no further round |
 
 ## Declined review findings
 
-None.
+- M2 A: `expected()` copies `from_entry`'s body: it is the independent assertion I4-1 asks for, and it must change with the placeholders (Issues 5-7).
+- M2 A: tree-size UI test and key-order test on Host only: accepted as proportionate (layout/tree checks; goldens cover other kinds' bytes).
+- M2 A: `read_back` belongs in the product as `from_config`: no caller needs it before Issues 5-7.
+- M2 A: T117 ticked while unbuilt: T117 offers the reword as its own done-condition; the deferral is in tasks.md, test-list I4-D1 and the docs.
 
 ## Handover
 

@@ -77,3 +77,10 @@ Append only. Newest last.
   is the missing-symbol compile error, not a recorded assertion failure.
 - T078a (`daemon_config_render.rs`, golden `host_project_added.toml`): a runtime-added project renders
   as `[[projects]]`. Covers the renderer only; the feed from `ProjectAdd` is T080a.
+
+## Cycle: Issue 4 (#1525) M2 remediation (T116-T123)
+
+- baseline: scoped `micold-client` `daemon_config_render` 4, `daemon_config_stable` 2, `daemon_config_validate` 5 passed (full workspace run by `mise run gate`).
+- red: mutant A (`Kind::Ssh` to `Kind::Host` in `from_entry`) survived the old tests (tdd-verify); the new `every_configured_daemon_renders_the_file_of_its_runtime` asserts the whole result per runtime. Mutant B (drop `!value.contains('\'')` in `quote`) survived; `a_value_that_needs_quoting_survives_the_file` covers it.
+- green: the three scoped test binaries plus the `ui::settings::daemons` unit test pass.
+- T117 took its alternative: `from_entry` stays a placeholder (documented in its doc comment, T024 and the user guide) until Issues 5-7 deliver the file.

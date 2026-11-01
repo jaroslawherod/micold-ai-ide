@@ -266,7 +266,7 @@ fn daemon_row<'a>(
     for warning in &view.install_warnings {
         body = body.push(caution(warning.clone(), roles));
     }
-    // Why the daemon's configuration file is not delivered (FR-013f).
+    // Errors found in the daemon's rendered configuration file (FR-013f).
     for error in &view.config_errors {
         body = body.push(caution(error.clone(), roles));
     }
@@ -789,4 +789,56 @@ pub fn view<'a>(
 #[allow(dead_code)]
 pub fn row_id(view: &DaemonView) -> DaemonId {
     view.id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::advanced::widget::Tree;
+
+    fn view_of(config_errors: &[&str]) -> DaemonView {
+        DaemonView {
+            id: DaemonId(1),
+            name: "Box".into(),
+            runtime_label: "Container".into(),
+            endpoint: "127.0.0.1:7000".into(),
+            version: None,
+            state: DaemonState::Starting,
+            bound: Vec::new(),
+            activity: None,
+            install_warnings: Vec::new(),
+            notice: None,
+            notice_dismissable: false,
+            stop_blocked: false,
+            explanation: None,
+            replace_offered: false,
+            replacing: false,
+            stopped_reason: None,
+            credential_lines: Vec::new(),
+            config_errors: config_errors.iter().map(ToString::to_string).collect(),
+        }
+    }
+
+    fn widgets(tree: &Tree) -> usize {
+        1 + tree.children.iter().map(widgets).sum::<usize>()
+    }
+
+    /// Each line of `config_errors` is a row of its own under the daemon (FR-013f): the row grows
+    /// by the same amount for every line.
+    #[test]
+    fn each_config_error_adds_a_line_to_the_row() {
+        let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
+        let state = State::default();
+        let size = |errors: &[&str]| {
+            let row = daemon_row(view_of(errors), &state, None, roles);
+            widgets(&Tree::new(&row))
+        };
+        let (none, one, two) = (size(&[]), size(&["a"]), size(&["a", "b"]));
+        assert!(one > none, "one error adds nothing: {none} vs {one}");
+        assert_eq!(
+            two - one,
+            one - none,
+            "each error adds the same: {none} {one} {two}"
+        );
+    }
 }
