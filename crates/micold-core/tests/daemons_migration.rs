@@ -130,6 +130,7 @@ fn document_naming_removed_git_credentials() -> String {
         runtime,
         auto_start: false,
         notice: None,
+        file: Default::default(),
     };
     let container = DaemonRuntime::Container(ContainerSettings {
         profile: Default::default(),

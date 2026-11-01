@@ -54,4 +54,4 @@ Baseline: `cargo test -p micold-client --test daemon_config_render --test daemon
 | I4-U5 | An invalid file yields the errors of `config check` and is not delivered | FR-013f | DONE |
 | I4-U6 | The errors reach the row's view model; a valid file clears them; a save checks the file and shows none for a valid one | FR-013f | DONE |
 | I4-U7 | Each config error adds a line to the Daemons row | FR-013f | DONE |
-| I4-D1 | `from_entry` builds the file from the daemon's real settings; checked at registry load | FR-005, FR-013f | DEFERRED to Issues 5-7 (T117) |
+| I4-D1 | `from_entry` builds the file from the daemon's saved settings; an invalid one saved in the form shows its error in the row | FR-005, FR-013f | DONE (T117; checking at registry load waits for delivery, 5-7) |

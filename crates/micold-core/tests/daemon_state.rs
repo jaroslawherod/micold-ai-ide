@@ -173,6 +173,7 @@ fn launch_state_follows_auto_start_and_support() {
         runtime,
         auto_start,
         notice: None,
+        file: Default::default(),
     };
     let registry = DaemonRegistry::new(
         vec![

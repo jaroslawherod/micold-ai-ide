@@ -14,6 +14,7 @@ fn entry(runtime: DaemonRuntime, auto_start: bool) -> DaemonEntry {
         runtime,
         auto_start,
         notice: None,
+        file: Default::default(),
     }
 }
 

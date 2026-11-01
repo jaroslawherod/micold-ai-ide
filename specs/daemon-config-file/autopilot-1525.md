@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | merged |
-| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, docs true to what ships (T117 reworded: real-settings `from_entry` is wired by Issues 5-7) | — | in review (B fixes: docs, T119 reworded, control-char case) |
+| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, `from_entry` built from saved per-daemon settings (`file` block), validate gate fails on a real saved setting and shows it in Settings → Daemons, docs true to what ships | — | in review |
 
 ## Decisions
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | tasks | User-guide task | Added T024a to the milestone (CI user-guide gate) | agent-resolved | milestones.md rule 4 |
 | D4 | tasks | Tier | full: touches the Settings UI and a public client API; M1 is always full | agent-resolved | milestone-format.md |
 | D5 | close | Unbuilt behaviour from tdd-verify (I4-2: `from_entry` builds from constants)? | New milestone M2 = T116–T123 (tasks.md Phase 21), tier full | agent-resolved | close.md step 2; tdd/verification.md Issue 4 |
+| D6 | milestone M2 | I4-2 needs a design the registry lacks: build it or defer? | Build in M2, minimal slice: serde-defaulted per-daemon `file` block on DaemonEntry (data_dir, clone_root, idle_stop, projects, client_token_file), Draft fields for data_dir, clone_root, client_token_file; `from_entry` reads it; T117/T119/I4-D1 deferrals undone | user | orchestrator relayed the user's answer 2026-11-01 |
 
 ## Review rounds
 
@@ -50,7 +51,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2 A: `expected()` copies `from_entry`'s body: it is the independent assertion I4-1 asks for, and it must change with the placeholders (Issues 5-7).
 - M2 A: tree-size UI test and key-order test on Host only: accepted as proportionate (layout/tree checks; goldens cover other kinds' bytes).
 - M2 A: `read_back` belongs in the product as `from_config`: no caller needs it before Issues 5-7.
-- M2 A: T117 ticked while unbuilt: T117 offers the reword as its own done-condition; the deferral is in tasks.md, test-list I4-D1 and the docs.
 
 ## Handover
 
@@ -58,11 +58,7 @@ None.
 
 ## Open escalation
 
-M2 part 2 (category: design decision), 2026-11-01. User said "Build the fix in M2" for I4-2. Evidence that it needs a design the registry does not have:
-- `DaemonEntry` (core/daemons.rs:171) holds name, runtime, auto_start, notice. Runtimes hold: container profile + container_name + port; kube context/namespace/image/providers/resources; ssh target. None of data_dir, idle_stop (only `survive_logout`), projects, clone_root, client token file, time_zone, log exists in the app, in the Draft form or in persisted settings (grep of micold-client/src: no `clone_root`, no `projects` setting).
-- The checker (core/daemon_config/validate.rs) can only fail on listen/token (V3), absolute paths (V4), duplicates, project/clone_root (V12), ai.cli, session, startup, git, tokens. The only keys derivable from today's entry are name, kind, `image` (kube/container profile, not validated by core) and `idle_stop = "off"` (survive_logout, always valid). So mapping real settings today still cannot yield an invalid file; an invalid-save UI test needs a new user-entered setting.
-- Branch is rebased on origin/main (2 local commits, not pushed). Nothing of part 2 built; T117/T119 rewordings still in place pending the answer.
-Waiting on the orchestrator's answer.
+None.
 
 ## Follow-ups not done
 

@@ -4,6 +4,7 @@
 //! rule over plain data, so it is testable without a runtime (Constitution Principle I).
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -184,6 +185,48 @@ pub struct DaemonEntry {
     /// the file when there is none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notice: Option<MigrationNotice>,
+    /// The settings the daemon's `daemon.toml` is rendered from beyond what the runtime holds
+    /// (#1525, FR-005). Omitted from the file while none is set.
+    #[serde(default, skip_serializing_if = "FileSettings::is_empty")]
+    pub file: FileSettings,
+}
+
+/// One `[[projects]]` entry of a daemon's configuration file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectSetting {
+    /// The project's path on the daemon's machine.
+    pub path: PathBuf,
+    /// The repository to clone it from, when it is not already there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+}
+
+/// What a daemon's configuration file holds that the runtime does not decide. Unset means the
+/// daemon uses the kind's default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileSettings {
+    /// `daemon.data_dir`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_dir: Option<PathBuf>,
+    /// `storage.clone_root`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clone_root: Option<PathBuf>,
+    /// `auth.client_token_file`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_token_file: Option<PathBuf>,
+    /// `daemon.idle_stop`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_stop: Option<crate::daemon_config::IdleStopSetting>,
+    /// The `[[projects]]` entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub projects: Vec<ProjectSetting>,
+}
+
+impl FileSettings {
+    /// Whether nothing is set.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
 }
 
 /// The stored shape of [`DaemonEntry`]: reading the runtime's settings may have dropped a removed
@@ -197,6 +240,8 @@ struct RawDaemonEntry {
     auto_start: bool,
     #[serde(default)]
     notice: Option<MigrationNotice>,
+    #[serde(default)]
+    file: FileSettings,
 }
 
 impl From<RawDaemonEntry> for DaemonEntry {
@@ -210,6 +255,7 @@ impl From<RawDaemonEntry> for DaemonEntry {
             runtime: raw.runtime,
             auto_start: raw.auto_start,
             notice: raw.notice,
+            file: raw.file,
         }
     }
 }
@@ -413,6 +459,7 @@ impl DaemonRegistry {
             runtime,
             auto_start,
             notice: None,
+            file: FileSettings::default(),
         });
         Ok(id)
     }
@@ -453,6 +500,17 @@ impl DaemonRegistry {
             entry.runtime = runtime;
             entry.auto_start = auto_start;
         }
+        Ok(())
+    }
+
+    /// Replace a daemon's file settings.
+    pub fn set_file(&mut self, id: DaemonId, file: FileSettings) -> Result<(), RegistryError> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .ok_or(RegistryError::UnknownDaemon)?;
+        entry.file = file;
         Ok(())
     }
 
@@ -981,6 +1039,7 @@ pub fn migrated_entry(config: &crate::settings::DaemonConfig) -> DaemonEntry {
         // Today's daemon is always brought up at launch.
         auto_start: true,
         notice: removed.then_some(MigrationNotice::RemovedGitCredentials),
+        file: FileSettings::default(),
     }
 }
 

@@ -83,4 +83,4 @@ Append only. Newest last.
 - baseline: scoped `micold-client` `daemon_config_render` 4, `daemon_config_stable` 2, `daemon_config_validate` 5 passed (full workspace run by `mise run gate`).
 - red: mutant A (`Kind::Ssh` to `Kind::Host` in `from_entry`) survived the old tests (tdd-verify); the new `every_configured_daemon_renders_the_file_of_its_runtime` asserts the whole result per runtime. Mutant B (drop `!value.contains('\'')` in `quote`) survived; `a_value_that_needs_quoting_survives_the_file` covers it.
 - green: the three scoped test binaries plus the `ui::settings::daemons` unit test pass.
-- T117 took its alternative: `from_entry` stays a placeholder (documented in its doc comment, T024 and the user guide) until Issues 5-7 deliver the file.
+- T117 built (user decision "Build the fix in M2"): `DaemonEntry` gained a `file` block, the form three fields, and `from_entry` reads them; tests in `daemon_config_validate.rs` (a relative data dir and a remote project with no clone root show their error in the row after a save). Tests were written after the code in this part, so there is no red run to record.

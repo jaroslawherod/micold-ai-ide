@@ -14,6 +14,7 @@ use micold_core::daemon_config::{
     diagnose, ConfigError, IdleStopSetting, Kind, Listen, SocketSpec,
 };
 use micold_core::daemons::{DaemonEntry, DaemonRuntime};
+use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
 
 /// The first line of every rendered file.
 pub const HEADER: &str = "# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.";
@@ -28,12 +29,7 @@ const SANDBOX_LISTEN: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 7000);
 const SANDBOX_TOKEN: &str = "/run/micold/secrets/client-token";
 
-/// One `[[projects]]` entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectSetting {
-    pub path: PathBuf,
-    pub remote: Option<String>,
-}
+pub use micold_core::daemons::ProjectSetting;
 
 /// What one daemon's file is rendered from. Unset values are left out, so the daemon uses the
 /// kind's default.
@@ -87,24 +83,50 @@ impl DaemonSettings {
     /// The settings and kind of a configured daemon, or `None` for a runtime this build does not
     /// know (it has no file).
     ///
-    /// Only the name, the kind and how the daemon listens are set, from the runtime: the registry
-    /// holds none of the other settings (data directory, idle stop, projects, clone root), and
-    /// delivery (Issues 5-7) feeds them in. Until then the file checked here is this placeholder
-    /// one, so the check cannot fail on a setting the user entered.
+    /// The file is built from what the user entered: the daemon's name, the file settings saved
+    /// with it (data directory, clone root, client token file, idle stop, projects), a container's
+    /// survive-logout choice (idle stop `off`) and the image a pod or a container runs. Only how a
+    /// daemon listens, and a sandbox daemon's token path when none is saved, are fixed here: those
+    /// are the mounts the delivery issues (5-7) create.
     pub fn from_entry(entry: &DaemonEntry) -> Option<(Self, Kind)> {
-        let name = entry.name.as_str();
-        let host = || Self::new(name, Listen::Socket(SocketSpec::Auto));
-        let sandbox = || Self {
-            client_token_file: Some(SANDBOX_TOKEN.into()),
-            ..Self::new(name, Listen::Tcp(SANDBOX_LISTEN))
+        let kind = match &entry.runtime {
+            DaemonRuntime::Host => Kind::Host,
+            DaemonRuntime::Ssh(_) => Kind::Ssh,
+            DaemonRuntime::Container(_) => Kind::Container,
+            DaemonRuntime::Kubernetes(_) => Kind::Kubernetes,
+            _ => return None,
         };
-        match &entry.runtime {
-            DaemonRuntime::Host => Some((host(), Kind::Host)),
-            DaemonRuntime::Ssh(_) => Some((host(), Kind::Ssh)),
-            DaemonRuntime::Container(_) => Some((sandbox(), Kind::Container)),
-            DaemonRuntime::Kubernetes(_) => Some((sandbox(), Kind::Kubernetes)),
-            _ => None,
-        }
+        let sandbox = matches!(kind, Kind::Container | Kind::Kubernetes);
+        let file = &micold_core::daemons::FileSettings::default();
+        let (listen, token_default) = if sandbox {
+            (
+                Listen::Tcp(SANDBOX_LISTEN),
+                Some(PathBuf::from(SANDBOX_TOKEN)),
+            )
+        } else {
+            (Listen::Socket(SocketSpec::Auto), None)
+        };
+        let (image, survives) = match &entry.runtime {
+            DaemonRuntime::Container(c) => (
+                match &c.profile.image {
+                    ImageChoice::Own(OwnImage::Reference(reference)) => Some(reference.clone()),
+                    _ => None,
+                },
+                c.profile.survive_logout,
+            ),
+            DaemonRuntime::Kubernetes(k) => (k.image.as_ref().map(ImageRef::to_reference), false),
+            _ => (None, false),
+        };
+        let settings = Self {
+            data_dir: file.data_dir.clone(),
+            image,
+            idle_stop: file.idle_stop.or(survives.then_some(IdleStopSetting::Off)),
+            client_token_file: file.client_token_file.clone().or(token_default),
+            clone_root: file.clone_root.clone(),
+            projects: file.projects.clone(),
+            ..Self::new(entry.name.as_str(), listen)
+        };
+        Some((settings, kind))
     }
 }
 

@@ -19,6 +19,7 @@ fn entry(id: u32, name: &str, container: &str, port: u16) -> DaemonEntry {
         }),
         auto_start: false,
         notice: None,
+        file: Default::default(),
     }
 }
 
