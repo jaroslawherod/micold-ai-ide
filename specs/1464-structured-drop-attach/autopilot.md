@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M4 verified, gated, reviewed; PR pending
-- **Next step**: full gate, PR, then M5
+- **Phase**: M4 PR open, awaiting CI/merge
+- **Next step**: merge M4, then M5
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1589 | M1 | merged | 506cceb6986e4db6f8b78b4fe665d71a464a2165 |
 | #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
 | #1618 | M3 | merged | be05cf1862a71d8d8736ffd4e86a26801b5cd0ca |
+| #PRN | M4 | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
-| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #… | pending |
+| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #PRN | open |
 | M5 | T034–T039 | full | Drop-target cue | #… | pending |
 
 ## Decisions
@@ -63,7 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 implemented, verified, reviewed (A and B CLEAN), visual pass PASS, committed locally; rebased onto origin/main (protocol 75, matches the daemon now built from this tree). NOT pushed, no PR. A full gate is running detached (started after the rebase; daemon rebuilt first) with log /tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-1464-structured-view-drag-and-drop-files-into-the/c9ce4521-eb39-4f7b-b16a-103228070635/scratchpad/gate-1.log; it ends with a `GATE_EXIT=` line and is waiting on feat-1524's build lock. Do not start a second copy while it runs (check `pgrep -f "mise run gate"`). Next: when GATE_EXIT=0 (rerun `mise run gate` if the log is gone or failed on a non-diff cause), push, open PR `feat(1464): /shortcuts opens the shortcut sheet with the attach chord (#1464)` with body per tasks/pr.md, record the PR, then M5.
+None.
 
 ## Open escalation
 
