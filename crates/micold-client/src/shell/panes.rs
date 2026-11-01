@@ -256,6 +256,7 @@ pub fn on_pane_msg(app: &mut App, msg: PaneMsg) -> Task<Message> {
         PaneMsg::FileDropped(pane, path) => {
             return crate::shell::drops::on_file_dropped(app, pane, path)
         }
+        PaneMsg::FilesHovering(on) => app.core.session.files_hovering = on,
         PaneMsg::DropsSettled => return crate::shell::drops::on_drops_settled(app),
         PaneMsg::Resized { pane, cols, rows } => {
             if let Some(p) = project(app) {

@@ -76,6 +76,19 @@ fn a_single_pane_takes_every_drop_inside_the_area() {
 /// Drive the real pane view (`ui::panes::view`, so the `SplitView` and its `.on_file_drop(`
 /// wiring) with a pointer move and a file drop, and return what it published.
 fn drop_at(pointer: (f32, f32), path: &str) -> Vec<Message> {
+    let mut messages = publish_for(&[
+        Event::Mouse(mouse::Event::CursorMoved {
+            position: Point::new(pointer.0, pointer.1),
+        }),
+        Event::Window(window::Event::FileDropped(PathBuf::from(path))),
+    ]);
+    // The view also reports its pane sizes; only the drops matter here.
+    messages.retain(|m| dropped(m).is_some());
+    messages
+}
+
+/// What the real pane view publishes for `events`, in order.
+fn publish_for(events: &[Event]) -> Vec<Message> {
     let (layout, _, _) = split();
     let state = State::default();
     let grids = HashMap::new();
@@ -100,15 +113,10 @@ fn drop_at(pointer: (f32, f32), path: &str) -> Vec<Message> {
     let mut messages = Vec::new();
     let mut shell = Shell::new(&mut messages);
     let mut clipboard = iced::advanced::clipboard::Null;
-    for event in [
-        Event::Mouse(mouse::Event::CursorMoved {
-            position: Point::new(pointer.0, pointer.1),
-        }),
-        Event::Window(window::Event::FileDropped(PathBuf::from(path))),
-    ] {
+    for event in events {
         element.as_widget_mut().update(
             &mut tree,
-            &event,
+            event,
             Layout::new(&node),
             mouse::Cursor::Unavailable,
             &renderer,
@@ -117,8 +125,6 @@ fn drop_at(pointer: (f32, f32), path: &str) -> Vec<Message> {
             &viewport,
         );
     }
-    // The view also reports its pane sizes; only the drops matter here.
-    messages.retain(|m| dropped(m).is_some());
     messages
 }
 
@@ -183,4 +189,97 @@ fn a_pane_showing_a_structured_primary_is_the_composers_drop_target() {
     );
     assert_eq!(target_of(&state, Some(None)), DropTarget::EmptyPane);
     assert_eq!(target_of(&state, None), DropTarget::Outside);
+}
+
+fn hovering(m: &Message) -> Option<bool> {
+    match m {
+        Message::Session(SessionMsg::Pane(PaneMsg::FilesHovering(on))) => Some(*on),
+        _ => None,
+    }
+}
+
+/// #1464 FR-005, SC-005: the pane view reports the window's file hover, and the end of it by the
+/// drag leaving or by the drop, so the flag the cue reads is never left set.
+#[test]
+fn the_pane_view_reports_a_hover_start_and_its_end_by_leave_or_drop() {
+    let hovers = |event| -> Vec<bool> {
+        publish_for(&[event])
+            .iter()
+            .filter_map(hovering)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        hovers(Event::Window(window::Event::FileHovered(PathBuf::from(
+            "/a"
+        )))),
+        [true]
+    );
+    assert_eq!(
+        hovers(Event::Window(window::Event::FilesHoveredLeft)),
+        [false]
+    );
+    assert_eq!(
+        hovers(Event::Window(window::Event::FileDropped(PathBuf::from(
+            "/a"
+        )))),
+        [false]
+    );
+}
+
+/// #1464 FR-005, US2 scenario 3: only a structured session that accepts input, while files hover,
+/// wears the cue; a terminal pane and a session that cannot take input do not.
+#[test]
+fn only_a_structured_pane_that_accepts_input_wears_the_cue_while_files_hover() {
+    use micold_client::features::composer::{InputState, TurnPhase};
+    use micold_client::features::session::shows_drop_cue;
+    use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
+    let start = |kind| {
+        Session::start_new_of_kind(
+            SessionLocation::Worktree("feat-00".into()),
+            AiCli::ClaudeCode,
+            kind,
+        )
+    };
+    let (structured, ended, plain) = (
+        start(SessionKind::Structured),
+        start(SessionKind::Structured),
+        start(SessionKind::Terminal),
+    );
+    let (s, e, t) = (structured.id, ended.id, plain.id);
+    let mut workspace =
+        support::workspace_with(vec![("/fixture/project", vec![structured, ended, plain])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = State {
+        workspace,
+        ..State::default()
+    };
+    let report = |state: &mut State, id, phase| {
+        state.composers.input_reported(
+            id,
+            InputState {
+                phase,
+                hold: false,
+                queue: Vec::new(),
+            },
+        );
+    };
+    report(&mut state, s, TurnPhase::Idle);
+    report(&mut state, e, TurnPhase::NotRunning);
+    report(&mut state, t, TurnPhase::Idle);
+    let primary = |session| TerminalRef {
+        session,
+        process: SessionProcess::Primary,
+    };
+    for id in [s, e, t] {
+        assert!(!shows_drop_cue(&state, primary(id)), "nothing hovers yet");
+    }
+    state.session.files_hovering = true;
+    assert!(shows_drop_cue(&state, primary(s)));
+    assert!(!shows_drop_cue(&state, primary(e)), "cannot accept input");
+    assert!(!shows_drop_cue(&state, primary(t)), "a terminal");
+    state.session.files_hovering = false;
+    assert!(
+        !shows_drop_cue(&state, primary(s)),
+        "gone after leave or drop"
+    );
 }

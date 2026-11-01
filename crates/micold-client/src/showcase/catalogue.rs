@@ -1186,6 +1186,21 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::composer::attachment_chip,
     },
     Entry {
+        module: "material/drop_cue.rs",
+        component: "drop_cue",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "a pane without the cue",
+            "the same pane while files hover over it",
+        ],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::composer::drop_cue,
+    },
+    Entry {
         module: "material/queue_row.rs",
         component: "QueueRow",
         variants: &[],

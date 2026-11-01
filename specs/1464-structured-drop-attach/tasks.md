@@ -83,12 +83,12 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 **Independent Test**: drag files over the view; cue shows; leave or drop; it is gone.
 
-- [ ] T034 [P] [US2] Failing reducer tests in `crates/micold-client/tests/pane_drop_target.rs`: `FilesHovering(true)` sets `files_hovering`, leave and drop clear it; a pane that cannot accept input and terminal panes get no cue (FR-005, SC-005)
-- [ ] T035 [P] [US2] `crates/micold-material/src/drop_cue.rs`: shared presentational cue (outline plus tinted fill from theme `Roles`); export it from the crate; with a unit test that wrapping a child leaves the child's size unchanged
-- [ ] T036 [US2] `SplitView` forwards `FileHovered`/`FilesHoveredLeft`/`FileDropped` as `PaneMsg::FilesHovering(bool)` in `crates/micold-client/src/ui/material/split_view.rs`; handle it in `src/shell/panes.rs`; `App.files_hovering` in `src/app.rs`
-- [ ] T037 [US2] Wrap an input-accepting structured pane's body in `drop_cue` while the flag is set in `crates/micold-client/src/ui/panes.rs`
-- [ ] T038 [P] [US2] Showcase pose of the cue in `crates/micold-client/src/showcase/sections/`
-- [ ] T039 [US2] User guide: the cue (best effort) in `docs/user-guide/structured-input.md`
+- [x] T034 [P] [US2] Failing reducer tests in `crates/micold-client/tests/pane_drop_target.rs`: `FilesHovering(true)` sets `files_hovering`, leave and drop clear it; a pane that cannot accept input and terminal panes get no cue (FR-005, SC-005)
+- [x] T035 [P] [US2] `crates/micold-material/src/drop_cue.rs`: shared presentational cue (outline plus tinted fill from theme `Roles`); export it from the crate; with a unit test that wrapping a child leaves the child's size unchanged
+- [x] T036 [US2] `SplitView` forwards `FileHovered`/`FilesHoveredLeft`/`FileDropped` as `PaneMsg::FilesHovering(bool)` in `crates/micold-client/src/ui/material/split_view.rs`; handle it in `src/shell/panes.rs`; `App.files_hovering` in `src/app.rs`
+- [x] T037 [US2] Wrap an input-accepting structured pane's body in `drop_cue` while the flag is set in `crates/micold-client/src/ui/panes.rs`
+- [x] T038 [P] [US2] Showcase pose of the cue in `crates/micold-client/src/showcase/sections/`
+- [x] T039 [US2] User guide: the cue (best effort) in `docs/user-guide/structured-input.md`
 
 ## Phase 8: Polish
 
