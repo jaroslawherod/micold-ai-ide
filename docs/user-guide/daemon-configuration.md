@@ -70,6 +70,21 @@ requires `auth.client_token_file`.
 | `projects[].path` | required | A project root the daemon serves at start. Unique. |
 | `projects[].remote` | none | Cloned to `path` when absent; needs `clone_root`, and `path` must be under it. |
 
+#### Projects and the clone root
+
+At start the daemon serves the `[[projects]]` the file lists, besides the projects you opened yourself, in the background, so a slow
+clone never delays connecting. Each project appears in the application as soon as it is ready:
+
+- A `path` that exists is served as it is.
+- A `path` that is absent and has a `remote` is cloned there, under `[storage] clone_root`. A clone
+  is made whole or not at all. Without a `clone_root`, or with a `path` outside it, nothing is
+  cloned and the project is not served; the daemon's log says why.
+- A `path` that is absent and has no `remote` is not served.
+
+A project already known to the daemon keeps its place: a restart does not change which project is
+active. A project you add in the application while the daemon runs works at once; it is not yet
+written into the file.
+
 ### `[git]`
 
 | Key | Default | Meaning |
@@ -169,10 +184,11 @@ Absent means no start script.
   and re-reads them every 2 seconds as a fallback (bind mounts from a VM and network filesystems
   send no events). A change is in use within 5 seconds, with no restart. A Kubernetes ConfigMap or
   Secret update is seen too. The daemon never writes the file or a secret.
-- **Which keys need a restart.** `[github.tokens]`, `[git]`, `[[ai.cli]]`, `[ai]`, `[session]` and
-  `[[projects]]` are live. `[daemon]`, `[listen]`, `[auth]`, `[ssh]`, `[storage]` and `[startup]`
+- **Which keys need a restart.** `[github.tokens]`, `[git]`, `[[ai.cli]]`, `[ai]` and `[session]`
+  are live. `[daemon]`, `[listen]`, `[auth]`, `[ssh]`, `[storage]` and `[startup]`
   are read once: after an edit the daemon keeps running on the old values and reports
-  `restart_needed`, naming the keys.
+  `restart_needed`, naming the keys. `[[projects]]` is read at start only too, but an edit to it is
+  not reported: restart the daemon to serve a project added to the file.
 - **An invalid edit keeps the last good configuration.** A file with a syntax error, a failing rule
   or a secret file it cannot read is ignored whole: no key of it is applied, the daemon logs why and
   reports it as `last_error`. A removed file keeps the last configuration. A secret file that is not

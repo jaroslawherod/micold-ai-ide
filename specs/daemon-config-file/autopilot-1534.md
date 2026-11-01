@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1534
 - **Worktree branch**: feat/1534_projects-and-clone-root-from-the-configuration
 - **Started**: 2026-11-01
-- **Phase**: milestone M1 (design PR open)
+- **Phase**: milestone M1 (gate and reviews)
 - **Next step**: milestone M1 after the design PR merges
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1628 | design: Issue 13 milestone | open | |
+| #1628 | design: Issue 13 milestone | merged | 6c9d0d533e6ce0b4cbf6d62dec7a7706b9ac9d9c |
 
 ## Milestones
 
@@ -51,4 +51,6 @@ None.
 
 ## Follow-ups not done
 
-None.
+- M1 follow-up: `DaemonSettings::add_runtime_project` (client, tested with a golden) has no production caller. The client only validates a generated file (`check_configs`/`validate_config`); nothing writes the file yet, and `from_entry` carries no per-daemon project list, so there is no "next rendered file" to feed. Wiring needs the daemon catalog's projects per daemon in `State` and the file-writing path (a later milestone). The user guide says a runtime-added project is not yet written into the file.
+- M1 follow-up: contract R7 lists `[[projects]]` as live-reloaded; only serve-at-start is implemented and `restart_keys` does not report it. The guide says so. Live reload of `[[projects]]` is left to a later task.
+- M1 follow-up: configured projects are served one after another (a hung clone delays the rest); `ensure_project`'s `exists()` check is outside `ensure_clone`'s per-destination lock.

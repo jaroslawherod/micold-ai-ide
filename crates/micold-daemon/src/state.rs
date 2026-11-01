@@ -5998,6 +5998,31 @@ impl DaemonState {
             .add_project(path, &micold_core::fs_scan::StdFolderScanner::new())
     }
 
+    /// Serves one `[[projects]]` entry of the configuration: makes sure it is on disk
+    /// ([`crate::repo_clone::ensure_project`]), then adds it to the catalog. A project that could
+    /// not be made is not served; the error says why. Blocking: it may clone. The caller
+    /// broadcasts the refreshed catalog (#1534, FR-014). A project the catalog already knows is left
+    /// as it is, so a restart does not change which project is active.
+    pub fn serve_configured_project(
+        &self,
+        project: &crate::settings::ConfiguredProject,
+        clone_root: Option<&Path>,
+    ) -> Result<(), String> {
+        crate::repo_clone::ensure_project(clone_root, project).map_err(|e| {
+            format!(
+                "{}: {}",
+                project.path.display(),
+                crate::repo_clone::describe(&e)
+            )
+        })?;
+        let known = std::fs::canonicalize(&project.path).unwrap_or_else(|_| project.path.clone());
+        if self.lock().catalog.project_repo(&known).is_some() {
+            return Ok(());
+        }
+        self.add_project(&project.path)
+            .map_err(|e| format!("{}: {e}", project.path.display()))
+    }
+
     /// Record a known project as the active one (002 BUG-003). `Ok(false)` when the path is not a
     /// known project or its folder is unavailable; nothing is persisted then.
     pub fn activate_project(&self, path: &Path) -> io::Result<bool> {

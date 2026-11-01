@@ -206,10 +206,11 @@ Research D12.
 
 ## Issue 13 — feat: projects and clone root from the configuration (needs 3)
 
-- [ ] T078 [P] [US3] Failing tests in `crates/micold-daemon/tests/config_projects.rs`: `[[projects]]` are served at start; an absent `path` with `remote` and `clone_root` is cloned (`crates/micold-daemon/src/repo_clone.rs`)
-- [ ] T078a [P] [US3] Failing test in `crates/micold-client/tests/daemon_config_render.rs`: a Settings value that gains a project added at runtime (`ProjectAdd`) renders it as a `[[projects]]` entry in the next rendered file, against a new golden
-- [ ] T079 [US3] Implement in `crates/micold-daemon/src/state.rs` and `repo_clone.rs`; render `[[projects]]` from Settings in `crates/micold-client/src/daemon_config_render.rs`, including a project the daemon reports as added at runtime (the Settings daemon entry takes the added project from the `ProjectAdd` the app already sees)
-- [ ] T080 [US3] Document in `docs/user-guide/daemon-configuration.md`
+- [x] T078 [P] [US3] Failing tests in `crates/micold-daemon/tests/config_projects.rs`: `[[projects]]` are served at start; an absent `path` with `remote` and `clone_root` is cloned (`crates/micold-daemon/src/repo_clone.rs`)
+- [x] T078a [P] [US3] Failing test in `crates/micold-client/tests/daemon_config_render.rs`: a Settings value that gains a project added at runtime (`ProjectAdd`) renders it as a `[[projects]]` entry in the next rendered file, against a new golden
+- [x] T079 [US3] Implement in `crates/micold-daemon/src/state.rs` and `repo_clone.rs`; render `[[projects]]` from Settings in `crates/micold-client/src/daemon_config_render.rs`, with `DaemonSettings::add_runtime_project` for a project added at runtime (feeding it from `ProjectAdd` is T080a)
+- [ ] T080a [US3] Feed `DaemonSettings::add_runtime_project` from the `ProjectAdd` the app sees, once the app writes the daemon file (nothing writes it yet); with a test through that path
+- [x] T080 [US3] Document in `docs/user-guide/daemon-configuration.md`
 
 ---
 

@@ -48,3 +48,16 @@ fn a_windows_path_is_a_literal_string_and_a_quote_is_escaped() {
     assert!(text.contains(r"data_dir = 'C:\Users\me\data'"), "{text}");
     assert!(text.contains(r#"name = "A \"quoted\" name""#), "{text}");
 }
+
+#[test]
+fn a_project_added_at_runtime_renders_in_the_next_file() {
+    let kind = micold_core::daemon_config::Kind::Host;
+    let mut s = settings(kind);
+    s.add_runtime_project("/home/me/src/added".as_ref());
+    // Adding it again changes nothing: the file is rewritten only when it differs.
+    let once = render(&s, kind);
+    s.add_runtime_project("/home/me/src/added".as_ref());
+    assert_eq!(render(&s, kind), once);
+    assert_eq!(once, fixtures::golden_named("host_project_added"));
+    parse(&once, "daemon.toml").unwrap_or_else(|e| panic!("{}", e[0]));
+}

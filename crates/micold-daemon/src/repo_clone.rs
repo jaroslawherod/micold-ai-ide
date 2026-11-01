@@ -113,6 +113,35 @@ pub fn ensure_clone(root: Option<&Path>, url: &str, dest: &str) -> Result<(), Cl
     settle(cloned, &partial, &dest)
 }
 
+/// A failure in words, for the daemon's log.
+pub fn describe(failure: &CloneFailureWire) -> String {
+    match failure {
+        CloneFailureWire::AuthRequired => "the remote needs a credential".into(),
+        CloneFailureWire::DiskFull => "the volume is full".into(),
+        CloneFailureWire::Unreachable => "the remote could not be reached".into(),
+        CloneFailureWire::Other(message) => message.clone(),
+    }
+}
+
+/// Makes sure the configured project is on disk: a present `path` is left as it is, an absent one
+/// with a `remote` is cloned there under `root` ([`ensure_clone`]), and an absent one with no remote
+/// is an error, since there is nothing to make it from (#1534, FR-014).
+pub fn ensure_project(
+    root: Option<&Path>,
+    project: &crate::settings::ConfiguredProject,
+) -> Result<(), CloneFailureWire> {
+    if project.path.exists() {
+        return Ok(());
+    }
+    match &project.remote {
+        Some(remote) => ensure_clone(root, remote, &project.path.to_string_lossy()),
+        None => Err(refuse(format!(
+            "{} is absent and has no remote to clone it from",
+            project.path.display()
+        ))),
+    }
+}
+
 /// Move a finished clone into place, or remove the partial directory: a failure leaves nothing
 /// half-cloned.
 fn settle(

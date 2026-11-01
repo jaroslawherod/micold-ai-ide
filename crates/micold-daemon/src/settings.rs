@@ -14,6 +14,14 @@ use micold_core::daemon_config::{DaemonConfig, IdleStopSetting, Kind, Listen};
 
 use crate::idle::IDLE_STOP_ENV;
 
+/// One `[[projects]]` entry the daemon serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfiguredProject {
+    pub path: PathBuf,
+    /// Where to clone it from when `path` is absent.
+    pub remote: Option<String>,
+}
+
 /// The start-up values, file over environment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonSettings {
@@ -38,6 +46,8 @@ pub struct DaemonSettings {
     pub token_file: Option<PathBuf>,
     /// `storage.clone_root` / `MICOLD_REPOS_ROOT`.
     pub clone_root: Option<PathBuf>,
+    /// `[[projects]]`; none without a file.
+    pub projects: Vec<ConfiguredProject>,
 }
 
 /// Reads the process environment, as the daemon does.
@@ -69,6 +79,7 @@ impl DaemonSettings {
             listen_tcp: text(env, crate::server::LISTEN_ADDR_ENV),
             token_file: path(env, micold_core::protocol::auth::TOKEN_PATH_ENV),
             clone_root: path(env, crate::repo_clone::ROOT_ENV),
+            projects: Vec::new(),
         };
         let Some(config) = config else {
             return from_env;
@@ -109,6 +120,14 @@ impl DaemonSettings {
                 .as_ref()
                 .and_then(|storage| storage.clone_root.clone())
                 .or(from_env.clone_root),
+            projects: config
+                .projects
+                .iter()
+                .map(|p| ConfiguredProject {
+                    path: p.path.clone(),
+                    remote: p.remote.clone(),
+                })
+                .collect(),
         }
     }
 
