@@ -83,6 +83,7 @@ fn the_projects_of_the_configuration_are_served_at_start() {
 
     let state = DaemonState::new(Catalog::ephemeral());
     assert!(serve(&state, &settings).is_empty());
+    dirs.sort();
     assert_eq!(served(&state), dirs);
 }
 
@@ -110,12 +111,13 @@ fn an_absent_project_with_a_remote_is_cloned_under_the_clone_root() {
 fn an_absent_project_that_cannot_be_cloned_is_reported_and_not_served() {
     let base = tempfile::tempdir().unwrap();
     let dest = base.path().join("outside/app");
-    // No clone root: nothing may be cloned.
-    let settings = settings_of(&format!(
-        "schema = 1\n[daemon]\nname = \"h\"\nkind = \"host\"\n[[projects]]\npath = {:?}\n\
-         remote = \"https://example.invalid/app.git\"\n",
+    // No clone root: nothing may be cloned. The file validator rejects this shape, so set the
+    // remote after parsing, as a defence for a daemon given settings by other means.
+    let mut settings = settings_of(&format!(
+        "schema = 1\n[daemon]\nname = \"h\"\nkind = \"host\"\n[[projects]]\npath = {:?}\n",
         dest.display().to_string(),
     ));
+    settings.projects[0].remote = Some("https://example.invalid/app.git".into());
     let state = DaemonState::new(Catalog::ephemeral());
     assert_eq!(serve(&state, &settings).len(), 1);
     assert!(served(&state).is_empty());
