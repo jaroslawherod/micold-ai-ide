@@ -10,8 +10,8 @@ use std::collections::BTreeSet;
 
 use micold_core::review::comment::{CommentId, ReviewComment, Scope, Status};
 use micold_core::review::drawer::{
-    newly_reported, rows_of, tab_counts, width, Drawer, DrawerEvent, DrawerTab, SendWatch,
-    START_HINT,
+    capped_with_floor, newly_reported, rows_of, tab_counts, width, Drawer, DrawerEvent, DrawerTab,
+    SendWatch, START_HINT,
 };
 use micold_core::review::Side;
 use review_comments::{comment, many, state, STATUSES};
@@ -134,6 +134,28 @@ fn width_is_360_but_at_most_half_the_area() {
     assert_eq!(width(1_000.0), 360.0);
     assert_eq!(width(720.0), 360.0);
     assert_eq!(width(500.0), 250.0);
+}
+
+/// #1474 D6a: half the area, but not under the floor, and never more than the area.
+#[test]
+fn a_floor_keeps_the_drawer_from_shrinking_below_what_its_rows_need() {
+    assert_eq!(capped_with_floor(360.0, 240.0, 720.0), 360.0);
+    assert_eq!(capped_with_floor(360.0, 240.0, 1_000.0), 360.0);
+    assert_eq!(capped_with_floor(360.0, 240.0, 500.0), 250.0);
+    assert_eq!(capped_with_floor(360.0, 240.0, 320.0), 240.0);
+    assert_eq!(capped_with_floor(360.0, 240.0, 200.0), 200.0);
+    assert_eq!(
+        capped_with_floor(360.0, 0.0, 200.0),
+        100.0,
+        "no floor: half"
+    );
+}
+
+#[test]
+fn the_drawer_width_has_the_anatomy_floor() {
+    use micold_core::tokens::anatomy::comments_drawer::MIN_WIDTH;
+    assert_eq!(width(320.0), MIN_WIDTH);
+    assert_eq!(width(MIN_WIDTH - 40.0), MIN_WIDTH - 40.0);
 }
 
 // --- Drawer -------------------------------------------------------------------------------------

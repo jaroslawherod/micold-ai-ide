@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: milestone M1 (gate and review)
-- **Next step**: M1 gate, review B, PR; then M2. T019 (quickstart §B record) is left to the close unit. Spec "persisted today" wording corrected: nothing found persisting sidebar hidden; only "a resize never writes hidden/width" is promised.
+- **Phase**: milestone M2 (PR open)
+- **Next step**: M2 CI and merge; then the close unit (T019 quickstart §B record, user guide check).
 
 ## Pull requests
 
@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1549 | progress slot (earlier bug flow) | merged | n/a |
 | #1592 | sort chips (earlier bug flow) | merged | 3190828cbe433f90b5458ad23837e6678d1c8910 |
 | #1626 | design (spec, plan, tasks) | merged | da15ba2f441be5c938dac897b658e8f492e509db |
+| #1637 | M1 sidebar strip | merged | 9589c784105246c8e02d884b02e60afcdc9f90a6 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | sidebar collapses to the strip below 720px | | PR open |
-| M2 | T011–T018 | full | review tab fits at 640x480 | | pending |
+| M1 | T001–T010 | full | sidebar collapses to the strip below 720px | #1637 | merged |
+| M2 | T011–T018 | full | review tab fits at 640x480 | | PR open |
 
 ## Decisions
 
@@ -53,6 +54,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - T006 (more): `cargo test -p micold-client --no-fail-fast` also broke `overlay_registration` (`sidebar.compact_open` is popover-shaped: listed in `INLINE_FLAGS`) and `root_state_is_shared` (`sidebar.hidden` is now read by `app::State::sidebar_hidden`, so its `COMPONENT_LOCAL` entry was deleted); both green. Everything else passed. T010: `layout_snapshot` fixture unchanged, 173 tests green.
 - Red proof: with `src/` reverted the three suites fail to compile (`COMPACT_WIDTH`, `compact`, `sidebar_hidden` missing); green with it.
 - M1 work started from a previous attempt's stash (`autopilot-1474-m1-wip`), checked against spec/plan/tasks; two misplaced doc comments in it were fixed.
+
+## M2 notes
+
+- T014-T016: the `MIN_WIDTH` floor of 240 alone made the drawer rows fit (gate green with the entry deleted), so `Row::wrap()` was not needed and 240 stood as the measured width. T015/T016 entries were already deleted in M1; the gate stays green without them. T017 pins FR-010 as a new test.
+- Review A: capped_with_floor ignoring `wanted` below the floor is latent (240 < 360), kept. Showcase pose deliberately keeps no floor.
 
 ## Declined review findings
 

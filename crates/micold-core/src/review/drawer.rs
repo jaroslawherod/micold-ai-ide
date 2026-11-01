@@ -88,9 +88,20 @@ pub fn rows_of(
 }
 
 /// The drawer's width over a diff area `area` px wide: 360, but at most half (FR-010, Edge Cases
-/// "Narrow window").
+/// "Narrow window") and not under `MIN_WIDTH` while the area has that much (#1474).
 pub fn width(area: f32) -> f32 {
-    capped(anatomy::comments_drawer::WIDTH, area)
+    capped_with_floor(
+        anatomy::comments_drawer::WIDTH,
+        anatomy::comments_drawer::MIN_WIDTH,
+        area,
+    )
+}
+
+/// [`capped`], but at least `floor` px while the area has that much: a sheet whose controls need
+/// `floor` px stays that wide over a narrow area, covering more than half of it. Never more than
+/// the area.
+pub fn capped_with_floor(wanted: f32, floor: f32, area: f32) -> f32 {
+    capped(wanted, area).max(floor).min(area.max(0.0))
 }
 
 /// A sheet `wanted` px wide over an area `area` px wide: `wanted`, but at most half the area

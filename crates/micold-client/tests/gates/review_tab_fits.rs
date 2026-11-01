@@ -14,7 +14,9 @@
 use crate::containment::clips_deliberately;
 use crate::session_area_fits::assert_fits_under;
 use crate::status_bar_fits::assert_the_bar_holds_its_place;
-use crate::support::covered_states::{covered_states, REVIEW_BAR, REVIEW_DIFF_PANE, REVIEW_DRAWER};
+use crate::support::covered_states::{
+    covered_states, REVIEW_BAR, REVIEW_DIFF_PANE, REVIEW_DRAWER, REVIEW_TREE, REVIEW_TREE_FILTER,
+};
 use crate::support::layout::{self as lay, CoveredState, LayoutRecord, StateUnderTest, WINDOW};
 use iced::{Rectangle, Size};
 use micold_client::app::MIN_WINDOW_SIZE;
@@ -119,10 +121,8 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
 /// is allowed. Each entry must keep firing in each of its states, or it is widening the gate
 /// silently: drop a state once its node fits there, and the entry once no state is left.
 ///
-/// The first three are scrolling, not defects: content taller or wider than the `Scrollable` that
-/// shows it, as `gates/containment.rs`'s scroll exemptions. The last is the drawer's draft and
-/// reply rows, still a few pixels past a narrow drawer at 640x480 after the sidebar strip (#1474);
-/// the next milestone fixes them and deletes the entries.
+/// All are scrolling, not defects: content taller or wider than the `Scrollable` that shows it, as
+/// `gates/containment.rs`'s scroll exemptions.
 const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
     (
         &[
@@ -163,13 +163,6 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
         "right",
         "base",
         "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
-    ),
-    (
-        &["drawer-drafts", "drawer-replies", "review-empty"],
-        "0/0/0/1/1/2/1/1/1/0/0/1/0/0/0/1/0/0/1/0",
-        "right",
-        "base",
-        "#1474 (M2): a draft or reply row's controls, 4px and 8px past a narrow drawer",
     ),
 ];
 
@@ -416,5 +409,41 @@ fn every_review_state_of_the_contract_is_covered_with_its_anchors() {
                 "{contract} ({name}) anchors {anchor}"
             );
         }
+    }
+}
+
+/// FR-010 (#1474): at the smallest window the tree's filter box lies inside the tree pane, no text
+/// in it is painted wider than its clip, and no node under the pane escapes it except past its
+/// bottom edge, where the tree's `VirtualRows` scroll.
+#[test]
+fn the_tree_and_its_filter_lie_inside_the_tree_pane_at_the_smallest_window() {
+    let name = "changes-tree-filter";
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        let what = format!("{name} {theme:?}");
+        let (overflows, records) = laid_out((covered(name).build)(), theme, MIN_WINDOW_SIZE);
+        let pane = rect(at(&records, REVIEW_TREE).expect("the tree pane is laid out"));
+        let filter = rect(at(&records, REVIEW_TREE_FILTER).expect("the filter box is laid out"));
+        assert!(
+            inside(&filter, &pane),
+            "{what}: the filter {filter:?} lies inside the tree pane {pane:?}"
+        );
+        assert!(
+            overflows.is_empty(),
+            "{what}: text overflows: {overflows:?}"
+        );
+        let prefix = REVIEW_TREE
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join("/")
+            + "/";
+        let escaped: Vec<_> = lay::escapes(&records, TOLERANCE)
+            .into_iter()
+            .filter(|e| e.child_path.starts_with(&prefix) && e.edge != "bottom")
+            .collect();
+        assert!(
+            escaped.is_empty(),
+            "{what}: tree nodes escape the tree pane: {escaped:?}"
+        );
     }
 }

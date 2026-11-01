@@ -422,6 +422,7 @@ fn comments_drawer<'a>(
         r,
     )
     .width(anatomy::comments_drawer::WIDTH)
+    .min_width(anatomy::comments_drawer::MIN_WIDTH)
     .title(COMMENTS)
     .on_close(Message::Changes(Msg::Drawer(DrawerEvent::Close)))
     .into()
