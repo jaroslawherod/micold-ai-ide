@@ -92,8 +92,10 @@ pub(super) fn review_key(state: &mut State, action: ReviewAction) -> Effect {
         ReviewAction::PrevComment => step_comments(state, Dir::Previous),
         ReviewAction::Comment => comment(state),
         ReviewAction::ToggleSheet => {
+            // A sheet `/shortcuts` opened closes on `?` too (#1464 FR-010).
+            let from_composer = std::mem::take(&mut state.sheet_from_composer);
             if let Some(view) = state.tabs.shown_view_mut() {
-                view.sheet_open = !view.sheet_open;
+                view.sheet_open = !(view.sheet_open || from_composer);
             }
             Effect::None
         }
