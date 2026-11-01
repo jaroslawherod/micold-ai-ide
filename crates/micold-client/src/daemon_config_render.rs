@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use micold_core::daemon_config::{
     diagnose, ConfigError, IdleStopSetting, Kind, Listen, SocketSpec,
@@ -69,6 +69,18 @@ impl DaemonSettings {
             ssh_dir: None,
             clone_root: None,
             projects: Vec::new(),
+        }
+    }
+
+    /// Records a project the daemon reports as added at runtime (`ProjectAdd`, which carries a path
+    /// and no remote), so the next rendered file lists it as a `[[projects]]` entry (FR-014). A
+    /// project already listed is left as it is.
+    pub fn add_runtime_project(&mut self, path: &Path) {
+        if self.projects.iter().all(|p| p.path != path) {
+            self.projects.push(ProjectSetting {
+                path: path.to_path_buf(),
+                remote: None,
+            });
         }
     }
 

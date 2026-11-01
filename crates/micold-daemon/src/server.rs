@@ -73,6 +73,7 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
         tracing::error!(addr = %addr, error = %e, "failed to bind the sandbox listener");
     })?;
     tracing::info!(addr = %addr, "listening (sandboxed)");
+    serve_configured_projects(&state);
 
     // The same rule as the host process, over a different transport (FR-018). A container whose
     // daemon has nobody connected is a container burning a machine's memory for nobody; because the
@@ -155,6 +156,32 @@ fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
     })?;
     tracing::info!("handshake authentication is enabled");
     Ok(())
+}
+
+/// Serves the `[[projects]]` of the configuration (#1534, FR-014). In the background, since a
+/// clone can take long and the accept loop must not wait for it; each project reaches the clients
+/// as soon as it is served.
+fn serve_configured_projects(state: &Arc<DaemonState>) {
+    let settings = crate::settings::current();
+    if settings.projects.is_empty() {
+        return;
+    }
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        for project in settings.projects.clone() {
+            let (serving, root) = (Arc::clone(&state), settings.clone_root.clone());
+            let target = project.clone();
+            let done = tokio::task::spawn_blocking(move || {
+                serving.serve_configured_project(&target, root.as_deref())
+            })
+            .await;
+            match done {
+                Ok(Ok(())) => refresh_worktrees_and_broadcast(&state, project.path).await,
+                Ok(Err(e)) => tracing::warn!(error = %e, "a configured project was not served"),
+                Err(e) => tracing::warn!(error = %e, "serving a configured project failed"),
+            }
+        }
+    });
 }
 
 /// Run the daemon: resolve the endpoint, acquire it as the single instance, then accept.
@@ -333,6 +360,7 @@ pub async fn run() -> io::Result<()> {
                 tracing::error!(error = %e, path = %endpoint.lock_path.display(), "could not record daemon pid");
             }
             crate::runtime_status::spawn(Arc::clone(&state), endpoint.clone());
+            serve_configured_projects(&state);
             serve_interprocess(state, *bound).await
         }
     }

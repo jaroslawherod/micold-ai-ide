@@ -8,10 +8,13 @@ use micold_core::daemon_config::{IdleStopSetting, Kind, Listen, SocketSpec};
 pub const KINDS: [Kind; 4] = [Kind::Host, Kind::Ssh, Kind::Container, Kind::Kubernetes];
 
 pub fn golden(kind: Kind) -> String {
+    golden_named(kind.as_str())
+}
+
+pub fn golden_named(name: &str) -> String {
     let path = format!(
-        "{}/tests/golden/daemon_config/{}.toml",
-        env!("CARGO_MANIFEST_DIR"),
-        kind.as_str()
+        "{}/tests/golden/daemon_config/{name}.toml",
+        env!("CARGO_MANIFEST_DIR")
     );
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
 }

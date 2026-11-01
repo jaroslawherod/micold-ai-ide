@@ -68,3 +68,12 @@ Append only. Newest last.
 - OS-neutral: the watcher, loader and settings have no `cfg(target_os)` arms; they watch parent
   directories on every OS (T089), and the poll covers a backend that misses events. The Windows
   "ACL not checked" line is `SecretStatus`'s display for an unchecked mode, tested on Linux.
+
+## Issue 13 (#1534) M1: projects and the clone root
+
+- T078 (`crates/micold-daemon/tests/config_projects.rs`): served at start, cloned under `clone_root`,
+  uncloneable path reported and not served. Written before `serve_configured_project` and
+  `ensure_project` (they did not compile without them); the work went in one commit, so the red run
+  is the missing-symbol compile error, not a recorded assertion failure.
+- T078a (`daemon_config_render.rs`, golden `host_project_added.toml`): a runtime-added project renders
+  as `[[projects]]`. Covers the renderer only; the feed from `ProjectAdd` is T080a.
