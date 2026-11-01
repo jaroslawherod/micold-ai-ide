@@ -58,7 +58,11 @@ None.
 
 ## Open escalation
 
-None.
+M2 part 2 (category: design decision), 2026-11-01. User said "Build the fix in M2" for I4-2. Evidence that it needs a design the registry does not have:
+- `DaemonEntry` (core/daemons.rs:171) holds name, runtime, auto_start, notice. Runtimes hold: container profile + container_name + port; kube context/namespace/image/providers/resources; ssh target. None of data_dir, idle_stop (only `survive_logout`), projects, clone_root, client token file, time_zone, log exists in the app, in the Draft form or in persisted settings (grep of micold-client/src: no `clone_root`, no `projects` setting).
+- The checker (core/daemon_config/validate.rs) can only fail on listen/token (V3), absolute paths (V4), duplicates, project/clone_root (V12), ai.cli, session, startup, git, tokens. The only keys derivable from today's entry are name, kind, `image` (kube/container profile, not validated by core) and `idle_stop = "off"` (survive_logout, always valid). So mapping real settings today still cannot yield an invalid file; an invalid-save UI test needs a new user-entered setting.
+- Branch is rebased on origin/main (2 local commits, not pushed). Nothing of part 2 built; T117/T119 rewordings still in place pending the answer.
+Waiting on the orchestrator's answer.
 
 ## Follow-ups not done
 
