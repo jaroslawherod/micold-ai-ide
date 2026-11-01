@@ -72,8 +72,8 @@ At compact width the user presses **show** on the strip, or the sidebar shortcut
 **Acceptance Scenarios**:
 
 1. **Given** auto-collapse at 640px, **When** the user presses **show**, **Then** the sidebar expands and stays expanded through resizes that remain below the threshold.
-2. **Given** the user expanded it at 640px, **When** the window grows to 720px or wider, **Then** the sidebar is still expanded; **and When** it shrinks below 720px again, **Then** it auto-collapses again (a fresh crossing).
-3. **Given** auto-collapse at 640px, **When** the user presses hide (after showing), **Then** the sidebar is the strip, and at 720px or wider it returns to the user's persisted state.
+2. **Given** the user expanded it at 640px, **When** the window grows to 720px or wider, **Then** the sidebar shows as the persisted state (not as the override); **and When** it shrinks below 720px again, **Then** it auto-collapses again (a fresh crossing).
+3. **Given** auto-collapse at 640px, **When** the user presses hide (after showing), **Then** the sidebar is the strip, and at 720px or wider it shows as the persisted state.
 
 ---
 
@@ -92,7 +92,8 @@ Overview full screen retracts the whole drawer as before; leaving it at compact 
 
 - Window size not yet reported (0, 0): not compact; no auto-collapse (existing meaning of "not reported").
 - Resize events at compact width that stay below the threshold never change the sidebar.
-- Several windows or sessions: the sidebar state is per window; auto-collapse reads that window's size only.
+- Several windows or sessions: the sidebar state is per window; auto-collapse reads that window's size only. Two windows at different widths collapse independently.
+- A resize and a toggle in the same update: applied in arrival order; the toggle acts on the effective state as it is after the resize.
 - A manual toggle while a collapse/expand animation runs reverses it as today; reduced motion switches in one step.
 - Platform differences: logical pixels on every platform (HiDPI scale does not change the threshold); a window manager that ignores the minimum size and goes below 640 is also compact.
 - Empty review (no changed files), failed diff load: same fit rules apply to those states.
@@ -104,15 +105,15 @@ Overview full screen retracts the whole drawer as before; leaving it at compact 
 
 - **FR-001**: The window is compact when its reported width is below 720 logical pixels. An unreported size (0, 0) is not compact.
 - **FR-002**: Entering compact width (a resize from not compact to compact, or the first report being compact) MUST show the sidebar as its collapsed strip, unless it already was one, and MUST NOT change the persisted sidebar state or width.
-- **FR-003**: Leaving compact width (a resize to 720 or wider) MUST show the sidebar as the persisted state, except that a sidebar the user expanded at compact width stays expanded.
-- **FR-004**: Show and hide at compact width MUST work. A show at compact width expands the sidebar until the window next leaves compact width; a hide returns to the strip. Neither writes the persisted state; the persisted state changes only by a toggle at 720 or wider.
+- **FR-003**: Leaving compact width (a resize to 720 or wider) MUST show the sidebar as the persisted state and clear any compact override (an expansion the user made at compact width ends here).
+- **FR-004**: Show and hide at compact width MUST work. A show at compact width expands the sidebar until the window next leaves compact width; a hide returns to the strip. Neither writes the persisted state; a toggle at 720px or wider flips the persisted state, which is what the user sees there, as today.
 - **FR-005**: Overview full screen MUST keep retracting the whole drawer; closing it MUST show the sidebar as FR-002 and FR-003 say for the current width.
 - **FR-006**: `docs/user-guide/overview.md` and `docs/user-guide/worktrees-and-sessions.md` MUST state the behaviour: the promise "the sidebar always returns exactly as you left it" gains the exception for windows narrower than 720px.
 - **FR-007**: At the smallest window with every review state of feature 1276, the diff header row's controls MUST lie inside the row and the row inside the diff pane.
 - **FR-008**: At the smallest window the diff loading placeholder MUST lie inside its box.
 - **FR-009**: At the smallest window the comments drawer's header, tabs and rows (drafts, replies, empty) MUST lie inside their parents, with controls reachable (never clipped to nothing).
 - **FR-010**: At the smallest window the tree's filter placeholder and every tree row MUST lie inside the tree pane.
-- **FR-011**: The layout harness MUST lay out each covered state at a given window size, so the smallest-window run really uses 640 and compact-width behaviour (sidebar strip, main-area width) and the 1280 run does not.
+- **FR-011**: The smallest-window run of the layout gates MUST be compact (sidebar strip, main area 608px wide) and the 1280 run MUST NOT be, so the two runs differ.
 - **FR-012**: Each fixed defect MUST delete its known-defect entry in `crates/micold-client/tests/gates/review_tab_fits.rs`; an entry that no longer fires fails the gate (existing behaviour). Scroll-overhang entries stay.
 - **FR-013**: Layouts at 1280x800 MUST be unchanged.
 
@@ -120,15 +121,16 @@ Overview full screen retracts the whole drawer as before; leaving it at compact 
 
 - **Compact flag**: derived from the window's reported width; not stored.
 - **Compact override**: transient, per window: whether the user expanded the sidebar at compact width; cleared when the window leaves compact width.
+- **Effective sidebar state**: persisted `hidden`, combined with the compact flag and the override (collapsed when compact and not overridden, else the persisted state). Every reader uses it: the drawer's open flag, the strip or width, the main area's freed width. Full screen (`retracted`) applies on top and is independent of it; closing full screen reveals the effective state.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: With the sidebar strip at 640x480, every review state escapes its parent by no more than the declared scroll overhangs, in light and dark: zero `#1474` entries remain in `review_tab_fits.rs`.
-- **SC-002**: Every resize across 720 px in either direction restores the user's sidebar state within one frame (one step under reduced motion), in 100% of tested sequences.
+- **SC-001**: With the sidebar strip at 640x480, every review state escapes its parent by no more than the declared scroll overhangs, in light and dark: zero `#1474` entries remain in `review_tab_fits.rs`, except the stale-notice source-control entry if it does not fall out of the wider main area; that one is re-filed under its own issue.
+- **SC-002**: Every resize across 720 px in either direction restores the user's sidebar state in the same update as the resize (the visual transition follows the existing sidebar animation, one step under reduced motion), in 100% of tested sequences.
 - **SC-003**: The persisted sidebar state is byte-identical before and after any resize sequence that makes no manual toggle at 720px or wider.
-- **SC-004**: At 640px the tree and diff panes together get at least 580px of width (window minus the strip), against about 334px with the default sidebar.
+- **SC-004**: At 640px the tree and diff panes together get at least 608px of width (640 minus the 32px strip), against about 334px with the default sidebar.
 - **SC-005**: The 1280x800 layout snapshot of every review state is unchanged.
 
 ## Assumptions
