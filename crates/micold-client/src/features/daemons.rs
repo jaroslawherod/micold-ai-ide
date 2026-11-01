@@ -323,6 +323,8 @@ pub struct DaemonDetails {
     pub applies_on_next_start: bool,
     /// The pod's log tail as last fetched, or why it could not be (FR-018).
     pub pod_log: Option<Result<String, String>>,
+    /// The daemon's configuration as it reported it (#1535, FR-029).
+    pub config: Option<micold_core::protocol::messages::ConfigStatus>,
 }
 
 /// What the details say of an edit saved while the pod runs (FR-005).
@@ -455,6 +457,8 @@ pub struct State {
     /// Kubernetes daemons edited while running, until they are started again.
     applies_on_next_start: BTreeSet<DaemonId>,
     pod_logs: BTreeMap<DaemonId, Result<String, String>>,
+    /// What each connected daemon reported of its configuration file (#1535).
+    config_status: BTreeMap<DaemonId, micold_core::protocol::messages::ConfigStatus>,
     /// The kubeconfig contexts the Kubernetes form offers (feature 686, FR-002).
     pub contexts: ContextList,
     /// The AI CLIs a new Kubernetes daemon installs: the providers enabled in Settings (FR-018).
@@ -861,6 +865,7 @@ pub fn details(state: &State, id: DaemonId) -> DaemonDetails {
         runtime_missing: state.runtime_missing.get(&id).cloned(),
         applies_on_next_start: state.applies_on_next_start.contains(&id),
         pod_log: state.pod_logs.get(&id).cloned(),
+        config: state.config_status.get(&id).cloned(),
     }
 }
 
@@ -1846,6 +1851,7 @@ fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome
     state.credentials.remove(&id);
     state.applies_on_next_start.remove(&id);
     state.pod_logs.remove(&id);
+    state.config_status.remove(&id);
     if state.details == Some(id) {
         state.details = None;
     }
@@ -2034,6 +2040,13 @@ pub enum Msg {
     DetailsOpened(DaemonId),
     /// Close the details dialog; nothing is stored.
     DetailsClosed,
+    /// The daemon's configuration status, as answered or pushed; `None` = it runs without a file.
+    ConfigReported(
+        DaemonId,
+        Option<micold_core::protocol::messages::ConfigStatus>,
+    ),
+    /// "Restart to apply": stop the daemon and start it again.
+    RestartRequested(DaemonId),
     /// What one daemon's connection reported (its state moves, and what it said is kept for the
     /// details). Sent by the shell as the connection actor's messages arrive.
     EventReported(DaemonId, DaemonEvent),
@@ -2389,6 +2402,18 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.opener = Some(Opener::Row(id, RowAction::Details));
         }
         Msg::DetailsClosed => state.details = None,
+        Msg::ConfigReported(id, Some(status)) => {
+            state.config_status.insert(id, status);
+        }
+        Msg::ConfigReported(id, None) => {
+            state.config_status.remove(&id);
+        }
+        Msg::RestartRequested(id) => {
+            state.config_status.remove(&id);
+            let mut out = reduce(state, model, Msg::Stopped(id));
+            out.extend(reduce(state, model, Msg::Started(id)));
+            return out;
+        }
         Msg::EventReported(id, event) => {
             daemon_event(state, model.links, id, event);
         }

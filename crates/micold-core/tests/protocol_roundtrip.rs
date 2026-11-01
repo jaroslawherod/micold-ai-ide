@@ -61,6 +61,10 @@ fn config_status() -> micold_core::protocol::messages::ConfigStatus {
             tail: vec!["oops".into()],
             finished_at_secs: 1_700_000_000,
         }),
+        tokens: vec![micold_core::protocol::messages::TokenReach {
+            name: "work".into(),
+            repos: vec!["acme/*".into()],
+        }],
     }
 }
 

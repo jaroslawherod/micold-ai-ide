@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use micold_core::daemon_config::{self, DaemonConfig};
-use micold_core::protocol::messages::ConfigStatus;
+use micold_core::protocol::messages::{ConfigStatus, TokenReach};
 
 use crate::config_load::{fingerprint, load_file, validate_text, LoadError, LoadedFile};
 
@@ -122,16 +122,25 @@ impl ConfigRuntime {
 
     fn status_of(&self, state: &State) -> ConfigStatus {
         let config = &state.applied;
+        let view = daemon_config::resolved_view(config);
         ConfigStatus {
             path: self.path.clone(),
             schema: config.schema,
             kind: config.daemon.kind.as_str().to_string(),
             applied_hash: state.applied_hash.clone(),
-            resolved: daemon_config::resolved_view(config).to_string(),
+            resolved: view.to_string(),
             restart_needed: !state.restart_keys.is_empty(),
             changed_restart_keys: state.restart_keys.clone(),
             last_error: state.last_error.clone(),
             startup: crate::startup_script::current_report(),
+            tokens: view
+                .tokens
+                .iter()
+                .map(|t| TokenReach {
+                    name: t.name.clone(),
+                    repos: t.repos.iter().flatten().map(ToString::to_string).collect(),
+                })
+                .collect(),
         }
     }
 

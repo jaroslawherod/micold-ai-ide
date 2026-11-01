@@ -216,9 +216,9 @@ Research D12.
 
 ## Issue 14 — feat: read what a daemon was given (needs 3)
 
-- [ ] T081 [P] [US6] Failing view test in `crates/micold-client/src/ui/daemon_details_dialog.rs` tests: a "Configuration" section shows the delivered file, the resolved values, reach per token, start-script last run (names of exported variables only), `restart_needed`; no secret value in the rendered text
-- [ ] T082 [US6] Implement with the shared code/markup viewer; Restart button when `restart_needed`
-- [ ] T083 [US6] Document in `docs/user-guide/settings.md`
+- [x] T081 [P] [US6] Failing view test in `crates/micold-client/src/ui/daemon_details_dialog.rs` tests: a "Configuration" section shows the delivered file, the resolved values, reach per token, start-script last run (names of exported variables only), `restart_needed`; no secret value in the rendered text
+- [x] T082 [US6] Implement with the shared code/markup viewer; Restart button when `restart_needed`
+- [x] T083 [US6] Document in `docs/user-guide/settings.md`
 
 ---
 

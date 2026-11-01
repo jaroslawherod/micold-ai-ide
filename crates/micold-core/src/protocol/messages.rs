@@ -2463,6 +2463,9 @@ pub struct ConfigStatus {
     pub last_error: Option<String>,
     /// How this start's start script went (#1533); `None` when the file has no `[startup]` table.
     pub startup: Option<StartupReport>,
+    /// What each GitHub token reaches (#1535, contract §5).
+    #[serde(default)]
+    pub tokens: Vec<TokenReach>,
 }
 
 /// How a run of the start script ended (#1533).
@@ -2504,6 +2507,15 @@ pub struct StartupReport {
     pub tail: Vec<String>,
     /// Unix seconds when the run ended; the application rejects a report older than its spawn.
     pub finished_at_secs: u64,
+}
+
+/// The repositories one configured GitHub token reaches: names only, never the token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenReach {
+    /// The token's name in the file.
+    pub name: String,
+    /// `owner/repo` or `owner/*` patterns; empty = every repository the token reaches.
+    pub repos: Vec<String>,
 }
 
 /// A single log entry surfaced to the diagnostics UI. MUST NOT contain terminal content or user
