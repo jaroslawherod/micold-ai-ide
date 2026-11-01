@@ -14602,6 +14602,7 @@ mod two_daemons {
             runtime,
             auto_start: true,
             notice: None,
+            file: Default::default(),
         }
     }
 

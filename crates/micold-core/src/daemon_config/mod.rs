@@ -127,6 +127,16 @@ pub enum IdleStopSetting {
     Secs(u32),
 }
 
+impl serde::Serialize for IdleStopSetting {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Default => serializer.serialize_str("default"),
+            Self::Off => serializer.serialize_str("off"),
+            Self::Secs(secs) => serializer.serialize_u32(*secs),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for IdleStopSetting {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;

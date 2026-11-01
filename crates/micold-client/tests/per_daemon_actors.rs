@@ -59,6 +59,7 @@ fn an_unsupported_runtime_gets_no_actor() {
             },
             auto_start: true,
             notice: None,
+            file: Default::default(),
         }],
         2,
     );

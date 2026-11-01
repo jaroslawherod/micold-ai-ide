@@ -15,7 +15,8 @@ use std::path::PathBuf;
 use micold_core::daemons::{
     container_name_long_enough, default_container_name, Binding, ConnectionError,
     DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry, DaemonRuntime,
-    DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef, CONTAINER_NAME_MIN,
+    DaemonState, DaemonView, FileSettings, RegistryError, StateChange, WorktreeRef,
+    CONTAINER_NAME_MIN,
 };
 use micold_core::kube::lifecycle::leftovers;
 use micold_core::kube::names::ResourceNames;
@@ -151,6 +152,12 @@ pub struct Draft {
     pub storage_mib: String,
     /// Connect at launch.
     pub auto_start: bool,
+    /// The daemon file's `daemon.data_dir` as typed; empty means unset (#1525).
+    pub data_dir: String,
+    /// The daemon file's `storage.clone_root` as typed; empty means unset.
+    pub clone_root: String,
+    /// The daemon file's `auth.client_token_file` as typed; empty means the kind's default.
+    pub client_token_file: String,
     /// The host or `Host` alias (SSH runtime only, feature 489).
     pub ssh_host: String,
     /// The remote user; blank takes it from the SSH configuration (SSH runtime only).
@@ -168,7 +175,30 @@ pub struct Draft {
     pub required: RequiredMarks<FieldId>,
 }
 
+/// A stored path as the form shows it.
+fn path_text(path: &Option<PathBuf>) -> String {
+    path.as_ref()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 impl Draft {
+    /// The file settings Save stores: the three typed paths over `stored`, which keeps what the
+    /// form has no field for (idle stop, projects).
+    pub fn file_settings(&self, stored: &FileSettings) -> FileSettings {
+        let path = |text: &str| {
+            Some(text.trim())
+                .filter(|t| !t.is_empty())
+                .map(PathBuf::from)
+        };
+        FileSettings {
+            data_dir: path(&self.data_dir),
+            clone_root: path(&self.clone_root),
+            client_token_file: path(&self.client_token_file),
+            ..stored.clone()
+        }
+    }
+
     /// The note under the volume size once the daemon exists (FR-005), so an edit is not taken to
     /// resize a volume that is already there.
     pub fn volume_notice(&self) -> Option<&'static str> {
@@ -275,6 +305,7 @@ enum Pending {
         name: String,
         runtime: Box<DaemonRuntime>,
         auto_start: bool,
+        file: FileSettings,
     },
 }
 
@@ -932,6 +963,9 @@ pub fn begin_add(state: &mut State) {
         pids: texts.pids,
         storage_mib: texts.storage_mib,
         auto_start: true,
+        data_dir: String::new(),
+        clone_root: String::new(),
+        client_token_file: String::new(),
         kube: KubeDraft::new(&state.default_providers),
         kube_edited: false,
         ssh_host: String::new(),
@@ -1016,6 +1050,9 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         pids: texts.pids,
         storage_mib: texts.storage_mib,
         auto_start: entry.auto_start,
+        data_dir: path_text(&entry.file.data_dir),
+        clone_root: path_text(&entry.file.clone_root),
+        client_token_file: path_text(&entry.file.client_token_file),
         ssh_host: ssh.0,
         ssh_user: ssh.1,
         ssh_port: ssh.2,
@@ -1356,7 +1393,16 @@ fn save_checked(
         result.map(|id| (id, probe))
     };
     let probed = check(&literal_identity).and_then(|_| check(&resolved_identity));
-    let (id, probe) = probed.map_err(|e| form_error(model.registry, &draft, e))?;
+    let (id, mut probe) = probed.map_err(|e| form_error(model.registry, &draft, e))?;
+    let file = draft.file_settings(
+        &draft
+            .editing
+            .and_then(|id| model.registry.get(id))
+            .map(|e| e.file.clone())
+            .unwrap_or_default(),
+    );
+    // `id` is the entry `probe` just added or edited, so this cannot fail.
+    let _ = probe.set_file(id, file.clone());
     if !commit {
         return Ok(Vec::new());
     }
@@ -1393,6 +1439,7 @@ fn save_checked(
                         name,
                         runtime: Box::new(runtime),
                         auto_start: draft.auto_start,
+                        file,
                     },
                     prompt,
                 ));
@@ -1473,11 +1520,13 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             name,
             runtime,
             auto_start,
+            file,
         } => {
             let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
             if model
                 .registry
                 .edit(id, &name, (*runtime).clone(), auto_start)
+                .and_then(|()| model.registry.set_file(id, file))
                 .is_err()
             {
                 return out;
@@ -1929,6 +1978,12 @@ pub enum Msg {
     StorageClassEdited(String),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
+    /// The file's data directory was typed in the form (#1525).
+    DataDirEdited(String),
+    /// The file's clone root was typed in the form.
+    CloneRootEdited(String),
+    /// The file's client token path was typed in the form.
+    ClientTokenFileEdited(String),
     /// A Kubernetes start found its pod running with other settings (the fields that differ).
     KubeDrift(DaemonId, Vec<String>),
     /// Cancel the start of this Kubernetes daemon.
@@ -2238,6 +2293,9 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::VolumeSizeEdited(v) => edit(state, &|d| d.kube.volume_size = v.clone()),
         Msg::StorageClassEdited(v) => edit(state, &|d| d.kube.storage_class = v.clone()),
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
+        Msg::DataDirEdited(v) => edit(state, &|d| d.data_dir = v.clone()),
+        Msg::CloneRootEdited(v) => edit(state, &|d| d.clone_root = v.clone()),
+        Msg::ClientTokenFileEdited(v) => edit(state, &|d| d.client_token_file = v.clone()),
         Msg::Started(id) => {
             start(state, model, id);
         }
