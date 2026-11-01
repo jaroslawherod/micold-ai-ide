@@ -3,7 +3,8 @@
 //!
 //! A title, a × that closes it and the content under them, the width its call site gives
 //! (`.width`, the comments drawer's `anatomy::comments_drawer::WIDTH`) but never more than half the
-//! area (`review::drawer::capped`). The sheet takes the whole area it is offered and lays its
+//! area (`review::drawer::capped_with_floor`, which keeps `.min_width` while the area has it). The sheet
+//! takes the whole area it is offered and lays its
 //! panel out at the area's right edge, so it is drawn with `stack![area, sheet]` and the area's own
 //! layout is computed as if the sheet were absent (FR-010: opening it does not change the diff's
 //! width or move its lines). A press on the panel stays there; left of it the area gets it.
@@ -32,6 +33,7 @@ pub struct SideSheet<'a, M> {
     title: Option<String>,
     on_close: Option<M>,
     width: f32,
+    min_width: f32,
 }
 
 impl<'a, M: Clone + 'a> SideSheet<'a, M> {
@@ -43,13 +45,21 @@ impl<'a, M: Clone + 'a> SideSheet<'a, M> {
             title: None,
             on_close: None,
             width: f32::INFINITY,
+            min_width: 0.0,
         }
     }
 
-    /// The panel's width, which it keeps while that is at most half the area; without it the
-    /// panel is half the area.
+    /// The panel's width, which it keeps while that is at most half the area (or `.min_width`);
+    /// without it the panel is half the area.
     pub fn width(mut self, width: f32) -> Self {
         self.width = width;
+        self
+    }
+
+    /// The least the panel is while the area has that much, though that is over half of it
+    /// (`review::drawer::capped_with_floor`); 0 by default.
+    pub fn min_width(mut self, min_width: f32) -> Self {
+        self.min_width = min_width;
         self
     }
 
@@ -100,6 +110,7 @@ impl<'a, M: Clone + 'a> From<SideSheet<'a, M>> for Element<'a, M> {
             panel: panel.into(),
             roles: r,
             width: sheet.width,
+            min_width: sheet.min_width,
         })
     }
 }
@@ -110,6 +121,8 @@ struct Sheet<'a, M> {
     roles: Roles,
     /// The width wanted, before the half-the-area cap.
     width: f32,
+    /// The floor under the half-the-area cap.
+    min_width: f32,
 }
 
 impl<M> Sheet<'_, M> {
@@ -142,7 +155,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Sheet<'_, M> {
         limits: &layout::Limits,
     ) -> layout::Node {
         let area = limits.resolve(Length::Fill, Length::Fill, Size::ZERO);
-        let width = drawer::capped(self.width, area.width);
+        let width = drawer::capped_with_floor(self.width, self.min_width, area.width);
         let fixed = layout::Limits::new(Size::ZERO, Size::new(width, area.height));
         let panel = self
             .panel

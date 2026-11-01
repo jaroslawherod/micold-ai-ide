@@ -26,7 +26,7 @@ use micold_core::review::changes::{
     ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
 };
 use micold_core::review::diff::{parse_unified, LoadedDiff, SideLines};
-use micold_core::review::drawer::DrawerEvent;
+use micold_core::review::drawer::{self, DrawerEvent};
 use micold_core::review::RelPath;
 use micold_core::tokens::{anatomy, spacing};
 
@@ -305,7 +305,8 @@ fn the_open_drawer_covers_the_right_of_the_diff_area_down_to_the_bar() {
     assert_drawer_covers_the_right_of(&records, DRAWER_PX);
 }
 
-/// FR-010: when half the diff area is under 360, the drawer is that half.
+/// FR-010: when half the diff area is under 360, the drawer is that half, but not under its floor
+/// (#1474: `anatomy::comments_drawer::MIN_WIDTH`, over half of a narrower area).
 #[test]
 fn in_a_narrow_window_the_drawer_is_half_the_diff_area() {
     let mut renderer = lay::renderer();
@@ -323,7 +324,7 @@ fn in_a_narrow_window_the_drawer_is_half_the_diff_area() {
         area.width / 2.0 < DRAWER_PX,
         "the narrow window leaves the drawer less than its full width: {area:?}"
     );
-    assert_drawer_covers_the_right_of(&records, area.width / 2.0);
+    assert_drawer_covers_the_right_of(&records, drawer::width(area.width));
 }
 
 /// The drawer is `wanted` wide, at the area's right edge, from its top to the bar, and starts at or
@@ -346,7 +347,7 @@ fn assert_drawer_covers_the_right_of(records: &[LayoutRecord], wanted: f32) {
         "the drawer runs from the area's top to the bar: {drawer:?}, bar {bar:?}"
     );
     assert!(
-        drawer.x >= area.x + area.width / 2.0 - TOLERANCE,
+        wanted > area.width / 2.0 + TOLERANCE || drawer.x >= area.x + area.width / 2.0 - TOLERANCE,
         "a jumped-to line starts left of the drawer: {drawer:?} over {area:?}"
     );
 }

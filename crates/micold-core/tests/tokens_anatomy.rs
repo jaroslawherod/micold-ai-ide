@@ -55,8 +55,8 @@ fn the_app_bar_is_the_small_variant() {
     assert_eq!(anatomy::app_bar::FIELD_MAX_WIDTH, 360.0);
     assert_eq!(
         anatomy::ALL.len(),
-        55,
-        "the four new app-bar figures are listed"
+        56,
+        "the four new app-bar figures and the drawer's floor are listed"
     );
 }
 
@@ -289,6 +289,7 @@ fn the_status_bar_anatomy_matches_the_contract() {
 fn the_review_bar_and_comments_drawer_anatomy_matches_the_contract() {
     assert_eq!(anatomy::review_bar::HEIGHT, 44.0);
     assert_eq!(anatomy::comments_drawer::WIDTH, 360.0);
+    assert_eq!(anatomy::comments_drawer::MIN_WIDTH, 240.0);
     assert!(anatomy::review_bar::SEND_WIDTH > 0.0);
     for (name, value) in [
         ("review_bar::HEIGHT", anatomy::review_bar::HEIGHT),

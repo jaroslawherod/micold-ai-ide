@@ -244,8 +244,12 @@ pub mod review_bar {
 
 /// The comments drawer over the right of the diff (feature 1270, contract D2).
 pub mod comments_drawer {
-    /// The drawer's width; it is at most half the diff area (`review::drawer::width`).
+    /// The drawer's width; it is at most half the diff area, but not under `MIN_WIDTH`
+    /// (`review::drawer::width`).
     pub const WIDTH: f32 = 360.0;
+    /// The least it is while the diff area has that much, though that is over half of it: the
+    /// width its rows' controls need (#1474, `review::drawer::capped_with_floor`).
+    pub const MIN_WIDTH: f32 = 240.0;
 }
 
 /// Every anatomy value, for the tests that hold properties across the whole set rather than
@@ -262,7 +266,7 @@ pub mod comments_drawer {
 /// it, which is the same shape as a figure nothing applies, one level further out.
 /// `tokens_anatomy::the_listed_table_holds_every_constant` now holds this against the module's own
 /// source, which is the only thing that can notice.
-pub const ALL: [(&str, f32); 55] = [
+pub const ALL: [(&str, f32); 56] = [
     ("app_bar::HEIGHT", app_bar::HEIGHT),
     ("app_bar::PADDING", app_bar::PADDING),
     (
@@ -321,4 +325,5 @@ pub const ALL: [(&str, f32); 55] = [
     ("review_bar::HEIGHT", review_bar::HEIGHT),
     ("review_bar::SEND_WIDTH", review_bar::SEND_WIDTH),
     ("comments_drawer::WIDTH", comments_drawer::WIDTH),
+    ("comments_drawer::MIN_WIDTH", comments_drawer::MIN_WIDTH),
 ];
