@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: milestone M2 (PR open)
-- **Next step**: M2 CI (docs fixed: user guide updated) and merge; then the close unit (T019 quickstart §B record, user guide check).
+- **Phase**: close (PR open)
+- **Next step**: close PR CI and merge; the run ends then.
 
 ## Pull requests
 
@@ -20,14 +20,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1592 | sort chips (earlier bug flow) | merged | 3190828cbe433f90b5458ad23837e6678d1c8910 |
 | #1626 | design (spec, plan, tasks) | merged | da15ba2f441be5c938dac897b658e8f492e509db |
 | #1637 | M1 sidebar strip | merged | 9589c784105246c8e02d884b02e60afcdc9f90a6 |
-| #1641 | M2 review tab fits | open | |
+| #1641 | M2 review tab fits | merged | cb3910fbb3c11961a16cc0c2e66aac4ecf9e4f85 |
+| (close) | close the spec | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | sidebar collapses to the strip below 720px | #1637 | merged |
-| M2 | T011–T018 | full | review tab fits at 640x480 | #1641 | PR open |
+| M2 | T011–T018 | full | review tab fits at 640x480 | #1641 | merged |
 
 ## Decisions
 
@@ -78,4 +79,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Close unit: visual pass (visual-pass.md): steps 1-5 pass, step 6 looks sane (no baseline compared), step 3 carries observation O1. O1: at 640 with the sidebar expanded by the user (show), the diff chips are squeezed and the diff is not visible; O2: at 640x480 the fixed header leaves the tree about 35px and the diff about 50px. Neither is in the spec's scope (quickstart step 2 covers the strip state); left for the user to file if wanted.
+- Close unit: speckit-converge not run: no CLEAN review B is recorded for M2, but tdd-verify traced 26 of 27 criteria with no unbuilt behaviour (the 27th, FR-006 docs, was checked by hand against docs/user-guide).

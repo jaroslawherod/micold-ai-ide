@@ -3,11 +3,12 @@
 
 mod support;
 
-use micold_client::app::{Message, State};
+use micold_client::app::{Message, State, MIN_WINDOW_SIZE};
 use micold_client::features::agent_confirm::Prompt;
 use micold_client::features::overview::{badge, Badge, Msg, Tone};
 use micold_client::features::pr_status::Msg as PrMsg;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::window::COMPACT_WIDTH;
 use micold_client::ui::overview::{arrow_focus, cards, follow_up};
 use micold_core::local_time::LocalTime;
 use micold_core::overview::Activation;
@@ -515,15 +516,19 @@ fn closing_full_screen_at_a_narrow_width_shows_the_strip() {
     let mut state = project_with(vec![]);
     state.update(Message::Window(
         micold_client::features::window::Msg::Resized {
-            width: 640,
-            height: 480,
+            width: MIN_WINDOW_SIZE.width as u16,
+            height: MIN_WINDOW_SIZE.height as u16,
         },
     ));
     open_overview(&mut state);
     toggle_full_screen(&mut state);
     toggle_full_screen(&mut state);
-    assert!(state.sidebar_hidden());
-    assert!(!state.sidebar.hidden);
+    assert!(
+        !state.overview.full_screen(),
+        "the drawer is no longer retracted"
+    );
+    assert!(state.sidebar_hidden(), "a narrow window shows the strip");
+    assert!(!state.sidebar.hidden, "the stored state is untouched");
 }
 
 #[test]
@@ -531,18 +536,22 @@ fn closing_full_screen_at_a_wide_width_returns_the_sidebar_expanded() {
     let mut state = project_with(vec![]);
     state.update(Message::Window(
         micold_client::features::window::Msg::Resized {
-            width: 1000,
+            width: COMPACT_WIDTH + 280,
             height: 700,
         },
     ));
     let width = state.sidebar.width;
     open_overview(&mut state);
     toggle_full_screen(&mut state);
-    assert!(state.overview.full_screen());
+    assert!(state.overview.full_screen(), "full screen is on");
     toggle_full_screen(&mut state);
-    assert!(!state.sidebar_hidden());
-    assert!(!state.sidebar.hidden);
-    assert_eq!(state.sidebar.width, width);
+    assert!(
+        !state.overview.full_screen(),
+        "the drawer is no longer retracted"
+    );
+    assert!(!state.sidebar_hidden(), "a wide window shows the sidebar");
+    assert!(!state.sidebar.hidden, "the stored state is untouched");
+    assert_eq!(state.sidebar.width, width, "the width is unchanged");
 }
 
 // ---- Feature 813 M2 (T026): pull request counts and the unknown mark ----
