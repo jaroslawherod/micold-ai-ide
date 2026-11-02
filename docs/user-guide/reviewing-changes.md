@@ -84,6 +84,10 @@ and `Esc`, `Tab` or a click outside the list closes it without changing anything
 to read its whole label and the base line. Below the header, the file list (or the Files tree) has
 a fixed-width column to itself, and the diff takes the rest of the width: a wider window widens
 only the diff. In a narrow window the control keeps its width: the entry's column narrows and its base line ends in `…`.
+At the smallest window (640 by 480) the sidebar shows as its thin strip (see [Resizing and hiding the
+sidebar](worktrees-and-sessions.md#resizing-and-hiding-the-sidebar)), and the review fits what is left:
+the diff header, the loading placeholder, the file tree and the comments drawer stay inside their
+boxes, in every review state, light and dark.
 
 Whatever you choose, the diff of the selected file is beside the tree: **Whole file** shows all its
 lines (see [Showing the whole file](#showing-the-whole-file)), and in **Files**, **Back** returns to

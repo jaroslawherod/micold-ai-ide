@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
 - **Phase**: milestone M2 (PR open)
-- **Next step**: M2 CI and merge; then the close unit (T019 quickstart §B record, user guide check).
+- **Next step**: M2 CI (docs fixed: user guide updated) and merge; then the close unit (T019 quickstart §B record, user guide check).
 
 ## Pull requests
 
