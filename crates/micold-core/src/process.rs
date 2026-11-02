@@ -126,11 +126,34 @@ pub enum RunOutcome {
 /// syscall from this same process is unambiguous.
 #[cfg(unix)]
 fn kill_process_group(pid: u32) {
+    // A descendant can leave the group (mise starts rustup with its own process group, #1642), and
+    // once its parent dies it is reparented and no longer found from `pid`: list them first.
+    let mut found = vec![pid];
+    let mut next = 0;
+    while let Some(&parent) = found.get(next) {
+        next += 1;
+        // ponytail: `pgrep -P` per node, a /proc walk or libproc if trees get large; no pgrep: the
+        // group kill alone.
+        let children = Command::new("pgrep")
+            .args(["-P", &parent.to_string()])
+            .stderr(Stdio::null())
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+            .unwrap_or_default();
+        found.extend(
+            children
+                .split_whitespace()
+                .filter_map(|p| p.parse::<u32>().ok()),
+        );
+    }
     // Safety: `kill(2)` with a negative pid signals the process group; passing an invalid/already-
     // reaped group id is a documented, safe no-op (returns -1/ESRCH) rather than undefined
-    // behavior.
+    // behavior. The same call with a positive pid signals one process, and is as safe.
     unsafe {
         libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+        for descendant in &found[1..] {
+            libc::kill(*descendant as libc::pid_t, libc::SIGKILL);
+        }
     }
 }
 
@@ -667,6 +690,44 @@ mod tests {
             !app_mutex_exists(),
             "after the marker is dropped, OpenMutexW({APP_MUTEX_NAME:?}) must fail"
         );
+    }
+
+    /// #1642: mise starts rustup in a process group of its own, so the group kill alone left the
+    /// stopped setup's downloads running into the next run. A descendant in another group dies too.
+    #[cfg(unix)]
+    #[test]
+    fn terminate_also_ends_a_descendant_in_its_own_process_group() {
+        let mut cmd = Command::new("perl");
+        // The forked `sleep` moves to a group of its own and the parent prints its pid.
+        cmd.args([
+            "-e",
+            "$|=1; my $p=fork; if(!$p){setpgrp(0,0); exec q(sleep),q(300)} print qq($p\\n); waitpid($p,0)",
+        ]);
+        let child = StreamingChild::spawn(cmd).unwrap();
+        let terminator = child.terminator();
+        let (tx, rx) = mpsc::channel();
+        let run = std::thread::spawn(move || {
+            child.run(|_, bytes| {
+                let _ = tx.send(String::from_utf8_lossy(bytes).trim().to_string());
+            })
+        });
+        let pid: libc::pid_t = std::iter::from_fn(|| rx.recv_timeout(Duration::from_secs(10)).ok())
+            .find_map(|chunk| chunk.parse().ok())
+            .expect("perl prints the sleep's pid");
+        terminator.terminate();
+        run.join().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only checks that the process exists.
+        while unsafe { libc::kill(pid, 0) } == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // SAFETY: as above.
+        let alive = unsafe { libc::kill(pid, 0) } == 0;
+        if alive {
+            // SAFETY: clean up the leaked sleep.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+        assert!(!alive, "the descendant {pid} outlived the tree kill");
     }
 
     #[cfg(unix)]
