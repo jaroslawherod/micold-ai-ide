@@ -66,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 done, full gate green (GATE_EXIT=0, before a rebase onto 3 newer main commits), branch pushed. Only step left: open the PR (gh pr create timed out against api.github.com repeatedly; body is pr-body.md in the old scratchpad: Milestone M5 of 5, Review A/B lines above, Refs #1464; title "feat(1464): show a drop-target cue while files hover over structured views (#1464)"). Check `gh pr list --head <branch>` first; then record the PR number in the table.
 
 ## Open escalation
 
