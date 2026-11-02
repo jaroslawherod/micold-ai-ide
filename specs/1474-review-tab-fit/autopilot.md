@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1626 | design (spec, plan, tasks) | merged | da15ba2f441be5c938dac897b658e8f492e509db |
 | #1637 | M1 sidebar strip | merged | 9589c784105246c8e02d884b02e60afcdc9f90a6 |
 | #1641 | M2 review tab fits | merged | cb3910fbb3c11961a16cc0c2e66aac4ecf9e4f85 |
-| (close) | close the spec | open | |
+| #1645 | close the spec | open | |
 
 ## Milestones
 
