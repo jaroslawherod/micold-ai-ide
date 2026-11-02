@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M5 PR #1651 open, waiting on CI and merge
-- **Next step**: orchestrator waits on CI and merges #1651, then the close unit
+- **Phase**: close unit found unbuilt behaviour; M6 cut, waiting to run
+- **Next step**: run M6 (T042–T044), then a new close unit (T040–T041 ticks, Status Closed, close PR). Close-unit work already committed: tdd/verification.md, strengthened tests (F1–F9), quickstart Part B results, T030 wording
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
 | #1618 | M3 | merged | be05cf1862a71d8d8736ffd4e86a26801b5cd0ca |
 | #1636 | M4 | merged | d965f390663fa3cb9842362d912f85c0b13d980c |
-| #1651 | M5 | open | |
+| #1651 | M5 | merged | edc9f75218b73600eeb47b7b0b8cf30484ecff1e |
 
 ## Milestones
 
@@ -31,7 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
-| M5 | T034–T039 | full | Drop-target cue | #1651 | open |
+| M5 | T034–T039 | full | Drop-target cue | #1651 (merge edc9f75218b73600eeb47b7b0b8cf30484ecff1e) | merged |
+| M6 | T042–T044 | full | Drop cue on a single-pane structured session | | pending |
 
 ## Decisions
 

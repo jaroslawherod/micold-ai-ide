@@ -19,7 +19,7 @@ use crate::transcript_jump_control_fits::viewport;
 use iced::widget::text_editor::{Action, Edit};
 use iced::Rectangle;
 use micold_client::app::{EditorAction, Message, State};
-use micold_client::features::composer::{DroppedFiles, InputState, OVERDUE};
+use micold_client::features::composer::{DroppedFiles, InputState, Msg, OVERDUE};
 use micold_client::features::window::{FieldId, Msg as WindowMsg};
 use micold_client::ui::composer::{
     Seams, BUSY, MAX_HEIGHT, ON_HOLD, PLACEHOLDER, QUEUE_MAX_HEIGHT, READY,
@@ -887,4 +887,126 @@ fn the_add_attachment_button_is_disabled_when_the_session_cannot_accept_input_or
     // Still drawn, so the row does not shift.
     let (painted, _) = paint(state, id);
     find(&painted, ATTACH_GLYPH);
+}
+
+/// The centre of the drawn **Add attachment** glyph, where a person points.
+fn attach_centre(state: &State, id: SessionId) -> (iced::Point, Vec<usize>) {
+    let (painted, _) = paint(state.clone(), id);
+    let glyph = find(&painted, ATTACH_GLYPH);
+    let at = iced::Point::new(
+        glyph.origin.x + glyph.natural_width / 2.0,
+        glyph.origin.y + glyph.natural_height / 2.0,
+    );
+    // The smallest laid-out box under the glyph: the button, whose tooltip the pointer opens.
+    let under = StateUnderTest::new(state.clone());
+    let path = lay::resolve(lay::view_of(&under), &lay::renderer())
+        .into_iter()
+        .filter(|r| {
+            r.layer == lay::Layer::Base
+                && (r.x..=r.x + r.width).contains(&at.x)
+                && (r.y..=r.y + r.height).contains(&at.y)
+        })
+        .min_by(|a, b| (a.width * a.height).total_cmp(&(b.width * b.height)))
+        .expect("a box under the glyph")
+        .path;
+    (at, path)
+}
+
+/// The composer messages a click on the drawn **Add attachment** button publishes.
+fn attach_click(state: &State, id: SessionId) -> Vec<Message> {
+    let (at, _) = attach_centre(state, id);
+    let under = StateUnderTest::new(state.clone());
+    lay::runtime_messages(|| lay::view_of(&under), WINDOW, &[lay::Gesture::Click(at)])
+        .into_iter()
+        .flatten()
+        .filter(|m| matches!(m, Message::Composer(_)))
+        .collect()
+}
+
+/// US3 AC4 / FR-006: the tooltip names the action and the shortcut, read as a person reads it,
+/// with the pointer on the button.
+#[test]
+fn the_add_attachment_tooltip_names_the_action_and_the_shortcut() {
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    let (_, path) = attach_centre(&state, id);
+    let under = StateUnderTest::new(state);
+    let (tip, _) =
+        lay::painted_text_hovering_at(lay::view_of(&under), &mut lay::renderer(), &path, WINDOW);
+    let wanted = if cfg!(target_os = "macos") {
+        "Add attachment (Cmd+Shift+A)"
+    } else {
+        "Add attachment (Ctrl+Shift+A)"
+    };
+    assert!(
+        tip.iter()
+            .any(|p| p.layer == lay::Layer::Overlay && p.content == wanted),
+        "the tooltip says `{wanted}`: {tip:?}"
+    );
+}
+
+/// US3 AC5 / FR-006, FR-011: pressing the drawn button asks for the picker; drawn disabled (a
+/// picker open, or the session ended) the same press publishes nothing.
+#[test]
+fn pressing_the_drawn_add_attachment_button_asks_for_the_picker_only_when_enabled() {
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    assert!(
+        attach_click(&state, id)
+            .iter()
+            .any(|m| matches!(m, Message::Composer(Msg::AttachRequested(s)) if *s == id)),
+        "an enabled button asks for the picker"
+    );
+    assert!(state.composers.attach_requested(id));
+    assert_eq!(
+        attach_click(&state, id).len(),
+        0,
+        "inert while the picker is open"
+    );
+    report(&mut state, id, TurnPhase::NotRunning, false, 0);
+    assert_eq!(
+        attach_click(&state, id).len(),
+        0,
+        "inert when the session cannot accept input"
+    );
+}
+
+/// US2 AC1-2, SC-005: files hovering over the window put the cue on the drawn (tiled) pane of a
+/// structured session that accepts input, and on none that cannot; the pixels differ only then.
+#[test]
+fn hovering_files_mark_the_drawn_pane_only_when_it_accepts_input() {
+    let frame = |state: &State, id: SessionId| {
+        let mut layout = micold_core::pane_layout::PaneLayout::single();
+        let only = layout.focused();
+        let primary = micold_core::protocol::messages::TerminalRef {
+            session: id,
+            process: micold_core::protocol::messages::SessionProcess::Primary,
+        };
+        layout
+            .split(
+                only,
+                micold_core::pane_layout::Axis::Vertical,
+                (1000.0, 600.0),
+                (80.0, 160.0),
+                None,
+            )
+            .expect("a 1000 px pane splits in two");
+        layout.show(only, primary).expect("the pane shows it");
+        let under = StateUnderTest::new(state.clone()).panes(layout);
+        lay::runtime_frame(|| lay::view_of(&under), WINDOW)
+    };
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    let calm = frame(&state, id);
+    state.session.files_hovering = true;
+    assert!(frame(&state, id) != calm, "the cue is drawn over the pane");
+    state.session.files_hovering = false;
+    assert!(frame(&state, id) == calm, "and gone when the files leave");
+    report(&mut state, id, TurnPhase::NotRunning, false, 0);
+    let ended = frame(&state, id);
+    state.session.files_hovering = true;
+    assert!(
+        frame(&state, id) == ended,
+        "no cue for a session that is over"
+    );
 }
