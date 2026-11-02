@@ -31,7 +31,7 @@
 //! `crates/micold-daemon/tests/ai_cli_availability.rs`, and the probe's own behaviour is
 //! `crates/micold-core/tests/available_here.rs`.
 
-mod inventory;
+use crate::inventory;
 
 use std::path::Path;
 

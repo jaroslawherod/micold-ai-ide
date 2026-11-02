@@ -1,4 +1,5 @@
 [package]
+autotests = false
 name = "micold-daemon"
 description = "User-space session host for Micold AI IDE (feature 010): owns PTY/VT sessions that outlive the UI."
 version.workspace = true
@@ -84,3 +85,423 @@ embed-resource = { workspace = true }
 
 [lints]
 workspace = true
+
+# Integration tests (#1631): `tests/main.rs` links every ordinary test file as a module; the targets below stay
+# separate (process-global state, timing budgets, container or sshd runtimes). A new file under `tests/` must be a
+# `mod` of `tests/main.rs` or be listed here; `every_test_file_is_wired` checks it.
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "activity_pipeline"
+path = "tests/activity_pipeline.rs"
+
+[[test]]
+name = "ai_cli_availability"
+path = "tests/ai_cli_availability.rs"
+
+[[test]]
+name = "attach_apply"
+path = "tests/attach_apply.rs"
+
+[[test]]
+name = "attach_mcp"
+path = "tests/attach_mcp.rs"
+
+[[test]]
+name = "attention_error_notice"
+path = "tests/attention_error_notice.rs"
+
+[[test]]
+name = "autospawn"
+path = "tests/autospawn.rs"
+
+[[test]]
+name = "catalog_join"
+path = "tests/catalog_join.rs"
+
+[[test]]
+name = "client_restart_input"
+path = "tests/client_restart_input.rs"
+
+[[test]]
+name = "codex_opencode_start"
+path = "tests/codex_opencode_start.rs"
+
+[[test]]
+name = "codex_resume"
+path = "tests/codex_resume.rs"
+
+[[test]]
+name = "config_wiring"
+path = "tests/config_wiring.rs"
+
+[[test]]
+name = "daemon_stop"
+path = "tests/daemon_stop.rs"
+
+[[test]]
+name = "exclusivity"
+path = "tests/exclusivity.rs"
+
+[[test]]
+name = "fatal_startup_is_logged"
+path = "tests/fatal_startup_is_logged.rs"
+
+[[test]]
+name = "git_credential_grant"
+path = "tests/git_credential_grant.rs"
+
+[[test]]
+name = "history_damaged"
+path = "tests/history_damaged.rs"
+
+[[test]]
+name = "history_periodic_save"
+path = "tests/history_periodic_save.rs"
+
+[[test]]
+name = "history_removal"
+path = "tests/history_removal.rs"
+
+[[test]]
+name = "history_restart_in_run"
+path = "tests/history_restart_in_run.rs"
+
+[[test]]
+name = "history_service_restart"
+path = "tests/history_service_restart.rs"
+
+[[test]]
+name = "history_setting"
+path = "tests/history_setting.rs"
+
+[[test]]
+name = "history_stop_request"
+path = "tests/history_stop_request.rs"
+
+[[test]]
+name = "history_timing"
+path = "tests/history_timing.rs"
+
+[[test]]
+name = "hooks_receiver"
+path = "tests/hooks_receiver.rs"
+
+[[test]]
+name = "idle_race"
+path = "tests/idle_race.rs"
+
+[[test]]
+name = "idle_stop"
+path = "tests/idle_stop.rs"
+
+[[test]]
+name = "idle_teardown"
+path = "tests/idle_teardown.rs"
+
+[[test]]
+name = "log_events"
+path = "tests/log_events.rs"
+
+[[test]]
+name = "log_redaction"
+path = "tests/log_redaction.rs"
+
+[[test]]
+name = "mcp_audit_log"
+path = "tests/mcp_audit_log.rs"
+
+[[test]]
+name = "mcp_binding_spawn"
+path = "tests/mcp_binding_spawn.rs"
+
+[[test]]
+name = "mcp_create_session"
+path = "tests/mcp_create_session.rs"
+
+[[test]]
+name = "mcp_cross_session"
+path = "tests/mcp_cross_session.rs"
+
+[[test]]
+name = "mcp_default_prompt"
+path = "tests/mcp_default_prompt.rs"
+
+[[test]]
+name = "mcp_read_latency"
+path = "tests/mcp_read_latency.rs"
+
+[[test]]
+name = "one_session_per_worktree"
+path = "tests/one_session_per_worktree.rs"
+
+[[test]]
+name = "osc8_passthrough"
+path = "tests/osc8_passthrough.rs"
+
+[[test]]
+name = "pasted_cleanup"
+path = "tests/pasted_cleanup.rs"
+
+[[test]]
+name = "pi_launch_wiring"
+path = "tests/pi_launch_wiring.rs"
+
+[[test]]
+name = "plan_usage_route"
+path = "tests/plan_usage_route.rs"
+
+[[test]]
+name = "plan_usage_structured"
+path = "tests/plan_usage_structured.rs"
+
+[[test]]
+name = "project_registered_before_create"
+path = "tests/project_registered_before_create.rs"
+
+[[test]]
+name = "provider_origin_discovery"
+path = "tests/provider_origin_discovery.rs"
+
+[[test]]
+name = "refused_mutations_are_logged"
+path = "tests/refused_mutations_are_logged.rs"
+
+[[test]]
+name = "resume_failure_reported"
+path = "tests/resume_failure_reported.rs"
+
+[[test]]
+name = "review_reports"
+path = "tests/review_reports.rs"
+
+[[test]]
+name = "review_send"
+path = "tests/review_send.rs"
+
+[[test]]
+name = "run_group_create"
+path = "tests/run_group_create.rs"
+
+[[test]]
+name = "run_group_pick"
+path = "tests/run_group_pick.rs"
+
+[[test]]
+name = "sandbox_real_ai_cli"
+path = "tests/sandbox_real_ai_cli.rs"
+
+[[test]]
+name = "sandbox_real_ai_cli_sessions"
+path = "tests/sandbox_real_ai_cli_sessions.rs"
+
+[[test]]
+name = "sandbox_real_boundary"
+path = "tests/sandbox_real_boundary.rs"
+
+[[test]]
+name = "sandbox_real_fingerprint"
+path = "tests/sandbox_real_fingerprint.rs"
+
+[[test]]
+name = "sandbox_real_history"
+path = "tests/sandbox_real_history.rs"
+
+[[test]]
+name = "sandbox_real_idle"
+path = "tests/sandbox_real_idle.rs"
+
+[[test]]
+name = "sandbox_real_limits"
+path = "tests/sandbox_real_limits.rs"
+
+[[test]]
+name = "sandbox_real_mcp"
+path = "tests/sandbox_real_mcp.rs"
+
+[[test]]
+name = "sandbox_real_mise_setup"
+path = "tests/sandbox_real_mise_setup.rs"
+
+[[test]]
+name = "sandbox_real_multi_daemon"
+path = "tests/sandbox_real_multi_daemon.rs"
+
+[[test]]
+name = "sandbox_real_multi_daemon_container"
+path = "tests/sandbox_real_multi_daemon_container.rs"
+
+[[test]]
+name = "sandbox_real_multi_daemon_host"
+path = "tests/sandbox_real_multi_daemon_host.rs"
+
+[[test]]
+name = "sandbox_real_no_user_credentials"
+path = "tests/sandbox_real_no_user_credentials.rs"
+
+[[test]]
+name = "sandbox_real_parity"
+path = "tests/sandbox_real_parity.rs"
+
+[[test]]
+name = "sandbox_real_provision"
+path = "tests/sandbox_real_provision.rs"
+
+[[test]]
+name = "sandbox_real_self_install"
+path = "tests/sandbox_real_self_install.rs"
+
+[[test]]
+name = "sandbox_real_session_start"
+path = "tests/sandbox_real_session_start.rs"
+
+[[test]]
+name = "sandbox_real_staleness"
+path = "tests/sandbox_real_staleness.rs"
+
+[[test]]
+name = "sandbox_real_toolchain_path"
+path = "tests/sandbox_real_toolchain_path.rs"
+
+[[test]]
+name = "session_archive_durable_marker"
+path = "tests/session_archive_durable_marker.rs"
+
+[[test]]
+name = "session_discovery"
+path = "tests/session_discovery.rs"
+
+[[test]]
+name = "session_identity_env"
+path = "tests/session_identity_env.rs"
+
+[[test]]
+name = "session_name_recovery"
+path = "tests/session_name_recovery.rs"
+
+[[test]]
+name = "session_start"
+path = "tests/session_start.rs"
+
+[[test]]
+name = "session_survival"
+path = "tests/session_survival.rs"
+
+[[test]]
+name = "set_wide_provider_decisions"
+path = "tests/set_wide_provider_decisions.rs"
+
+[[test]]
+name = "settings_notification_kinds"
+path = "tests/settings_notification_kinds.rs"
+
+[[test]]
+name = "spawn_fd_hygiene"
+path = "tests/spawn_fd_hygiene.rs"
+
+[[test]]
+name = "structured_commands"
+path = "tests/structured_commands.rs"
+
+[[test]]
+name = "structured_effort"
+path = "tests/structured_effort.rs"
+
+[[test]]
+name = "structured_history"
+path = "tests/structured_history.rs"
+
+[[test]]
+name = "structured_input"
+path = "tests/structured_input.rs"
+
+[[test]]
+name = "structured_input_saved"
+path = "tests/structured_input_saved.rs"
+
+[[test]]
+name = "structured_lifecycle"
+path = "tests/structured_lifecycle.rs"
+
+[[test]]
+name = "structured_model"
+path = "tests/structured_model.rs"
+
+[[test]]
+name = "structured_permission"
+path = "tests/structured_permission.rs"
+
+[[test]]
+name = "structured_permission_mode"
+path = "tests/structured_permission_mode.rs"
+
+[[test]]
+name = "structured_resume"
+path = "tests/structured_resume.rs"
+
+[[test]]
+name = "structured_saved_history"
+path = "tests/structured_saved_history.rs"
+
+[[test]]
+name = "structured_session"
+path = "tests/structured_session.rs"
+
+[[test]]
+name = "structured_single_view"
+path = "tests/structured_single_view.rs"
+
+[[test]]
+name = "structured_switch"
+path = "tests/structured_switch.rs"
+
+[[test]]
+name = "supervision_conversation_gone"
+path = "tests/supervision_conversation_gone.rs"
+
+[[test]]
+name = "supervision_giveup"
+path = "tests/supervision_giveup.rs"
+
+[[test]]
+name = "supervision_slow_crash_loop"
+path = "tests/supervision_slow_crash_loop.rs"
+
+[[test]]
+name = "untitled_session_labels"
+path = "tests/untitled_session_labels.rs"
+
+[[test]]
+name = "version_mismatch_resolves"
+path = "tests/version_mismatch_resolves.rs"
+
+[[test]]
+name = "windows_pipe_acl"
+path = "tests/windows_pipe_acl.rs"
+
+[[test]]
+name = "windows_process_tree"
+path = "tests/windows_process_tree.rs"
+
+[[test]]
+name = "connection"
+path = "tests/connection/main.rs"
+
+[[test]]
+name = "mcp"
+path = "tests/mcp/main.rs"
+
+[[test]]
+name = "sessions"
+path = "tests/sessions/main.rs"
+
+[[test]]
+name = "settings"
+path = "tests/settings/main.rs"
+
+[[test]]
+name = "ssh_real"
+path = "tests/ssh_real/main.rs"

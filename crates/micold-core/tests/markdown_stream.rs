@@ -7,8 +7,7 @@ use std::collections::HashMap;
 use micold_core::markdown::Document;
 use micold_core::structured::transcript::{EntryKey, EntryKind, Transcript};
 
-#[path = "support/markdown.rs"]
-mod markdown;
+use crate::markdown;
 use markdown::{events_of, lines_of, prefixes, subset, turn_text};
 
 fn texts() -> [(&'static str, String); 2] {

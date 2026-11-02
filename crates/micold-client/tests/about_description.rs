@@ -11,7 +11,7 @@
 //! manifests: the client's `extended-description`, which is the copy written for a user (and the
 //! one the `.deb` ships), and `micold-core`'s `description`, which is the property that broke.
 
-mod support;
+use crate::support;
 
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;

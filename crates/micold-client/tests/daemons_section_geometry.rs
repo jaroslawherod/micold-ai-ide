@@ -6,8 +6,7 @@
 //! with its details open, the empty state, the add form with a refused field, and the removal
 //! confirmation.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;

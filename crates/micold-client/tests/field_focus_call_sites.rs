@@ -33,8 +33,7 @@
 //! resulting chrome would be a truer test and a far larger one, and it would still be checking that
 //! a call site is joined up — which is a property of the source.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{rs_files, src_dir};
 

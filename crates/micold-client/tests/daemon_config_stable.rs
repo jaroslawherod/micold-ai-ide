@@ -1,8 +1,7 @@
 //! Rendering is a pure function of the Settings: a second render gives the same bytes, so delivery
 //! writes only on a change (research D10, #1525).
 
-#[path = "support/daemon_config_fixtures.rs"]
-mod fixtures;
+use crate::fixtures;
 
 use fixtures::{settings, KINDS};
 use micold_client::daemon_config_render::render;

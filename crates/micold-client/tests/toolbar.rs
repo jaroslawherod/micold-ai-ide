@@ -1,6 +1,6 @@
 //! Integration test: the overflow menu's "Help" action exposes exactly "About" (FR-004).
 
-mod support;
+use crate::support;
 
 use micold_client::features::help::help_actions;
 

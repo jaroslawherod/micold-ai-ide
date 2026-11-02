@@ -3,8 +3,7 @@
 //! chevron shows even with Claude Code as the only CLI. The plain press and every other entry
 //! start a terminal session.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::app::{Message, State};
 use micold_client::features::session::{

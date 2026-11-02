@@ -23,7 +23,7 @@ use micold_client::features::sidebar::Msg as SidebarMsg;
 
 use micold_client::app::{on_escape, Message, State};
 
-mod support;
+use crate::support;
 use support::modals::{modals, open_dialog, Modal};
 
 // ---------------------------------------------------------------------------

@@ -22,8 +22,7 @@
 //! **offered**, and the Settings test now says exactly that by allowing the one sentence whose
 //! whole job is to name it.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;

@@ -9,7 +9,7 @@
 // value under test, not a mistyped `(0..4).collect()`.
 #![allow(clippy::single_range_in_vec_init)]
 
-mod support;
+use crate::support;
 
 use std::path::PathBuf;
 

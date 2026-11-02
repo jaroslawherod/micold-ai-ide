@@ -15,8 +15,7 @@
 //! The two frame budgets below are deliberately far larger than the ~150 ms the transitions need.
 //! An earlier gate for this bug asserted at 30 frames and failed for want of frames rather than for
 //! want of a fix, which is indistinguishable from the real thing until you check.
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout, Shell};

@@ -8,8 +8,7 @@
 // unix-only: the stand-in CLI is a `#!/bin/sh` script, as in `review_send.rs`.
 #![cfg(unix)]
 
-#[path = "support/runs.rs"]
-mod runs_support;
+use crate::runs_support;
 
 use std::os::unix::fs::MetadataExt;
 use std::sync::Arc;

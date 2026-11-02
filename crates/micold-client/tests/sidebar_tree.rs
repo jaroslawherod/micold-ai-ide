@@ -10,7 +10,7 @@ use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
-mod support;
+use crate::support;
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {

@@ -6,8 +6,7 @@ use micold_core::structured::{
     StructuredEvent,
 };
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use micold_core::structured::control::parse_apply_effort;
 use micold_core::structured::effort::EffortRefusal;
 use stream_json::{

@@ -11,7 +11,7 @@
 //! person would, and read what was drawn: the last project — and in the switcher the trailing "Add
 //! project…" row — must then be on screen.
 
-mod support;
+use crate::support;
 
 use iced::{Element, Point};
 use micold_client::app::{Message, State};

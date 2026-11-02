@@ -7,7 +7,7 @@
 //! Two halves. The wording is pure and checked directly; that the progress takes no row of its own
 //! (it is the status bar's sandbox item, feature 1124) is checked by laying the window out.
 
-mod support;
+use crate::support;
 
 use micold_client::app::Message;
 use micold_client::ui::stage_line;

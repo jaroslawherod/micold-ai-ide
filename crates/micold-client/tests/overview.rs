@@ -1,7 +1,7 @@
 //! Feature 813 (T010): the Overview's client state — open flag, and the cards built from what the
 //! window holds.
 
-mod support;
+use crate::support;
 
 use micold_client::app::{Message, State, MIN_WINDOW_SIZE};
 use micold_client::features::agent_confirm::Prompt;

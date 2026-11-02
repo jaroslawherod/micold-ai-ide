@@ -10,8 +10,7 @@ use micold_core::structured::{
 use serde_json::json;
 use std::collections::HashSet;
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{
     assistant_block, assistant_blocks, block_delta, block_start, built, events_of,
     input_json_delta, lines_of, message_start, replayed, sequenced, stream_event, stream_marker,

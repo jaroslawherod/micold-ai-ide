@@ -15,8 +15,7 @@
 //! non-comment line under `crates/micold-client/src/` naming a [`MARKERS`] entry must be in
 //! [`ALLOWED`], with a reason, and every [`ALLOWED`] entry must still match a line.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::rs_files;
 

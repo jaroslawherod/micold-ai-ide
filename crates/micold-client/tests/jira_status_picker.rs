@@ -1,6 +1,6 @@
 //! The New worktree picker shows a Jira ticket's status (feature 1101, US1, FR-002, FR-009).
 
-mod support;
+use crate::support;
 
 use micold_client::ui::issue_rows;
 use micold_core::github::Issue;

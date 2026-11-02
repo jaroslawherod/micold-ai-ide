@@ -8,8 +8,7 @@
 //! The line limit (`material::Tooltip::max_lines`, contract §5) is held beside its widget, in
 //! `src/ui/material/line_clamp.rs`: `ui::material` is not reachable from an integration test.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

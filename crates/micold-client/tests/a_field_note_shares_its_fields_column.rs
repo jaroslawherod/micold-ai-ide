@@ -17,8 +17,7 @@
 //! Both points of choice FR-023b names are covered, since they are two call sites of one helper
 //! and a helper used correctly in one place and not the other is exactly the drift this catches.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;

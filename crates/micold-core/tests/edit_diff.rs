@@ -6,8 +6,7 @@ use micold_core::structured::edit_diff::{edit_diff, EditDiff, EditHunk, EditKind
 use micold_core::structured::{ContentBlock, StructuredEvent};
 use serde_json::{json, Value};
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{events_of, lines_of, without_stream_events};
 
 fn diff(tool: &str, input: Value) -> EditDiff {

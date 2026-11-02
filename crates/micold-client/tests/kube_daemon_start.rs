@@ -2,7 +2,7 @@
 //! scripted pod host connects through the relay and the shared provisioning sequence; a second
 //! start adopts the pod; two actors share one pod; nothing else is disturbed.
 
-mod kube_daemon_common;
+use crate::kube_daemon_common;
 
 use kube_daemon_common::*;
 use micold_client::daemon::{actor_specs, cancel_kube_start, kube_attempt, Dial, KubeAttemptError};

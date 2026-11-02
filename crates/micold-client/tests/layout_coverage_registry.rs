@@ -16,8 +16,7 @@
 //! registry, **and** when the registry stops constructing one of the kinds it is supposed to hold.
 //! A scan that cannot fire is worth nothing, and this feature has already produced one of those.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::read_rs_under;
 

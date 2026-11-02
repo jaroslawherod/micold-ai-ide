@@ -5,8 +5,7 @@
 //! the text area's blur gave the keyboard back to the pane: `KeyboardElsewhere` then took Send's
 //! focus on the next event and the Tab listener closed, so Tab never visibly left the text area.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::sync::{Arc, Mutex};
 

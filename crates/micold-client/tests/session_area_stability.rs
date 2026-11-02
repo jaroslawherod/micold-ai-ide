@@ -16,10 +16,8 @@
 //! is for (R10; `ui/cdk/keyed.rs`'s slot test): a member's slot follows its key. What these gates
 //! hold is the rest: the strip's and the header's own rows keep a child list that never varies.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
-#[path = "support/mod.rs"]
-mod support;
+use crate::source_scan;
+use crate::support;
 
 use source_scan::{read_rs_under, strip_comments};
 

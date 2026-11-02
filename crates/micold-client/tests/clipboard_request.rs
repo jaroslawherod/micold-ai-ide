@@ -35,7 +35,7 @@ use micold_client::features::Outcome;
 use micold_client::selection::{copy_request, Anchor, SelectGranularity, Selection};
 use micold_core::protocol::grid::LineId;
 
-mod inventory;
+use crate::inventory;
 
 use std::path::Path;
 

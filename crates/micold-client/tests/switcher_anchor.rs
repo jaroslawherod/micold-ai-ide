@@ -1,7 +1,7 @@
 //! The project switcher's panel hangs from the trigger that opened it (BUG-1023): it used to sit
 //! at the window's trailing edge, under the overflow button, whichever control was pressed.
 
-mod support;
+use crate::support;
 
 use iced::Element;
 use micold_client::app::{Message, State};

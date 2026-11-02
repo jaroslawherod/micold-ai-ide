@@ -5,8 +5,7 @@
 //! opens; both have their own tables. What is held here is the widget that feeds them: which events
 //! it observes, with which cursor, and what it shows as a result.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

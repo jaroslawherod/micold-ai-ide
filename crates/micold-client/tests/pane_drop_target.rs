@@ -2,7 +2,7 @@
 //! or not, and to none when the pointer is over no pane. The same gate style as feature 484's pane
 //! geometry tests: the layout is the real one, only the pointer is a number.
 
-mod support;
+use crate::support;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

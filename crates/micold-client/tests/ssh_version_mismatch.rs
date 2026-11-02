@@ -2,8 +2,7 @@
 //! SC-005): the state text names both versions and the way out, and an op for it is refused with
 //! that same text, never sent anywhere.
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use iced::futures::channel::mpsc;
 use micold_client::daemon::Outbox;

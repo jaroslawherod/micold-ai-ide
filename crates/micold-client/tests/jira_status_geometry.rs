@@ -1,6 +1,6 @@
 //! A status chip does not move the row's key and title (feature 1101, FR-009, edge case).
 
-mod support;
+use crate::support;
 
 use support::jira_picker::{form_with, state_with, ticket};
 use support::layout::{painted_text_settled, renderer, view_of};

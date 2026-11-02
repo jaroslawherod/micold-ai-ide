@@ -7,8 +7,7 @@ use micold_core::structured::{parse_line, ReportedCommand, StructuredEvent};
 use micold_core::typeahead::Direction;
 use std::time::{Duration, Instant};
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{events_of, lines_of, sequenced};
 
 fn reported(name: &str) -> ReportedCommand {

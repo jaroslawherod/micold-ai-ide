@@ -35,7 +35,7 @@ use micold_client::features::help;
 use micold_client::overlay::registry::Closing;
 use micold_client::overlay::SurfaceId;
 
-mod support;
+use crate::support;
 use support::modals::{modals, opened, Modal};
 
 /// One snapshot of every kind, with the dialog each is a snapshot *of* — taken the way the binary

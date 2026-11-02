@@ -83,6 +83,10 @@ all — see "Missing capabilities" below for what that costs.
 
 ## Notes and constraints
 
+- **Most integration test files are modules of one `main` target per crate (#1631).** Run one with
+  `scripts/build-lock.sh cargo test -p <crate> --test main <file>::<name> -- --exact`, a whole file with
+  `… --test main <file>::`. The files listed as `[[test]]` in the crate's `Cargo.toml` (process-global
+  state, budgets, real runtimes) keep their own target, so `--test {file}` below still applies to them.
 - **The single-test command silently false-greens without the `{name}` guard.**
   `cargo test --test workspace_lookup zzz_no_such_test -- --exact` prints
   `running 0 tests` … `6 filtered out` and **exits 0**. libtest treats a filter

@@ -41,7 +41,7 @@ use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::app::{Message, State};
 use micold_core::overlay::{dismisses, Surface, Trigger};
 
-mod support;
+use crate::support;
 use support::modals::{modals, open_dialog, Modal};
 
 /// A sidebar scroll offset, in whole pixels. Any non-zero value works — the dismissal rule reads

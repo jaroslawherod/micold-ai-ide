@@ -1,8 +1,7 @@
 //! The Daemons feature in isolation (feature 491, SC-004): it constructs only its own types and
 //! the core's, and names no other feature.
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use micold_client::features::daemons::{self, State};
 

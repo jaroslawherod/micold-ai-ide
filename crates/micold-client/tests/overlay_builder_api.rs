@@ -31,7 +31,7 @@
 //! stated as the two things that would actually break the shape — a public field, and a method
 //! that mutates through `&mut self` instead of consuming `self`.
 
-mod inventory;
+use crate::inventory;
 
 use inventory::{code_only, declarations_in, sources_in, src_dir};
 use micold_client::app::Message;

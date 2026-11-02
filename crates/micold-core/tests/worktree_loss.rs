@@ -2,8 +2,7 @@
 
 use micold_core::git::{Git, GitCli};
 
-#[path = "support/attach_fixture.rs"]
-mod attach_fixture;
+use crate::attach_fixture;
 use attach_fixture::git;
 
 /// A repository with one commit; with `upstream`, a bare remote it is pushed to.

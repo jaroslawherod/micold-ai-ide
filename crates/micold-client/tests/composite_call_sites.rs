@@ -32,8 +32,7 @@
 //! [`Button::leading`]: micold_client::ui::material::Button::leading
 //! [`IconLabel`]: micold_client::ui::material::IconLabel
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments_keep_lines;
 

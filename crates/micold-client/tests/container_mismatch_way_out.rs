@@ -3,8 +3,7 @@
 //! for an older daemon proved idle, Stop is the stated way out otherwise and is never hidden by the
 //! client's stale session list, and the host daemon is untouched by any of it (spec 491 FR-007).
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use micold_client::features::daemons::{self, Msg, State};
 use micold_client::features::Outcome;

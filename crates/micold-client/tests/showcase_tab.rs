@@ -5,8 +5,7 @@
 //! focus ring could be seen. This drives a Tab through the real gallery and hands the event, with
 //! the status the gallery gave it, to the showcase's listener.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::Tree;

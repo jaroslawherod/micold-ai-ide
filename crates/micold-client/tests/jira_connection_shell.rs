@@ -3,6 +3,7 @@
 //! probe is a plain existence check. Feature 1186 adds the remembered query file beside the token:
 //! a read-modify-write of one field, kept unless the connection is removed (FR-013, FR-014).
 
+#[allow(clippy::duplicate_mod)]
 #[path = "../src/shell/jira.rs"]
 #[allow(dead_code)]
 mod jira;

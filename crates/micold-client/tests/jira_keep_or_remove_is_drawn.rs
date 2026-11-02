@@ -5,8 +5,7 @@
 //! while the switch was on. Nothing appeared and Save seemed to do nothing. The reducer tests read
 //! `draft.jira.prompt`; this one reads what the renderer painted.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -8,7 +8,7 @@ use micold_core::naming::ConventionalType;
 use micold_core::navigation::Dir;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 
-mod support;
+use crate::support;
 use support::sidebar_fixture::{
     deliver, listed, run_group, session_at, state_with_active, worktree,
 };

@@ -2,8 +2,7 @@
 //! a daemon id, so a further runtime needs no change to either surface (feature 491, T044, US5
 //! scenario 5, FR-015).
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -10,7 +10,7 @@
 //! to. Feature 017's fix commit named the same distinction: "only the node was bounded, and nothing
 //! clips a paragraph to its node."
 
-mod support;
+use crate::support;
 
 use micold_core::theme::ColorScheme;
 use support::covered_states::covered_states;

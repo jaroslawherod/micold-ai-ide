@@ -24,8 +24,7 @@ use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::{AiCli, SessionLocation};
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about

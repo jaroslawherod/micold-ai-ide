@@ -25,8 +25,8 @@ snap=$(scripts/autopilot/review-snapshot.sh)
 # other test needs the root-owned build folder and toolchain, so it stays as root. A new test of
 # this kind belongs here. Format: package test-target test-name.
 root_only=(
-	"micold-core settings_refuses_save_over_failed_read a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched"
-	"micold-core settings_write_is_logged a_refused_write_is_logged_as_a_failure_with_the_reason"
+	"micold-core main settings_refuses_save_over_failed_read::a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched"
+	"micold-core main settings_write_is_logged::a_refused_write_is_logged_as_a_failure_with_the_reason"
 	"micold-core worktree_leftovers a_directory_that_cannot_be_emptied_names_what_survived"
 	"micold-core worktree_leftovers the_leftover_report_is_capped"
 	"micold-daemon sessions mutation_semantics::worktree_delete_blocked_by_an_unremovable_path_still_archives_and_reports"

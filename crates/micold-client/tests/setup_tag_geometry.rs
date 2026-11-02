@@ -1,7 +1,7 @@
 //! A setup tag never moves a row's name or state icon (feature 1289, M5: geometry gate G1,
 //! contract U2, FR-015).
 
-mod support;
+use crate::support;
 
 use iced::Element;
 use micold_client::app::{Message, State};

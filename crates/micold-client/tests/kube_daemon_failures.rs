@@ -1,7 +1,7 @@
 //! Feature 686, T074 (US4, A14–A18): each failed start ends with its reason, leaves only a
 //! pre-existing claim behind, reaches the daemon's diagnostics, and touches no other daemon.
 
-mod kube_daemon_common;
+use crate::kube_daemon_common;
 
 use kube_daemon_common::*;
 use micold_client::features::daemons::{self, State};

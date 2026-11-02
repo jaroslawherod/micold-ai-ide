@@ -5,7 +5,7 @@
 //! the way the runtime does: events in, a rebuilt tree when the pane marks the tree stale, a
 //! redraw, and the interaction read from the root.
 
-mod support;
+use crate::support;
 
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout};

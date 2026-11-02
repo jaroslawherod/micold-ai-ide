@@ -22,8 +22,7 @@
 //! The check is structural because the behavioural version is not available: `subscription` is
 //! private to the binary and a `Subscription` cannot be inspected for its contents.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments;
 

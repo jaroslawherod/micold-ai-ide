@@ -11,8 +11,7 @@ use micold_core::structured::selection::{
 use micold_core::structured::transcript::{EntryId, EntryKey, EntryKind, Transcript};
 use micold_core::structured::{Delta, StructuredEvent};
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{built, events_of, lines_of, replayed, RECORDED};
 
 fn pos(row: RowPos, path: &[u16], offset: usize) -> TextPos {

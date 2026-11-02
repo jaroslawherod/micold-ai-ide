@@ -5,7 +5,7 @@
 //! drawn from their cached documents, edit inputs as their diffs, and tool results, streaming or
 //! malformed inputs and cache misses as `PLAIN` draws them.
 
-mod support;
+use crate::support;
 
 use std::cell::Cell;
 

@@ -11,8 +11,7 @@ use micold_core::structured::{
     ControlOutcome, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
 };
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{events_of, lines_of, sequenced};
 
 /// The outcome of the fixture's one `initialize` request.

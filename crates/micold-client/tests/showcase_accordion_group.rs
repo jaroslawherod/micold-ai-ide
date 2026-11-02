@@ -6,8 +6,7 @@
 //! them. The section's body text is painted only while it is open, so counting painted bodies
 //! counts open sections.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::showcase::samples;
 use micold_client::showcase::sections::surfaces;

@@ -22,8 +22,7 @@
 //! trick would read `subs.push(` and conclude it was unguarded. Tracking which block a line sits
 //! inside costs thirty lines and does not care how the argument is wrapped.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_line_comments;
 

@@ -13,7 +13,7 @@ use micold_core::quick_switch::EntryKey;
 use micold_core::session::SessionLocation;
 use micold_core::worktree::WorktreeStatus;
 
-mod support;
+use crate::support;
 use support::sidebar_fixture::{
     arranged, deliver, foreign_session, listed, press, project, run_group, session_at,
     session_count, state_with_active, worktree,

@@ -12,8 +12,7 @@
 //! It scans text rather than types deliberately: the point is that these *names* must not appear,
 //! which is a property of the source, not of what it compiles to.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{read_rs_under, strip_comments};
 

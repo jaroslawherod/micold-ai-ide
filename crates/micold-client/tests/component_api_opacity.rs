@@ -9,8 +9,7 @@
 //! Enforced by reading the library's own public signatures. A rule that lives only in review
 //! decays between reviews.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments;
 

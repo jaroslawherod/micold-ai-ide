@@ -13,8 +13,7 @@
 //! (`features::daemons::traps_focus`), and T013 applies. The tests below drive that same scoped
 //! operation, so they fail if the dialog loses its scope container.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::sync::{Arc, Mutex};
 

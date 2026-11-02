@@ -14,8 +14,7 @@
 //! Text scanning, like its siblings, and for the same reason: the property is about what these
 //! *source files* are allowed to name.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments;
 

@@ -8,8 +8,7 @@
 //!
 //! The rule takes the four files' text, so the synthetic cases at the end can show it failing.
 
-#[path = "support/packaging.rs"]
-mod packaging;
+use crate::packaging;
 
 use packaging::{
     basename, deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,

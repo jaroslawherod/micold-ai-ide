@@ -29,7 +29,7 @@ use micold_core::session::SessionLocation;
 
 // --- fixtures -------------------------------------------------------------------------------------
 
-mod support;
+use crate::support;
 use support::review_fixture::{draft, file, id, path};
 
 /// Open `entry`'s Review tab in `state` and answer its first read with `files`.

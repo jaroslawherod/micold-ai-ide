@@ -16,8 +16,7 @@
 //! `packaging/micold-daemon.` is one of the two files feature 010 shipped, whatever it is
 //! installed as.
 
-#[path = "support/packaging.rs"]
-mod packaging;
+use crate::packaging;
 
 use packaging::{deb_assets, manifest_path, repo_root, rpm_assets};
 use std::fs;

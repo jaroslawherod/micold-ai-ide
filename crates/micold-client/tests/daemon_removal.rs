@@ -1,8 +1,7 @@
 //! Removing, rebinding and editing a running daemon (feature 491, T031, FR-011, FR-012, FR-014,
 //! US3 scenarios 5 to 7).
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use daemons_fixture::{wt, World};
 use iced::futures::channel::mpsc;
