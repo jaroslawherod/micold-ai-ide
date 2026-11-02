@@ -102,7 +102,14 @@ fn publish_for(events: &[Event]) -> Vec<Message> {
         windows_host: false,
         sandbox: None,
     };
-    let mut element = panes::view(&state, &area, None, 0, ColorScheme::Dark, &links);
+    publish(
+        panes::view(&state, &area, None, 0, ColorScheme::Dark, &links),
+        events,
+    )
+}
+
+/// What `element` publishes for `events`, in order.
+fn publish<'a>(mut element: iced::Element<'a, Message>, events: &[Event]) -> Vec<Message> {
     let renderer = renderer();
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
@@ -275,4 +282,72 @@ fn only_a_structured_pane_that_accepts_input_wears_the_cue_while_files_hover() {
         !shows_drop_cue(&state, primary(s)),
         "gone after leave or drop"
     );
+}
+
+/// #1464 US2 AC1, FR-005: with a single pane the window view is not the tiled one, yet files
+/// hovering over a structured session still reach `FilesHovering` and a drop still reaches the
+/// pane it landed on.
+#[test]
+fn a_single_pane_structured_session_reports_the_hover_and_the_drop() {
+    use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
+    let session = Session::start_new_of_kind(
+        SessionLocation::Worktree("feat-00".into()),
+        AiCli::ClaudeCode,
+        SessionKind::Structured,
+    );
+    let id = session.id;
+    let mut workspace = support::workspace_with(vec![("/fixture/project", vec![session])]);
+    workspace.active = workspace.projects.first().map(|p| p.path.clone());
+    let mut state = State {
+        workspace,
+        ..State::default()
+    };
+    state.session.active = Some(id);
+    let mut layout = PaneLayout::single();
+    let only = layout.focused();
+    layout
+        .show(
+            only,
+            TerminalRef {
+                session: id,
+                process: SessionProcess::Primary,
+            },
+        )
+        .unwrap();
+    let grids = HashMap::new();
+    let area = PaneArea {
+        layout: &layout,
+        grids: &grids,
+        refusal: None,
+    };
+    let view = || {
+        micold_client::ui::view_with(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
+            None,
+            Some(&area),
+        )
+    };
+    let got = publish(
+        view(),
+        &[
+            Event::Window(window::Event::FileHovered(PathBuf::from("/a.png"))),
+            Event::Mouse(mouse::Event::CursorMoved {
+                position: Point::new(400.0, 300.0),
+            }),
+            Event::Window(window::Event::FileDropped(PathBuf::from("/a.png"))),
+        ],
+    );
+    assert_eq!(
+        got.iter().filter_map(hovering).collect::<Vec<_>>(),
+        [true, false]
+    );
+    let drops: Vec<_> = got.iter().filter_map(dropped).collect();
+    assert_eq!(drops, [(only, &PathBuf::from("/a.png"))]);
 }

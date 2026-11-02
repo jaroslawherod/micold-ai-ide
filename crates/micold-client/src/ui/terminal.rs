@@ -28,7 +28,7 @@ use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Color, Element, Font, Length};
 use micold_core::protocol::grid::{WireColor, WireStyle};
-use micold_core::protocol::messages::TerminalRef;
+use micold_core::protocol::messages::{SessionProcess, TerminalRef};
 use micold_core::session::{SessionId, SessionLifecycle, TerminalMode};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Rgb};
@@ -478,7 +478,17 @@ pub fn pane<'a>(
         // A structured session's AI process draws no terminal and takes no input (feature 938,
         // FR-022a): its pane is the transcript (feature 939, FR-001). Its shell instances stay
         // terminals.
-        transcript_body(state, active, scheme)
+        let transcript = transcript_body(state, active, scheme);
+        let primary = TerminalRef {
+            session: active,
+            process: SessionProcess::Primary,
+        };
+        // #1464: the cue and the drop target a tiled pane has, for the lone pane as well.
+        let cued = crate::ui::panes::with_drop_cue(state, primary, transcript, r);
+        match area {
+            Some(area) => crate::ui::panes::single_pane_drop_target(area, cued, r),
+            None => cued,
+        }
     } else {
         match grid {
             Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
@@ -692,7 +702,7 @@ fn active_primary(state: &State, id: SessionId) -> Option<TerminalRef> {
         .any(|s| s.id == id && s.mode == TerminalMode::AiCli)
         .then_some(TerminalRef {
             session: id,
-            process: micold_core::protocol::messages::SessionProcess::Primary,
+            process: SessionProcess::Primary,
         })
 }
 
