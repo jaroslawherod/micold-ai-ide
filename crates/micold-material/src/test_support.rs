@@ -64,7 +64,18 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
 /// `None` on its first line when the hint is not `"wgpu"`, before it constructs an instance or
 /// requests an adapter — so the fallback renderer picks the CPU rasteriser without a GPU ever being
 /// probed, and these tests run in CI.
-pub fn renderer() -> iced::Renderer {
+/// Load the shipped faces into the global font system, once per process — both Roboto weights,
+/// both Fira Mono weights and the icon face.
+///
+/// Split out of [`renderer()`] (BUG-1653): `Floor::Saving` (the give-way planner, feature 1124 R4)
+/// measures a component's floor text while building its `Element`, in `From<_> for Element`,
+/// before anything ever calls `renderer()`. The first such measurement in a process used to shape
+/// against whatever font the host substituted for an unloaded family — 2.5x wider than the shipped
+/// face — so `Lane`'s width budget for that one layout depended on whether an earlier test had
+/// already called `renderer()`. `shaped_text::width_of`, every `Floor::Saving` call site's
+/// measurer, now calls this itself, so the faces are loaded before the very first measurement
+/// regardless of which test ran first.
+pub(crate) fn ensure_fonts_loaded() {
     static LOADED: Once = Once::new();
     LOADED.call_once(|| {
         let mut fonts = iced::advanced::graphics::text::font_system()
@@ -78,6 +89,10 @@ pub fn renderer() -> iced::Renderer {
         // so code-like text measures against the shipped face rather than a host one (feature 1260).
         super::install_monospace(&mut fonts);
     });
+}
+
+pub fn renderer() -> iced::Renderer {
+    ensure_fonts_loaded();
 
     block_on(<iced::Renderer as Headless>::new(
         super::ROBOTO,
