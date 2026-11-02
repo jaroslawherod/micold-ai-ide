@@ -124,7 +124,7 @@ pub use choice_list::{ChoiceList, OTHER as CHOICE_OTHER, OTHER_PLACEHOLDER};
 pub use count_badge::CountBadge;
 pub use disclosure_card::DisclosureCard;
 pub use divider::Divider;
-pub use drop_cue::drop_cue;
+pub use drop_cue::DropCue;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
 pub use field_button::{FieldButton, Fit as FieldFit};
