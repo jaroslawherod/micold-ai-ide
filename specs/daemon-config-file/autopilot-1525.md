@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1617 | Design (milestones for Issue 4) | merged | 9f6e33d41bdea3325af5084f986fc46c8843eab2 |
 | #1620 | M1 | merged | 245bce5fe3f1a46dca57e191d46977f30d07e0ef |
+| #1654 | M2 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | merged |
-| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, `from_entry` built from saved per-daemon settings (`file` block), validate gate fails on a real saved setting and shows it in Settings → Daemons, docs true to what ships | — | in review |
+| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, `from_entry` built from saved per-daemon settings (`file` block), validate gate fails on a real saved setting and shows it in Settings → Daemons, docs true to what ships | #1654 | in review |
 
 ## Decisions
 
