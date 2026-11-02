@@ -26,7 +26,7 @@ use micold_core::review::changes::{
     ChangeIdentity, ChangeKind, ChangeList, ChangedFile, Content, Origin,
 };
 use micold_core::review::diff::{parse_unified, LoadedDiff, SideLines};
-use micold_core::review::drawer::{self, DrawerEvent};
+use micold_core::review::drawer::DrawerEvent;
 use micold_core::review::RelPath;
 use micold_core::tokens::{anatomy, spacing};
 
@@ -308,7 +308,7 @@ fn the_open_drawer_covers_the_right_of_the_diff_area_down_to_the_bar() {
 /// FR-010: when half the diff area is under 360, the drawer is that half, but not under its floor
 /// (#1474: `anatomy::comments_drawer::MIN_WIDTH`, over half of a narrower area).
 #[test]
-fn in_a_narrow_window_the_drawer_is_half_the_diff_area() {
+fn in_a_narrow_window_the_drawer_is_half_the_diff_area_but_not_under_its_floor() {
     let mut renderer = lay::renderer();
     let (_, all) = lay::painted_text_settled_at(
         lay::view_of(&drawer_open(review_bar())),
@@ -324,7 +324,17 @@ fn in_a_narrow_window_the_drawer_is_half_the_diff_area() {
         area.width / 2.0 < DRAWER_PX,
         "the narrow window leaves the drawer less than its full width: {area:?}"
     );
-    assert_drawer_covers_the_right_of(&records, drawer::width(area.width));
+    let floor = anatomy::comments_drawer::MIN_WIDTH;
+    assert!(
+        (floor - 240.0).abs() <= TOLERANCE,
+        "the floor is 240 wide: {floor}"
+    );
+    let expected = if area.width / 2.0 < floor {
+        240.0
+    } else {
+        area.width / 2.0
+    };
+    assert_drawer_covers_the_right_of(&records, expected);
 }
 
 /// The drawer is `wanted` wide, at the area's right edge, from its top to the bar, and starts at or
@@ -346,8 +356,13 @@ fn assert_drawer_covers_the_right_of(records: &[LayoutRecord], wanted: f32) {
             && (drawer.y + drawer.height - bar.y).abs() <= TOLERANCE,
         "the drawer runs from the area's top to the bar: {drawer:?}, bar {bar:?}"
     );
+    // Where the floor lifts the drawer over half the area, it may start left of the middle.
     assert!(
         wanted > area.width / 2.0 + TOLERANCE || drawer.x >= area.x + area.width / 2.0 - TOLERANCE,
         "a jumped-to line starts left of the drawer: {drawer:?} over {area:?}"
+    );
+    assert!(
+        drawer.width <= area.width + TOLERANCE,
+        "the drawer does not exceed the area: {drawer:?} in {area:?}"
     );
 }

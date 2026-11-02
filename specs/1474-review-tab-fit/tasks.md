@@ -42,7 +42,7 @@ Stories: US1 review tab fits (P1), US2 sidebar gives way (P1), US3 open the side
 
 ## Phase 5: Polish
 
-- [ ] T019 (close unit) Run quickstart §B (visual pass at 640x480 and 1280x800, light and dark) and record the result in the spec directory (`specs/1474-review-tab-fit/`)
+- [x] T019 (close unit) Run quickstart §B (visual pass at 640x480 and 1280x800, light and dark) and record the result in the spec directory (`specs/1474-review-tab-fit/`)
 
 ## Dependencies
 
@@ -76,3 +76,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test layout_snapshot review_tab_fits`; `cargo test -p micold-core review::drawer`; quickstart §B
 - **Depends on**: M1
 - **Tier**: full
+
+## Phase 6: TDD remediation
+
+**The feature is not done until T020 and T021 are cleared** (verdict FAIL, `specs/1474-review-tab-fit/tdd/verification.md`).
+
+- [x] T020 [US4] Finding 1 (HIGH): add a `freed_width` test at compact width: 640 wide with `compact_open` false gives `STRIP_WIDTH`, with `compact_open` true gives the sidebar width plus `RESIZE_HANDLE_WIDTH`; confirm it fails with `freed_width` reading `sidebar.hidden` (`crates/micold-client/src/ui/drawer_flags_tests.rs:38`; `cargo test -p micold-client --lib freed_width`)
+- [x] T021 [US1] Finding 2 (HIGH): restore an independent expectation in `in_a_narrow_window_the_drawer_is_half_the_diff_area`: literal `MIN_WIDTH` when half the area is under it, half the area otherwise; keep the `drawer.x >= middle` check for the case where the floor does not apply; rename the test and doc to say "floor" (`crates/micold-client/tests/gates/review_bar_fixed.rs:309-351`; `cargo test -p micold-client --test layout_snapshot review_bar_fixed`)
+- [x] T022 Finding 4 (MED): add a reducer test for the Edge Case "a resize and a toggle in the same update": toggle then resize across 720, and resize then toggle at 640 (`crates/micold-client/tests/sidebar_state.rs`; `cargo test -p micold-client --test sidebar_state`)
+- [x] T023 Finding 6 (MED): drop `two_states_are_independent` or replace it with a check that two windows' `window_size` values drive their own `sidebar_hidden()` through `State::update` (`crates/micold-client/tests/sidebar_state.rs:145`; `cargo test -p micold-client --test sidebar_state`)
+- [x] T024 Findings 7, 8, 9 (LOW): in the new tests, assert the drawer's open flag after closing full screen, add rule messages to the new assertions, and use `COMPACT_WIDTH` and `MIN_WINDOW_SIZE` for the 719/720/640 literals (`crates/micold-client/tests/overview.rs:512`, `crates/micold-client/tests/sidebar_state.rs:46`; `cargo test -p micold-client --test overview --test sidebar_state`)

@@ -1,7 +1,8 @@
 //! Sidebar hide/show + adjustable-width state (feature 005 UI enhancement).
 
 use micold_client::app::{
-    on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    on_escape, Message, State, MIN_WINDOW_SIZE, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH,
+    SIDEBAR_MIN_WIDTH,
 };
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
@@ -9,6 +10,7 @@ use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
+use micold_client::features::window::COMPACT_WIDTH;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form;
 use micold_core::naming::ConventionalType;
@@ -43,6 +45,10 @@ fn toggling_hides_and_shows() {
     assert!(!state.sidebar.hidden);
 }
 
+/// A window one pixel under the compact width, and the smallest the window can be.
+const NARROW: (u16, u16) = (COMPACT_WIDTH - 1, 480);
+const SMALLEST: (u16, u16) = (MIN_WINDOW_SIZE.width as u16, MIN_WINDOW_SIZE.height as u16);
+
 fn resize(state: &mut State, width: u16, height: u16) {
     state.update(Message::Window(
         micold_client::features::window::Msg::Resized { width, height },
@@ -60,22 +66,25 @@ fn the_sidebar_collapses_below_720_and_returns_as_left() {
     let mut state = State::default();
     let width = state.sidebar.width;
     resize(&mut state, 1000, 700);
-    assert!(!state.sidebar_hidden());
-    resize(&mut state, 640, 480);
-    assert!(state.sidebar_hidden());
-    resize(&mut state, 720, 480);
-    assert!(!state.sidebar_hidden());
-    assert!(!state.sidebar.hidden);
-    assert_eq!(state.sidebar.width, width);
+    assert!(!state.sidebar_hidden(), "a wide window shows the sidebar");
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
+    assert!(
+        state.sidebar_hidden(),
+        "the smallest window shows the strip"
+    );
+    resize(&mut state, COMPACT_WIDTH, 480);
+    assert!(!state.sidebar_hidden(), "widening to 720 restores it");
+    assert!(!state.sidebar.hidden, "the stored state was never written");
+    assert_eq!(state.sidebar.width, width, "the width is unchanged");
 }
 
 #[test]
 fn the_boundary_is_719_compact_720_not() {
     let mut state = State::default();
-    resize(&mut state, 719, 480);
-    assert!(state.sidebar_hidden());
-    resize(&mut state, 720, 480);
-    assert!(!state.sidebar_hidden());
+    resize(&mut state, NARROW.0, NARROW.1);
+    assert!(state.sidebar_hidden(), "719 is compact");
+    resize(&mut state, COMPACT_WIDTH, 480);
+    assert!(!state.sidebar_hidden(), "720 is not compact");
 }
 
 #[test]
@@ -83,53 +92,59 @@ fn a_hidden_sidebar_stays_hidden_through_a_narrow_window() {
     let mut state = State::default();
     resize(&mut state, 1000, 700);
     toggle(&mut state);
-    assert!(state.sidebar_hidden());
-    resize(&mut state, 640, 480);
-    assert!(state.sidebar_hidden());
+    assert!(state.sidebar_hidden(), "the user hid it");
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
+    assert!(state.sidebar_hidden(), "still the strip when narrow");
     resize(&mut state, 1000, 700);
-    assert!(state.sidebar_hidden());
-    assert!(state.sidebar.hidden);
+    assert!(state.sidebar_hidden(), "still hidden when widened");
+    assert!(state.sidebar.hidden, "the stored state is hidden");
 }
 
 #[test]
 fn starting_narrow_shows_the_strip_without_touching_the_stored_state() {
     let mut state = State::default();
-    resize(&mut state, 640, 480);
-    assert!(state.sidebar_hidden());
-    assert!(!state.sidebar.hidden);
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
+    assert!(state.sidebar_hidden(), "a narrow start shows the strip");
+    assert!(!state.sidebar.hidden, "the stored state is untouched");
 }
 
 #[test]
 fn an_unreported_size_is_not_compact() {
     let mut state = State::default();
     resize(&mut state, 0, 0);
-    assert!(!state.sidebar_hidden());
+    assert!(
+        !state.sidebar_hidden(),
+        "(0, 0) is not reported, not compact"
+    );
 }
 
 #[test]
 fn show_at_compact_width_holds_until_the_window_is_widened() {
     let mut state = State::default();
-    resize(&mut state, 640, 480);
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
     toggle(&mut state);
-    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar_hidden(), "the toggle opens the sidebar");
     resize(&mut state, 650, 480);
-    assert!(!state.sidebar_hidden());
+    assert!(!state.sidebar_hidden(), "it holds while still compact");
     assert!(!state.sidebar.hidden, "the toggle did not write hidden");
-    resize(&mut state, 720, 480);
-    assert!(!state.sidebar_hidden());
-    assert!(!state.sidebar.compact_open);
-    resize(&mut state, 640, 480);
+    resize(&mut state, COMPACT_WIDTH, 480);
+    assert!(!state.sidebar_hidden(), "it stays shown at 720");
+    assert!(!state.sidebar.compact_open, "the override is cleared");
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
     assert!(state.sidebar_hidden(), "a fresh crossing collapses again");
 }
 
 #[test]
 fn hide_after_show_at_compact_width_returns_to_the_strip() {
     let mut state = State::default();
-    resize(&mut state, 640, 480);
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
     toggle(&mut state);
     toggle(&mut state);
-    assert!(state.sidebar_hidden());
-    assert!(!state.sidebar.hidden);
+    assert!(
+        state.sidebar_hidden(),
+        "the second toggle returns the strip"
+    );
+    assert!(!state.sidebar.hidden, "the stored state is untouched");
 }
 
 #[test]
@@ -137,18 +152,55 @@ fn a_toggle_at_720_or_wider_flips_the_stored_state() {
     let mut state = State::default();
     resize(&mut state, 1000, 700);
     toggle(&mut state);
-    assert!(state.sidebar.hidden);
-    assert!(!state.sidebar.compact_open);
+    assert!(state.sidebar.hidden, "the toggle writes hidden");
+    assert!(!state.sidebar.compact_open, "no override outside compact");
 }
 
+/// Edge case "a resize and a toggle in the same update": a toggle acts on the effective state after
+/// the resize that came before it, whichever order they arrive in.
 #[test]
-fn two_states_are_independent() {
+fn a_toggle_and_a_resize_act_in_the_order_they_arrive() {
+    // Toggle at 1000, then shrink: the hidden sidebar stays hidden.
+    let mut state = State::default();
+    resize(&mut state, 1000, 700);
+    toggle(&mut state);
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
+    assert!(state.sidebar.hidden, "the toggle wrote hidden while wide");
+    assert!(state.sidebar_hidden(), "and it stays hidden when narrow");
+
+    // Shrink, then toggle at 640: the toggle opens the sidebar over the strip, `hidden` untouched.
+    let mut state = State::default();
+    resize(&mut state, 1000, 700);
+    resize(&mut state, SMALLEST.0, SMALLEST.1);
+    toggle(&mut state);
+    assert!(
+        !state.sidebar_hidden(),
+        "the toggle after a resize opens it"
+    );
+    assert!(!state.sidebar.hidden, "without writing hidden");
+
+    // Toggle at 640 (opens), then widen across 720: the override clears, the stored state holds.
+    resize(&mut state, COMPACT_WIDTH, 480);
+    assert!(!state.sidebar.compact_open, "widening clears the override");
+    toggle(&mut state);
+    assert!(state.sidebar.hidden, "a toggle at 720 now hides it");
+}
+
+/// Each window's `window_size` drives its own `sidebar_hidden()` through `State::update`.
+#[test]
+fn each_windows_size_drives_its_own_sidebar() {
     let mut narrow = State::default();
     let mut wide = State::default();
-    resize(&mut narrow, 640, 480);
+    resize(&mut narrow, SMALLEST.0, SMALLEST.1);
     resize(&mut wide, 1000, 700);
-    assert!(narrow.sidebar_hidden());
-    assert!(!wide.sidebar_hidden());
+    assert_eq!(
+        narrow.window.window_size,
+        (SMALLEST.0, SMALLEST.1),
+        "narrow size"
+    );
+    assert_eq!(wide.window.window_size, (1000, 700), "wide size");
+    assert!(narrow.sidebar_hidden(), "the narrow window shows the strip");
+    assert!(!wide.sidebar_hidden(), "the wide window shows the sidebar");
 }
 
 /// The drag protocol changed with feature 017 (T041): the resize handle owns the drag itself, so

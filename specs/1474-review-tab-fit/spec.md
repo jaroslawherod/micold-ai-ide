@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: Draft
+**Status**: Closed 2026-11-02 — shipped in PRs #1626, #1637, #1641
 
 **Input**: User description: "Issue #1474: Review tab: parts are squeezed out of their boxes at the smallest window (640x480). Parts 1 and 2 (progress slot, sort chips) shipped in #1549 and #1592. Remaining: the diff header row, the diff placeholder, the comments drawer. User decision: auto-collapse the sidebar at the smallest window so the tree and diff panes get the width." Labels: bug, flow:feature (switched from flow:bug). Builds on feature 1276 (review tab, `gates/review_tab_fits.rs`) and feature 970 (`specs/970-overview-fullscreen`, sidebar retracted in full screen).
 
