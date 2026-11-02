@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | tasks | Tier | full: touches the Settings UI and a public client API; M1 is always full | agent-resolved | milestone-format.md |
 | D5 | close | Unbuilt behaviour from tdd-verify (I4-2: `from_entry` builds from constants)? | New milestone M2 = T116–T123 (tasks.md Phase 21), tier full | agent-resolved | close.md step 2; tdd/verification.md Issue 4 |
 | D6 | milestone M2 | I4-2 needs a design the registry lacks: build it or defer? | Build in M2, minimal slice: serde-defaulted per-daemon `file` block on DaemonEntry (data_dir, clone_root, idle_stop, projects, client_token_file), Draft fields for data_dir, clone_root, client_token_file; `from_entry` reads it; T117/T119/I4-D1 deferrals undone | user | orchestrator relayed the user's answer 2026-11-01 |
+| D7 | milestone M2 | Part 4 of the unit (rebase, gate, push, PR) | Approved; mechanical remainder | user | orchestrator note 2026-11-02 |
 
 ## Review rounds
 
@@ -59,8 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Part 3 (context over cap). Rebased onto origin/main (#1620 and later merged; WIP commit squashed into a24bce2b8 plus earlier commits). Done: all T116-T123 ticked; review A round 2 and review B round 2 run, real finding fixed (from_entry used FileSettings::default(); now entry.file; survive-logout wins over saved idle_stop); three form fields got FieldId focus tracking and show only when editing a daemon (the Kubernetes add form must fit one window height, daemon_form_fits); user guide says "form of an existing daemon". Scoped gate green except `micold-daemon --test structured_model of_two_picks_the_last_one_wins` (haiku vs sonnet; no daemon diff, looks flaky/unrelated: confirm by rerun on origin/main if it fails again). Full gate started detached (`mise run gate`), log: /tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-1525-the-app-renders-each-daemon-s-configuration-from/2f804002-66be-4af1-9e4f-4c2da7df1f2d/scratchpad/full-1793562023.log (look for `GATE_EXIT=`; other worktrees' builds queue on the build lock, so it can take 1h+).
-Next: wait for the full gate (rerun if it dies on disk full / lock); on green push (`git push --force-with-lease -u origin HEAD`) and open the PR per tasks/pr.md (title `feat(daemon-config-file): per-daemon file settings feed the rendered config, tests and docs true to what ships (#1525)`, body: M2 of 2, review A/B lines from Review rounds, `Refs #1525`); record PR in ledger, set M2 status. Review B MINOR (UI test counts widgets, not text) accepted.
+None. (Part 4: rebased onto origin/main keeping both sides of tasks.md, tdd/verification.md, tdd/cycle-log.md; full gate rerun; then push and PR.)
 
 ## Open escalation
 
