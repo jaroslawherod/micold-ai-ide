@@ -14254,37 +14254,225 @@ mod panes {
         assert_eq!(taken.notice, None);
     }
 
-    /// FR-001 (#1464, T006): files dropped on a structured pane beside a terminal pane type
-    /// nothing into the terminal; the structured pane's composer is the one that reads them.
-    #[test]
-    fn a_drop_on_a_structured_pane_beside_a_terminal_sends_no_terminal_input() {
+    use micold_client::features::composer::Msg;
+
+    /// A window with two running panes, the second a structured session that accepts input: its
+    /// id and its pane.
+    fn structured_beside_a_terminal() -> (App, SessionId, PaneId, SentRx) {
+        use micold_client::features::composer::InputState;
+        use micold_core::protocol::messages::TurnPhase;
         use micold_core::session::SessionKind;
-        let (mut app, ids, mut rx) = app_with_sessions(2);
-        let (terminal_pane, _) = two_running_panes(&mut app, &ids);
+        let (mut app, ids, rx) = app_with_sessions(2);
+        let _ = two_running_panes(&mut app, &ids);
         let structured = ids[1];
         let (_, s) = app.core.workspace.find_session_mut(structured).unwrap();
         s.kind = SessionKind::Structured;
+        app.core.composers.input_reported(
+            structured,
+            InputState {
+                phase: TurnPhase::Idle,
+                hold: false,
+                queue: Vec::new(),
+            },
+        );
         let pane = layout_of(&app)
             .panes()
             .into_iter()
             .find(|p| p.terminal().is_some_and(|t| t.session == structured))
             .map(|p| p.id())
             .unwrap();
-        assert_ne!(terminal_pane.session, structured);
-        let _ = drain(&mut rx);
-        let _ = update(
-            &mut app,
-            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(
-                pane,
-                PathBuf::from("/d/shot.png"),
-            ))),
-        );
-        let _ = update(
-            &mut app,
+        (app, structured, pane, rx)
+    }
+
+    /// Run `work` to its end and feed what it published back through `update`.
+    fn settle_work(app: &mut App, work: Task<Message>) {
+        for message in messages(work) {
+            let _ = update(app, message);
+        }
+    }
+
+    /// Files on disk for the drop tests: two pictures and a file whose name needs quoting.
+    fn drop_fixture() -> (tempfile::TempDir, Vec<PathBuf>) {
+        let dir = tempfile::tempdir().unwrap();
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+        let paths: Vec<PathBuf> = ["c.png", "my notes.txt", "a.png"]
+            .iter()
+            .map(|name| dir.path().join(name))
+            .collect();
+        for path in &paths {
+            let bytes: &[u8] = if path.extension().is_some_and(|e| e == "png") {
+                png
+            } else {
+                b"notes"
+            };
+            std::fs::write(path, bytes).unwrap();
+        }
+        (dir, paths)
+    }
+
+    /// The files dropped on `pane` one by one, as the window reports them, then settled.
+    fn drop_on_pane(app: &mut App, pane: PaneId, paths: &[PathBuf]) {
+        for path in paths {
+            let _ = update(
+                app,
+                Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path.clone()))),
+            );
+        }
+        let work = update(
+            app,
             Message::Session(SessionMsg::Pane(PaneMsg::DropsSettled)),
         );
+        settle_work(app, work);
+    }
+
+    /// FR-001 (#1464, T006): files dropped on a structured pane beside a terminal pane type
+    /// nothing into the terminal; the structured pane's composer is the one that reads them.
+    #[test]
+    fn a_drop_on_a_structured_pane_beside_a_terminal_sends_no_terminal_input() {
+        let (mut app, structured, pane, mut rx) = structured_beside_a_terminal();
+        let (_dir, paths) = drop_fixture();
+        let _ = drain(&mut rx);
+        drop_on_pane(&mut app, pane, &paths[..1]);
         assert!(inputs(&mut rx).is_empty(), "no terminal received input");
         assert!(app.pending_drops.is_empty());
+        let draft = app.core.composers.draft(structured).unwrap();
+        assert_eq!(draft.images.len(), 1, "the composer read the picture");
+        assert_eq!(draft.images[0].name(), "c.png");
+    }
+
+    /// FR-008, FR-013, SC-001 (#1464): the files chosen in the picker give the composer exactly
+    /// what the same files dropped on the pane give it, in the same order, through the shell's
+    /// own reading of them.
+    #[test]
+    fn the_files_picked_give_the_composer_what_the_same_files_dropped_give_it() {
+        let (_dir, paths) = drop_fixture();
+        let (mut dropped, s, pane, _rx) = structured_beside_a_terminal();
+        drop_on_pane(&mut dropped, pane, &paths);
+        let (mut picked, p, _, _rx2) = structured_beside_a_terminal();
+        let work = update(&mut picked, Message::Composer(Msg::AttachRequested(p)));
+        assert!(work.units() > 0, "the button opens the picker");
+        let work = update(
+            &mut picked,
+            Message::Composer(Msg::AttachPicked {
+                session: p,
+                paths: paths.clone(),
+            }),
+        );
+        settle_work(&mut picked, work);
+        let (d, k) = (
+            dropped.core.composers.composer(s).unwrap(),
+            picked.core.composers.composer(p).unwrap(),
+        );
+        assert_eq!(d.draft.images.len(), 2, "both pictures attached");
+        assert!(d.draft.text.contains("my notes.txt"), "{:?}", d.draft.text);
+        assert_eq!(k.draft, d.draft, "the same attachments and the same text");
+        assert_eq!(k.notice, d.notice);
+        assert!(!picked.core.composers.picker_open(p));
+    }
+
+    /// FR-012, FR-015 (#1464): the shell opens one picker per request, refuses a result that comes
+    /// back for a session that ended meanwhile (nothing is read), and lets a close reopen it.
+    #[test]
+    fn a_late_picker_result_for_an_ended_session_is_refused_and_reads_nothing() {
+        use micold_client::features::composer::InputState;
+        use micold_core::protocol::messages::TurnPhase;
+        let (mut app, s, _pane, _rx) = structured_beside_a_terminal();
+        let (_dir, paths) = drop_fixture();
+        let ask = |app: &mut App| update(app, Message::Composer(Msg::AttachRequested(s)));
+        assert!(ask(&mut app).units() > 0, "the first request opens it");
+        assert!(app.core.composers.picker_open(s));
+        assert_eq!(ask(&mut app).units(), 0, "the second opens none");
+        let work = update(&mut app, Message::Composer(Msg::AttachPickerClosed(s)));
+        assert_eq!(work.units(), 0);
+        assert!(!app.core.composers.picker_open(s));
+        assert!(ask(&mut app).units() > 0, "a closed picker can be reopened");
+        app.core.composers.input_reported(
+            s,
+            InputState {
+                phase: TurnPhase::NotRunning,
+                hold: false,
+                queue: Vec::new(),
+            },
+        );
+        let work = update(
+            &mut app,
+            Message::Composer(Msg::AttachPicked {
+                session: s,
+                paths: paths[..2].to_vec(),
+            }),
+        );
+        assert_eq!(work.units(), 0, "nothing is read for an ended session");
+        let composer = app.core.composers.composer(s).unwrap();
+        assert!(composer.draft.images.is_empty());
+        assert_eq!(
+            composer.notice.as_deref(),
+            Some("2 files not attached: the session is not accepting input")
+        );
+        assert!(!app.core.composers.picker_open(s));
+    }
+
+    /// FR-008 (#1464): a result lands on the session that asked and on no other.
+    #[test]
+    fn a_picker_result_lands_only_on_the_session_that_asked() {
+        use micold_client::features::composer::InputState;
+        use micold_core::protocol::messages::TurnPhase;
+        let (mut app, a, _pane, _rx) = structured_beside_a_terminal();
+        let b = SessionId::new();
+        app.core.composers.input_reported(
+            b,
+            InputState {
+                phase: TurnPhase::Idle,
+                hold: false,
+                queue: Vec::new(),
+            },
+        );
+        let (_dir, paths) = drop_fixture();
+        let _ = update(&mut app, Message::Composer(Msg::AttachRequested(a)));
+        let pick = |session| {
+            Message::Composer(Msg::AttachPicked {
+                session,
+                paths: paths[..1].to_vec(),
+            })
+        };
+        assert!(app.core.composers.picker_open(a), "a is waiting");
+        assert!(!app.core.composers.picker_open(b), "b is not");
+        let work = update(&mut app, pick(a));
+        settle_work(&mut app, work);
+        assert_eq!(app.core.composers.draft(a).unwrap().images.len(), 1);
+        assert!(app
+            .core
+            .composers
+            .draft(b)
+            .is_none_or(|d| d.images.is_empty()));
+        assert!(!app.core.composers.picker_open(b));
+    }
+
+    /// FR-010, US4 AC2 (#1464): the attach chord in the composer is the button's press: it opens the
+    /// picker, once, and only for a session that accepts input.
+    #[test]
+    fn the_attach_chord_opens_the_picker_like_the_button() {
+        use micold_client::keymap::{Key, KeyInput, Mods, PhysicalKey};
+        let (mut app, s, _pane, _rx) = structured_beside_a_terminal();
+        let chord = || {
+            Message::Composer(Msg::Key {
+                session: s,
+                press: KeyInput {
+                    key: Key::Char('a'),
+                    mods: Mods {
+                        shift: true,
+                        ctrl: !cfg!(target_os = "macos"),
+                        logo: cfg!(target_os = "macos"),
+                        ..Mods::NONE
+                    },
+                    text: None,
+                    physical: PhysicalKey::Other,
+                },
+                composing: false,
+            })
+        };
+        assert!(update(&mut app, chord()).units() > 0, "the chord opens it");
+        assert!(app.core.composers.picker_open(s));
+        assert_eq!(update(&mut app, chord()).units(), 0, "and only one");
     }
 
     /// #1550 T052 (FR-008, *Multi-session*): in a split of two structured sessions, a drag in

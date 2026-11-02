@@ -72,7 +72,7 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 - [x] T027 [US4] `SHORTCUTS_COMMAND`, `DraftCommand::Shortcuts` and the `classify_draft` branch in `crates/micold-core/src/structured/commands/mod.rs`; add it to both list builders
 - [x] T028 [US4] `DraftCommand::Shortcuts` arms in both exhaustive `classify_draft` matches in `crates/micold-daemon/src/state.rs`: the switch-to-terminal validation (`SwitchRefusal::BadCommand`, beside `Send | Model(_)`) and the user-message validation (`Err(UserMessageRefusal::ShortcutsIsTheApps)`, beside `Model(_)`); add the variant and its message to `crates/micold-core/src/structured/user_message.rs`
 - [x] T029 [US4] `Classified::Shortcuts` in `crates/micold-client/src/features/command_palette.rs`; `SendIntent::ShowShortcuts` in `src/features/composer.rs`; turn it into `ShortcutsToggled(true)` in `src/shell/composer.rs`; nothing is sent to the CLI
-- [x] T030 [US4] `State.shortcuts_open` and `app::Message::ShortcutsToggled(bool)` in `crates/micold-client/src/app.rs`; the app's handler of `changes::Msg::ShortcutsClosed` also clears `shortcuts_open`; `ShortcutSheet::open_in` in `src/features/changes.rs` true when either flag is set
+- [x] T030 [US4] (as built: `changes::State.sheet_from_composer` and `changes::Msg::ShortcutsShown`, not `app::Message::ShortcutsToggled`; see ledger M4 notes) `State.shortcuts_open` and `app::Message::ShortcutsToggled(bool)` in `crates/micold-client/src/app.rs`; the app's handler of `changes::Msg::ShortcutsClosed` also clears `shortcuts_open`; `ShortcutSheet::open_in` in `src/features/changes.rs` true when either flag is set
 - [x] T031 [US4] `SheetModel` as groups with `COMPOSER_KEYS` in `crates/micold-client/src/features/changes/keys.rs`; render the groups in `src/ui/shortcut_sheet.rs`
 - [x] T032 [P] [US4] Showcase poses of the sheet with both groups in `crates/micold-client/src/showcase/sections/`
 - [x] T033 [US4] User guide: `/shortcuts` and the sheet in `docs/user-guide/structured-input.md`
@@ -92,7 +92,7 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 ## Phase 8: Polish
 
-- [ ] T040 Quickstart §B visual pass (`visual-pass` skill) and manual per-platform matrix, including keyboard reach of the button (Tab, Enter/Space, visible focus), SC-004 (UI responsive while the picker is open) and SC-003 per platform; record results in `specs/1464-structured-drop-attach/quickstart.md` (no code: done by the close unit)
+- [ ] T040 Quickstart §B visual pass (`visual-pass` skill) and manual per-platform matrix, including keyboard reach of the button (Tab, Enter/Space, visible focus), SC-004 (UI responsive while the picker is open) and SC-003 per platform; record results in `specs/1464-structured-drop-attach/quickstart.md` (no code: done by the close unit; recorded in quickstart.md Part B results, steps 2-4 not run on real platforms)
 - [ ] T041 Tick tasks and confirm every FR in the requirement map is covered (close unit)
 
 ## Dependencies & Execution Order
@@ -152,4 +152,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M1
 - **Tier**: full
 
-Phase 8 (T040–T041) changes no code and is left to the close unit.
+Phase 8 (T040–T041) changes no code and is left to the close unit (it runs again after M6).
+
+## Phase 9: Convergence
+
+- [ ] T042 [US2] Failing test first: a structured session in a single pane (no tiling) draws the drop cue while files hover and an input-accepting session shows it, and not when it cannot accept input or after leave/drop, per US2 AC1-3, FR-005, SC-005 (missing; found by `tdd/verification.md`: the only `DropCue` wiring is `ui/panes.rs`, reached only when `layout.len() > 1`). Also check that hover events reach `FilesHovering` with a single pane (`pane_drop_target.rs`)
+- [ ] T043 [US2] Wrap the single-pane `transcript_body(state, active, scheme)` branch of `crates/micold-client/src/ui/terminal.rs` (~line 481) in `micold_material::DropCue` with `shows_drop_cue`, sharing one helper with `ui/panes.rs:260` instead of copying it; make hover tracking work with a single pane if T042 shows it does not
+- [ ] T044 [US2] Record the single-pane cue in the user guide (`docs/user-guide/structured-input.md`) if its wording says "pane" only, and re-run the showcase pose check of M5 (`visual-pass`) for the single-pane view
