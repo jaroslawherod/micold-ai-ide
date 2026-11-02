@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1474
 - **Worktree branch**: fix/1474_review-tab-parts-are-squeezed-out-of-their-boxes
 - **Started**: 2026-11-01
-- **Phase**: close (PR open)
-- **Next step**: close PR CI and merge; the run ends then.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | fbff5a3d1173541778ab6ffce9a94740c03224fb:08b2c3758d99257ccec6a1fa67e96392653d8fb9 | CLEAN (2 MINOR fixed, prose only) |
 | M1 Review A (code-review high) | 1 | ea37931dbe006cca20d96e71441a309da1da0e4b:dbb82d1371603e2e900cf553b619b1352f4e4d2d | 1 fixed (0x0 must not emit CompactWidthLeft), rest declined |
 | M1 Review B (conformance, sonnet) | 1 | ea37931dbe006cca20d96e71441a309da1da0e4b:dbb82d1371603e2e900cf553b619b1352f4e4d2d | CLEAN (static) |
+| Close diff review (sonnet) | 1 | 154276c844b7d55849496e34e05821b2f1eadc2a:5c24d84ed6e47d82c939925914714efbccf8ad0d | CLEAN (1 MINOR fixed, prose only; 1 MINOR left) |
 
 
 
