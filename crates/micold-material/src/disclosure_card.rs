@@ -20,11 +20,14 @@
 use super::accordion_section::{HeaderSelect, HeaderText};
 use super::selectable_text::Hit;
 use super::{style, AccordionSection, Text, TypeRole};
+use crate::forward_to_child;
 use crate::icons::Icon;
+use iced::advanced::widget::Tree;
+use iced::advanced::{mouse, renderer, Layout, Renderer as _, Widget};
 use iced::widget::text::Wrapping;
 use iced::widget::{container, Row, Space};
-use iced::{Alignment, Element, Length};
-use micold_core::tokens::{spacing, Roles};
+use iced::{Alignment, Element, Length, Rectangle, Shadow};
+use micold_core::tokens::{elevation, shape, spacing, Roles};
 use std::ops::Range;
 
 /// A folding card. Builder form (Principle VIII):
@@ -153,11 +156,96 @@ impl<'a, M: Clone + 'a> From<DisclosureCard<'a, M>> for Element<'a, M> {
         if let Some(trailing) = trailing {
             section = section.trailing(trailing);
         }
-        container(section)
+        // The container paints no shadow: `Lifted` paints it (issue 1608).
+        let surface = style::disclosure_card(c.roles, c.failed);
+        let card = container(section)
             .padding(spacing::XS)
             .width(Length::Fill)
-            .style(style::disclosure_card(c.roles, c.failed))
-            .into()
+            .style(move |theme| container::Style {
+                shadow: Shadow::default(),
+                ..surface(theme)
+            });
+        let shadow = if c.failed {
+            Shadow::default()
+        } else {
+            style::elevation_shadow(c.roles, elevation::CARD)
+        };
+        Element::new(Lifted {
+            content: card.into(),
+            shadow,
+        })
+    }
+}
+
+/// The card with its shadow drawn on the GPU renderer only (issue 1608). iced_tiny_skia blends a
+/// quad's shadow over its whole reach with no clip, so a repaint that damages one control of an
+/// open card, a hover, laid the shadow over the whole body again each time and darkened it for good.
+/// The CPU renderer keeps the tonal elevation without the shadow.
+struct Lifted<'a, M> {
+    content: Element<'a, M>,
+    shadow: Shadow,
+}
+
+impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Lifted<'a, M> {
+    forward_to_child!(content, M, iced::Theme, iced::Renderer;
+        children, diff, size, layout, mouse_interaction, operate, overlay);
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &iced::Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn iced::advanced::Clipboard,
+        shell: &mut iced::advanced::Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout,
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        if matches!(renderer, iced::Renderer::Primary(_)) {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: layout.bounds(),
+                    border: iced::Border {
+                        radius: shape::MEDIUM.into(),
+                        ..iced::Border::default()
+                    },
+                    shadow: self.shadow,
+                    ..renderer::Quad::default()
+                },
+                iced::Color::TRANSPARENT,
+            );
+        }
+        self.content.as_widget().draw(
+            &tree.children[0],
+            renderer,
+            theme,
+            style,
+            layout,
+            cursor,
+            viewport,
+        );
     }
 }
 
@@ -190,6 +278,24 @@ mod tests {
     fn header_centre(m: &Mounted<'_>) -> Point {
         let h = header(m);
         Point::new(h.x + h.width / 2.0, h.y + h.height / 2.0)
+    }
+
+    /// Issue 1608: on the CPU rasteriser a repaint that damages one control must leave the rest of
+    /// an open card as it was. iced_tiny_skia blends a quad's shadow with no clip, so a card that
+    /// draws its shadow as its own quad darkened its whole body on every such repaint.
+    #[test]
+    fn repainting_one_control_leaves_an_open_card_unchanged() {
+        let mut m = Mounted::new(card(true, roles()));
+        let h = header(&m);
+        let hovered = iced::Rectangle::new(
+            Point::new(h.x + h.width - 40.0, h.y),
+            iced::Size::new(32.0, h.height),
+        );
+        let (first, last) = m.redrawn_in(iced::Color::WHITE, hovered, 4);
+        assert!(
+            first == last,
+            "four repaints of one control changed the card's pixels"
+        );
     }
 
     /// FR-010: a press on the header, and Space or Enter once it holds the keyboard, each emit the

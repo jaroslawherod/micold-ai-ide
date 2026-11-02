@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [features]
 # The headless renderer the component tests share (`test_support`), for the client's own tests.
-test-support = ["dep:iced_renderer", "dep:iced_tiny_skia"]
+test-support = ["dep:iced_renderer", "dep:iced_tiny_skia", "dep:iced_tiny_skia_raster"]
 
 [dependencies]
 iced = { workspace = true }
@@ -30,12 +30,15 @@ ttf-parser = { workspace = true }
 unicode-segmentation = { workspace = true }
 iced_renderer = { workspace = true, optional = true }
 iced_tiny_skia = { workspace = true, optional = true }
+# The raster crate `iced_tiny_skia` draws with: the workspace's own `tiny-skia` is another version.
+iced_tiny_skia_raster = { package = "tiny-skia", version = "0.11.4", optional = true }
 
 [dev-dependencies]
 iced_runtime = { workspace = true }
 tempfile = { workspace = true }
 iced_renderer = { workspace = true }
 iced_tiny_skia = { workspace = true }
+iced_tiny_skia_raster = { package = "tiny-skia", version = "0.11.4" }
 
 [lints]
 workspace = true
