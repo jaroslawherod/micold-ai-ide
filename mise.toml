@@ -61,6 +61,10 @@ run = "scripts/autopilot/measure-skill.sh"
 description = "Build the 20-worktree reference scene for the frame-time measurement (018 §B8)"
 run = "scripts/reference-scene.sh"
 
+[tasks.check]
+description = "Check the whole workspace without linking (fast edit loop) [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo check --workspace"
+
 [tasks.test]
 description = "Test the whole workspace (core + client + daemon), matching CI [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo test --workspace"

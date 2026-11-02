@@ -67,6 +67,12 @@ whose use is not obvious from that:
 - `mise run gate` — CI's merge gate locally, in CI's order: `cargo fmt --check`, clippy (core, then
   workspace, `-D warnings`), `cargo test --workspace`, then `scripts/tests/*.test.sh`. Run this, not
   `mise run test`, before pushing — CI stops at fmt before any test runs.
+- `mise run check` — `cargo check --workspace`: no linking, so it is the fast loop while editing.
+  `mise run test`/`mise run gate` link one executable per top-level `tests/*.rs` file (591 of
+  them); a single `cargo test -p micold-client` run has written ~39 GB and driven I/O pressure to
+  50%. Iterate with `mise run check` or a single targeted test (`scripts/build-lock.sh cargo test
+  -p <crate> <test_name>`, or `mise run test-core` for the core crate); reserve a `--workspace` test
+  run for `mise run gate` before you push. See `docs/development/shared-build.md`.
 - `mise run test-core` — test only the render-free core (`cargo test -p micold-core
   --all-targets`); no GUI, no iced, so it is much faster for logic-only changes.
 - `mise run image` — build the `:dev` sandbox image from the working tree; `mise run test-sandbox`

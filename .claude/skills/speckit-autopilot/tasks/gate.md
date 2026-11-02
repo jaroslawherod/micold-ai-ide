@@ -45,4 +45,9 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 - **Changed how something looks?** (In the chore flow that is not a chore: return `NEXT:`.) Run the `visual-pass` skill through an `autopilot-worker`. Save
   its evidence in the spec directory, when the flow has one.
 
+- **While writing code or a test, not running the gate**: use `mise run check` (no linking) or a
+  targeted `scripts/build-lock.sh cargo test -p <crate> <test_name>`, never `cargo test
+  --workspace`/`mise run test` — each links one executable per top-level `tests/*.rs` file (591 of
+  them), which is the IO-bound cost, not the compile. See `docs/development/shared-build.md`.
+
 Next: the task that sent you here.
