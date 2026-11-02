@@ -134,12 +134,12 @@ pub fn drop_cue<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Me
         vec![
             posed(
                 "a pane without the cue",
-                crate::ui::material::drop_cue(pane(), roles, false),
+                crate::ui::material::DropCue::new(pane(), roles).active(false),
                 roles,
             ),
             posed(
                 "the same pane while files hover over it",
-                crate::ui::material::drop_cue(pane(), roles, true),
+                crate::ui::material::DropCue::new(pane(), roles).active(true),
                 roles,
             ),
         ],

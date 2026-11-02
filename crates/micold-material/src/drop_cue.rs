@@ -7,7 +7,7 @@
 //! reads the layout sees the same rectangle with or without the cue. Where the cue shows is the
 //! caller's decision; this only draws it.
 //!
-//! Form: `drop_cue(content, roles, active)`.
+//! Form: `DropCue::new(content, roles).active(active)`.
 
 use iced::widget::{container, stack, Space};
 use iced::{Background, Border, Element, Length};
@@ -41,16 +41,38 @@ fn overlay_style(roles: Roles, active: bool) -> container::Style {
 ///
 /// The overlay is in the tree whether or not the cue shows, so the content's widget state (a
 /// scroll offset, a focused editor) survives the cue appearing and going.
-pub fn drop_cue<'a, M: 'a>(
-    content: impl Into<Element<'a, M>>,
+pub struct DropCue<'a, M> {
+    content: Element<'a, M>,
     roles: Roles,
     active: bool,
-) -> Element<'a, M> {
-    let overlay = container(Space::new())
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_: &iced::Theme| overlay_style(roles, active));
-    stack![content.into(), overlay].into()
+}
+
+impl<'a, M> DropCue<'a, M> {
+    /// `content` with no cue; [`active`](Self::active) turns it on.
+    pub fn new(content: impl Into<Element<'a, M>>, roles: Roles) -> Self {
+        Self {
+            content: content.into(),
+            roles,
+            active: false,
+        }
+    }
+
+    /// Whether files are being dragged over the window and this region would take them.
+    pub fn active(mut self, active: bool) -> Self {
+        self.active = active;
+        self
+    }
+}
+
+impl<'a, M: 'a> From<DropCue<'a, M>> for Element<'a, M> {
+    fn from(cue: DropCue<'a, M>) -> Self {
+        let (roles, active) = (cue.roles, cue.active);
+        let overlay = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_: &iced::Theme| overlay_style(roles, active));
+        stack![cue.content, overlay].into()
+    }
 }
 
 #[cfg(test)]
@@ -72,7 +94,7 @@ mod tests {
         for active in [false, true] {
             assert_eq!(
                 bare,
-                size_of::<()>(drop_cue(child(), roles(), active), room)
+                size_of::<()>(DropCue::new(child(), roles()).active(active).into(), room)
             );
         }
         let fill = || {
@@ -80,7 +102,10 @@ mod tests {
                 .width(Length::Fill)
                 .height(Length::Fill)
         };
-        assert_eq!(size_of::<()>(drop_cue(fill(), roles(), true), room), room);
+        assert_eq!(
+            size_of::<()>(DropCue::new(fill(), roles()).active(true).into(), room),
+            room
+        );
     }
 
     /// The cue is the accent as outline and as a faint tint; off, it draws nothing.
@@ -105,7 +130,8 @@ mod tests {
     fn the_widget_tree_has_the_same_shape_with_the_cue_on_and_off() {
         use iced::advanced::widget::Tree;
         let shape = |active| {
-            let element: Element<'_, ()> = drop_cue(Space::new(), roles(), active);
+            let element: Element<'_, ()> =
+                DropCue::new(Space::new(), roles()).active(active).into();
             let tree = Tree::new(element.as_widget());
             (tree.tag, tree.children.len())
         };

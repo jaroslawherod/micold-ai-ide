@@ -1187,7 +1187,7 @@ pub const COMPONENTS: &[Entry] = &[
     },
     Entry {
         module: "material/drop_cue.rs",
-        component: "drop_cue",
+        component: "DropCue",
         variants: &[],
         density: &[],
         posed: &[

@@ -259,11 +259,9 @@ pub fn view<'a>(
                 Some(t) if is_structured_primary(state, t) => {
                     let transcript = transcript_body(state, t.session, scheme);
                     // #1464 FR-005: files hovering over the window mark the pane that takes them.
-                    micold_material::drop_cue(
-                        transcript,
-                        r,
-                        crate::features::session::shows_drop_cue(state, t),
-                    )
+                    micold_material::DropCue::new(transcript, r)
+                        .active(crate::features::session::shows_drop_cue(state, t))
+                        .into()
                 }
                 Some(t) => match area.grids.get(&t) {
                     Some(grid) => {
