@@ -442,6 +442,37 @@ impl<'a> Mounted<'a> {
         (self.renderer.screenshot(Size::new(w, h), 1.0, backdrop), w)
     }
 
+    /// The element as the CPU rasteriser leaves it after one full draw and then `times` redraws
+    /// that damage only `damage`, as a real window repaints a hovered control: the pixels of the
+    /// full draw and of the last redraw (issue 1608). Both are `backdrop`-cleared RGBA of the
+    /// element's own size.
+    pub fn redrawn_in(
+        &mut self,
+        backdrop: iced::Color,
+        damage: Rectangle,
+        times: usize,
+    ) -> (Vec<u8>, Vec<u8>) {
+        let size = self.paint(mouse::Cursor::Unavailable);
+        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
+        let viewport = iced_tiny_skia::graphics::Viewport::with_physical_size(Size::new(w, h), 1.0);
+        let iced_renderer::fallback::Renderer::Secondary(cpu) = &mut self.renderer else {
+            panic!("a damaged redraw needs the CPU rasteriser; see `renderer`")
+        };
+        let mut buf = vec![0u8; (w * h * 4) as usize];
+        let mut mask = iced_tiny_skia_raster::Mask::new(w, h).expect("a non-empty clip mask");
+        let mut draw = |damage: Rectangle, buf: &mut Vec<u8>| {
+            let mut pixels =
+                iced_tiny_skia_raster::PixmapMut::from_bytes(buf, w, h).expect("pixels fit");
+            cpu.draw(&mut pixels, &mut mask, &viewport, &[damage], backdrop);
+        };
+        draw(Rectangle::with_size(size), &mut buf);
+        let first = buf.clone();
+        for _ in 0..times {
+            draw(damage, &mut buf);
+        }
+        (first, buf)
+    }
+
     /// Every paragraph the element paints, in draw order: what it says, at which size, in which
     /// face and colour, and where — what `tests/support/layout.rs::painted_text` reads, for the
     /// in-crate tests that cannot reach it (feature 890, T001).
