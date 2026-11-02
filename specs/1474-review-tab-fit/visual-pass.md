@@ -15,7 +15,7 @@ Screenshots: `specs/1474-review-tab-fit/visual-pass/`.
 |---|---|---|---|
 | 1 | pass | n/a | 1000 expanded, live resize to 640: sidebar became the strip, main widened. |
 | 2 | pass | pass | See below. Loading placeholder not captured. |
-| 3 | pass | n/a | See below. Layout concern (O1). |
+| 3 | pass with observation O1 | n/a | See below. Layout concern (O1). |
 | 4 | pass | n/a | Hidden at 1000, at 640 (strip) and back at 1000 (no sidebar). |
 | 5 | pass | n/a | Overview full screen at 640, exit: strip. At 1000 expanded, exit: expanded. |
 | 6 | looks sane | looks sane | No baseline build compared ("as before" is a judgement, not a diff). |
