@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | Drop admission guard and delivery | #1589 | merged |
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
-| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 | merged |
+| M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
 | M5 | T034–T039 | full | Drop-target cue | #… | in progress |
 
 ## Decisions
@@ -66,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 code done and committed locally (T034-T039 ticked), not pushed. Review A (code-review high): 6 findings; fixed tree-shape change (drop_cue now always stacks, takes active flag), hover publish dedup, stronger drop_cue tests; declined: cue marks all accepting panes (by design, research R: OS gives no pointer position; picker-open nuance is best-effort), stale flag if SplitView replaced mid-drag (best-effort). Review B (sonnet): CLEAN, 3 MINOR (doc fixed; reducer arm is one assignment, accepted; no tdd/cycle-log as M1-M4), but its Verify run never got the lock. Visual pass: light scheme PASS, dark not checked (headless sway could not press the toggle); screenshots in specs/1464-structured-drop-attach/visual/. Remaining: wait for gate3.log GATE_EXIT=0 (scoped, detached, queued ~1h on build lock), then full gate (mise run gate), PR via tasks/pr.md (title feat(1464): show a drop-target cue while files hover over structured views (#1464)). Note: gate2 failed to compile (TurnPhase import), fixed in last commit.
+None.
 
 ## Open escalation
 
