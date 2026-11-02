@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | — | CLEAN (1 MINOR: comment added, prose only) |
+| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | PR pending (opening) | reviews CLEAN (1 MINOR: comment added, prose only); full gate green |
 
 ## Decisions
 
