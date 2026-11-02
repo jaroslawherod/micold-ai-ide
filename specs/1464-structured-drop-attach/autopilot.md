@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M6 implemented, PR opening
+- **Phase**: M6 PR #1652 open
 - **Next step**: merge M6, then a new close unit (T040–T041 ticks, Status Closed, close PR). Close-unit work already committed: tdd/verification.md, strengthened tests (F1–F9), quickstart Part B results, T030 wording
 
 ## Pull requests
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
 | M5 | T034–T039 | full | Drop-target cue | #1651 (merge edc9f75218b73600eeb47b7b0b8cf30484ecff1e) | merged |
-| M6 | T042–T044 | full | Drop cue on a single-pane structured session | (PR pending) | in review |
+| M6 | T042–T044 | full | Drop cue on a single-pane structured session | #1652 | open |
 
 ## Decisions
 
