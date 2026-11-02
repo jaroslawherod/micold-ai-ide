@@ -34,3 +34,22 @@ for as long as the app is open.
 
 Target dirs grow without bound; `mise run sweep` reclaims them. Run it on a schedule with a size
 bound, e.g. `SWEEP_ARGS='--maxsize 60GB' mise run sweep` from cron or a systemd timer.
+
+## Linking is the expensive part, not compiling
+
+The workspace has 591 top-level `tests/*.rs` files (client 262, core 229, daemon 99, material 1),
+each its own executable: `cargo test --workspace` (or any `-p <crate>` run without a narrower
+filter) links every one of them, even when only one test changed. Measured 2026-11-01: a single
+`cargo test -p micold-client` wrote ~39 GB in 14 minutes and pushed `/proc/pressure/io`'s `full`
+average to 50%. `cargo check --workspace` does not link at all, and `cargo test -p <crate>
+<test_name>` builds only the one binary whose tests match. Use `cargo check` (`mise run check`, or
+`scripts/build-lock.sh cargo check --workspace` ad hoc) while iterating, and narrow a test run to
+the crate and test name you are working on (e.g. `mise run test-core`, or
+`scripts/build-lock.sh cargo test -p <crate> <test_name>`); reserve `cargo test --workspace` (`mise
+run gate`, or `mise run test`) for before a push.
+
+`cargo nextest` was evaluated for `mise run test` (issue #1635): it ran `micold-core`'s 4656 tests
+in parallel in 40.6s with no failures, but it still links one executable per `tests/*.rs` file like
+`cargo test` does, so it would not by itself cut the linking cost above. Its value is as a safer
+test *runner* for a later consolidation of those 591 files into fewer binaries; adopting it in
+`mise run test`/`mise run gate` is deferred to that follow-up.
