@@ -9,13 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1526
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
-- **Phase**: tasks
-- **Next step**: open the design PR
+- **Phase**: done
+- **Next step**: handoff (merge design PR #1656, then M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1656 | Design (milestone for Issue 5) | open | — |
 
 ## Milestones
 
