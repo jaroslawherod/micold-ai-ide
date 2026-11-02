@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: M5 implemented and reviewed, waiting on a gate
-- **Next step**: scoped gate (log /tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-1464-structured-view-drag-and-drop-files-into-the/1772b713-64ef-43c6-ba98-f0a6fcdeafa8/scratchpad/gate3.log, detached, queued on the build lock) then full gate, then PR
+- **Phase**: M5 PR #1651 open, waiting on CI and merge
+- **Next step**: orchestrator waits on CI and merges #1651, then the close unit
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1603 | M2 | merged | 61da96291ecf084a60535e4eaaf6e7ec21afe541 |
 | #1618 | M3 | merged | be05cf1862a71d8d8736ffd4e86a26801b5cd0ca |
 | #1636 | M4 | merged | d965f390663fa3cb9842362d912f85c0b13d980c |
+| #1651 | M5 | open | |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T010–T019 | full | Add attachment button and picker | #1603 | merged |
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
-| M5 | T034–T039 | full | Drop-target cue | #… | in progress |
+| M5 | T034–T039 | full | Drop-target cue | #1651 | open |
 
 ## Decisions
 
@@ -66,7 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 done, full gate green (GATE_EXIT=0, before a rebase onto 3 newer main commits), branch pushed. Only step left: open the PR (gh pr create timed out against api.github.com repeatedly; body is pr-body.md in the old scratchpad: Milestone M5 of 5, Review A/B lines above, Refs #1464; title "feat(1464): show a drop-target cue while files hover over structured views (#1464)"). Check `gh pr list --head <branch>` first; then record the PR number in the table.
+None. M5 PR #1651 opened after rebase onto origin/main and a green full gate.
 
 ## Open escalation
 
