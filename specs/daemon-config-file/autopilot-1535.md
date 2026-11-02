@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1629 | Design (milestones for Issue 14) | merged | 44cf9d37c8b416b545a9c8e6cd1b4fb3bc9e429b |
+| #1655 | M1 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | PR pending (opening) | reviews CLEAN (1 MINOR: comment added, prose only); full gate green |
+| M1 | T081–T083 | full | Daemon details → Configuration: delivered file, resolved values, reach per token, start-script last run, "Restart to apply"; no secret shown | #1655 | reviews CLEAN (1 MINOR: comment added, prose only); full gate green |
 
 ## Decisions
 
