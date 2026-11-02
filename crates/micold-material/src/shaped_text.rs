@@ -74,6 +74,13 @@ pub(super) fn draw_paragraph<R>(
 /// How wide `content` shapes on one line at `role`: what a bar that picks between texts by the room
 /// it has measures them with (`StatusBar`'s give-way plan, the review bar's counts, feature 1270).
 pub fn width_of(content: &str, role: TypeRole) -> f32 {
+    // A give-way planner's `Floor::Saving` (feature 1124 R4) calls this while building its
+    // `Element`, in `From<_> for Element` — before a `Mounted` ever calls `renderer()`. Load the
+    // shipped faces here too, or the first such measurement in a process shapes against whatever
+    // font the host substitutes for the still-unloaded family (BUG-1653).
+    #[cfg(any(test, feature = "test-support"))]
+    crate::test_support::ensure_fonts_loaded();
+
     <iced::Renderer as text::Renderer>::Paragraph::with_text(CoreText {
         content,
         bounds: Size::INFINITE,
