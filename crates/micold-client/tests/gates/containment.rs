@@ -262,11 +262,12 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
 /// `0` after the pane's prefix). Feature 944 put the session bar above the scrollable (`1` before the
 /// last two steps) and added `session-transcript-insights`, whose open thread outgrows it too.
 /// Feature 1126 put the session area's header and strip above the panes (the `2` after the main
-/// area's prefix) and dropped the pane column the bottom bar shared (one `0` fewer).
-const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/2/0/0/1/0/0"];
+/// area's prefix) and dropped the pane column the bottom bar shared (one `0` fewer). #1464 wrapped
+/// the lone transcript in a drop cue (one `0` more, after the pane's prefix).
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/2/0/0/0/1/0/0"];
 
 /// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
-const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/1/0";
+const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/0/1/0";
 
 /// The folded bodies of **feature 944's cards** in `session-transcript-insights` (T037): the
 /// background-task list's `AccordionSection`, the `Agent` card whose thread is open below it, and a
@@ -276,9 +277,9 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/1/0";
 /// that padding, so a body that grew past it still fires. #943 put the session bar in a row with
 /// **Open in terminal** (`0/0` after the bar's container).
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/2/0/0/0/0/0/0/1/1/0",
-    "0/0/0/1/1/2/0/0/1/0/0/4/0/0/1/0",
-    "0/0/0/1/1/2/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/2/0/0/0/0/0/0/0/1/1/0",
+    "0/0/0/1/1/2/0/0/0/1/0/0/4/0/0/1/0",
+    "0/0/0/1/1/2/0/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
 ];
 
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).

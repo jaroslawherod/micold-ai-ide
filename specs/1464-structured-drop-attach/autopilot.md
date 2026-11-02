@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1464
 - **Worktree branch**: feat/1464_structured-view-drag-and-drop-files-into-the
 - **Started**: 2026-10-27
-- **Phase**: close unit found unbuilt behaviour; M6 cut, waiting to run
-- **Next step**: run M6 (T042–T044), then a new close unit (T040–T041 ticks, Status Closed, close PR). Close-unit work already committed: tdd/verification.md, strengthened tests (F1–F9), quickstart Part B results, T030 wording
+- **Phase**: M6 implemented, PR opening
+- **Next step**: merge M6, then a new close unit (T040–T041 ticks, Status Closed, close PR). Close-unit work already committed: tdd/verification.md, strengthened tests (F1–F9), quickstart Part B results, T030 wording
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
 | M5 | T034–T039 | full | Drop-target cue | #1651 (merge edc9f75218b73600eeb47b7b0b8cf30484ecff1e) | merged |
-| M6 | T042–T044 | full | Drop cue on a single-pane structured session | | pending |
+| M6 | T042–T044 | full | Drop cue on a single-pane structured session | (PR pending) | implemented, gate running |
 
 ## Decisions
 
@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 Review A | 1 | 290c0fa73f22f78d3421627507d6701b0420fc86:506cceb6986e4db6f8b78b4fe665d71a464a2165 | CLEAN (code-review high); 1 MINOR (fmt) fixed |
 | M2 Review B | 1 | 8eb86d60227de3c11dc518344f55c0312a2db337:506cceb6986e4db6f8b78b4fe665d71a464a2165 | CHANGES: 1 MAJOR (composer_tab Tab order; fixed in test, full gate rerun), 2 MINOR (F2 hover/focus poses are in the entry's live list, interactive; F3 feature keeps no tdd/cycle-log, as M1) |
 | M2 Review B | 2 | 3d0f65257323d4449418f183cf0795008c08a359:bb131b4ebef02f6715de608f7d8949f4a7c320aa | CLEAN (sonnet, full re-run after rebase onto main; Verify tests green, round-1 composer_tab fix holds) |
+| A M6 | 1 | 1d4c9f48d79e:2b14571dbb43 | CLEAN (2 MINOR: no cue-drawn assertion, no single-terminal negative test; not fixed) |
 
 ## Declined review findings
 
