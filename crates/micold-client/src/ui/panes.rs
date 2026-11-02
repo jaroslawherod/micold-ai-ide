@@ -232,6 +232,38 @@ fn picker<'a>(
         .into()
 }
 
+/// #1464 FR-005: files hovering over the window mark the pane that takes them. `transcript` is the
+/// body of the structured session `terminal`; the cue shows only while it can take the files.
+pub(crate) fn with_drop_cue<'a>(
+    state: &State,
+    terminal: TerminalRef,
+    transcript: Element<'a, Message>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    micold_material::DropCue::new(transcript, roles)
+        .active(crate::features::session::shows_drop_cue(state, terminal))
+        .into()
+}
+
+/// `split` reporting the window's file hover and each dropped file with the pane it landed on.
+fn take_files<'a>(split: SplitView<'a, Message>) -> SplitView<'a, Message> {
+    split
+        .on_file_drop(|pane, path| {
+            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path)))
+        })
+        .on_file_hover(|on| Message::Session(SessionMsg::Pane(PaneMsg::FilesHovering(on))))
+}
+
+/// The one pane of `area` as a drop target: a single pane is not tiled, so it has no [`SplitView`]
+/// of its own to hear the window's file events (#1464, FR-005).
+pub(crate) fn single_pane_drop_target<'a>(
+    area: &PaneArea<'a>,
+    body: Element<'a, Message>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    take_files(SplitView::new(area.layout, min_pane(), roles, vec![body])).into()
+}
+
 /// The panes of `area` tiled by a [`SplitView`] (FR-001). `selection` and `display_offset` belong to
 /// the focused pane's terminal; every other pane draws live.
 #[allow(clippy::too_many_arguments)]
@@ -258,10 +290,7 @@ pub fn view<'a>(
                 // (feature 939, FR-001, research R15).
                 Some(t) if is_structured_primary(state, t) => {
                     let transcript = transcript_body(state, t.session, scheme);
-                    // #1464 FR-005: files hovering over the window mark the pane that takes them.
-                    micold_material::DropCue::new(transcript, r)
-                        .active(crate::features::session::shows_drop_cue(state, t))
-                        .into()
+                    with_drop_cue(state, t, transcript, r)
                 }
                 Some(t) => match area.grids.get(&t) {
                     Some(grid) => {
@@ -314,12 +343,8 @@ pub fn view<'a>(
                 .into()
         })
         .collect();
-    let split = SplitView::new(area.layout, min_pane(), r, children)
-        .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))))
-        .on_file_drop(|pane, path| {
-            Message::Session(SessionMsg::Pane(PaneMsg::FileDropped(pane, path)))
-        })
-        .on_file_hover(|on| Message::Session(SessionMsg::Pane(PaneMsg::FilesHovering(on))));
+    let split = take_files(SplitView::new(area.layout, min_pane(), r, children))
+        .on_event(|e| Message::Session(SessionMsg::Pane(PaneMsg::Gesture(e))));
     match area.refusal {
         // Over the panes, not above them: a row above would resize every pane, and the
         // measurement that follows would dismiss the reason before it was read.
