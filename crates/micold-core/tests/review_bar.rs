@@ -2,8 +2,7 @@
 //! diff, the send button and the overflow menu's items (FR-002, FR-003, FR-005, FR-006, FR-007;
 //! research R2–R4; contract B2, B4, B7).
 
-#[path = "support/review_comments.rs"]
-mod review_comments;
+use crate::review_comments;
 
 use micold_core::review::bar::{
     counts_text, error_text, overflow, send_button, CountsForm, Overflow, ScopeCounts, SendButton,

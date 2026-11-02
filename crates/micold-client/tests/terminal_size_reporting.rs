@@ -16,7 +16,7 @@
 //! This resolves the real widget tree headlessly — no display, no GPU — and dispatches one redraw,
 //! which is what the runtime does on every frame.
 
-mod support;
+use crate::support;
 
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Shell};

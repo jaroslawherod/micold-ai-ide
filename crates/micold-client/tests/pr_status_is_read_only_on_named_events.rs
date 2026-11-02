@@ -14,8 +14,7 @@
 //! 3. the source's `read` is reached from one place;
 //! 4. nothing logs a pull request's title or address.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::rs_files;
 

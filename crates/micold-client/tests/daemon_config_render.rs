@@ -1,8 +1,7 @@
 //! `render(&DaemonSettings, Kind)` writes one golden file per kind, and the file parses back to the
 //! Settings it was rendered from (#1525, US1, FR-005).
 
-#[path = "support/daemon_config_fixtures.rs"]
-mod fixtures;
+use crate::fixtures;
 
 use fixtures::{golden, settings, KINDS};
 use micold_client::daemon_config_render::render;

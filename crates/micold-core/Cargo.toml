@@ -1,4 +1,5 @@
 [package]
+autotests = false
 name = "micold-core"
 description = "Render-free shared domain model for Micold AI IDE (state, persistence, session/worktree logic, wire protocol)."
 version.workspace = true
@@ -72,3 +73,131 @@ tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
+
+# Integration tests (#1631): `tests/main.rs` links every ordinary test file as a module; the targets below stay
+# separate (process-global state, timing budgets, container or sshd runtimes). A new file under `tests/` must be a
+# `mod` of `tests/main.rs` or be listed here; `every_test_file_is_wired` checks it.
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "ai_cli_provider"
+path = "tests/ai_cli_provider.rs"
+
+[[test]]
+name = "ai_cli_provider_seam"
+path = "tests/ai_cli_provider_seam.rs"
+
+[[test]]
+name = "available_here"
+path = "tests/available_here.rs"
+
+[[test]]
+name = "available_in"
+path = "tests/available_in.rs"
+
+[[test]]
+name = "copilot_provider"
+path = "tests/copilot_provider.rs"
+
+[[test]]
+name = "env_include_resolve"
+path = "tests/env_include_resolve.rs"
+
+[[test]]
+name = "first_turn_label_corpus"
+path = "tests/first_turn_label_corpus.rs"
+
+[[test]]
+name = "git_remotes"
+path = "tests/git_remotes.rs"
+
+[[test]]
+name = "github_gh_cli"
+path = "tests/github_gh_cli.rs"
+
+[[test]]
+name = "jira_site_release"
+path = "tests/jira_site_release.rs"
+
+[[test]]
+name = "markdown_subset"
+path = "tests/markdown_subset.rs"
+
+[[test]]
+name = "notification_registers_nothing"
+path = "tests/notification_registers_nothing.rs"
+
+[[test]]
+name = "opencode_provider"
+path = "tests/opencode_provider.rs"
+
+[[test]]
+name = "pi_provider"
+path = "tests/pi_provider.rs"
+
+[[test]]
+name = "process_run_bounded"
+path = "tests/process_run_bounded.rs"
+
+[[test]]
+name = "provider_origin"
+path = "tests/provider_origin.rs"
+
+[[test]]
+name = "review_git"
+path = "tests/review_git.rs"
+
+[[test]]
+name = "review_keys_doc"
+path = "tests/review_keys_doc.rs"
+
+[[test]]
+name = "sandbox_real_basic_image"
+path = "tests/sandbox_real_basic_image.rs"
+
+[[test]]
+name = "sandbox_real_enable"
+path = "tests/sandbox_real_enable.rs"
+
+[[test]]
+name = "sandbox_real_handshake"
+path = "tests/sandbox_real_handshake.rs"
+
+[[test]]
+name = "sandbox_real_lifecycle"
+path = "tests/sandbox_real_lifecycle.rs"
+
+[[test]]
+name = "sandbox_real_storage"
+path = "tests/sandbox_real_storage.rs"
+
+[[test]]
+name = "terminal_backend"
+path = "tests/terminal_backend.rs"
+
+[[test]]
+name = "terminal_history_store"
+path = "tests/terminal_history_store.rs"
+
+[[test]]
+name = "terminal_only_doc"
+path = "tests/terminal_only_doc.rs"
+
+[[test]]
+name = "tests_never_write_the_real_data_directory"
+path = "tests/tests_never_write_the_real_data_directory.rs"
+
+[[test]]
+name = "typeahead_budget"
+path = "tests/typeahead_budget.rs"
+
+[[test]]
+name = "workspace_lookup"
+path = "tests/workspace_lookup.rs"
+
+[[test]]
+name = "worktree_leftovers"
+path = "tests/worktree_leftovers.rs"

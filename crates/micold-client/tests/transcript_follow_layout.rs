@@ -5,7 +5,7 @@
 //!
 //! Pinned headless on the real view, one widget tree kept across frames as the runtime keeps it.
 
-mod support;
+use crate::support;
 
 use iced::advanced::widget::operation::scrollable::{scroll_to, snap_to};
 use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset};

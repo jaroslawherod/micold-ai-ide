@@ -4,6 +4,7 @@
 //! being already removed. The App paths (the read at form open, the delete when the project is
 //! forgotten, the notification of a failed write) are in `src/main_tests.rs`.
 
+#[allow(clippy::duplicate_mod)]
 #[path = "../src/shell/remembered.rs"]
 #[allow(dead_code)]
 mod remembered;

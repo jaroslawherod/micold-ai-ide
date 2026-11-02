@@ -17,7 +17,7 @@ use micold_core::project::Availability;
 use micold_core::quick_switch::EntryKey;
 use micold_core::session::{AiCli, Session, SessionId, SessionLifecycle, SessionLocation};
 
-mod support;
+use crate::support;
 use support::sidebar_fixture::{
     arranged, deliver, listed, run_group, session_at, state_with_active, worktree,
 };

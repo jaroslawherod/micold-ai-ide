@@ -17,8 +17,7 @@
 //! looks like: with the default installed the press still starts it in one interaction (SC-001),
 //! and with the default missing the same press opens the list and starts nothing.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout, Shell};

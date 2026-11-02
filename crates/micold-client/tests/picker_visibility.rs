@@ -22,8 +22,7 @@
 //! `ui::cdk` is `pub`, so all of this is reachable from an integration test. `ui::material` is not,
 //! which is why the select's own gates live in-crate instead.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

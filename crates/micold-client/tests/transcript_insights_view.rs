@@ -2,7 +2,7 @@
 //! turn footer, the subagent threads and the background tasks' states say, read off the pure view
 //! model, and that the transcript view draws them where the contract puts them.
 
-mod support;
+use crate::support;
 
 use micold_client::features::structured_insights::{InsightsMsg, State as Insights};
 use micold_client::features::structured_transcript::{State, TranscriptMsg};
@@ -25,8 +25,7 @@ use serde_json::json;
 use support::layout::{painted_text_settled_at, renderer};
 use support::transcript::{ctx, fixture_lines, sequenced};
 
-#[path = "../../micold-core/tests/support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{tool_use, user_text, with_parent};
 
 /// One window's transcript and insights of one session, fed as the app feeds them.

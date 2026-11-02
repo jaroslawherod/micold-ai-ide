@@ -33,6 +33,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+#[allow(clippy::duplicate_mod)]
 #[path = "source_scan.rs"]
 mod source_scan;
 pub use source_scan::code_only;

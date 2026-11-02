@@ -27,8 +27,7 @@
 //! This deliberately does not check the message's wording. That is `empty_terminal_message`'s own
 //! tests' job, and pinning prose in two places makes the prose unchangeable rather than correct.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments;
 

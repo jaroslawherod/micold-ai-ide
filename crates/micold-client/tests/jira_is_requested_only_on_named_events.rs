@@ -7,8 +7,7 @@
 //! search is due, the adapter is constructed in `Capabilities::real()` and nowhere else, and no Jira
 //! issue type is serialisable.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::rs_files;
 use std::fs;

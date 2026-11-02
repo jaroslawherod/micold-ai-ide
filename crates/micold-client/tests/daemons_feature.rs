@@ -1,8 +1,7 @@
 //! The Daemons reducer: list rows, add/edit validation, per-daemon actions, live state, details
 //! (feature 491, T030, FR-010, FR-011, FR-015, US3 scenario 4).
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use daemons_fixture::{wt, World};
 use micold_client::features::daemons::{self, DraftRuntime, State};

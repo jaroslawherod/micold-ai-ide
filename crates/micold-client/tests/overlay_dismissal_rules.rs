@@ -7,7 +7,7 @@
 //! kind/trigger pair — so a local special case fails here rather than being discovered as a
 //! surface that closes when its neighbour does not.
 
-mod support;
+use crate::support;
 
 use micold_client::app::Message;
 use micold_client::features::help::Msg as HelpMsg;

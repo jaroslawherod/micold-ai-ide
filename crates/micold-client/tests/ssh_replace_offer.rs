@@ -2,8 +2,7 @@
 //! the daemon said of its sessions, is offered only for an older daemon proved idle, and ends
 //! nothing otherwise.
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
+use crate::daemons_fixture;
 
 use micold_client::features::daemons::{self, Msg, State};
 use micold_client::features::Outcome;

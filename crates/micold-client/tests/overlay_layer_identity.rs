@@ -19,7 +19,7 @@
 //! number of layers whether or not it can be dismissed. Asserted through the laid-out tree, because
 //! that is where an index is observable at all.
 
-mod support;
+use crate::support;
 
 use iced::Element;
 use micold_client::ui::cdk::overlay::{Anchor, Overlay, Surface};

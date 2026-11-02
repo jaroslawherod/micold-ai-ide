@@ -3,7 +3,7 @@
 //! The card and the sidebar row read the one board, so a ticket shown in both shows the same
 //! status. Driven through the state's `plan`/`apply` (the shell's refresh driver is in the binary).
 
-mod support;
+use crate::support;
 
 use std::time::Duration;
 

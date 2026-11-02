@@ -5,7 +5,7 @@
 //! The transcript is the recorded `prompt-tool-request` turn; the requests are the window's
 //! `features::permission_prompts` state, drawn by `ui::transcript::view_with_prompts`.
 
-mod support;
+use crate::support;
 
 use iced::Point;
 use micold_client::features::permission_prompts::{Action, Msg as PromptsMsg, State as Prompts};

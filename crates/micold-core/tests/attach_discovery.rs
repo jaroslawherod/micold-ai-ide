@@ -4,8 +4,7 @@
 //! Real git worktrees through the shared fixture, discovered with the production `discover`, so
 //! the rule is checked over what git and the filesystem actually report.
 
-#[path = "support/attach_fixture.rs"]
-mod attach_fixture;
+use crate::attach_fixture;
 
 // ---------------------------------------------------------------------------------------
 // T017 [US2]: resumable provider sessions (FR-006 - FR-010, FR-014, SC-002, SC-005)

@@ -13,7 +13,7 @@
 //! keyboard and the pointer to the rail's rest behaviour while it moves: the control that was
 //! pressed keeps focus, nothing hidden becomes reachable, and a press lands where it is drawn.
 
-mod support;
+use crate::support;
 
 use std::time::Instant;
 

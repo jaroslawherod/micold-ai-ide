@@ -19,7 +19,7 @@ use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-mod support;
+use crate::support;
 use support::sidebar_fixture::{deliver, listed, session_at, state_with_active, worktree};
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.

@@ -4,7 +4,7 @@
 //! resolution rows, the `(TextPath, text)` list the selectable leaves of each row report to a
 //! widget operation equals `units(row, view)`.
 
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

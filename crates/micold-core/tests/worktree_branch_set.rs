@@ -5,8 +5,7 @@
 //! Every git run is pinned to a time (`GIT_COMMITTER_DATE`), so the reflog's seconds are the
 //! test's, not the clock's: a branch made elsewhere is never within the match window by accident.
 
-#[path = "support/attach_fixture.rs"]
-mod attach_fixture;
+use crate::attach_fixture;
 
 use std::collections::BTreeSet;
 use std::path::Path;

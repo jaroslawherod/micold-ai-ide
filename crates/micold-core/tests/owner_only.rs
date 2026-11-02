@@ -9,8 +9,7 @@ use std::path::{Path, PathBuf};
 
 use micold_core::owner_only;
 
-#[path = "support/file_security.rs"]
-mod file_security;
+use crate::file_security;
 
 const CONTENT: &[u8] = b"the second, shorter version";
 const FILE: &str = "a.history";

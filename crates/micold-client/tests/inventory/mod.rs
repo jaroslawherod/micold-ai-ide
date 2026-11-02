@@ -32,6 +32,7 @@
 
 #![allow(dead_code)]
 
+#[allow(clippy::duplicate_mod)]
 #[path = "../support/source_scan.rs"]
 mod source_scan;
 

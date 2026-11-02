@@ -1,6 +1,6 @@
 //! The sidebar nests the sessions an agent started under their origin (feature 551, M2).
 
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_client::features::sidebar::{SidebarEntry, WorktreeNode};

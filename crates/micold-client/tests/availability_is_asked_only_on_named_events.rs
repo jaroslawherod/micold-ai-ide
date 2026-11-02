@@ -32,8 +32,7 @@
 //! test-gated item above production code, so skipping "from the first `#[cfg(test)]` on" would
 //! hide production code (M2 review), and no inline test names a marker today.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::rs_files;
 

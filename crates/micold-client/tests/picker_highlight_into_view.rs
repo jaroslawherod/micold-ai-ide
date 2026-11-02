@@ -13,7 +13,7 @@
 //! over the base tree and the floated list as the runtime does, and reads back where the
 //! highlighted row and the list's viewport are.
 
-mod support;
+use crate::support;
 
 use iced::advanced::widget::operation::scrollable::Scrollable;
 use iced::advanced::widget::operation::Outcome;

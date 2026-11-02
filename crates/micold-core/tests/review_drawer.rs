@@ -3,8 +3,7 @@
 //! and auto-open (FR-008, FR-010–FR-014, FR-018–FR-020, SC-006; research R5, R6, R9; contract
 //! D1–D5, D9–D11).
 
-#[path = "support/review_comments.rs"]
-mod review_comments;
+use crate::review_comments;
 
 use std::collections::BTreeSet;
 

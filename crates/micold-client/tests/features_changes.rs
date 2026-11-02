@@ -4415,8 +4415,7 @@ fn a_current_session_dropped_from_the_catalog_shows_the_headers_review() {
 // Feature 1272, M2: the source control's chips and Files option in the reducer (data-model §9,
 // R4; contract §2).
 
-#[path = "support/source_menu.rs"]
-mod drive;
+use crate::drive;
 
 mod source_menu {
     use super::drive::{highlight, menu, menu_label, pick, pr, stops, view};

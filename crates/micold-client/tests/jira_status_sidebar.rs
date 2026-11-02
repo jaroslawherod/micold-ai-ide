@@ -5,7 +5,7 @@
 //! are `jira_status_driver` in `main_tests.rs`. These drive what the driver drives: the state's
 //! `plan` and `apply`, `read_statuses` through a `FakeJiraSource`, and the painted sidebar.
 
-mod support;
+use crate::support;
 
 use std::time::Duration;
 

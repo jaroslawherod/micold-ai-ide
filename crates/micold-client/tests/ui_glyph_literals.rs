@@ -20,8 +20,7 @@
 //!
 //! Pure file inspection — no iced, runs under `cargo test --no-default-features`.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::rs_files;
 

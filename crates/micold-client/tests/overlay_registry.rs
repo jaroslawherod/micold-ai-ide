@@ -51,7 +51,7 @@ use micold_client::app::{on_escape, Message, State};
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
 
-mod support;
+use crate::support;
 use support::modals::{an_agent_request, modals, Modal as Dialog};
 
 /// Every dialog, shared (`support::modals`) and this file's own: the name it registers under, the

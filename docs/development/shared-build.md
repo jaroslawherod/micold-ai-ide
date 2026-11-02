@@ -37,7 +37,7 @@ bound, e.g. `SWEEP_ARGS='--maxsize 60GB' mise run sweep` from cron or a systemd 
 
 ## Linking is the expensive part, not compiling
 
-The workspace has 591 top-level `tests/*.rs` files (client 262, core 229, daemon 99, material 1),
+Before the consolidation below, the workspace had 591 top-level `tests/*.rs` files (client 262, core 229, daemon 99, material 1),
 each its own executable: `cargo test --workspace` (or any `-p <crate>` run without a narrower
 filter) links every one of them, even when only one test changed. Measured 2026-11-01: a single
 `cargo test -p micold-client` wrote ~39 GB in 14 minutes and pushed `/proc/pressure/io`'s `full`
@@ -53,3 +53,17 @@ in parallel in 40.6s with no failures, but it still links one executable per `te
 `cargo test` does, so it would not by itself cut the linking cost above. Its value is as a safer
 test *runner* for a later consolidation of those 591 files into fewer binaries; adopting it in
 `mise run test`/`mise run gate` is deferred to that follow-up.
+
+## Few test executables
+
+Every top-level `crates/*/tests/*.rs` used to be its own test target, linked as its own executable:
+591 of them, 54 GB of test binaries for one `cargo test --workspace`. `micold-core`, `micold-client`
+and `micold-daemon` now set `autotests = false`; each has a `tests/main.rs` that declares the ordinary
+test files as modules, so one run links about 150 executables, 10 GB.
+
+A test file stays its own target, listed as a `[[test]]` in the crate's `Cargo.toml`, when it
+changes process-global state (`std::env::set_var`, the working directory, a re-executed test
+binary), times a budget, needs a container runtime or sshd, or is run by name from CI. A new file
+under `tests/` must be a `mod` of `tests/main.rs` or a `[[test]]`; `every_test_file_is_wired`
+fails otherwise. Run one test of the merged set with
+`cargo test -p <crate> --test main <file>::<test> -- --exact`.

@@ -4,7 +4,7 @@
 //! Settings opens Settings, the field is skipped while Settings is open, and the app mark is neither
 //! a Tab stop nor a control.
 
-mod support;
+use crate::support;
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::operation::{focusable, Focusable, Outcome};

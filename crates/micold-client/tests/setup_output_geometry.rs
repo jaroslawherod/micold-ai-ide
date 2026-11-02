@@ -2,7 +2,7 @@
 //! inside the dialog at the smallest window (feature 1289, M6: geometry gate G2; contracts U3, U4,
 //! U6; FR-016, FR-021, FR-024).
 
-mod support;
+use crate::support;
 
 use micold_client::app::{State, MIN_WINDOW_SIZE};
 use micold_client::features::setup::{update, Msg, Names};

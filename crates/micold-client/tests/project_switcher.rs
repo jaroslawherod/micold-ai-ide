@@ -2,7 +2,7 @@
 //! overflow menu, and the pure switcher-row data (active marker, running count, unavailable).
 //! Rendering (trigger placement, panel) is build-verified + validated by quickstart.md.
 
-mod support;
+use crate::support;
 
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;

@@ -6,7 +6,7 @@
 //! core guarantees: distinct identities, correct owner resolution, independent per-project
 //! counts, and non-destructive switching across THREE concurrently-running projects (BS-1/4/5).
 
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_core::session::{SessionLifecycle, SessionLocation};

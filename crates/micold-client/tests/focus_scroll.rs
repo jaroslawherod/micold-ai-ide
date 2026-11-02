@@ -12,7 +12,7 @@
 //! because building the tree means naming raw iced widgets, which a module under `src/ui/` may
 //! not do (SC-001, `material_boundary`).
 
-mod support;
+use crate::support;
 
 use iced::advanced::widget::operation::scrollable::Scrollable;
 use iced::advanced::widget::operation::{Focusable, Outcome};

@@ -4,7 +4,7 @@
 //! a pane shows) and drives it as the shell does: key presses through `composer_key`, the editor's
 //! text through `edited`, sends and their answers, the daemon's `StructuredInput`, and drops.
 
-mod support;
+use crate::support;
 
 use std::path::PathBuf;
 

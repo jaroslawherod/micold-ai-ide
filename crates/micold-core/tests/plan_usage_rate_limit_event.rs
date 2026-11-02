@@ -5,8 +5,7 @@ use micold_core::plan_usage::rate_limit_event::parse;
 use micold_core::plan_usage::{limit_window, LimitWindow, UsageReading};
 use serde_json::{json, Value};
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{lines_of, RECORDED};
 
 /// Before every reset time the recorded events carry (2026-10-18 05:06 UTC).

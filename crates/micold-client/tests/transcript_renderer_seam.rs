@@ -3,7 +3,7 @@
 //! blocks draw: the marker appears once per `AssistantText` entry, and every other entry, the order
 //! and the fold state are as `BlockRenderers::PLAIN` draws them.
 
-mod support;
+use crate::support;
 
 use iced::Size;
 use micold_client::ui::transcript::{AssistantText, Block, BlockCache, BlockRenderers, RenderCtx};

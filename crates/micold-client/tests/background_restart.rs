@@ -1,6 +1,6 @@
 //! US1 (feature 008): background-restart marker + return notice. BS-7 / FR-011 / SC-007.
 
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use std::path::{Path, PathBuf};

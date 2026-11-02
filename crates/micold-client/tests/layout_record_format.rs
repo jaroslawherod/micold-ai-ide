@@ -5,7 +5,7 @@
 //! anything. Sorting makes it stable in a way that *hides* structural reordering, which is one of
 //! the changes it exists to report.
 
-mod support;
+use crate::support;
 
 use support::layout::{self as lay, Layer, LayoutRecord};
 

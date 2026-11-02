@@ -1,8 +1,7 @@
 //! Feature 582, T018 [US2]: which store directories of a provider could hold a project's sessions
 //! (FR-006, FR-007, FR-014; research R3).
 
-#[path = "support/attach_fixture.rs"]
-mod attach_fixture;
+use crate::attach_fixture;
 
 use std::path::{Path, PathBuf};
 

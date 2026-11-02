@@ -14,8 +14,7 @@
 //! `RequiredLegend`. The error message gets the same check (C5, SC-006): no file outside `ui/material/` spells
 //! `This field is required`.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{rs_files, src_dir, strip_comments_keep_lines};
 

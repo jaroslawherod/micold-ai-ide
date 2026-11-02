@@ -3,6 +3,7 @@
 //! wire frames, the `Debug` of the draft, its messages and the validated form, and the error
 //! text are scanned for the sentinel. Later milestones extend it with load and each failure.
 
+#[allow(clippy::duplicate_mod)]
 #[path = "../src/shell/jira.rs"]
 #[allow(dead_code)]
 mod jira;

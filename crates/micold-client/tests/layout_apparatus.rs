@@ -11,7 +11,7 @@
 //! checked — a later refactor that reuses a tree between walks would break both silently, and
 //! nothing else in the suite would notice.
 
-mod support;
+use crate::support;
 
 use iced::advanced::layout;
 use iced::advanced::renderer::Headless;

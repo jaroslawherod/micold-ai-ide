@@ -13,8 +13,7 @@
 //! [`a_default_that_turned_out_to_be_installed_says_nothing`] holds: the flag says why the user
 //! pressed, never what is true now.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use micold_client::app::{drain, interpret, State};
 use micold_client::features::session::{

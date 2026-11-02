@@ -2,8 +2,7 @@
 //! 1092, FR-002, FR-005, FR-009, FR-012). Each test presses the real built view, so a button
 //! wired to the wrong message fails here and not only in a visual pass.
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 use iced::advanced::layout::Layout;
 use iced::advanced::widget::operation::{Focusable, Outcome};

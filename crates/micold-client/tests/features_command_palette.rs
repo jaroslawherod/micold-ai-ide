@@ -5,7 +5,7 @@
 //! (`composers.edited` then `composer_edited`), keys go through `palette_key` before
 //! `composer_key`, and a send asks `send_intent` what the draft means.
 
-mod support;
+use crate::support;
 
 use micold_client::app::State as Window;
 use micold_client::features::command_palette::{

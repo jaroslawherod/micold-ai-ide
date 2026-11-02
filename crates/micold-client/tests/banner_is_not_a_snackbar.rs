@@ -17,7 +17,7 @@ use std::path::Path;
 
 use micold_client::app::State;
 
-mod support;
+use crate::support;
 
 /// The source of the rendering layer, for the structural half.
 fn source(relative: &str) -> String {

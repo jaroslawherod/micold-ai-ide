@@ -6,7 +6,7 @@
 //! [`Window::effort_picked`]. What the service then holds arrives on the catalog, as the model's
 //! does; the send itself and a refusal's notice are the shell's (`shell/composer.rs` tests).
 
-mod support;
+use crate::support;
 
 use micold_client::app::State as Window;
 use micold_client::features::effort_picker::{

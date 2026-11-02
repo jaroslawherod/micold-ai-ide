@@ -28,8 +28,7 @@
 //! exactly **one** file, the one that turns a role into a size. Anywhere else, a call site can only
 //! reach the scale through a role — which is the property the first rule was trying to buy.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{sources_under, strip_comments};
 

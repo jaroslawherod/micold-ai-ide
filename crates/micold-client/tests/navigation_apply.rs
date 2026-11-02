@@ -5,7 +5,7 @@ use micold_client::features::navigation::Step;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::sidebar::RowRef;
 
-mod support;
+use crate::support;
 use support::sidebar_fixture::{arranged, press, session_count, worktree};
 
 #[test]

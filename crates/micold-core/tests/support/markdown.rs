@@ -6,6 +6,8 @@
 use micold_core::markdown::{Block, Document, Inlines, Span};
 use micold_core::structured::transcript::{EntryKind, Transcript};
 
+// Also a root module of `tests/main.rs`: the same file, loaded where this one is used on its own.
+#[allow(clippy::duplicate_mod)]
 #[path = "stream_json.rs"]
 mod stream_json;
 pub use stream_json::{events_of, lines_of, without_stream_events};

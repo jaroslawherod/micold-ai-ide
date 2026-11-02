@@ -26,8 +26,7 @@
 //! delegation appears **and** when a sanctioned one disappears without being struck off, so the
 //! list cannot quietly drift out of step with the code it describes.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{sources_under, strip_comments};
 

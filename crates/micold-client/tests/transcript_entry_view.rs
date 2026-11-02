@@ -1,7 +1,7 @@
 //! T032 (feature 939, FR-012, FR-006, FR-004, FR-024): what each entry's header, status and footer
 //! say, and the rows the view draws, read off the pure view model.
 
-mod support;
+use crate::support;
 
 use iced::Size;
 use micold_client::features::structured_transcript::State;

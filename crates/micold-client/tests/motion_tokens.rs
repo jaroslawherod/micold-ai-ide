@@ -18,8 +18,7 @@
 //! a made-up 200ms because it is asserting *drawing*, and holding a test's stand-in clock to the
 //! design system would be pedantry rather than a check.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{sources_under, src_dir, strip_comments};
 

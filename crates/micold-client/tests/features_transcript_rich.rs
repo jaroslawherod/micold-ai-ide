@@ -21,7 +21,7 @@ use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
 use micold_core::tokens::Rgb;
 use serde_json::json;
 
-mod support;
+use crate::support;
 
 // ---- fixtures ----
 

@@ -2294,8 +2294,7 @@ fn a_browsed_path_missing_from_the_other_source_says_so() {
 
 // Feature 1272, M2: the source control in the reducer (data-model §8, §9; contract §2).
 
-#[path = "support/source_menu.rs"]
-mod drive;
+use crate::drive;
 
 mod source_menu {
     use super::*;

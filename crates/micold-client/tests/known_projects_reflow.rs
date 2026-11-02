@@ -15,7 +15,7 @@
 //! report's ladder ends; the narrower one stands for the main area beside a sidebar at its minimum
 //! width, which is the narrowest the list is ever given while the window is at its own minimum.
 
-mod support;
+use crate::support;
 
 use iced::widget::container;
 use iced::{Element, Length};

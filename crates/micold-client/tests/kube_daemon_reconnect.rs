@@ -2,7 +2,7 @@
 //! link is re-dialled to the same pod; a pod found gone stops the daemon with the reason, marks
 //! its sessions lost to it and creates nothing; Start then makes a new pod on the kept volume.
 
-mod kube_daemon_common;
+use crate::kube_daemon_common;
 
 use std::sync::Arc;
 

@@ -11,8 +11,7 @@ use micold_core::structured::{
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-#[path = "support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{events_of, lines_of, tool_use, user_text, with_parent, RECORDED};
 
 /// Every fixture recorded from a real `claude`.

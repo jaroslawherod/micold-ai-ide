@@ -2,10 +2,8 @@
 //! that fails is not delivered and its errors reach the Settings → Daemons view model (FR-013f,
 //! #1525).
 
-#[path = "support/daemons_fixture.rs"]
-mod daemons_fixture;
-#[path = "support/daemon_config_fixtures.rs"]
-mod fixtures;
+use crate::daemons_fixture;
+use crate::fixtures;
 
 use daemons_fixture::World;
 use fixtures::{settings, KINDS};

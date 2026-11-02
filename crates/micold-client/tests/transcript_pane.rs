@@ -6,7 +6,7 @@
 //! the transcript's is named `transcript-<session>` ([`transcript_scroll_id`]), so its presence
 //! says which session's transcript a pane draws.
 
-mod support;
+use crate::support;
 
 use std::collections::HashMap;
 

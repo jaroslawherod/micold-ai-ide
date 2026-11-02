@@ -1,7 +1,7 @@
 //! The delete prompt's loss list keeps its buttons on screen and its rows inside the dialog
 //! (#1602, FR-006, SC-003): 50 files scroll rather than push Allow and Deny away.
 
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_client::features::agent_confirm::Prompt;

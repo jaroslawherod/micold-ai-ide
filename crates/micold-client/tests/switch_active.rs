@@ -2,7 +2,7 @@
 //! foreground (recording the outgoing one BEFORE activation — I1), and rejects unavailable
 //! projects. BS-1, BS-3, BS-10.
 
-mod support;
+use crate::support;
 
 use micold_client::app::State;
 use micold_core::project::Availability;
