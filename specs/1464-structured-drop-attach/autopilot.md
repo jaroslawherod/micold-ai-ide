@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T020–T023 | full | Attach shortcut | #1618 | merged |
 | M4 | T024–T033 | full | Shortcut sheet and /shortcuts | #1636 (merge d965f390663fa3cb9842362d912f85c0b13d980c) | merged |
 | M5 | T034–T039 | full | Drop-target cue | #1651 (merge edc9f75218b73600eeb47b7b0b8cf30484ecff1e) | merged |
-| M6 | T042–T044 | full | Drop cue on a single-pane structured session | (PR pending) | implemented, gate running |
+| M6 | T042–T044 | full | Drop cue on a single-pane structured session | (PR pending) | in review |
 
 ## Decisions
 
