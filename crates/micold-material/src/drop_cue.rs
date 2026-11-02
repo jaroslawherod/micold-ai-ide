@@ -14,14 +14,14 @@ use iced::{Background, Border, Element, Length};
 use micold_core::tokens::{shape, Roles};
 
 /// How thick the outline is, in dp.
-pub const OUTLINE: f32 = 2.0;
+const OUTLINE: f32 = 2.0;
 
 /// How strongly the accent tints the content, 0 to 1: enough to see on a dark and a light
 /// surface, little enough to read the transcript through it.
-pub const TINT: f32 = 0.12;
+const TINT: f32 = 0.12;
 
 /// The overlay's look: the accent outline and tint while `active`, nothing while not.
-pub fn overlay_style(roles: Roles, active: bool) -> container::Style {
+fn overlay_style(roles: Roles, active: bool) -> container::Style {
     if !active {
         return container::Style::default();
     }
