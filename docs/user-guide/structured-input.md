@@ -9,7 +9,7 @@ files go to that session's composer only. Nothing is typed into a terminal, even
 pane sits beside the session.
 
 While you drag files over the window, each structured session that can take input is outlined and
-tinted in the accent colour; the outline goes when you drag out again or drop. Some systems do not
+tinted in the accent colour, also when the session fills the window on its own; the outline goes when you drag out again or drop. Some systems do not
 report a drag until it ends: there is then no outline, and the drop works just the same.
 
 - **Pictures** (PNG, JPEG, GIF, WebP) become attachment chips in the composer and are sent with your
