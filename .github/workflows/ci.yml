@@ -433,46 +433,48 @@ jobs:
           cargo test -p micold-client \
             --test showcase_completeness \
             --test showcase_determinism \
-            --test showcase_isolation \
             --test showcase_captions \
-            --test showcase_state \
-            --test showcase_glue \
             --test packaging_excludes_showcase \
             --test material_boundary \
-            --test material_builder_api \
             --test idle_requests_no_frames \
             --test animated_layout_relayouts \
-            --test feature_write_isolation \
-            --test root_is_routing_only \
-            --test root_vocabulary_is_cross_cutting \
-            --test root_state_is_shared \
-            --test logical_state_ownership \
-            --test features_are_render_free \
-            --test no_concrete_implementations \
-            --test overlay_registration \
             --test feature_registration_cost \
-            --test surface_registration_cost \
             --test service_capability_fakes \
-            --test outcome_termination \
             --test popover_displacement \
-            --test attention_notify \
-            --test attention_view_report \
-            --test unread_rows \
-            --test switcher_unread \
-            --test attention_reveal \
-            --test features_attention \
-            --test features_connection \
-            --test features_help \
-            --test features_notifications \
-            --test features_project \
             --test features_session \
             --test features_settings \
             --test features_sidebar \
-            --test features_window \
-            --test features_worktree \
-            --test features_worktree_form \
-            --test notification_icon \
             --test anatomy_call_sites
+          # Modules of the merged `main` test target (#1650): the filters keep this run to them.
+          cargo test -p micold-client --test main -- \
+            showcase_isolation:: \
+            showcase_state:: \
+            showcase_glue:: \
+            material_builder_api:: \
+            feature_write_isolation:: \
+            root_is_routing_only:: \
+            root_vocabulary_is_cross_cutting:: \
+            root_state_is_shared:: \
+            logical_state_ownership:: \
+            features_are_render_free:: \
+            no_concrete_implementations:: \
+            overlay_registration:: \
+            surface_registration_cost:: \
+            outcome_termination:: \
+            attention_notify:: \
+            attention_view_report:: \
+            unread_rows:: \
+            switcher_unread:: \
+            attention_reveal:: \
+            features_attention:: \
+            features_connection:: \
+            features_help:: \
+            features_notifications:: \
+            features_project:: \
+            features_window:: \
+            features_worktree:: \
+            features_worktree_form:: \
+            notification_icon::
       # Feature 039 (T122). The macOS and Windows notification backends are `cfg` modules of the
       # client binary (`shell/desktop_notify/macos.rs`, `windows.rs`), and so are their tests. The
       # list above names integration tests, which reach no unit test of the binary, and
