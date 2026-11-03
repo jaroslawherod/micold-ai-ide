@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 1 | (part 1) | CHANGES: test gaps (view, secret, reducer); fixed in 4591aad7e |
 | M1 B | 2 | 1a970730:b5c8c822 | CLEAN (1 MINOR: comment added, prose only) |
 | M1 B | 3 | a2973481:10bfc1b5 | CHANGES: F1 PROTOCOL_VERSION 76→77 (tokens) fixed; F2 daemon never filled `startup`, now reads startup-result.json from the data dir, test added; F3 T081/Deliverable reworded to D5 (prose only); F4 declined |
+| M1 B | 4 | 25b8b8c3:11dbeebd | CLEAN (full round: r3 snapshot stale after rebase; no secret in view, protocol 77 consistent, Verify green) |
 
 ## Declined review findings
 
