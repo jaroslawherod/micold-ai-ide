@@ -522,7 +522,7 @@ The **Configuration** section of a daemon's Details shows what the daemon was gi
 - the configuration file the application delivered (`daemon.toml`);
 - the values the daemon resolved from it, with each secret shown as a path and whether it is readable, never its content;
 - for each GitHub token, the repositories it reaches;
-- the start script's last run: when it ran, how it ended and the names of the variables it exported, never their values.
+- the start script's last run: how it ended (ran, skipped, or failed, with the reason such as an exit code or a timeout) and when, shown as seconds since 1 January 1970. The output it printed and the variables it exported are never shown.
 
 When a change needs the daemon to restart, the section says which settings changed and the dialog offers **Restart to apply**, which stops the daemon and starts it again. A file the daemon could not apply shows the reason, and the daemon keeps working with the previous one.
 
