@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1533
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
-- **Phase**: tasks
-- **Next step**: design PR merge, then milestone M1
+- **Phase**: implement
+- **Next step**: M1 PR merge, then milestone M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1630 | Design (spec, plan, tasks) | open | |
+| #1630 | Design (spec, plan, tasks) | merged | 1ede52197f6dc7022ea768f7fb884e64b175e83c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | | pending |
+| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | | open |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | | pending |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | | pending |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
@@ -63,15 +63,7 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-Unit M1 handed over at 150k, nothing pushed, no PR for M1 yet. Previous PR #1630 merged (SHA 1ede52197f6dc7022ea768f7fb884e64b175e83c); branch was reset to origin/main by branch-start.sh.
-
-Done (uncommitted work committed as one WIP commit, NOT yet compiled or tested, because the shared build lock was held by another worktree's gate for hours):
-- `crates/micold-core/src/env_include.rs`: `run_and_diff(script, shell, cwd, timeout, extra_env, on_line) -> ScriptRun{end: ScriptEnd, exports}` (POSIX sh wrapper + PowerShell wrapper, watchdog, LineSplitter) and a `run_and_diff_tests` module (T002, T004). `resolve` deliberately left on its `run_bounded` path (research R4 says so); record as a decision.
-- `protocol/messages.rs`: `StartupOutcome`, `StartupReason`, `StartupReport`, `ConfigStatus.startup`; `version.rs` 75 -> 76; `tests/protocol_roundtrip.rs` updated + new test (T003, T005). `config_watch.rs` sets `startup: None` (T006: state.rs needs no change).
-- `crates/micold-daemon/src/startup_script.rs` (StartupPlan, Tail, exportable, run, failure_block, read_result, unit tests), `lib.rs` module, `logging::append_line`, `main.rs` runs the plan after `align_container_home` (T001, T008, T009), `tests/startup_script.rs` (T007).
-- tasks.md NOT yet ticked (T001-T009).
-
-Next: `mise run test-core` (was queued; log in scratchpad), fix compile errors/test failures (likely: unused `Stream` import in daemon, schema_hash test, exact `tempfile`/`std::path::absolute` use, the posix wrapper behaviour in `/bin/sh`), then `cargo test -p micold-daemon --test startup_script` via `scripts/build-lock.sh`, `cargo test -p micold-daemon --lib startup_script`, tick T001-T009, then verify.md, review A (high), review B, scoped gate, full gate, PR (title `feat(1533): run the start script before the daemon serves (#1533)`; maybe `docs-not-needed` label). Another worktree (#1535) also edits ConfigStatus: expect a rebase conflict on messages.rs/version.rs.
+None.
 
 ## Open escalation
 
