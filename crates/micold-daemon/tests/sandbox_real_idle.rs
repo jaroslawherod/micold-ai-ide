@@ -135,9 +135,9 @@ async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
 
-    // No window through `extra`: `argv::idle_stop_value` puts `off` in the argv for this spec, and
-    // the harness reads it from there. Passing a window here as well would test which of the two
-    // `-e` flags the runtime happens to prefer, which is not a promise this product makes.
+    // No window through `extra`: the harness puts `idle_stop = "off"` in the delivered `daemon.toml`
+    // for this spec. Passing a window here as well would test which of the two the daemon happens
+    // to prefer, which is not a promise this product makes.
     let _sandbox = start_sandbox(&SandboxSpec {
         container: KEPT_CONTAINER,
         network: KEPT_NETWORK,

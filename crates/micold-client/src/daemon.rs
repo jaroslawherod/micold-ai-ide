@@ -223,10 +223,11 @@ pub enum Dial {
         keys_dir: PathBuf,
         /// Whether the container may connect out: with none, installers go through the relay.
         network: micold_core::sandbox::NetworkPosture,
-        /// The image reference the container was created from, which the daemon reports in a
-        /// refusal (`MICOLD_IMAGE_REFERENCE`).
+        /// The image reference the container was created from, which its `daemon.toml` carries so
+        /// the daemon can report it in a refusal.
         image: String,
-        /// Whether the daemon is kept running with nobody connected (`MICOLD_IDLE_STOP=off`).
+        /// Whether the daemon is kept running with nobody connected (`idle_stop = "off"` in its
+        /// `daemon.toml`).
         survive_logout: bool,
         /// The AI CLIs this daemon offers once installed (FR-010).
         ai_clis: AiCliSelection,
@@ -831,10 +832,11 @@ async fn connect_and_pump(
                 container_name,
                 keys_dir,
                 network,
-                image,
-                survive_logout,
                 ai_clis,
                 bring_up,
+                // The image and the keep-running opt-in only decide the actor's identity: the
+                // container's `daemon.toml` carries them (#1527).
+                ..
             },
             _,
         ) => {
@@ -846,8 +848,6 @@ async fn connect_and_pump(
                 container_name,
                 keys_dir,
                 network: *network,
-                image,
-                survive_logout: *survive_logout,
                 ai_clis,
                 time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
                 home: CONTAINER_HOME.get().and_then(|h| h.as_deref()),
@@ -1414,42 +1414,27 @@ struct ContainerReach<'a> {
     container_name: &'a str,
     keys_dir: &'a Path,
     network: micold_core::sandbox::NetworkPosture,
-    image: &'a str,
-    survive_logout: bool,
     ai_clis: &'a AiCliSelection,
     time_zone: Option<&'a str>,
-    /// The container's home (`MICOLD_HOME`), which the daemon and its sessions must run with.
+    /// The container's home (`home` of its `daemon.toml`, `HOME` here), which the daemon and its sessions must run with.
     home: Option<&'a Path>,
 }
 
 /// The environment of a daemon the bridge starts in a container. sshd builds a session's
 /// environment afresh, so the container's own `-e` values (set at `create`, which only the daemon
-/// the entrypoint starts inherits) ride the remote command: the image's state directory, the image
-/// reference a refusal names, the host's time zone and the keep-running opt-in.
+/// the entrypoint starts inherits) would not reach it: of those, the host's time zone and the
+/// container's home ride the remote command. Everything else the daemon reads from the
+/// `daemon.toml` mounted at `/run/micold/config`, the file the entrypoint's daemon reads too, so no
+/// `MICOLD_*` variable is passed (#1527, FR-005).
 fn container_env(reach: &ContainerReach<'_>) -> Vec<(String, String)> {
-    let mut env = vec![(
-        micold_core::ssh::argv::CONTAINER_DATA_ENV.to_string(),
-        micold_core::ssh::argv::CONTAINER_DATA_DIR.to_string(),
-    )];
-    if !reach.image.is_empty() {
-        env.push((
-            "MICOLD_IMAGE_REFERENCE".to_string(),
-            reach.image.to_string(),
-        ));
-    }
+    let mut env = Vec::new();
     if let Some(zone) = reach.time_zone {
         env.push(("TZ".to_string(), zone.to_string()));
     }
-    // sshd sets HOME from passwd (`/home/node` on the base image), not from the container's
-    // `MICOLD_HOME`, where the shared sign-in and git config are mounted (#1434).
+    // sshd sets HOME from passwd (`/home/node` on the base image), where the container's `-e HOME`
+    // names the home the shared sign-in and git config are mounted in (#1434).
     if let Some(home) = reach.home {
         env.push(("HOME".to_string(), home.display().to_string()));
-    }
-    if let Some(value) = micold_core::sandbox::argv::idle_stop_value(reach.survive_logout) {
-        env.push((
-            micold_core::spawn::IDLE_STOP_ENV.to_string(),
-            value.to_string(),
-        ));
     }
     env
 }
@@ -2314,8 +2299,6 @@ mod tests {
             container_name: "box-ctr",
             keys_dir: &keys.dir,
             network: Default::default(),
-            image: "ghcr.io/o/img:1",
-            survive_logout: true,
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: Some("Europe/Berlin"),
             home: Some(std::path::Path::new("/home/jaro")),
@@ -2350,26 +2333,25 @@ mod tests {
                 .find(|(n, _)| n == k)
                 .map(|(_, v)| v.as_str())
         };
-        assert_eq!(get("MICOLD_DATA_DIR"), Some("/var/lib/micold-ai-ide"));
         // 1286: sessions inherit the daemon's environment, so no XDG variable may ride along.
         assert_eq!(get("XDG_DATA_HOME"), None);
-        assert_eq!(get("MICOLD_IMAGE_REFERENCE"), Some("ghcr.io/o/img:1"));
-        assert_eq!(get("MICOLD_IDLE_STOP"), Some("off"));
+        // #1527, FR-005: the SSH start path passes no `MICOLD_*` variable; the daemon reads the same
+        // `daemon.toml` the boot path's daemon does.
+        assert!(
+            target.env.iter().all(|(n, _)| !n.starts_with("MICOLD_")),
+            "{:?}",
+            target.env
+        );
         assert_eq!(get("TZ"), Some("Europe/Berlin"));
         // 1434: the shared credentials live under MICOLD_HOME, not the passwd home sshd would use.
         assert_eq!(get("HOME"), Some("/home/jaro"));
         let quiet_reach = ContainerReach {
-            survive_logout: false,
-            image: "",
             time_zone: None,
             home: None,
             ..reach
         };
         let plain = container_target("node".into(), &quiet_reach, &keys).env;
-        assert!(plain.iter().all(|(n, _)| n != "MICOLD_IDLE_STOP"
-            && n != "MICOLD_IMAGE_REFERENCE"
-            && n != "TZ"
-            && n != "HOME"));
+        assert!(plain.is_empty(), "{plain:?}");
         let open = ContainerReach {
             network: micold_core::sandbox::NetworkPosture::Outbound,
             ..reach
@@ -2426,8 +2408,6 @@ mod tests {
             container_name: "box-ctr",
             keys_dir: dir.path(),
             network: micold_core::sandbox::NetworkPosture::Outbound,
-            image: "img",
-            survive_logout: false,
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: None,
             home: None,

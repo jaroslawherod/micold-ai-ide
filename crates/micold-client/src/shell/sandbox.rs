@@ -353,6 +353,23 @@ pub fn start_attempt<R: CommandRunner>(
         mounts.history = None;
     }
 
+    // The daemon's configuration file and the (empty) directory of its secrets, delivered where the
+    // container mounts them read-only (#1527, FR-005): one file for the daemon the entrypoint starts
+    // and the one the SSH bridge starts. A container without it has no configuration to read.
+    if let Some(delivery) = &mounts.delivery {
+        if let Err(e) = micold_client::daemon_config_delivery::deliver_container(
+            container_name,
+            profile,
+            &mounts.home.container,
+            delivery,
+        ) {
+            return Err(preparation_failed(format!(
+                "could not write the daemon's configuration to {}: {e}",
+                delivery.config.display()
+            )));
+        }
+    }
+
     // The git configuration is shared as a copy without anything that could carry a credential
     // (FR-004). A host without a readable configuration or without `git` shares none, as an
     // absent file does.

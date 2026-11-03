@@ -22,7 +22,6 @@ use super::dialect::Dialect;
 use super::parse::{GIT_IDENTITY_LABEL, GIT_IDENTITY_NONE};
 use super::runtime::{IdentityMapping, NoOutboundSupport, RuntimeCapabilities, RuntimeError};
 use super::{MountSet, NetworkPosture, SandboxSpec};
-use crate::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 
 /// Flags that would hand the sandbox back the host, in whole or in part.
 ///
@@ -98,25 +97,6 @@ pub fn restart_policy(survive_logout: bool) -> &'static str {
     }
 }
 
-/// The [`IDLE_STOP_ENV`] value a sandbox is created with, or `None` to leave it unset (feature 028,
-/// FR-022, lifecycle contract §5.18).
-///
-/// `Some("off")` exactly when the keep-it-running opt-in is on. That is the single approved
-/// exception to "the same rule on both placements" (§5.16): a service the user explicitly asked to
-/// keep running is not one to stop for being unused. With the opt-in off this returns `None` and
-/// the variable is not passed at all — the daemon's own default *is* the shipped window, so passing
-/// it would say the same thing less clearly, and would give a reader of the argv something to
-/// wonder about.
-///
-/// The opt-in's other half is [`restart_policy`], and neither works alone: a container the runtime
-/// restarts that then stops itself for being idle is a stopped container. They are named side by
-/// side here because the real-runtime harness has to create its containers with the values the
-/// application would choose — a test that spelled `off` itself would be checking its own copy of
-/// this decision rather than this one.
-pub fn idle_stop_value(survive_logout: bool) -> Option<&'static str> {
-    survive_logout.then_some(IDLE_STOP_OFF)
-}
-
 /// The port the container's SSH server listens on (`packaging/basic/sshd_config`).
 pub const CONTAINER_SSH_PORT: u16 = 2222;
 
@@ -178,24 +158,9 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
         args.push(format!("TZ={zone}").into());
     }
 
-    // The image the daemon is running from, so a `StaleDevImage` refusal can name it (FR-024d,
-    // research R8). The daemon reads it (`state.rs`) and has no other way to learn it — a container
-    // cannot see the reference it was created from. Without this the refusal carries `image: ""`
-    // and the remedy is missing exactly the word the developer needs to act on it.
-    args.push("-e".into());
-    args.push(format!("MICOLD_IMAGE_REFERENCE={}", spec.profile.image.reference()).into());
-    // The daemon's home inside the container, where the client installs its state (FR-004d).
-    args.push("-e".into());
-    args.push(format!("MICOLD_HOME={}", spec.mounts.home.container.display()).into());
-
-    // How long this daemon should tolerate having nobody connected (FR-022, contract §5.18). Beside
-    // the image reference and for the same reason: a daemon inside a container cannot see how its
-    // container was created, so the one thing the sandbox does differently about the idle rule has
-    // to be told to it at creation. Absent unless the user asked — see `idle_stop_value`.
-    if let Some(value) = idle_stop_value(spec.profile.survive_logout) {
-        args.push("-e".into());
-        args.push(format!("{IDLE_STOP_ENV}={value}").into());
-    }
+    // No `MICOLD_*` variable: the image reference, the daemon's home and the keep-running opt-in
+    // are keys of the `daemon.toml` mounted at `/run/micold/config` (#1527, FR-005), read the same
+    // way whether the entrypoint or the client over SSH starts the daemon.
 
     // Git ignores every credential helper the shared configuration may still name (FR-004). The
     // daemon's sessions inherit these.
@@ -308,6 +273,20 @@ fn mount_args(mounts: &MountSet, selinux_enforcing: bool) -> Vec<OsString> {
         &mounts.state.container.display(),
         true,
     );
+    // The configuration the daemon reads and the secrets it names, read-only (#1527, FR-029): a
+    // session runs as the daemon's user and must not be able to rewrite either.
+    if let Some(delivery) = &mounts.delivery {
+        mount(
+            &delivery.config.display(),
+            &super::CONTAINER_CONFIG_DIR,
+            false,
+        );
+        mount(
+            &delivery.secrets.display(),
+            &super::CONTAINER_SECRETS_DIR,
+            false,
+        );
+    }
     // The SSH material, as three single files so nothing else in the key directory (the client's
     // private key) reaches the container. `secret.host` is the daemon's key directory.
     for (host, container) in SSH_MOUNT_FILES {
@@ -338,11 +317,11 @@ mod tests {
     use crate::sandbox::image::{ImageChoice, OwnImage};
     use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind};
     use crate::sandbox::{
-        Bytes, CredentialMount, CredentialShare, HomeMount, MilliCpus, NetworkPosture,
-        ProjectMount, ResourceBudget, SandboxProfile, SecretMount, StateMount,
+        Bytes, CredentialMount, CredentialShare, DeliveryMount, HomeMount, MilliCpus,
+        NetworkPosture, ProjectMount, ResourceBudget, SandboxProfile, SecretMount, StateMount,
     };
     use std::collections::BTreeSet;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn caps(kind: RuntimeKind, storage: LimitSupport) -> RuntimeCapabilities {
         RuntimeCapabilities {
@@ -391,6 +370,9 @@ mod tests {
                 },
                 credentials: Vec::new(),
                 history: None,
+                delivery: Some(DeliveryMount::beside(Path::new(
+                    "/home/u/.local/share/micold-ai-ide",
+                ))),
                 retired: Vec::new(),
             },
             uid: 1000,
@@ -549,8 +531,9 @@ mod tests {
                 .filter(|(_, a)| a.as_str() == "-v")
                 .filter_map(|(i, _)| args.get(i + 1).cloned())
                 .collect();
-            // sandbox home + projects + state volume + three SSH key files + one credential
-            assert_eq!(mounted.len(), 7, "{kind} mounted: {mounted:?}");
+            // sandbox home + projects + state volume + config + secrets + three SSH key files + one
+            // credential
+            assert_eq!(mounted.len(), 9, "{kind} mounted: {mounted:?}");
             // The home is the application's own directory mounted *at* the host home path — not
             // the host home mounted anywhere. Asserting the pair, not just the destination, is
             // what keeps the two apart: `/home/u:/home/u` would satisfy a destination-only check
@@ -614,8 +597,8 @@ mod tests {
             let unlabelled = strings(&create(&s, &plain));
 
             let mounts = mount_values(&labelled);
-            // home, history, two projects, state, three SSH key files, one credential
-            assert_eq!(mounts.len(), 9, "{kind}: {mounts:?}");
+            // home, history, two projects, state, config, secrets, three SSH key files, one credential
+            assert_eq!(mounts.len(), 11, "{kind}: {mounts:?}");
             for m in &mounts {
                 assert!(
                     m.ends_with(":rw,z") || m.ends_with(":ro,z"),
@@ -720,58 +703,26 @@ mod tests {
         }
     }
 
+    /// #1527, FR-005: the image reference, the daemon's home and the keep-running opt-in are keys of
+    /// the mounted `daemon.toml`, so no `MICOLD_*` variable is passed, and the opt-in still
+    /// travels with the restart policy.
     #[test]
-    fn the_image_reference_is_passed_in_so_a_stale_image_can_name_itself() {
-        // FR-024d, research R8. The daemon reads `MICOLD_IMAGE_REFERENCE` when it builds a
-        // `StaleDevImage` refusal and has no other way to learn it — a container cannot see the
-        // reference it was created from. Nothing set it, so the refusal that exists to tell a
-        // developer *which image to rebuild* named no image at all: `image: ""`, measured against a
-        // real container in `evidence/us7-dev-loop.md`.
+    fn no_micold_variable_is_passed_and_the_keep_running_opt_in_keeps_its_restart_policy() {
         for kind in RuntimeKind::ALL {
-            let s = spec();
-            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            let expected = format!("MICOLD_IMAGE_REFERENCE={}", s.profile.image.reference());
-            assert!(
-                args.contains(&expected),
-                "{kind}: expected {expected:?} in {args:?}"
-            );
-        }
-    }
-
-    /// T045, FR-019/FR-022, lifecycle contract 5.17/5.18, research R2a.
-    ///
-    /// The idle rule is the same code on both placements; the *one* thing the sandbox does
-    /// differently is honour the keep-it-running opt-in by switching the rule off. A container's
-    /// daemon learns that at creation and nowhere else, for the reason the image reference is
-    /// passed the same way: a process inside a container cannot see how its container was made.
-    #[test]
-    fn the_keep_running_opt_in_is_the_only_thing_that_turns_the_idle_stop_off() {
-        let expected = format!("{IDLE_STOP_ENV}={IDLE_STOP_OFF}");
-        for kind in RuntimeKind::ALL {
-            // Off — the default. The variable is not passed at all, which is the same thing as
-            // passing the shipped window and says less.
-            let mut s = spec();
-            s.profile.survive_logout = false;
-            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            assert!(
-                !args.iter().any(|a| a.starts_with(IDLE_STOP_ENV)),
-                "{kind}: idle stop suppressed without anyone asking: {args:?}"
-            );
-
-            // On — the approved exception. A service the user asked to keep running is not one to
-            // stop for being unused.
-            s.profile.survive_logout = true;
-            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            assert!(
-                args.contains(&expected),
-                "{kind}: expected {expected:?} in {args:?}"
-            );
-            // And it travels with the restart policy, because on its own neither one keeps a
-            // sandbox alive: a restarting container that stops itself for being idle is stopped.
-            assert!(
-                args.iter().any(|a| a == restart_policy(true)),
-                "{kind}: {args:?}"
-            );
+            for survive in [false, true] {
+                let mut s = spec();
+                s.profile.survive_logout = survive;
+                let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+                assert!(
+                    !args.iter().any(|a| a.starts_with("MICOLD_")),
+                    "{kind}: {args:?}"
+                );
+                assert_eq!(
+                    args.iter().any(|a| a == restart_policy(true)),
+                    survive,
+                    "{kind}: {args:?}"
+                );
+            }
         }
     }
 
@@ -904,6 +855,47 @@ mod tests {
         }
     }
 
+    /// #1527, FR-005, FR-029: the configuration and the secrets are two read-only directory mounts,
+    /// the only `-e` values left are `HOME`, `TZ` and the git credential environment, and no mount
+    /// of the sandbox is a writable single file.
+    #[test]
+    fn the_configuration_and_secrets_are_read_only_directories_and_the_environment_is_small() {
+        for kind in RuntimeKind::ALL {
+            let mut s = spec();
+            s.time_zone = Some("Europe/Berlin".into());
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            for (host, container) in [
+                (
+                    "/home/u/.local/share/micold-ai-ide.delivery/config",
+                    "/run/micold/config",
+                ),
+                (
+                    "/home/u/.local/share/micold-ai-ide.delivery/secrets",
+                    "/run/micold/secrets",
+                ),
+            ] {
+                assert!(
+                    args.contains(&format!("{host}:{container}:ro")),
+                    "{kind}: {args:?}"
+                );
+            }
+            let names: BTreeSet<&str> = args
+                .windows(2)
+                .filter(|w| w[0] == "-e")
+                .filter_map(|w| w[1].split('=').next())
+                .collect();
+            let git = crate::scoped_credential::git_env(crate::scoped_credential::GITHUB_BASE);
+            let mut allowed: BTreeSet<&str> = BTreeSet::from(["HOME", "TZ"]);
+            allowed.extend(git.keys().map(String::as_str));
+            assert_eq!(names, allowed, "{kind}: {args:?}");
+            let writable_file = mount_values(&args)
+                .into_iter()
+                .filter(|m| m.contains("/run/micold/") && m.contains(":rw"))
+                .count();
+            assert_eq!(writable_file, 0, "{kind}: {args:?}");
+        }
+    }
+
     #[test]
     fn the_container_is_reached_over_ssh_with_no_token_and_no_daemon_port() {
         // Feature 806, FR-005: for the basic image and the user's own alike, the container publishes
@@ -935,7 +927,7 @@ mod tests {
                     );
                 }
                 assert!(
-                    args.iter().any(|a| a.starts_with("MICOLD_HOME=")),
+                    args.iter().any(|a| a.starts_with("HOME=")),
                     "{kind}: {args:?}"
                 );
                 assert!(

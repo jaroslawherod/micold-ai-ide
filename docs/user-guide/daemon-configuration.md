@@ -59,13 +59,14 @@ on it.
 
 ### `[listen]`, `[auth]`, `[ssh]`, `[storage]`, `[[projects]]`
 
-`[listen]` holds exactly one key. A host or SSH daemon uses `socket` (`"auto"`, the per-user
-endpoint, or a socket path). A container or pod daemon uses `tcp` (`"127.0.0.1:7000"`), which
-requires `auth.client_token_file`.
+`[listen]` holds exactly one key. A host, SSH or container daemon uses `socket` (`"auto"`, the
+per-user endpoint, or a socket path); the application reaches a container through its SSH server, so the
+daemon listens on its socket. A pod daemon uses `tcp` (`"127.0.0.1:7000"`), which requires
+`auth.client_token_file`; so does `tcp` on a container.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `listen.socket` | `"auto"` | The endpoint or socket path (host, ssh). |
+| `listen.socket` | `"auto"` | The endpoint or socket path (host, ssh, container). |
 | `listen.tcp` | none | A TCP listener (container, pod). |
 | `auth.client_token_file` | none | Secret. The token every client must present. |
 | `ssh.dir` | container and pod: `/run/micold/ssh` | Holds `host_ed25519_key`, `host_ed25519_key.pub`, `authorized_keys`. |

@@ -2,12 +2,15 @@
 # The basic image's entrypoint (feature 806, research R3).
 #
 # 1. The container runs as the host uid, which has no passwd entry; sshd refuses a user it cannot
-#    resolve. Add one, home `$MICOLD_HOME` (the container home the client passes), when absent.
+#    resolve. Add one, home `$HOME` (the container home the client passes with `-e HOME`; `$MICOLD_HOME`
+#    still wins when set), when absent.
 # 2. Create the home's `~/.local/bin` and mise's shims folder, which #1289 puts on every session's
 #    `PATH`, so a session that lists them sees what exists (#1439, FR-011).
 # 3. When provisioning has started a daemon build here before, start it again in the background,
 #    so a restart-policy restart runs the daemon unattended (feature 027's survive-logout).
-# 4. Run sshd as this container's main process and, when the runtime stops the container, stop every
+# 4. Take the directory of sshd's host key and authorized keys from `[ssh] dir` of the daemon's
+#    configuration file, `/run/micold/config/daemon.toml` (#1527), by default `/run/micold/ssh`.
+# 5. Run sshd as this container's main process and, when the runtime stops the container, stop every
 #    daemon first: the daemon is not sshd's child (the client starts it over SSH), so the runtime's
 #    SIGTERM, which reaches only this process, would end it unsaved when the container goes. The
 #    daemon's orderly stop saves terminal history (feature 041, FR-002).
@@ -16,6 +19,8 @@ set -eu
 # Overridable so scripts/tests/basic-entrypoint.test.sh can drive this against fixture files.
 passwd_file="${MICOLD_PASSWD_FILE:-/etc/passwd}"
 group_file="${MICOLD_GROUP_FILE:-/etc/group}"
+config_file="${MICOLD_CONFIG_FILE:-/run/micold/config/daemon.toml}"
+sshd_bin="${MICOLD_SSHD:-/usr/sbin/sshd}"
 
 uid="$(id -u)"
 gid="$(id -g)"
@@ -73,7 +78,35 @@ fi
 # them apart. A zombie has no command line, so it never matches.
 daemon_pattern='/remote/.*/micold-daemon$'
 
-/usr/sbin/sshd -D -e -f /etc/micold/sshd_config &
+# `[ssh] dir` of the configuration file: the value of the first `dir` key under `[ssh]`, quoted
+# either way TOML allows. Absent file, table or key: the directory the client has always mounted.
+ssh_dir=/run/micold/ssh
+if [ -r "$config_file" ]; then
+  configured="$(awk '
+    /^[ \t]*\[/ { in_ssh = ($0 ~ /^[ \t]*\[ssh\][ \t]*(#.*)?$/); next }
+    in_ssh && /^[ \t]*dir[ \t]*=/ {
+      value = $0
+      sub(/^[ \t]*dir[ \t]*=[ \t]*/, "", value)
+      quote = substr(value, 1, 1)
+      if (quote == "\"" || quote == "\047") {
+        value = substr(value, 2)
+        end = index(value, quote)
+        if (end > 0) { print substr(value, 1, end - 1); exit }
+      }
+    }
+  ' "$config_file")"
+  [ -n "$configured" ] && ssh_dir="$configured"
+fi
+
+# The image's sshd_config names the default directory; a configured one is added to it on the command
+# line (an option there wins over the file's AuthorizedKeysFile, and a second HostKey is loaded
+# beside the first, whose file may then be absent).
+if [ "$ssh_dir" = /run/micold/ssh ]; then
+  "$sshd_bin" -D -e -f /etc/micold/sshd_config &
+else
+  "$sshd_bin" -D -e -f /etc/micold/sshd_config \
+    -o "HostKey=$ssh_dir/host_ed25519_key" -o "AuthorizedKeysFile=$ssh_dir/authorized_keys" &
+fi
 sshd_pid=$!
 
 stop_all() {

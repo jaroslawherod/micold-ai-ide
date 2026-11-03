@@ -270,17 +270,32 @@ pub(crate) enum EnvEdit {
     Remove(std::ffi::OsString),
 }
 
+/// The locale a container session gets unless `session.env` sets `LANG`.
+pub(crate) const CONTAINER_LANG: &str = "C.UTF-8";
+
 /// The edits every session spawn makes before its own variables are applied: on Windows
 /// [`prefer_process_path`], then [`strip_inherited_terminal_identity`], and the removal of the
 /// daemon's own `MICOLD_DATA_DIR` (1286): it beats `XDG_DATA_HOME` in `micold_core::paths`, so a
 /// micold build run inside a session would otherwise write the live state directory.
 pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
-    let data_dir = std::env::var(micold_core::paths::DATA_DIR_ENV).ok();
+    // From the installed settings: the configuration file's `data_dir` (a container daemon started
+    // over SSH is passed no `MICOLD_DATA_DIR`, #1527), else the variable.
+    let data_dir = crate::settings::current()
+        .data_dir
+        .as_ref()
+        .and_then(|dir| dir.to_str().map(str::to_owned));
     let exe = std::env::current_exe().ok();
     let identity_exists = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
         .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
         .is_file();
-    env_hygiene_with(target, data_dir.as_deref(), exe.as_deref(), identity_exists)
+    let lang_inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
+    env_hygiene_with(
+        target,
+        data_dir.as_deref(),
+        exe.as_deref(),
+        identity_exists,
+        lang_inherited,
+    )
 }
 
 /// [`env_hygiene`] with the process facts it reads passed in, so a test can drive the wiring.
@@ -289,13 +304,21 @@ fn env_hygiene_with(
     data_dir: Option<&str>,
     exe: Option<&std::path::Path>,
     identity_exists: bool,
+    lang_inherited: bool,
 ) -> Vec<EnvEdit> {
     let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
     #[cfg(windows)]
     edits.extend(prefer_process_path(target));
     edits.extend(strip_inherited_terminal_identity(target));
-    // Overwriting an inherited GIT_CONFIG_* is intended. MICOLD_DATA_DIR is the container signal:
-    // only the client's `container_env` forwards it to the SSH-started daemon.
+    // The daemon's data directory is the container signal: the configuration file names it,
+    // whichever way the daemon was started.
+    if data_dir == Some(micold_core::ssh::argv::CONTAINER_DATA_DIR) && !lang_inherited {
+        // sshd gives a login no `LANG`, and a container image sets none, so a session would run in
+        // the POSIX locale. Not when the daemon inherited one (an image's `ENV LANG`), and before
+        // the session's own variables are applied, so `session.env` wins (#1527, FR-039).
+        edits.push(EnvEdit::Set("LANG".into(), CONTAINER_LANG.into()));
+    }
+    // Overwriting an inherited GIT_CONFIG_* is intended.
     let git = container_git_edits(data_dir, exe, identity_exists);
     if !git.is_empty() {
         let names: Vec<String> = git
@@ -936,6 +959,7 @@ mod container_git_tests {
             Some(DATA),
             Some(Path::new(EXE)),
             true,
+            false,
         );
         let env = set(&edits);
         assert_eq!(env["GIT_CONFIG_COUNT"], "5");
@@ -949,8 +973,28 @@ mod container_git_tests {
             None,
             Some(Path::new(EXE)),
             true,
+            false,
         );
         assert!(!set(&outside).contains_key("GIT_CONFIG_COUNT"));
+    }
+
+    #[test]
+    fn a_container_session_gets_a_utf8_locale_and_a_host_session_does_not() {
+        let lang = |data_dir, inherited| {
+            set(&env_hygiene_with(
+                &std::process::Command::new("true"),
+                data_dir,
+                None,
+                false,
+                inherited,
+            ))
+            .get("LANG")
+            .cloned()
+        };
+        assert_eq!(lang(Some(DATA), false).as_deref(), Some("C.UTF-8"));
+        assert_eq!(lang(Some(DATA), true), None, "an inherited LANG is kept");
+        assert_eq!(lang(None, false), None);
+        assert_eq!(lang(Some("/x"), false), None);
     }
 
     #[test]

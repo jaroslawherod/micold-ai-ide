@@ -171,8 +171,8 @@ impl World {
     }
 
     /// Provision the container, restart it so the entrypoint starts the daemon with the container's
-    /// own environment (`MICOLD_IMAGE_REFERENCE`, `TZ`: a daemon the client starts over SSH does
-    /// not inherit them, which is not how a sandbox runs), and connect to that daemon.
+    /// own environment (`TZ`: a daemon the client starts over SSH does not inherit it, which is not
+    /// how a sandbox runs), and connect to that daemon.
     async fn connect_container(&self) -> (DaemonConnection, CatalogSnapshot) {
         provision_then_restart(CONTAINER, PORT).await;
         wait_for_accept(PORT).await

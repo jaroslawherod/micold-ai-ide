@@ -226,6 +226,9 @@ pub enum StaleReason {
     /// since #1002 carries: it may mount the user's SSH agent or git credential store from wherever
     /// they were at its creation, which no path known today can rule out (FR-001, decision D17).
     MadeBeforeCredentialRemoval,
+    /// Mounts no `/run/micold/config` (#1527): a container made before the daemon's configuration
+    /// was delivered by mount, in which the daemon would start with no configuration.
+    MadeBeforeConfigDelivery,
     /// Not attached to the network this posture needs: after a switch between `Outbound` and
     /// `NoOutbound` it would keep the old posture's network (#1290).
     DifferentNetwork {
@@ -250,6 +253,9 @@ impl StaleReason {
             ),
             StaleReason::MadeBeforeCredentialRemoval => "the existing sandbox was made before git \
                 credentials were withdrawn from sandboxes, and may still hold them"
+                .to_string(),
+            StaleReason::MadeBeforeConfigDelivery => "the existing sandbox was made before the \
+                daemon's configuration was delivered to it, and has none to read"
                 .to_string(),
         }
     }
@@ -328,6 +334,21 @@ pub fn adopt(
                 found: facts.image.clone(),
                 expected: expected_image.to_string(),
             },
+        };
+    }
+
+    // A container made before #1527 mounts no configuration, and the daemon the client starts in
+    // it over SSH is passed no environment either: it would run on defaults. Judged only when the
+    // mounts are known, which every container the runtime reports has (the home, at least).
+    if !facts.mount_destinations.is_empty()
+        && !facts
+            .mount_destinations
+            .iter()
+            .any(|d| d == super::CONTAINER_CONFIG_DIR)
+    {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::MadeBeforeConfigDelivery,
         };
     }
 
@@ -1042,7 +1063,7 @@ mod mounted_tests {
     use crate::sandbox::{CredentialLayout, MountSet, SecretMount};
     use std::path::{Path, PathBuf};
 
-    const DESTINATIONS: [&str; 2] = ["/home/u/p", "/var/lib/micold-ai-ide"];
+    const DESTINATIONS: [&str; 3] = ["/home/u/p", "/var/lib/micold-ai-ide", "/run/micold/config"];
 
     /// A runtime that answers every call, with whatever `find` should report already there.
     struct Fake {
@@ -1466,6 +1487,25 @@ mod adoption_tests {
                 "micold-net"
             ),
             Adoption::Replace { .. }
+        ));
+    }
+
+    #[test]
+    fn a_container_without_the_configuration_mount_is_replaced_not_attached() {
+        // #1527: its daemon, started over SSH with no environment, would run on defaults.
+        let mut old = existing("micold-daemon:0.27.0", true);
+        old.mount_destinations = vec!["/home/u/p".into(), "/var/lib/micold-ai-ide".into()];
+        assert!(matches!(
+            adopt(Some(&old), "micold-daemon:0.27.0", &[], "micold-net"),
+            Adoption::Replace {
+                reason: StaleReason::MadeBeforeConfigDelivery,
+                ..
+            }
+        ));
+        let current = existing("micold-daemon:0.27.0", true);
+        assert!(matches!(
+            adopt(Some(&current), "micold-daemon:0.27.0", &[], "micold-net"),
+            Adoption::Attach(_)
         ));
     }
 
