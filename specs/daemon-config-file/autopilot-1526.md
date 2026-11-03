@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1526
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
-- **Phase**: implement
-- **Next step**: M1b PR open; orchestrator waits on CI
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,14 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1656 | Design (milestone for Issue 5) | MERGED | 86a9e5d9df604be5849f8cb7a8db9e9ea487d996 |
 | #1659 | Re-cut M1 into M1a/M1b | MERGED | 1f4e769c01901d65377a3cafc8dee0ca7606009b |
 | #1660 | M1a (host delivery) | MERGED | 974af5dc9804ffe266f8fd9e1fd70f22f50eefdf |
-| #1670 | M1b (SSH delivery) | OPEN | — |
+| #1670 | M1b (SSH delivery) | MERGED | 422c18e113ac56611d36b048e74eae69edab1c4e |
+| PR_CLOSE | Close | OPEN | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | #1660 | merged |
-| M1b | T026, T028, T029 | full | SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone; user guide documents the SSH file | — | planned |
+| M1b | T026, T028, T029 | full | SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone; user guide documents the SSH file | #1670 | merged |
 
 ## Decisions
 
@@ -368,3 +369,5 @@ None.
 ## Follow-ups not done
 
 - Milestones live in tasks.md under "Issue 4 (#1525)" through "Issue 14 (#1535)"; #1525 stays open for follow-up work in PR #1654 and may edit the same section — expect a rebase if the second to merge.
+
+- Close: tdd-verify FAIL (test-strength only, I5-1..I5-11) fixed by T131-T138; review of the close diff (snapshot 9a6187775ee5a23546fb509e96be3f37fe9c0fa1:5380b6b8b171d5c391f026ec764529055815176c): see below. converge skipped (review B CLEAN for M1a and M1b). Host write_if_changed now re-chmods an unchanged file (as SSH does). Local gate: scoped only, full gate left to CI.
