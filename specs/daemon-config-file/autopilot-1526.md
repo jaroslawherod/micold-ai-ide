@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1526
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
-- **Phase**: implement
-- **Next step**: M1 (T025–T029, T080a)
+- **Phase**: implement (escalated)
+- **Next step**: awaiting user answer on the M1 split (see Open escalation)
 
 ## Pull requests
 
@@ -251,7 +251,26 @@ PR: not opened — no code to review yet.
 
 ## Open escalation
 
-None.
+**Question**: M1 as cut (T025, T026, T027, T080a, T028, T029 in one milestone) has not converged —
+two consecutive milestone units hit the 150k context cap with the design fully settled but no code
+written (parts 2 and 3; see the Handover section). Category 5, non-convergence. How should the work
+be split?
+
+- **(Recommended) Option A — split M1 into two milestones**, each run as its own unit and PR:
+  **M1a host delivery** (T025, T027, T080a) and **M1b SSH delivery** (T026, T028, T029). The design
+  in the Handover is settled and already separates the two paths; each half then needs only its own
+  files, and they share just the write-if-changed helper, which M1a lands first. Needs a short
+  tasks unit to re-cut the `### Issue 5 (#1526) — M1` entry in
+  `specs/daemon-config-file/tasks.md` into M1a/M1b, then two milestone units.
+- **Option B — dispatch a fourth M1 part** with a hard instruction to write tests first and to
+  delegate mechanical edits to `autopilot-worker` subagents. One PR, no tasks.md change, but a
+  third no-code handover is a real risk: parts 2 and 3 spent about 315k tokens between them on
+  research alone.
+- **Option C — stop the run here** and leave the settled design in the ledger for a later session
+  or a human to implement. Nothing merges.
+
+**What is paused**: all of M1. Nothing is merged beyond the design PR #1656 (merged, `86a9e5d9d`),
+which only added the milestone entry to tasks.md. No source file has been changed on this branch.
 
 ## Follow-ups not done
 
