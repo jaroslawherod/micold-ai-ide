@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 mod files;
 mod resolved;
@@ -432,17 +432,19 @@ pub struct Network {
 }
 
 /// `startup.on_failure`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OnFailure {
+    #[default]
     Refuse,
     Warn,
 }
 
 /// `startup.run`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunPolicy {
+    #[default]
     EveryStart,
     OncePerContainer,
 }

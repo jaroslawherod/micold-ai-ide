@@ -36,6 +36,8 @@ pub enum Section {
     Placement,
     /// Survive-logout.
     Sessions,
+    /// The start script and how it runs (#1533); offered only for a kind that delivers it.
+    StartScript,
 }
 
 const CONTAINER: &[Section] = &[
@@ -55,15 +57,45 @@ const KUBERNETES: &[Section] = &[
 ];
 const SSH: &[Section] = &[Section::Connection];
 const HOST: &[Section] = &[Section::Connection, Section::Sessions];
+const CONTAINER_START: &[Section] = &[
+    Section::Connection,
+    Section::Container,
+    Section::Credentials,
+    Section::Network,
+    Section::Resources,
+    Section::Sessions,
+    Section::StartScript,
+];
+const KUBERNETES_START: &[Section] = &[
+    Section::Connection,
+    Section::Image,
+    Section::Credentials,
+    Section::Resources,
+    Section::Placement,
+    Section::StartScript,
+];
+const SSH_START: &[Section] = &[Section::Connection, Section::StartScript];
+const HOST_START: &[Section] = &[Section::Connection, Section::Sessions, Section::StartScript];
 
 impl Section {
     /// The sections of a daemon of `runtime`, in the order the form lists them (FR-002).
     pub fn of(runtime: DraftRuntime) -> &'static [Section] {
-        match runtime {
-            DraftRuntime::Container => CONTAINER,
-            DraftRuntime::Kubernetes => KUBERNETES,
-            DraftRuntime::Ssh => SSH,
-            DraftRuntime::Host => HOST,
+        let kind = super::daemons_start::kind_of(runtime);
+        Self::of_with(runtime, micold_core::daemons::start_script_delivered(kind))
+    }
+
+    /// [`Self::of`] with the Start script group on or off, whatever the kind delivers: the group
+    /// is last, and appears only once the kind's script is delivered (#1533).
+    pub fn of_with(runtime: DraftRuntime, start_script: bool) -> &'static [Section] {
+        match (runtime, start_script) {
+            (DraftRuntime::Container, false) => CONTAINER,
+            (DraftRuntime::Kubernetes, false) => KUBERNETES,
+            (DraftRuntime::Ssh, false) => SSH,
+            (DraftRuntime::Host, false) => HOST,
+            (DraftRuntime::Container, true) => CONTAINER_START,
+            (DraftRuntime::Kubernetes, true) => KUBERNETES_START,
+            (DraftRuntime::Ssh, true) => SSH_START,
+            (DraftRuntime::Host, true) => HOST_START,
         }
     }
 
@@ -78,6 +110,7 @@ impl Section {
             Section::Resources => "Resources",
             Section::Placement => "Placement and storage",
             Section::Sessions => "Sessions",
+            Section::StartScript => "Start script",
         }
     }
 
@@ -99,6 +132,7 @@ impl Section {
                 Section::Placement
             }
             (Ssh, "host" | "user" | "port" | "key_file") => Section::Connection,
+            (_, "startup_script" | "startup_timeout") => Section::StartScript,
             (Host, _) | (_, _) => return None,
         };
         Self::of(runtime).contains(&section).then_some(section)
@@ -148,6 +182,9 @@ impl Section {
 /// §Section summaries), or `None` when the section is not the kind's, or every part is empty and
 /// the row gives no fallback. Recomputed from the draft on every view, so it follows each keystroke.
 pub fn summary(draft: &Draft, section: Section) -> Option<String> {
+    if section == Section::StartScript {
+        return Some(start_script_summary(draft));
+    }
     if !Section::of(draft.runtime).contains(&section) {
         return None;
     }
@@ -169,6 +206,15 @@ pub fn marked(draft: &Draft, section: Section) -> bool {
     draft.required_fields().into_iter().any(|(id, req)| {
         req.required && req.empty && Section::holding(draft.runtime, id) == Some(section)
     })
+}
+
+fn start_script_summary(draft: &Draft) -> String {
+    use super::daemons_start::StartSource;
+    match draft.start.source {
+        StartSource::None => "No start script".into(),
+        StartSource::File => format!("File {}", draft.start.file.trim()),
+        StartSource::Inline => "Inline script".into(),
+    }
 }
 
 fn auto_start(draft: &Draft) -> String {
@@ -265,7 +311,7 @@ fn container_parts(d: &Draft, section: Section) -> Vec<String> {
         } else {
             "Stops when signed out or idle".into()
         }],
-        Section::Image | Section::Placement => Vec::new(),
+        Section::Image | Section::Placement | Section::StartScript => Vec::new(),
     }
 }
 
@@ -325,7 +371,9 @@ fn kube_parts(d: &Draft, section: Section) -> Vec<String> {
                 String::new()
             },
         ],
-        Section::Container | Section::Network | Section::Sessions => Vec::new(),
+        Section::Container | Section::Network | Section::Sessions | Section::StartScript => {
+            Vec::new()
+        }
     }
 }
 

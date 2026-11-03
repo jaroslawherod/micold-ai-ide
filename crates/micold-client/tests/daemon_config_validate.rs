@@ -228,6 +228,7 @@ fn from_entry_builds_the_file_from_the_saved_settings() {
             path: "/srv/clones/app".into(),
             remote: Some("r".into()),
         }],
+        startup: None,
     };
     w.registry.set_file(id, file.clone()).unwrap();
     let (settings, kind) = DaemonSettings::from_entry(w.registry.get(id).unwrap()).unwrap();

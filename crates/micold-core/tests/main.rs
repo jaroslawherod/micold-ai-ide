@@ -175,6 +175,7 @@ mod setup_output;
 mod setup_shell;
 mod shell_command;
 mod site_theme_contrast;
+mod startup_settings;
 mod store_fault_isolation;
 mod store_issue_source;
 mod store_roundtrip;

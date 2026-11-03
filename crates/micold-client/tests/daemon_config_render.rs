@@ -46,6 +46,7 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
                 remote: p.remote,
             })
             .collect(),
+        startup: None,
     }
 }
 

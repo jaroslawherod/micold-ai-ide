@@ -201,6 +201,7 @@ mod sidebar_tree;
 mod ssh_replace_offer;
 mod ssh_version_mismatch;
 mod start_failure_notice;
+mod start_script_settings;
 mod structured_start_menu;
 mod switch_active;
 mod switcher_anchor;

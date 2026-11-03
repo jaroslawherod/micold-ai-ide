@@ -362,6 +362,7 @@ pub mod connection;
 pub mod daemon_sections;
 pub mod daemons;
 pub mod daemons_kube;
+pub mod daemons_start;
 pub mod effort_picker;
 pub mod help;
 pub mod history;

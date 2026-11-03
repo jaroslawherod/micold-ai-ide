@@ -220,6 +220,74 @@ pub struct FileSettings {
     /// The `[[projects]]` entries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub projects: Vec<ProjectSetting>,
+    /// The `[startup]` table: the start script and how it runs (#1533, FR-010). An inline script's
+    /// text is not here: it is a file in the app data (`StartupScript::Inline`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup: Option<StartupSettings>,
+}
+
+/// Where a daemon's start script comes from (#1533).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupScript {
+    /// A script file the user picked.
+    File(PathBuf),
+    /// Text written in Settings, kept as `<app data>/daemons/<id>/startup.sh`; the entry holds only
+    /// this marker, never the text.
+    Inline,
+}
+
+/// A daemon's start script and the `[startup]` keys around it (#1533, FR-010). Unset keys take
+/// the schema's defaults: no timeout, `refuse`, `every_start`, the environment exported.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartupSettings {
+    /// The script.
+    pub script: StartupScript,
+    /// `startup.shell`; unset is the daemon's default shell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<PathBuf>,
+    /// `startup.timeout_secs`, kept signed so an out-of-range value reaches the check's reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<i64>,
+    /// `startup.on_failure`.
+    #[serde(default)]
+    pub on_failure: crate::daemon_config::OnFailure,
+    /// `startup.run`.
+    #[serde(default)]
+    pub run: crate::daemon_config::RunPolicy,
+    /// `startup.env_file`: the path of a file of secrets, never their values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_file: Option<PathBuf>,
+    /// `startup.export_env`.
+    #[serde(default = "default_export_env")]
+    pub export_env: bool,
+}
+
+fn default_export_env() -> bool {
+    true
+}
+
+impl StartupSettings {
+    /// Settings for `script` with every other key at its default.
+    pub fn new(script: StartupScript) -> Self {
+        Self {
+            script,
+            shell: None,
+            timeout_secs: None,
+            on_failure: Default::default(),
+            run: Default::default(),
+            env_file: None,
+            export_env: true,
+        }
+    }
+}
+
+/// Whether the application delivers a start script to a daemon of `kind` (#1533). Settings offers
+/// the Start script group only for a kind that does, so no savable group sits on main without
+/// delivery. Each delivery milestone turns its kind on: host and SSH (#1526), container (#1527),
+/// pod (#1528).
+pub fn start_script_delivered(_kind: crate::daemon_config::Kind) -> bool {
+    false
 }
 
 impl FileSettings {
@@ -947,6 +1015,9 @@ pub struct DaemonView {
     /// What stopped the daemon's configuration file from being delivered: one line per error of
     /// the check `micold-daemon config check` runs (FR-013f). Empty when the file is valid.
     pub config_errors: Vec<String>,
+    /// The start script or its settings changed since the daemon started: Settings says it
+    /// applies after a restart (#1533, US5.2).
+    pub startup_restart: bool,
 }
 
 /// A line of a daemon's row about one project's git credential (#1002, FR-013, FR-008).

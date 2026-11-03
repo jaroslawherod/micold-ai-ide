@@ -33,6 +33,7 @@ pub fn dialog<'a>(
         draft: state.settings.settings_draft.as_ref().map(|d| &d.daemon),
         legacy_default: state.daemon_rows().legacy_default,
         missing_cli: missing_cli_notice(state.session.availability.home()),
+        start_script: list.start_script_forced,
     };
     let title = match (draft.editing, draft.name.trim()) {
         (None, _) => "Add daemon".to_string(),

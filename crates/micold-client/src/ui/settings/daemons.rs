@@ -17,21 +17,37 @@ use crate::features::daemons::{
     Msg as DaemonsMsg, Opener, RowAction, Section, State, ViewModel,
 };
 use crate::features::daemons_kube::{AllowedKind, ContextList};
+use crate::features::daemons_start::StartSource;
 use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::kube::live::ContextEntry;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
     Button, Checkbox, FieldGroup, HostPicker, KeyValueList, RequiredLegend, Select, StageProgress,
-    Tag, TextField, TolerationList,
+    Tag, TextArea, TextField, TolerationList,
 };
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, section_body, Named, SECTION_GAP};
 use iced::widget::{column, row};
 use iced::{Element, Length};
+use micold_core::daemon_config::{OnFailure, RunPolicy};
 use micold_core::daemons::{DaemonId, DaemonState, DaemonView, ATTEMPTS_STOPPED};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::tokens::{spacing, Roles};
+
+const START_SOURCES: &[Named<StartSource>] = &[
+    Named(StartSource::None, "No start script"),
+    Named(StartSource::File, "A script file"),
+    Named(StartSource::Inline, "Written here"),
+];
+const ON_FAILURES: &[Named<OnFailure>] = &[
+    Named(OnFailure::Refuse, "Refuse to serve"),
+    Named(OnFailure::Warn, "Warn and serve"),
+];
+const RUN_POLICIES: &[Named<RunPolicy>] = &[
+    Named(RunPolicy::EveryStart, "At every start"),
+    Named(RunPolicy::OncePerContainer, "Once per container"),
+];
 
 const RUNTIMES: &[Named<DraftRuntime>] = &[
     Named(DraftRuntime::Container, "Container"),
@@ -266,6 +282,13 @@ fn daemon_row<'a>(
     for warning in &view.install_warnings {
         body = body.push(caution(warning.clone(), roles));
     }
+    // A changed start script runs only at the next start (#1533, US5.2).
+    if view.startup_restart {
+        body = body.push(note(
+            crate::features::daemons_start::RESTART_TO_APPLY,
+            roles,
+        ));
+    }
     // Errors found in the daemon's rendered configuration file (FR-013f).
     for error in &view.config_errors {
         body = body.push(caution(error.clone(), roles));
@@ -369,6 +392,10 @@ pub struct MachineFacts<'a> {
     pub legacy_default: Option<DaemonId>,
     /// What a session would not find in the running image (FR-023b), shown under *Image reference*.
     pub missing_cli: Option<String>,
+    /// Whether the Start script group is shown, in place of what the kind delivers
+    /// ([`micold_core::daemons::start_script_delivered`]): the showcase and the geometry gates
+    /// force it on while no kind delivers (#1533).
+    pub start_script: Option<bool>,
 }
 
 /// The daemon form: the dialog's body (feature 1092). Its Save daemon / Cancel live in the dialog.
@@ -576,7 +603,110 @@ pub(crate) fn form<'a>(
     for control in sections {
         fields = fields.push(control);
     }
+    let kind = crate::features::daemons_start::kind_of(draft.runtime);
+    if facts
+        .start_script
+        .unwrap_or_else(|| micold_core::daemons::start_script_delivered(kind))
+    {
+        fields = fields.push(container_fields::accordion(
+            Section::StartScript,
+            section_body(None, start_script_controls(draft, state, roles), roles),
+            open(Section::StartScript),
+            draft,
+            roles,
+        ));
+    }
     fields.into()
+}
+
+/// The Start script group's controls (#1533, FR-010): the script as a path or inline text, then
+/// shell, timeout, failure and run policies, the secret file and the export setting.
+fn start_script_controls<'a>(
+    draft: &'a Draft,
+    state: &'a State,
+    roles: Roles,
+) -> Vec<Element<'a, Message>> {
+    let start = &draft.start;
+    let mut controls: Vec<Element<'a, Message>> = vec![Select::new(
+        START_SOURCES,
+        Some(Named(start.source, name_of(START_SOURCES, start.source))),
+        |chosen: Named<StartSource>| Message::Daemons(DaemonsMsg::StartSourceChosen(chosen.0)),
+        roles,
+    )
+    .label("Script")
+    .into()];
+    match start.source {
+        StartSource::None => return controls,
+        StartSource::File => controls.push(
+            TextField::new("Path on this computer", &start.file, roles)
+                .label("Script file")
+                .on_input(|v| Message::Daemons(DaemonsMsg::StartFileEdited(v)))
+                .into(),
+        ),
+        StartSource::Inline => controls.push(
+            TextArea::new(start.editor.content(), roles)
+                .placeholder("#!/bin/sh")
+                .on_action(|a| Message::Daemons(DaemonsMsg::StartTextAction(EditorAction(a))))
+                .into(),
+        ),
+    }
+    if let Some(message) = error_of(state, "startup_script") {
+        controls.push(caution(message, roles));
+    }
+    controls.push(
+        TextField::new("Default shell", &start.shell, roles)
+            .label("Shell")
+            .on_input(|v| Message::Daemons(DaemonsMsg::StartShellEdited(v)))
+            .into(),
+    );
+    controls.push(
+        TextField::new("No timeout", &start.timeout, roles)
+            .label("Timeout (seconds)")
+            .supporting("From 1 to 3600")
+            .error(error_of(state, "startup_timeout"))
+            .on_input(|v| Message::Daemons(DaemonsMsg::StartTimeoutEdited(v)))
+            .into(),
+    );
+    controls.push(
+        Select::new(
+            ON_FAILURES,
+            Some(Named(
+                start.on_failure,
+                name_of(ON_FAILURES, start.on_failure),
+            )),
+            |chosen: Named<OnFailure>| Message::Daemons(DaemonsMsg::StartOnFailureChosen(chosen.0)),
+            roles,
+        )
+        .label("When the script fails")
+        .into(),
+    );
+    controls.push(
+        Select::new(
+            RUN_POLICIES,
+            Some(Named(start.run, name_of(RUN_POLICIES, start.run))),
+            |chosen: Named<RunPolicy>| Message::Daemons(DaemonsMsg::StartRunChosen(chosen.0)),
+            roles,
+        )
+        .label("Run")
+        .into(),
+    );
+    controls.push(
+        TextField::new("Not set", &start.env_file, roles)
+            .label("Secrets file")
+            .supporting("Path of a file of KEY=value lines; its values never enter the config file")
+            .on_input(|v| Message::Daemons(DaemonsMsg::StartEnvFileEdited(v)))
+            .into(),
+    );
+    controls.push(
+        Checkbox::new(
+            "Export the script's environment to sessions",
+            start.export_env,
+            roles,
+        )
+        .on_toggle(|v| Message::Daemons(DaemonsMsg::StartExportToggled(v)))
+        .into(),
+    );
+    controls
 }
 
 /// The connect-at-start checkbox, which closes the `Connection` section of every kind.
@@ -844,6 +974,7 @@ mod tests {
             stopped_reason: None,
             credential_lines: Vec::new(),
             config_errors: config_errors.iter().map(ToString::to_string).collect(),
+            startup_restart: false,
         }
     }
 

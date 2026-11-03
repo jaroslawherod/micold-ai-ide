@@ -158,6 +158,8 @@ pub struct Draft {
     pub clone_root: String,
     /// The daemon file's `auth.client_token_file` as typed; empty means the kind's default.
     pub client_token_file: String,
+    /// The Start script group (#1533); shown only for a kind whose script is delivered.
+    pub start: super::daemons_start::StartDraft,
     /// The host or `Host` alias (SSH runtime only, feature 489).
     pub ssh_host: String,
     /// The remote user; blank takes it from the SSH configuration (SSH runtime only).
@@ -412,6 +414,10 @@ pub enum Opener {
 /// What the Daemons feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
+    /// Shows (`Some(true)`) or hides the Start script group whatever the kind delivers, for the
+    /// showcase and the geometry gates while no kind delivers yet (#1533). `None` follows
+    /// [`micold_core::daemons::start_script_delivered`].
+    pub start_script_forced: Option<bool>,
     /// The open add/edit form.
     pub draft: Option<Draft>,
     /// The control that opened the form, so focus goes back to it when the form closes (feature
@@ -443,6 +449,8 @@ pub struct State {
     /// The AI CLIs whose install failed at each daemon's last start; they outlive the start so the
     /// connected row keeps saying so, and the next start clears them (feature 806, FR-012).
     install_warnings: BTreeMap<DaemonId, Vec<String>>,
+    /// The daemons whose start script or `[startup]` table changed since they started (#1533).
+    startup_restart: std::collections::BTreeSet<DaemonId>,
     /// The errors of each daemon's rendered configuration file at the last check; a daemon with
     /// an empty list was checked and is valid (#1525, FR-013f).
     config_errors: BTreeMap<DaemonId, Vec<String>>,
@@ -734,6 +742,14 @@ fn check_configs(state: &mut State, registry: &DaemonRegistry) {
 }
 
 impl State {
+    /// The sections of a form for `runtime`, with the Start script group as the form shows it.
+    pub fn sections_of(&self, runtime: DraftRuntime) -> &'static [Section] {
+        match self.start_script_forced {
+            Some(on) => Section::of_with(runtime, on),
+            None => Section::of(runtime),
+        }
+    }
+
     /// Whether daemon `id`'s configuration file has been checked.
     pub fn config_checked(&self, id: DaemonId) -> bool {
         self.config_errors.contains_key(&id)
@@ -804,6 +820,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .get(&entry.id)
                 .cloned()
                 .unwrap_or_default(),
+            startup_restart: state.startup_restart.contains(&entry.id),
             install_warnings: state
                 .install_warnings
                 .get(&entry.id)
@@ -990,6 +1007,7 @@ pub fn begin_add(state: &mut State) {
         data_dir: String::new(),
         clone_root: String::new(),
         client_token_file: String::new(),
+        start: Default::default(),
         kube: KubeDraft::new(&state.default_providers),
         kube_edited: false,
         ssh_host: String::new(),
@@ -1077,6 +1095,13 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         data_dir: path_text(&entry.file.data_dir),
         clone_root: path_text(&entry.file.clone_root),
         client_token_file: path_text(&entry.file.client_token_file),
+        start: super::daemons_start::StartDraft::new(
+            entry.file.startup.as_ref(),
+            crate::daemon_config_render::load_inline_script(
+                &micold_core::paths::data_local_dir().unwrap_or_default(),
+                id,
+            ),
+        ),
         ssh_host: ssh.0,
         ssh_user: ssh.1,
         ssh_port: ssh.2,
@@ -1425,10 +1450,24 @@ fn save_checked(
             .map(|e| e.file.clone())
             .unwrap_or_default(),
     );
+    let mut file = file;
+    let kind = super::daemons_start::kind_of(draft.runtime);
+    if micold_core::daemons::start_script_delivered(kind) {
+        file.startup = draft.start.settings()?;
+    }
     // `id` is the entry `probe` just added or edited, so this cannot fail.
     let _ = probe.set_file(id, file.clone());
     if !commit {
         return Ok(Vec::new());
+    }
+    if let (true, Some(text)) = (file.startup.is_some(), draft.start.inline_text()) {
+        let app_data = micold_core::paths::data_local_dir().unwrap_or_default();
+        crate::daemon_config_render::save_inline_script(&app_data, id, text).map_err(|e| {
+            FormError {
+                field: "startup_script",
+                message: format!("Couldn't save the script: {e}"),
+            }
+        })?;
     }
 
     match draft.editing {
@@ -2009,6 +2048,27 @@ pub enum Msg {
     CloneRootEdited(String),
     /// The file's client token path was typed in the form.
     ClientTokenFileEdited(String),
+    /// The Start script's source was chosen (#1533).
+    StartSourceChosen(super::daemons_start::StartSource),
+    /// The Start script's file path was typed.
+    StartFileEdited(String),
+    /// The inline script's editor was used.
+    StartTextAction(crate::app::EditorAction),
+    /// The Start script's shell was typed.
+    StartShellEdited(String),
+    /// The Start script's timeout was typed.
+    StartTimeoutEdited(String),
+    /// The failure policy was chosen.
+    StartOnFailureChosen(micold_core::daemon_config::OnFailure),
+    /// The run policy was chosen.
+    StartRunChosen(micold_core::daemon_config::RunPolicy),
+    /// The secret env file path was typed.
+    StartEnvFileEdited(String),
+    /// The export-environment box changed.
+    StartExportToggled(bool),
+    /// The daemon reported the restart-only keys that changed since it started
+    /// (`ConfigStatus.changed_restart_keys`); an empty list clears the notice (US5.2).
+    RestartKeysReported(DaemonId, Vec<String>),
     /// A Kubernetes start found its pod running with other settings (the fields that differ).
     KubeDrift(DaemonId, Vec<String>),
     /// Cancel the start of this Kubernetes daemon.
@@ -2172,7 +2232,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         }
         Msg::SectionToggled(section) => {
             // A press for a section the open form lacks (a stale message) changes nothing.
-            let kind = state.draft.as_ref().map(|d| Section::of(d.runtime));
+            let kind = state.draft.as_ref().map(|d| state.sections_of(d.runtime));
             if let Some(kind) = kind.filter(|k| k.contains(&section)) {
                 if !state.held_open(section) {
                     state.sections.toggle(section, kind.first().copied());
@@ -2328,6 +2388,24 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::DataDirEdited(v) => edit(state, &|d| d.data_dir = v.clone()),
         Msg::CloneRootEdited(v) => edit(state, &|d| d.clone_root = v.clone()),
         Msg::ClientTokenFileEdited(v) => edit(state, &|d| d.client_token_file = v.clone()),
+        Msg::StartSourceChosen(v) => edit(state, &|d| d.start.source = v),
+        Msg::StartFileEdited(v) => edit(state, &|d| d.start.file = v.clone()),
+        Msg::StartTextAction(action) => edit(state, &|d| {
+            d.start.text = d.start.editor.perform(&action);
+        }),
+        Msg::StartShellEdited(v) => edit(state, &|d| d.start.shell = v.clone()),
+        Msg::StartTimeoutEdited(v) => edit(state, &|d| d.start.timeout = v.clone()),
+        Msg::StartOnFailureChosen(v) => edit(state, &|d| d.start.on_failure = v),
+        Msg::StartRunChosen(v) => edit(state, &|d| d.start.run = v),
+        Msg::StartEnvFileEdited(v) => edit(state, &|d| d.start.env_file = v.clone()),
+        Msg::StartExportToggled(v) => edit(state, &|d| d.start.export_env = v),
+        Msg::RestartKeysReported(id, keys) => {
+            if super::daemons_start::startup_restart_pending(&keys) {
+                state.startup_restart.insert(id);
+            } else {
+                state.startup_restart.remove(&id);
+            }
+        }
         Msg::Started(id) => {
             start(state, model, id);
         }
