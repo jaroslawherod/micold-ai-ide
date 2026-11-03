@@ -1319,13 +1319,16 @@ async fn ssh_attempt(
         target,
         std::time::Duration::from_secs(u64::from(timeout_secs)),
     );
-    // A configuration that does not render is not delivered; the daemon starts with its defaults.
-    provision_target.config = daemon_config_render::prepare(settings, Kind::Ssh)
-        .ok()
-        .map(|text| ConfigDelivery {
-            config: text.into_bytes(),
-            secrets: named_secrets(settings),
-        });
+    // A configuration that does not render stops the attempt: the daemon would otherwise start
+    // without the settings the user chose.
+    let text = daemon_config_render::prepare(settings, Kind::Ssh).map_err(|errors| {
+        let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
+        format!("the daemon configuration is invalid: {}", joined.join("; "))
+    })?;
+    provision_target.config = Some(ConfigDelivery {
+        config: text.into_bytes(),
+        secrets: named_secrets(settings),
+    });
     let provisioned = ssh_run(host, &provision_target, &opts, &CancelToken::new(), sink).await;
     provisioned.map(|p| p.connected).map_err(|failure| {
         failure.reason(&ReasonContext {
