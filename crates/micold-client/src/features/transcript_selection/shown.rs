@@ -491,3 +491,14 @@ mod summary_tests {
         assert!(e.title.contains("error") && e.failed);
     }
 }
+
+#[cfg(test)]
+mod hidden_text_tests {
+    use super::hidden_text;
+
+    #[test]
+    fn the_notice_counts_in_the_singular_and_the_plural() {
+        assert_eq!(hidden_text(1), "1 event hidden");
+        assert_eq!(hidden_text(2), "2 events hidden");
+    }
+}

@@ -178,11 +178,20 @@ pub fn view_full<'a, M: Clone + 'a>(
         .map(on_transcript),
     )
     .width(Length::Fill);
+    // The toggle takes a row of its own under the figures: beside them it squeezes the meter, the
+    // totals and the running count (whose row wraps) out of the narrowest pane.
+    let toggle_row = container(raw_events_toggle(ctx).map(on_transcript))
+        .width(Length::Fill)
+        .align_x(Alignment::End);
     let bar = container(
-        iced::widget::row![session_bar, raw_events_toggle(ctx).map(on_transcript)]
-            .push(trailing)
-            .spacing(spacing::SM)
-            .align_y(Alignment::Start),
+        column![
+            iced::widget::row![session_bar]
+                .push(trailing)
+                .spacing(spacing::SM)
+                .align_y(Alignment::Start),
+            toggle_row
+        ]
+        .spacing(spacing::XS),
     )
     .padding(iced::Padding {
         top: spacing::SM,

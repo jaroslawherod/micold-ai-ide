@@ -47,7 +47,7 @@ in the bar above the transcript to see them as the summary lines described above
 
 ## The hidden-events notice
 
-When the switch is off and some entries are hidden, a line at the end of the transcript says how
+When the switch is off and some entries are hidden, a line at the start of the transcript says how
 many ("3 events hidden"), with a **Show** button that turns the switch on. A transcript that holds
 only hidden entries shows this notice instead of an empty-session message.
 

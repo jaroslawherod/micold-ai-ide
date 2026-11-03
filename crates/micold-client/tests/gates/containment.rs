@@ -277,9 +277,9 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/0/1/0";
 /// that padding, so a body that grew past it still fires. #943 put the session bar in a row with
 /// **Open in terminal** (`0/0` after the bar's container).
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/2/0/0/0/0/0/0/0/1/1/0",
-    "0/0/0/1/1/2/0/0/0/1/0/0/4/0/0/1/0",
-    "0/0/0/1/1/2/0/0/0/1/0/0/4/1/0/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/2/0/0/0/0/0/0/0/0/1/1/0",
+    "0/0/0/1/1/2/0/0/0/1/0/0/1/0/0/1/0",
+    "0/0/0/1/1/2/0/0/0/1/0/0/1/1/0/0/1/0/0/1/0/1/0",
 ];
 
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).

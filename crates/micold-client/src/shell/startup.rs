@@ -210,6 +210,8 @@ fn restore_from_disk(
 fn restore_folds(core: &mut State, settings: &Settings) {
     core.sidebar.folded = settings.folded_origins.clone();
     core.sidebar.filter_open = settings.filter_open;
+    // #1664, SC-004: the transcript's "Show raw events" choice, as it was left.
+    core.settings.show_raw_events = settings.show_raw_events;
     core.attach.offer.dismissed = settings.dismissed_offers.clone();
 }
 
@@ -263,7 +265,6 @@ fn boot() -> (App, Task<Message>) {
     core.settings.reduce_motion = loaded.settings.reduce_motion;
     crate::shell::changes::suggestion_chips_in_force(&mut core, loaded.settings.suggestion_chips);
     core.settings.review_single_keys = loaded.settings.review_single_keys;
-    core.settings.show_raw_events = loaded.settings.show_raw_events;
     // Feature 551, FR-017: the folds the user left; an origin never folded is expanded.
     restore_folds(&mut core, &loaded.settings);
     let scrollback_lines = loaded.settings.scrollback_lines;
@@ -798,6 +799,20 @@ mod tests {
         };
         restore_folds(&mut core, &settings);
         assert!(core.sidebar.filter_open);
+    }
+
+    /// #1664, SC-004: the "Show raw events" choice is restored at launch.
+    #[test]
+    fn the_raw_events_choice_is_restored_at_launch() {
+        let mut core = State::default();
+        restore_folds(&mut core, &Settings::default());
+        assert!(!core.settings.show_raw_events);
+        let settings = Settings {
+            show_raw_events: true,
+            ..Settings::default()
+        };
+        restore_folds(&mut core, &settings);
+        assert!(core.settings.show_raw_events);
     }
 
     /// The window has a narrowest supported size, and it is the one the documentation names.
