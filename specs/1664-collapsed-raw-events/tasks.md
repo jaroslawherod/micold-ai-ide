@@ -103,7 +103,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T008
 - **Deliverable**: raw, session-start, footer and orphan-result entries show as one folded summary line each that expands to its detail, and copy matches what is drawn.
 - **Satisfies**: US1 acceptance scenarios 1–4; FR-001, FR-002, FR-003, FR-004, FR-012; SC-001 (collapsed), SC-003
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test transcript_entry_view --test transcript_selection_parity --test transcript_follow_layout`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test main -- transcript_entry_view transcript_selection_parity transcript_follow_layout`
 - **Depends on**: —
 - **Tier**: full
 
