@@ -8,6 +8,13 @@
 # As root on Linux, the few permission-refusal tests (root_only below) run as a normal user through
 # scripts/run-unprivileged.sh, since root reads and removes through any permission bits. Set
 # MICOLD_GATE_AS_ROOT=1 to run everything as root anyway.
+#
+# Issue #1649: `cargo nextest run` replaces `cargo test` for the workspace run (mise.toml pins
+# cargo-nextest; see its comment there). nextest does not run doctests at all, so `cargo test --doc
+# --workspace` still runs them on its own -- dropping it would silently stop testing every `///
+# ```rust` example. The 591-file test-binary consolidation nextest was evaluated for (issue #1635)
+# landed separately and first as issue #1631 (docs/development/shared-build.md), so nextest already
+# runs over the ~150 consolidated executables, not the original 591.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -45,8 +52,15 @@ fi
 scripts/build-lock.sh bash -c '
   cargo fmt --all -- --check &&
   cargo clippy -p micold-core --all-targets -- -D warnings &&
-  cargo clippy --workspace --all-targets -- -D warnings &&
-  cargo test --workspace -- "$@"' gate "${skip[@]}"
+  cargo clippy --workspace --all-targets -- -D warnings || exit 1
+  # Both run even if one fails, so a single failing test does not hide a doctest failure (or vice
+  # versa) behind a `&&` short-circuit (issue #1649 review finding). --no-fail-fast: unlike
+  # `cargo test`, nextest stops the whole run after the first failing test by default, which would
+  # hide every later failure; `cargo test --workspace` never did that, so this keeps the gate
+  # reporting the same failures it always did.
+  nextest_rc=0; cargo nextest run --workspace --no-fail-fast -- "$@" || nextest_rc=$?
+  doc_rc=0; cargo test --doc --workspace || doc_rc=$?
+  exit $((nextest_rc == 0 ? doc_rc : nextest_rc))' gate "${skip[@]}"
 
 if [ "$split" = 1 ]; then
 	host=$(rustc -vV | sed -n 's/^host: //p')

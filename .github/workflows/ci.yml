@@ -270,6 +270,24 @@ jobs:
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
+      # Issue #1649: the "Test (full workspace)" step below runs with nextest, matching
+      # `mise run gate`/`mise run test` (docs/development/shared-build.md, mise.toml's
+      # `github:nextest-rs/nextest` tool comment). Downloaded straight from the project's pinned
+      # GitHub release and checksummed, rather than through a third-party action, so this trusts
+      # only GitHub's own release host for a binary CI would otherwise need ~4 minutes to build
+      # from source with `cargo install cargo-nextest --locked`.
+      - name: Install cargo-nextest
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          ver=cargo-nextest-0.9.150
+          asset="$ver-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSLO "https://github.com/nextest-rs/nextest/releases/download/$ver/$asset"
+          echo "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f  $asset" | sha256sum -c -
+          tar xzf "$asset" cargo-nextest
+          # /usr/local/bin is root-owned on the runner image, like the kind/kubectl and lychee
+          # installs elsewhere in this workflow.
+          sudo install -m 0755 cargo-nextest /usr/local/bin/
       # Principle I: the render-free core compiles and passes with no iced/PTY (FR-040),
       # verified on every platform.
       - name: Test (render-free core, no GUI)
@@ -513,10 +531,20 @@ jobs:
             }
           }
           if ($failed) { exit 1 }
-      # Run the client + daemon test suites where the iced system deps are present.
+      # Run the client + daemon test suites where the iced system deps are present. Issue #1649:
+      # nextest does not run doctests at all, so `cargo test --doc` still runs them on its own --
+      # dropping it would silently stop testing every `/// ```rust` example.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
-        run: cargo test --workspace
+        shell: bash
+        run: |
+          # Both run even if one fails, so a single failing test does not hide a doctest failure
+          # (or vice versa) behind set -e / shell && (issue #1649 review finding). --no-fail-fast:
+          # unlike `cargo test`, nextest stops the whole run after the first failing test by
+          # default, which would hide every later failure.
+          nextest_rc=0; cargo nextest run --workspace --no-fail-fast || nextest_rc=$?
+          doc_rc=0; cargo test --doc --workspace || doc_rc=$?
+          exit $((nextest_rc == 0 ? doc_rc : nextest_rc))
       # Feature 021's frame budget (SC-002) is a release-build number, so its measurements are
       # ignored in the debug suite above and run here instead (BUG-003).
       - name: Test (type-ahead frame budget, release)

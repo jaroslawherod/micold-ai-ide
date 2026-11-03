@@ -49,10 +49,13 @@ the crate and test name you are working on (e.g. `mise run test-core`, or
 run gate`, or `mise run test`) for before a push.
 
 `cargo nextest` was evaluated for `mise run test` (issue #1635): it ran `micold-core`'s 4656 tests
-in parallel in 40.6s with no failures, but it still links one executable per `tests/*.rs` file like
-`cargo test` does, so it would not by itself cut the linking cost above. Its value is as a safer
-test *runner* for a later consolidation of those 591 files into fewer binaries; adopting it in
-`mise run test`/`mise run gate` is deferred to that follow-up.
+in parallel in 40.6s with no failures. `mise run test` and `mise run gate` now run the workspace
+suite with it (issue #1649; `mise.toml`'s `github:nextest-rs/nextest` tool comment and
+`scripts/gate.sh` explain the pin and why doctests still run separately under plain `cargo test
+--doc`, which nextest does not run at all). The consolidation below (issue #1631) landed
+independently and first, so nextest already runs over the consolidated ~150 executables below, not
+the original 591 — adopting nextest is no longer gated on it. nextest's one-process-per-test
+isolation is still a safer runner for any further consolidation.
 
 ## Few test executables
 
