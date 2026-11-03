@@ -236,8 +236,9 @@ largest part of those legs). They run in full when:
 - the pull request carries the `full-ci` label (`classify change` exposes it as the `full_ci`
   output, and the two steps read that one output).
 
-Ubuntu is unchanged: `cargo test --workspace` runs the whole suite, daemon included, on every
-code-affecting pull request, so the platform-independent daemon logic is still gated before merge.
+Ubuntu is unchanged: `cargo nextest run --workspace` (plus `cargo test --doc --workspace`, which
+nextest does not run; issue #1649) runs the whole suite, daemon included, on every code-affecting
+pull request, so the platform-independent daemon logic is still gated before merge.
 The targeted `Test (daemon Windows process supervision)` step also stays on every pull request.
 
 **The accepted cost:** a break that only macOS or Windows sees (a `cfg(unix)` arm, a path
@@ -267,7 +268,7 @@ keeps what pull requests may skip:
 | Job on a proven push | |
 |---|---|
 | `fmt + clippy`, `assertion freeze` | **skipped** (lint and the shell suites ran on the PR) |
-| `build + test (ubuntu-latest)` | **skipped** (its `cargo test --workspace` ran on the PR) |
+| `build + test (ubuntu-latest)` | **skipped** (its `cargo nextest run --workspace` ran on the PR) |
 | `build + test (macos-latest)`, `(windows-latest)` | run, with the full daemon suites |
 | `static Linux daemons` | runs (the macOS, Windows and ARM64 packaging steps need its artifact) |
 | `package + smoke (windows-11-arm)`, sandbox, sshd | run |

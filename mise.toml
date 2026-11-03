@@ -18,6 +18,13 @@ node = "24"
 # runner, where apt is the shorter path.
 ffmpeg = "8"
 
+# `mise run test` and `mise run gate` run the workspace suite with nextest (issue #1649, evaluated
+# in #1635): it ran micold-core's 4656 tests in 40.6s, in parallel, using the same test binaries
+# `cargo test` builds. A pinned binary from the project's own GitHub releases, through mise's
+# `github` backend (it auto-matches the release asset for each CI runner's OS/arch), so a fresh
+# worktree and CI get it without the ~4 minute `cargo install cargo-nextest --locked` source build.
+"github:nextest-rs/nextest" = "cargo-nextest-0.9.150"
+
 # Every cargo task below goes through scripts/build-lock.sh, which points cargo
 # at one shared target directory beside the main checkout instead of a ~30 GB
 # target/ per worktree.
@@ -66,8 +73,15 @@ description = "Check the whole workspace without linking (fast edit loop) [build
 run = "{{config_root}}/scripts/build-lock.sh cargo check --workspace"
 
 [tasks.test]
-description = "Test the whole workspace (core + client + daemon), matching CI [build-locked]"
-run = "{{config_root}}/scripts/build-lock.sh cargo test --workspace"
+description = "Test the whole workspace (core + client + daemon) with nextest, matching CI [build-locked]"
+# nextest does not run doctests (issue #1649); `cargo test --doc` runs them on its own so none are
+# silently skipped. See the `github:nextest-rs/nextest` tool comment above and scripts/gate.sh.
+run = """
+{{config_root}}/scripts/build-lock.sh bash -c '
+  nextest_rc=0; cargo nextest run --workspace --no-fail-fast || nextest_rc=$?
+  doc_rc=0; cargo test --doc --workspace || doc_rc=$?
+  exit $((nextest_rc == 0 ? doc_rc : nextest_rc))'
+"""
 
 [tasks.test-core]
 description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
