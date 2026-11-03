@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1656 | Design (milestone for Issue 5) | MERGED | 86a9e5d9df604be5849f8cb7a8db9e9ea487d996 |
 | #1659 | Re-cut M1 into M1a/M1b | MERGED | 1f4e769c01901d65377a3cafc8dee0ca7606009b |
 | #1660 | M1a (host delivery) | MERGED | 974af5dc9804ffe266f8fd9e1fd70f22f50eefdf |
+| #1670 | M1b (SSH delivery) | OPEN | — |
 
 ## Milestones
 
