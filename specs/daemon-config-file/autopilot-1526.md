@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | tasks | Split Issue 5? | No: 6 tasks, one story (host + SSH delivery share the write-if-changed path and FR-005/FR-029), rule 3 of milestones.md | agent-resolved | milestones.md rule 3 |
 | D3 | tasks | Include T080a? | Yes: Issue 13's ledger (#1534, D2) already moved it here because it needs T027's delivery | agent-resolved | specs/daemon-config-file/autopilot-1534.md |
 | D4 | tasks | Tier | full: touches process spawn, SSH provisioning and file permissions (security-relevant); M1 is always full | agent-resolved | milestone-format.md |
+| D5 | implement | Generic secret copy (a) or `client_token_file`-only (b)? | (b): ship the copy-step plumbing against `client_token_file` only; note the rest as a follow-up for Issues 8/9/11/16 | agent-resolved | FR-005 ("deliver it, with the secret files it names, by the kind's own means" — "it names" ties the secret set to what the renderer already names, not a generic reflective walk); contracts/daemon-config.md §3.2 R3/R5; `daemon_config_render.rs:41-103`: `DaemonSettings` has exactly one secret-shaped field (`client_token_file`), and `from_entry`'s `host()` closure (used for both `Kind::Host` and `Kind::Ssh`) never sets it — only `sandbox()` does. So M1's real secret set is empty for host/SSH today; the generic mechanism is exercised by a test that constructs a `DaemonSettings` with `client_token_file` set directly, not through the real `from_entry` wiring |
 
 ## Review rounds
 
@@ -43,115 +44,208 @@ None.
 
 ## Handover
 
-No code written yet; this unit spent its budget on architecture research (it hit the context cap
-before writing any test or implementation). Next unit: pick up at `implement.md` step 1
-(`speckit-implement`/`speckit-tdd-run`, no prior cycles logged in `tdd/cycle-log.md` for this
-milestone — `tdd/test-list.md` only has behaviors U1-U20/A1-A2 from Issue 2/3, none for M1; add new
-rows there for T025/T026/T080a before running the loop, and mark T025/T026/T027/T028/T080a's lines
-in tasks.md with the new behavior ids `[U21]` etc. so Phase 6 can tick them).
+Still no code written (two units in a row hit the context cap during research, not implementation)
+— **but the design is now fully settled** below; the next unit should go straight to writing tests,
+no more architecture digging. Pick up at `implement.md` step 1 (`speckit-implement`/
+`speckit-tdd-run`); `tdd/test-list.md` only has behaviors U1-U20/A1-A2 from Issue 2/3, none for M1 —
+add new rows for T025/T026/T080a before running the loop, and mark T025/T026/T027/T028/T080a's lines
+in tasks.md with the new behavior ids (`[U21]` etc.) so Phase 6 can tick them. Decision D5 above
+resolves the one open design question from the last handover.
 
 **Scope narrower than it looks**: M1 only delivers the keys `render()` already covers (`[daemon]`,
 `[listen]`, `[auth]`, `[storage]`, `[ssh]`, `[[projects]]` — contracts/daemon-config.md §3.1/§3.2).
 The `[git]`/`[[github.tokens]]`/`[ai]`/`[session]`/`[startup]` tables are Issues 8-12, not this
 milestone — do not expand `render()`'s key coverage here.
 
-**T025/T027 — host delivery** (write-if-changed before spawn, mode 0600, no `MICOLD_*` env):
-- `spawn_detached_daemon` (`crates/micold-core/src/spawn.rs:73`) is called only from
-  `connect_or_spawn` (`crates/micold-core/src/connect.rs:514,528`), itself called from
-  `crates/micold-client/src/daemon.rs:694` at `(Dial::Host, Some(endpoint)) =>
-  connect_or_spawn(...)` inside `connect_and_pump` (`daemon.rs:681`). `connect.rs` is core and has
-  no access to `micold-client`'s `daemon_config_render` (the render lives in the client crate per
-  Issue 4) — so the write-if-changed call must happen in `daemon.rs` just before that
-  `connect_or_spawn` call, not inside core.
-- Problem to solve: `Dial::Host` (`daemon.rs:191`) carries no fields today, so the config to render
-  is not available at the call site. `ActorSpec`/`Dial` is the actor's **subscription identity**
-  (`#[derive(Hash)]`, `daemon.rs:326`) — adding the rendered settings (or a hash of them) to
-  `Dial::Host` restarts the actor when Settings change, which looks like the right trigger for a
-  fresh write + reconnect, but confirm against spec.md/FR-029 before committing to it. Plumb from
-  `actor_specs_answered` (`daemon.rs:392`, the `DaemonRuntime::Host => Dial::Host` arm at line 416)
-  using `DaemonSettings::from_entry(entry)` (`daemon_config_render.rs:91`) — `entry: &DaemonEntry`
-  is already in scope there.
-- Write-if-changed: render via `daemon_config_render::prepare(settings, Kind::Host)`
-  (`daemon_config_render.rs:155`), compare against the file at `<data_dir>/daemon.toml` (read
-  existing bytes, skip the write when equal), else write + `set_permissions(0o600)` (unix; Windows
-  has no mode bit, skip or no-op per the repo's existing `cfg(windows)` pattern — check
-  `crates/micold-core/src/spawn.rs` for the existing `cfg(unix)`/`cfg(windows)` split style).
-  `data_dir` comes from the same source `state_dir`/`legacy_default` resolution `actor_specs`
-  already does (`daemon.rs:375` `state_dir: &Path` param) — likely the same directory
-  `spawn_detached_daemon`'s daemon reads by default; confirm against `crates/micold-core/src/paths.rs`.
-- "No `MICOLD_*` env": `spawn_detached_daemon` (`spawn.rs:73`) already builds a bare `Command` with
-  no explicit env vars added (inherits parent env only) — grep the test fixture / CI env for
-  `MICOLD_*` vars that might leak from the *client's own* process env into the spawned child
-  (`Command::env_clear()` may be needed before `spawn()` if inheritance is the actual risk T025
-  tests for). Read `spec.md`/FR-005 "by the kind's own means" before assuming inherited env is fine.
-- New test file `crates/micold-client/tests/daemon_config_delivery_host.rs`; exemplar
-  `crates/micold-client/tests/daemon_config_render.rs` (T078a) for style; helper
-  `crates/micold-client/tests/support/mod.rs`.
+**Confirmed facts, do not re-derive**:
+- `micold_core::paths::data_dir()` is the *exact* directory the daemon itself resolves by default
+  for the host config (`crates/micold-daemon/src/config_load.rs:36-38`,
+  `DefaultLocations::system(data_dir)`), so the client writes there directly — no `state_dir`
+  parameter threading needed for the host path.
+- `Dial::Host` / `Dial::Ssh` (`daemon.rs:191`/`203`) are matched in only ~4-5 places total in
+  `daemon.rs` (grepped across the whole crate) — adding fields to each is a contained change, not a
+  sweeping one. Sites: `actor_specs_answered`'s `DaemonRuntime::Host =>`/`Ssh(s) =>` arms (~416,
+  441), `actor()`'s endpoint-resolution match (~583), `connect_and_pump`'s two `Dial::Host` arms
+  (~693, 696) and one `Dial::Ssh` arm (~700), plus one unit test at ~2005 that destructures
+  `Dial::Ssh { target }` (needs `, ..` added) and one at ~2244 (already uses `Dial::Ssh { .. }`,
+  untouched).
+- `DaemonEntry` (`micold-core/src/daemons.rs:171`) has **no `projects` field at all** —
+  `DaemonSettings.projects` is always empty out of `from_entry`; `add_runtime_project` only mutates
+  an in-memory `DaemonSettings`. T080a therefore needs a *new* place to hold runtime-added project
+  paths across the app's run (see its own section below) — this was not obvious going in.
+- `run_with_relay` (`provision/mod.rs:~592`) is the **shared** sequence for both `Ownership::UserHost`
+  (SSH host, this issue) and `Ownership::AppOwned` (container-over-SSH, a different issue) targets.
+  Any new delivery step must no-op when its new `ProvisionTarget` field is `None`, which it always
+  is for the container-over-SSH path — load-bearing, not cosmetic.
+- `Step` (`provision/failure.rs:15`) is shared with feature 489's provisioning UI row list and
+  `contracts/provisioning.md` (a different feature) — **do not add a variant** for this feature's
+  config/secret copy; fold it into the existing `Step::Copy` (it still says "copying the daemon",
+  which stays true enough — the config rides along).
+- `ProvisionTarget::user_host`/`owned_with` (`provision/mod.rs:142-153`, `~800`) already set
+  `env: Vec::new()` and have done so since the field was introduced (checked full file history) —
+  there never was a non-empty SSH env list for user hosts to "drop"; T028's "drop the env list" is a
+  **constraint to honor** (never add `MICOLD_*` env to reach a user host), not removal work. Say so
+  in the PR body.
+
+**T025/T027 — host delivery** (write-if-changed before spawn, mode 0600, no added `MICOLD_*` env):
+1. Add `Eq` to `DaemonSettings`'s derive (`daemon_config_render.rs:40`, currently
+   `#[derive(Debug, Clone, PartialEq)]`) — every field is already `Eq` (`ProjectSetting` already
+   derives it at line 32; `Listen`/`IdleStopSetting` in `micold_core::daemon_config` are `Eq` too),
+   so this is a one-line, risk-free change.
+2. New module `crates/micold-client/src/daemon_config_delivery.rs` (wire into `lib.rs`'s `pub mod`
+   list beside `daemon_config_render`): `pub fn deliver_host(settings: &DaemonSettings, data_dir:
+   &Path) -> io::Result<bool>` — `daemon_config_render::prepare(settings, Kind::Host)` (map its
+   `Vec<ConfigError>` to an `io::Error` via `ConfigError`'s existing `Display`), then a private
+   `write_if_changed(path, bytes) -> io::Result<bool>`: `std::fs::read(path)` and compare, skip if
+   equal, else `create_dir_all` the parent, `fs::write`, then `set_permissions(0o600)` behind
+   `#[cfg(unix)]` (no-op `#[cfg(windows)]`, matching `spawn.rs`'s existing split style). Returns
+   whether it wrote.
+3. In `daemon.rs`, add near the `Dial` enum:
+   ```rust
+   pub struct HostDial { pub settings: DaemonSettings, pub data_dir: Option<PathBuf> }
+   // #[derive(Debug, Clone, PartialEq, Eq)] — needs DaemonSettings: Eq (step 1)
+   impl Hash for HostDial { // hash the rendered bytes, DaemonSettings itself is not Hash
+       fn hash<H: Hasher>(&self, state: &mut H) {
+           daemon_config_render::render(&self.settings, Kind::Host).hash(state);
+           self.data_dir.hash(state);
+       }
+   }
+   ```
+   (same idiom as the existing `KubeDial`/`ContainerBringUp` wrappers a few lines below it, which
+   also hash a derived string because their payload isn't `Hash`). Change `Dial::Host` →
+   `Dial::Host(HostDial)`.
+4. `actor_specs_answered`'s Host arm (~416): `DaemonRuntime::Host => Dial::Host(HostDial {
+   settings: DaemonSettings::from_entry(entry)?.0, data_dir: micold_core::paths::data_dir() })`.
+5. `actor()`'s match (~583): `Dial::Host(_) => match endpoint::resolve() { ... }` (fields unused
+   here; only which variant matters).
+6. `connect_and_pump`'s two arms (~693, 696): on `(Dial::Host(host), Some(endpoint))`, call
+   `crate::daemon_config_delivery::deliver_host(&host.settings, dir)` for
+   `host.data_dir.as_deref()` (an `io::Error::new(NotFound, ...)` when `data_dir` is `None`, same
+   style as the existing `(Dial::Host, None) => Err(...)` arm) **before** awaiting
+   `connect_or_spawn`; propagate a write error as `Err(err)` (the `attempt` variable's type is
+   `io::Result<Connected>`, confirmed by reading the whole match and how `attempt` is consumed right
+   after it — every arm already funnels into that one type).
+7. New test file `crates/micold-client/tests/daemon_config_delivery_host.rs`; wire it into
+   `crates/micold-client/tests/main.rs`'s `mod` list, alphabetically between `daemon_adopt_on_restart`
+   (line 61) and `daemon_config_render` (line 62) — tests here are modules of one linked binary now
+   (#1631), not separate targets; `every_test_file_is_wired` enforces this. Cases:
+   - write-if-changed: build a `DaemonSettings` (reuse/extend the `settings()`/fixtures helper at
+     `tests/support/daemon_config_fixtures.rs`), a tempdir as `data_dir`; first `deliver_host` call
+     → `Ok(true)`, file exists, bytes equal `daemon_config_render::prepare(&settings,
+     Kind::Host).unwrap()`, mode `0600` (unix: `fs::metadata(..).permissions().mode() & 0o777`);
+     second call, same settings → `Ok(false)`, file untouched (check mtime or just re-assert bytes).
+   - a settings change (e.g. `settings.add_runtime_project(...)`) → `Ok(true)` again, new bytes.
+   - a `#[cfg(unix)]` env regression test: set `MICOLD_DAEMON_BIN` to a tiny `sh` script (write one
+     to the tempdir) that does `env > "$SOME_OUT_PATH"`, set `SOME_OUT_PATH` (a test-chosen env var
+     name, inherited — that's fine, it's not something the *client* adds) to a tempfile path, call
+     `micold_core::spawn::spawn_detached_daemon()`, poll (bounded) for the output file to appear,
+     then assert the keys in that file equal `std::env::vars()`'s keys of the test process **before**
+     the call (i.e., nothing was added) — proves `spawn_detached_daemon` adds no env, which is
+     already true in `spawn.rs` today (a bare `Command::new` with no `.env()` calls); this is a
+     regression guard, not new production code.
 
 **T026/T028 — SSH delivery** (copy `daemon.toml` + named secrets to `~/.micold/remote/`, rotated
-token re-copies only that file; "drop the SSH env list for user hosts"):
-- Finding: `ProvisionTarget::user_host` (`crates/micold-core/src/provision/mod.rs:142-153`, the
-  exact lines the task cites) **already** sets `env: Vec::new()` — has done so since the `env`
-  field was introduced (checked full git history of the file, every commit touching it adds the
-  field and the empty value together). There never was a non-empty env list for user hosts to
-  "drop". Read this as a **constraint to honor while implementing T028** (never add a `MICOLD_*`
-  env var to carry config to a user host — deliver only via the file), not as removal work; note
-  this in the PR body so a reviewer does not look for a diff that is not there.
-  `bridge_with_env`/`bridge` (`crates/micold-core/src/ssh/argv.rs:320-346`) is the mechanism that
-  would carry such env (used today only for the container-over-SSH path's `MICOLD_IDLE_STOP`,
-  `daemon.rs:1283` `container_env`) — confirm it is never reached for `Dial::Ssh`.
-  `ssh_attempt` (`daemon.rs:1230`, called from `daemon.rs:702`) is the user-host SSH connect path;
-  the config copy belongs before/alongside its `ssh_run(...)` call (`daemon.rs:1241`), analogous to
-  how `ensure_build` (`provision/mod.rs:341`) copies the daemon binary during `ssh_run`'s sequence.
-- The binary copy's shell idiom is the pattern to copy from: `argv::copy` (`ssh/argv.rs:281-288`)
-  builds `sh -c 'umask 077; p="$dir/.part.$$"; mkdir -p "$dir" && cat > "$p" && chmod 700 "$p" && mv
-  "$p" ...'`, run via `host.run(cmd, bytes, bound, progress)` (`provision/mod.rs:389`, the
-  `SshHost`/`SshRunner` trait, `provision.rs:71`). A new `argv::copy_config`-style helper (or a
-  generalized `copy_file` taking the remote path and mode) writing to
-  `~/.micold/remote/daemon.toml` (`0600`, directory `~/.micold/remote` presumably already `0700`
-  from the existing build copy) and one per named secret under
-  `~/.micold/remote/secrets/<name>` (dir `0700`, file `0600`) is the shape to build.
-- **Open design question, not yet resolved — read `data-model.md` and `research.md` line 299
-  before coding**: M1's `DaemonSettings` (`daemon_config_render.rs:41`) has exactly one secret-
-  shaped field, `client_token_file: Option<PathBuf>` (contracts/daemon-config.md marks it
-  `(secret)`), and it is only ever set for sandbox kinds (`SANDBOX_TOKEN` in `from_entry`'s
-  `sandbox()` closure) — **never for `Kind::Host`/`Kind::Ssh` today**. So M1's actual host/SSH
-  secret set may be empty in practice, and "the named secrets" in the task/milestone text is
-  infrastructure for Issues 8/9/11/16 (github tokens, AI CLI secrets) to plug into later, not
-  something with content yet. Two ways to resolve, pick by what the tests at T026 actually assert:
-  (a) build a generic "copy every `SecretPath`-shaped field the *parsed* `micold_core::daemon_config::DaemonConfig`
-  (`daemon_config/mod.rs:37`, `SecretPath` in `daemon_config/secret.rs:11`) resolves from the
-  rendered text" — future-proof, more code now; or (b) ship the copy-step plumbing against
-  `client_token_file` only (today's one secret field) and note the rest as a follow-up when Issues
-  8/9/11/16 add fields. (b) is probably the right scope for a `low`-effort issue; confirm against
-  spec.md's FR-005/FR-029 wording for Issue 5 before choosing.
-- "A rotated token re-copies only that file": requires per-file content/hash tracking (likely a
-  local sidecar, e.g. a small `BTreeMap<name, hash>` persisted beside the keys the
-  `DaemonKeys`/`attempt::AttemptLedger` machinery already tracks under `state_dir`/`keys_dir`
-  per-daemon) — look at how `probe.have` (`provision/mod.rs:360`, skips the binary copy when
-  already present) short-circuits for the binary, and mirror that per-secret rather than
-  per-daemon.
-- New test; task text says "the provisioning copy step" — likely a new integration test in
-  `crates/micold-core/tests/` (the T026 line says `provision/mod.rs`, not a client test), following
-  the existing test helpers at `provision/mod.rs:780-830` (`user_target`, fake `SshHost`).
+token re-copies only that file):
+1. `ssh/argv.rs`: add `pub const REMOTE_CONFIG: &str = "$HOME/.micold/remote/daemon.toml";` and
+   `pub fn remote_secret_path(name: &str) -> String { format!("$HOME/.micold/remote/secrets/{name}")
+   }`, plus:
+   ```rust
+   /// Writes stdin to `remote_path` (mode octal) only when the file's current sha256 differs from
+   /// `hash`: the remote shell itself decides, so a rotated secret re-copies only itself with no
+   /// local cache (research D10's write-if-changed, done server-side for the copy path).
+   pub fn copy_if_changed(reach: &Reach, platform: ClientPlatform, timeout: u32, remote_path: &str,
+       mode: u32, hash: &str) -> SshCommand {
+       let remote = format!(
+           "sh -c 'd=$(dirname \"{remote_path}\"); mkdir -p \"$d\" 2>/dev/null; \
+            cur=$(sha256sum \"{remote_path}\" 2>/dev/null | cut -d\" \" -f1); \
+            if [ \"$cur\" = \"{hash}\" ]; then cat >/dev/null; else \
+            umask 077; p=\"$d/.part.$$\"; cat > \"$p\" && chmod {mode:o} \"$p\" && mv \"$p\" \
+            \"{remote_path}\" || {{ rm -f \"$p\"; exit 1; }}; fi'"
+       );
+       command(reach, platform, timeout, &remote, None)
+   }
+   ```
+   (`hash` is always our own `sha256_hex` hex output — safe to interpolate; `remote_path` is always
+   one we construct, never user text). Mirrors `copy`'s `.part.$$` idiom (`ssh/argv.rs:281-288`).
+2. `provision/mod.rs`: add `pub struct ConfigDelivery { pub config: Vec<u8>, pub secrets:
+   Vec<(String, Vec<u8>)> }` and a field `pub config: Option<ConfigDelivery>` on `ProvisionTarget`
+   (`None` in both `user_host()` and the test-only `owned_with()`/`owned_target()` helpers — the
+   production `AppOwned` construction site, wherever that is for container-over-SSH, also leaves it
+   `None`, satisfying the "shared `run_with_relay`" constraint above).
+3. In `ensure_build` (`provision/mod.rs:341`), add a `deliver_config(host, target, opts, cancel)`
+   call at **both** exit points that currently `return Ok((probe, false))` (the `probe.have` early
+   return) and `Ok((probe, true))` (after a fresh binary copy) — i.e., config/secrets are delivered
+   on every `ensure_build`, binary-cached or not. `deliver_config` no-ops when `target.config` is
+   `None`; otherwise it `guard`s under `Step::Copy` (reuse, do not add a `Step` variant — see
+   "Confirmed facts") and calls a small `upload(host, target, opts, bound, path, mode, bytes)`
+   helper per file: `sha256_hex(bytes)` (`micold_core::protocol::hashing::sha256_hex`, already used
+   in `config_load.rs`), build the command with `argv::copy_if_changed`, `host.run(cmd,
+   bytes.to_vec(), bound, None).await`, map a non-`ok()` outcome the same way the existing binary
+   copy does (`TimedOut`/`CopyFailed`, reusing `io_fail`/`fail`).
+4. `provision/mod.rs`'s test module (`#[cfg(test)] mod tests`, ~640): the `kind(cmd, stdin)`
+   classifier (~660) checks `last.contains("cat >")` for `"copy"` — add checks for
+   `last.contains("daemon.toml")` → `"config"` and `last.contains("/secrets/")` → `"secret"`
+   **before** that check (both new commands also contain `cat >`), so `Fake` can script config/
+   secret responses distinctly from the binary copy. Existing tests are unaffected: they never set
+   `target.config`, so `deliver_config` no-ops and never issues a "config"/"secret" command.
+5. New unit tests in that same module, built directly on `ensure_build`/`run_with_relay` with a
+   `ProvisionTarget` whose `.config = Some(ConfigDelivery { config: b"...".to_vec(), secrets:
+   vec![("client-token".into(), b"tok1".to_vec())] })` (constructed directly — this is where D5's
+   "(b)" is actually exercised, since the real wiring below never populates a secret today):
+   first run copies both the config and the one secret; an identical second run copies neither
+   (script the Fake's `"config"`/`"secret"` kinds with a success `SshOutput` and assert `count(...)
+   == 1` each, or check the Fake's remote-side hash comparison end to end if the Fake simulates a
+   filesystem — simplest is to script the **remote** side realistically enough that
+   `sha256sum`-against-`hash` actually differs/matches, which the current `Fake` does not simulate
+   (it just returns scripted `SshOutput`s per kind, blind to content) — the test instead asserts at
+   the `SshCommand` level: the second call's `copy_if_changed` command string contains the *same*
+   `hash` as the first (proving the client passed the unchanged content's hash both times; the
+   remote-side skip is the shell script's job, already covered by a plain shell-logic read, not by
+   the Fake); then change only the secret's bytes and assert the **config**'s command hash is
+   unchanged while the **secret**'s command hash changed — that is what proves "only that file
+   re-copies" at the level this test harness can see (the Fake never runs the shell for real).
+6. Wire it in `daemon.rs`:
+   - `Dial::Ssh` gets a second field: `settings: SshDial` where `pub struct SshDial(pub
+     DaemonSettings);` with a custom `Hash` (`render(&self.0, Kind::Ssh).hash(state)`), same pattern
+     as `HostDial`/`KubeDial`. Construction at `actor_specs_answered`'s Ssh arm (~441):
+     `settings: SshDial(DaemonSettings::from_entry(entry)?.0)`.
+   - `ssh_attempt` (`daemon.rs:1230`) gains a `settings: &DaemonSettings` parameter; build
+     `ProvisionTarget::user_host(target, ...)` as today, then set `.config =
+     daemon_config_render::prepare(settings, Kind::Ssh).ok().map(|text| ConfigDelivery { config:
+     text.into_bytes(), secrets: named_secrets(settings) })` where `named_secrets` is a small new
+     function (per D5(b)) that, **only** for `settings.client_token_file`, reads the local file's
+     bytes and returns `vec![("client-token".into(), bytes)]` (empty `Vec` when `None`, which is
+     every real case today — `from_entry`'s `host()` closure never sets it). Note in the PR body
+     that this path is untested against real secret content because none exists yet for host/SSH;
+     the generic mechanism's test coverage is the provision/mod.rs unit tests in step 5.
+   - Update the call site (`connect_and_pump`'s `(Dial::Ssh { target }, _) =>`, ~700) to `(Dial::Ssh
+     { target, settings }, _) => { ... ssh_attempt(..., target, &settings.0, &sink).await ... }`.
+   - Fix the one test at ~2005 that destructures `Dial::Ssh { target }` — add `, ..`.
 
-**T080a — `add_runtime_project` from `ProjectAdd`**: `DaemonSettings::add_runtime_project`
-(`daemon_config_render.rs:71`) already exists and is unit-tested via T079. T080a's gap is wiring:
-find where the client sees a `ProjectAdd` message/event (grep `ProjectAdd` across
-`crates/micold-client/src/`) and call `add_runtime_project` on the live `DaemonSettings` that T027's
-write-if-changed reads from, then trigger a re-render/re-write (reuse whatever "Settings changed"
-path T027 wires `Dial::Host` to, above) so the next written file includes it. Needs T027's plumbing
-to exist first — do T027 before T080a.
+**T080a — `add_runtime_project` from `ProjectAdd`**: blocked on a small design gap found this round:
+since `DaemonEntry` carries no `projects` field, there is currently nowhere to persist a
+runtime-added project across the recomputations of `actor_specs_answered` (which rebuilds
+`DaemonSettings` fresh from `entry` every time via `from_entry`). The shape to build: a new
+`BTreeMap<DaemonId, Vec<PathBuf>>` of runtime-added projects, held in whatever app/shell state
+already owns `DaemonStates`/`DaemonLinks` (grep for where those live, e.g. `app::State` or
+`shell/daemons.rs`), passed into `actor_specs_answered` as a new parameter (same pattern as
+`drift`/`boot_owner` today) and applied via `settings.add_runtime_project(path)` for each entry in
+its list, right after `DaemonSettings::from_entry(entry)` in both the Host and Ssh arms. The
+`Output::ProjectAdd` handler (`daemon_sync.rs:4102`, calls `setup::add_project`) is where to insert
+into that map. Needs T027 (and ideally T028) landed first — their `Dial` changes are what make a
+settings change actually cause a rewrite. Do this task last.
 
 **T029 — docs**: `docs/user-guide/remote-daemons.md`, not started; straightforward once T026/T028
-land (document the `~/.micold/remote/daemon.toml` path and that hand edits are overwritten, per
-the file's own header comment, contracts/daemon-config.md §3.2).
+land (document the `~/.micold/remote/daemon.toml` path, the `secrets/` directory, and that hand
+edits are overwritten, per the file's own header comment and contracts/daemon-config.md §3.2).
 
 **Stack profile** (`.specify/memory/tdd-profile.md`): rust, `cargo test` only, no mocks/coverage/
 mutation tooling; exemplars `crates/micold-core/tests/workspace_lookup.rs` (unit/integration),
 `crates/micold-client/tests/support/mod.rs` (fixtures); single-test command
 `scripts/build-lock.sh cargo test --test {file} {name} -- --exact` (needs the `{name}` guard, a
-typo'd filter silently passes).
+typo'd filter silently passes). Prefer `mise run check`/targeted builds while iterating; `tests/
+main.rs` links the whole `micold-client` test binary, so a full `cargo test -p micold-client` run is
+expensive — see CLAUDE.md's shared-build notes.
 
 PR: not opened — no code to review yet.
 
