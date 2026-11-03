@@ -327,4 +327,229 @@ mod tests {
             "start script failed: exit status 1\n--- last 200 lines of the start script's output ---\noops\n--- end ---"
         );
     }
+
+    #[test]
+    fn the_hash_is_length_prefixed_and_covers_shell_script_and_env_file() {
+        let sh = Path::new("/bin/sh");
+        let h = |shell: &Path, script: &[u8], env: Option<&[u8]>| {
+            inputs_hash(shell, Some(script), env)
+        };
+        let base = h(sh, b"ab", Some(b"c"));
+        assert_eq!(base.len(), 64);
+        assert_ne!(base, h(sh, b"a", Some(b"bc")), "no concatenation collision");
+        assert_ne!(base, h(Path::new("/bin/bash"), b"ab", Some(b"c")));
+        assert_ne!(base, h(sh, b"abc", Some(b"c")));
+        assert_ne!(base, h(sh, b"ab", Some(b"d")));
+        assert_ne!(h(sh, b"ab", None), h(sh, b"ab", Some(b"")), "absent is not empty");
+        assert_ne!(inputs_hash(sh, None, None), h(sh, b"", None));
+    }
+
+    #[test]
+    fn an_env_file_is_key_value_lines_taken_literally() {
+        let pairs = parse_env_file(b"# comment\n\nTOKEN=x y\r\nQ=\"$(id)\"\nEMPTY=\nno-equals\n");
+        assert_eq!(
+            pairs,
+            vec![
+                ("TOKEN".to_string(), "x y".to_string()),
+                ("Q".to_string(), "\"$(id)\"".to_string()),
+                ("EMPTY".to_string(), String::new()),
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    mod run {
+        use super::*;
+        use micold_core::daemon_config::RunPolicy;
+        use std::os::unix::fs::PermissionsExt;
+
+        fn plan(dir: &Path, script: &str) -> StartupPlan {
+            std::fs::write(dir.join("s.sh"), script).unwrap();
+            StartupPlan {
+                script_file: dir.join("s.sh"),
+                shell: PathBuf::from("/bin/sh"),
+                timeout: Duration::from_secs(20),
+                on_failure: OnFailure::Refuse,
+                export_env: false,
+                run: RunPolicy::EveryStart,
+                env_file: None,
+            }
+        }
+
+        fn go(dir: &Path, plan: &StartupPlan) -> Result<StartupReport, String> {
+            run(
+                plan,
+                &RunContext {
+                    data_dir: &dir.join("data"),
+                    time_zone_configured: false,
+                    home_configured: false,
+                },
+            )
+        }
+
+        fn mode(path: &Path) -> u32 {
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+        }
+
+        fn count(dir: &Path) -> usize {
+            std::fs::read_to_string(dir.join("data/count")).map_or(0, |s| s.lines().count())
+        }
+
+        #[test]
+        fn an_empty_script_succeeds() {
+            let dir = tempfile::tempdir().unwrap();
+            let report = go(dir.path(), &plan(dir.path(), "")).unwrap();
+            assert_eq!(report.outcome, StartupOutcome::Ok);
+            assert!(report.tail.is_empty());
+        }
+
+        #[test]
+        fn the_files_it_keeps_are_private_and_the_dump_is_gone() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut p = plan(dir.path(), "export SECRET_NAME=secret-value\n");
+            p.run = RunPolicy::OncePerContainer;
+            go(dir.path(), &p).unwrap();
+            let data = dir.path().join("data");
+            for file in [RESULT_FILE, DONE_FILE, ENV_NAMES_FILE] {
+                assert_eq!(mode(&data.join(file)), 0o600, "{file}");
+            }
+            assert!(!data.join("startup-env.dump").exists());
+            let names = std::fs::read_to_string(data.join(ENV_NAMES_FILE)).unwrap();
+            assert!(names.contains("SECRET_NAME") && !names.contains("secret-value"));
+        }
+
+        #[test]
+        fn once_per_container_skips_while_nothing_changed_and_a_failure_is_not_recorded() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut p = plan(dir.path(), "echo x >> count\n");
+            p.run = RunPolicy::OncePerContainer;
+            assert_eq!(go(dir.path(), &p).unwrap().outcome, StartupOutcome::Ok);
+            let again = go(dir.path(), &p).unwrap();
+            assert_eq!(again.outcome, StartupOutcome::Skipped);
+            assert_eq!(count(dir.path()), 1);
+            let on_disk = read_result(&dir.path().join("data")).unwrap();
+            assert_eq!(on_disk.outcome, StartupOutcome::Skipped, "a skip is recorded too");
+            // Any of the three changing runs it again.
+            let mut changed = plan(dir.path(), "echo x >> count\n# edited\n");
+            changed.run = RunPolicy::OncePerContainer;
+            assert_eq!(go(dir.path(), &changed).unwrap().outcome, StartupOutcome::Ok);
+            assert_eq!(count(dir.path()), 2);
+            std::fs::write(dir.path().join("e.env"), "A=1\n").unwrap();
+            changed.env_file = Some(dir.path().join("e.env"));
+            assert_eq!(go(dir.path(), &changed).unwrap().outcome, StartupOutcome::Ok);
+            assert_eq!(count(dir.path()), 3);
+
+            let dir = tempfile::tempdir().unwrap();
+            let mut failing = plan(dir.path(), "echo x >> count\nexit 3\n");
+            failing.run = RunPolicy::OncePerContainer;
+            failing.on_failure = OnFailure::Warn;
+            for _ in 0..2 {
+                assert_eq!(go(dir.path(), &failing).unwrap().outcome, StartupOutcome::Warned);
+            }
+            assert_eq!(count(dir.path()), 2, "a failed run is not recorded as done");
+            assert!(!dir.path().join("data").join(DONE_FILE).exists());
+        }
+
+        #[test]
+        fn a_failure_under_refuse_fails_the_start_and_under_warn_serves() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut p = plan(dir.path(), "echo oops\nexit 1\n");
+            let text = go(dir.path(), &p).unwrap_err();
+            assert_eq!(
+                text,
+                "start script failed: exit status 1\n--- last 200 lines of the start script's output ---\noops\n--- end ---"
+            );
+            let failed = read_result(&dir.path().join("data")).unwrap();
+            assert_eq!(failed.outcome, StartupOutcome::Failed);
+            assert_eq!(failed.reason, Some(StartupReason::Exit(1)));
+            assert_eq!(failed.tail, vec!["oops".to_string()]);
+            p.on_failure = OnFailure::Warn;
+            let warned = go(dir.path(), &p).unwrap();
+            assert_eq!(warned.outcome, StartupOutcome::Warned);
+            assert_eq!(warned.tail, vec!["oops".to_string()]);
+            assert_eq!(read_result(&dir.path().join("data")).unwrap(), warned);
+        }
+
+        #[test]
+        fn a_timeout_is_a_failure_and_kills_the_children() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut p = plan(dir.path(), "sleep 300 &\necho $! > child.pid\nwait\n");
+            p.timeout = Duration::from_secs(1);
+            p.on_failure = OnFailure::Warn;
+            let report = go(dir.path(), &p).unwrap();
+            assert_eq!(report.reason, Some(StartupReason::Timeout));
+            let pid: i32 = std::fs::read_to_string(dir.path().join("data/child.pid"))
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            // SAFETY: signal 0 only tests that the process exists.
+            while unsafe { libc::kill(pid, 0) } == 0 {
+                assert!(std::time::Instant::now() < deadline, "the child outlived the timeout");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+
+        #[test]
+        fn a_missing_script_or_env_file_is_file_missing_handled_by_on_failure() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut p = plan(dir.path(), "");
+            p.script_file = dir.path().join("absent.sh");
+            p.on_failure = OnFailure::Warn;
+            let report = go(dir.path(), &p).unwrap();
+            assert_eq!(report.outcome, StartupOutcome::Warned);
+            assert!(matches!(report.reason, Some(StartupReason::FileMissing(_))));
+            p.on_failure = OnFailure::Refuse;
+            assert!(go(dir.path(), &p).unwrap_err().contains("cannot read"));
+
+            let mut p = plan(dir.path(), "touch ran\n");
+            p.env_file = Some(dir.path().join("absent.env"));
+            let text = go(dir.path(), &p).unwrap_err();
+            assert!(text.contains("absent.env"), "{text}");
+            assert!(!dir.path().join("data/ran").exists(), "the script did not run");
+        }
+
+        #[test]
+        fn a_stale_result_is_not_left_when_the_run_fails_to_write_a_new_one() {
+            let dir = tempfile::tempdir().unwrap();
+            let data = dir.path().join("data");
+            std::fs::create_dir_all(&data).unwrap();
+            let stale = StartupReport {
+                outcome: StartupOutcome::Ok,
+                reason: None,
+                tail: vec!["stale".into()],
+                finished_at_secs: 1,
+            };
+            std::fs::write(data.join(RESULT_FILE), serde_json::to_vec(&stale).unwrap()).unwrap();
+            // The temporary file's name is taken by a directory, so the new result cannot be written.
+            std::fs::create_dir(data.join(format!("{RESULT_FILE}.tmp"))).unwrap();
+            let _ = go(dir.path(), &plan(dir.path(), "echo new\n"));
+            assert_eq!(read_result(&data), None, "the stale file was deleted first");
+        }
+
+        #[test]
+        fn a_second_run_waits_on_the_lock_of_the_first() {
+            let dir = tempfile::tempdir().unwrap();
+            let data = dir.path().join("data");
+            std::fs::create_dir_all(&data).unwrap();
+            let held = StartupLock::acquire(&data).unwrap();
+            let p = plan(dir.path(), "touch ran\n");
+            let (tx, rx) = std::sync::mpsc::channel();
+            let root = dir.path().to_path_buf();
+            std::thread::spawn(move || {
+                let _ = tx.send(go(&root, &p).map(|r| r.outcome));
+            });
+            assert!(rx.recv_timeout(Duration::from_millis(700)).is_err(), "it ran under the lock");
+            assert!(!data.join("ran").exists());
+            drop(held);
+            assert_eq!(rx.recv_timeout(Duration::from_secs(20)).unwrap(), Ok(StartupOutcome::Ok));
+        }
+    }
+
+    #[test]
+    fn a_start_table_without_a_script_is_refused() {
+        let text = "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[startup]\nenv_file = \"/e\"\n";
+        assert!(crate::config_load::validate_text(text, "t").is_err());
+    }
 }
