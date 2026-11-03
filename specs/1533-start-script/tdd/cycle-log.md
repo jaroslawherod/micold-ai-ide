@@ -27,3 +27,14 @@ APIs that did not exist (`StartupPlan.run`/`env_file`, `inputs_hash`, `parse_env
 pass. The precedence tests (T010/T012) needed no new merge code: they passed once the harness could
 express the tiers (research R5). Note: `session.env`/`secret_env`/`ai.cli[].env` application is not
 in the daemon yet, so the order test stands in for those tiers with the spawn pairs the daemon passes.
+
+## M3 (T018-T022)
+
+Not red-before-green in git: the M3 tests and code landed together in the WIP commit `09e572217`
+(the unit ran out of context mid-milestone and committed once). The behaviours were exercised
+test-first within that session: the `start_script_settings`, section-geometry and `daemons_*` tests
+were written against the missing `StartDraft`, `Section::StartScript` and `StartupSettings` and
+failed to compile before the code existed. The review fixes (inline script written only on commit,
+removal cleanup, forced-group error sections) are covered by the same suites; the isolation test is
+`tests/features_daemons_start.rs`.
+Hand-off: `Msg::RestartKeysReported` has no producer until M4 wires the daemon's `ConfigStatus`.

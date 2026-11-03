@@ -610,7 +610,11 @@ pub(crate) fn form<'a>(
     {
         fields = fields.push(container_fields::accordion(
             Section::StartScript,
-            section_body(None, start_script_controls(draft, state, roles), roles),
+            section_body(
+                None,
+                start_script_controls(draft, state, focused, roles),
+                roles,
+            ),
             open(Section::StartScript),
             draft,
             roles,
@@ -624,6 +628,7 @@ pub(crate) fn form<'a>(
 fn start_script_controls<'a>(
     draft: &'a Draft,
     state: &'a State,
+    focused: Option<FieldId>,
     roles: Roles,
 ) -> Vec<Element<'a, Message>> {
     let start = &draft.start;
@@ -640,6 +645,7 @@ fn start_script_controls<'a>(
         StartSource::File => controls.push(
             TextField::new("Path on this computer", &start.file, roles)
                 .label("Script file")
+                .track_focus(FieldId::DaemonStartFile, focused)
                 .on_input(|v| Message::Daemons(DaemonsMsg::StartFileEdited(v)))
                 .into(),
         ),
@@ -656,12 +662,14 @@ fn start_script_controls<'a>(
     controls.push(
         TextField::new("Default shell", &start.shell, roles)
             .label("Shell")
+            .track_focus(FieldId::DaemonStartShell, focused)
             .on_input(|v| Message::Daemons(DaemonsMsg::StartShellEdited(v)))
             .into(),
     );
     controls.push(
         TextField::new("No timeout", &start.timeout, roles)
             .label("Timeout (seconds)")
+            .track_focus(FieldId::DaemonStartTimeout, focused)
             .supporting("From 1 to 3600")
             .error(error_of(state, "startup_timeout"))
             .on_input(|v| Message::Daemons(DaemonsMsg::StartTimeoutEdited(v)))
@@ -693,6 +701,7 @@ fn start_script_controls<'a>(
     controls.push(
         TextField::new("Not set", &start.env_file, roles)
             .label("Secrets file")
+            .track_focus(FieldId::DaemonStartEnvFile, focused)
             .supporting("Path of a file of KEY=value lines; its values never enter the config file")
             .on_input(|v| Message::Daemons(DaemonsMsg::StartEnvFileEdited(v)))
             .into(),
@@ -703,6 +712,7 @@ fn start_script_controls<'a>(
             start.export_env,
             roles,
         )
+        .track_focus(FieldId::DaemonStartExport, focused)
         .on_toggle(|v| Message::Daemons(DaemonsMsg::StartExportToggled(v)))
         .into(),
     );

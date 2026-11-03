@@ -1624,15 +1624,18 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             {
                 return out;
             }
-            if let Err(e) = write_inline_script(id, script.as_deref()) {
-                state.form_error = Some(e);
-            }
+            let script_error = write_inline_script(id, script.as_deref()).err();
             model.links.apply(id, DaemonEvent::Stop);
             if runtime.is_startable() {
                 model.links.apply(id, DaemonEvent::Start);
             }
             state.runtime_missing.remove(&id);
-            state.draft = None;
+            // A script that could not be saved keeps the form open with the reason.
+            if script_error.is_some() {
+                state.form_error = script_error;
+            } else {
+                state.draft = None;
+            }
             if !sessions.is_empty() {
                 out.push(Outcome::DaemonSessionsEnded {
                     daemon: id,
