@@ -216,7 +216,7 @@ Research D12.
 
 ## Issue 14 — feat: read what a daemon was given (needs 3)
 
-- [x] T081 [P] [US6] Failing view test in `crates/micold-client/src/ui/daemon_details_dialog.rs` tests: a "Configuration" section shows the delivered file, the resolved values, reach per token, start-script last run (names of exported variables only), `restart_needed`; no secret value in the rendered text
+- [x] T081 [P] [US6] Failing view test in `crates/micold-client/src/ui/daemon_details_dialog.rs` tests: a "Configuration" section shows the delivered file, the resolved values, reach per token, start-script last run (outcome and reason, from main's `StartupReport`; never the output tail, never values), `restart_needed`; no secret value in the rendered text
 - [x] T082 [US6] Implement with the shared code/markup viewer; Restart button when `restart_needed`
 - [x] T083 [US6] Document in `docs/user-guide/settings.md`
 
@@ -399,7 +399,7 @@ user-guide entry (T083) share the Configuration section of Daemon details, so no
 separates them (rule 3).
 
 - **Tasks**: T081–T083
-- **Deliverable**: Daemon details (opened from Settings → Daemons) → Configuration shows the delivered file, the resolved values, reach per token and the start script's last run (names of exported variables only); "Restart to apply" appears when `restart_needed`; no secret value is shown anywhere.
+- **Deliverable**: Daemon details (opened from Settings → Daemons) → Configuration shows the delivered file, the resolved values, reach per token and the start script's last run (outcome and reason; never the output tail, never values); "Restart to apply" appears when `restart_needed`; no secret value is shown anywhere.
 - **Satisfies**: US6; FR-029, SC-005
 - **Verify**: `cargo test -p micold-client daemon_details_dialog`
 - **Depends on**: Issue 3 (#1524), merged
