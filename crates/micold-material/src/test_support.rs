@@ -50,8 +50,8 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
     }
 }
 
-/// The CPU rasteriser, with every shipped face loaded — both Roboto weights, both Fira Mono weights
-/// **and the icon face**.
+/// Load the shipped faces into the global font system, once per process — both Roboto weights,
+/// both Fira Mono weights and the icon face.
 ///
 /// The icon face is every bit as load-bearing as the text ones, and it was missing: an icon is a
 /// glyph from `Material Symbols Outlined`, shaped and measured like any other text. Without it a
@@ -59,13 +59,6 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
 /// an icon's box was reading whatever font the machine happened to offer. `tests/support/layout.rs`
 /// had the identical gap and closed it; this is the same fix on the in-crate side, found by
 /// BUG-003's §7.5 checks, which measure a menu item's leading glyph.
-///
-/// `Some("tiny-skia")` is load-bearing rather than cosmetic: `iced_wgpu`'s `Headless::new` returns
-/// `None` on its first line when the hint is not `"wgpu"`, before it constructs an instance or
-/// requests an adapter — so the fallback renderer picks the CPU rasteriser without a GPU ever being
-/// probed, and these tests run in CI.
-/// Load the shipped faces into the global font system, once per process — both Roboto weights,
-/// both Fira Mono weights and the icon face.
 ///
 /// Split out of [`renderer()`] (BUG-1653): `Floor::Saving` (the give-way planner, feature 1124 R4)
 /// measures a component's floor text while building its `Element`, in `From<_> for Element`,
@@ -91,6 +84,12 @@ pub(crate) fn ensure_fonts_loaded() {
     });
 }
 
+/// The CPU rasteriser, with every shipped face loaded via [`ensure_fonts_loaded()`].
+///
+/// `Some("tiny-skia")` is load-bearing rather than cosmetic: `iced_wgpu`'s `Headless::new` returns
+/// `None` on its first line when the hint is not `"wgpu"`, before it constructs an instance or
+/// requests an adapter — so the fallback renderer picks the CPU rasteriser without a GPU ever being
+/// probed, and these tests run in CI.
 pub fn renderer() -> iced::Renderer {
     ensure_fonts_loaded();
 

@@ -515,6 +515,8 @@ mod tests {
         use iced::advanced::graphics::text::Paragraph;
         use iced::advanced::text::Paragraph as _;
 
+        crate::test_support::ensure_fonts_loaded();
+
         Paragraph::with_text(CoreText {
             content,
             bounds: Size::INFINITE,
