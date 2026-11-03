@@ -165,7 +165,12 @@ fn the_details_dialog_paints_the_delivered_file_and_the_resolved_values() {
         .into_iter()
         .map(|drawn| drawn.content)
         .collect();
-    for want in ["Delivered file", "schema = 1", "[daemon]", "Resolved values"] {
+    for want in [
+        "Delivered file",
+        "schema = 1",
+        "[daemon]",
+        "Resolved values",
+    ] {
         assert!(painted.iter().any(|p| p == want), "{want:?}: {painted:?}");
     }
     assert!(

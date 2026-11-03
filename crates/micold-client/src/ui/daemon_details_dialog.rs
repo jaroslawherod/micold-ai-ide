@@ -300,7 +300,10 @@ mod tests {
         let rows = texts(&configuration_rows(Some("schema = 1\n".into()), Some(&s)));
         assert!(!lines.contains(TAIL), "tail in the lines:\n{lines}");
         assert!(!rows.contains(TAIL), "tail in the rows:\n{rows}");
-        assert!(lines.contains("Start script:"), "the fixture reached the line");
+        assert!(
+            lines.contains("Start script:"),
+            "the fixture reached the line"
+        );
     }
 
     /// Every outcome and every reason has its own exact line (US6: outcome and reason).

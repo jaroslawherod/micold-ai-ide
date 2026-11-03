@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1535
 - **Worktree branch**: feat/1535_read-what-a-daemon-was-given
 - **Started**: 2026-11-01
-- **Phase**: close
-- **Next step**: close PR remediation (T124-T130), review, gate, PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1629 | Design (milestones for Issue 14) | merged | 44cf9d37c8b416b545a9c8e6cd1b4fb3bc9e429b |
 | #1655 | M1 | merged | 937c03ea2fa1da5c722b42260a2c8786b151bf90 |
+| close | Close (T124-T130 remediation) | open | — |
 
 ## Milestones
 
@@ -44,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 2 | 1a970730:b5c8c822 | CLEAN (1 MINOR: comment added, prose only) |
 | M1 B | 3 | a2973481:10bfc1b5 | CHANGES: F1 PROTOCOL_VERSION 76→77 (tokens) fixed; F2 daemon never filled `startup`, now reads startup-result.json from the data dir, test added; F3 T081/Deliverable reworded to D5 (prose only); F4 declined |
 | M1 B | 4 | 25b8b8c3:11dbeebd | CLEAN (full round: r3 snapshot stale after rebase; no secret in view, protocol 77 consistent, Verify green) |
+| Close | 1 | dd50f188:a607485f | CLEAN (1 MINOR: cycle log reworded) |
 
 ## Declined review findings
 

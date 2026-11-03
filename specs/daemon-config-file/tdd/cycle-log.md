@@ -104,6 +104,6 @@ Append only. Newest last.
 ## Issue 14 (#1535) M1 remediation (T124-T130)
 
 - baseline: `ui::daemon_details_dialog` 6 unit tests, `daemon_dialog_buttons` 6, `daemons_section_geometry` 22 passed.
-- red (mutants from tdd-verify, tests written against them): M1 `restart_needed && false` at `daemon_details_dialog.rs:35` now fails `the_details_dialog_offers_restart_only_when_the_daemon_needs_one` (re-run, then reverted). M2 (tail appended), M3 (`Skipped` text) and M4 (`Timeout` dropped) are pinned by `the_start_script_output_tail_is_never_rendered` and `the_start_script_line_names_each_outcome_and_reason`; they were not re-run.
+- red (mutants from tdd-verify, tests written against them): M1 `restart_needed && false` at `daemon_details_dialog.rs:35` now fails `the_details_dialog_offers_restart_only_when_the_daemon_needs_one` (re-run, then reverted). M2 (tail appended), M3 (`Skipped` text) and M4 (`Timeout` dropped) are pinned by `the_start_script_output_tail_is_never_rendered` and `the_start_script_line_names_each_outcome_and_reason`; they were not re-run (pinned by inspection only, as is T125's `delivered`/`details.config` check).
 - green: `ui::daemon_details_dialog` 8 unit tests, `--test main -- daemon_dialog_buttons daemons_section_geometry` 30 passed.
 - T128: the overflow assertion is whole again; only the node holding the delivered file's own first line (its scroll container) is exempt.
