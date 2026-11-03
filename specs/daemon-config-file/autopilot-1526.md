@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
 - **Phase**: implement
-- **Next step**: M1b review B, gate, PR
+- **Next step**: M1b PR open; orchestrator waits on CI
 
 ## Pull requests
 
@@ -51,7 +51,7 @@ None.
 
 ## Handover
 
-**Continuation (unit 2)**: review-A fixes a-c applied (ssh_attempt returns Err on a config that does not render; extra Copy event dropped; copy_if_changed chmods on skip, test asserts it); scoped gate green. Remaining: review B, gate, docs check, PR. Declined (review A, follow-up): client_token_file path vs delivered secret, unreadable token file / SshDial not hashing secret content, stale secrets never removed (all dormant until a later Issue sets client_token_file, D5(b)); config change not applied to an already-running remote daemon (no reload; Issue 9/16); copy error-mapping duplication (small).
+**Continuation (unit 2)**: review-A fixes a-c applied (ssh_attempt returns Err on a config that does not render; extra Copy event dropped; copy_if_changed chmods on skip, test asserts it); scoped gate green. Review B CLEAN (2 MINOR, no action: no cycle-log entry for U24; T028 env list already empty). Scoped gate only (full gate left to CI, OOM/exclusivity history). Remaining: PR. Declined (review A, follow-up): client_token_file path vs delivered secret, unreadable token file / SshDial not hashing secret content, stale secrets never removed (all dormant until a later Issue sets client_token_file, D5(b)); config change not applied to an already-running remote daemon (no reload; Issue 9/16); copy error-mapping duplication (small).
 
 **M1b UNIT HANDOVER (read this first; the M1a text below is history).** The M1b unit was stopped
 by `Disk quota exceeded` on `/tmp/claude-1000` (Bash tool unusable: every call fails with EDQUOT
