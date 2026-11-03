@@ -414,3 +414,122 @@ Untested criteria: the output tail, the Restart button. Tests tracing to nothing
 - The `dialog()` wiring mutants (delivered `None`, `details.config` dropped) were reasoned about, not run.
 - Mutation was six hand-picked mutants on one file, not a tool run.
 - The earlier sections of this file (Issues 2, 3, 4, 13) are kept as they are: this run appended instead of overwriting because one file serves several issues.
+
+# Issue 5 (#1526) M1a + M1b: deliver the configuration to host and SSH daemons
+
+```yaml
+scope: Issue 5 (#1526), tasks T025-T029, T080a; behaviors U21-U24; M1a host delivery (commit 189ccd5ff, PR #1660) and M1b SSH delivery (commits 8a5e7f12c, df158b368, PR #1670). Files read cold: crates/micold-client/src/daemon_config_delivery.rs, daemon.rs, shell/setup.rs, features/daemons.rs, crates/micold-core/src/provision/mod.rs, ssh/argv.rs, and the tests tests/daemon_config_delivery_host.rs, tests/daemon_config_delivery_host_env.rs
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 9667c5f0d
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: FAIL
+behaviors: 4 listed in tdd/test-list.md (U21-U24); T080a has no row of its own (traced to U22)
+proven: 0
+likely: 0
+test_after: 4
+no_test: 0
+high_smells: 0
+high_findings: 5
+mutants_tried: 12
+mutants_caught: 5
+mutants_survived: 7
+mutation_score: unmeasured # no tool; 12 targeted hand mutants, 5 caught, 7 survived
+criteria_covered: 2 of 5 through a real entry point (see Traceability)
+suite: scoped - core lib `provision:: ssh::argv` 95 passed; client lib 1047 passed; client `--test main` 2979 passed; `--test daemon_config_delivery_host_env` 1 passed; 0 failed (full workspace suite and mise run gate not run)
+```
+
+**Verdict: FAIL.** Seven of twelve hand mutants survive the whole client and core scoped suites, five of them inside
+behaviors marked `DONE`: the app never being shown to call `deliver_host` before the spawn (U21), the `ProjectAdd` to
+delivery feed (T080a/U22), the actor identity that makes a settings change reach the next write (U22), and, on SSH, the
+secret upload and the post-copy delivery (U24). Every unit that was written is sound (the five mutants inside them are
+caught); what is missing is the join between them and the entry points. No red run is recorded for any of the four behaviors.
+
+Audit independence: the auditor did not write these tests. Mutation ran on a `git archive` export of `HEAD` in the
+scratchpad, not in the working tree (the session blocked `git worktree add`, so no git worktree was used); the export was
+removed after the run and the working tree was never edited by the mutation step.
+
+## Test-first evidence (Issue 5)
+
+| Behavior | Class | Evidence |
+|---|---|---|
+| U21 | TEST_AFTER | no #1526 entry in `tdd/cycle-log.md`; `189ccd5ff` adds `daemon_config_delivery.rs` and `tests/daemon_config_delivery_host.rs` in one commit; no red recorded |
+| U22 | TEST_AFTER | same commit; the unit tests `a_runtime_added_project_reaches_the_host_dials_settings` and `a_recorded_project_is_kept_once_per_daemon` were added with the code they cover |
+| U23 | TEST_AFTER | same commit; by nature green on arrival (guards `spawn.rs`, which the issue did not change), so no red is possible; a regression guard, recorded as such |
+| U24 | TEST_AFTER | `8a5e7f12c` adds `deliver_config`, `copy_if_changed` and their tests together; the ledger `autopilot-1526.md` says "no cycle-log entry for U24" |
+| Baseline | absent | `test-list.md` and `cycle-log.md` record no baseline for #1526 |
+
+Per Hard Rule 3 the absence of a recorded red is `TEST_AFTER`, not `LIKELY`. The mutants below show which tests do bite.
+
+Existing tests changed in `189ccd5ff..df158b368`: `daemon.rs` tests gain the `&BTreeMap::new()` argument for `actor_specs_answered`,
+`Dial::Ssh { target, .. }` and a `settings` argument for `ssh_attempt`; `user_target`, `container_target` and `pod_target`
+gain `config: None`. All mechanical, no assertion removed or loosened, no skip, filter, ignore or threshold change. `df158b368`
+only strengthens `copy_if_changed_...` (one added assertion) and swaps `.err().expect` for `.expect_err`. `tasks.md` T025-T029 and
+T080a are `[x]`; each has its code and tests: consistent with the test list (U21-U24 `DONE`).
+
+## Findings (Issue 5)
+
+| # | Sev | Category | File | Finding |
+|---|---|---|---|---|
+| I5-1 | HIGH | test-strength (mutant M1) | `crates/micold-client/src/shell/setup.rs:50-54` | The feed from `ProjectAdd` into `State::add_runtime_project` is untested. Replacing the call with `let _ = daemon;` leaves all 1047 lib, 2979 `main` and the env test green. T080a asks for "a test through that path"; the two tests written start at `State::add_runtime_project` and at `actor_specs_answered(.., &runtime_projects)`, so the join between them (the only code T080a adds to the app) has none. Behavior U22 |
+| I5-2 | HIGH | test-strength (mutant M2) | `crates/micold-client/src/daemon.rs:760-772` (`connect_and_pump`, `Dial::Host` arm) | Nothing shows the app writes the file before `connect_or_spawn`. Replacing `deliver_host(&host.settings, dir)` with `Ok(false)` passes every test. The `None` data-dir error and the delivery-failure branch (`Err(err) => Err(err)`) are untested too. This is the FR-005 behavior the issue is named for. Behavior U21 |
+| I5-3 | HIGH | test-strength (mutant M3) | `crates/micold-client/src/daemon.rs:259-269` (`HostDial`/`SshDial` `Hash`) | The hash that makes an actor's identity depend on the rendered settings is untested: removing the `render(..).hash(state)` line passes. That identity is what restarts the actor, and so the next `deliver_host`, after a settings or project change, i.e. the "next call writes again" of U22 and FR-014 in the running app. The existing `assert_ne!(asked[0], answered[0])` test compares specs by `PartialEq`, not `Hash`. A side effect worth a check (not verified): because the hash includes the project list, adding a project in the app changes the host actor's identity |
+| I5-4 | HIGH | test-strength (mutants M4, M5) | `daemon.rs:276-286` (`named_secrets`), `daemon.rs:495-508` (SSH arm) | SSH: `named_secrets` never reads a file in any test (mutant: return nothing, green), so the "named secrets uploaded" half of U24 is tested only with a hand-built `ConfigDelivery`, not from `DaemonSettings`. The SSH arm of `actor_specs_answered` feeds runtime projects, but only the host arm is tested (mutant `.take(0)` on the second loop, green). `ssh_attempt` refusing an invalid config (`df158b368`) has no test either; its only test is the `NoSsh` path |
+| I5-5 | HIGH | test-strength (mutant M9) | `crates/micold-core/src/provision/mod.rs:422-426` | The `deliver_config` after a fresh copy is untested: removing it passes all 95 `provision::`/`ssh::argv` tests. The tests set `PROBE_HAVE` (build already present), so only the early-return path runs. A host with no build yet, the most common first connection, would silently get no configuration. Behavior U24 |
+| I5-6 | MED | test-strength (mutant M6) | `daemon_config_delivery.rs:35-37` | `create_dir_all(parent)` is never needed by a test (the tests write into an existing tempdir); removing it passes. On a first run with a data dir that does not exist yet, delivery would fail |
+| I5-7 | MED | behavior gap (by inspection) | `daemon_config_delivery.rs:26-41` vs `ssh/argv.rs:309-312` | The SSH script corrects a hand-widened mode on an unchanged file (added by `df158b368` and tested); host `write_if_changed` returns early on equal bytes without touching the mode, so a `0644` `daemon.toml` stays `0644` and `second_call_..._is_a_no_op` would pin that. The file also exists with the umask mode between `fs::write` and `set_permissions`. Both are low impact (the file holds no secret value) but the two paths disagree and the host one is unpinned |
+| I5-8 | MED | process | `tdd/cycle-log.md`, `tdd/test-list.md` | No cycle-log entry, baseline, or red for #1526 (ledger admits it for U24). T080a has no row (traced to U22 only). Test and source share commits `189ccd5ff`, `8a5e7f12c` |
+| I5-9 | LOW | smell (re-implemented expectation) | `tests/daemon_config_delivery_host.rs:23-27,66-71` | The expected file text is computed with `prepare(&settings, Kind::Host)`, the function `deliver_host` itself calls. It proves "writes what `prepare` returns" and not what the bytes are; the renderer goldens (Issue 4) cover the content, so LOW. The first test could compare to a golden file instead |
+| I5-10 | LOW | test-strength | `tests/daemon_config_delivery_host_env.rs:40-60` | U23 compares environment variable names only (`split_once('=').map(k)`), so a spawn that overrode the value of an existing variable would pass. It also sets `MICOLD_DAEMON_BIN` before both runs and guards unchanged code (`spawn.rs`); it cannot have been red. Kept as a documented regression guard. The test's 5 s deadline loop is bounded and deterministic otherwise |
+| I5-11 | LOW | docs | `docs/user-guide/remote-daemons.md:65-73` | The by-hand edit instructions exist (T029 done) but nothing tests that a hand edit survives the next connect: `deliver_config` overwrites any file whose hash differs from the rendered one. Not a test gap, a behavior to state in the guide or the spec (FR-005 says the app owns the file) |
+
+Smell pass: no assertion-free, tautological, skipped or `#[ignore]` tests; `tempfile` and the repo's existing `Fake` host in
+`provision/mod.rs` tests are reused, no new fake; no secrets (`tok1`/`tok2` are literal test bytes). The real-shell test
+`copy_if_changed_writes_private_files_and_skips_an_unchanged_one` is specific (mode, dir mode, sentinel survives, rotation), runs
+in 3.6 s with the rest. Deterministic: the env test mutates process env, kept in its own target as `tests/main.rs` requires.
+
+## Mutation results (Issue 5)
+
+No mutation tool (`mutation: null`). Twelve deliberate mutants, one at a time, in a scratchpad export; after each the
+file was restored from `HEAD` and byte-compared. Suites run for each client mutant: `-p micold-client --lib`, `--test main`,
+`--test daemon_config_delivery_host_env`; for each core mutant: `-p micold-core --lib -- provision:: ssh::argv`. Not exhaustive.
+
+| Mutant | File | Result | Judgment |
+|---|---|---|---|
+| M1 drop `add_runtime_project` call in `add_project` | `shell/setup.rs` | SURVIVED | not equivalent; I5-1 |
+| M2 replace `deliver_host(..)` with `Ok(false)` | `daemon.rs` | SURVIVED | not equivalent; I5-2 |
+| M3 `HostDial::hash` ignores the settings | `daemon.rs` | SURVIVED | not equivalent; I5-3 |
+| M4 `named_secrets` reads nothing | `daemon.rs` | SURVIVED | not equivalent; I5-4 |
+| M5 SSH arm ignores runtime projects | `daemon.rs` | SURVIVED | not equivalent; I5-4 |
+| M6 drop `create_dir_all(parent)` | `daemon_config_delivery.rs` | SURVIVED | not equivalent; I5-6 |
+| M7 mode `0o600` to `0o644` | `daemon_config_delivery.rs` | CAUGHT (`first_call_writes_the_file_mode_0600`) | fine |
+| M8 drop dedupe in `State::add_runtime_project` | `features/daemons.rs` | CAUGHT (`a_recorded_project_is_kept_once_per_daemon`) | fine |
+| M9 drop `deliver_config` after a fresh copy | `provision/mod.rs` | SURVIVED | not equivalent; I5-5 |
+| M10 drop `chmod` on the skip branch | `ssh/argv.rs` | CAUGHT (`copy_if_changed_writes_private_files_...`) | closes the review-A fix |
+| M11 `umask 077` to `022` | `ssh/argv.rs` | CAUGHT (2 tests) | fine |
+| M12 `secrets/` to `secret/` in `remote_secret_path` | `ssh/argv.rs` | CAUGHT (2 tests) | fine |
+
+Not mutated: `write_if_changed`'s equality check (the first return value is asserted, so it would be caught), `spawn.rs`
+(outside the issue's changed files; U23's bite was therefore not measured), `daemon_config_render` (Issue 4's section).
+
+## Traceability (Issue 5)
+
+| Criterion | Tests | Real entry point | Status |
+|---|---|---|---|
+| FR-005 host: file written before the spawn, `0600`, write-if-changed (T025, T027, U21) | `first_call_writes_the_file_mode_0600`, `second_call_..._no_op` | `deliver_host` only; the call in `connect_and_pump` is untested | Covered at unit level (I5-2, I5-6, I5-7) |
+| FR-005 no `MICOLD_*` env added at spawn (U23) | `spawn_detached_daemon_adds_no_env` | `spawn_detached_daemon` | Covered, regression guard (I5-10) |
+| FR-014 a settings or runtime-added project change is delivered (T080a, U22) | `a_settings_change_writes_again`, `a_recorded_project_is_kept_once_per_daemon`, `a_runtime_added_project_reaches_the_host_dials_settings` | none from `ProjectAdd` or the actor to the file | Partial (I5-1, I5-3) |
+| FR-005, FR-029 SSH: file and named secrets uploaded by content hash, `0600`/`0700` (T026, T028, U24) | `the_config_and_its_secrets_are_uploaded_by_hash_...`, `copy_if_changed_writes_private_files_...`, `a_target_without_a_configuration_uploads_nothing`, `a_failed_config_upload_fails_the_copy_step` | `ensure_build` with a fake host; `ssh_attempt` not reached | Partial (I5-4, I5-5) |
+| T029 user guide | `docs/user-guide/remote-daemons.md:65-73` | n/a | Present (I5-11) |
+
+Tests tracing to nothing: none. Claimed tests that do not exist: none. T080a is not a row of `test-list.md`.
+
+## What was not audited (Issue 5)
+
+- Full workspace suite and `mise run gate`; coverage (none in profile); a mutation sweep beyond the 12 mutants above
+  (the `Dial::Ssh` hash, `ssh_attempt` error mapping and `ssh_options` were not mutated).
+- Commit-level test-first ordering beyond what the two commits show; the PR review history (#1660, #1670).
+- Whether a daemon on an SSH host picks up `~/.micold/remote/daemon.toml` (Issue 3's loader reads `<data_dir>/daemon.toml`;
+  the data-dir convention on the remote side was not run end to end), and whether changing a project in the app restarts the
+  host actor (I5-3 note). No real SSH host or container runtime was used.
+- Windows (`set_owner_only` is a no-op there; no test); the `#[cfg(unix)]` tests run only on this Linux host.
+- Issues 2, 3, 4, 13, 14 sections above were not touched.
