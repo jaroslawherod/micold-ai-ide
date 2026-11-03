@@ -427,13 +427,20 @@ pub async fn ensure_build(
 }
 
 /// `config` with the home placeholder replaced by the remote home the probe reported
-/// ([`argv::REMOTE_HOME_PLACEHOLDER`]); unchanged when it has none or the home is unknown.
-fn with_remote_home(config: &[u8], probe_dir: &str) -> Vec<u8> {
-    let (Some(home), Ok(text)) = (argv::remote_home(probe_dir), std::str::from_utf8(config)) else {
-        return config.to_vec();
+/// ([`argv::REMOTE_HOME_PLACEHOLDER`]). `None` when it still holds the placeholder but the home is
+/// unknown: uploading it would leave a path no daemon can use.
+fn with_remote_home(config: &[u8], probe_dir: &str) -> Option<Vec<u8>> {
+    let Ok(text) = std::str::from_utf8(config) else {
+        return Some(config.to_vec());
     };
-    text.replace(argv::REMOTE_HOME_PLACEHOLDER, home)
-        .into_bytes()
+    match argv::remote_home(probe_dir) {
+        Some(home) => Some(
+            text.replace(argv::REMOTE_HOME_PLACEHOLDER, home)
+                .into_bytes(),
+        ),
+        None if text.contains(argv::REMOTE_HOME_PLACEHOLDER) => None,
+        None => Some(config.to_vec()),
+    }
 }
 
 /// Upload the configuration and its secrets, each only when its content changed on the host. A
@@ -448,7 +455,9 @@ async fn deliver_config(
     let Some(delivery) = &target.config else {
         return Ok(());
     };
-    let config = with_remote_home(&delivery.config, &probe.dir);
+    let Some(config) = with_remote_home(&delivery.config, &probe.dir) else {
+        return Err(fail(Step::Copy, FailureCause::CopyFailed));
+    };
     let bound = target.bounds.copy;
     let secrets = delivery
         .secrets
@@ -1057,6 +1066,14 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    /// #1533 M4: a config naming the placeholder is not uploaded when the probe gave no home.
+    #[test]
+    fn an_unknown_home_refuses_a_config_that_needs_it() {
+        let with = format!("p = \"{}/x\"\n", argv::REMOTE_HOME_PLACEHOLDER);
+        assert_eq!(with_remote_home(with.as_bytes(), ""), None);
+        assert_eq!(with_remote_home(b"p = 1\n", ""), Some(b"p = 1\n".to_vec()));
     }
 
     /// #1533 M4: the rendered file names the start script under a placeholder home; the upload
