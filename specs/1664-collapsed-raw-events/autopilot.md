@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1667 | Design | merged | 64ed549a8651dba5cfa433fc833d4d3540904298 |
 | #1668 | M1 collapsed summary lines (PR head branch feat/1664_collapsed-raw-events-m1; local worktree branch tracks it) | merged | 4198d80c53a5109eee89f11b0b4cfa8356ad9e36 |
-| #CLOSE | Close (PR head branch feat/1664_collapsed-raw-events-close) | open | - |
+| #1677 | Close (PR head branch feat/1664_collapsed-raw-events-close) | open | - |
 | #1672 | M2 toggle (PR head branch feat/1664_collapsed-raw-events-m2; push with explicit refspec) | merged | 9912461a10c757d84371f39827785ca31d0c7494 |
 
 ## Milestones
