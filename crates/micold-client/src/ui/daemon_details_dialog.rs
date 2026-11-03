@@ -58,7 +58,8 @@ pub fn dialog<'a>(
 }
 
 /// The sentences of the Configuration section, in order. Names and paths only: a secret's content
-/// never reaches the daemon's status, and the start script's variables show by name (FR-029).
+/// never reaches the daemon's status, and the start script shows its outcome, reason and time only,
+/// never its variables or output (FR-029).
 pub fn configuration_lines(status: &ConfigStatus) -> Vec<String> {
     let mut lines = vec![format!(
         "{} ({}, schema {})",
@@ -287,5 +288,71 @@ mod tests {
         let text = configuration_lines(&s).join("\n");
         assert!(text.contains("Start script: has not run"));
         assert!(!text.contains("Restart to apply"));
+    }
+
+    /// FR-029: the start script's output tail may echo what it read, so no rendered text has it.
+    #[test]
+    fn the_start_script_output_tail_is_never_rendered() {
+        const TAIL: &str = "TAIL_ECHOED_SECRET_9f3a";
+        let mut s = status();
+        s.startup.as_mut().expect("the fixture ran").tail = vec![TAIL.into()];
+        let lines = configuration_lines(&s).join("\n");
+        let rows = texts(&configuration_rows(Some("schema = 1\n".into()), Some(&s)));
+        assert!(!lines.contains(TAIL), "tail in the lines:\n{lines}");
+        assert!(!rows.contains(TAIL), "tail in the rows:\n{rows}");
+        assert!(lines.contains("Start script:"), "the fixture reached the line");
+    }
+
+    /// Every outcome and every reason has its own exact line (US6: outcome and reason).
+    #[test]
+    fn the_start_script_line_names_each_outcome_and_reason() {
+        let cases = [
+            (StartupOutcome::Ok, None, "ok"),
+            (
+                StartupOutcome::Skipped,
+                None,
+                "skipped (nothing it reads changed)",
+            ),
+            (
+                StartupOutcome::Warned,
+                Some(StartupReason::Exit(3)),
+                "failed, daemon serves (exit 3)",
+            ),
+            (
+                StartupOutcome::Failed,
+                Some(StartupReason::Signal(9)),
+                "failed, daemon refused to start (signal 9)",
+            ),
+            (
+                StartupOutcome::Warned,
+                Some(StartupReason::Timeout),
+                "failed, daemon serves (timed out)",
+            ),
+            (
+                StartupOutcome::Failed,
+                Some(StartupReason::Spawn("no such file".into())),
+                "failed, daemon refused to start (could not start: no such file)",
+            ),
+            (
+                StartupOutcome::Failed,
+                Some(StartupReason::FileMissing("/x/start.sh".into())),
+                "failed, daemon refused to start (file unreadable: /x/start.sh)",
+            ),
+        ];
+        for (outcome, reason, want) in cases {
+            let mut s = status();
+            s.startup = Some(StartupReport {
+                outcome,
+                reason,
+                tail: Vec::new(),
+                finished_at_secs: 1_700_000_000,
+            });
+            let lines = configuration_lines(&s);
+            assert_eq!(
+                lines.last().map(String::as_str),
+                Some(format!("Start script: {want} at 1700000000").as_str()),
+                "{lines:?}"
+            );
+        }
     }
 }

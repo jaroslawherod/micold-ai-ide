@@ -176,10 +176,26 @@ fn the_details_dialog_paints_the_errors_and_the_log_and_the_page_paints_neither(
         micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
             .expect("the dialog is open");
     // The delivered file is a code block: a line wider than the dialog scrolls sideways inside it
-    // by design (#1535), so its comment line is not an overflow of the dialog.
-    let overflows: Vec<_> = lay::text_overflows(body, &mut renderer)
+    // by design (#1535). Only text in that scroll container is exempt, found as the layout node
+    // that holds the file's own first line; any other overflow, whatever it says, still fails.
+    let scroller = lay::painted_text(
+        micold_client::ui::daemon_details_dialog::dialog(&state, ColorScheme::Dark, &outcome)
+            .expect("the dialog is open"),
+        &mut renderer,
+    )
+    .into_iter()
+    .find(|drawn| drawn.content == "schema = 1")
+    .expect("the delivered file is painted")
+    .node_path;
+    let all = lay::text_overflows(body, &mut renderer);
+    assert!(
+        all.iter()
+            .any(|o| o.node_path == scroller && o.content.starts_with("# Written by")),
+        "the delivered file's long comment line scrolls inside its block: {all:?}"
+    );
+    let overflows: Vec<_> = all
         .into_iter()
-        .filter(|o| !o.content.starts_with("# Written by Micold AI IDE"))
+        .filter(|o| o.node_path != scroller)
         .collect();
     assert!(overflows.is_empty(), "the dialog text fits: {overflows:?}");
 }

@@ -111,6 +111,69 @@ fn the_details_dialog_close_sends_details_closed() {
     );
 }
 
+/// The details dialog of the host daemon after it reported `restart_needed` as given.
+fn reported_details(restart_needed: bool) -> (State, DaemonId) {
+    use micold_core::protocol::messages::ConfigStatus;
+    let (mut state, [host, _]) = state();
+    state.update(daemons(DaemonsMsg::DetailsOpened(host)));
+    let status = ConfigStatus {
+        path: "/run/micold/config/daemon.toml".into(),
+        schema: 1,
+        kind: "host".into(),
+        applied_hash: "ab".repeat(32),
+        resolved: "RESOLVED_MARKER token work: /run/secrets/work (readable, 0600)\n".into(),
+        restart_needed,
+        changed_restart_keys: vec!["daemon.log".into()],
+        last_error: None,
+        tokens: Vec::new(),
+        startup: None,
+    };
+    state.update(daemons(DaemonsMsg::ConfigReported(host, Some(status))));
+    (state, host)
+}
+
+fn details_dialog(state: &State) -> Element<'_, Message> {
+    micold_client::ui::daemon_details_dialog::dialog(
+        state,
+        ColorScheme::Dark,
+        &EnvIncludeOutcome::Disabled,
+    )
+    .expect("details are open")
+}
+
+#[test]
+fn the_details_dialog_offers_restart_only_when_the_daemon_needs_one() {
+    let (state, host) = reported_details(true);
+    let sent = sweep(details_dialog(&state));
+    assert!(
+        sent.contains(&daemons(DaemonsMsg::RestartRequested(host))),
+        "Restart to apply: {sent:?}"
+    );
+    let (state, host) = reported_details(false);
+    let sent = sweep(details_dialog(&state));
+    assert!(
+        !sent.contains(&daemons(DaemonsMsg::RestartRequested(host))),
+        "no restart needed: {sent:?}"
+    );
+}
+
+#[test]
+fn the_details_dialog_paints_the_delivered_file_and_the_resolved_values() {
+    let (state, _) = reported_details(false);
+    let mut renderer = lay::renderer();
+    let painted: Vec<String> = lay::painted_text(details_dialog(&state), &mut renderer)
+        .into_iter()
+        .map(|drawn| drawn.content)
+        .collect();
+    for want in ["Delivered file", "schema = 1", "[daemon]", "Resolved values"] {
+        assert!(painted.iter().any(|p| p == want), "{want:?}: {painted:?}");
+    }
+    assert!(
+        painted.iter().any(|p| p.contains("RESOLVED_MARKER")),
+        "the resolved values: {painted:?}"
+    );
+}
+
 #[test]
 fn the_page_buttons_open_the_dialog_for_their_row() {
     let (state, [host, other]) = state();
