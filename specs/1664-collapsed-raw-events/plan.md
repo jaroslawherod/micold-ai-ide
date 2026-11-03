@@ -49,6 +49,7 @@ resumed transcripts are the same `Transcript` type, so FR-011 needs no second pa
 | FR-006, 007, 013 | `visibility::shown(kind, show_raw)` in core, used by `rows()` |
 | FR-008 | `Transcript::hidden_count(show_raw)` + `Row::Hidden(n)` notice with a "Show" button |
 | FR-009 | `Settings.show_raw_events`, window copy in `settings::State`, written by `persist_show_raw_events` |
+| FR-004 copy | `body_units` (selection) emits the summary line as unit 0 and the detail only when the entry is open, for Raw, SessionStart, Footer, OrphanResult, so copy equals what is drawn (S-1) |
 | FR-010 | filtering is view-side only; `Transcript` is untouched |
 | FR-011 | one `Transcript` type for live and resumed sessions |
 | FR-012 | non-low-signal kinds never reach the new paths; guarded by a test over every other `EntryKind` |
@@ -73,13 +74,17 @@ crates/micold-core/src/structured/transcript/
 ├── visibility.rs      # NEW: LowSignal, Entry::low_signal, shown(), Transcript::hidden_count
 ├── mod.rs             # re-export
 └── entry.rs           # unchanged
-crates/micold-core/src/settings.rs   # + show_raw_events: bool (serde default false)
+crates/micold-core/src/settings.rs   # + show_raw_events: bool in: Settings (serde default false), the on-disk mirror
+#                                      struct and both its conversions (~l.825-1080; without them the key is not
+#                                      persisted), and the Default impl (false)
 crates/micold-client/src/
 ├── features/transcript_selection/shown.rs   # + summary/notice text fns (pure, shared)
-├── features/transcript_selection.rs         # rows()/entries_in() filtered; TranscriptView gains show_raw
+├── features/transcript_selection.rs         # rows()/entries_in() filtered; body_units for the four kinds; reconcile; TranscriptView gains show_raw (its 4 construction sites, incl. test/parity helpers, updated in one task)
 ├── features/structured_transcript.rs        # TranscriptMsg::ShowRawEvents(bool)
-├── features/settings.rs                     # State.show_raw_events; SettingsMsg::ShowRawEventsToggled
-├── shell/persist.rs                         # persist_show_raw_events; window_settings / set_changed / literals
+├── features/settings.rs                     # State.show_raw_events; SettingsMsg::ShowRawEventsToggled; ValidSettings::into_settings
+│                                            #   (~l.893) carries the window's value, a Save never changes it; test literals
+├── shell/persist.rs                         # persist_show_raw_events; window_settings takes the window copy; set_changed
+│                                            #   destructure gets `show_raw_events: _` (never set by a Save); test literals
 ├── ui/transcript/entries.rs                 # rows(.., show_raw), Row::Hidden, summary-card arms, hidden notice
 ├── ui/transcript/mod.rs                     # toggle in bar; RowKey::Hidden; pass show_raw
 └── main.rs                                  # route the message (check feature_write_isolation)
@@ -96,7 +101,10 @@ docs/user-guide/structured-transcript.md     # NEW, + docs/SUMMARY.md line
 | FR-001, 003, 004, 006, 007, 008, SC-001, SC-002 | client (`tests/transcript_entry_view.rs`) | `rows()` with flag off/on over a mixed transcript: counts, order, notice, no raw text painted off; raw detail text byte-equal when open |
 | SC-003, US1-4 | client geometry (`tests/transcript_follow_layout.rs` style) | a collapsed summary card is one line tall; appended summary moves the offset by at most that |
 | FR-009, SC-004, US2-5 | client (`main_tests.rs` reducer + `shell/persist.rs` tests) | toggle updates `core.settings`, writes the store, a fresh `App` from that store starts on; two sessions' views read the same value; `set_changed` neither loses nor clobbers the key |
-| selection/copy | client (`tests/transcript_selection_parity.rs`) | hidden entries absent from `rows()` and from the copy text; revealed ones present |
+| selection/copy | client (`tests/transcript_selection_parity.rs`) | hidden entries absent from `rows()` and from the copy text; revealed ones present; a collapsed raw entry copies its summary line only, an open one also its text; `body_units` parity for all four kinds |
+| toggle with a live selection | client (`transcript_selection` unit) | `ShowRawEvents` clears that session's selection (reconcile otherwise keeps a row no longer in `rows()`); test with a selection ending on a low-signal entry |
+| US2-5 | client (`main_tests.rs`) | two sessions' views, one toggle: both `rows()` change in the same reducer step |
+| Save keeps the key | client (`persist.rs`, `features/settings.rs`) | a Save of another field leaves `show_raw_events` as the window holds it |
 | FR-011 | client | same transcript built live and via the resume path gives equal `rows()` |
 | look | quickstart §B visual pass | summary line weight, toggle placement, notice |
 

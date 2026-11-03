@@ -9,3 +9,5 @@
 **Layout**: header row = session bar then, at the trailing end, the `LabelledToggle` "Show raw events" (tooltip: "Show session start, turn summaries and unrecognised events"). Summary line = folded `DisclosureCard`, one line tall. Error summaries use the card's `failed` outline plus the word "failed"/"error" in the title (never colour alone).
 
 **Persistence**: `settings.json` key `show_raw_events` (bool, absent reads false).
+
+**Selection**: `body_units` for the four kinds yields the summary line as unit 0, the detail units only while open. Flipping the toggle clears that session's selection (a hidden entry's row leaves `rows()`).
