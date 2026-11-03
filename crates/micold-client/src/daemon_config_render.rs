@@ -11,9 +11,11 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use micold_core::daemon_config::{
-    diagnose, ConfigError, IdleStopSetting, Kind, Listen, SocketSpec,
+    diagnose, ConfigError, IdleStopSetting, Kind, Listen, OnFailure, RunPolicy, SocketSpec,
 };
-use micold_core::daemons::{DaemonEntry, DaemonRuntime};
+use micold_core::daemons::{
+    start_script_delivered, DaemonEntry, DaemonId, DaemonRuntime, StartupScript, StartupSettings,
+};
 use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
 
 /// The first line of every rendered file.
@@ -31,6 +33,36 @@ const SANDBOX_TOKEN: &str = "/run/micold/secrets/client-token";
 
 pub use micold_core::daemons::ProjectSetting;
 
+/// The `[startup]` table of a daemon's file: the settings and the path the script is delivered to
+/// (`startup.script_file`), which is where delivery put it, not where the user picked it from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartupTable {
+    pub script_file: PathBuf,
+    pub settings: StartupSettings,
+}
+
+/// Where an inline start script is kept: `<app data>/daemons/<id>/startup.sh` (#1533, FR-010).
+pub fn inline_script_path(app_data: &Path, id: DaemonId) -> PathBuf {
+    app_data
+        .join("daemons")
+        .join(id.0.to_string())
+        .join("startup.sh")
+}
+
+/// Writes an inline script's text to [`inline_script_path`]; `daemons.json` keeps only the marker.
+pub fn save_inline_script(app_data: &Path, id: DaemonId, text: &str) -> std::io::Result<()> {
+    let path = inline_script_path(app_data, id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, text)
+}
+
+/// The text saved by [`save_inline_script`]; empty when none was saved.
+pub fn load_inline_script(app_data: &Path, id: DaemonId) -> String {
+    std::fs::read_to_string(inline_script_path(app_data, id)).unwrap_or_default()
+}
+
 /// What one daemon's file is rendered from. Unset values are left out, so the daemon uses the
 /// kind's default.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +79,9 @@ pub struct DaemonSettings {
     pub ssh_dir: Option<PathBuf>,
     pub clone_root: Option<PathBuf>,
     pub projects: Vec<ProjectSetting>,
+    /// The `[startup]` table; `None` when the daemon has no start script, or its kind does not
+    /// deliver one yet ([`start_script_delivered`]).
+    pub startup: Option<StartupTable>,
 }
 
 impl DaemonSettings {
@@ -65,6 +100,7 @@ impl DaemonSettings {
             ssh_dir: None,
             clone_root: None,
             projects: Vec::new(),
+            startup: None,
         }
     }
 
@@ -89,6 +125,17 @@ impl DaemonSettings {
     /// daemon listens, and a sandbox daemon's token path when none is saved, are fixed here: those
     /// are the mounts the delivery issues (5-7) create.
     pub fn from_entry(entry: &DaemonEntry) -> Option<(Self, Kind)> {
+        Self::from_entry_delivering(entry, start_script_delivered)
+    }
+
+    /// [`Self::from_entry`] with `delivered` deciding which kinds get their start script in the
+    /// file. A script that is not delivered is left out, so the daemon never names a file that is
+    /// not there. The script path is the one the app knows; delivery replaces it with the path on
+    /// the daemon's machine.
+    pub fn from_entry_delivering(
+        entry: &DaemonEntry,
+        delivered: impl Fn(Kind) -> bool,
+    ) -> Option<(Self, Kind)> {
         let kind = match &entry.runtime {
             DaemonRuntime::Host => Kind::Host,
             DaemonRuntime::Ssh(_) => Kind::Ssh,
@@ -124,6 +171,17 @@ impl DaemonSettings {
             client_token_file: file.client_token_file.clone().or(token_default),
             clone_root: file.clone_root.clone(),
             projects: file.projects.clone(),
+            startup: file
+                .startup
+                .as_ref()
+                .filter(|_| delivered(kind))
+                .map(|settings| StartupTable {
+                    script_file: match &settings.script {
+                        StartupScript::File(path) => path.clone(),
+                        StartupScript::Inline => inline_script_path(&app_data_dir(), entry.id),
+                    },
+                    settings: settings.clone(),
+                }),
             ..Self::new(entry.name.as_str(), listen)
         };
         Some((settings, kind))
@@ -174,7 +232,44 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
         let _ = writeln!(out, "path = {}", quote(&project.path.to_string_lossy()));
         key_str(&mut out, "remote", &project.remote);
     }
+    if let Some(startup) = &settings.startup {
+        render_startup(&mut out, startup);
+    }
     out
+}
+
+/// The `[startup]` table: only the keys that differ from the schema's defaults, and never a
+/// script's text or a secret's value, only the paths.
+fn render_startup(out: &mut String, startup: &StartupTable) {
+    let StartupTable {
+        script_file,
+        settings,
+    } = startup;
+    out.push_str("\n[startup]\n");
+    let _ = writeln!(
+        out,
+        "script_file = {}",
+        quote(&script_file.to_string_lossy())
+    );
+    key_path(out, "shell", &settings.shell);
+    if let Some(secs) = settings.timeout_secs {
+        let _ = writeln!(out, "timeout_secs = {secs}");
+    }
+    if settings.on_failure == OnFailure::Warn {
+        out.push_str("on_failure = \"warn\"\n");
+    }
+    if settings.run == RunPolicy::OncePerContainer {
+        out.push_str("run = \"once_per_container\"\n");
+    }
+    key_path(out, "env_file", &settings.env_file);
+    if !settings.export_env {
+        out.push_str("export_env = false\n");
+    }
+}
+
+/// The application's data directory, where inline scripts are kept.
+fn app_data_dir() -> PathBuf {
+    micold_core::paths::data_local_dir().unwrap_or_default()
 }
 
 /// The file to deliver, or the errors that stop its delivery: the check of

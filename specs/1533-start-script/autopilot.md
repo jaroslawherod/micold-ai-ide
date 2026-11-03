@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M2 PR merge, then milestone M3
+- **Next step**: M3 gate, reviews and PR
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1630 | Design (spec, plan, tasks) | merged | 1ede52197f6dc7022ea768f7fb884e64b175e83c |
 | #1665 | M1 | merged | d0f4739f6fe79a7e9bc2af87729e0f30597105c2 |
-| #1669 | M2 | open | |
+| #1669 | M2 | merged | 96a41b38670b43471a568573dd143459189e139a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
-| M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | open |
+| M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | | pending |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
@@ -65,7 +65,9 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-None.
+M3 (T018-T022) is implemented and ticked in tasks.md, uncommitted work committed as WIP on this branch (not pushed, no PR). Targeted tests pass (start_script_settings, geometry cases, daemon_config*, daemons_*; core startup_settings not yet run). New code: core `StartupSettings`/`StartupScript`/`start_script_delivered` (daemons.rs), `OnFailure`/`RunPolicy` Serialize+Default, client `daemons_start.rs`, `Section::StartScript` + `of_with`, `State.start_script_forced`, `DaemonView.startup_restart`, `Msg::RestartKeysReported`, render `[startup]` + inline script file helpers.
+Next: (1) read the scoped gate log `.../scratchpad/sg.log` (SG_EXIT=101, cause not yet read; likely clippy or a core test), fix; (2) fix Review A F1 (MAJOR): in `save_checked` (features/daemons.rs) write the inline script only where the registry is committed (None arm, Some arm before `*model.registry = probe`, and on Pending::Edit confirm - carry the text in Pending::Edit); and MINORs: F2 `field_section` should use forced flag, F3 empty app-data fallback (error instead of relative path), F4 clear `startup_restart` and delete inline script dir on daemon removal; (3) Review B (agent afe993e83cd765370 was dispatched, result not read; re-dispatch if lost); (4) full `mise run gate`, push, PR titled `feat(1533): Start script group in Settings, hidden until delivery (#1533)`, body ends `Refs #1533`; may need docs-not-needed label. Live feed of ConfigStatus into RestartKeysReported is left to M4 (follow-up).
+Review rounds so far: Review A round 1 (snapshot 7200ed14845184c60fef43d8a31bbd70e4be91d8:96a41b38670b43471a568573dd143459189e139a): CHANGES, 1 MAJOR 3 MINOR, unfixed.
 
 ## Open escalation
 

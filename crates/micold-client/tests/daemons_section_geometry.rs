@@ -1038,3 +1038,74 @@ fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
         );
     }
 }
+
+/// #1533, M3: while no kind delivers a start script the edit form paints no Start script group;
+/// forced on, it paints last, opens to its fields for each source, and none overflows.
+#[test]
+fn the_start_script_group_is_hidden_until_delivery_and_fits_when_forced_on() {
+    use micold_client::features::daemons::{DraftRuntime, Section};
+    use micold_client::features::daemons_start::StartSource;
+    for runtime in [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Ssh,
+        DraftRuntime::Host,
+    ] {
+        let (mut state, shown) = add_form(runtime);
+        assert!(
+            !has(&shown, "Start script"),
+            "{runtime:?} hidden: {shown:?}"
+        );
+
+        state.daemon_list.start_script_forced = Some(true);
+        let shown = painted_tall(&state);
+        assert!(
+            has(&shown, "Start script"),
+            "{runtime:?} forced on: {shown:?}"
+        );
+        assert_no_text_overflows(
+            &state,
+            &format!("{runtime:?} form with the Start script group"),
+        );
+
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+            Section::StartScript,
+        )));
+        for (source, field) in [
+            (StartSource::File, "Script file"),
+            (StartSource::Inline, "When the script fails"),
+        ] {
+            state.update(Message::Daemons(DaemonsMsg::StartSourceChosen(source)));
+            let shown = painted_tall(&state);
+            for label in [field, "Timeout (seconds)", "Secrets file", "Shell"] {
+                assert!(
+                    has(&shown, label),
+                    "{runtime:?} {source:?}: {label} in {shown:?}"
+                );
+            }
+            assert_no_text_overflows(&state, &format!("{runtime:?} Start script, {source:?}"));
+        }
+        state.update(Message::Daemons(DaemonsMsg::StartTimeoutEdited("0".into())));
+    }
+}
+
+/// US5.2, client side: a daemon whose changed restart-only keys include `startup` says the change
+/// applies after a restart; reporting none clears it.
+#[test]
+fn a_pending_start_script_change_shows_the_restart_notice() {
+    let (mut state, [host, ..]) = with_daemons();
+    let notice = micold_client::features::daemons_start::RESTART_TO_APPLY;
+    assert!(!has(&painted(&state), "Restart to apply"));
+    state.update(Message::Daemons(DaemonsMsg::RestartKeysReported(
+        host,
+        vec!["startup".into()],
+    )));
+    state.update(Message::Daemons(DaemonsMsg::DetailsOpened(host)));
+    assert!(has(&painted(&state), notice), "the notice is on the row");
+    assert_no_text_overflows(&state, "a row with the restart notice");
+    state.update(Message::Daemons(DaemonsMsg::RestartKeysReported(
+        host,
+        Vec::new(),
+    )));
+    assert!(!has(&painted(&state), "Restart to apply"));
+}
