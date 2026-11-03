@@ -85,3 +85,7 @@ Review A (snapshot 43c5ab91:aeebb4cf): CLEAN, 3 MINOR not fixed (exports lost on
 watcher hashes after the run; FileMissing leaves tail empty, reason is the output per S2.3).
 Review B (sonnet): CLEAN, 3 MINOR (order test stands in for session.env/ai.cli tiers not yet applied
 by the daemon; compile-red only; quickstart Part A not run). Scoped gate green.
+
+## M3 docs decision
+
+PR #1673 carries `docs-not-needed`: the Start script group is hidden for every kind until delivery (`start_script_delivered` is false), so no user-visible change exists. The guide page is T023 in M4.
