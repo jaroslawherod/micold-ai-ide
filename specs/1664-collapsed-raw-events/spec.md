@@ -101,8 +101,8 @@ A session resumed from its saved history shows its low-signal entries the same w
 - **FR-009**: The toggle's state MUST be remembered per user, across restarts and across views.
 - **FR-010**: No event MAY be dropped: every hidden entry stays in the transcript data and is reachable by turning the toggle on.
 - **FR-011**: FR-001 to FR-010 MUST hold for live and for resumed transcripts alike.
-- **FR-013**: [NEEDS CLARIFICATION: with the toggle off, do an error turn footer and an error orphan result stay visible as summary lines (default, so a failed turn is never silent), or are they hidden like the rest and counted in the hidden-events notice?]
 - **FR-012**: Conversation entries (messages, thinking, tool cards, command output, compaction and other session notices) MUST be unchanged by this feature.
+- **FR-013**: [NEEDS CLARIFICATION: with the toggle off, do an error turn footer and an error orphan result stay visible as summary lines (default, so a failed turn is never silent), or are they hidden like the rest and counted in the hidden-events notice?]
 
 ### Key Entities
 
