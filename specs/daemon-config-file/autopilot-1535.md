@@ -59,3 +59,5 @@ None.
 ## Follow-ups not done
 
 - Milestones live in tasks.md under "Issue 14 (#1535)".
+
+Note (part 6): local full gate could not finish; /tmp hit `Disk quota exceeded` (git init, rustc, cp). Failures seen were only that; the affected daemon tests pass when rerun; full gate left to CI.
