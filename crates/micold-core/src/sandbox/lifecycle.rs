@@ -1291,7 +1291,7 @@ mod mounted_tests {
         assert_eq!(started.id, ContainerId("9f2b1c4d7e8a".into()));
         assert_eq!(fake.called("create"), 1, "no second create");
         assert!(ledger.is_empty(), "the winner is not ours to roll back");
-        assert_eq!(started.mounted.as_deref().map(<[String]>::len), Some(2));
+        assert_eq!(started.mounted.as_deref().map(<[String]>::len), Some(3));
     }
 
     #[test]
@@ -1547,7 +1547,7 @@ mod adoption_tests {
             }
         ));
         // Without the mount the same container is attached as before.
-        ours.mount_destinations = vec!["/home/u/project".into()];
+        ours.mount_destinations = vec!["/home/u/project".into(), "/run/micold/config".into()];
         assert_eq!(
             adopt(Some(&ours), "micold-daemon:0.27.0", &retired, "micold-net"),
             Adoption::Attach(ContainerId("9f2b".into()))

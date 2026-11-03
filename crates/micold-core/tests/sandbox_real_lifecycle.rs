@@ -38,6 +38,11 @@ fn host_home() -> PathBuf {
 /// fix arriving by another route. `shell::sandbox::start` creates it for the same reason.
 fn make_sandbox_home(state: &std::path::Path) {
     std::fs::create_dir_all(state.join(micold_core::sandbox::SANDBOX_HOME_DIR)).unwrap();
+    // The read-only configuration and secrets folders (#1527) must exist too: podman refuses a
+    // missing bind source.
+    let delivery = micold_core::sandbox::DeliveryMount::beside(state);
+    std::fs::create_dir_all(&delivery.config).unwrap();
+    std::fs::create_dir_all(&delivery.secrets).unwrap();
 }
 
 use std::process::Command;
