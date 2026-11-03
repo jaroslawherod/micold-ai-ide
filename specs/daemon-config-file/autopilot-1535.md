@@ -9,15 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1535
 - **Worktree branch**: feat/1535_read-what-a-daemon-was-given
 - **Started**: 2026-11-01
-- **Phase**: milestone M1
-- **Next step**: handoff (wait on CI, merge M1)
+- **Phase**: close
+- **Next step**: close PR remediation (T124-T130), review, gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1629 | Design (milestones for Issue 14) | merged | 44cf9d37c8b416b545a9c8e6cd1b4fb3bc9e429b |
-| #1655 | M1 | open | — |
+| #1655 | M1 | merged | 937c03ea2fa1da5c722b42260a2c8786b151bf90 |
 
 ## Milestones
 

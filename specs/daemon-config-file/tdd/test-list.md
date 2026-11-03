@@ -72,3 +72,15 @@ project into the next write.
 | ID | Behavior | Traces to | State |
 |---|---|---|---|
 | U24 | `ensure_build` for a user host uploads `daemon.toml` and each named secret by content hash; unchanged content sends identical commands, a rotated secret changes only its own; the remote script writes `0600`/`0700` and skips a matching hash | FR-005, FR-029 | DONE |
+
+## Test list: Issue 14 (#1535), milestone M1
+
+Baseline: `micold-client` `ui::daemon_details_dialog` 6 unit tests, `daemon_dialog_buttons` 6, `daemons_section_geometry` 22 (green at `0ad33a4e5`).
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| I14-1 | The details dialog keeps the full no-overflow assertion; only text in the delivered file's scroll container is exempt, and that exemption is itself asserted | US6, SC-005 | DONE |
+| I14-2 | The dialog offers Restart to apply only when the status says `restart_needed`; painted text holds the delivered file and the resolved values | US6, FR-029 | DONE |
+| I14-3 | The start script's output tail appears in no rendered line or row | US6, FR-029 | DONE |
+| I14-4 | The start-script line is exact for every outcome and reason (`Ok`, `Skipped`, `Warned`, `Failed`; `Exit`, `Signal`, `Timeout`, `Spawn`, `FileMissing`) | US6, FR-029 | DONE |
+| I14-6 | The user guide and the code comment say what ships: outcome, reason and time, no variable names | US6, FR-029 | DONE (docs) |
