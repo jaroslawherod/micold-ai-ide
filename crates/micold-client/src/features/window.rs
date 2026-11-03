@@ -210,6 +210,16 @@ pub enum FieldId {
     DaemonCloneRoot,
     /// Settings → Daemons: the form's client token file field (#1525).
     DaemonClientTokenFile,
+    /// Settings → Daemons: the Start script group's script file path (#1533).
+    DaemonStartFile,
+    /// Settings → Daemons: the Start script group's shell (#1533).
+    DaemonStartShell,
+    /// Settings → Daemons: the Start script group's timeout (#1533).
+    DaemonStartTimeout,
+    /// Settings → Daemons: the Start script group's secrets file (#1533).
+    DaemonStartEnvFile,
+    /// Settings → Daemons: the Start script group's export checkbox (#1533).
+    DaemonStartExport,
     /// Settings → Daemons: one remote daemon's repository path field (feature 489, FR-012; per
     /// daemon since 937, so two daemons' marks are distinct).
     DaemonRepository(micold_core::daemons::DaemonId),
