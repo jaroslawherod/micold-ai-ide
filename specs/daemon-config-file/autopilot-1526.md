@@ -55,6 +55,16 @@ None.
 The orchestrator waits on CI and merges; a fresh unit should not redo any of the implementation,
 gate or review work below.
 
+**CI fix (attempt 1 of 3)**: PR #1660's first CI run came back RED on the `docs check` job only
+(`feat(1526): …` title + `crates/micold-client/src/features/daemons.rs` flagged user-facing, no
+`docs/user-guide/` page touched). Fixed by updating
+`docs/user-guide/daemon-configuration.md`'s "Projects and the clone root" section: the old sentence
+"A project you add in the application while the daemon runs works at once; it is not yet written
+into the file" was stale as of T080a/T027 — it is now written into `daemon.toml` for a **host**
+daemon (not yet for SSH, M1b's job). Verified locally with `scripts/check-user-guide-updated.sh
+origin/main HEAD` (after committing) and `mise run test-scripts` (docs-only gate per gate.md's
+table); both clean. No code changed.
+
 **Local gate note**: the scoped gate (fmt + clippy + tests of `micold-client`, the only crate this
 diff touches) passed clean. The full `mise run gate` was attempted twice and failed both times for
 reasons unrelated to this diff: (1) resource contention with another concurrently-running worktree
