@@ -107,3 +107,11 @@ Append only. Newest last.
 - red (mutants from tdd-verify, tests written against them): M1 `restart_needed && false` at `daemon_details_dialog.rs:35` now fails `the_details_dialog_offers_restart_only_when_the_daemon_needs_one` (re-run, then reverted). M2 (tail appended), M3 (`Skipped` text) and M4 (`Timeout` dropped) are pinned by `the_start_script_output_tail_is_never_rendered` and `the_start_script_line_names_each_outcome_and_reason`; they were not re-run (pinned by inspection only, as is T125's `delivered`/`details.config` check).
 - green: `ui::daemon_details_dialog` 8 unit tests, `--test main -- daemon_dialog_buttons daemons_section_geometry` 30 passed.
 - T128: the overflow assertion is whole again; only the node holding the delivered file's own first line (its scroll container) is exempt.
+
+## Issue 5 (#1526) M1a, M1b: deliver the configuration to host and SSH daemons
+
+- Baseline before M1a: `micold-client` and `micold-core` scoped suites green on `origin/main`.
+- No red run was recorded for U21-U24 and T080a: tests and code landed in the same commits
+  (`189ccd5ff`, `8a5e7f12c`), so these behaviors are `TEST_AFTER`. `tdd/verification.md`
+  (Issue 5) lists the gaps found afterwards; T131-T136 and T138 closed them, each checked against
+  the mutant it names.

@@ -58,6 +58,8 @@ Baseline: `cargo test -p micold-client --test main daemon_config` green at M2 st
 
 ## Test list: Issue 5 (#1526), milestone M1a
 
+Baseline: scoped `micold-client` and `micold-core` suites green on `origin/main` before M1a. Traces for U21-U24 and T080a: FR-005, FR-014, FR-029.
+
 Host delivery before spawn (write-if-changed, mode 0600, no added env) and feeding a runtime-added
 project into the next write.
 
