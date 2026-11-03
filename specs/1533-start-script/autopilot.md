@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M3 gate, reviews and PR
+- **Next step**: M3 PR CI and merge, then M4 (after #1526)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
-| M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | | pending |
+| M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | PR pending | in review |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
@@ -50,6 +50,9 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 | Plan 1533 | 1 | 9afe4badc3b5:6e4fc30a516c | CHANGES: 3 MAJOR (timeout mechanism, align_container_home order, host spawn failure trigger) and 3 MINOR fixed; re-review next |
 | Plan 1533 | 2 | ac54eddf2e07:6e4fc30a516c | CLEAN (3 MINOR fixed, prose only) |
 | Tasks 1533 analyze | 1 | 43696b27:c6372cd5 | 0 CRITICAL, 1 HIGH (Windows tests/doc) fixed; MEDIUM/LOW fixed except task splitting (declined) |
+| Code M3 A (code-review high) | 1 | 7200ed14:96a41b38 | CHANGES: 1 MAJOR (inline script written before edit commits) 3 MINOR, all fixed |
+| Code M3 A | 2 | fix diff | CLEAN (1 MINOR: confirm keeps form open on script write error, fixed) |
+| Code M3 B (conformance) | 1 | HEAD~2 | CHANGES: 1 MAJOR (cycle-log M3 section missing, added), 1 MINOR (RestartKeysReported has no producer until M4, recorded in cycle log) |
 | Tasks 1533 | 1 | 43696b27:c6372cd5 | CHANGES: 1 MAJOR (M3 half-wired UI: group hidden per kind until delivery) and 3 MINOR fixed |
 | Tasks 1533 | 2 | 80d6c8d2:c6372cd5 | CHANGES: 1 MAJOR (guide task T023 moved to M4) and 2 MINOR fixed; prose/ordering only, no round 3 |
 | Code M1 A (code-review high) | 1 | 3e019daf9ea5:761a3fb9e52b | CLEAN (3 MINOR; F1 invalid env name fixed with test; F2, F3 declined, see Declined) |
@@ -65,9 +68,7 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-M3 (T018-T022) is implemented and ticked in tasks.md, uncommitted work committed as WIP on this branch (not pushed, no PR). Targeted tests pass (start_script_settings, geometry cases, daemon_config*, daemons_*; core startup_settings not yet run). New code: core `StartupSettings`/`StartupScript`/`start_script_delivered` (daemons.rs), `OnFailure`/`RunPolicy` Serialize+Default, client `daemons_start.rs`, `Section::StartScript` + `of_with`, `State.start_script_forced`, `DaemonView.startup_restart`, `Msg::RestartKeysReported`, render `[startup]` + inline script file helpers.
-Next: (1) read the scoped gate log `.../scratchpad/sg.log` (SG_EXIT=101, cause not yet read; likely clippy or a core test), fix; (2) fix Review A F1 (MAJOR): in `save_checked` (features/daemons.rs) write the inline script only where the registry is committed (None arm, Some arm before `*model.registry = probe`, and on Pending::Edit confirm - carry the text in Pending::Edit); and MINORs: F2 `field_section` should use forced flag, F3 empty app-data fallback (error instead of relative path), F4 clear `startup_restart` and delete inline script dir on daemon removal; (3) Review B (agent afe993e83cd765370 was dispatched, result not read; re-dispatch if lost); (4) full `mise run gate`, push, PR titled `feat(1533): Start script group in Settings, hidden until delivery (#1533)`, body ends `Refs #1533`; may need docs-not-needed label. Live feed of ConfigStatus into RestartKeysReported is left to M4 (follow-up).
-Review rounds so far: Review A round 1 (snapshot 7200ed14845184c60fef43d8a31bbd70e4be91d8:96a41b38670b43471a568573dd143459189e139a): CHANGES, 1 MAJOR 3 MINOR, unfixed.
+None.
 
 ## Open escalation
 
