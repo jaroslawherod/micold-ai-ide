@@ -343,28 +343,41 @@ scenario separates them without a half-wired UI. Delivery of the rendered file i
 - **Depends on**: Issue 2 (#1523), merged
 - **Tier**: full
 
-### Issue 5 (#1526) — M1 — Deliver the configuration to host and SSH daemons 🎯 MVP
+### Issue 5 (#1526) — M1a — Deliver the configuration to the host daemon 🎯 MVP
 
-One milestone: host delivery (T025 test, T027 implement) and SSH delivery (T026 test, T028
-implement, including dropping the user-host env list) share the write-if-changed path and FR-005's
-"by the kind's own means", and FR-029's "show when the file differs" is only meaningful once both
-kinds deliver a file, so no acceptance scenario separates them without a half-wired daemon. T080a
+Host delivery (T025 test, T027 implement) is its own milestone: two consecutive M1 units hit the
+context cap before writing any code (see `autopilot-1526.md`), so the host and SSH halves now ship
+as separate milestones/PRs, split along the host/SSH line the settled design already uses. T080a
 (feed `add_runtime_project` from a seen `ProjectAdd`) travels with it (moved from Issue 13 per its
-ledger, `autopilot-1534.md`: it needs T027's delivery). T029 (user guide) travels with it.
+ledger, `autopilot-1534.md`: it needs T027's delivery) since it needs the host's write path to
+observe a project change.
 
-- **Tasks**: T025–T029, T080a
+- **Tasks**: T025, T027, T080a
 - **Deliverable**: before `spawn_detached_daemon` the host writes `<data_dir>/daemon.toml` (mode
-  `0600`) only when it changed, with no `MICOLD_*` env passed to the process; the SSH provisioning
-  copy step uploads `~/.micold/remote/daemon.toml` and the named secrets to
-  `~/.micold/remote/secrets/` (`0700`/`0600`), a rotated token re-copies only that file, and the
-  SSH env list for user hosts is gone; a runtime-added project (`ProjectAdd`) appears in the next
-  file written to either kind; `docs/user-guide/remote-daemons.md` documents where the file lives
-  on the SSH host and how to edit it by hand.
-- **Satisfies**: US1, US3; FR-005, FR-014, FR-029
-- **Verify**: `cargo test -p micold-client --test daemon_config_delivery_host`; `cargo test -p
-  micold-core provision`; `cargo test -p micold-core ssh::argv`
+  `0600`) only when it changed, with no `MICOLD_*` env passed to the process; a runtime-added
+  project (`ProjectAdd`) appears in the next file written to the host.
+- **Satisfies**: US1, US3; FR-005, FR-014
+- **Verify**: `cargo test -p micold-client --test daemon_config_delivery_host`
 - **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1 (`render` and its golden files),
   merged on `main` via PR #1617/#1620 — #1525 itself stays open for follow-up work in PR #1654
+- **Tier**: full
+
+### Issue 5 (#1526) — M1b — Deliver the configuration to SSH daemons
+
+SSH delivery (T026 test, T028 implement, including dropping the user-host env list) reuses the
+write-if-changed helper M1a lands, done server-side over the copy step. T029 (user guide) travels
+with it: it documents the SSH-side file this milestone delivers.
+
+- **Tasks**: T026, T028, T029
+- **Deliverable**: the SSH provisioning copy step uploads `~/.micold/remote/daemon.toml` and the
+  named secrets to `~/.micold/remote/secrets/` (`0700`/`0600`), a rotated token re-copies only that
+  file, and the SSH env list for user hosts is gone; `docs/user-guide/remote-daemons.md` documents
+  where the file lives on the SSH host and how to edit it by hand.
+- **Satisfies**: US1, US3; FR-005, FR-029
+- **Verify**: `cargo test -p micold-core provision`; `cargo test -p micold-core ssh::argv`
+- **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1 (`render` and its golden files),
+  merged on `main` via PR #1617/#1620 — #1525 itself stays open for follow-up work in PR #1654;
+  Issue 5 (#1526) M1a (reuses the write-if-changed helper it lands)
 - **Tier**: full
 
 ### Issue 13 (#1534) — M1 — Projects and clone root from the configuration
