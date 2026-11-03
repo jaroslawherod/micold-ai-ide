@@ -115,3 +115,23 @@ Append only. Newest last.
   (`189ccd5ff`, `8a5e7f12c`), so these behaviors are `TEST_AFTER`. `tdd/verification.md`
   (Issue 5) lists the gaps found afterwards; T131-T136 and T138 closed them, each checked against
   the mutant it names.
+## Issue 6 (#1527) M1: container daemons read the delivered configuration (T030-T035, T090)
+
+Honest account: the `tdd.run` hook did not run in this part, so there is no per-behaviour red run
+recorded. Tests and code were written together and the suites run green afterwards; red evidence
+below is by mutation on the green tree, not an observed failing-first run.
+
+- T030 (mounts and env, `crates/micold-core/src/sandbox/`, `sandbox_argv`/`sandbox_parity` tests):
+  config and secrets folders mount read-only at `/run/micold/config` and `/run/micold/secrets`; no
+  `MICOLD_*` `-e` on `create`. Covered by argv goldens.
+- T031 (`container_env`, `crates/micold-client/src/daemon.rs`): the bridge command carries no
+  `MICOLD_DATA_DIR`; unit tests in `daemon::`.
+- T032 (`scripts/tests/entrypoint-config.test.sh`): the entrypoint reads `[ssh] dir` from the file
+  and starts the daemon without environment.
+- T090 (`supervisor.rs` `env_hygiene_with`): `LANG=C.UTF-8` unless the daemon inherited one.
+- V3 relaxation: `listen.socket` valid for kind `container` (`daemon_config` tests).
+- `StaleReason::MadeBeforeConfigDelivery` (`lifecycle.rs` `adoption_tests`): a container with no
+  `/run/micold/config` mount is replaced, a current one attached. The first version of this test
+  used a helper from a sibling test module and did not compile; found by `test-sandbox`'s build.
+- Real runtime: `sandbox_real_*` boot and SSH start cases exercise the delivered file under podman
+  (`MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman`); results in the PR body.
