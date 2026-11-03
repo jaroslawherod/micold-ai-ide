@@ -286,6 +286,35 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
     command(reach, platform, timeout, &remote, None)
 }
 
+/// Where the delivered configuration lives on an SSH host (`$HOME` is the remote shell's).
+pub const REMOTE_CONFIG: &str = "$HOME/.micold/remote/daemon.toml";
+
+/// Where a delivered secret file named `name` lives on an SSH host.
+pub fn remote_secret_path(name: &str) -> String {
+    format!("$HOME/.micold/remote/secrets/{name}")
+}
+
+/// Writes stdin to `remote_path` (mode `mode`, directories `0700`) only when the file's current
+/// sha256 differs from `hash`: the remote shell decides, so a rotated secret re-copies only
+/// itself and an unchanged file is not rewritten. `hash` is our own hex digest and `remote_path`
+/// one we build, never user text, so both are safe to interpolate.
+pub fn copy_if_changed(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    remote_path: &str,
+    mode: u32,
+    hash: &str,
+) -> SshCommand {
+    let remote = format!(
+        "sh -c 'umask 077; d=$(dirname \"{remote_path}\"); mkdir -p \"$d\" || exit 1; \
+         cur=$( (sha256sum \"{remote_path}\" || shasum -a 256 \"{remote_path}\") 2>/dev/null | cut -d\" \" -f1); \
+         if [ \"$cur\" = \"{hash}\" ]; then cat >/dev/null; else \
+         p=\"$d/.part.$$\"; cat > \"$p\" && chmod {mode:o} \"$p\" && mv \"$p\" \"{remote_path}\" || {{ rm -f \"$p\"; exit 1; }}; fi'"
+    );
+    command(reach, platform, timeout, &remote, None)
+}
+
 /// The state directory a container's daemon keeps its data in: the image's
 /// `ENV MICOLD_DATA_DIR`, which an SSH session does not inherit (sshd builds the session's
 /// environment afresh), so it rides the bridge command. Never `XDG_DATA_HOME` (1286): that would
@@ -349,6 +378,54 @@ pub fn bridge_with_env(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// Run `copy_if_changed`'s remote script with a throwaway `$HOME`, feeding `stdin`.
+    #[cfg(unix)]
+    fn run_copy_if_changed(home: &std::path::Path, hash: &str, stdin: &[u8]) {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let cmd = copy_if_changed(
+            &target(),
+            ClientPlatform::Linux,
+            15,
+            &remote_secret_path("client-token"),
+            0o600,
+            hash,
+        );
+        let script = cmd.args.last().unwrap();
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(script)
+            .env("HOME", home)
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(stdin).unwrap();
+        assert!(child.wait().unwrap().success());
+    }
+
+    /// T026 (#1526): the remote script writes `0600` under a `0700` directory, and leaves a file
+    /// whose hash matches untouched (a rotated secret is the only one rewritten).
+    #[cfg(unix)]
+    #[test]
+    fn copy_if_changed_writes_private_files_and_skips_an_unchanged_one() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join(".micold/remote/secrets/client-token");
+        let hash = |b: &[u8]| crate::protocol::hashing::sha256_hex(b);
+        run_copy_if_changed(home.path(), &hash(b"tok1"), b"tok1");
+        assert_eq!(std::fs::read(&file).unwrap(), b"tok1");
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&file), 0o600);
+        assert_eq!(mode(file.parent().unwrap()), 0o700);
+        // Same hash: stdin is drained, the file is not rewritten (a sentinel survives).
+        std::fs::write(&file, b"sentinel").unwrap();
+        run_copy_if_changed(home.path(), &hash(b"sentinel"), b"other");
+        assert_eq!(std::fs::read(&file).unwrap(), b"sentinel");
+        run_copy_if_changed(home.path(), &hash(b"tok2"), b"tok2");
+        assert_eq!(std::fs::read(&file).unwrap(), b"tok2");
+        assert_eq!(mode(&file), 0o600);
+    }
 
     fn target() -> Reach {
         Reach::UserConfig(SshTarget {

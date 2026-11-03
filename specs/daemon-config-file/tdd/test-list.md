@@ -66,3 +66,9 @@ project into the next write.
 | U21 | `deliver_host` writes `<data_dir>/daemon.toml` mode 0600 on first call; a second call with unchanged settings is a no-op (file untouched) | FR-005 | DONE |
 | U22 | A settings change (e.g. a runtime-added project) makes the next `deliver_host` call write again | FR-005, FR-014 | DONE |
 | U23 | `spawn_detached_daemon` adds no `MICOLD_*` (or any) env beyond the test process's own (regression guard) | FR-005 | DONE |
+
+## Test list: Issue 5 (#1526), milestone M1b
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| U24 | `ensure_build` for a user host uploads `daemon.toml` and each named secret by content hash; unchanged content sends identical commands, a rotated secret changes only its own; the remote script writes `0600`/`0700` and skips a matching hash | FR-005, FR-029 | DONE |

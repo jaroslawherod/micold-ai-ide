@@ -32,8 +32,8 @@ use micold_core::provision::ai_cli::AiCliTable;
 use micold_core::provision::keys::DaemonKeys;
 use micold_core::provision::AttemptLedger;
 use micold_core::provision::{
-    run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionEvent, ProvisionTarget,
-    Step, StepBounds,
+    run as ssh_run, CancelToken, ConfigDelivery, Egress, EventSink, Ownership, ProvisionEvent,
+    ProvisionTarget, Step, StepBounds,
 };
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::SystemRunner;
@@ -206,6 +206,8 @@ pub enum Dial {
     Ssh {
         /// The host and connection settings.
         target: SshTarget,
+        /// The configuration delivered to the host beside the build (#1526).
+        settings: SshDial,
     },
     /// Provision and bridge to a container daemon over the container's own SSH server, published
     /// on loopback, with the app's own keys (feature 806). A running released-image container is
@@ -262,6 +264,28 @@ impl std::hash::Hash for HostDial {
         daemon_config_render::render(&self.settings, Kind::Host).hash(state);
         self.data_dir.hash(state);
     }
+}
+
+/// An SSH daemon's config settings, as part of an actor's identity: hashed by their rendered bytes
+/// like [`HostDial`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshDial(pub DaemonSettings);
+
+impl std::hash::Hash for SshDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        daemon_config_render::render(&self.0, Kind::Ssh).hash(state);
+    }
+}
+
+/// The secret files an SSH host's configuration names, read from this machine: file name under
+/// `secrets/`, content. Only `client_token_file` is such a field today (#1526 D5(b)).
+fn named_secrets(settings: &DaemonSettings) -> Vec<(String, Vec<u8>)> {
+    settings
+        .client_token_file
+        .as_ref()
+        .and_then(|path| std::fs::read(path).ok())
+        .map(|bytes| vec![("client-token".to_string(), bytes)])
+        .unwrap_or_default()
 }
 
 /// A [`DriftChoice`] as part of an actor's identity.
@@ -472,9 +496,16 @@ pub fn actor_specs_answered(
                         })
                         .flatten(),
                 },
-                DaemonRuntime::Ssh(s) => Dial::Ssh {
-                    target: s.target.clone(),
-                },
+                DaemonRuntime::Ssh(s) => {
+                    let mut settings = DaemonSettings::from_entry(entry)?.0;
+                    for path in runtime_projects.get(&entry.id).into_iter().flatten() {
+                        settings.add_runtime_project(path);
+                    }
+                    Dial::Ssh {
+                        target: s.target.clone(),
+                        settings: SshDial(settings),
+                    }
+                }
                 DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
                     name: entry.name.as_str().to_string(),
                     settings: KubeDial(Box::new(k.clone())),
@@ -742,9 +773,9 @@ async fn connect_and_pump(
             std::io::ErrorKind::NotFound,
             "no host endpoint",
         )),
-        (Dial::Ssh { target }, _) => {
+        (Dial::Ssh { target, settings }, _) => {
             let sink = provisioning_sink(id, output);
-            match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, &sink).await {
+            match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, &settings.0, &sink).await {
                 Ok(c) => Ok(c),
                 // A link that was up and is down is retried; a start that never connected is
                 // reported once and ends the actor.
@@ -1275,6 +1306,7 @@ pub async fn replace_remote(reach: RemoteReach) -> Result<(), micold_core::ssh::
 async fn ssh_attempt(
     host: Option<&dyn SshHost>,
     target: &SshTarget,
+    settings: &DaemonSettings,
     sink: &EventSink,
 ) -> Result<Connected, String> {
     let Some(host) = host else {
@@ -1283,17 +1315,18 @@ async fn ssh_attempt(
     let platform = ClientPlatform::current();
     let opts = ssh_options(host, target).await;
     let timeout_secs = opts.timeout_secs;
-    let provisioned = ssh_run(
-        host,
-        &ProvisionTarget::user_host(
-            target,
-            std::time::Duration::from_secs(u64::from(timeout_secs)),
-        ),
-        &opts,
-        &CancelToken::new(),
-        sink,
-    )
-    .await;
+    let mut provision_target = ProvisionTarget::user_host(
+        target,
+        std::time::Duration::from_secs(u64::from(timeout_secs)),
+    );
+    // A configuration that does not render is not delivered; the daemon starts with its defaults.
+    provision_target.config = daemon_config_render::prepare(settings, Kind::Ssh)
+        .ok()
+        .map(|text| ConfigDelivery {
+            config: text.into_bytes(),
+            secrets: named_secrets(settings),
+        });
+    let provisioned = ssh_run(host, &provision_target, &opts, &CancelToken::new(), sink).await;
     provisioned.map(|p| p.connected).map_err(|failure| {
         failure.reason(&ReasonContext {
             host: target.host.clone(),
@@ -1380,6 +1413,7 @@ fn container_target(
             state_dir: PathBuf::from(CONTAINER_STATE_DIR),
         },
         env: container_env(reach),
+        config: None,
         bounds: StepBounds::container(),
     }
 }
@@ -2101,7 +2135,7 @@ mod tests {
         states.insert(id, DaemonState::Starting);
         let specs = actor_specs(&registry, &states, dir, None);
         assert!(
-            matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target } if target.host == "build-box"))
+            matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target, .. } if target.host == "build-box"))
         );
 
         states.insert(
@@ -2313,12 +2347,18 @@ mod tests {
     #[tokio::test]
     async fn a_missing_ssh_is_reported_in_words_not_retried() {
         let target = SshTarget::new("build-box", None, None, None).unwrap();
-        let err = match ssh_attempt(Some(&NoSsh), &target, &quiet()).await {
+        let settings = crate::daemon_config_render::DaemonSettings::new(
+            "build-box",
+            micold_core::daemon_config::Listen::Socket(
+                micold_core::daemon_config::SocketSpec::Auto,
+            ),
+        );
+        let err = match ssh_attempt(Some(&NoSsh), &target, &settings, &quiet()).await {
             Ok(_) => panic!("no ssh cannot connect"),
             Err(e) => e,
         };
         assert!(err.to_lowercase().contains("ssh"), "{err}");
-        let none = ssh_attempt(None, &target, &quiet())
+        let none = ssh_attempt(None, &target, &settings, &quiet())
             .await
             .err()
             .expect("no runner");

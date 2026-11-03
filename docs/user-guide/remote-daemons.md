@@ -53,9 +53,25 @@ The row shows **Starting** and, under it, the step it is in:
 4. `starting the daemon`
 5. `checking the daemon version`, only if the daemon refused the handshake over its version
 
+Under the copy step Micold also puts the daemon's configuration on the host, every time it
+connects: see [The configuration on the host](#the-configuration-on-the-host).
+
 Each step is on its own timeout, apart from the copy, which shows its progress instead. When the handshake succeeds the row shows **Connected**, the daemon's version and
 `user@host:port`. Nothing is listening on a network port on either machine: the connection is the
 SSH session itself.
+
+## The configuration on the host
+
+Micold writes the daemon's settings to `~/.micold/remote/daemon.toml` on the host, and any secret
+file that configuration names to `~/.micold/remote/secrets/`. The directories are readable by you
+alone (`0700`) and the files are `0600`. A file is sent only when its content differs from the
+one already there, so a rotated token replaces just its own file and nothing else is touched.
+
+The application owns these files and rewrites them from its settings when it connects, so a hand
+edit is overwritten. To change a setting, change it in the application. To look at the file, or
+check one you prepared, read it on the host or run `micold-daemon config check
+~/.micold/remote/daemon.toml`; the format is in [daemon-configuration.md](daemon-configuration.md).
+No `MICOLD_*` environment variable is set on the host: the file is the only channel.
 
 ## Adding a repository that lives on the host
 

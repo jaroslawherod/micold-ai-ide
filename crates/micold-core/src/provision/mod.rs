@@ -137,6 +137,18 @@ pub struct ProvisionTarget {
     pub bounds: StepBounds,
     /// The daemon's environment, quoted into the remote bridge command (empty for a user's host).
     pub env: Vec<(String, String)>,
+    /// The daemon's configuration and secret files, delivered with the build; `None` for a target
+    /// that has none (containers, pods).
+    pub config: Option<ConfigDelivery>,
+}
+
+/// The files delivered to a user's host beside the build (daemon-config-file FR-005).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigDelivery {
+    /// The rendered `daemon.toml`.
+    pub config: Vec<u8>,
+    /// Secret files the configuration names: file name under `secrets/`, content.
+    pub secrets: Vec<(String, Vec<u8>)>,
 }
 
 impl ProvisionTarget {
@@ -148,6 +160,7 @@ impl ProvisionTarget {
             owned: Ownership::UserHost,
             bounds: StepBounds::user_host(connect_deadline),
             env: Vec::new(),
+            config: None,
         }
     }
 }
@@ -358,6 +371,7 @@ pub async fn ensure_build(
         ));
     }
     if probe.have {
+        deliver_config(host, target, opts, cancel, sink).await?;
         return Ok((probe, false));
     }
 
@@ -408,7 +422,56 @@ pub async fn ensure_build(
     if !again.have {
         return Err(fail(Step::Copy, FailureCause::CopyFailed));
     }
+    deliver_config(host, target, opts, cancel, sink).await?;
     Ok((again, true))
+}
+
+/// Upload the configuration and its secrets, each only when its content changed on the host. A
+/// target without a configuration does nothing. Rides the `Copy` step: it is one more file copy.
+async fn deliver_config(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    cancel: &CancelToken,
+    sink: &EventSink,
+) -> Result<(), ProvisionFailure> {
+    let Some(delivery) = &target.config else {
+        return Ok(());
+    };
+    sink(ProvisionEvent::Entered(Step::Copy));
+    let bound = target.bounds.copy;
+    let secrets = delivery
+        .secrets
+        .iter()
+        .map(|(name, bytes)| (argv::remote_secret_path(name), 0o600, bytes));
+    let files =
+        std::iter::once((argv::REMOTE_CONFIG.to_string(), 0o600, &delivery.config)).chain(secrets);
+    for (path, mode, bytes) in files {
+        guard(Step::Copy, bound, cancel, async {
+            let hash = crate::protocol::hashing::sha256_hex(bytes);
+            let cmd = argv::copy_if_changed(
+                &target.reach,
+                opts.platform,
+                opts.timeout_secs,
+                &path,
+                mode,
+                &hash,
+            );
+            let out = host
+                .run(cmd, bytes.clone(), bound, None)
+                .await
+                .map_err(|e| io_fail(Step::Copy, e))?;
+            if out.ok() {
+                return Ok(());
+            }
+            if let (true, Some(bound)) = (out.timed_out, bound) {
+                return Err(fail(Step::Copy, FailureCause::TimedOut { bound }));
+            }
+            Err(fail(Step::Copy, FailureCause::CopyFailed).with_output(out.stderr))
+        })
+        .await?;
+    }
+    Ok(())
 }
 
 async fn start_step(
@@ -661,6 +724,10 @@ mod tests {
         let last = cmd.args.last().map(String::as_str).unwrap_or_default();
         if last == "true" {
             "reach"
+        } else if last.contains("daemon.toml") {
+            "config"
+        } else if last.contains("/secrets/") {
+            "secret"
         } else if last.contains("cat >") {
             "copy"
         } else if last.contains("printf") {
@@ -798,6 +865,7 @@ mod tests {
             owned: Ownership::UserHost,
             bounds,
             env: Vec::new(),
+            config: None,
         }
     }
 
@@ -823,6 +891,7 @@ mod tests {
             },
             bounds,
             env: Vec::new(),
+            config: None,
         }
     }
 
@@ -946,6 +1015,94 @@ mod tests {
                 &ProvisionEvent::CopyPercent(100)
             ]
         );
+    }
+
+    fn delivery(token: &[u8]) -> ConfigDelivery {
+        ConfigDelivery {
+            config: b"[daemon]\nname = \"x\"\n".to_vec(),
+            secrets: vec![("client-token".into(), token.to_vec())],
+        }
+    }
+
+    /// Run `ensure_build` for a user host that has the build, delivering `config`; return the
+    /// command line and stdin of every config and secret upload.
+    async fn deliver(config: ConfigDelivery) -> Vec<(&'static str, String, Vec<u8>)> {
+        let fake = Fake::default()
+            .say("probe", ok(PROBE_HAVE))
+            .say("config", ok(""))
+            .say("secret", ok(""));
+        let mut target = user_target(StepBounds::user_host(secs(15)));
+        target.config = Some(config);
+        let (sink, _) = recorder();
+        ensure_build(&fake, &target, &opts(), &CancelToken::new(), &sink)
+            .await
+            .unwrap();
+        let runs = fake.runs.lock().unwrap();
+        runs.iter()
+            .filter(|r| matches!(r.0, "config" | "secret"))
+            .map(|(k, cmd, stdin)| {
+                (
+                    *k,
+                    cmd.args.last().cloned().unwrap_or_default(),
+                    stdin.clone(),
+                )
+            })
+            .collect()
+    }
+
+    /// T026 (#1526): a user host gets `daemon.toml` and its secrets, each sent with the hash of
+    /// its content so the remote shell skips an unchanged file; a rotated secret changes only its
+    /// own command.
+    #[tokio::test]
+    async fn the_config_and_its_secrets_are_uploaded_by_hash_and_only_a_changed_one_differs() {
+        let first = deliver(delivery(b"tok1")).await;
+        assert_eq!(
+            first.iter().map(|r| r.0).collect::<Vec<_>>(),
+            ["config", "secret"]
+        );
+        assert!(first[0].1.contains("$HOME/.micold/remote/daemon.toml"));
+        assert!(first[1]
+            .1
+            .contains("$HOME/.micold/remote/secrets/client-token"));
+        assert!(first[1].1.contains("chmod 600") && first[1].1.contains("umask 077"));
+        assert_eq!(first[1].2, b"tok1");
+        let same = deliver(delivery(b"tok1")).await;
+        assert_eq!(first, same, "unchanged content sends identical commands");
+        let rotated = deliver(delivery(b"tok2")).await;
+        assert_eq!(rotated[0], first[0], "the config command is unchanged");
+        assert_ne!(rotated[1].1, first[1].1, "the secret's hash changed");
+        assert_eq!(rotated[1].2, b"tok2");
+    }
+
+    #[tokio::test]
+    async fn a_target_without_a_configuration_uploads_nothing() {
+        let fake = Fake::default().say("probe", ok(PROBE_HAVE));
+        let (sink, _) = recorder();
+        ensure_build(
+            &fake,
+            &user_target(StepBounds::user_host(secs(15))),
+            &opts(),
+            &CancelToken::new(),
+            &sink,
+        )
+        .await
+        .unwrap();
+        assert_eq!(fake.count("config") + fake.count("secret"), 0);
+    }
+
+    #[tokio::test]
+    async fn a_failed_config_upload_fails_the_copy_step() {
+        let fake = Fake::default()
+            .say("probe", ok(PROBE_HAVE))
+            .say("config", bad("disk full"));
+        let mut target = user_target(StepBounds::user_host(secs(15)));
+        target.config = Some(delivery(b"t"));
+        let (sink, _) = recorder();
+        let err = ensure_build(&fake, &target, &opts(), &CancelToken::new(), &sink)
+            .await
+            .err()
+            .expect("fails");
+        assert_eq!(err.step, Step::Copy);
     }
 
     #[tokio::test]
