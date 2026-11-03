@@ -27,8 +27,8 @@ None separate. Each story below brings the core pieces it needs.
 
 ### Tests first
 
-- [ ] T001 [P] [US1] Unit tests for the summary text functions (title and facts per kind: every raw reason, empty raw text reads "Empty event", footer ok/error with and without duration/turns, session start with and without model, orphan ok/error) in `crates/micold-client/src/features/transcript_selection/shown.rs`
-- [ ] T002 [P] [US1] View tests in `crates/micold-client/tests/transcript_entry_view.rs`: the four kinds draw as folded cards with the summary title; no raw text painted while collapsed (SC-001); open state shows raw detail byte-equal to the entry text (FR-004, tabs to spaces only); error footer/orphan titles carry the word "failed"/"error"
+- [ ] T001 [P] [US1] Unit tests for the summary text functions (title and facts per kind: every raw reason, the `(type)` fact present when the raw text is JSON with a `type` and absent otherwise, empty raw text reads "Empty event", footer ok/error with and without duration/turns, session start with and without model, orphan ok/error) in `crates/micold-client/src/features/transcript_selection/shown.rs`
+- [ ] T002 [P] [US1] View tests in `crates/micold-client/tests/transcript_entry_view.rs`: the four kinds draw as folded cards with the summary title; no raw text painted while collapsed (SC-001); open state shows raw detail byte-equal to the entry text (FR-004, tabs to spaces only); error footer/orphan titles carry the word "failed"/"error"; a footer arriving later updates its summary in place; a very large raw detail is height-bounded
 - [ ] T003 [P] [US1] Geometry test in `crates/micold-client/tests/transcript_follow_layout.rs` style: a collapsed summary card is one line tall; appending one moves the reading offset by at most that (SC-003, US1 scenario 4)
 - [ ] T004 [P] [US1] Parity test in `crates/micold-client/tests/transcript_selection_parity.rs`: `body_units` for Raw, SessionStart, Footer, OrphanResult yields the summary line as unit 0 and detail units only while open; copy equals what is drawn
 
@@ -56,8 +56,8 @@ None separate. Each story below brings the core pieces it needs.
 
 - [ ] T014 [US2] `LowSignal` closed enum (`Raw`, `SessionStart`, `Footer`, `OrphanResult`), `Entry::low_signal()` as an exhaustive `match` on `EntryKind` with no `_` arm, `shown(&Entry, show_raw)`, `Transcript::hidden_count(show_raw) -> u64` in new `crates/micold-core/src/structured/transcript/visibility.rs`, re-exported from `crates/micold-core/src/structured/transcript/mod.rs`
 - [ ] T015 [US2] `show_raw_events: bool` (`#[serde(default)]`, default false) in `crates/micold-core/src/settings.rs`: `Settings`, the on-disk mirror struct and both conversions, the `Default` impl, and every struct literal of `Settings` in the workspace (all literal sites in this one task)
-- [ ] T016 [US2] `State.show_raw_events` and `SettingsMsg::ShowRawEventsToggled(bool)` in `crates/micold-client/src/features/settings.rs`; `ValidSettings::into_settings` emits the default and `set_changed` ignores the key (`show_raw_events: _`)
-- [ ] T017 [US2] `persist_show_raw_events`, `window_settings` taking the window copy, `set_changed` destructure `show_raw_events: _` in `crates/micold-client/src/shell/persist.rs`
+- [ ] T016 [US2] `State.show_raw_events` and `SettingsMsg::ShowRawEventsToggled(bool)` in `crates/micold-client/src/features/settings.rs`; `ValidSettings::into_settings` emits the default for the key; `set_changed` ignores the key (`show_raw_events: _`)
+- [ ] T017 [US2] `persist_show_raw_events`, `window_settings` taking the window copy, and the single `set_changed` change (destructure `show_raw_events: _`, a Save never changes the key; the settings.rs side only emits the default) in `crates/micold-client/src/shell/persist.rs`
 - [ ] T018 [US2] `TranscriptMsg::ShowRawEvents(bool)` in `crates/micold-client/src/features/structured_transcript.rs`, routed by the root to `SettingsMsg::ShowRawEventsToggled` in `crates/micold-client/src/main.rs` (settings feature stays the only writer; check `tests/feature_write_isolation.rs`)
 - [ ] T019 [US2] `TranscriptView` gains `show_raw` (all 4 construction sites incl. test/parity helpers in this one task); `rows()`/`entries_in` filtered by `visibility::shown`; reconcile clears the session's selection on toggle, in `crates/micold-client/src/features/transcript_selection.rs`
 - [ ] T020 [US2] `rows(transcript, show_raw)` filter in `crates/micold-client/src/ui/transcript/entries.rs`; `LabelledToggle` "Show raw events" (tooltip "Show session start, turn summaries and unrecognised events") at the trailing end of the session bar in `view_full` and `show_raw` passed down in `crates/micold-client/src/ui/transcript/mod.rs`
@@ -85,13 +85,14 @@ None separate. Each story below brings the core pieces it needs.
 ## Dependencies & Execution Order
 
 - T001–T004 before T005–T007; T008 after T006.
-- T009–T013 before T014–T020; T014 before T019/T020; T015 before T016/T017; T016/T017 before T018; T019 before T020.
+- T009–T013 before T014–T020; T014 before T019/T020; T015 before T016/T017; T016/T017 before T018; T018 before T020; T019 before T020.
 - Phase 5 depends on Phase 4 (needs `show_raw` plumbing); T022/T023 before T024.
+- Cross-window sync is out of scope: all views of one app process share `settings::State` (research R7).
 - Parallel: all `[P]` tests within a phase touch different files or independent sections.
 
 ## Implementation Strategy
 
-MVP = Phase 3 (summary lines, always shown). Then the toggle and persistence, then the notice. Each phase is one milestone.
+MVP = Phase 3 (summary lines, always shown). Then the toggle and persistence, then the notice. Phases 4 and 5 form one milestone.
 
 ## Milestones
 
@@ -106,24 +107,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: —
 - **Tier**: full
 
-### M2 — "Show raw events" toggle, persisted
+### M2 — "Show raw events" toggle, persisted, with hidden notice
 
-- **Tasks**: T009–T021
-- **Deliverable**: a header toggle (off by default) hides low-signal entries except error footers/orphans, is remembered across restarts and shared by all views, and hidden entries are neither selected nor copied.
-- **Satisfies**: US2 acceptance scenarios 1, 2, 3, 5; FR-005, FR-006, FR-007, FR-009, FR-010, FR-013; SC-002 (rows part), SC-004
-- **Verify**: `mise run test-core` and `scripts/build-lock.sh cargo test -p micold-client show_raw_events`
+- **Tasks**: T009–T025
+- **Deliverable**: a header toggle (off by default) hides low-signal entries except error footers/orphans, shows "N events hidden" with a Show button while hidden, is remembered across restarts and shared by all views, live and resumed transcripts behave alike, and hidden entries are neither selected nor copied.
+- **Satisfies**: US2 acceptance scenarios 1–5; US3 acceptance scenarios 1–2; FR-005 to FR-011, FR-013; SC-002, SC-004
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test transcript_entry_view --test transcript_selection_parity`; quickstart §B steps 2–5
 - **Depends on**: M1
 - **Tier**: full
 
-M2 has 13 tasks (over the ~10 guideline) and no acceptance-scenario split exists: hiding, the persisted flag and its selection handling are one behaviour, and splitting would leave a setting with no control. The diff is small per task (one field, one filter); kept whole.
-
-### M3 — Hidden-events notice and resumed parity
-
-- **Tasks**: T022–T025
-- **Deliverable**: while entries are hidden the transcript shows "N events hidden" with a Show button, a transcript of only hidden entries is not empty-looking, and live and resumed transcripts render equally.
-- **Satisfies**: US2 acceptance scenario 4; US3 acceptance scenarios 1–2; FR-008, FR-011
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test transcript_entry_view`; quickstart §B steps 2–4
-- **Depends on**: M2
-- **Tier**: full
+M2 has 17 tasks (over the ~10 guideline) and no acceptance-scenario split leaves a shippable half: a toggle without the hidden-count notice hides entries silently (US2 scenario 4), and the persisted flag has no use without the toggle. Per-task diffs are small (one field, one filter, one row); kept whole.
 
 T026 (Polish) changes no code and is left to the close unit.
