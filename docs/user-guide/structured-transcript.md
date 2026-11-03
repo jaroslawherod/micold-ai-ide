@@ -2,7 +2,7 @@
 
 A structured session shows the conversation: your messages, Claude's answers, its thinking and its
 tool calls. Entries that are not part of the conversation proper are folded into one summary line
-each, so they stay out of the way.
+each, and by default they are hidden altogether (see *Showing raw events*).
 
 ## Summary lines
 
@@ -31,3 +31,25 @@ entry:
 
 Copying a selection copies what is drawn: a folded line copies its summary, an expanded one also
 its detail.
+
+## Showing raw events
+
+By default the transcript leaves out the session start, the unrecognised or unreadable entries, a
+tool result without its call, and the footer of a turn that succeeded. Turn **Show raw events** on
+in the bar above the transcript to see them as the summary lines described above.
+
+- The switch is off by default and applies to every structured session in the window at once.
+- Errors stay visible with the switch off: a failed turn and an error result are always drawn.
+- Your choice is remembered per user. It is saved as you press the switch and restored the next
+  time the app starts; if the settings file cannot be written, the app says so and the choice
+  still applies until you quit.
+- Changing the switch clears any text you had selected in a transcript, because the rows changed.
+
+## The hidden-events notice
+
+When the switch is off and some entries are hidden, a line at the end of the transcript says how
+many ("3 events hidden"), with a **Show** button that turns the switch on. A transcript that holds
+only hidden entries shows this notice instead of an empty-session message.
+
+A resumed session is read the same way as a live one: the same entries are hidden and the same count
+is shown, whether you watched them arrive or opened the session later.

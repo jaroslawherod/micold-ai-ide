@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1664_structured-view-raw-events-are-shown-inline-in-the
 - **Started**: 2026-11-03
 - **Phase**: milestone M2 (implementing)
-- **Next step**: implement M2 T009-T025, review, gate, PR
+- **Next step**: M2 verify, scoped gate + review A, review B, visual pass, full gate, PR
 
 ## Pull requests
 
@@ -51,19 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 implementation, unit 1 (context cap hit). Branch already reset to origin/main by branch-start.sh (M1 merged #1668); local branch name stays feat/1664_structured-view-raw-events-are-shown-inline-in-the, push with explicit refspec `git push -u origin HEAD:refs/heads/feat/1664_collapsed-raw-events-m2` (never force). M2 PR row is in the PR table (number to fill).
-
-Done (uncommitted-or-WIP-committed in the worktree, `mise run check --all-targets` last green apart from the items below):
-- Core: `visibility.rs` (LowSignal, Entry::low_signal, shown, Transcript::hidden_count + 6 unit tests, pass), `Settings.show_raw_events` (+mirror, Default, settings_issue_mapping key list, new roundtrip test in settings_roundtrip.rs). (T009 T010 T014 T015 done; roundtrip test not yet run.)
-- Client: settings State.show_raw_events + Msg::ShowRawEventsToggled + into_settings default; persist.rs persist_show_raw_events, window_settings copy, set_changed `show_raw_events: _`, test literal; startup.rs load; main.rs routes TranscriptMsg::ShowRawEvents -> SettingsMsg + selection.visibility_changed() + persist; TranscriptMsg::ShowRawEvents; TranscriptView.show_raw + entries() filter used by rows()/entries_in; State::visibility_changed (clears all selections); app.rs transcript_view_of takes show_raw (self.settings.show_raw_events); RenderCtx.show_raw (tests/showcase set true, terminal.rs real); ui rows(transcript, show_raw), Row::Hidden, RowKey::Hidden, hidden_notice (text + Show button), header toggle raw_events_toggle (LabelledToggle Icon::Filter + Tooltip) in view_full; shown.rs hidden_text/SHOW_HIDDEN/SHOW_RAW_EVENTS(+_TIP).
-- Tests added and passing: transcript_entry_view.rs (T011, T022 partly, T023), features_transcript_selection.rs (T012: hidden_entries_are_neither_rows_nor_copied, the_toggle_clears_the_selection).
-
-Next (in order):
-1. T013: add reducer tests in `crates/micold-client/src/main_tests.rs` (send Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(true))) via the root update; assert core.settings.show_raw_events, store.saves() last has it true (FakeSettingsStore::loaded + `.with_settings(Arc)` as in main_tests ~l.9250), a fresh startup from that store starts on, two sessions' `app.core.transcript_view(s).show_raw`/rows equal in one step, failing store (`FakeSettingsStore::failing_save(io::ErrorKind::...)`) shows "Couldn't save your settings" yet value applies) and in `shell/persist.rs` tests (persist_show_raw_events writes only that key; set_changed with saved.show_raw_events != baseline leaves target as is; ValidSettings::into_settings emits false). T022: test the Show button message if feasible (else the painted "Show" text is already asserted).
-2. Run: `scripts/build-lock.sh cargo test -p micold-core --test settings_roundtrip --test settings_issue_mapping`; `mise run test-core`; `cargo test -p micold-client --test main` (targeted), `--test transcript_selection_parity`, check `tests/feature_write_isolation.rs`, `tests/transcript_follow_layout.rs`, layout_snapshot fixture (header toggle changes the bar: regenerate per repo convention if a snapshot test fails).
-3. T021/T025: docs/user-guide/structured-transcript.md sections (toggle off by default, errors stay visible, remembered per user; hidden-events notice; resumed sessions). Docs only text.
-4. Tick T009-T025 in specs/1664-collapsed-raw-events/tasks.md; ledger Phase/Next; commit `feat(1664): ...`.
-5. tasks/verify.md, then review A (code-review high) with scoped gate, review B (sonnet, conformance), visual pass (quickstart §B steps 2-5), full `mise run gate`, push (explicit refspec above), `gh pr create --base main --head feat/1664_collapsed-raw-events-m2`, title `feat(1664): ... (#1664)`, body ends `Refs #1664`. Fill the PR number in the ledger table.
+None.
 
 ## Open escalation
 
