@@ -207,7 +207,7 @@ pub enum Dial {
         /// The host and connection settings.
         target: SshTarget,
         /// The configuration delivered to the host beside the build (#1526).
-        settings: SshDial,
+        settings: Box<SshDial>,
     },
     /// Provision and bridge to a container daemon over the container's own SSH server, published
     /// on loopback, with the app's own keys (feature 806). A running released-image container is
@@ -503,7 +503,7 @@ pub fn actor_specs_answered(
                     }
                     Dial::Ssh {
                         target: s.target.clone(),
-                        settings: SshDial(settings),
+                        settings: Box::new(SshDial(settings)),
                     }
                 }
                 DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
