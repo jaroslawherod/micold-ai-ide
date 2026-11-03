@@ -1413,13 +1413,19 @@ fn hidden_entries_are_neither_rows_nor_copied() {
         shown.starts_with("before\n") && shown.ends_with("\nafter") && shown.lines().count() == 3,
         "the summary line is copied: {shown:?}"
     );
-    assert!(!shown.contains("HIDDEN LINE"), "a folded entry copies its summary only");
+    assert!(
+        !shown.contains("HIDDEN LINE"),
+        "a folded entry copies its summary only"
+    );
 }
 
 /// #1664: toggling clears the selection, which could end on an entry that is no longer a row.
 #[test]
 fn the_toggle_clears_the_selection() {
-    let held = Held::new(0, [user("a"), StructuredEvent::Unreadable { text: "x".into() }]);
+    let held = Held::new(
+        0,
+        [user("a"), StructuredEvent::Unreadable { text: "x".into() }],
+    );
     let mut state = micold_client::features::transcript_selection::State::default();
     state.update(
         SelectMsg::SelectAll {

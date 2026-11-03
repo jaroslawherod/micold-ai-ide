@@ -31,13 +31,13 @@ pub use rich::EDIT_TOOLS;
 
 use crate::features::permission_prompts::Placement;
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
+use crate::features::transcript_selection::shown;
 use crate::features::transcript_selection::{Click, EdgeDir, SelectMsg};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::cdk::Keyed;
 use crate::ui::focus::TrackFocusAs;
 use crate::ui::material::selection_area::Edge;
-use crate::features::transcript_selection::shown;
 use crate::ui::material::{
     Button, ContextMenu, LabelledToggle, MenuItem, Scrollable, SelectionArea, Tooltip,
 };

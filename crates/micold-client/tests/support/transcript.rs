@@ -72,7 +72,7 @@ pub fn ctx(cache: &BlockCache) -> RenderCtx<'_> {
         cache,
         selected: None,
         row: None,
-            show_raw: true,
+        show_raw: true,
     }
 }
 
