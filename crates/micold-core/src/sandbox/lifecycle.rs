@@ -1493,7 +1493,7 @@ mod adoption_tests {
     #[test]
     fn a_container_without_the_configuration_mount_is_replaced_not_attached() {
         // #1527: its daemon, started over SSH with no environment, would run on defaults.
-        let mut old = existing("micold-daemon:0.27.0", true);
+        let mut old = facts("micold-daemon:0.27.0", None, true);
         old.mount_destinations = vec!["/home/u/p".into(), "/var/lib/micold-ai-ide".into()];
         assert!(matches!(
             adopt(Some(&old), "micold-daemon:0.27.0", &[], "micold-net"),
@@ -1502,7 +1502,12 @@ mod adoption_tests {
                 ..
             }
         ));
-        let current = existing("micold-daemon:0.27.0", true);
+        let mut current = facts("micold-daemon:0.27.0", None, true);
+        current.mount_destinations = vec![
+            "/home/u/p".into(),
+            "/var/lib/micold-ai-ide".into(),
+            "/run/micold/config".into(),
+        ];
         assert!(matches!(
             adopt(Some(&current), "micold-daemon:0.27.0", &[], "micold-net"),
             Adoption::Attach(_)
