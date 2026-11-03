@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1527
 - **Worktree branch**: feat/1527_deliver-the-configuration-to-container-daemons
 - **Started**: 2026-11-03
-- **Phase**: tasks
+- **Phase**: tasks (review done, design PR next)
 - **Next step**: tasks unit cuts milestones for Issue 6 (T030–T035, T090) in `specs/daemon-config-file/tasks.md`
 
 ## Pull requests
@@ -20,7 +20,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Milestones
 
-None yet (the tasks unit cuts them).
+| M | Deliverable | Tasks | Tier | PR |
+|---|---|---|---|---|
+| M1 | container daemons read the same read-only `/run/micold/config/daemon.toml` at boot and over SSH; no `MICOLD_*` env; `LANG=C.UTF-8` | T030–T035, T090 | full | — |
+
+Checked 2026-11-03: `container_env` is at `daemon.rs:1328` (not 1283); `docs/user-guide/sandboxed-daemon.md` exists; the entrypoint reads no `MICOLD_SSH_DIR` today. Fixed in tasks.md.
 
 ## Decisions
 
@@ -30,7 +34,7 @@ None yet (the tasks unit cuts them).
 
 ## Review rounds
 
-None. (Spec review skipped: no spec written; the shared spec was reviewed in PR #1509.)
+Tasks review A round 1 (`f688c7ee:038b306fe`): CHANGES, F1 MAJOR (TZ unassigned) fixed in T030/T033/T090, F2/F3 MINOR fixed in T033/T034; wording only, no new round. (Spec review skipped: no spec written; the shared spec was reviewed in PR #1509.)
 
 ## Declined review findings
 
