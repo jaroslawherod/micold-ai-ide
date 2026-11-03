@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1525
 - **Worktree branch**: feat/1525_the-app-renders-each-daemon-s-configuration-from
 - **Started**: 2026-10-30
-- **Phase**: done
-- **Next step**: handoff
+- **Phase**: close
+- **Next step**: wait for CI and merge PR #1666
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1617 | Design (milestones for Issue 4) | merged | 9f6e33d41bdea3325af5084f986fc46c8843eab2 |
 | #1620 | M1 | merged | 245bce5fe3f1a46dca57e191d46977f30d07e0ef |
 | #1654 | M2 | merged | 606c5bf85706c584f474b0ce2ff8fd50666a5ca5 |
-| close | Close the spec | opening | — |
+| #1666 | Close the spec | open | — |
 
 ## Milestones
 
