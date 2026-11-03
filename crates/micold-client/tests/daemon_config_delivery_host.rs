@@ -171,3 +171,58 @@ fn an_unreadable_script_stops_the_delivery_naming_it() {
     assert!(err.to_string().contains("gone.sh"), "{err}");
     assert!(!data.path().join("daemon.toml").exists());
 }
+
+// --- container delivery (#1527, T031, FR-005) --------------------------------------------------
+
+mod container {
+    use micold_client::daemon_config_delivery::deliver_container;
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
+    use micold_core::sandbox::{DeliveryMount, SandboxProfile};
+    use std::path::Path;
+
+    fn profile(survive_logout: bool) -> SandboxProfile {
+        SandboxProfile {
+            image: ImageChoice::Own(OwnImage::Reference("acme/ssh:1".into())),
+            survive_logout,
+            ..SandboxProfile::default()
+        }
+    }
+
+    #[test]
+    fn the_file_carries_what_the_create_arguments_no_longer_do_and_is_valid() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let home = Path::new("/home/jaro");
+
+        assert!(deliver_container("box", &profile(true), home, &delivery).unwrap());
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+        let daemon = config.unwrap().daemon;
+        assert_eq!(daemon.kind, micold_core::daemon_config::Kind::Container);
+        assert_eq!(
+            daemon.data_dir.as_deref(),
+            Some(Path::new("/var/lib/micold-ai-ide"))
+        );
+        assert_eq!(daemon.home.as_deref(), Some(home));
+        assert_eq!(daemon.image.as_deref(), Some("acme/ssh:1"));
+        assert_eq!(
+            daemon.idle_stop,
+            Some(micold_core::daemon_config::IdleStopSetting::Off)
+        );
+        assert!(delivery.secrets.is_dir(), "the secrets folder is made too");
+    }
+
+    #[test]
+    fn the_keep_running_opt_in_off_leaves_the_idle_window_alone_and_a_repeat_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let home = Path::new("/home/jaro");
+
+        assert!(deliver_container("box", &profile(false), home, &delivery).unwrap());
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(!text.contains("idle_stop"), "{text}");
+        assert!(!deliver_container("box", &profile(false), home, &delivery).unwrap());
+        assert!(deliver_container("box", &profile(true), home, &delivery).unwrap());
+    }
+}

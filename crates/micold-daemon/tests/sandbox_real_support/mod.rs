@@ -603,8 +603,34 @@ fn start_sandbox_on(
     let git_credential_tmpfs =
         micold_core::sandbox::argv::git_credential_tmpfs(dialect().identity, uid, gid);
     let home_env = format!("HOME={}", spec.home);
-    let micold_home_env = format!("MICOLD_HOME={}", spec.home);
-    let image_env = format!("MICOLD_IMAGE_REFERENCE={image}");
+    // The daemon's configuration, delivered as the application delivers it (#1527, FR-005): the
+    // image reference, the home and the keep-running opt-in are keys of this file, read at
+    // `/run/micold/config` by the daemon the entrypoint starts and by the one the bridge starts.
+    let profile = micold_core::sandbox::SandboxProfile {
+        image: micold_core::sandbox::image::ImageChoice::Own(
+            micold_core::sandbox::image::OwnImage::Reference(image.to_string()),
+        ),
+        survive_logout: spec.survive_logout,
+        ..micold_core::sandbox::SandboxProfile::default()
+    };
+    let delivery = micold_core::sandbox::DeliveryMount::beside(&state);
+    micold_client::daemon_config_delivery::deliver_container(
+        spec.container,
+        &profile,
+        Path::new(spec.home),
+        &delivery,
+    )
+    .expect("deliver the daemon's configuration");
+    let config_mount = bind_mount(
+        delivery.config.display(),
+        micold_core::sandbox::CONTAINER_CONFIG_DIR,
+        false,
+    );
+    let secrets_mount = bind_mount(
+        delivery.secrets.display(),
+        micold_core::sandbox::CONTAINER_SECRETS_DIR,
+        false,
+    );
     let project_mount = bind_mount(spec.project.display(), spec.project.display(), true);
     let state_mount = bind_mount(state.display(), CONTAINER_STATE, true);
     // The sandbox's own writable home, at the path `HOME` names (FR-004d). Created here rather than
@@ -646,17 +672,10 @@ fn start_sandbox_on(
         &publish,
         "--tmpfs",
         &git_credential_tmpfs,
+        // The entrypoint adds the passwd entry sshd needs, with this as the home (the sessions'
+        // `HOME`), as `argv::create` passes it. The only `MICOLD_*`-free variable it needs.
         "-e",
         &home_env,
-        // The entrypoint adds the passwd entry sshd needs, with this as the home (the sessions'
-        // `HOME`), as `argv::create` passes it.
-        "-e",
-        &micold_home_env,
-        // What `argv::create` passes so a `StaleDevImage` refusal can name the image to rebuild
-        // (FR-024d). Mirrored here because a harness that omits it would have hidden the defect
-        // that it was never passed at all.
-        "-e",
-        &image_env,
     ]
     .iter()
     .map(|s| s.to_string())
@@ -666,6 +685,8 @@ fn start_sandbox_on(
     args.extend(home_mount);
     args.extend(project_mount);
     args.extend(state_mount);
+    args.extend(config_mount);
+    args.extend(secrets_mount);
     for mount in key_mounts {
         args.extend(mount);
     }
@@ -675,13 +696,6 @@ fn start_sandbox_on(
     // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
     // using podman's answer to it.
     args.extend(dialect().identity_args(uid, gid));
-    // The opt-in's other half (feature 028, FR-022). From `argv::idle_stop_value` rather than
-    // spelled here, for the reason `restart_policy` is read above: a harness carrying its own copy
-    // of the decision would go on passing after the application stopped making it.
-    if let Some(value) = micold_core::sandbox::argv::idle_stop_value(spec.survive_logout) {
-        args.push("-e".to_string());
-        args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
-    }
     // The git environment `argv::create` passes (#1002, FR-004), from the same function for the
     // reason above.
     for (name, value) in
@@ -1100,11 +1114,9 @@ impl ProvisionRun {
                 egress,
             },
             bounds,
-            // As the client's container target: the image's data home rides the bridge command.
-            env: vec![(
-                micold_core::ssh::argv::CONTAINER_DATA_ENV.to_string(),
-                micold_core::ssh::argv::CONTAINER_DATA_DIR.to_string(),
-            )],
+            // As the client's container target (#1527): no variable rides the bridge command; the
+            // daemon reads the `daemon.toml` the container mounts.
+            env: Vec::new(),
             config: None,
         };
         let opts = ProvisionOptions {

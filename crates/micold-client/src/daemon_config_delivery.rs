@@ -104,9 +104,46 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
     Ok(wrote | config)
 }
 
-/// Writes `bytes` to `path` only when the file does not already hold them, then (on unix) sets
-/// its mode to `0600`. The file holds no secret, but there is no reason to leave it world- or
-/// group-readable either.
+/// The `daemon.toml` of a container daemon, and the directories it is delivered in (#1527, FR-005).
+///
+/// The same file for a container the boot brings up and one the SSH bridge starts the daemon in:
+/// the container mounts `delivery.config` read-only at `/run/micold/config`, where the daemon
+/// started by the entrypoint and the one started over SSH both read it. The client reaches the
+/// container through its SSH server, so the daemon listens on its socket, as it did when `-e` values
+/// told it so. Returns whether it wrote.
+pub fn deliver_container(
+    name: &str,
+    profile: &micold_core::sandbox::SandboxProfile,
+    home: &Path,
+    delivery: &micold_core::sandbox::DeliveryMount,
+) -> io::Result<bool> {
+    use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
+    use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
+    use micold_core::ssh::argv::CONTAINER_DATA_DIR;
+    let settings = DaemonSettings {
+        data_dir: Some(CONTAINER_DATA_DIR.into()),
+        home: Some(home.to_path_buf()),
+        image: Some(profile.image.reference().to_string()),
+        idle_stop: profile.survive_logout.then_some(IdleStopSetting::Off),
+        ssh_dir: Some(CONTAINER_SSH_DIR.into()),
+        ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
+    };
+    let text = daemon_config_render::prepare(&settings, Kind::Container)
+        .map_err(|errors| io::Error::other(errors[0].to_string()))?;
+    // Created here, as the user, so the runtime does not create them as root (as for the sandbox
+    // home), and the secrets directory exists for the files delivered into it.
+    micold_core::owner_only::ensure_dir(&delivery.config)?;
+    micold_core::owner_only::ensure_dir(&delivery.secrets)?;
+    write_if_changed(
+        &delivery.config.join(daemon_config_render::ORIGIN),
+        text.as_bytes(),
+    )
+}
+
+/// Writes `bytes` to `path` only when the file does not already hold them, by writing a temporary
+/// file and renaming it (contract R9: a daemon that reads the file as it is replaced sees the old
+/// one or the new one, never half of it), mode `0600`. The file holds no secret, but there is no
+/// reason to leave it world- or group-readable either.
 fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if let Ok(existing) = std::fs::read(path) {
         if existing == bytes {
@@ -127,15 +164,4 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     io::Write::write_all(&mut options.open(path)?, bytes)?;
     set_owner_only(path)?;
     Ok(true)
-}
-
-#[cfg(unix)]
-fn set_owner_only(path: &Path) -> io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-#[cfg(windows)]
-fn set_owner_only(_path: &Path) -> io::Result<()> {
-    Ok(())
 }

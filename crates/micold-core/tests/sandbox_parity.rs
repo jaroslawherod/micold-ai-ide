@@ -297,9 +297,10 @@ fn the_idle_rule_never_asks_which_placement_it_is_running_in() {
 /// The one difference that *is* allowed, and its shape.
 ///
 /// Lifecycle contract 5.18 carves out a single exception to 5.16 — while the keep-it-running opt-in
-/// is on, the sandbox is not idle-stopped — and this pins it to one `-e` chosen by that opt-in.
-/// Anything else would be a second difference, which 5.16 does not permit however reasonable it
-/// looked at the time.
+/// is on, the sandbox is not idle-stopped. Since #1527 the daemon is told that by `idle_stop = "off"`
+/// in its `daemon.toml` (`micold-client`'s `daemon_config_delivery`), not by an `-e`, so the argv
+/// differs only in the restart policy, the opt-in's other half. Anything else would be a second
+/// difference, which 5.16 does not permit however reasonable it looked at the time.
 #[test]
 fn the_only_idle_difference_between_placements_is_the_one_the_user_asked_for() {
     let off = SandboxProfile::default();
@@ -311,42 +312,23 @@ fn the_only_idle_difference_between_placements_is_the_one_the_user_asked_for() {
     let without = argv_strings(&spec(&off));
     let with = argv_strings(&spec(&on));
 
-    let idle_args = |args: &[String]| -> Vec<String> {
-        args.iter()
-            .filter(|a| a.starts_with(micold_core::spawn::IDLE_STOP_ENV))
-            .cloned()
-            .collect()
-    };
-    assert!(
-        idle_args(&without).is_empty(),
-        "the default sandbox is told something about the idle rule: {without:?}"
-    );
-    assert_eq!(
-        idle_args(&with),
-        vec![format!(
-            "{}={}",
-            micold_core::spawn::IDLE_STOP_ENV,
-            micold_core::spawn::IDLE_STOP_OFF
-        )],
-        "the opt-in must switch the rule off with exactly one argument"
-    );
+    for args in [&without, &with] {
+        assert!(
+            !args
+                .iter()
+                .any(|a| a.starts_with(micold_core::spawn::IDLE_STOP_ENV)),
+            "the idle rule is told through the configuration file, not the environment: {args:?}"
+        );
+    }
 
-    // And nothing else moved. The restart policy is the opt-in's other half and is expected to
-    // differ; every remaining argument must be identical, or the sandbox the user opted into is a
-    // different sandbox rather than the same one kept running.
+    // The restart policy is the opt-in's other half and is expected to differ; every remaining
+    // argument must be identical, or the sandbox the user opted into is a different sandbox rather
+    // than the same one kept running.
     let strip = |args: &[String]| -> Vec<String> {
         let mut out = Vec::new();
         let mut i = 0;
         while i < args.len() {
             if args[i] == "--restart" {
-                i += 2;
-                continue;
-            }
-            if args[i] == "-e"
-                && args
-                    .get(i + 1)
-                    .is_some_and(|v| v.starts_with(micold_core::spawn::IDLE_STOP_ENV))
-            {
                 i += 2;
                 continue;
             }

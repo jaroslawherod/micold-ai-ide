@@ -289,6 +289,21 @@ exist.
 
 Files a session creates in a project come out owned by **you**, not by root.
 
+### The daemon's configuration
+
+A container daemon reads one file, `/run/micold/config/daemon.toml`, and the secret files it names
+from `/run/micold/secrets`. The application writes the file before it creates the container, and
+the container mounts both folders **read-only**: a session runs as the daemon's user but cannot
+rewrite either. The same file is read whether the container is started when the application opens
+or the daemon is started over SSH, and no `MICOLD_*` variable is set on the container (`podman
+inspect` shows none). The folders are on your computer in `<data folder>.delivery/config` and
+`<data folder>.delivery/secrets`, beside the daemon's data folder.
+
+The only variables the container still gets are `HOME`, `TZ` and git's credential settings. Sessions
+in a container run with `LANG=C.UTF-8` unless the daemon already has a `LANG` of its own.
+The SSH server's keys are read from the file's `[ssh] dir`, which is `/run/micold/ssh` unless the
+file says otherwise.
+
 ### Dropping files into a sandboxed session
 
 Dropping a file on a sandboxed terminal (or pasting a screenshot) inserts the path **the container

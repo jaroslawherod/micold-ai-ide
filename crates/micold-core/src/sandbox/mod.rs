@@ -580,6 +580,41 @@ pub struct SecretMount {
     pub container: PathBuf,
 }
 
+/// Where a container reads its configuration file: `daemon.toml` and the files it names that are
+/// not secret (#1527, contract R8).
+pub const CONTAINER_CONFIG_DIR: &str = "/run/micold/config";
+
+/// Where a container reads its secret files: the files `*_file` keys of `daemon.toml` name.
+pub const CONTAINER_SECRETS_DIR: &str = "/run/micold/secrets";
+
+/// The two host directories a container daemon's configuration is delivered in (#1527, FR-005,
+/// FR-029): the rendered `daemon.toml` and the secrets it names. Both are mounted read-only, so a
+/// session cannot rewrite what the daemon trusts.
+///
+/// They lie *beside* the state directory, never inside it: the state directory is mounted writable
+/// at `/var/lib/micold-ai-ide`, and a directory inside it would be writable through that mount.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeliveryMount {
+    /// Holds `daemon.toml`; mounted read-only at [`CONTAINER_CONFIG_DIR`].
+    pub config: PathBuf,
+    /// Holds the secret files; mounted read-only at [`CONTAINER_SECRETS_DIR`].
+    pub secrets: PathBuf,
+}
+
+impl DeliveryMount {
+    /// The delivery directories of the daemon whose state directory is `state_dir`: `config` and
+    /// `secrets` in `<state_dir>.delivery`, a sibling.
+    pub fn beside(state_dir: &Path) -> Self {
+        let mut name = state_dir.file_name().unwrap_or_default().to_os_string();
+        name.push(".delivery");
+        let root = state_dir.with_file_name(name);
+        Self {
+            config: root.join("config"),
+            secrets: root.join("secrets"),
+        }
+    }
+}
+
 /// The sandbox's own home directory, mounted where the container's `HOME` points (FR-004d).
 ///
 /// The sandbox runs as the host uid, which has no `/etc/passwd` entry inside the container and so
@@ -643,6 +678,9 @@ pub struct MountSet {
     pub home: HomeMount,
     /// The authentication token.
     pub secret: SecretMount,
+    /// The configuration file and secrets the daemon reads, read-only (#1527). `None` mounts
+    /// neither: a set built only to measure paths.
+    pub delivery: Option<DeliveryMount>,
     /// Credential mounts, one per active opt-in. Empty unless the user opted in (rule N-1).
     pub credentials: Vec<CredentialMount>,
     /// The saved terminal histories, when the state mount does not already carry them (feature 041).
@@ -810,6 +848,7 @@ impl MountSet {
         windows_host: bool,
     ) -> Self {
         let state_dir = state_dir.into();
+        let delivery = DeliveryMount::beside(&state_dir);
         let credentials = profile
             .credentials
             .iter()
@@ -850,6 +889,7 @@ impl MountSet {
                 container: PathBuf::from(STATE_CONTAINER_DIR),
             },
             secret,
+            delivery: Some(delivery),
             credentials,
             history: None,
             retired: layout
@@ -1081,6 +1121,11 @@ impl MountSet {
             .chain(std::iter::once(self.home.host.as_path()))
             .chain(std::iter::once(self.secret.host.as_path()))
             .chain(self.history.iter().map(|h| h.host.as_path()))
+            .chain(
+                self.delivery
+                    .iter()
+                    .flat_map(|d| [d.config.as_path(), d.secrets.as_path()]),
+            )
             .chain(self.credentials.iter().map(|c| c.host.as_path()))
             .collect()
     }

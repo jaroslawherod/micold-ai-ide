@@ -144,6 +144,14 @@ fn mapped_volumes(
             .into_owned(),
     ]
     .into_iter()
+    // The configuration and secrets folders (#1527): fixed container paths, like the state's.
+    .chain(
+        spec.mounts
+            .delivery
+            .iter()
+            .flat_map(|d| [&d.config, &d.secrets])
+            .map(|p| p.to_string_lossy().into_owned()),
+    )
     .chain(
         ["host_ed25519", "host_ed25519.pub", "authorized_keys"].map(|f| {
             spec.mounts
@@ -460,7 +468,7 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
         },
         false,
     );
-    // Other values are passed: the zone and the idle rule.
+    // Other values are passed: the zone. The idle rule is a key of the delivered `daemon.toml`.
     spec.time_zone = Some("Europe/Berlin".into());
     spec.profile.survive_logout = true;
     let args: Vec<String> = argv::create(&spec, &caps())
@@ -478,7 +486,6 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
         assert!(
             name == "HOME"
                 || name == "TZ"
-                || name.starts_with("MICOLD_")
                 || name.starts_with("GIT_CONFIG_")
                 || name == "GIT_TERMINAL_PROMPT",
             "{e} is passed into the container"
