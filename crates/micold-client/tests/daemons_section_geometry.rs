@@ -1055,10 +1055,10 @@ fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
     }
 }
 
-/// #1533, M3: while no kind delivers a start script the edit form paints no Start script group;
+/// #1533: the edit form paints the Start script group only for a kind that delivers a script;
 /// forced on, it paints last, opens to its fields for each source, and none overflows.
 #[test]
-fn the_start_script_group_is_hidden_until_delivery_and_fits_when_forced_on() {
+fn the_start_script_group_follows_delivery_and_fits_when_forced_on() {
     use micold_client::features::daemons::{DraftRuntime, Section};
     use micold_client::features::daemons_start::StartSource;
     for runtime in [
@@ -1068,9 +1068,12 @@ fn the_start_script_group_is_hidden_until_delivery_and_fits_when_forced_on() {
         DraftRuntime::Host,
     ] {
         let (mut state, shown) = add_form(runtime);
-        assert!(
-            !has(&shown, "Start script"),
-            "{runtime:?} hidden: {shown:?}"
+        // Host and SSH deliver a script since M4; container and pod do not yet.
+        let delivered = matches!(runtime, DraftRuntime::Ssh | DraftRuntime::Host);
+        assert_eq!(
+            has(&shown, "Start script"),
+            delivered,
+            "{runtime:?} by default: {shown:?}"
         );
 
         state.daemon_list.start_script_forced = Some(true);
