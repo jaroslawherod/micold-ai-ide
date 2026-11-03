@@ -471,6 +471,10 @@ pub struct State {
     requested: BTreeSet<String>,
     /// What the user answered to each daemon's drift prompt, until it is started again.
     drift_answers: BTreeMap<DaemonId, DriftChoice>,
+    /// Projects added at runtime (`ProjectAdd`) per daemon, so the next config file written to a
+    /// host or SSH daemon lists them (#1526, T080a, FR-014). `DaemonEntry` carries no `projects`
+    /// field of its own, so this is the only place that remembers one across the app's run.
+    runtime_projects: BTreeMap<DaemonId, Vec<PathBuf>>,
 }
 
 impl State {
@@ -579,6 +583,21 @@ impl State {
     /// Sessions that ended because their daemon was removed.
     pub fn ended_by_removal(&self) -> &[SessionId] {
         &self.ended
+    }
+
+    /// Records a project added at runtime to `daemon`, so the next config file written to it
+    /// lists it (#1526, T080a). A project already recorded for this daemon is left as it is.
+    pub fn add_runtime_project(&mut self, daemon: DaemonId, path: PathBuf) {
+        let paths = self.runtime_projects.entry(daemon).or_default();
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+
+    /// The projects added at runtime to each daemon, fed into [`crate::daemon::connections`] so
+    /// `DaemonSettings::add_runtime_project` sees them (#1526, T080a).
+    pub fn runtime_projects(&self) -> &BTreeMap<DaemonId, Vec<PathBuf>> {
+        &self.runtime_projects
     }
 }
 
@@ -2496,5 +2515,36 @@ impl Registered for BindDaemonDialog {
             .bind_target
             .as_ref()
             .map(|_| BindDaemonDialog)
+    }
+}
+
+#[cfg(test)]
+mod runtime_project_tests {
+    use super::State;
+    use micold_core::daemons::DaemonRegistry;
+    use micold_core::daemons::DaemonRuntime;
+    use std::path::PathBuf;
+
+    /// T080a (#1526, U22): a project recorded for a daemon reaches `runtime_projects`, is kept
+    /// in insertion order, and a repeat of the same path is not duplicated.
+    #[test]
+    fn a_recorded_project_is_kept_once_per_daemon() {
+        let mut registry = DaemonRegistry::default();
+        let id = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+        let mut state = State::default();
+
+        assert!(state.runtime_projects().is_empty());
+
+        state.add_runtime_project(id, PathBuf::from("/home/me/src/app"));
+        state.add_runtime_project(id, PathBuf::from("/home/me/src/lib"));
+        state.add_runtime_project(id, PathBuf::from("/home/me/src/app"));
+
+        assert_eq!(
+            state.runtime_projects().get(&id),
+            Some(&vec![
+                PathBuf::from("/home/me/src/app"),
+                PathBuf::from("/home/me/src/lib"),
+            ])
+        );
     }
 }

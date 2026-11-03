@@ -33,7 +33,7 @@ pub use micold_core::daemons::ProjectSetting;
 
 /// What one daemon's file is rendered from. Unset values are left out, so the daemon uses the
 /// kind's default.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonSettings {
     pub name: String,
     pub data_dir: Option<PathBuf>,

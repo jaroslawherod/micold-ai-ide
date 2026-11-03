@@ -135,9 +135,17 @@ fn added_daemon(runtime: RuntimeKind, image: &str, container: &str, state_dir: &
     for e in registry.entries() {
         states.insert(e.id, micold_core::daemons::DaemonState::Starting);
     }
-    actor_specs_answered(&registry, &states, state_dir, None, None, &BTreeMap::new())
-        .pop()
-        .expect("the added daemon has an actor")
+    actor_specs_answered(
+        &registry,
+        &states,
+        state_dir,
+        None,
+        None,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+    )
+    .pop()
+    .expect("the added daemon has an actor")
 }
 
 #[tokio::test(flavor = "multi_thread")]

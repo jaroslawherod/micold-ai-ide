@@ -45,6 +45,13 @@ pub fn add_project(app: &mut App, binding: Binding, path: PathBuf) {
     if sent.is_none() {
         return;
     }
+    // Remembered so the next config file written to a host or SSH daemon lists it (#1526,
+    // T080a, FR-014): nothing else holds a runtime-added project across the app's run.
+    if let Binding::Bound(daemon) = binding {
+        app.core
+            .daemon_list
+            .add_runtime_project(daemon, path.clone());
+    }
     if let Some(command) = setup::command_for(in_force(app), &path).cloned() {
         send_setup_set(app, binding, path, Some(command));
     }

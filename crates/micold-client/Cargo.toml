@@ -230,6 +230,10 @@ name = "composer_large_draft"
 path = "tests/composer_large_draft.rs"
 
 [[test]]
+name = "daemon_config_delivery_host_env"
+path = "tests/daemon_config_delivery_host_env.rs"
+
+[[test]]
 name = "feature_registration_cost"
 path = "tests/feature_registration_cost.rs"
 

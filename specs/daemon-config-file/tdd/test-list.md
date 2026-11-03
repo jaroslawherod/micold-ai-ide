@@ -55,3 +55,14 @@ Baseline: `cargo test -p micold-client --test main daemon_config` green at M2 st
 | I4-U6 | The errors reach the row's view model; a valid file clears them; a save checks the file and shows none for a valid one | FR-013f | DONE |
 | I4-U7 | Each config error adds a line to the Daemons row | FR-013f | DONE |
 | I4-D1 | `from_entry` builds the file from the daemon's saved settings; an invalid one saved in the form shows its error in the row | FR-005, FR-013f | DONE (T117; checking at registry load waits for delivery, 5-7) |
+
+## Test list: Issue 5 (#1526), milestone M1a
+
+Host delivery before spawn (write-if-changed, mode 0600, no added env) and feeding a runtime-added
+project into the next write.
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| U21 | `deliver_host` writes `<data_dir>/daemon.toml` mode 0600 on first call; a second call with unchanged settings is a no-op (file untouched) | FR-005 | DONE |
+| U22 | A settings change (e.g. a runtime-added project) makes the next `deliver_host` call write again | FR-005, FR-014 | DONE |
+| U23 | `spawn_detached_daemon` adds no `MICOLD_*` (or any) env beyond the test process's own (regression guard) | FR-005 | DONE |
