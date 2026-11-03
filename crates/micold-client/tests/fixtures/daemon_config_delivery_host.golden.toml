@@ -1,0 +1,9 @@
+# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.
+schema = 1
+
+[daemon]
+name = "Host"
+kind = "host"
+
+[listen]
+socket = "auto"

@@ -58,12 +58,16 @@ fn spawn_detached_daemon_adds_no_env() {
     std::env::remove_var(micold_core::spawn::DAEMON_BIN_ENV);
     std::env::remove_var("SOME_OUT_PATH");
 
-    assert_eq!(after, baseline, "spawn_detached_daemon must add no env");
+    assert_eq!(
+        after, baseline,
+        "spawn_detached_daemon must add or change no env"
+    );
 }
 
 /// Polls for the `DONE` marker the script writes only after the full `env` dump landed —
 /// `is_file()` alone would race the shell's write (the file can exist, opened by the redirect,
-/// before `env` finishes writing it).
+/// before `env` finishes writing it). Whole `NAME=value` lines are kept, so an overridden value
+/// differs as well as an added name; only the per-run output path (`SOME_OUT_PATH`) is left out.
 #[cfg(unix)]
 fn wait_and_parse(out_path: &std::path::Path) -> std::collections::BTreeSet<String> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -77,6 +81,7 @@ fn wait_and_parse(out_path: &std::path::Path) -> std::collections::BTreeSet<Stri
     }
     content
         .lines()
-        .filter_map(|l| l.split_once('=').map(|(k, _)| k.to_string()))
+        .filter(|l| l.contains('=') && !l.starts_with("SOME_OUT_PATH="))
+        .map(str::to_string)
         .collect()
 }

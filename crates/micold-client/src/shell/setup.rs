@@ -236,6 +236,34 @@ mod tests {
         (app, rx)
     }
 
+    /// T124 (#1526, U22, FR-014): a project added through `add_project` to a bound host daemon is
+    /// remembered, and the dial the app then builds for that daemon lists it in its settings.
+    #[test]
+    fn a_project_added_to_a_host_daemon_reaches_its_next_dial() {
+        let (mut app, _rx) = connected();
+        let path = PathBuf::from("/home/me/src/app");
+        add_project(&mut app, Binding::Bound(DAEMON), path.clone());
+
+        assert_eq!(
+            app.core.daemon_list.runtime_projects().get(&DAEMON),
+            Some(&vec![path.clone()])
+        );
+        let specs = micold_client::daemon::actor_specs_answered(
+            &app.core.settings.daemons,
+            app.core.settings.links.states(),
+            std::path::Path::new("/nonexistent"),
+            app.core.settings.legacy_default_daemon,
+            None,
+            &BTreeMap::new(),
+            app.core.daemon_list.runtime_projects(),
+        );
+        let Some(micold_client::daemon::Dial::Host(host)) = specs.first().map(|s| &s.dial) else {
+            panic!("the bound daemon dials as a host: {specs:?}");
+        };
+        assert_eq!(host.settings.projects.len(), 1);
+        assert_eq!(host.settings.projects[0].path, path);
+    }
+
     /// M7 (T056): the entries send `SetupRun` and `SetupStop` for the location to its daemon.
     #[test]
     fn run_and_stop_requests_send_the_wire_messages() {

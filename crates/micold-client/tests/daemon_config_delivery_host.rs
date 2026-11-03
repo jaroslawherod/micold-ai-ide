@@ -20,12 +20,9 @@ fn first_call_writes_the_file_mode_0600() {
     assert!(wrote, "first call must write");
     assert!(path.is_file());
 
-    let expected = micold_client::daemon_config_render::prepare(
-        &settings(),
-        micold_core::daemon_config::Kind::Host,
-    )
-    .unwrap();
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+    // A golden text, not `prepare`: the function `deliver_host` itself calls (I5-9).
+    let golden = include_str!("fixtures/daemon_config_delivery_host.golden.toml");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), golden);
 
     #[cfg(unix)]
     {
@@ -72,4 +69,33 @@ fn a_settings_change_writes_again() {
     )
     .unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+}
+
+/// I5-6 (mutant: no `create_dir_all`): a first run, when the data dir does not exist yet.
+#[test]
+fn a_data_dir_that_does_not_exist_yet_is_created() {
+    let dir = tempfile::tempdir().unwrap();
+    let data_dir = dir.path().join("not").join("yet");
+
+    assert!(deliver_host(&settings(), &data_dir).unwrap());
+    assert!(data_dir.join("daemon.toml").is_file());
+}
+
+/// I5-7 (decision: the host path corrects a hand-widened mode, as the SSH path does): an
+/// unchanged file left `0644` is not rewritten but is made `0600` again.
+#[cfg(unix)]
+#[test]
+fn an_unchanged_file_with_a_widened_mode_is_made_private_again() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("daemon.toml");
+    assert!(deliver_host(&settings(), dir.path()).unwrap());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    assert!(
+        !deliver_host(&settings(), dir.path()).unwrap(),
+        "the content is unchanged"
+    );
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
 }
