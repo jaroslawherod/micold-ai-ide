@@ -83,5 +83,6 @@ A test file stays its own target, listed as a `[[test]]` in the crate's `Cargo.t
 changes process-global state (`std::env::set_var`, the working directory, a re-executed test
 binary), times a budget, needs a container runtime or sshd, or is run by name from CI. A new file
 under `tests/` must be a `mod` of `tests/main.rs` or a `[[test]]`; `every_test_file_is_wired`
-fails otherwise. Run one test of the merged set with
+fails otherwise. CI's all-platform architecture-gate step runs the merged ones by module filter
+(`--test main -- <file>::`), since a merged file is no longer a target of its own. Run one test of the merged set with
 `cargo test -p <crate> --test main <file>::<test> -- --exact`.
