@@ -1346,11 +1346,20 @@ pub async fn replace_remote(reach: RemoteReach) -> Result<(), micold_core::ssh::
 fn ssh_delivery(settings: &DaemonSettings) -> Result<ConfigDelivery, String> {
     let files = crate::daemon_config_delivery::read_startup_files(settings)
         .map_err(|e| format!("the daemon configuration could not be delivered: {e}"))?;
-    let remote_secrets =
-        Path::new(micold_core::ssh::argv::REMOTE_HOME_PLACEHOLDER).join(".micold/remote/secrets");
+    // The remote is POSIX whatever this client is: build its paths as strings.
+    let remote = |name: &str| {
+        PathBuf::from(format!(
+            "{}/.micold/remote/secrets/{name}",
+            micold_core::ssh::argv::REMOTE_HOME_PLACEHOLDER
+        ))
+    };
     let relocated;
     let settings = if files.is_some() {
-        relocated = crate::daemon_config_delivery::relocated_startup(settings, &remote_secrets);
+        relocated = crate::daemon_config_delivery::relocated_startup(
+            settings,
+            remote(crate::daemon_config_delivery::SCRIPT_NAME),
+            remote(crate::daemon_config_delivery::ENV_NAME),
+        );
         &relocated
     } else {
         settings

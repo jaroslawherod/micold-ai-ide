@@ -52,17 +52,21 @@ pub fn read_startup_files(settings: &DaemonSettings) -> io::Result<Option<Startu
 }
 
 /// `settings` with the start script (and `env_file`, when it has one) pointing at where delivery
-/// put them: `dir/startup.sh` and `dir/startup.env`.
-pub fn relocated_startup(settings: &DaemonSettings, dir: &Path) -> DaemonSettings {
+/// put them: `script` and `env`.
+pub fn relocated_startup(
+    settings: &DaemonSettings,
+    script: PathBuf,
+    env: PathBuf,
+) -> DaemonSettings {
     let mut moved = settings.clone();
     if let Some(StartupTable {
         script_file,
         settings: table,
     }) = &mut moved.startup
     {
-        *script_file = dir.join(SCRIPT_NAME);
+        *script_file = script;
         if table.env_file.is_some() {
-            table.env_file = Some(dir.join(ENV_NAME));
+            table.env_file = Some(env);
         }
     }
     moved
@@ -76,12 +80,12 @@ pub fn relocated_startup(settings: &DaemonSettings, dir: &Path) -> DaemonSetting
 /// the script text nor a secret value is in `daemon.toml` (US5.4).
 pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bool> {
     let files = read_startup_files(settings)?;
-    let relocated: PathBuf;
     let settings = match &files {
-        Some(_) => {
-            relocated = data_dir.to_path_buf();
-            std::borrow::Cow::Owned(relocated_startup(settings, &relocated))
-        }
+        Some(_) => std::borrow::Cow::Owned(relocated_startup(
+            settings,
+            data_dir.join(SCRIPT_NAME),
+            data_dir.join(ENV_NAME),
+        )),
         None => std::borrow::Cow::Borrowed(settings),
     };
     let text = daemon_config_render::prepare(&settings, Kind::Host)
@@ -115,7 +119,12 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, bytes)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    // Created owner-only, so a secret (`startup.env`) is never readable in between.
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    io::Write::write_all(&mut options.open(path)?, bytes)?;
     set_owner_only(path)?;
     Ok(true)
 }
