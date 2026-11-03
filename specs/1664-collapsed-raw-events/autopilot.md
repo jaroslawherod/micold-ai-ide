@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1664
 - **Worktree branch**: feat/1664_structured-view-raw-events-are-shown-inline-in-the
 - **Started**: 2026-11-03
-- **Phase**: tasks (done)
-- **Next step**: milestone M1
+- **Phase**: milestone M1 (PR next)
+- **Next step**: CI and merge of M1, then milestone M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1667 | Design | open | … |
+| #1667 | Design | merged | 64ed549a8651dba5cfa433fc833d4d3540904298 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | Collapsed summary lines | #… | pending |
+| M1 | T001–T008 | full | Collapsed summary lines | #… | in review |
 | M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #… | pending |
 
 ## Decisions
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | f10850fee75acb8a1900cc086b032d92e3ef5c23:19c23230602f2f7baa0900ae3630e275d1a4d8d3 | CLEAN (1 MINOR into_settings wording, fixed, prose only) |
 | Tasks | 1 | 7f490e14daa4fd3665d83223e6898ac8e0ecb4b8:dacfed8994dc737a731872b83cf8f1a69ec11bc9 | CHANGES: 1 MAJOR ([P] tasks sharing a file), 3 MINOR; fixed, prose only; analyze F6 fixed by merging notice into M2 |
 | Spec | 2 | a7d89dffe96efd9eed2b34554c01e3d784f407d0:2305bb236cec7443b911cbc0c9b526ac9dd8870a | CLEAN (2 MINOR: FR order fixed; error-footer scenario deferred to FR-013 resolution in clarify) |
+| M1 A+B | 1 | 29927781b4b54b1a221637c30fcac1e03b3efb4d:64ed549a8651dba5cfa433fc833d4d3540904298 | A: CHANGES 1 MAJOR (footer details tooltip dropped; now an open-detail unit [4]), fixed; B: CLEAN; MINOR stale doc fixed |
 
 ## Declined review findings
 

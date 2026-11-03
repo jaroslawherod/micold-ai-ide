@@ -20,6 +20,7 @@
 - [Running a prompt in parallel](user-guide/parallel-runs.md)
 - [Terminal panes](user-guide/terminal-panes.md)
 - [Giving a structured session a file](user-guide/structured-input.md)
+- [Reading a structured session's transcript](user-guide/structured-transcript.md)
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md)
 - [Tools for the AI in your sessions](user-guide/agent-tools.md)
 - [Settings](user-guide/settings.md)

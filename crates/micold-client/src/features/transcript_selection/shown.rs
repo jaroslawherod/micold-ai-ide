@@ -9,13 +9,14 @@ use micold_core::structured::edit_diff::HunkNote;
 use micold_core::structured::insights::figures::{turn_details, turn_figures, ESTIMATE_NOTE};
 use micold_core::structured::insights::TurnUsage;
 use micold_core::structured::transcript::{
-    footer_figures, CommandChip, Outcome, ToolStatus, TurnFooter,
+    footer_figures, format_duration, format_turns, CommandChip, Outcome, RawReason, ToolStatus,
+    TurnFooter,
 };
 
 /// What an empty transcript says (FR-006).
 pub const NO_OUTPUT: &str = "No output yet";
-/// The label a raw row leads with (research R4), so it reads apart from the conversation.
-pub const RAW_LABEL: &str = "Raw event";
+/// What a raw entry's detail reads when the event holds no text (#1664).
+pub const EMPTY_EVENT: &str = "Empty event";
 /// A thinking card's title.
 pub const THINKING_TITLE: &str = "Thinking";
 /// What a user message is headed with.
@@ -26,8 +27,6 @@ pub const ENDED_WITHOUT_RESULT: &str = "The turn ended without a result";
 pub const INTERRUPTED: &str = "You interrupted this turn";
 /// What a message sent with pictures names them under (feature 941, FR-030).
 pub const ATTACHED: &str = "Attached";
-/// What heads a result whose call is not in the transcript (FR-020): shown, never as an error.
-pub const ORPHAN_RESULT: &str = "Result of a tool call not shown";
 
 /// Which colour role a status takes beside its icon and label (FR-012).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -309,4 +308,170 @@ pub fn structured_input(text: &str) -> String {
         .ok()
         .and_then(|value| serde_json::to_string_pretty(&value).ok())
         .unwrap_or_else(|| text.to_owned())
+}
+
+/// A low-signal entry as one summary line (#1664 FR-001, FR-002): what it is, then its key facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SummaryLine {
+    pub title: String,
+    pub facts: Vec<String>,
+    /// Drawn with the card's failed outline, and the title says so in words.
+    pub failed: bool,
+}
+
+impl SummaryLine {
+    fn new(title: &str, facts: Vec<String>) -> Self {
+        Self {
+            title: title.to_owned(),
+            facts,
+            failed: false,
+        }
+    }
+
+    /// The facts as the folded line shows them.
+    pub fn facts_text(&self) -> String {
+        self.facts.join(" \u{b7} ")
+    }
+}
+
+/// The `type` of `raw` when it is a JSON object with a string `type`.
+fn raw_type(raw: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+    value.get("type")?.as_str().map(str::to_owned)
+}
+
+/// A raw entry's summary: the reason in words, and its `(type)` when the raw text names one.
+pub fn raw_summary(text: &str, reason: RawReason) -> SummaryLine {
+    let title = match reason {
+        RawReason::Unrecognised => "Unrecognised event",
+        RawReason::Unreadable => "Unreadable line",
+        RawReason::UnknownBlock => "Unknown content block",
+        RawReason::UnknownStreamEvent => "Unknown stream event",
+    };
+    SummaryLine::new(
+        title,
+        raw_type(text)
+            .map(|t| format!("({t})"))
+            .into_iter()
+            .collect(),
+    )
+}
+
+/// A raw entry's detail: its text as drawn, or [`EMPTY_EVENT`] when it holds none.
+pub fn raw_detail(text: &str) -> String {
+    if text.is_empty() {
+        EMPTY_EVENT.to_owned()
+    } else {
+        plain_text(text)
+    }
+}
+
+/// A session start's summary: the model when it is known.
+pub fn session_start_summary(model: Option<&str>) -> SummaryLine {
+    SummaryLine::new(
+        "Session started",
+        model.map(str::to_owned).into_iter().collect(),
+    )
+}
+
+/// A turn footer's summary: the outcome and, when the result reports them, duration and turns.
+pub fn footer_summary(footer: &TurnFooter) -> SummaryLine {
+    let failed = footer.outcome == Outcome::Error;
+    let mut line = SummaryLine::new(
+        if failed { "Turn failed" } else { "Turn done" },
+        [
+            footer.duration_ms.map(format_duration),
+            footer.num_turns.map(format_turns),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+    );
+    line.failed = failed;
+    line
+}
+
+/// An orphan result's summary: whether it is an error.
+pub fn orphan_summary(is_error: bool) -> SummaryLine {
+    let mut line = SummaryLine::new(
+        if is_error {
+            "Result without a call \u{b7} error"
+        } else {
+            "Result without a call"
+        },
+        Vec::new(),
+    );
+    line.failed = is_error;
+    line
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+
+    fn footer(outcome: Outcome, duration: Option<u64>, turns: Option<u64>) -> TurnFooter {
+        TurnFooter {
+            outcome,
+            duration_ms: duration,
+            cost_usd: None,
+            num_turns: turns,
+            error_text: None,
+        }
+    }
+
+    #[test]
+    fn a_raw_entry_is_titled_by_its_reason() {
+        for (reason, title) in [
+            (RawReason::Unrecognised, "Unrecognised event"),
+            (RawReason::Unreadable, "Unreadable line"),
+            (RawReason::UnknownBlock, "Unknown content block"),
+            (RawReason::UnknownStreamEvent, "Unknown stream event"),
+        ] {
+            assert_eq!(raw_summary("{not json", reason).title, title);
+        }
+    }
+
+    #[test]
+    fn a_raw_type_is_a_fact_only_when_the_text_is_json_with_a_type() {
+        let r = RawReason::Unrecognised;
+        assert_eq!(
+            raw_summary(r#"{"type":"stream_event"}"#, r).facts,
+            ["(stream_event)"]
+        );
+        assert!(raw_summary("{not json", r).facts.is_empty());
+        assert!(raw_summary(r#"{"other":1}"#, r).facts.is_empty());
+        assert!(raw_summary(r#"{"type":3}"#, r).facts.is_empty());
+        assert!(raw_summary("", r).facts.is_empty());
+    }
+
+    #[test]
+    fn an_empty_raw_text_reads_empty_event_and_other_text_is_kept() {
+        assert_eq!(raw_detail(""), "Empty event");
+        assert_eq!(raw_detail("a\tb"), "a   b");
+    }
+
+    #[test]
+    fn a_session_start_carries_its_model_when_it_has_one() {
+        assert_eq!(session_start_summary(Some("opus")).facts, ["opus"]);
+        assert!(session_start_summary(None).facts.is_empty());
+        assert_eq!(session_start_summary(None).title, "Session started");
+    }
+
+    #[test]
+    fn a_footer_says_its_outcome_and_the_figures_it_has() {
+        let ok = footer_summary(&footer(Outcome::Success, Some(6_674), Some(2)));
+        assert_eq!((ok.title.as_str(), ok.failed), ("Turn done", false));
+        assert_eq!(ok.facts_text(), "6.7 s \u{b7} 2 turns");
+        let bare = footer_summary(&footer(Outcome::Error, None, None));
+        assert_eq!((bare.title.as_str(), bare.failed), ("Turn failed", true));
+        assert!(bare.facts.is_empty());
+    }
+
+    #[test]
+    fn an_orphan_result_says_error_in_words_when_it_is_one() {
+        assert_eq!(orphan_summary(false).title, "Result without a call");
+        assert!(!orphan_summary(false).failed);
+        let e = orphan_summary(true);
+        assert!(e.title.contains("error") && e.failed);
+    }
 }

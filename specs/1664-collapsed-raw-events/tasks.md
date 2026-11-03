@@ -27,17 +27,17 @@ None separate. Each story below brings the core pieces it needs.
 
 ### Tests first
 
-- [ ] T001 [P] [US1] Unit tests for the summary text functions (title and facts per kind: every raw reason, the `(type)` fact present when the raw text is JSON with a `type` and absent otherwise, empty raw text reads "Empty event", footer ok/error with and without duration/turns, session start with and without model, orphan ok/error) in `crates/micold-client/src/features/transcript_selection/shown.rs`
-- [ ] T002 [P] [US1] View tests in `crates/micold-client/tests/transcript_entry_view.rs`: the four kinds draw as folded cards with the summary title; no raw text painted while collapsed (SC-001); open state shows raw detail byte-equal to the entry text (FR-004, tabs to spaces only); error footer/orphan titles carry the word "failed"/"error"; a footer arriving later updates its summary in place; a very large raw detail is height-bounded
-- [ ] T003 [P] [US1] Geometry test in `crates/micold-client/tests/transcript_follow_layout.rs`: a collapsed summary card is one line tall; appending one moves the reading offset by at most that (SC-003, US1 scenario 4)
-- [ ] T004 [P] [US1] Parity test in `crates/micold-client/tests/transcript_selection_parity.rs`: `body_units` for Raw, SessionStart, Footer, OrphanResult yields the summary line as unit 0 and detail units only while open; copy equals what is drawn
+- [x] T001 [P] [US1] Unit tests for the summary text functions (title and facts per kind: every raw reason, the `(type)` fact present when the raw text is JSON with a `type` and absent otherwise, empty raw text reads "Empty event", footer ok/error with and without duration/turns, session start with and without model, orphan ok/error) in `crates/micold-client/src/features/transcript_selection/shown.rs`
+- [x] T002 [P] [US1] View tests in `crates/micold-client/tests/transcript_entry_view.rs`: the four kinds draw as folded cards with the summary title; no raw text painted while collapsed (SC-001); open state shows raw detail byte-equal to the entry text (FR-004, tabs to spaces only); error footer/orphan titles carry the word "failed"/"error"; a footer arriving later updates its summary in place; a very large raw detail is height-bounded
+- [x] T003 [P] [US1] Geometry test in `crates/micold-client/tests/transcript_follow_layout.rs`: a collapsed summary card is one line tall; appending one moves the reading offset by at most that (SC-003, US1 scenario 4)
+- [x] T004 [P] [US1] Parity test in `crates/micold-client/tests/transcript_selection_parity.rs`: `body_units` for Raw, SessionStart, Footer, OrphanResult yields the summary line as unit 0 and detail units only while open; copy equals what is drawn
 
 ### Implementation
 
-- [ ] T005 [US1] Summary title/facts functions in `crates/micold-client/src/features/transcript_selection/shown.rs` (wording table in data-model.md; raw type shown only if the raw text parses as JSON with a `type`)
-- [ ] T006 [US1] Folded `DisclosureCard` arms for the four kinds in `crates/micold-client/src/ui/transcript/entries.rs`, raw detail in a height-bounded scrollable (reuse the bound used by tool results in `blocks.rs`), error variants use the card's `failed` outline
-- [ ] T007 [US1] `body_units` for the four kinds (summary unit 0, detail only when open) in `crates/micold-client/src/features/transcript_selection.rs`
-- [ ] T008 [US1] User-guide page `docs/user-guide/structured-transcript.md` (summary lines and expanding) and its `docs/SUMMARY.md` entry
+- [x] T005 [US1] Summary title/facts functions in `crates/micold-client/src/features/transcript_selection/shown.rs` (wording table in data-model.md; raw type shown only if the raw text parses as JSON with a `type`)
+- [x] T006 [US1] Folded `DisclosureCard` arms for the four kinds in `crates/micold-client/src/ui/transcript/entries.rs`, raw detail in a height-bounded scrollable (reuse the bound used by tool results in `blocks.rs`), error variants use the card's `failed` outline
+- [x] T007 [US1] `body_units` for the four kinds (summary unit 0, detail only when open) in `crates/micold-client/src/features/transcript_selection.rs`
+- [x] T008 [US1] User-guide page `docs/user-guide/structured-transcript.md` (summary lines and expanding) and its `docs/SUMMARY.md` entry
 
 ## Phase 4: User Story 2 - Hide low-signal entries altogether, and get them back (P2)
 

@@ -13,7 +13,7 @@ use micold_client::features::permission_prompts::State as Prompts;
 use micold_client::features::structured_transcript::{Scroll, TranscriptMsg};
 use micold_client::features::transcript_rich::{DerivedBody, Part, RichCache};
 use micold_client::features::transcript_selection::shown::{
-    footer_view, hunk_title, omitted_text, resolution_label, structured_input, unshown_caption,
+    footer_summary, hunk_title, omitted_text, resolution_label, structured_input, unshown_caption,
     INPUT_CUT, PLAN_TITLE,
 };
 use micold_client::features::transcript_selection::{
@@ -526,13 +526,13 @@ fn a_footer_copies_its_status_and_figures() {
             _ => None,
         })
         .expect("a footer");
-    let view = footer_view(&footer);
+    let summary = footer_summary(&footer);
     let n = held.transcript.entries().len() - 1;
     assert_eq!(
         held.units_of(held.body(n)),
         vec![
-            (vec![0], view.status.label.to_owned()),
-            (vec![1], view.figures.join(" \u{b7} ")),
+            (vec![0], summary.title.clone()),
+            (vec![1], summary.facts_text())
         ]
     );
 }

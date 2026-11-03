@@ -52,10 +52,11 @@ use crate::features::structured_insights::State as InsightsState;
 use crate::features::transcript_rich::{Derived, DerivedBody, Part, RichCache, EDIT_TOOLS};
 use shown::{
     always_allow_note, attachments_line, command_chip_description, command_chip_title,
-    compacted_text, effort_changed_text, first_line, footer_view_with, hunk_title,
-    model_changed_text, note_text, omitted_text, oversized_text, plain_text, resolution_label,
-    structured_input, subagent_notice_text, unshown_caption, CLEARED, COMMAND_OUTPUT_TITLE,
-    ENDED_WITHOUT_RESULT, INPUT_CUT, INTERRUPTED, PLAN_TITLE, QUESTION_TITLE, THINKING_TITLE,
+    compacted_text, effort_changed_text, first_line, footer_summary, footer_view_with, hunk_title,
+    model_changed_text, note_text, omitted_text, orphan_summary, oversized_text, plain_text,
+    raw_detail, raw_summary, resolution_label, session_start_summary, structured_input,
+    subagent_notice_text, unshown_caption, CLEARED, COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT,
+    INPUT_CUT, INTERRUPTED, PLAN_TITLE, QUESTION_TITLE, THINKING_TITLE,
 };
 
 /// What a pane says when the clipboard refused a copy of its transcript selection (FR-014).
@@ -597,10 +598,13 @@ fn body_units<'a>(
     let mut u = Units::default();
     match entry.kind() {
         EntryKind::SessionStart { model, cwd, .. } => {
-            let mut parts = vec!["Session started".to_owned()];
-            parts.extend(model.iter().cloned());
-            parts.extend(cwd.iter().cloned());
-            u.line(vec![0], parts.join(" \u{b7} "));
+            let line = session_start_summary(model.as_deref());
+            u.header(line.title.clone(), line.facts_text(), open);
+            if open {
+                if let Some(cwd) = cwd {
+                    u.line(vec![2], cwd.clone());
+                }
+            }
         }
         EntryKind::UserMessage {
             text,
@@ -667,15 +671,29 @@ fn body_units<'a>(
                 }
             }
         }
-        EntryKind::OrphanResult { parts, .. } => u.parts(1, parts),
-        EntryKind::Footer(footer) => {
-            let view = footer_view_with(footer, extras.turn);
-            u.line(vec![0], view.status.label);
-            if !view.figures.is_empty() {
-                u.after(vec![1], view.figures.join(" \u{b7} "), Joint::Space);
+        EntryKind::OrphanResult {
+            parts, is_error, ..
+        } => {
+            let line = orphan_summary(*is_error);
+            u.header(line.title.clone(), line.facts_text(), open);
+            if open {
+                u.parts(2, parts);
             }
-            if let Some(error) = view.error_text {
-                u.line(vec![2], error);
+        }
+        EntryKind::Footer(footer) => {
+            let line = footer_summary(footer);
+            u.header(line.title.clone(), line.facts_text(), open);
+            if open {
+                let view = footer_view_with(footer, extras.turn);
+                if !view.figures.is_empty() {
+                    u.line(vec![2], view.figures.join(" \u{b7} "));
+                }
+                if let Some(error) = view.error_text {
+                    u.line(vec![3], error);
+                }
+                if !view.details.is_empty() {
+                    u.line(vec![4], view.details.join("\n"));
+                }
             }
         }
         EntryKind::TurnEndedWithoutResult => u.line(vec![0], ENDED_WITHOUT_RESULT),
@@ -688,7 +706,13 @@ fn body_units<'a>(
                 u.line(vec![0], subagent_notice_text(*count));
             }
         }
-        EntryKind::Raw { text, .. } => u.line(vec![1], plain_text(text)),
+        EntryKind::Raw { text, reason } => {
+            let line = raw_summary(text, *reason);
+            u.header(line.title.clone(), line.facts_text(), open);
+            if open {
+                u.line(vec![2], raw_detail(text));
+            }
+        }
     }
     u.0
 }

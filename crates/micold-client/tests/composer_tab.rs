@@ -45,8 +45,8 @@ impl Operation for Record {
     }
 }
 
-/// Focus the focusable under `at`, as a click on it does, and no other.
-struct FocusAt(Point);
+/// Focus the focusable laid out at exactly `bounds`, and no other.
+struct FocusAt(Rectangle);
 
 impl Operation for FocusAt {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
@@ -54,7 +54,7 @@ impl Operation for FocusAt {
     }
 
     fn focusable(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
-        if bounds.contains(self.0) {
+        if bounds == self.0 {
             state.focus();
         } else {
             state.unfocus();
@@ -125,6 +125,19 @@ impl<'a> Mounted<'a> {
             &Rectangle::with_size(WINDOW),
         );
         messages
+    }
+
+    /// Focus the focusable drawn on top at `at`, as a click on it does: the last one the traversal
+    /// reaches there, since a transcript card scrolled out of its viewport still has bounds
+    /// beneath the composer.
+    fn focus_at(&mut self, at: Point) {
+        let top = self
+            .reached()
+            .into_iter()
+            .map(|(b, _)| b)
+            .rfind(|b| b.contains(at))
+            .expect("a focusable under the point");
+        self.operate(Box::new(FocusAt(top)));
     }
 
     fn focused(&mut self) -> Option<Rectangle> {
@@ -229,7 +242,7 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
     assert_eq!(state.window.focused_field, Some(FieldId::Composer(id)));
     let messages = {
         let mut mounted = Mounted::new(view(&state));
-        mounted.operate(Box::new(FocusAt(area)));
+        mounted.focus_at(area);
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         let attach = painted_at(&StateUnderTest::new(state.clone()), "\u{e226}");
@@ -260,7 +273,7 @@ fn shift_tab_from_the_text_area_reaches_send_queued_and_the_queue_actions() {
     let (state, _) = crowded();
     let (_, send_queued, area) = places(&state);
     let mut mounted = Mounted::new(view(&state));
-    mounted.operate(Box::new(FocusAt(area)));
+    mounted.focus_at(area);
     let mut landed = Vec::new();
     // The status row's stops (the model, #1554's effort trigger) come before the queue's.
     for _ in 0..7 {
