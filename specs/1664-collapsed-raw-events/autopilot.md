@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1664
 - **Worktree branch**: feat/1664_structured-view-raw-events-are-shown-inline-in-the
 - **Started**: 2026-11-03
-- **Phase**: milestone M2 (implementing)
-- **Next step**: M2 verify, scoped gate + review A, review B, visual pass, full gate, PR
+- **Phase**: milestone M2 (PR open)
+- **Next step**: wait for CI, merge, then close unit (T026)
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1667 | Design | merged | 64ed549a8651dba5cfa433fc833d4d3540904298 |
 | #1668 | M1 collapsed summary lines (PR head branch feat/1664_collapsed-raw-events-m1; local worktree branch tracks it) | merged | 4198d80c53a5109eee89f11b0b4cfa8356ad9e36 |
-| #… | M2 toggle (PR head branch feat/1664_collapsed-raw-events-m2; push with explicit refspec) | in progress | - |
+| #1672 | M2 toggle (PR head branch feat/1664_collapsed-raw-events-m2; push with explicit refspec) | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Collapsed summary lines | #1668 | merged |
-| M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #… (head feat/1664_collapsed-raw-events-m2) | in progress |
+| M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #1672 | open |
 
 ## Decisions
 
