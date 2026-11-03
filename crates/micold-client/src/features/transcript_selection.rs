@@ -237,6 +237,9 @@ pub struct TranscriptView<'a> {
     pub rich: &'a RichCache,
     pub prompts: Option<&'a PromptsState>,
     pub insights: Option<&'a InsightsState>,
+    /// The "Show raw events" toggle (#1664): off, the low-signal entries it hides are neither rows
+    /// nor copied.
+    pub show_raw: bool,
 }
 
 /// A row drawn under an entry's card: a pending request (with the card's entry) or how the last
@@ -253,6 +256,14 @@ struct Placed<'a> {
 }
 
 impl<'a> TranscriptView<'a> {
+    /// The entries the view draws: all but those the toggle hides (#1664, FR-007).
+    pub fn entries(&self) -> impl Iterator<Item = &'a Entry> {
+        let show_raw = self.show_raw;
+        self.transcript
+            .entries()
+            .filter(move |e| micold_core::structured::transcript::shown(e, show_raw))
+    }
+
     /// Where the view draws each request block and resolution row (`ui/transcript/mod.rs`):
     /// under a held card its pending requests, else how its last request ended; requests whose
     /// card is not held after the last entry.
@@ -309,7 +320,7 @@ pub fn rows(view: &TranscriptView<'_>) -> Vec<RowPos> {
     if view.transcript.omitted_notice().is_some() {
         rows.push(RowPos::Omitted);
     }
-    for entry in view.transcript.entries() {
+    for entry in view.entries() {
         let id = entry.id();
         rows.push(RowPos::Entry(id, Under::Body));
         let under = placed.under.get(&id).map_or(0, Vec::len);
@@ -918,8 +929,7 @@ fn entries_in<'a>(
     end: &TextPos,
 ) -> impl Iterator<Item = (&'a Entry, RowPos)> {
     let (from, to) = (start.row, end.row);
-    view.transcript
-        .entries()
+    view.entries()
         .map(|e| (e, RowPos::Entry(e.id(), Under::Body)))
         .skip_while(move |(_, row)| *row < from)
         .take_while(move |(_, row)| *row <= to)
@@ -1233,6 +1243,12 @@ impl State {
         if held {
             s.clear();
         }
+    }
+
+    /// The "Show raw events" toggle changed (#1664): every session's rows changed, so a selection
+    /// ending on an entry that is no longer a row is cleared rather than kept dangling.
+    pub fn visibility_changed(&mut self) {
+        self.sessions.values_mut().for_each(SessionSelection::clear);
     }
 
     /// Forget `session`'s selection and menu (the session was closed or removed).

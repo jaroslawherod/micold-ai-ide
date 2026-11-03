@@ -254,6 +254,11 @@ pub struct Settings {
     /// file written before the key existed reads as off. Client-owned: the daemon never reads it.
     #[serde(default)]
     pub suggestion_chips: bool,
+    /// Whether the structured view shows its low-signal entries (raw events, session start, turn
+    /// footers, results without a call) as summary lines (#1664, FR-005, FR-009). Off by default; a
+    /// file written before the key existed reads as off. Client-owned: the daemon never reads it.
+    #[serde(default)]
+    pub show_raw_events: bool,
     /// Per-session embedded-terminal scrollback limit in lines (feature 006, FR-020/FR-021).
     #[serde(default = "default_scrollback")]
     pub scrollback_lines: usize,
@@ -467,6 +472,7 @@ impl Default for Settings {
             theme: ThemePreference::default(),
             reduce_motion: false,
             suggestion_chips: false,
+            show_raw_events: false,
             scrollback_lines: DEFAULT_SCROLLBACK_LINES,
             env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: default_env_include_script_path_string(),
@@ -829,6 +835,9 @@ struct StoredSettings {
     /// Missing in files written before #1275 → off.
     #[serde(default)]
     suggestion_chips: bool,
+    /// Missing in files written before #1664 → off.
+    #[serde(default)]
+    show_raw_events: bool,
     /// Missing in v1 files → defaults to [`DEFAULT_SCROLLBACK_LINES`] (backward compatible).
     #[serde(default = "default_scrollback")]
     scrollback_lines: usize,
@@ -985,6 +994,7 @@ impl StoredSettings {
             theme: settings.theme,
             reduce_motion: settings.reduce_motion,
             suggestion_chips: settings.suggestion_chips,
+            show_raw_events: settings.show_raw_events,
             scrollback_lines: settings.scrollback_lines,
             env_include_enabled: settings.env_include_enabled,
             env_include_script_path: settings.env_include_script_path.clone(),
@@ -1037,6 +1047,7 @@ impl StoredSettings {
             theme: self.theme,
             reduce_motion: self.reduce_motion,
             suggestion_chips: self.suggestion_chips,
+            show_raw_events: self.show_raw_events,
             scrollback_lines: clamp_scrollback(self.scrollback_lines),
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,

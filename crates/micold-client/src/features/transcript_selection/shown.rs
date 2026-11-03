@@ -106,6 +106,22 @@ pub fn omitted_text(n: u64) -> String {
     }
 }
 
+/// The notice for entries the toggle hides: `"1 event hidden"`, `"40 events hidden"` (#1664, FR-008).
+pub fn hidden_text(n: u64) -> String {
+    if n == 1 {
+        "1 event hidden".to_owned()
+    } else {
+        format!("{n} events hidden")
+    }
+}
+
+/// The "Show" button of the hidden-events notice (#1664, FR-008).
+pub const SHOW_HIDDEN: &str = "Show";
+
+/// The header toggle's label and tooltip (#1664, FR-005).
+pub const SHOW_RAW_EVENTS: &str = "Show raw events";
+pub const SHOW_RAW_EVENTS_TIP: &str = "Show session start, turn summaries and unrecognised events";
+
 /// What an event too large to send says (FR-004).
 pub fn oversized_text(original_bytes: u64) -> String {
     format!("An event of {original_bytes} bytes was too large to show")

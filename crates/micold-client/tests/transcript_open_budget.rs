@@ -270,6 +270,7 @@ fn selection_view(o: &Opened) -> TranscriptView<'_> {
         rich: &o.cache,
         prompts: None,
         insights: None,
+        show_raw: true,
     }
 }
 

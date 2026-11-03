@@ -108,8 +108,8 @@ fn a_card_shows_its_sub_agent_count_while_above_zero() {
 
 #[test]
 fn an_empty_transcript_shows_no_output_yet() {
-    assert_eq!(rows(None), vec![Row::Empty]);
-    assert_eq!(rows(Some(&Transcript::new())), vec![Row::Empty]);
+    assert_eq!(rows(None, true), vec![Row::Empty]);
+    assert_eq!(rows(Some(&Transcript::new()), true), vec![Row::Empty]);
 
     let session = SessionId::new();
     let mut state = State::default();
@@ -135,14 +135,14 @@ fn unreadable(seq: u64, line: &str) -> SequencedEvent {
 fn the_omitted_notice_is_first_when_events_are_omitted() {
     let mut t = Transcript::new();
     t.apply(40, &[unreadable(40, "not json")], false);
-    let shown = rows(Some(&t));
+    let shown = rows(Some(&t), true);
     assert_eq!(shown[0], Row::Omitted(40));
     assert!(matches!(shown[1], Row::Entry(_)));
     assert_eq!(shown.len(), 2);
 
     let mut none_omitted = Transcript::new();
     none_omitted.apply(0, &[unreadable(0, "not json")], false);
-    assert!(matches!(rows(Some(&none_omitted))[0], Row::Entry(_)));
+    assert!(matches!(rows(Some(&none_omitted), true)[0], Row::Entry(_)));
 }
 
 fn init(seq: u64) -> SequencedEvent {
@@ -323,4 +323,130 @@ fn a_very_large_raw_detail_is_height_bounded() {
         vec![],
     );
     assert!(showing.content < 500.0, "{showing:?}");
+}
+
+// ---- #1664 M2: the "Show raw events" toggle ----
+
+/// A mixed transcript: a raw line, a session start, an ok footer, an error footer, an ok orphan
+/// and an error orphan. The first, second, third and fifth are hidden with the toggle off.
+fn mixed() -> Vec<SequencedEvent> {
+    vec![
+        unreadable(0, "not json"),
+        init(1),
+        result(2, false),
+        result(3, true),
+        orphan(4, false),
+        orphan(5, true),
+    ]
+}
+
+/// What the entry rows of `t` are, as their kinds' debug text: stable across builds of the same
+/// history, where an entry's revision is not.
+fn entry_kinds(t: &Transcript, show_raw: bool) -> Vec<String> {
+    rows(Some(t), show_raw)
+        .into_iter()
+        .map(|row| match row {
+            Row::Entry(e) => format!("{:?}", e.kind()),
+            other => format!("{other:?}"),
+        })
+        .collect()
+}
+
+/// SC-002, FR-013: with the toggle on every low-signal entry is a row; off, the summary lines plus
+/// the hidden count are the same total and the error ones stay.
+#[test]
+fn rows_follow_the_toggle_and_the_hidden_count_completes_the_total() {
+    let mut t = Transcript::new();
+    t.apply(0, &mixed(), false);
+
+    let on = rows(Some(&t), true);
+    assert_eq!(on.len(), 6);
+    assert!(on.iter().all(|r| matches!(r, Row::Entry(_))));
+
+    let off = rows(Some(&t), false);
+    assert_eq!(off[0], Row::Hidden(4), "the notice comes first (no omitted)");
+    let kept = off.iter().filter(|r| matches!(r, Row::Entry(_))).count();
+    assert_eq!(kept, 2, "the error footer and the error orphan stay");
+    assert_eq!(kept as u64 + 4, on.len() as u64, "SC-002");
+    let order = |rows: &[Row]| -> Vec<u64> {
+        rows.iter()
+            .filter_map(|r| match r {
+                Row::Entry(e) => Some(e.opened_at()),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(order(&off), vec![3, 5], "in transcript order");
+}
+
+/// US2 scenario 4: the notice follows the omitted notice, and only exists while something is hidden.
+#[test]
+fn the_hidden_notice_follows_omitted_and_exists_only_above_zero() {
+    let mut t = Transcript::new();
+    t.apply(7, &[unreadable(7, "x"), init(8)], false);
+    let off = rows(Some(&t), false);
+    assert_eq!(off, vec![Row::Omitted(7), Row::Hidden(2)]);
+    assert!(!rows(Some(&t), true).iter().any(|r| matches!(r, Row::Hidden(_))));
+
+    let mut only_errors = Transcript::new();
+    only_errors.apply(0, &[result(0, true)], false);
+    assert!(!rows(Some(&only_errors), false)
+        .iter()
+        .any(|r| matches!(r, Row::Hidden(_))));
+}
+
+/// Edge case: a transcript of only hidden entries shows the notice, not "No output yet".
+#[test]
+fn a_transcript_of_only_hidden_entries_shows_the_notice_not_empty() {
+    let (state, session) = state_with(&[unreadable(0, "x"), init(1)]);
+    let off = rows(state.transcript(session), false);
+    assert_eq!(off, vec![Row::Hidden(2)]);
+    assert!(!off.contains(&Row::Empty));
+}
+
+/// SC-002 as drawn: off, no raw text and "N events hidden" with a "Show" button; on, the
+/// summaries and no notice.
+#[test]
+fn the_view_paints_the_notice_off_and_the_summaries_on() {
+    let (state, session) = state_with(&[unreadable(0, "RAW LINE"), init(1)]);
+    let cache = BlockCache::default();
+    let paint = |show_raw: bool| -> Vec<String> {
+        let ctx = micold_client::ui::transcript::RenderCtx {
+            show_raw,
+            ..support::transcript::ctx(&cache)
+        };
+        let (painted, _) = painted_text_settled_at(
+            micold_client::ui::transcript::view(&state, session, &BlockRenderers::PLAIN, ctx),
+            &mut renderer(),
+            Size::new(600.0, 600.0),
+        );
+        painted.into_iter().map(|p| p.content).collect()
+    };
+    let off = paint(false);
+    assert!(off.iter().any(|t| t == "2 events hidden"), "{off:?}");
+    assert!(off.iter().any(|t| t == "Show"), "{off:?}");
+    assert!(!off.iter().any(|t| t.contains("RAW LINE")));
+    let on = paint(true);
+    assert!(!on.iter().any(|t| t.contains("hidden")), "{on:?}");
+    assert!(on.iter().any(|t| t == "Session started"), "{on:?}");
+}
+
+/// FR-011, US3: the same history built live (one event at a time) and resumed (all at once)
+/// gives the same rows, for both values of the toggle.
+#[test]
+fn live_and_resumed_transcripts_give_equal_rows() {
+    let events = mixed();
+    let mut resumed = Transcript::new();
+    resumed.apply(0, &events, false);
+    let mut live = Transcript::new();
+    for event in &events {
+        live.apply(0, std::slice::from_ref(event), true);
+    }
+    for show_raw in [false, true] {
+        assert_eq!(
+            entry_kinds(&live, show_raw),
+            entry_kinds(&resumed, show_raw),
+            "show_raw = {show_raw}"
+        );
+    }
 }

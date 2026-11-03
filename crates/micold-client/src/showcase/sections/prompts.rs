@@ -146,6 +146,7 @@ pub fn prompt_card_sample(pose: PromptPose, scheme: ColorScheme) -> Element<'sta
             cache: &CACHE,
             selected: None,
             row: None,
+            show_raw: true,
         },
         |_| Message::NoOp,
     )

@@ -208,6 +208,7 @@ fn other_writers_preserve_the_mapping() {
             "save_terminal_history",
             "scrollback_lines",
             "settings_version",
+            "show_raw_events",
             "suggestion_chips",
             "theme",
             "tool_server_enabled",

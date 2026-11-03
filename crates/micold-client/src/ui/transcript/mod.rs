@@ -37,7 +37,10 @@ use crate::icons::Icon;
 use crate::ui::cdk::Keyed;
 use crate::ui::focus::TrackFocusAs;
 use crate::ui::material::selection_area::Edge;
-use crate::ui::material::{Button, ContextMenu, MenuItem, Scrollable, SelectionArea};
+use crate::features::transcript_selection::shown;
+use crate::ui::material::{
+    Button, ContextMenu, LabelledToggle, MenuItem, Scrollable, SelectionArea, Tooltip,
+};
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::protocol::messages::PromptId;
@@ -59,6 +62,8 @@ pub fn transcript_scroll_id(session: SessionId) -> iced::advanced::widget::Id {
 enum RowKey {
     Omitted,
     Empty,
+    /// The hidden-events notice (#1664).
+    Hidden,
     Entry(EntryId),
     /// A permission request whose tool card is not held, after the last entry (feature 942).
     Prompt(PromptId),
@@ -174,7 +179,7 @@ pub fn view_full<'a, M: Clone + 'a>(
     )
     .width(Length::Fill);
     let bar = container(
-        iced::widget::row![session_bar]
+        iced::widget::row![session_bar, raw_events_toggle(ctx).map(on_transcript)]
             .push(trailing)
             .spacing(spacing::SM)
             .align_y(Alignment::Start),
@@ -201,6 +206,17 @@ pub fn view_full<'a, M: Clone + 'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+/// The header's "Show raw events" toggle (#1664, FR-005): tinted while on.
+fn raw_events_toggle<'a>(ctx: RenderCtx<'a>) -> Element<'a, TranscriptMsg> {
+    let roles = ctx.roles;
+    let mut toggle = LabelledToggle::new(Icon::Filter, shown::SHOW_RAW_EVENTS, roles)
+        .on_press(TranscriptMsg::ShowRawEvents(!ctx.show_raw));
+    if ctx.show_raw {
+        toggle = toggle.tint(roles.primary);
+    }
+    Tooltip::new(toggle, shown::SHOW_RAW_EVENTS_TIP, roles).into()
 }
 
 fn build<'a, M: Clone + 'a>(
@@ -283,7 +299,7 @@ fn build<'a, M: Clone + 'a>(
             on_transcript,
         ))
     };
-    let mut keyed: Vec<(RowKey, Element<'a, M>)> = rows(transcript)
+    let mut keyed: Vec<(RowKey, Element<'a, M>)> = rows(transcript, ctx.show_raw)
         .into_iter()
         .map(|row| match row {
             Row::Omitted(n) => {
@@ -301,6 +317,10 @@ fn build<'a, M: Clone + 'a>(
                     entries::omitted_notice(n, &ctx).map(on_transcript),
                 )
             }
+            Row::Hidden(n) => (
+                RowKey::Hidden,
+                entries::hidden_notice(n, roles).map(on_transcript),
+            ),
             Row::Empty => (RowKey::Empty, entries::no_output(roles).map(on_transcript)),
             Row::Entry(entry) => {
                 let open = state.is_open(session, entry.key());

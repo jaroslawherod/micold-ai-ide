@@ -990,3 +990,32 @@ fn the_worktree_guard_off_survives_a_save_and_load() {
 
     assert!(!store.load().settings.worktree_guard_enabled);
 }
+
+/// #1664 FR-009: `show_raw_events` is off by default, a file without the key reads as off, on
+/// survives a save and a load, and saving it touches no other key.
+#[test]
+fn show_raw_events_defaults_off_and_round_trips() {
+    assert!(!Settings::default().show_raw_events, "off by default");
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{ "settings_version": 4, "theme": "dark" }"#,
+    )
+    .unwrap();
+    assert!(
+        !store.load().settings.show_raw_events,
+        "a file without the key reads as off"
+    );
+
+    let on = Settings {
+        show_raw_events: true,
+        theme: ThemePreference::Dark,
+        ..Settings::default()
+    };
+    store.save(&on).unwrap();
+    let loaded = store.load().settings;
+    assert!(loaded.show_raw_events, "loads back on");
+    assert_eq!(loaded, on, "other keys are untouched");
+}

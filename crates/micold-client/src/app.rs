@@ -1089,6 +1089,7 @@ impl State {
             &self.permission_prompts,
             &self.structured_insights,
             session,
+            self.settings.show_raw_events,
         ) {
             self.transcript_selection.before_apply(&view);
         }
@@ -1114,6 +1115,7 @@ impl State {
             &self.permission_prompts,
             &self.structured_insights,
             session,
+            self.settings.show_raw_events,
         ) {
             self.transcript_selection.applied(&view);
         }
@@ -1132,6 +1134,7 @@ impl State {
             &self.permission_prompts,
             &self.structured_insights,
             session,
+            self.settings.show_raw_events,
         )
     }
 
@@ -1155,6 +1158,7 @@ impl State {
                 &self.permission_prompts,
                 &self.structured_insights,
                 session,
+            self.settings.show_raw_events,
             ) {
                 self.transcript_selection.prompts_changed(&view);
             }
@@ -1315,6 +1319,7 @@ impl State {
             &self.permission_prompts,
             &self.structured_insights,
             session,
+            self.settings.show_raw_events,
         );
         let copy = self.transcript_selection.update(msg, view.as_ref());
         if refocus || copy.is_some() {
@@ -2588,6 +2593,7 @@ fn transcript_view_of<'a>(
     prompts: &'a crate::features::permission_prompts::State,
     insights: &'a crate::features::structured_insights::State,
     session: micold_core::session::SessionId,
+    show_raw: bool,
 ) -> Option<crate::features::transcript_selection::TranscriptView<'a>> {
     Some(crate::features::transcript_selection::TranscriptView {
         session,
@@ -2596,6 +2602,7 @@ fn transcript_view_of<'a>(
         rich,
         prompts: Some(prompts),
         insights: Some(insights),
+        show_raw,
     })
 }
 
