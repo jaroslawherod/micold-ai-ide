@@ -54,8 +54,7 @@
 //! `EscapePressed` resolves to the registry at all — and stop there.
 //! `tests/root_is_routing_only.rs` is what watches whether those helpers should exist.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::code_only;
 

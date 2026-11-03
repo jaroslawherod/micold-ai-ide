@@ -293,8 +293,7 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
 /// resolved transitively. It lived in this file from T059 until G2 needed the same walk to name
 /// the single writer of a loose root field; see the module's own header for why it is shared
 /// rather than copied.
-#[path = "support/state_scan.rs"]
-mod state_scan;
+use crate::state_scan;
 
 use state_scan::{
     code_only, feature_of, operations_in, sources, src_dir, struct_field_types, struct_fields,

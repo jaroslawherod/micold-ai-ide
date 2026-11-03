@@ -61,8 +61,7 @@ use std::fs;
 use std::path::Path;
 
 /// The shared source-text scan — see its own header for why it is not a copy.
-#[path = "support/state_scan.rs"]
-mod state_scan;
+use crate::state_scan;
 
 use state_scan::{
     code_only, feature_of, operations_in, sources, src_dir, struct_field_types, struct_fields,

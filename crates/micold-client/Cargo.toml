@@ -214,18 +214,6 @@ name = "animated_layout_relayouts"
 path = "tests/animated_layout_relayouts.rs"
 
 [[test]]
-name = "attention_notify"
-path = "tests/attention_notify.rs"
-
-[[test]]
-name = "attention_reveal"
-path = "tests/attention_reveal.rs"
-
-[[test]]
-name = "attention_view_report"
-path = "tests/attention_view_report.rs"
-
-[[test]]
 name = "composer_large_draft"
 path = "tests/composer_large_draft.rs"
 
@@ -238,34 +226,6 @@ name = "feature_registration_cost"
 path = "tests/feature_registration_cost.rs"
 
 [[test]]
-name = "feature_write_isolation"
-path = "tests/feature_write_isolation.rs"
-
-[[test]]
-name = "features_are_render_free"
-path = "tests/features_are_render_free.rs"
-
-[[test]]
-name = "features_attention"
-path = "tests/features_attention.rs"
-
-[[test]]
-name = "features_connection"
-path = "tests/features_connection.rs"
-
-[[test]]
-name = "features_help"
-path = "tests/features_help.rs"
-
-[[test]]
-name = "features_notifications"
-path = "tests/features_notifications.rs"
-
-[[test]]
-name = "features_project"
-path = "tests/features_project.rs"
-
-[[test]]
 name = "features_session"
 path = "tests/features_session.rs"
 
@@ -276,22 +236,6 @@ path = "tests/features_settings.rs"
 [[test]]
 name = "features_sidebar"
 path = "tests/features_sidebar.rs"
-
-[[test]]
-name = "features_structured_insights"
-path = "tests/features_structured_insights.rs"
-
-[[test]]
-name = "features_window"
-path = "tests/features_window.rs"
-
-[[test]]
-name = "features_worktree"
-path = "tests/features_worktree.rs"
-
-[[test]]
-name = "features_worktree_form"
-path = "tests/features_worktree_form.rs"
 
 [[test]]
 name = "idle_requests_no_frames"
@@ -330,36 +274,8 @@ name = "layout_snapshot"
 path = "tests/layout_snapshot.rs"
 
 [[test]]
-name = "layout_snapshot_regeneration"
-path = "tests/layout_snapshot_regeneration.rs"
-
-[[test]]
-name = "logical_state_ownership"
-path = "tests/logical_state_ownership.rs"
-
-[[test]]
 name = "material_boundary"
 path = "tests/material_boundary.rs"
-
-[[test]]
-name = "material_builder_api"
-path = "tests/material_builder_api.rs"
-
-[[test]]
-name = "no_concrete_implementations"
-path = "tests/no_concrete_implementations.rs"
-
-[[test]]
-name = "notification_icon"
-path = "tests/notification_icon.rs"
-
-[[test]]
-name = "outcome_termination"
-path = "tests/outcome_termination.rs"
-
-[[test]]
-name = "overlay_registration"
-path = "tests/overlay_registration.rs"
 
 [[test]]
 name = "packaging_excludes_showcase"
@@ -368,18 +284,6 @@ path = "tests/packaging_excludes_showcase.rs"
 [[test]]
 name = "popover_displacement"
 path = "tests/popover_displacement.rs"
-
-[[test]]
-name = "root_is_routing_only"
-path = "tests/root_is_routing_only.rs"
-
-[[test]]
-name = "root_state_is_shared"
-path = "tests/root_state_is_shared.rs"
-
-[[test]]
-name = "root_vocabulary_is_cross_cutting"
-path = "tests/root_vocabulary_is_cross_cutting.rs"
 
 [[test]]
 name = "service_capability_fakes"
@@ -398,29 +302,6 @@ name = "showcase_determinism"
 path = "tests/showcase_determinism.rs"
 
 [[test]]
-name = "showcase_glue"
-path = "tests/showcase_glue.rs"
-
-[[test]]
-name = "showcase_isolation"
-path = "tests/showcase_isolation.rs"
-
-[[test]]
-name = "showcase_state"
-path = "tests/showcase_state.rs"
-
-[[test]]
-name = "surface_registration_cost"
-path = "tests/surface_registration_cost.rs"
-
-[[test]]
-name = "switcher_unread"
-path = "tests/switcher_unread.rs"
-
-[[test]]
 name = "transcript_open_budget"
 path = "tests/transcript_open_budget.rs"
 
-[[test]]
-name = "unread_rows"
-path = "tests/unread_rows.rs"

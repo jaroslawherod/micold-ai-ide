@@ -22,7 +22,7 @@
 //! test that fails partway: a check about not clobbering a baseline would be a poor thing to
 //! implement by clobbering the baseline.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};

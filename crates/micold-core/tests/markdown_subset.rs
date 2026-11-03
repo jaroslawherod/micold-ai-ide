@@ -4,8 +4,7 @@
 
 use micold_core::markdown::{Align, Block, CodeBlock, Document, Link, ListItem, Span, Style};
 
-#[path = "support/markdown.rs"]
-mod markdown;
+use crate::markdown;
 use markdown::{assert_nothing_hidden, plain, prefixes, spans, subset, turn_text, Rng};
 
 fn finished(text: &str) -> Document {

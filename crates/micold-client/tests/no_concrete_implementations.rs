@@ -73,7 +73,7 @@
 //! `set_wide_provider_decisions.rs` exist. Recorded here so a reader does not mistake a green run
 //! of this file for the whole of FR-022.
 
-mod inventory;
+use crate::inventory;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

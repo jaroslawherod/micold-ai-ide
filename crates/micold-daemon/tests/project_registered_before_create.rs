@@ -1,10 +1,8 @@
 //! Bug 1423: each daemon keeps its own catalog, so a worktree create on a daemon that was never
 //! told the project is refused, and one after `ProjectAdd` succeeds. The refusal says why.
 
-#[path = "support/conn.rs"]
-mod conn;
-#[path = "support/mcp.rs"]
-mod mcp;
+use crate::conn;
+use crate::mcp;
 
 use std::sync::Arc;
 

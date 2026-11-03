@@ -22,8 +22,7 @@
 //! The first draft of `gallery.rs` failed this check on its own scheme-control label. That is the
 //! check working: the label is a decision about state, and it now lives in the reducer with a test.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::strip_comments;
 

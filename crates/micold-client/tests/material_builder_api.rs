@@ -17,7 +17,7 @@
 //! effect in both at once. Two scanners that happen to agree today is the arrangement that requirement
 //! exists to prevent. The definition itself is unchanged; only its address is.
 
-mod inventory;
+use crate::inventory;
 
 use inventory::{declarations, Declared};
 
