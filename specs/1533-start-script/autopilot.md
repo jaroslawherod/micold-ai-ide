@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1630 | Design (spec, plan, tasks) | merged | 1ede52197f6dc7022ea768f7fb884e64b175e83c |
+| #1665 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | | open |
+| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | open |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | | pending |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | | pending |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
