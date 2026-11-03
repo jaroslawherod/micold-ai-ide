@@ -505,3 +505,7 @@ path = "tests/settings/main.rs"
 [[test]]
 name = "ssh_real"
 path = "tests/ssh_real/main.rs"
+
+[[test]]
+name = "startup_script"
+path = "tests/startup_script.rs"

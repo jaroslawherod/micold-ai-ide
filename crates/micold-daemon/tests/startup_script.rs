@@ -103,16 +103,16 @@ impl Fixture {
 async fn nothing_is_accepted_until_the_script_ends_and_it_runs_in_the_data_dir() {
     let _turn = TURN.lock().await;
     let f = Fixture::new(
-        "echo hello-from-script\npwd > \"$(dirname \"$0\")/cwd.txt\"\nsleep 2\ntouch \"$(dirname \"$0\")/done\"\n",
+        "echo hello-from-script\npwd > cwd.txt\nsleep 2\ntouch done\n",
         Some(""),
     );
     let _daemon = f.spawn();
     f.wait_connected().await;
     assert!(
-        f.path("done").exists(),
+        f.data().join("done").exists(),
         "the daemon accepted a client before the script ended (SC-004)"
     );
-    let cwd = std::fs::read_to_string(f.path("cwd.txt")).unwrap();
+    let cwd = std::fs::read_to_string(f.data().join("cwd.txt")).unwrap();
     assert_eq!(
         Path::new(cwd.trim()).canonicalize().unwrap(),
         f.data().canonicalize().unwrap()
@@ -136,10 +136,10 @@ async fn nothing_is_accepted_until_the_script_ends_and_it_runs_in_the_data_dir()
 #[tokio::test(flavor = "multi_thread")]
 async fn no_startup_table_runs_nothing_and_writes_nothing() {
     let _turn = TURN.lock().await;
-    let f = Fixture::new("touch \"$(dirname \"$0\")/ran\"\n", None);
+    let f = Fixture::new("touch ran\n", None);
     let _daemon = f.spawn();
     f.wait_connected().await;
-    assert!(!f.path("ran").exists());
+    assert!(!f.data().join("ran").exists());
     assert!(startup_script::read_result(&f.data()).is_none());
 }
 
