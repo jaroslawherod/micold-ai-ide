@@ -20,7 +20,9 @@
 
 ### Session 2026-11-03
 
-None yet. Decisions taken as assumptions are listed under Assumptions.
+- Q: With the toggle off, do an error turn footer and an error orphan result stay visible? → A: Yes. They stay visible as summary lines so a failed turn is never silent; they are not raw events. The hidden-events count excludes them. _(decided by user)_
+
+Other decisions taken as assumptions are listed under Assumptions.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -47,11 +49,11 @@ The user wants a transcript with only the conversation. A "Show raw events" togg
 
 **Why this priority**: Summary lines still take a line each; the toggle gives the clean view the issue asks for, and the acceptance criteria hinge on it.
 
-**Independent Test**: With the toggle off, open a transcript with raw entries: no low-signal entry and no raw JSON appears. Turn it on: every one appears as a summary line. Restart the app: the toggle is as left.
+**Independent Test**: With the toggle off, open a transcript with raw entries: no low-signal entry other than an error turn footer or error orphan result, and no raw JSON, appears. Turn it on: every one appears as a summary line. Restart the app: the toggle is as left.
 
 **Acceptance Scenarios**:
 
-1. **Given** the toggle is off (the default), **When** a transcript renders, **Then** no low-signal entry and no raw JSON appears in it.
+1. **Given** the toggle is off (the default), **When** a transcript renders, **Then** no low-signal entry and no raw JSON appears in it, except error turn footers and error orphan results, which stay as summary lines (FR-013).
 2. **Given** the toggle is off, **When** the user turns it on, **Then** every low-signal entry appears in place as a collapsed summary line, with no entry missing.
 3. **Given** the user turned the toggle on, **When** the app restarts and a structured view opens, **Then** the toggle is on.
 4. **Given** the toggle is off and entries are hidden, **When** the view renders, **Then** it shows that events are hidden and how many, so the user knows they exist and can reveal them.
@@ -84,7 +86,7 @@ A session resumed from its saved history shows its low-signal entries the same w
 - Many consecutive low-signal entries: each keeps its own line (grouping is out of scope).
 - Several sessions, several windows: the toggle is one per user, not per session; expansion state is per view.
 - Platforms: behaviour and stored preference are the same on Linux, macOS and Windows.
-- A transcript made only of low-signal entries with the toggle off: shows the hidden-events notice, not an empty-looking view.
+- A transcript made only of low-signal entries with the toggle off: shows the hidden-events notice (plus any error entries), not an empty-looking view.
 
 ## Requirements *(mandatory)*
 
@@ -96,13 +98,13 @@ A session resumed from its saved history shows its low-signal entries the same w
 - **FR-004**: A raw entry's detail MUST show its original text with no content changed or dropped (tabs may be drawn as spaces).
 - **FR-005**: The structured view's header MUST hold a "Show raw events" toggle, off by default.
 - **FR-006**: With the toggle off, the transcript MUST contain no low-signal entry and no raw JSON, except as FR-013 says.
-- **FR-007**: With the toggle on, every low-signal entry MUST appear as a summary line, in transcript order.
-- **FR-008**: While entries are hidden, the view MUST show how many are hidden and offer a way to reveal them.
+- **FR-007**: With the toggle on, every low-signal entry MUST appear as a summary line, in transcript order (error entries included, as they are always shown).
+- **FR-008**: While entries are hidden, the view MUST show how many are hidden (error entries are never hidden, so not counted) and offer a way to reveal them.
 - **FR-009**: The toggle's state MUST be remembered per user, across restarts and across views.
 - **FR-010**: No event MAY be dropped: every hidden entry stays in the transcript data and is reachable by turning the toggle on.
 - **FR-011**: FR-001 to FR-010 MUST hold for live and for resumed transcripts alike.
 - **FR-012**: Conversation entries (messages, thinking, tool cards, command output, compaction and other session notices) MUST be unchanged by this feature.
-- **FR-013**: [NEEDS CLARIFICATION: with the toggle off, do an error turn footer and an error orphan result stay visible as summary lines (default, so a failed turn is never silent), or are they hidden like the rest and counted in the hidden-events notice?]
+- **FR-013**: With the toggle off, an error turn footer and an error orphan result MUST stay visible as collapsed summary lines, so a failed turn is never silent. They are not counted in the hidden-events notice. All other low-signal entries are hidden.
 
 ### Key Entities
 
@@ -112,8 +114,8 @@ A session resumed from its saved history shows its low-signal entries the same w
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: With the toggle off, no raw JSON text is visible in any transcript, live or resumed, in 100% of the test transcripts.
-- **SC-002**: With the toggle on, the count of summary lines equals the count of low-signal entries in the transcript.
+- **SC-001**: With the toggle off, no raw JSON text is visible (an error entry's detail is collapsed, so it shows none until expanded) in any transcript, live or resumed, in 100% of the test transcripts.
+- **SC-002**: With the toggle on, the count of summary lines equals the count of low-signal entries in the transcript; with it off, the summary lines plus the hidden count equal that same total.
 - **SC-003**: A low-signal entry occupies one line height while collapsed.
 - **SC-004**: The preference survives an app restart in 100% of runs.
 
