@@ -20,8 +20,8 @@ use micold_core::protocol::messages::{StartupOutcome, StartupReason, StartupRepo
 pub const TAIL_LINES: usize = 200;
 /// The most bytes of one kept line.
 pub const TAIL_LINE_BYTES: usize = 4096;
-/// The file, in the data directory, that describes the last run.
-pub const RESULT_FILE: &str = "startup-result.json";
+// The result file, its reader and the failure block live in core: the spawners read them too.
+pub use micold_core::startup_result::{failure_block, read_result, RESULT_FILE};
 /// The record, in the data directory, of the last successful run (`run = "once_per_container"`).
 pub const DONE_FILE: &str = "startup.done";
 /// Held while a run reads the record and runs, so a second start waits for the first.
@@ -208,16 +208,6 @@ fn reason_of(end: &ScriptEnd) -> Option<StartupReason> {
     }
 }
 
-fn describe(reason: &StartupReason) -> String {
-    match reason {
-        StartupReason::Exit(code) => format!("exit status {code}"),
-        StartupReason::Signal(signal) => format!("killed by signal {signal}"),
-        StartupReason::Timeout => "timed out".to_string(),
-        StartupReason::Spawn(message) => format!("could not start: {message}"),
-        StartupReason::FileMissing(path) => format!("cannot read {path}"),
-    }
-}
-
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -239,11 +229,6 @@ fn write_private(dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
 fn write_result(data_dir: &Path, report: &StartupReport) -> std::io::Result<()> {
     let bytes = serde_json::to_vec(report).map_err(std::io::Error::other)?;
     write_private(data_dir, RESULT_FILE, &bytes)
-}
-
-/// Reads `<data_dir>/startup-result.json`; `None` when absent or unreadable.
-pub fn read_result(data_dir: &Path) -> Option<StartupReport> {
-    serde_json::from_slice(&std::fs::read(data_dir.join(RESULT_FILE)).ok()?).ok()
 }
 
 fn create_private_dir(dir: &Path) -> std::io::Result<()> {
@@ -385,18 +370,6 @@ fn conclude(
         (Some(reason), OnFailure::Refuse) => Err(failure_block(reason, &report.tail)),
         _ => Ok(report),
     }
-}
-
-/// The text of a refused start (contract S3).
-pub fn failure_block(reason: &StartupReason, tail: &[String]) -> String {
-    let mut text = format!("start script failed: {}", describe(reason));
-    text.push_str("\n--- last 200 lines of the start script's output ---\n");
-    for line in tail {
-        text.push_str(line);
-        text.push('\n');
-    }
-    text.push_str("--- end ---");
-    text
 }
 
 #[cfg(test)]

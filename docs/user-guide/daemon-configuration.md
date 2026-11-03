@@ -195,6 +195,36 @@ directory. Nothing connects while it runs.
   that prints a secret leaves it in both.
 - **Windows.** The default shell is PowerShell. Capturing exports works for PowerShell only.
 
+#### Setting it up in Settings, and how it reaches the daemon
+
+**Settings → Daemons → Start script** (host and SSH daemons) edits the script and the other
+`[startup]` keys without hand-writing the file. Pick a script file, or write the script in the
+inline editor; the inline text is kept as a file in the application's data directory and used like a
+picked one. Set the shell, timeout (1 to 3600 seconds), failure policy, run policy, secret
+`env_file` and whether exports reach sessions. An invalid value is refused with the reason before
+anything is sent. A change applies after the daemon restarts: Settings shows **Restart to apply**
+and the daemon details dialog has a **Restart to apply** button.
+
+The application sends the script and `env_file` with the configuration, each time it starts the
+daemon:
+
+| Daemon | Script and `env_file` land in | Mode |
+|---|---|---|
+| Host | the daemon's data directory: `startup.sh` and `startup.env` beside `daemon.toml` | `0600` |
+| SSH | `~/.micold/remote/secrets/startup.sh` and `startup.env` on the remote machine | `0600` |
+
+`daemon.toml` holds only the paths of these copies, never the script text or a secret value. Container
+and Kubernetes daemons do not receive a start script yet, and Settings does not offer the group for
+them.
+
+#### When it fails
+
+A start the script refused shows the daemon in an error state with the exit status and the last 200
+lines of the script's output, for a host daemon and for an SSH daemon. With `on_failure = "warn"`
+the daemon serves, and **Daemon details → Configuration** shows the failure as a warning with
+**Show output** and the same lines. The output is also in the daemon log under the `startup` target.
+The output can echo what the script read: do not print secrets.
+
 ## Loading and live reload
 
 `micold-daemon [--config <path>] [--kind host|ssh|container|kubernetes]` reads the file at start.

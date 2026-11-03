@@ -289,6 +289,16 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
 /// Where the delivered configuration lives on an SSH host (`$HOME` is the remote shell's).
 pub const REMOTE_CONFIG: &str = "$HOME/.micold/remote/daemon.toml";
 
+/// Stands for the remote `$HOME` in a rendered configuration. The daemon wants absolute paths and
+/// the application does not know the remote home until the probe has run, so the rendered file
+/// carries this absolute-looking prefix and delivery swaps in the probe's home (#1533, M4).
+pub const REMOTE_HOME_PLACEHOLDER: &str = "/__MICOLD_REMOTE_HOME__";
+
+/// The remote home the probe's build directory (`<home>/.micold/remote/<build>`) lies under.
+pub fn remote_home(probe_dir: &str) -> Option<&str> {
+    probe_dir.find("/.micold/remote").map(|i| &probe_dir[..i])
+}
+
 /// Where a delivered secret file named `name` lives on an SSH host.
 pub fn remote_secret_path(name: &str) -> String {
     format!("$HOME/.micold/remote/secrets/{name}")

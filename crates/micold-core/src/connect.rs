@@ -516,6 +516,19 @@ pub async fn connect_or_spawn(
     client_build: &str,
     timeout: Duration,
 ) -> io::Result<Connected> {
+    connect_or_spawn_reading(endpoint, client_build, timeout, None).await
+}
+
+/// [`connect_or_spawn`] that, given the daemon's data directory, also reads the start script's
+/// result after it spawned a daemon: a start the script refused ends at once with the failure
+/// block (exit status and output tail) instead of waiting out `timeout` (#1533, US4.1).
+pub async fn connect_or_spawn_reading(
+    endpoint: &Endpoint,
+    client_build: &str,
+    timeout: Duration,
+    data_dir: Option<&std::path::Path>,
+) -> io::Result<Connected> {
+    let since_secs = crate::startup_result::now_secs();
     // The daemon is ready when it *accepts*, not when exec returns — poll until it answers.
     let deadline = std::time::Instant::now() + timeout;
     let mut backoff = Duration::from_millis(10);
@@ -528,6 +541,11 @@ pub async fn connect_or_spawn(
             let pid = crate::spawn::spawn_detached_daemon()?;
             let _ = pid; // the daemon is intentionally not ours to wait on
             spawned_at = Some(std::time::Instant::now());
+        }
+        if let Some(block) =
+            data_dir.and_then(|d| crate::startup_result::fresh_refusal(d, since_secs))
+        {
+            return Err(io::Error::other(block));
         }
         if std::time::Instant::now() >= deadline {
             return Err(io::Error::new(

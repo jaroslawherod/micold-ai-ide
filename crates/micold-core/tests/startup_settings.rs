@@ -47,8 +47,13 @@ fn the_entry_holds_the_inline_marker_and_no_text() {
 }
 
 #[test]
-fn no_kind_delivers_a_script_yet() {
-    for kind in [Kind::Host, Kind::Ssh, Kind::Container, Kind::Kubernetes] {
-        assert!(!start_script_delivered(kind), "{kind:?}");
+fn only_host_and_ssh_deliver_a_script_so_far() {
+    for (kind, delivered) in [
+        (Kind::Host, true),
+        (Kind::Ssh, true),
+        (Kind::Container, false),
+        (Kind::Kubernetes, false),
+    ] {
+        assert_eq!(start_script_delivered(kind), delivered, "{kind:?}");
     }
 }

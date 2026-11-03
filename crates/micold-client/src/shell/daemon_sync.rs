@@ -2107,8 +2107,15 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         }
         // The daemon's configuration file as it runs it: Daemon details shows it (#1535).
         DaemonMsg::Config { status, .. } | DaemonMsg::ConfigChanged { status } => {
+            // The restart-only keys that changed drive Settings' "Restart to apply" (US5.2).
+            let restart_keys = status
+                .as_ref()
+                .map_or_else(Vec::new, |s| s.changed_restart_keys.clone());
             app.core.update(Message::Daemons(
                 micold_client::features::daemons::Msg::ConfigReported(daemon, status),
+            ));
+            app.core.update(Message::Daemons(
+                micold_client::features::daemons::Msg::RestartKeysReported(daemon, restart_keys),
             ));
         }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.

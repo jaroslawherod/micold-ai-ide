@@ -137,6 +137,16 @@ pub fn configuration_rows(
         return rows;
     };
     rows.extend(configuration_lines(status).into_iter().map(ConfigRow::Note));
+    // A refused or warned start shows the end of the script's output (US4.1, US4.2, FR-008).
+    if let Some(run) = status.startup.as_ref().filter(|r| {
+        matches!(r.outcome, StartupOutcome::Failed | StartupOutcome::Warned) && !r.tail.is_empty()
+    }) {
+        rows.push(note("Show output: the start script's last lines"));
+        rows.push(ConfigRow::Code {
+            text: run.tail.join("\n"),
+            toml: false,
+        });
+    }
     rows.push(note("Resolved values"));
     rows.push(ConfigRow::Code {
         text: status.resolved.clone(),
@@ -212,6 +222,36 @@ mod tests {
         ] {
             assert!(text.contains(want), "{want:?} missing from:\n{text}");
         }
+    }
+
+    /// US4.1/US4.2: a refused or warned start shows its exit status and the output tail; a run
+    /// that went well shows no output block.
+    #[test]
+    fn a_failed_or_warned_start_shows_its_exit_status_and_output() {
+        for outcome in [StartupOutcome::Failed, StartupOutcome::Warned] {
+            let mut s = status();
+            s.startup = Some(StartupReport {
+                outcome,
+                reason: Some(StartupReason::Exit(1)),
+                tail: vec!["oops".into(), "second".into()],
+                finished_at_secs: 5,
+            });
+            let text = texts(&configuration_rows(None, Some(&s)));
+            for want in ["(exit 1)", "Show output", "oops\nsecond"] {
+                assert!(
+                    text.contains(want),
+                    "{outcome:?}: {want:?} missing:\n{text}"
+                );
+            }
+        }
+        let mut ok = status();
+        ok.startup = Some(StartupReport {
+            outcome: StartupOutcome::Ok,
+            reason: None,
+            tail: vec!["fine".into()],
+            finished_at_secs: 5,
+        });
+        assert!(!texts(&configuration_rows(None, Some(&ok))).contains("Show output"));
     }
 
     fn texts(rows: &[ConfigRow]) -> String {

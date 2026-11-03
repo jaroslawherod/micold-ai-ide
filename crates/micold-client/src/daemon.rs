@@ -19,7 +19,7 @@ use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
-use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
+use micold_core::connect::{connect_at, Connected, Credentials, SPAWN_TIMEOUT};
 use micold_core::daemon_config::Kind;
 use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
@@ -286,6 +286,20 @@ fn named_secrets(settings: &DaemonSettings) -> Vec<(String, Vec<u8>)> {
         .and_then(|path| std::fs::read(path).ok())
         .map(|bytes| vec![("client-token".to_string(), bytes)])
         .unwrap_or_default()
+}
+
+/// The start script and `env_file` as files under the host's `secrets/` (mode `0600`): the script
+/// may name or read secrets, and neither belongs in the configuration file (US5.4).
+fn startup_secrets(
+    files: Option<crate::daemon_config_delivery::StartupFiles>,
+) -> Vec<(String, Vec<u8>)> {
+    use crate::daemon_config_delivery::{ENV_NAME, SCRIPT_NAME};
+    let Some(files) = files else {
+        return Vec::new();
+    };
+    let mut out = vec![(SCRIPT_NAME.to_string(), files.script)];
+    out.extend(files.env.map(|env| (ENV_NAME.to_string(), env)));
+    out
 }
 
 /// A [`DriftChoice`] as part of an actor's identity.
@@ -778,8 +792,15 @@ async fn connect_and_pump(
         // current settings (#1526, FR-005/FR-014). Only the host entry ever reaches here; a
         // container daemon is never spawned by the client.
         (Dial::Host(host), Some(endpoint)) => {
+            // A start the script refused ends at once with its exit status and output tail
+            // (#1533, US4.1), read from the host's data dir.
             deliver_then_connect(host, || {
-                connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT)
+                micold_core::connect::connect_or_spawn_reading(
+                    endpoint,
+                    CLIENT_BUILD,
+                    SPAWN_TIMEOUT,
+                    host.data_dir.as_deref(),
+                )
             })
             .await
         }
@@ -1317,6 +1338,36 @@ pub async fn replace_remote(reach: RemoteReach) -> Result<(), micold_core::ssh::
     micold_core::ssh::status::stop_if_idle(&*host, &reach, &opts).await
 }
 
+/// What an SSH daemon is sent beside the build: its rendered file, the secrets it names and the
+/// start script with its `env_file` (as files under `secrets/`, named by a placeholder home that
+/// delivery replaces with the probe's). A configuration that does not render, or a script that
+/// cannot be read, stops the attempt: the daemon would otherwise start without the settings the
+/// user chose.
+fn ssh_delivery(settings: &DaemonSettings) -> Result<ConfigDelivery, String> {
+    let files = crate::daemon_config_delivery::read_startup_files(settings)
+        .map_err(|e| format!("the daemon configuration could not be delivered: {e}"))?;
+    let remote_secrets =
+        Path::new(micold_core::ssh::argv::REMOTE_HOME_PLACEHOLDER).join(".micold/remote/secrets");
+    let relocated;
+    let settings = if files.is_some() {
+        relocated = crate::daemon_config_delivery::relocated_startup(settings, &remote_secrets);
+        &relocated
+    } else {
+        settings
+    };
+    let text = daemon_config_render::prepare(settings, Kind::Ssh).map_err(|errors| {
+        let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
+        format!("the daemon configuration is invalid: {}", joined.join("; "))
+    })?;
+    Ok(ConfigDelivery {
+        config: text.into_bytes(),
+        secrets: named_secrets(settings)
+            .into_iter()
+            .chain(startup_secrets(files))
+            .collect(),
+    })
+}
+
 async fn ssh_attempt(
     host: Option<&dyn SshHost>,
     target: &SshTarget,
@@ -1333,16 +1384,7 @@ async fn ssh_attempt(
         target,
         std::time::Duration::from_secs(u64::from(timeout_secs)),
     );
-    // A configuration that does not render stops the attempt: the daemon would otherwise start
-    // without the settings the user chose.
-    let text = daemon_config_render::prepare(settings, Kind::Ssh).map_err(|errors| {
-        let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
-        format!("the daemon configuration is invalid: {}", joined.join("; "))
-    })?;
-    provision_target.config = Some(ConfigDelivery {
-        config: text.into_bytes(),
-        secrets: named_secrets(settings),
-    });
+    provision_target.config = Some(ssh_delivery(settings)?);
     let provisioned = ssh_run(host, &provision_target, &opts, &CancelToken::new(), sink).await;
     provisioned.map(|p| p.connected).map_err(|failure| {
         failure.reason(&ReasonContext {
@@ -1972,6 +2014,43 @@ async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: Connectio
 
 #[cfg(test)]
 mod tests {
+    /// #1533 M4 (FR-011, US5.4): an SSH daemon is sent its script and `env_file` beside the
+    /// config, the file names the remote copies, and neither text nor secret is in the file.
+    #[test]
+    fn ssh_delivery_sends_script_and_env_file_as_files_not_in_the_config() {
+        use crate::daemon_config_render::{DaemonSettings, StartupTable};
+        use micold_core::daemon_config::{Listen, SocketSpec};
+        use micold_core::daemons::{StartupScript, StartupSettings};
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("s.sh");
+        let env = dir.path().join("s.env");
+        std::fs::write(&script, "echo SCRIPT_BODY").unwrap();
+        std::fs::write(&env, "K=SECRET_VALUE").unwrap();
+        let mut table = StartupSettings::new(StartupScript::File(script.clone()));
+        table.env_file = Some(env);
+        let mut settings = DaemonSettings::new("S", Listen::Socket(SocketSpec::Auto));
+        settings.startup = Some(StartupTable {
+            script_file: script,
+            settings: table,
+        });
+        let delivery = super::ssh_delivery(&settings).unwrap();
+        let config = String::from_utf8(delivery.config).unwrap();
+        for want in [
+            "script_file = \"/__MICOLD_REMOTE_HOME__/.micold/remote/secrets/startup.sh\"",
+            "env_file = \"/__MICOLD_REMOTE_HOME__/.micold/remote/secrets/startup.env\"",
+        ] {
+            assert!(config.contains(want), "{want} missing:\n{config}");
+        }
+        assert!(!config.contains("SCRIPT_BODY") && !config.contains("SECRET_VALUE"));
+        assert_eq!(
+            delivery.secrets,
+            vec![
+                ("startup.sh".to_string(), b"echo SCRIPT_BODY".to_vec()),
+                ("startup.env".to_string(), b"K=SECRET_VALUE".to_vec()),
+            ]
+        );
+    }
+
     use super::{
         actor_specs, reconnect_loop, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial,
         LinkLife, PumpEnd, RECONNECT_BACKOFF,
