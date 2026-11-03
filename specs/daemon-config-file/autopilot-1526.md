@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
 - **Phase**: implement
-- **Next step**: M1b implement (T026, T028, T029)
+- **Next step**: M1b review B, gate, PR
 
 ## Pull requests
 
@@ -50,6 +50,46 @@ finds this file by its **Worktree branch** line. Keep it true.
 None.
 
 ## Handover
+
+**Continuation (unit 2)**: review-A fixes a-c applied (ssh_attempt returns Err on a config that does not render; extra Copy event dropped; copy_if_changed chmods on skip, test asserts it); scoped gate green. Remaining: review B, gate, docs check, PR. Declined (review A, follow-up): client_token_file path vs delivered secret, unreadable token file / SshDial not hashing secret content, stale secrets never removed (all dormant until a later Issue sets client_token_file, D5(b)); config change not applied to an already-running remote daemon (no reload; Issue 9/16); copy error-mapping duplication (small).
+
+**M1b UNIT HANDOVER (read this first; the M1a text below is history).** The M1b unit was stopped
+by `Disk quota exceeded` on `/tmp/claude-1000` (Bash tool unusable: every call fails with EDQUOT
+before running). Free space there (the session scratchpad holds big gate logs) or set
+`CLAUDE_CODE_TMPDIR` elsewhere, then continue.
+- Done: ledger records M1a merged (commit 1); M1b implemented in commit 2 `feat(1526): deliver the
+  configuration to SSH daemons`: `ssh/argv.rs` (`REMOTE_CONFIG`, `remote_secret_path`,
+  `copy_if_changed` + real-shell test), `provision/mod.rs` (`ConfigDelivery`, `ProvisionTarget.config`,
+  `deliver_config` called at both `ensure_build` exits, 3 Fake tests; `config: None` added at the
+  other `ProvisionTarget` sites incl. `kube/start.rs`, `daemon.rs::container_target`,
+  `micold-daemon/tests/sandbox_real_support/mod.rs`), `daemon.rs` (`Dial::Ssh { target, settings:
+  SshDial }`, `named_secrets` (D5(b)), `ssh_attempt` takes settings, runtime projects applied to the
+  Ssh arm too), docs (`remote-daemons.md` new section, `daemon-configuration.md` sentence), T026/T028/
+  T029 ticked, test-list U24 DONE. `cargo test -p micold-core --lib provision:: / copy_if_changed`
+  passed. Uncommitted: a clippy fix in `provision/mod.rs` (`.err().expect` -> `expect_err`).
+- The scoped gate (`scripts/autopilot/scoped-gate.sh`) first run failed only on that clippy lint;
+  the rerun's result was lost to the quota error. Rerun it, then commit.
+- Review A (code-review high) returned 9 findings; decisions: FIX (small): (a) `ssh_attempt` should
+  return `Err(<joined ConfigError text>)` when `prepare` fails instead of `.ok()`/silent drop, and
+  the comment "starts with its defaults" is wrong; (b) drop the extra `sink(Entered(Step::Copy))` in
+  `deliver_config` (UI noise when nothing is copied); (c) `copy_if_changed`'s skip branch should
+  `chmod {mode:o}` the file too (a hand-widened mode is corrected). DECLINE/follow-up (record under
+  Declined): client_token_file rendered path vs delivered `secrets/client-token` (dormant: `from_entry`
+  never sets `client_token_file` for host/SSH, D5(b); belongs with the first Issue that sets it),
+  unreadable token file silently empty and `SshDial` not hashing secret content (same), stale
+  secrets never removed (same), config change not applied to an already-running remote daemon (no
+  reload exists; Issue 9/16 area), duplication of copy error mapping (accept, small).
+  Add a test for (a)/(c) if cheap (the argv real-shell test can assert the mode correction).
+- Remaining: apply a-c, scoped gate, review B (conformance, sonnet, `autopilot-reviewer`; verify =
+  `cargo test -p micold-core provision`, `cargo test -p micold-core ssh::argv`), then full `mise run
+  gate` (see Local gate note: OOM contention and the pre-existing `micold-daemon` exclusivity test
+  `a_displaced_client_is_not_terminated` may fail; if so, record scoped tree per gate.md and say
+  "Local gate: scoped only, full gate left to CI"), docs check:
+  `CHANGE_TITLE="feat(1526): ... (#1526)" scripts/check-user-guide-updated.sh origin/main HEAD`
+  (needs the env var). PR title `feat(1526): deliver the configuration to SSH daemons (#1526)`,
+  body notes: "SSH env list for user hosts" was already empty (a constraint honored, not removal
+  work); the secret path is untested against real content because none exists for host/SSH yet
+  (D5(b)); body ends `Refs #1526`.
 
 **M1a (T025, T027, T080a) is implemented, reviewed (A and B both CLEAN) and its PR is open: #1660.**
 The orchestrator waits on CI and merges; a fresh unit should not redo any of the implementation,

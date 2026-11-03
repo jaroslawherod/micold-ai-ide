@@ -371,7 +371,7 @@ pub async fn ensure_build(
         ));
     }
     if probe.have {
-        deliver_config(host, target, opts, cancel, sink).await?;
+        deliver_config(host, target, opts, cancel).await?;
         return Ok((probe, false));
     }
 
@@ -422,7 +422,7 @@ pub async fn ensure_build(
     if !again.have {
         return Err(fail(Step::Copy, FailureCause::CopyFailed));
     }
-    deliver_config(host, target, opts, cancel, sink).await?;
+    deliver_config(host, target, opts, cancel).await?;
     Ok((again, true))
 }
 
@@ -433,12 +433,10 @@ async fn deliver_config(
     target: &ProvisionTarget,
     opts: &ProvisionOptions,
     cancel: &CancelToken,
-    sink: &EventSink,
 ) -> Result<(), ProvisionFailure> {
     let Some(delivery) = &target.config else {
         return Ok(());
     };
-    sink(ProvisionEvent::Entered(Step::Copy));
     let bound = target.bounds.copy;
     let secrets = delivery
         .secrets
@@ -1100,8 +1098,7 @@ mod tests {
         let (sink, _) = recorder();
         let err = ensure_build(&fake, &target, &opts(), &CancelToken::new(), &sink)
             .await
-            .err()
-            .expect("fails");
+            .expect_err("fails");
         assert_eq!(err.step, Step::Copy);
     }
 

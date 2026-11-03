@@ -309,7 +309,7 @@ pub fn copy_if_changed(
     let remote = format!(
         "sh -c 'umask 077; d=$(dirname \"{remote_path}\"); mkdir -p \"$d\" || exit 1; \
          cur=$( (sha256sum \"{remote_path}\" || shasum -a 256 \"{remote_path}\") 2>/dev/null | cut -d\" \" -f1); \
-         if [ \"$cur\" = \"{hash}\" ]; then cat >/dev/null; else \
+         if [ \"$cur\" = \"{hash}\" ]; then cat >/dev/null; chmod {mode:o} \"{remote_path}\"; else \
          p=\"$d/.part.$$\"; cat > \"$p\" && chmod {mode:o} \"$p\" && mv \"$p\" \"{remote_path}\" || {{ rm -f \"$p\"; exit 1; }}; fi'"
     );
     command(reach, platform, timeout, &remote, None)
@@ -422,6 +422,10 @@ mod tests {
         std::fs::write(&file, b"sentinel").unwrap();
         run_copy_if_changed(home.path(), &hash(b"sentinel"), b"other");
         assert_eq!(std::fs::read(&file).unwrap(), b"sentinel");
+        // A hand-widened mode is corrected even when the content is unchanged.
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        run_copy_if_changed(home.path(), &hash(b"sentinel"), b"other");
+        assert_eq!(mode(&file), 0o600);
         run_copy_if_changed(home.path(), &hash(b"tok2"), b"tok2");
         assert_eq!(std::fs::read(&file).unwrap(), b"tok2");
         assert_eq!(mode(&file), 0o600);
