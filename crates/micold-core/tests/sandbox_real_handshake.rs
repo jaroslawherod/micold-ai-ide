@@ -60,6 +60,9 @@ impl Sandbox {
         std::fs::create_dir_all(&project).unwrap();
         // Before the runtime sees them: it would create a missing bind source owned by root.
         std::fs::create_dir_all(state.join(SANDBOX_HOME_DIR)).unwrap();
+        let delivery = micold_core::sandbox::DeliveryMount::beside(&state);
+        std::fs::create_dir_all(&delivery.config).unwrap();
+        std::fs::create_dir_all(&delivery.secrets).unwrap();
         let (keys, secret) = make_keys(&state, port);
 
         let home = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()));
