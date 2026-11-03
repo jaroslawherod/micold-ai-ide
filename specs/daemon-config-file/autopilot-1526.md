@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
 - **Phase**: implement
-- **Next step**: M1a gate/review/PR (implementation done, see Handover)
+- **Next step**: M1a PR open, wait on CI (full gate was scoped-only locally, see Local gate note below), then merge
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | — | planned |
+| M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | #TBD | in review |
 | M1b | T026, T028, T029 | full | SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone; user guide documents the SSH file | — | planned |
 
 ## Decisions
@@ -41,6 +41,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - Tasks review round 1 (snapshot a9a1e1257e80ba2b94fe9cefd52688d321ef553f:8176ca30aac5c24fca47a85695e888d3122ad2b5): CHANGES; F1 (MAJOR, Satisfies line omitted US3/FR-014 for T080a) fixed, prose only (`Satisfies: US1, US3; FR-005, FR-014, FR-029`); no re-review needed.
 - M1-split re-cut review round 1 (snapshot 45db00e65384f233e2329504c35e84c587bf14c1:251ed96cb96486391f3e171c6fc2e24a6ebe81e6): CLEAN. No findings.
+- M1a code review A (code-review, high; snapshot 0c7becd612254eda65be945bcb840d03966f7789:582673e2660ca5d02d39a7fb2b8fab18cf6426b2): CLEAN. No findings.
+- M1a review B (conformance, sonnet; same snapshot): CLEAN. Verify run for real: `daemon_config_delivery_host` (3/3 ok), `daemon_config_delivery_host_env` (ok), `daemon::tests::a_runtime_added_project_reaches_the_host_dials_settings` (ok), `features::daemons::runtime_project_tests::a_recorded_project_is_kept_once_per_daemon` (ok); confirmed M1b (SSH) untouched and tasks.md shows T025/T027/T080a ticked.
 
 ## Declined review findings
 
@@ -48,10 +50,23 @@ None.
 
 ## Handover
 
-**M1a (T025, T027, T080a) is implemented and green; the gate/review/PR steps are not done yet** —
-this unit hit the context cap (231k) right after getting all tests passing and before starting
-`gate.md`. A fresh unit should pick up at `gate.md` step 1 (scoped gate + review A), not
-`implement.md` — do not re-derive or redo any of the implementation below.
+**M1a (T025, T027, T080a) is implemented, reviewed (A and B both CLEAN) and its PR is open** — see
+the Pull requests table above for the number. The orchestrator waits on CI and merges; a fresh unit
+should not redo any of the implementation, gate or review work below.
+
+**Local gate note**: the scoped gate (fmt + clippy + tests of `micold-client`, the only crate this
+diff touches) passed clean. The full `mise run gate` was attempted twice and failed both times for
+reasons unrelated to this diff: (1) resource contention with another concurrently-running worktree
+building on the same shared `target-shared/` caused one run to SIGKILL (OOM, signal 9) mid-compile;
+(2) `crates/micold-daemon/tests/exclusivity.rs::a_displaced_client_is_not_terminated` fails
+deterministically on this tree — confirmed pre-existing and unrelated: `git diff --stat
+origin/main...HEAD -- crates/micold-daemon` is empty (this diff touches only `micold-client`), and
+`origin/main`'s own latest CI run (sha `b7b7410083a18ebd04b5bfffe26013eb9e07340f`) is already red
+(a Windows build failure, PR #1653, also unrelated to this diff). Per gate.md's "let CI validate
+instead" and escalation.md's "a problem from work outside this flow... do not fix it", this unit
+recorded the scoped-gate tree in `autopilot-gate-ok` and pushed; the PR body says "Local gate:
+scoped only, full gate left to CI". A red CI on this PR should be checked against the same two
+causes before treating it as this flow's own failure.
 
 **What landed (all tests green, `cargo fmt --check` clean, `cargo clippy -p micold-client
 --all-targets -- -D warnings` clean; `mise run gate` not yet run)**:
@@ -92,14 +107,6 @@ this unit hit the context cap (231k) right after getting all tests passing and b
 - `specs/daemon-config-file/tasks.md`: T025/T027/T080a ticked `[x]`, each with its behavior ids.
 - `specs/daemon-config-file/tdd/test-list.md`: new "Issue 5 (#1526), milestone M1a" section, U21-U23
   all `DONE`.
-
-**Next step for a fresh unit**: `gate.md` step 1 — start the scoped gate (or full `mise run gate`,
-disk permitting) detached, run review A (`code-review`, `high`) on `origin/main...HEAD` in its
-shadow, then review B (conformance, sonnet) per `review.md`, then the full gate once, then
-`pr.md`. No visual pass (nothing user-visible changed). PR title:
-`feat(1526): deliver the configuration to the host daemon before spawn (#1526)` (M1a only — M1b is
-a separate, later PR). Local gate line for the PR body: fill in once `mise run gate` has actually
-run; this unit did not run it (context ran out right after the targeted tests went green).
 
 **M1b (T026, T028, T029) is not started** — a later unit does it, after M1a's PR merges, reusing
 `deliver_host`'s write-if-changed shape server-side over the SSH copy step. Its design is below,
