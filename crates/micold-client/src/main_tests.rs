@@ -6380,6 +6380,59 @@ mod script_path_report {
         );
     }
 
+    /// #1664, FR-009: the transcript toggle applies at once, writes the choice, and a Settings save
+    /// that follows keeps it.
+    #[test]
+    fn the_raw_events_toggle_applies_persists_and_survives_a_settings_save() {
+        let path = stored_path();
+        let (mut app, _probe, store) =
+            saving_app(&path, micold_core::settings::FakeSettingsStore::loaded);
+        assert!(!app.core.settings.show_raw_events, "off by default");
+
+        let _ = update_inner(
+            &mut app,
+            Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(true))),
+        );
+
+        assert!(app.core.settings.show_raw_events, "applies at once");
+        assert_eq!(
+            store.saves().last().map(|s| s.show_raw_events),
+            Some(true),
+            "written as it is pressed"
+        );
+
+        save_and_check(&mut app);
+        assert_eq!(
+            store.saves().last().map(|s| s.show_raw_events),
+            Some(true),
+            "a Settings save does not write the choice off"
+        );
+    }
+
+    /// #1664, FR-009: a refused write is said, and the value still applies in this window.
+    #[test]
+    fn a_refused_raw_events_write_is_said_and_the_value_still_applies() {
+        let path = stored_path();
+        let (mut app, _probe, _store) = saving_app(&path, |window| {
+            micold_core::settings::FakeSettingsStore::loaded(window)
+                .failing_save(std::io::ErrorKind::PermissionDenied)
+        });
+        let _ = drain_notifications(&mut app);
+
+        let _ = update_inner(
+            &mut app,
+            Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(true))),
+        );
+
+        assert!(app.core.settings.show_raw_events, "the value applies");
+        assert!(
+            drain_notifications(&mut app)
+                .iter()
+                .any(|n| n.message.contains("Couldn't save your settings")),
+            "the failed write is reported"
+        );
+    }
+
     /// What one save told the connected service: the fields of its `SettingsSet`.
     #[derive(Debug, Default, Clone, PartialEq)]
     struct Told {

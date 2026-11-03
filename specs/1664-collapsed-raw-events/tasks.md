@@ -46,22 +46,22 @@ None separate. Each story below brings the core pieces it needs.
 
 ### Tests first
 
-- [ ] T009 [P] [US2] Core unit tests in `crates/micold-core/src/structured/transcript/visibility.rs`: every `EntryKind` classified; error footer and error orphan always shown (FR-013); ok ones follow the flag; `hidden_count` excludes errors and is 0 when shown; transcript length unchanged by any flag value (FR-010); every non-low-signal kind is always shown (FR-012)
-- [ ] T010 [P] [US2] Settings tests in `crates/micold-core/tests/settings_roundtrip.rs`: `show_raw_events` defaults false, a file without the key reads false, round-trips true, other keys untouched
-- [ ] T011 [P] [US2] Client tests in `crates/micold-client/tests/transcript_entry_view.rs`: `rows()` with flag off/on over a mixed transcript (counts, order, no raw text off; summary lines plus hidden count equal the total, SC-002)
-- [ ] T012 [P] [US2] Selection tests in `crates/micold-client/tests/transcript_selection_parity.rs` and a unit in `crates/micold-client/src/features/transcript_selection.rs`: hidden entries absent from `rows()` and copy text, revealed ones present; `ShowRawEvents` clears that session's selection (selection ending on a low-signal entry)
-- [ ] T013 [P] [US2] Reducer tests in `crates/micold-client/src/main_tests.rs` and `crates/micold-client/src/shell/persist.rs`: toggle updates `core.settings` and writes the store; a fresh `App` from that store starts on (SC-004); two sessions' views change in one reducer step; a Save of another field leaves `show_raw_events` as the window holds it; a write failure shows "Couldn't save your settings" and the value still applies
+- [x] T009 [P] [US2] Core unit tests in `crates/micold-core/src/structured/transcript/visibility.rs`: every `EntryKind` classified; error footer and error orphan always shown (FR-013); ok ones follow the flag; `hidden_count` excludes errors and is 0 when shown; transcript length unchanged by any flag value (FR-010); every non-low-signal kind is always shown (FR-012)
+- [x] T010 [P] [US2] Settings tests in `crates/micold-core/tests/settings_roundtrip.rs`: `show_raw_events` defaults false, a file without the key reads false, round-trips true, other keys untouched
+- [x] T011 [P] [US2] Client tests in `crates/micold-client/tests/transcript_entry_view.rs`: `rows()` with flag off/on over a mixed transcript (counts, order, no raw text off; summary lines plus hidden count equal the total, SC-002)
+- [x] T012 [P] [US2] Selection tests in `crates/micold-client/tests/transcript_selection_parity.rs` and a unit in `crates/micold-client/src/features/transcript_selection.rs`: hidden entries absent from `rows()` and copy text, revealed ones present; `ShowRawEvents` clears that session's selection (selection ending on a low-signal entry)
+- [x] T013 [P] [US2] Reducer tests in `crates/micold-client/src/main_tests.rs` and `crates/micold-client/src/shell/persist.rs`: toggle updates `core.settings` and writes the store; a fresh `App` from that store starts on (SC-004); two sessions' views change in one reducer step; a Save of another field leaves `show_raw_events` as the window holds it; a write failure shows "Couldn't save your settings" and the value still applies
 
 ### Implementation
 
-- [ ] T014 [US2] `LowSignal` closed enum (`Raw`, `SessionStart`, `Footer`, `OrphanResult`), `Entry::low_signal()` as an exhaustive `match` on `EntryKind` with no `_` arm, `shown(&Entry, show_raw)`, `Transcript::hidden_count(show_raw) -> u64` in new `crates/micold-core/src/structured/transcript/visibility.rs`, re-exported from `crates/micold-core/src/structured/transcript/mod.rs`
-- [ ] T015 [US2] `show_raw_events: bool` (`#[serde(default)]`, default false) in `crates/micold-core/src/settings.rs`: `Settings`, the on-disk mirror struct and both conversions, the `Default` impl, and every struct literal of `Settings` in the workspace (all literal sites in this one task)
-- [ ] T016 [US2] `State.show_raw_events` and `SettingsMsg::ShowRawEventsToggled(bool)` in `crates/micold-client/src/features/settings.rs`; `ValidSettings::into_settings` emits the default for the key (the `set_changed` change is T017's)
-- [ ] T017 [US2] `persist_show_raw_events`, `window_settings` taking the window copy, and the single `set_changed` change (destructure `show_raw_events: _`, a Save never changes the key; the settings.rs side only emits the default) in `crates/micold-client/src/shell/persist.rs`
-- [ ] T018 [US2] `TranscriptMsg::ShowRawEvents(bool)` in `crates/micold-client/src/features/structured_transcript.rs`, routed by the root to `SettingsMsg::ShowRawEventsToggled` in `crates/micold-client/src/main.rs` (settings feature stays the only writer; check `tests/feature_write_isolation.rs`)
-- [ ] T019 [US2] `TranscriptView` gains `show_raw` (all 4 construction sites incl. test/parity helpers in this one task); `rows()`/`entries_in` filtered by `visibility::shown`; reconcile clears the session's selection on toggle, in `crates/micold-client/src/features/transcript_selection.rs`
-- [ ] T020 [US2] `rows(transcript, show_raw)` filter in `crates/micold-client/src/ui/transcript/entries.rs`; `LabelledToggle` "Show raw events" (tooltip "Show session start, turn summaries and unrecognised events") at the trailing end of the session bar in `view_full` and `show_raw` passed down in `crates/micold-client/src/ui/transcript/mod.rs`
-- [ ] T021 [US2] User-guide section on the toggle (off by default, errors stay visible, remembered per user) in `docs/user-guide/structured-transcript.md`
+- [x] T014 [US2] `LowSignal` closed enum (`Raw`, `SessionStart`, `Footer`, `OrphanResult`), `Entry::low_signal()` as an exhaustive `match` on `EntryKind` with no `_` arm, `shown(&Entry, show_raw)`, `Transcript::hidden_count(show_raw) -> u64` in new `crates/micold-core/src/structured/transcript/visibility.rs`, re-exported from `crates/micold-core/src/structured/transcript/mod.rs`
+- [x] T015 [US2] `show_raw_events: bool` (`#[serde(default)]`, default false) in `crates/micold-core/src/settings.rs`: `Settings`, the on-disk mirror struct and both conversions, the `Default` impl, and every struct literal of `Settings` in the workspace (all literal sites in this one task)
+- [x] T016 [US2] `State.show_raw_events` and `SettingsMsg::ShowRawEventsToggled(bool)` in `crates/micold-client/src/features/settings.rs`; `ValidSettings::into_settings` emits the default for the key (the `set_changed` change is T017's)
+- [x] T017 [US2] `persist_show_raw_events`, `window_settings` taking the window copy, and the single `set_changed` change (destructure `show_raw_events: _`, a Save never changes the key; the settings.rs side only emits the default) in `crates/micold-client/src/shell/persist.rs`
+- [x] T018 [US2] `TranscriptMsg::ShowRawEvents(bool)` in `crates/micold-client/src/features/structured_transcript.rs`, routed by the root to `SettingsMsg::ShowRawEventsToggled` in `crates/micold-client/src/main.rs` (settings feature stays the only writer; check `tests/feature_write_isolation.rs`)
+- [x] T019 [US2] `TranscriptView` gains `show_raw` (all 4 construction sites incl. test/parity helpers in this one task); `rows()`/`entries_in` filtered by `visibility::shown`; reconcile clears the session's selection on toggle, in `crates/micold-client/src/features/transcript_selection.rs`
+- [x] T020 [US2] `rows(transcript, show_raw)` filter in `crates/micold-client/src/ui/transcript/entries.rs`; `LabelledToggle` "Show raw events" (tooltip "Show session start, turn summaries and unrecognised events") at the trailing end of the session bar in `view_full` and `show_raw` passed down in `crates/micold-client/src/ui/transcript/mod.rs`
+- [x] T021 [US2] User-guide section on the toggle (off by default, errors stay visible, remembered per user) in `docs/user-guide/structured-transcript.md`
 
 ## Phase 5: User Story 2 (notice) and User Story 3 - Hidden count and resumed transcripts (P2)
 
@@ -70,13 +70,13 @@ None separate. Each story below brings the core pieces it needs.
 
 ### Tests first
 
-- [ ] T022 [P] [US2] Tests in `crates/micold-client/tests/transcript_entry_view.rs`: `Row::Hidden(n)` present only when n > 0, after `Omitted`; a transcript of only hidden entries shows the notice (no `Empty`); the Show button emits `TranscriptMsg::ShowRawEvents(true)`; notice text unit test in `shown.rs`
-- [ ] T023 [US3] Test in `crates/micold-client/tests/transcript_entry_view.rs`: the same transcript built live and via the resume path gives equal `rows()` for both flag values (FR-011)
+- [x] T022 [P] [US2] Tests in `crates/micold-client/tests/transcript_entry_view.rs`: `Row::Hidden(n)` present only when n > 0, after `Omitted`; a transcript of only hidden entries shows the notice (no `Empty`); the Show button emits `TranscriptMsg::ShowRawEvents(true)`; notice text unit test in `shown.rs`
+- [x] T023 [US3] Test in `crates/micold-client/tests/transcript_entry_view.rs`: the same transcript built live and via the resume path gives equal `rows()` for both flag values (FR-011)
 
 ### Implementation
 
-- [ ] T024 [US2] Notice text function in `crates/micold-client/src/features/transcript_selection/shown.rs`; `Row::Hidden(u64)` emitted by `rows()` and drawn as "N events hidden" with a "Show" button in `crates/micold-client/src/ui/transcript/entries.rs`; `RowKey::Hidden` in `crates/micold-client/src/ui/transcript/mod.rs`; not a selection unit
-- [ ] T025 [US2] User-guide note on the hidden-events notice and resumed sessions in `docs/user-guide/structured-transcript.md`
+- [x] T024 [US2] Notice text function in `crates/micold-client/src/features/transcript_selection/shown.rs`; `Row::Hidden(u64)` emitted by `rows()` and drawn as "N events hidden" with a "Show" button in `crates/micold-client/src/ui/transcript/entries.rs`; `RowKey::Hidden` in `crates/micold-client/src/ui/transcript/mod.rs`; not a selection unit
+- [x] T025 [US2] User-guide note on the hidden-events notice and resumed sessions in `docs/user-guide/structured-transcript.md`
 
 ## Phase 6: Polish
 

@@ -1350,6 +1350,31 @@ mod tests {
         );
     }
 
+    /// #1664, FR-009: the toggle writes only `show_raw_events`; every other key stays as stored.
+    #[test]
+    fn a_raw_events_toggle_writes_only_that_key() {
+        let stored = Settings {
+            reduce_motion: true,
+            ..Settings::default()
+        };
+        let store = FakeSettingsStore::loaded(stored.clone());
+        let mut core = State::default();
+        core.settings.show_raw_events = true;
+
+        persist_show_raw_events(Some(&store), &mut core);
+
+        let saved = store.saves();
+        assert_eq!(saved.len(), 1, "exactly one write");
+        assert!(saved[0].show_raw_events);
+        assert_eq!(
+            Settings {
+                show_raw_events: false,
+                ..saved[0].clone()
+            },
+            stored
+        );
+    }
+
     /// BUG-1470, FR-016: the toggle writes the open state and leaves the rest as stored.
     #[test]
     fn a_filter_toggle_writes_the_open_state() {

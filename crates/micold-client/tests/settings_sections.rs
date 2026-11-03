@@ -79,6 +79,12 @@ const DEFERRED: &[(&str, &str)] = &[
 /// counter and the legacy default it was migrated into are chosen there (T034). Feature 804 moved
 /// the legacy `daemon` block's controls into that form, so they are chosen there too.
 const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
+    // #1664: "Show raw events" is the structured transcript bar's toggle.
+    (
+        "show_raw_events",
+        "src/ui/transcript/mod.rs",
+        "TranscriptMsg::ShowRawEvents(",
+    ),
     // BUG-1470's filter accordion is opened by the sidebar's Filter toggle.
     (
         "filter_open",
