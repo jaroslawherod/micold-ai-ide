@@ -208,6 +208,17 @@ pub fn persist_folded_origins(
     });
 }
 
+/// Write the structured view's "Show raw events" choice after a toggle (#1664, FR-009): only that
+/// key, so every other setting stays as the file holds it. A failed write is said, and the value
+/// still applies in this window.
+pub fn persist_show_raw_events(
+    store: Option<&(dyn SettingsStore + Send + Sync)>,
+    core: &mut State,
+) {
+    let on = core.settings.show_raw_events;
+    write_setting(store, core, &mut |settings| settings.show_raw_events = on);
+}
+
 /// Write the filter accordion's open state after a toggle (BUG-1470, FR-016).
 pub fn persist_filter_open(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
     let open = core.sidebar.filter_open;
@@ -363,6 +374,7 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         theme: app.core.settings.theme_pref,
         reduce_motion: app.core.settings.reduce_motion,
         suggestion_chips: app.core.settings.suggestion_chips,
+        show_raw_events: app.core.settings.show_raw_events,
         review_single_keys: app.core.settings.review_single_keys,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
@@ -441,6 +453,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         theme: _,
         reduce_motion: _,
         suggestion_chips: _,
+        // Never set by a Save (#1664): the transcript toggle owns it and writes it as it is pressed.
+        show_raw_events: _,
         review_single_keys: _,
         scrollback_lines: _,
         env_include_enabled: _,
@@ -1265,6 +1279,7 @@ mod tests {
             long_task_threshold_secs: 120,
             reduce_motion: false,
             suggestion_chips: false,
+            show_raw_events: false,
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,

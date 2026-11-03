@@ -105,6 +105,10 @@ pub enum TranscriptMsg {
         /// The session the view shows.
         session: SessionId,
     },
+    /// The header's "Show raw events" toggle, or the hidden-events notice's "Show", was activated
+    /// (#1664, FR-005, FR-008): the user's choice, for every view. The root routes it to the
+    /// settings feature, which owns the value.
+    ShowRawEvents(bool),
     /// A link in a rich block was activated (feature 940, FR-004, RR-6).
     OpenLink {
         /// Its address, re-classified before anything opens.
@@ -162,7 +166,10 @@ impl TranscriptMsg {
             | Self::Highlighted { session, .. } => Some(*session),
             Self::Insights(msg) => Some(msg.session()),
             Self::Select(msg) => Some(msg.session()),
-            Self::OpenLink { .. } | Self::CopyChecked { .. } | Self::CopyExpired { .. } => None,
+            Self::OpenLink { .. }
+            | Self::CopyChecked { .. }
+            | Self::CopyExpired { .. }
+            | Self::ShowRawEvents(_) => None,
         }
     }
 }
@@ -338,6 +345,8 @@ impl State {
     /// rich blocks' messages what `rich`, the window's render cache, asks for (feature 940).
     pub fn update(&mut self, rich: &mut RichCache, msg: TranscriptMsg) -> Effect {
         match msg {
+            // The settings feature owns the value; the root routes the message there (#1664).
+            TranscriptMsg::ShowRawEvents(_) => Effect::default(),
             TranscriptMsg::Toggle { session, key } => {
                 self.toggle(session, key);
                 Effect::default()

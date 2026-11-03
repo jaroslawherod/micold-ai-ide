@@ -22,7 +22,9 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::SelectKind;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::structured_transcript::TranscriptMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
@@ -1360,6 +1362,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
         // Feature 939 (R9): the transcript view's messages, and the scroll they ask for.
+        // #1664, FR-009: the "Show raw events" toggle is the user's, not the view's: the settings
+        // feature takes the value (the only writer), the selections of every view are cleared
+        // (their rows changed) and the choice is written as it is made.
+        Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(on))) => {
+            app.core
+                .update(Message::Settings(SettingsMsg::ShowRawEventsToggled(on)));
+            app.core.transcript_selection.visibility_changed();
+            shell::persist::persist_show_raw_events(app.caps.settings(), &mut app.core);
+            Task::none()
+        }
         Message::Session(SessionMsg::Transcript(msg)) => shell::transcript::update(app, msg),
         // Feature 944: a thread, a card in one or the background-task list folded; nothing to
         // scroll, and an opened thread's blocks are highlighted as the main transcript's are.

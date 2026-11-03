@@ -157,6 +157,7 @@ impl Held {
             rich: &self.rich,
             prompts: Some(&self.prompts),
             insights: None,
+            show_raw: true,
         }
     }
 
@@ -1380,4 +1381,53 @@ fn opening_a_menu_closes_another_sessions() {
     }
     assert_eq!(app.transcript_selection.menu(a), None);
     assert_eq!(app.transcript_selection.open_menu(), Some((b, (2, 2))));
+}
+
+/// #1664 FR-007: with "Show raw events" off, a hidden low-signal entry is neither a row nor part of
+/// a copy; on, its summary line is both. The toggle clears a held selection.
+#[test]
+fn hidden_entries_are_neither_rows_nor_copied() {
+    let held = Held::new(
+        0,
+        [
+            user("before"),
+            StructuredEvent::Unreadable {
+                text: "HIDDEN LINE".into(),
+            },
+            user("after"),
+        ],
+    );
+    let on = held.view();
+    let off = TranscriptView {
+        show_raw: false,
+        ..held.view()
+    };
+    assert_eq!(rows(&on).len(), 3);
+    assert_eq!(rows(&off).len(), 2, "the raw entry is not a row");
+
+    let all = held.rows_selection(held.body(0), held.body(2));
+    let hidden = copy_text(&off, &all);
+    assert_eq!(hidden, "before\nafter");
+    let shown = copy_text(&on, &all);
+    assert!(
+        shown.starts_with("before\n") && shown.ends_with("\nafter") && shown.lines().count() == 3,
+        "the summary line is copied: {shown:?}"
+    );
+    assert!(!shown.contains("HIDDEN LINE"), "a folded entry copies its summary only");
+}
+
+/// #1664: toggling clears the selection, which could end on an entry that is no longer a row.
+#[test]
+fn the_toggle_clears_the_selection() {
+    let held = Held::new(0, [user("a"), StructuredEvent::Unreadable { text: "x".into() }]);
+    let mut state = micold_client::features::transcript_selection::State::default();
+    state.update(
+        SelectMsg::SelectAll {
+            session: held.session,
+        },
+        Some(&held.view()),
+    );
+    assert!(state.selection(held.session).is_some());
+    state.visibility_changed();
+    assert!(state.selection(held.session).is_none());
 }

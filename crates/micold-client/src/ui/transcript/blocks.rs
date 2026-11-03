@@ -108,6 +108,9 @@ pub struct RenderCtx<'a> {
     pub selected: Option<&'a Selection>,
     /// The row being drawn, set by the view per row; `None` draws nothing selectable.
     pub row: Option<RowCtx<'a>>,
+    /// The window's "Show raw events" toggle (#1664): the transcript hides the low-signal entries
+    /// while it is off.
+    pub show_raw: bool,
 }
 
 /// The row a renderer draws in (feature 1550, research R6): its session, its place, and the part

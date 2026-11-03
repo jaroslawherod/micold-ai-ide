@@ -263,6 +263,7 @@ fn boot() -> (App, Task<Message>) {
     core.settings.reduce_motion = loaded.settings.reduce_motion;
     crate::shell::changes::suggestion_chips_in_force(&mut core, loaded.settings.suggestion_chips);
     core.settings.review_single_keys = loaded.settings.review_single_keys;
+    core.settings.show_raw_events = loaded.settings.show_raw_events;
     // Feature 551, FR-017: the folds the user left; an origin never folded is expanded.
     restore_folds(&mut core, &loaded.settings);
     let scrollback_lines = loaded.settings.scrollback_lines;

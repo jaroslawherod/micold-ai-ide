@@ -602,6 +602,7 @@ pub(crate) fn transcript_body<'a>(
             cache: &state.transcript_rich,
             selected: state.transcript_selection.selection(id),
             row: None,
+            show_raw: state.settings.show_raw_events,
         },
         |msg| match msg {
             TranscriptMsg::Insights(msg) => Message::Session(SessionMsg::Insights(msg)),

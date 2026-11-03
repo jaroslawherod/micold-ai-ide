@@ -230,6 +230,7 @@ impl Case {
             rich: &self.rich,
             prompts: Some(&self.prompts),
             insights: None,
+            show_raw: true,
         })
     }
 

@@ -142,6 +142,10 @@ pub struct State {
     /// Whether comment boxes show the suggestion chips (#1275, FR-022; persisted). Set by a save,
     /// like `reduce_motion`; the draft's copy is the unsaved edit.
     pub suggestion_chips: bool,
+    /// Whether the structured view shows its low-signal entries (#1664, FR-009; persisted, off by
+    /// default). Not part of the Settings form: the transcript's toggle writes it as it is pressed,
+    /// and a Save never changes it.
+    pub show_raw_events: bool,
     /// Whether the Review tab's single keys act (#1274, FR-022; persisted, on by default). Set by a
     /// save, like `reduce_motion`; the draft's copy is the unsaved edit.
     pub review_single_keys: bool,
@@ -198,6 +202,7 @@ impl Default for State {
             theme_pref: Default::default(),
             reduce_motion: false,
             suggestion_chips: false,
+            show_raw_events: false,
             review_single_keys: true,
             placement_in_force: Default::default(),
             daemons: Default::default(),
@@ -894,6 +899,8 @@ impl ValidSettings {
             theme: self.theme,
             reduce_motion: self.reduce_motion,
             suggestion_chips: self.suggestion_chips,
+            // Not in the form (#1664): a Save never changes the key, `set_changed` ignores it.
+            show_raw_events: false,
             scrollback_lines: self.scrollback_lines,
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
@@ -1904,6 +1911,9 @@ pub enum Msg {
     /// The Settings **Suggestion chips** switch was toggled (#1275, FR-022). Edits the draft; Save
     /// applies it and Cancel discards it.
     SuggestionChipsToggled(bool),
+    /// The structured view's **Show raw events** toggle was pressed (#1664, FR-005, FR-009).
+    /// Applies at once, to every view; the root writes the settings file.
+    ShowRawEventsToggled(bool),
     /// The Settings **Single-key shortcuts in the Review tab** switch was toggled (#1274,
     /// FR-022). Edits the draft; Save applies it and Cancel discards it.
     ReviewSingleKeysToggled(bool),
@@ -2054,6 +2064,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::ThemeChanged(theme) => theme_changed(state, theme),
         Msg::ReduceMotionToggled(on) => reduce_motion_toggled(state, on),
         Msg::SuggestionChipsToggled(on) => suggestion_chips_toggled(state, on),
+        Msg::ShowRawEventsToggled(on) => state.settings.show_raw_events = on,
         Msg::ReviewSingleKeysToggled(on) => review_single_keys_toggled(state, on),
         Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
         Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),

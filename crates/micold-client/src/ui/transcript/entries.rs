@@ -15,7 +15,8 @@ use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyState, CopyTarget};
 use crate::icons::Icon;
-use crate::ui::material::Scrollable;
+use crate::features::transcript_selection::shown;
+use crate::ui::material::{Button, Scrollable};
 use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, TypeRole};
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
@@ -88,11 +89,13 @@ pub enum Row<'a> {
     Omitted(u64),
     /// "No output yet": the transcript holds no entry (FR-006).
     Empty,
+    /// The toggle hides this many entries (#1664, FR-008); after the omitted notice.
+    Hidden(u64),
     Entry(&'a Entry),
 }
 
 /// The view's rows for `transcript` (`None`: the window has heard nothing of the session yet).
-pub fn rows(transcript: Option<&Transcript>) -> Vec<Row<'_>> {
+pub fn rows(transcript: Option<&Transcript>, show_raw: bool) -> Vec<Row<'_>> {
     let Some(t) = transcript else {
         return vec![Row::Empty];
     };
@@ -101,7 +104,15 @@ pub fn rows(transcript: Option<&Transcript>) -> Vec<Row<'_>> {
     if t.entries().len() == 0 {
         rows.push(Row::Empty);
     }
-    rows.extend(t.entries().map(Row::Entry));
+    let hidden = t.hidden_count(show_raw);
+    if hidden > 0 {
+        rows.push(Row::Hidden(hidden));
+    }
+    rows.extend(
+        t.entries()
+            .filter(|e| micold_core::structured::transcript::shown(e, show_raw))
+            .map(Row::Entry),
+    );
     rows
 }
 
@@ -169,6 +180,18 @@ fn change_marker(shown: String, refused: bool, ctx: &RenderCtx<'_>) -> Block {
 /// The omitted notice: its row's one unit.
 pub fn omitted_notice(n: u64, ctx: &RenderCtx<'_>) -> Element<'static, TranscriptMsg> {
     unit_caption(omitted_text(n), ctx, vec![0])
+}
+
+/// The hidden-events notice: "N events hidden" and a "Show" button that turns the toggle on
+/// (#1664, FR-008). Not a selection unit.
+pub fn hidden_notice(n: u64, roles: Roles) -> Element<'static, TranscriptMsg> {
+    iced::widget::row![
+        caption(shown::hidden_text(n), roles),
+        Button::text(shown::SHOW_HIDDEN, roles).on_press(TranscriptMsg::ShowRawEvents(true)),
+    ]
+    .spacing(spacing::SM)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 /// "No output yet".
