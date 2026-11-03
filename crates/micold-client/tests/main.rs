@@ -59,6 +59,7 @@ mod container_mismatch_way_out;
 mod context_menu_anchor_call_sites;
 mod current_session_writers;
 mod daemon_adopt_on_restart;
+mod daemon_config_delivery_host;
 mod daemon_config_render;
 mod daemon_config_stable;
 mod daemon_config_validate;

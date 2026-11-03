@@ -347,6 +347,7 @@ fn daemon_connections(app: &App) -> Subscription<Message> {
             )
         }),
         app.core.daemon_list.drift_answers(),
+        app.core.daemon_list.runtime_projects(),
     )
 }
 

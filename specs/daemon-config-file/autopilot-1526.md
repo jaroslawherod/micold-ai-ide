@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
 - **Phase**: implement
-- **Next step**: M1a (host delivery: T025, T027, T080a)
+- **Next step**: M1a gate/review/PR (implementation done, see Handover)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1656 | Design (milestone for Issue 5) | MERGED | 86a9e5d9df604be5849f8cb7a8db9e9ea487d996 |
-| #1659 | Re-cut M1 into M1a/M1b | OPEN | — |
+| #1659 | Re-cut M1 into M1a/M1b | MERGED | 1f4e769c01901d65377a3cafc8dee0ca7606009b |
 
 ## Milestones
 
@@ -48,20 +48,62 @@ None.
 
 ## Handover
 
-**Note (tasks unit, M1 split into M1a/M1b, D6)**: the design below is unchanged and still settled;
-it now serves two milestone units instead of one. M1a (T025, T027, T080a) is the "T025/T027 — host
-delivery" section and the "T080a" section below. M1b (T026, T028, T029) is the "T026/T028 — SSH
-delivery" section and the "T029 — docs" section. The "Confirmed facts" and "Scope narrower than it
-looks" notes above them apply to both. The M1a unit should add its own `tdd/test-list.md` rows and
-tick only T025/T027/T080a in tasks.md; the M1b unit does the same for T026/T028/T029.
+**M1a (T025, T027, T080a) is implemented and green; the gate/review/PR steps are not done yet** —
+this unit hit the context cap (231k) right after getting all tests passing and before starting
+`gate.md`. A fresh unit should pick up at `gate.md` step 1 (scoped gate + review A), not
+`implement.md` — do not re-derive or redo any of the implementation below.
 
-Still no code written (two units in a row hit the context cap during research, not implementation)
-— **but the design is now fully settled** below; the next unit should go straight to writing tests,
-no more architecture digging. Pick up at `implement.md` step 1 (`speckit-implement`/
-`speckit-tdd-run`); `tdd/test-list.md` only has behaviors U1-U20/A1-A2 from Issue 2/3, none for M1 —
-add new rows for T025/T026/T080a before running the loop, and mark T025/T026/T027/T028/T080a's lines
-in tasks.md with the new behavior ids (`[U21]` etc.) so Phase 6 can tick them. Decision D5 above
-resolves the one open design question from the last handover.
+**What landed (all tests green, `cargo fmt --check` clean, `cargo clippy -p micold-client
+--all-targets -- -D warnings` clean; `mise run gate` not yet run)**:
+- `crates/micold-client/src/daemon_config_render.rs`: `DaemonSettings` now derives `Eq`.
+- New `crates/micold-client/src/daemon_config_delivery.rs` (`deliver_host`, write-if-changed, mode
+  `0600` via `set_owner_only`), wired into `lib.rs`.
+- `crates/micold-client/src/daemon.rs`: `Dial::Host` → `Dial::Host(HostDial)` (`HostDial { settings:
+  DaemonSettings, data_dir: Option<PathBuf> }`, manual `Hash` over the rendered bytes); the 4 match
+  sites updated (`actor_specs_answered`, `actor()`, the 2 `connect_and_pump` arms — the second now
+  calls `deliver_host` before `connect_or_spawn` and propagates a write error as `Err`).
+- T080a: `crate::features::daemons::State` gained `runtime_projects: BTreeMap<DaemonId,
+  Vec<PathBuf>>` plus `add_runtime_project`/`runtime_projects()`; `actor_specs_answered` and
+  `connections` both gained a trailing `runtime_projects` parameter (threaded through every call
+  site: `shell/sandbox_real.rs`, `shell/daemons.rs` test, `tests/daemons_feature.rs`,
+  `shell/subscriptions.rs`'s real call via `app.core.daemon_list.runtime_projects()`); the Host arm
+  applies `settings.add_runtime_project(path)` for each recorded path. `crate::shell::setup::
+  add_project` now calls `app.core.daemon_list.add_runtime_project(daemon, path)` when `binding` is
+  `Bound` (the `Output::ProjectAdd` handler in `daemon_sync.rs:4102` already calls `add_project`, so
+  nothing else needed changing). The Ssh arm is untouched on purpose — it carries no settings yet;
+  that is M1b/T028's job, so a project added at runtime to an SSH daemon is not yet delivered (only
+  the host path is M1a's scope).
+- Tests: `crates/micold-client/tests/daemon_config_delivery_host.rs` (3 cases: write-if-changed,
+  no-op on unchanged, rewrite on a settings change — wired into `tests/main.rs`'s `mod` list) plus
+  `crates/micold-client/tests/daemon_config_delivery_host_env.rs` as its **own** `[[test]]` target
+  in `Cargo.toml` (not a `main.rs` module: it sets process env vars, which `main.rs`'s own header
+  comment says must not share a binary with tests that don't expect that). A unit test in
+  `daemon.rs`'s existing test module (`a_runtime_added_project_reaches_the_host_dials_settings`) and
+  one in `features/daemons.rs` (`runtime_project_tests::a_recorded_project_is_kept_once_per_daemon`)
+  cover T080a directly.
+- **A real gotcha worth recording so nobody re-derives it**: on this machine `/bin/sh` is `dash`,
+  and dash drops any inherited env var whose name is not a valid shell identifier — in particular
+  `CARGO_BIN_EXE_micold-ai-ide`/`CARGO_BIN_EXE_micold-showcase` (hyphen from the binary's own name)
+  — before it execs a command inside a script. A naive "dump env via a `sh` script, diff against
+  `std::env::vars()` in the test process" test fails on exactly those two vars, even though
+  `spawn_detached_daemon` adds nothing. The env regression test instead dumps through the **same**
+  script twice (once run directly, once through `spawn_detached_daemon`) and diffs those two dumps,
+  which cancels the dash-filtering artifact out and still catches a real regression.
+- `specs/daemon-config-file/tasks.md`: T025/T027/T080a ticked `[x]`, each with its behavior ids.
+- `specs/daemon-config-file/tdd/test-list.md`: new "Issue 5 (#1526), milestone M1a" section, U21-U23
+  all `DONE`.
+
+**Next step for a fresh unit**: `gate.md` step 1 — start the scoped gate (or full `mise run gate`,
+disk permitting) detached, run review A (`code-review`, `high`) on `origin/main...HEAD` in its
+shadow, then review B (conformance, sonnet) per `review.md`, then the full gate once, then
+`pr.md`. No visual pass (nothing user-visible changed). PR title:
+`feat(1526): deliver the configuration to the host daemon before spawn (#1526)` (M1a only — M1b is
+a separate, later PR). Local gate line for the PR body: fill in once `mise run gate` has actually
+run; this unit did not run it (context ran out right after the targeted tests went green).
+
+**M1b (T026, T028, T029) is not started** — a later unit does it, after M1a's PR merges, reusing
+`deliver_host`'s write-if-changed shape server-side over the SSH copy step. Its design is below,
+unchanged from the last handover.
 
 **Scope narrower than it looks**: M1 only delivers the keys `render()` already covers (`[daemon]`,
 `[listen]`, `[auth]`, `[storage]`, `[ssh]`, `[[projects]]` — contracts/daemon-config.md §3.1/§3.2).

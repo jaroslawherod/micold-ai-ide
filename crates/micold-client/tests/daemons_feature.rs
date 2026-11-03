@@ -1218,6 +1218,7 @@ fn a_container_daemon_added_in_the_form_creates_its_own_container() {
             None,
             boot_owner,
             &Default::default(),
+            &Default::default(),
         )
         .into_iter()
         .find_map(|s| match s.dial {

@@ -20,6 +20,7 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
 use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
+use micold_core::daemon_config::Kind;
 use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
 use micold_core::kube::settings::KubeSettings;
@@ -46,6 +47,7 @@ use micold_core::ssh::remote_path;
 use micold_core::ssh::{ClientPlatform, ReasonContext, SshHost, SshTarget};
 
 use crate::app::Message;
+use crate::daemon_config_render::{self, DaemonSettings};
 
 /// The build string this client announces in the handshake (diagnostics only).
 const CLIENT_BUILD: &str = concat!("micold-ai-ide/", env!("CARGO_PKG_VERSION"));
@@ -187,8 +189,9 @@ pub struct ActorKey {
 /// How an actor reaches its daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Dial {
-    /// Connect to the host daemon, spawning it on a cold start.
-    Host,
+    /// Connect to the host daemon, spawning it on a cold start. The config file is written
+    /// (write-if-changed) before the spawn attempt (#1526, FR-005).
+    Host(HostDial),
     /// Dial a container's published loopback port with this daemon's own token. Never spawns.
     Container {
         /// The port from the daemon's own entry, not the default sandbox port.
@@ -241,6 +244,24 @@ pub enum Dial {
         /// prompt, `Ask` until there is one. Part of the identity, so an answer restarts the actor.
         drift: DriftDial,
     },
+}
+
+/// A host daemon's config settings and data directory, as part of an actor's identity:
+/// `DaemonSettings` is not `Hash`, so the rendered bytes are hashed instead (#1526).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostDial {
+    /// The settings to render and deliver before the spawn attempt.
+    pub settings: DaemonSettings,
+    /// Where the host daemon resolves its config directory; `None` when it cannot be determined,
+    /// which fails the connect attempt (same style as the existing no-endpoint case).
+    pub data_dir: Option<PathBuf>,
+}
+
+impl std::hash::Hash for HostDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        daemon_config_render::render(&self.settings, Kind::Host).hash(state);
+        self.data_dir.hash(state);
+    }
 }
 
 /// A [`DriftChoice`] as part of an actor's identity.
@@ -382,13 +403,16 @@ pub fn actor_specs(
         legacy_default,
         None,
         &BTreeMap::new(),
+        &BTreeMap::new(),
     )
 }
 
 /// [`actor_specs`] with the answers the user gave to the drift prompts (feature 686): a Kubernetes
 /// daemon in `drift` is dialled with that choice, the others with `Ask`. `boot_owner` is the
 /// container daemon the application's own sandbox boot creates the container of; every other
-/// container daemon's actor creates its own.
+/// container daemon's actor creates its own. `runtime_projects` is each daemon's projects added at
+/// runtime (`ProjectAdd`), fed into the host dial's settings so the next write lists them (#1526,
+/// T080a).
 pub fn actor_specs_answered(
     registry: &DaemonRegistry,
     states: &DaemonStates,
@@ -396,6 +420,7 @@ pub fn actor_specs_answered(
     legacy_default: Option<DaemonId>,
     boot_owner: Option<DaemonId>,
     drift: &BTreeMap<DaemonId, DriftChoice>,
+    runtime_projects: &BTreeMap<DaemonId, Vec<PathBuf>>,
 ) -> Vec<ActorSpec> {
     let keys = actor_keys(registry);
     registry
@@ -413,7 +438,16 @@ pub fn actor_specs_answered(
         .filter_map(|entry| {
             let key = keys.iter().find(|k| k.id == entry.id)?.clone();
             let dial = match &entry.runtime {
-                DaemonRuntime::Host => Dial::Host,
+                DaemonRuntime::Host => {
+                    let mut settings = DaemonSettings::from_entry(entry)?.0;
+                    for path in runtime_projects.get(&entry.id).into_iter().flatten() {
+                        settings.add_runtime_project(path);
+                    }
+                    Dial::Host(HostDial {
+                        settings,
+                        data_dir: micold_core::paths::data_dir(),
+                    })
+                }
                 DaemonRuntime::Container(c) if states.is_legacy(entry.id) => Dial::Container {
                     port: c.port,
                     token_path: entry.token_path(state_dir, legacy_default)?,
@@ -472,6 +506,7 @@ pub fn connections(
     legacy_default: Option<DaemonId>,
     boot_owner: Option<DaemonId>,
     drift: &BTreeMap<DaemonId, DriftChoice>,
+    runtime_projects: &BTreeMap<DaemonId, Vec<PathBuf>>,
 ) -> Subscription<Message> {
     Subscription::batch(
         actor_specs_answered(
@@ -481,6 +516,7 @@ pub fn connections(
             legacy_default,
             boot_owner,
             drift,
+            runtime_projects,
         )
         .into_iter()
         .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
@@ -580,7 +616,7 @@ pub fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
             // Resolve the host endpoint once; it does not change over the app's life. A container
             // daemon dials its own port and needs none.
             let endpoint = match spec.dial {
-                Dial::Host => match endpoint::resolve() {
+                Dial::Host(_) => match endpoint::resolve() {
                     Ok(e) => Some(e),
                     Err(err) => {
                         let _ = output
@@ -688,12 +724,21 @@ async fn connect_and_pump(
     // The relay of a Kubernetes daemon lives as long as its connection.
     let mut held_relay: Option<crate::kube::relay::Relay> = None;
     let attempt = match (&spec.dial, endpoint) {
-        // Unchanged: auto-spawn a detached host process and poll until it accepts. Only the host
-        // entry ever reaches here; a container daemon is never spawned by the client.
-        (Dial::Host, Some(endpoint)) => {
-            connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await
-        }
-        (Dial::Host, None) => Err(std::io::Error::new(
+        // Deliver the host's config (write-if-changed, mode 0600) before spawning it, so a cold
+        // start — and any later reconnect after a settings change — always starts from the
+        // current settings (#1526, FR-005/FR-014). Only the host entry ever reaches here; a
+        // container daemon is never spawned by the client.
+        (Dial::Host(host), Some(endpoint)) => match host.data_dir.as_deref() {
+            Some(dir) => match crate::daemon_config_delivery::deliver_host(&host.settings, dir) {
+                Ok(_) => connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await,
+                Err(err) => Err(err),
+            },
+            None => Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "no host data dir",
+            )),
+        },
+        (Dial::Host(_), None) => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "no host endpoint",
         )),
@@ -1887,8 +1932,54 @@ mod tests {
     use micold_core::ssh::{
         Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget,
     };
+    use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    /// T080a (#1526, U22): a project recorded in `runtime_projects` for the host daemon reaches
+    /// its `HostDial` settings, so the next config file written lists it (FR-014). A daemon with
+    /// no recorded project keeps the plain settings `from_entry` gives.
+    #[test]
+    fn a_runtime_added_project_reaches_the_host_dials_settings() {
+        let mut registry = DaemonRegistry::default();
+        let id = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let dir = std::path::Path::new("/nonexistent");
+
+        let without = super::actor_specs_answered(
+            &registry,
+            &states,
+            dir,
+            None,
+            None,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+        );
+        let Dial::Host(host) = &without[0].dial else {
+            panic!("a host daemon dials Dial::Host")
+        };
+        assert!(host.settings.projects.is_empty());
+
+        let mut runtime_projects = BTreeMap::new();
+        runtime_projects.insert(id, vec![std::path::PathBuf::from("/home/me/src/app")]);
+        let with = super::actor_specs_answered(
+            &registry,
+            &states,
+            dir,
+            None,
+            None,
+            &BTreeMap::new(),
+            &runtime_projects,
+        );
+        let Dial::Host(host) = &with[0].dial else {
+            panic!("a host daemon dials Dial::Host")
+        };
+        assert_eq!(
+            host.settings.projects[0].path,
+            std::path::PathBuf::from("/home/me/src/app")
+        );
+    }
 
     #[test]
     fn the_pod_login_is_the_basic_images_entry_for_the_pods_uid() {
@@ -1982,7 +2073,15 @@ mod tests {
         let dir = std::path::Path::new("/nonexistent");
         let asked = actor_specs(&registry, &states, dir, None);
         let answer = std::collections::BTreeMap::from([(id, DriftChoice::Recreate)]);
-        let answered = super::actor_specs_answered(&registry, &states, dir, None, None, &answer);
+        let answered = super::actor_specs_answered(
+            &registry,
+            &states,
+            dir,
+            None,
+            None,
+            &answer,
+            &BTreeMap::new(),
+        );
         assert_ne!(asked[0], answered[0]);
         assert!(
             matches!(&asked[0].dial, Dial::Kubernetes { drift, .. } if drift.0 == DriftChoice::Ask)
