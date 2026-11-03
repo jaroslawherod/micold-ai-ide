@@ -307,7 +307,9 @@ enum Pending {
         name: String,
         runtime: Box<DaemonRuntime>,
         auto_start: bool,
-        file: FileSettings,
+        file: Box<FileSettings>,
+        /// The inline start script's text, written only when this edit commits.
+        script: Option<String>,
     },
 }
 
@@ -1460,18 +1462,15 @@ fn save_checked(
     if !commit {
         return Ok(Vec::new());
     }
-    if let (true, Some(text)) = (file.startup.is_some(), draft.start.inline_text()) {
-        let app_data = micold_core::paths::data_local_dir().unwrap_or_default();
-        crate::daemon_config_render::save_inline_script(&app_data, id, text).map_err(|e| {
-            FormError {
-                field: "startup_script",
-                message: format!("Couldn't save the script: {e}"),
-            }
-        })?;
-    }
+    let script = file
+        .startup
+        .is_some()
+        .then(|| draft.start.inline_text().map(str::to_string))
+        .flatten();
 
     match draft.editing {
         None => {
+            write_inline_script(id, script.as_deref())?;
             *model.registry = probe;
             model
                 .links
@@ -1502,15 +1501,43 @@ fn save_checked(
                         name,
                         runtime: Box::new(runtime),
                         auto_start: draft.auto_start,
-                        file,
+                        file: Box::new(file),
+                        script,
                     },
                     prompt,
                 ));
                 return Ok(Vec::new());
             }
+            write_inline_script(id, script.as_deref())?;
             *model.registry = probe;
             state.draft = None;
             Ok(vec![Outcome::DaemonRegistryChanged(model.registry.clone())])
+        }
+    }
+}
+
+/// Writes an inline start script where the registry commits it (#1533, FR-010). An empty app-data
+/// directory is an error, never a path relative to the working directory.
+fn write_inline_script(id: DaemonId, text: Option<&str>) -> Result<(), FormError> {
+    let Some(text) = text else {
+        return Ok(());
+    };
+    let error = |message: String| FormError {
+        field: "startup_script",
+        message,
+    };
+    let app_data = micold_core::paths::data_local_dir()
+        .ok_or_else(|| error("Couldn't save the script: no application data folder".into()))?;
+    crate::daemon_config_render::save_inline_script(&app_data, id, text)
+        .map_err(|e| error(format!("Couldn't save the script: {e}")))
+}
+
+/// Deletes a removed daemon's inline start script directory (best effort).
+fn remove_inline_script(id: DaemonId) {
+    if let Some(app_data) = micold_core::paths::data_local_dir() {
+        let path = crate::daemon_config_render::inline_script_path(&app_data, id);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::remove_dir_all(dir);
         }
     }
 }
@@ -1570,6 +1597,8 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             state.versions.remove(&id);
             state.runtime_missing.remove(&id);
             state.credentials.remove(&id);
+            state.startup_restart.remove(&id);
+            remove_inline_script(id);
             state.ended.extend(sessions.iter().copied());
             if !sessions.is_empty() {
                 out.push(Outcome::DaemonSessionsEnded {
@@ -1584,15 +1613,19 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             runtime,
             auto_start,
             file,
+            script,
         } => {
             let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
             if model
                 .registry
                 .edit(id, &name, (*runtime).clone(), auto_start)
-                .and_then(|()| model.registry.set_file(id, file))
+                .and_then(|()| model.registry.set_file(id, *file))
                 .is_err()
             {
                 return out;
+            }
+            if let Err(e) = write_inline_script(id, script.as_deref()) {
+                state.form_error = Some(e);
             }
             model.links.apply(id, DaemonEvent::Stop);
             if runtime.is_startable() {
@@ -1888,6 +1921,8 @@ fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome
     state.versions.remove(&id);
     state.runtime_missing.remove(&id);
     state.credentials.remove(&id);
+    state.startup_restart.remove(&id);
+    remove_inline_script(id);
     state.applies_on_next_start.remove(&id);
     state.pod_logs.remove(&id);
     state.config_status.remove(&id);

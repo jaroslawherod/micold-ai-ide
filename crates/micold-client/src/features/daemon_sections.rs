@@ -135,7 +135,9 @@ impl Section {
             (_, "startup_script" | "startup_timeout") => Section::StartScript,
             (Host, _) | (_, _) => return None,
         };
-        Self::of(runtime).contains(&section).then_some(section)
+        // The Start script group's own fields exist only while the group is shown, so a forced
+        // group (tests) is held open as well as a delivered one.
+        (section == Section::StartScript || Self::of(runtime).contains(&section)).then_some(section)
     }
 
     /// The section of a daemon of `runtime` that holds the control `id`. `None` for the name and
@@ -174,7 +176,9 @@ impl Section {
             }
             (Host, _) | (_, _) => return None,
         };
-        Self::of(runtime).contains(&section).then_some(section)
+        // The Start script group's own fields exist only while the group is shown, so a forced
+        // group (tests) is held open as well as a delivered one.
+        (section == Section::StartScript || Self::of(runtime).contains(&section)).then_some(section)
     }
 }
 
