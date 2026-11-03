@@ -17,6 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1656 | Design (milestone for Issue 5) | MERGED | 86a9e5d9df604be5849f8cb7a8db9e9ea487d996 |
+| #1659 | Re-cut M1 into M1a/M1b | OPEN | — |
 
 ## Milestones
 
@@ -257,7 +258,7 @@ typo'd filter silently passes). Prefer `mise run check`/targeted builds while it
 main.rs` links the whole `micold-client` test binary, so a full `cargo test -p micold-client` run is
 expensive — see CLAUDE.md's shared-build notes.
 
-PR: not opened — no code to review yet.
+PR: #1659 (re-cuts M1 into M1a/M1b; no code).
 
 ## Open escalation
 
