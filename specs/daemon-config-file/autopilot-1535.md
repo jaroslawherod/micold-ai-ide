@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D2 | tasks | Split Issue 14? | No: 3 tasks, one view (rule 3) | agent-resolved | milestones.md rule 3 |
 | D3 | tasks | User-guide task | T083 already in the milestone | agent-resolved | milestones.md rule 4 |
 | D4 | tasks | Tier | full: UI and a diagnostic read; M1 is always full | agent-resolved | milestone-format.md |
+| D5 | M1 | Rebase onto #1533 (ConfigStatus.startup)? | Adopted main's StartupReport; dropped own StartScriptRun/start_script; view shows outcome and reason, never the tail; kept tokens | agent-resolved | origin/main messages.rs |
 
 ## Review rounds
 
