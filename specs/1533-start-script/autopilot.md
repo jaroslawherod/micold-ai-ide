@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M4 targeted tests, reviews A/B, full gate, PR
+- **Next step**: M4: verify fixes compile (`mise run check`), run targeted tests (core `startup_settings` is a mod of tests/main.rs, not its own target; client `daemon_config_delivery_host`, `--lib ssh_delivery`, core `ssh::classify`), re-review round 2 (sonnet) of the fix diff, full gate, PR
 
 ## Pull requests
 
@@ -69,7 +69,10 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-None.
+Done: all M4 code, tests, guide, tasks ticked, committed (feat(1533) M4). Review A and B round 1 returned.
+Fixes applied after them but NOT yet compiled or tested or committed: (A.F1) remote paths built as POSIX strings, `relocated_startup(settings, script, env)` now takes both paths; (A.F2) `write_if_changed` creates files with mode 0600 and tightens an unchanged one; (B.F1) `classify` keeps the whole "start script failed:" block as `SshFailure::Other` (test `start_script_tests`).
+Still to do: declined/pending findings: A.F3 (with_remote_home leaves placeholder if home unknown: make it a Copy-step ProvisionFailure, or decline as MINOR), B.F2 (red-before-green: cannot be reconstructed, record as accepted deviation in Declined with reason), B.F3 (connect_or_spawn_reading test, MINOR; second granularity), B.F4 reword guide so it does not imply a toggle (guide says "Show output" - ok). Then: `mise run check`; targeted tests (the earlier run passed core lib 81, daemon lib 23; the client tests were still queued behind another worktree's build lock when this unit stopped, so UNVERIFIED); round-2 sonnet re-review of fix diff; `mise run gate` detached; add PR (title `feat(1533): host and SSH start script delivery and failure display (#1533)`, body per pr.md, Refs #1533); record PR in ledger. Note: do not use `pgrep -f "cargo check ..."` in wait loops (matches itself).
+Review rounds: A r1 and B r1 snapshot 76fd9421:41b0f119 (CHANGES, fixed as above).
 
 ## Open escalation
 

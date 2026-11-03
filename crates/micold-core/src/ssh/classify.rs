@@ -86,11 +86,21 @@ const PATTERNS: &[Pattern] = &[
     ("Permission denied", || SshFailure::AuthRefused),
 ];
 
+/// How the daemon's failure block for a refused start script begins (`failure_block`).
+const START_SCRIPT_FAILED: &str = "start script failed:";
+
 /// Classify an attempt. `spawn_not_found`: the `ssh` executable could not be started;
 /// `timed_out`: the watchdog killed the child at the deadline.
 pub fn classify(spawn_not_found: bool, timed_out: bool, exit_ok: bool, stderr: &str) -> SshFailure {
     if spawn_not_found {
         return SshFailure::SshMissing;
+    }
+    // A start the daemon's start script refused: its block (exit status, output tail) is the
+    // reason, whole, and nothing in the script's output is read as an ssh failure (#1533).
+    if let Some(at) = stderr.find(START_SCRIPT_FAILED) {
+        return SshFailure::Other {
+            tail: stderr[at..].trim().to_string(),
+        };
     }
     if let Some((_, class)) = PATTERNS.iter().find(|(needle, _)| stderr.contains(needle)) {
         return class();
@@ -381,5 +391,22 @@ mod tests {
         assert!(SshFailure::SshMissing.reason(&c).contains("OpenSSH Client"));
         c.platform = ClientPlatform::MacOs;
         assert!(SshFailure::SshMissing.reason(&c).contains("macOS"));
+    }
+}
+
+#[cfg(test)]
+mod start_script_tests {
+    use super::*;
+
+    /// US4.1 (SSH): the whole failure block is the reason, even when the script printed a phrase
+    /// that is also an ssh failure.
+    #[test]
+    fn a_refused_start_script_keeps_its_whole_block_as_the_reason() {
+        let stderr = "micold-daemon remote bridge: start script failed: exit status 1\n--- last 200 lines of the start script's output ---\nPermission denied\n--- end ---\n";
+        let SshFailure::Other { tail } = classify(false, false, false, stderr) else {
+            panic!("not the block");
+        };
+        assert!(tail.starts_with("start script failed: exit status 1"));
+        assert!(tail.contains("Permission denied") && tail.ends_with("--- end ---"));
     }
 }
