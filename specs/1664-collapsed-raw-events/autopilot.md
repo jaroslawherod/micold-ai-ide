@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 7f490e14daa4fd3665d83223e6898ac8e0ecb4b8:dacfed8994dc737a731872b83cf8f1a69ec11bc9 | CHANGES: 1 MAJOR ([P] tasks sharing a file), 3 MINOR; fixed, prose only; analyze F6 fixed by merging notice into M2 |
 | Spec | 2 | a7d89dffe96efd9eed2b34554c01e3d784f407d0:2305bb236cec7443b911cbc0c9b526ac9dd8870a | CLEAN (2 MINOR: FR order fixed; error-footer scenario deferred to FR-013 resolution in clarify) |
 | M2 A | 1 | a7dd47c5:daea8759 | fmt only (fixed by cargo fmt); 5 others declined (see Declined) |
+| M2 B | 1 | 6d8a1de1:58cac1ec | CHANGES 2 MAJOR: startup test + hidden_text unit + docs wording fixed; Show-button message and two-session reducer tests declined (below); TDD log absent MINOR declined |
 | M1 A+B | 1 | 29927781b4b54b1a221637c30fcac1e03b3efb4d:64ed549a8651dba5cfa433fc833d4d3540904298 | A: CHANGES 1 MAJOR (footer details tooltip dropped; now an open-detail unit [4]), fixed; B: CLEAN; MINOR stale doc fixed |
 
 ## Declined review findings
@@ -53,6 +54,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A | Other windows keep the old value until restart | Same model as filter_open/folded_origins (loaded at startup, written per user); spec says one per user |
 | M2 | A | Hidden notice not a selection unit | Designed so (T024); a notice, not content |
 | M2 | A | visibility_changed only called from main.rs arm | Single writer by design (feature_write_isolation); only path |
+| M2 | B | Show button emits ShowRawEvents(true) untested | One-line wiring; painted "Show" asserted; iced Element message not inspectable without a harness |
+| M2 | B | Two sessions change in one step test | Both views read the one `core.settings.show_raw_events`; no per-session state exists |
+| M2 | B | No tdd cycle-log | Feature does not use tdd/ artifacts |
 | M2 | A | into_settings emits false placeholder | Spec task T016/T017 design; set_changed ignores key, comment documents |
 
 ## Handover
@@ -64,6 +68,8 @@ None.
 None. FR-013 answered by the user (error footers/orphans stay visible); applied to spec.md.
 
 ## Follow-ups not done
+
+- Visual pass (quickstart Part B) NOT RUN in M2: no Xvfb/xdotool, client cannot open a seeded transcript headlessly; layout covered by layout_snapshot gates (toggle sits on its own row under the session bar). T026 stays for the close unit.
 
 - Subagent thread view (`thread_body` in ui/transcript/entries.rs) still shows raw/footer entries regardless of the toggle (review A, M2).
 
