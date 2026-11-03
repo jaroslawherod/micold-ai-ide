@@ -106,13 +106,13 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 ## Issue 6 — feat: deliver the configuration to container daemons (needs 3, 4)
 
-- [ ] T030 [P] [US1] Failing test in `crates/micold-core/src/sandbox/argv.rs` (tests): `podman create` mounts `<data_dir>/daemons/<id>/config` read-only at `/run/micold/config` and `…/secrets` read-only at `/run/micold/secrets`, and passes no `-e MICOLD_*` (only `HOME`); no single-file bind mount anywhere (the old writable sign-in mount is gone); a session process cannot write under either path (FR-029)
-- [ ] T031 [P] [US1] Failing test in `crates/micold-client/src/daemon.rs` tests: `container_env` (`daemon.rs:1283`) for the SSH-bridge start path is empty of `MICOLD_*`; boot and SSH starts give the same diagnostic (quickstart §2)
-- [ ] T032 [P] [US1] Failing shell test `scripts/tests/entrypoint-config.test.sh`: `packaging/basic/entrypoint.sh` reads `[ssh] dir` from `/run/micold/config/daemon.toml` (default `/run/micold/ssh`) instead of `MICOLD_SSH_DIR`
-- [ ] T033 [US1] Implement the mounts in `crates/micold-core/src/sandbox/argv.rs` and `crates/micold-core/src/sandbox/mod.rs`; remove the `-e` list and `container_env`
-- [ ] T034 [US1] Change `packaging/basic/entrypoint.sh` per T032
-- [ ] T090 [US1] `LANG=C.UTF-8` in container sessions unless `session.env` sets it (D15 row 12), in `crates/micold-core/src/sandbox/argv.rs` with a test
-- [ ] T035 [US1] Run `mise run test-sandbox` real-runtime cases for boot and SSH start; update `docs/user-guide/sandboxed-daemon.md`
+- [ ] T030 [P] [US1] Failing test in `crates/micold-core/src/sandbox/argv.rs` (tests): `podman create` mounts `<data_dir>/daemons/<id>/config` read-only at `/run/micold/config` and `…/secrets` read-only at `/run/micold/secrets`, and passes no `-e MICOLD_*` (the `-e` values that remain are `HOME` and `TZ` from `spec.time_zone`, plus the git credential env, each asserted); no single-file bind mount anywhere (the old writable sign-in mount is gone); a session process cannot write under either path (FR-029)
+- [ ] T031 [P] [US1] Failing test in `crates/micold-client/src/daemon.rs` tests: `container_env` (`daemon.rs:1328`, verified 2026-11-03) for the SSH-bridge start path is empty of `MICOLD_*`; boot and SSH starts give the same diagnostic (quickstart §2)
+- [ ] T032 [P] [US1] Failing shell test `scripts/tests/entrypoint-config.test.sh`: `packaging/basic/entrypoint.sh` reads `[ssh] dir` from `/run/micold/config/daemon.toml` (default `/run/micold/ssh`); the entrypoint reads no SSH-dir variable today (`MICOLD_SSH_DIR` is only in `kube/manifest.rs`), so this adds the file read rather than replacing a variable
+- [ ] T033 [US1] Implement the mounts in `crates/micold-core/src/sandbox/argv.rs` and `crates/micold-core/src/sandbox/mod.rs`; strip every `MICOLD_*` (`MICOLD_DATA_DIR`, `MICOLD_IMAGE_REFERENCE`, `MICOLD_HOME`) from the `-e` list and from `container_env`, keeping `HOME` (sshd sets it from passwd, #1434) and `TZ`; the daemon takes its data dir and image reference from the config file (`[daemon]` keys, contract §3.3) or its default
+- [ ] T034 [US1] Change `packaging/basic/entrypoint.sh` per T032; keep the `MICOLD_HOME` fallback to `$HOME` (entrypoint.sh:23), covered by `scripts/tests/basic-entrypoint.test.sh`
+- [ ] T090 [US1] `LANG=C.UTF-8` in container sessions unless `session.env` sets it (D15 row 12), in `crates/micold-core/src/sandbox/argv.rs` with a test; the same test asserts `TZ` still reaches a session from `spec.time_zone` on both the boot and the SSH-bridge path (FR-039)
+- [ ] T035 [US1] Run `mise run test-sandbox` real-runtime cases for boot and SSH start; update `docs/user-guide/sandboxed-daemon.md` (exists, verified)
 
 ---
 
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -414,6 +414,21 @@ Added by the close unit: `tdd/verification.md` (Issue 4) found that `DaemonSetti
 - **Satisfies**: US1; FR-005, FR-013f
 - **Verify**: `cargo test -p micold-client --test main daemon_config`; a mutant changing `Kind::Ssh` to `Kind::Host` in `from_entry` fails a test
 - **Depends on**: M1
+- **Tier**: full
+
+### Issue 6 (#1527) — M1 — Deliver the configuration to container daemons 🎯 MVP
+
+One milestone: the read-only mounts and removal of the `-e` list (T030, T033), the SSH-bridge `container_env` (T031), the
+entrypoint's `[ssh] dir` read (T032, T034), `LANG` (T090) and the real-runtime cases (T035) all serve one acceptance
+scenario (a container started at boot and over SSH reads the same file); removing the env list without the mounts, or the
+reverse, would leave a container with no configuration. Seven tasks, so it is not split. It touches the sandbox boundary,
+so the tier is `full`. T035's user-guide update travels here (rule 4).
+
+- **Tasks**: T030–T035, T090
+- **Deliverable**: a container daemon, started at boot or over the SSH bridge, reads the same `/run/micold/config/daemon.toml` (config and secrets bind-mounted read-only, not writable by the session user); `podman create -e` and the bridge's `container_env` carry no `MICOLD_*`; the entrypoint takes `[ssh] dir` from the file; sessions get `LANG=C.UTF-8` unless `session.env` sets it; real-runtime tests cover both start paths.
+- **Satisfies**: US1; FR-005, FR-029, FR-039
+- **Verify**: `cargo test -p micold-core --test sandbox_argv`; `cargo test -p micold-client daemon::`; `scripts/tests/entrypoint-config.test.sh`; `mise run image && mise run test-sandbox`
+- **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1, merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
