@@ -61,7 +61,7 @@
 - [x] T020 [US5] Render `[startup]` and save the inline file in `crates/micold-client/src/daemon_config_render.rs`; validate with `daemon_config::validate`
 - [x] T021 [US5] "Start script" group in `crates/micold-client/src/ui/settings/daemons.rs`: file picker or inline `TextArea` (add a builder to `micold-material` only if the building block is missing, Principle VIII), shell, timeout, `on_failure`, `run`, `env_file`, `export_env`, validation message; render it only for kinds where `start_script_delivered(kind)` is true, false for every kind in M3 (rule 6: M4, M5, M6 each enable their kind), so no savable group sits on main without delivery
 - [x] T022 [US5] "Restart to apply" notice from `ConfigStatus.changed_restart_keys` containing `startup` in `crates/micold-client/src/ui/settings/daemons.rs` (US5.2 client side)
-- [ ] T023 [US5] (ships in M4, when the group first becomes reachable) User guide: the Start script group in `docs/user-guide/daemon-configuration.md`
+- [x] T023 [US5] (ships in M4, when the group first becomes reachable) User guide: the Start script group in `docs/user-guide/daemon-configuration.md`
 
 **Checkpoint (M3)**: T018 to T022 (T023, the guide, ships in M4). The group is built and tested but hidden for every kind until M4 to M6 enable it.
 
@@ -70,12 +70,12 @@
 **Goal**: script and `env_file` are delivered with the config; a failure shows in the app with its output.
 **Independent test**: `echo oops; exit 1` with `refuse` on a host and an SSH daemon: the app's error state shows exit 1 and "oops"; with `warn` a warning with the same text.
 
-- [ ] T024 [P] [US4] Failing tests: `crates/micold-core/src/spawn.rs` (host spawn reads `startup-result.json` on a failed start and rejects one older than the spawn); `crates/micold-daemon/src/remote.rs` (bridge relays the failure block and the file); `crates/micold-client/src/shell/daemon_sync.rs` (script and `env_file` delivered beside the config for host `<data_dir>/daemons/<id>/startup.sh` and SSH `~/.micold/remote/config/startup.sh`; no script text or secret in the config file, US5.4); `crates/micold-client/src/ui/daemon_details_dialog.rs` (failure and warning rows with exit status, tail, "Show output")
-- [ ] T025 [US4] Post-spawn wait loop in `crates/micold-core/src/spawn.rs` that reads the result file after a failed start (US4.1 host)
-- [ ] T026 [US4] Relay the failure block and file in `crates/micold-daemon/src/remote.rs` (US4.1 SSH)
-- [ ] T027 [US4] Deliver script and `env_file` for host and SSH in `crates/micold-client/src/shell/daemon_sync.rs` (FR-011, US5.4) and enable the Start script group for host and SSH in `crates/micold-client/src/ui/settings/daemons.rs`
-- [ ] T028 [US4] Failure and warning display in `crates/micold-client/src/ui/daemon_details_dialog.rs` (US4.1, US4.2)
-- [ ] T029 [US4] User guide: delivery and failure display for host and SSH in `docs/user-guide/daemon-configuration.md`
+- [x] T024 [P] [US4] Failing tests: `crates/micold-core/src/spawn.rs` (host spawn reads `startup-result.json` on a failed start and rejects one older than the spawn); `crates/micold-daemon/src/remote.rs` (bridge relays the failure block and the file); `crates/micold-client/src/shell/daemon_sync.rs` (script and `env_file` delivered beside the config for host `<data_dir>/daemons/<id>/startup.sh` and SSH `~/.micold/remote/config/startup.sh`; no script text or secret in the config file, US5.4); `crates/micold-client/src/ui/daemon_details_dialog.rs` (failure and warning rows with exit status, tail, "Show output")
+- [x] T025 [US4] Post-spawn wait loop in `crates/micold-core/src/spawn.rs` that reads the result file after a failed start (US4.1 host)
+- [x] T026 [US4] Relay the failure block and file in `crates/micold-daemon/src/remote.rs` (US4.1 SSH)
+- [x] T027 [US4] Deliver script and `env_file` for host and SSH in `crates/micold-client/src/shell/daemon_sync.rs` (FR-011, US5.4) and enable the Start script group for host and SSH in `crates/micold-client/src/ui/settings/daemons.rs`
+- [x] T028 [US4] Failure and warning display in `crates/micold-client/src/ui/daemon_details_dialog.rs` (US4.1, US4.2)
+- [x] T029 [US4] User guide: delivery and failure display for host and SSH in `docs/user-guide/daemon-configuration.md`
 
 **Checkpoint (M4)**: T024 to T029, after #1526 merges.
 

@@ -92,6 +92,7 @@ pub mod setup;
 pub mod sidebar_groups;
 pub mod spawn;
 pub mod ssh;
+pub mod startup_result;
 pub mod store;
 pub mod structured;
 pub mod task_progress;

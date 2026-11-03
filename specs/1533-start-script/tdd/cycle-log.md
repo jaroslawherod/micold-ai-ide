@@ -38,3 +38,21 @@ failed to compile before the code existed. The review fixes (inline script writt
 removal cleanup, forced-group error sections) are covered by the same suites; the isolation test is
 `tests/features_daemons_start.rs`.
 Hand-off: `Msg::RestartKeysReported` has no producer until M4 wires the daemon's `ConfigStatus`.
+
+## M4 (T023-T029)
+
+Not red-before-green in git: the M4 tests and code were written in one pass (the shared build lock
+was contended), tests first within the pass. Behaviours covered: `startup_result` (fresh refusal read,
+older result rejected, warning/garbage ignored); bridge ends with the failure block instead of a
+timeout; `deliver_host` writes `startup.sh`/`startup.env` mode 0600 beside `daemon.toml` with no
+script text or secret in it, and an unreadable script stops delivery; `ssh_delivery` sends both as
+`secrets/` files and the file names the remote copies via a home placeholder that the provision
+step replaces with the probe's home; the details dialog shows exit status and output for Failed and
+Warned only.
+
+Deviations from the task text, recorded: delivered locations follow the merged #1526 layout (host
+`<host data dir>/startup.sh`, SSH `~/.micold/remote/secrets/startup.sh`), not the task's
+`daemons/<id>/` and `config/` paths. The bridge relays the failure block on stderr, not the JSON
+file. "Show output" is a heading above an always-shown output block, not a toggle. The
+`connect_or_spawn_reading` loop is covered through `fresh_refusal` unit tests, not by spawning a real
+daemon. `RestartKeysReported` now has its producer (the daemon's `ConfigStatus`).

@@ -140,11 +140,20 @@ fn run_bridge() -> io::Result<()> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
+    // A start the script refused leaves its result in the data directory: the bridge relays the
+    // failure block on stderr (the SSH client shows it) instead of waiting out the timeout.
+    let since_secs = micold_core::startup_result::now_secs();
+    let data_dir = micold_core::paths::data_dir();
     let result = runtime.block_on(bridge(
         &endpoint,
         tokio::io::stdin(),
         tokio::io::stdout(),
         || micold_core::spawn::spawn_detached_daemon().map(|_| ()),
+        || {
+            data_dir
+                .as_deref()
+                .and_then(|dir| micold_core::startup_result::fresh_refusal(dir, since_secs))
+        },
         SPAWN_TIMEOUT,
     ));
     // `tokio::io::stdin` reads on the blocking pool; a normal drop would wait for that read, so a
@@ -155,12 +164,14 @@ fn run_bridge() -> io::Result<()> {
 
 /// Relay `input` to the daemon at `endpoint` and its answers to `output`, byte for byte, until
 /// either side closes. `start` spawns a detached daemon; it is called when nothing accepts, again
-/// after [`RESPAWN_AFTER`], until `timeout`.
+/// after [`RESPAWN_AFTER`], until `timeout`. `refused` returns the failure block of a start the
+/// start script refused, which ends the wait with that text as the error (#1533, US4.1).
 pub async fn bridge<I, O>(
     endpoint: &Endpoint,
     mut input: I,
     mut output: O,
     mut start: impl FnMut() -> io::Result<()>,
+    refused: impl Fn() -> Option<String>,
     timeout: Duration,
 ) -> io::Result<()>
 where
@@ -177,6 +188,9 @@ where
         if started.is_none_or(|at| at.elapsed() >= RESPAWN_AFTER) {
             start()?;
             started = Some(Instant::now());
+        }
+        if let Some(block) = refused() {
+            return Err(io::Error::other(block));
         }
         if Instant::now() >= deadline {
             return Err(io::Error::new(
@@ -265,7 +279,7 @@ mod tests {
     async fn relay_once(ep: &Endpoint, mut start: impl FnMut() -> io::Result<()>) -> Vec<u8> {
         let (mut client, near) = tokio::io::duplex(64);
         let (out_w, mut out_r) = tokio::io::duplex(64);
-        let relay = bridge(ep, near, out_w, &mut start, Duration::from_secs(5));
+        let relay = bridge(ep, near, out_w, &mut start, || None, Duration::from_secs(5));
         let user = async move {
             client.write_all(b"hello").await.unwrap();
             let mut got = [0u8; 5];
@@ -320,11 +334,41 @@ mod tests {
         let ep = endpoint(dir.path());
         let (_keep, input) = tokio::io::duplex(8);
         let (output, _out) = tokio::io::duplex(8);
-        let err = bridge(&ep, input, output, || Ok(()), Duration::from_millis(100))
-            .await
-            .unwrap_err();
+        let err = bridge(
+            &ep,
+            input,
+            output,
+            || Ok(()),
+            || None,
+            Duration::from_millis(100),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
         assert!(err.to_string().contains("d.sock"));
+    }
+
+    /// US4.1 (SSH): a start the script refused ends the wait with the failure block, long before
+    /// the timeout.
+    #[tokio::test]
+    async fn a_refused_start_is_relayed_as_the_failure_block_not_a_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let ep = endpoint(dir.path());
+        let (_keep, input) = tokio::io::duplex(8);
+        let (output, _out) = tokio::io::duplex(8);
+        let err = bridge(
+            &ep,
+            input,
+            output,
+            || Ok(()),
+            || Some("start script failed: exit status 1\noops".to_string()),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap_err();
+        assert!(err
+            .to_string()
+            .starts_with("start script failed: exit status 1"));
     }
 
     fn status(running: u32) -> RemoteStatus {

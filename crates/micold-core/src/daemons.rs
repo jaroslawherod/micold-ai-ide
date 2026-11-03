@@ -286,8 +286,9 @@ impl StartupSettings {
 /// the Start script group only for a kind that does, so no savable group sits on main without
 /// delivery. Each delivery milestone turns its kind on: host and SSH (#1526), container (#1527),
 /// pod (#1528).
-pub fn start_script_delivered(_kind: crate::daemon_config::Kind) -> bool {
-    false
+pub fn start_script_delivered(kind: crate::daemon_config::Kind) -> bool {
+    use crate::daemon_config::Kind;
+    matches!(kind, Kind::Host | Kind::Ssh)
 }
 
 impl FileSettings {

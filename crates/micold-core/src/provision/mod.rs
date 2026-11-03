@@ -371,7 +371,7 @@ pub async fn ensure_build(
         ));
     }
     if probe.have {
-        deliver_config(host, target, opts, cancel).await?;
+        deliver_config(host, target, opts, cancel, &probe).await?;
         return Ok((probe, false));
     }
 
@@ -422,8 +422,18 @@ pub async fn ensure_build(
     if !again.have {
         return Err(fail(Step::Copy, FailureCause::CopyFailed));
     }
-    deliver_config(host, target, opts, cancel).await?;
+    deliver_config(host, target, opts, cancel, &again).await?;
     Ok((again, true))
+}
+
+/// `config` with the home placeholder replaced by the remote home the probe reported
+/// ([`argv::REMOTE_HOME_PLACEHOLDER`]); unchanged when it has none or the home is unknown.
+fn with_remote_home(config: &[u8], probe_dir: &str) -> Vec<u8> {
+    let (Some(home), Ok(text)) = (argv::remote_home(probe_dir), std::str::from_utf8(config)) else {
+        return config.to_vec();
+    };
+    text.replace(argv::REMOTE_HOME_PLACEHOLDER, home)
+        .into_bytes()
 }
 
 /// Upload the configuration and its secrets, each only when its content changed on the host. A
@@ -433,17 +443,18 @@ async fn deliver_config(
     target: &ProvisionTarget,
     opts: &ProvisionOptions,
     cancel: &CancelToken,
+    probe: &Probe,
 ) -> Result<(), ProvisionFailure> {
     let Some(delivery) = &target.config else {
         return Ok(());
     };
+    let config = with_remote_home(&delivery.config, &probe.dir);
     let bound = target.bounds.copy;
     let secrets = delivery
         .secrets
         .iter()
         .map(|(name, bytes)| (argv::remote_secret_path(name), 0o600, bytes));
-    let files =
-        std::iter::once((argv::REMOTE_CONFIG.to_string(), 0o600, &delivery.config)).chain(secrets);
+    let files = std::iter::once((argv::REMOTE_CONFIG.to_string(), 0o600, &config)).chain(secrets);
     for (path, mode, bytes) in files {
         guard(Step::Copy, bound, cancel, async {
             let hash = crate::protocol::hashing::sha256_hex(bytes);
@@ -1046,6 +1057,30 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    /// #1533 M4: the rendered file names the start script under a placeholder home; the upload
+    /// carries the home the probe reported.
+    #[tokio::test]
+    async fn the_home_placeholder_in_the_config_becomes_the_probes_home() {
+        let config = ConfigDelivery {
+            config: format!(
+                "script_file = \"{}/.micold/remote/secrets/startup.sh\"\n",
+                argv::REMOTE_HOME_PLACEHOLDER
+            )
+            .into_bytes(),
+            secrets: vec![("startup.sh".into(), b"echo hi".to_vec())],
+        };
+        let runs = deliver(config).await;
+        let upload = &runs[0];
+        assert_eq!(upload.0, "config");
+        assert_eq!(
+            upload.2,
+            b"script_file = \"/h/.micold/remote/secrets/startup.sh\"\n"
+        );
+        assert!(runs[1]
+            .1
+            .contains("$HOME/.micold/remote/secrets/startup.sh"));
     }
 
     /// T026 (#1526): a user host gets `daemon.toml` and its secrets, each sent with the hash of

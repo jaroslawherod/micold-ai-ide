@@ -99,3 +99,75 @@ fn an_unchanged_file_with_a_widened_mode_is_made_private_again() {
     let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
 }
+
+/// #1533 M4 (FR-011, US5.4): a host daemon's start script and `env_file` are written beside its
+/// `daemon.toml`, the file names those copies, and neither the script text nor a secret is in it.
+#[test]
+fn the_script_and_env_file_are_delivered_beside_the_config_and_not_into_it() {
+    use micold_client::daemon_config_render::StartupTable;
+    use micold_core::daemons::{StartupScript, StartupSettings};
+
+    let app = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let script = app.path().join("mine.sh");
+    let env = app.path().join("mine.env");
+    std::fs::write(&script, "echo SCRIPT_BODY\n").unwrap();
+    std::fs::write(&env, "TOKEN=SECRET_VALUE\n").unwrap();
+    let mut table = StartupSettings::new(StartupScript::File(script.clone()));
+    table.env_file = Some(env);
+    let mut settings = settings();
+    settings.startup = Some(StartupTable {
+        script_file: script,
+        settings: table,
+    });
+
+    assert!(deliver_host(&settings, data.path()).unwrap());
+
+    assert_eq!(
+        std::fs::read_to_string(data.path().join("startup.sh")).unwrap(),
+        "echo SCRIPT_BODY\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(data.path().join("startup.env")).unwrap(),
+        "TOKEN=SECRET_VALUE\n"
+    );
+    let config = std::fs::read_to_string(data.path().join("daemon.toml")).unwrap();
+    let delivered = data.path().join("startup.sh");
+    assert!(config.contains(&format!("script_file = \"{}\"", delivered.display())));
+    assert!(!config.contains("SCRIPT_BODY") && !config.contains("SECRET_VALUE"));
+    assert!(
+        !deliver_host(&settings, data.path()).unwrap(),
+        "an unchanged delivery writes nothing"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |n: &str| {
+            std::fs::metadata(data.path().join(n))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        assert_eq!((mode("startup.sh"), mode("startup.env")), (0o600, 0o600));
+    }
+}
+
+/// A script that cannot be read stops the delivery with its path, instead of a daemon that starts
+/// without it.
+#[test]
+fn an_unreadable_script_stops_the_delivery_naming_it() {
+    use micold_client::daemon_config_render::StartupTable;
+    use micold_core::daemons::{StartupScript, StartupSettings};
+
+    let data = tempfile::tempdir().unwrap();
+    let missing = data.path().join("gone.sh");
+    let mut settings = settings();
+    settings.startup = Some(StartupTable {
+        script_file: missing.clone(),
+        settings: StartupSettings::new(StartupScript::File(missing)),
+    });
+    let err = deliver_host(&settings, data.path()).unwrap_err();
+    assert!(err.to_string().contains("gone.sh"), "{err}");
+    assert!(!data.path().join("daemon.toml").exists());
+}
