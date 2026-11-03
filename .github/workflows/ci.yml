@@ -553,7 +553,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cargo test --release -p micold-core --test typeahead_budget
-          cargo test --release -p micold-core --test jira_site_release
+          cargo test --release -p micold-core --test main -- jira_site_release::
           cargo test --release -p micold-core --lib review::anchor::tests::two_hundred_comments_locate_inside_the_budget
           cargo test --release -p micold-client --test transcript_open_budget
 
