@@ -49,7 +49,7 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+Clarify round 1 (2026-11-03): FR-013 - with "Show raw events" off, do error turn footers and error orphan results stay visible as summary lines (recommended, default in spec) or are they hidden and counted in the notice? Product decision the repo does not settle. Asked via ESCALATE return.
 
 ## Follow-ups not done
 
