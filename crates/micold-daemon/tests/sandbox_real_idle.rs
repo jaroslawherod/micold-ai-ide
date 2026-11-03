@@ -149,18 +149,19 @@ async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
         extra: &[],
     });
 
-    // The opt-in reached the runtime as an environment entry, not merely as an argv the test built.
-    let env = cli_out(&["inspect", "-f", "{{.Config.Env}}", KEPT_CONTAINER]);
-    let expected = format!(
-        "{}={}",
-        micold_core::spawn::IDLE_STOP_ENV,
-        micold_core::spawn::IDLE_STOP_OFF
-    );
+    // The opt-in reached the container as the `idle_stop` key of the mounted `daemon.toml` (#1527),
+    // not merely as a file the test built.
+    let config = cli_out(&[
+        "exec",
+        KEPT_CONTAINER,
+        "cat",
+        "/run/micold/config/daemon.toml",
+    ]);
     assert!(
-        env.contains(&expected),
-        "the keep-it-running opt-in must reach the container as {expected}; a container created \
-         without it obeys the idle rule and stops half an hour after the user walked away from \
-         the thing they asked to keep running. Got: {env}"
+        config.lines().any(|l| l.trim() == "idle_stop = \"off\""),
+        "the keep-it-running opt-in must reach the container as `idle_stop = \"off\"` in its \
+         daemon.toml; a container created without it obeys the idle rule and stops half an hour \
+         after the user walked away from the thing they asked to keep running. Got: {config}"
     );
 
     provision_then_restart(KEPT_CONTAINER, KEPT_PORT).await;

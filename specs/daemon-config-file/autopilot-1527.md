@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1527_deliver-the-configuration-to-container-daemons
 - **Started**: 2026-11-03
 - **Phase**: implement (M1 in progress)
-- **Next step**: M1 gate, reviews A and B, PR
+- **Next step**: full gate, PR
 
 ## Pull requests
 
@@ -41,7 +41,9 @@ Checked 2026-11-03: `container_env` is at `daemon.rs:1328` (not 1283); `docs/use
 
 Tasks review A round 1 (`f688c7ee:038b306fe`): CHANGES, F1 MAJOR (TZ unassigned) fixed in T030/T033/T090, F2/F3 MINOR fixed in T033/T034; wording only, no new round. (Spec review skipped: no spec written; the shared spec was reviewed in PR #1509.)
 
-M1 review A (`code-review` high, tree `ba66a1d6`): CHANGES, 9 findings. Fixed: F1/F2 (image hash test, pin `BASIC_IMAGE_CONTENT_HASH` refreshed to the tree; the `ENV MICOLD_DATA_DIR` removal reverted, D6), F3 (`LANG` kept when the daemon inherited one), F4 (`adopt` replaces a container with no `/run/micold/config` mount: `StaleReason::MadeBeforeConfigDelivery`), F5 (ENV kept for pods), F6 (atomic write through `owner_only::write`), F9 (stale comments). Declined: F7, F8 (below). Fix round not yet re-reviewed by a fresh subagent; review B (sonnet) covers the final tree.
+M1 review A (`code-review` high, tree `ba66a1d6`): CHANGES, 9 findings. Fixed: F1/F2 (image hash test, pin `BASIC_IMAGE_CONTENT_HASH` refreshed to the tree; the `ENV MICOLD_DATA_DIR` removal reverted, D6), F3 (`LANG` kept when the daemon inherited one), F4 (`adopt` replaces a container with no `/run/micold/config` mount: `StaleReason::MadeBeforeConfigDelivery`), F5 (ENV kept for pods), F6 (atomic write through `owner_only::write`), F9 (stale comments). Declined: F7, F8 (below). Fix round re-reviewed by a fresh sonnet subagent (scoped to the fix areas; snapshot unknown after the rebase, so over the whole diff): CLEAN, no BLOCKER/MAJOR. Review B round 1: CHANGES, F1 (real-runtime results) and F2 (cycle-log) addressed; F2 fixed in `tdd/cycle-log.md`.
+
+Real-runtime results (`MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman mise run test-sandbox`, tree after rebase on origin/main): 39 `sandbox_real_*` pass, 20 fail. One failure was ours and is fixed: `sandbox_real_idle_is_off_for_the_keep_running_opt_in` asserted the old `MICOLD_IDLE_STOP` env; it now reads `idle_stop = "off"` from the container's mounted `daemon.toml`. The rest are podman-on-this-host failures that do not touch config delivery: `uid=1000` mount option rejected by podman, `localhost/` image prefix in `inspect`, cgroup memory limit not enforced, probe-echo parsing in shell-output asserts, and `/etc/passwd` (root:root 664) not writable by the keep-id uid, so the entrypoint's home fix never applies and the restart tests (`provision_then_restart`) find no daemon under `$HOME`; the entrypoint's passwd logic and the Containerfile are unchanged by this PR. The SSH-provisioning tests (`multi_daemon*`, `session_start`) passed and failed on different runs while other worktrees ran podman tests on the same fixed ports. Not baselined against origin/main (worktree creation is blocked in this session): CI runs this suite on docker, which is the proof for the boot and SSH start cases.
 
 ## Declined review findings
 
@@ -50,10 +52,4 @@ M1 review A (`code-review` high, tree `ba66a1d6`): CHANGES, 9 findings. Fixed: F
 
 ## Handover
 
-Phase implement, M1 code complete in the working tree (committed as WIP, not pushed, no PR). Done: all of T030-T035/T090 code, tests, docs, review A round 1 fixes, review B round 1 returned CHANGES.
-Next steps, in order:
-1. Review B F1 (MAJOR): get real results. A background run was started: `scratchpad/t7.log` (`MICOLD_RUNTIME=podman mise run image` then `MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman mise run test-sandbox`; the default docker dialect fails on this host because docker is podman-emulated). It was blocked for 30+ min on the shared build lock held by another worktree. Rerun it if the log is gone; fix any failure (boot and SSH start cases: `sandbox_real_*`). The harness `crates/micold-daemon/tests/sandbox_real_support/mod.rs` was changed to deliver the config; it is unproven.
-2. Review B F2 (MAJOR): add a #1527 entry to `specs/daemon-config-file/tdd/cycle-log.md` (red/green per behaviour: T030 mounts and env, T031 container_env, T032 entrypoint, T090 LANG, V3 relaxation, MadeBeforeConfigDelivery).
-3. Run unit tests not yet observed after the fix round: `cargo test -p micold-core --lib -- sandbox:: daemon_config`; `-p micold-core --test main -- sandbox_argv sandbox_parity`; `-p micold-client --lib daemon::`; `-p micold-client --test main -- daemon_config`; `-p micold-daemon --lib supervisor` (aggregated tests live under `--test main`). Earlier passes were before review fixes (adopt change, atomic write, LANG inherited flag).
-4. Scoped re-review (sonnet) of the review A fix diff, then `mise run gate`, then pr.md (PR title `feat(1527): deliver the configuration to container daemons (#1527)`).
-
+None.
