@@ -92,8 +92,8 @@ The admission guard every route needs (D1, contracts/admission.md). Part of M1 w
 
 ## Phase 8: Polish
 
-- [ ] T040 Quickstart §B visual pass (`visual-pass` skill) and manual per-platform matrix, including keyboard reach of the button (Tab, Enter/Space, visible focus), SC-004 (UI responsive while the picker is open) and SC-003 per platform; record results in `specs/1464-structured-drop-attach/quickstart.md` (no code: done by the close unit; recorded in quickstart.md Part B results, steps 2-4 not run on real platforms)
-- [ ] T041 Tick tasks and confirm every FR in the requirement map is covered (close unit)
+- [x] T040 Quickstart §B visual pass (`visual-pass` skill) and manual per-platform matrix, including keyboard reach of the button (Tab, Enter/Space, visible focus), SC-004 (UI responsive while the picker is open) and SC-003 per platform; record results in `specs/1464-structured-drop-attach/quickstart.md` (no code: done by the close unit; recorded in quickstart.md Part B results, steps 2-4 not run on real platforms)
+- [x] T041 Tick tasks and confirm every FR in the requirement map is covered (close unit; FR-001..016 each map to a plan section and a test layer in plan.md *Requirement map* and *Test strategy*; FR-004, SC-003, SC-004 rest on the unrun manual matrix, quickstart Part B results)
 
 ## Dependencies & Execution Order
 

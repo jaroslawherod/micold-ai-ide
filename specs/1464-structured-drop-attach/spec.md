@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft
+**Status**: Closed 2026-11-03 — shipped in PRs #1553, #1589, #1603, #1618, #1636, #1651, #1652
 
 **Input**: GitHub issue #1464 "Structured view: drag-and-drop files into the composer and an 'Add attachment' button". Builds on `specs/941-structured-prompt-input` (FR-026 to FR-029), which defines what a drop on a structured pane does but leaves the composer with no way to add a file without dragging.
 

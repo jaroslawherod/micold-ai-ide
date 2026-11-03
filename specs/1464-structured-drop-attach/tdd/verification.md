@@ -70,6 +70,17 @@ No secrets found in any test or fixture. No instruction-like text in tests.
 
 Smell pass (other items of the catalogue): no assertion-free, empty, skipped or conditional-logic tests found. `for` loops in `an_empty_drop_leaves_...`, `the_attach_chord_...` and `...fits_the_composer_row...` always assert per iteration. Style matches the exemplars (inline `#[cfg(test)]`, `tests/` per concern, stock asserts with rule messages, shared `composer_in`/`drop_of` helpers). `drop_of` is a feature-local fixture, the `DroppedFiles` build is repeated in `main_tests.rs::composer_drop` (LOW duplicated setup). Suite properties: deterministic and fast (feature targets under 15 s each); the tests are tolerant of refactors apart from F1/F7 which pin reducer internals (`picker_open`, `attach_picked` count argument).
 
+## Remediation after the audit
+
+The verdict above is of `edc9f7521`, as audited. Not re-audited since. What changed after it:
+
+- F1, F2, F3, F6, F7 (`761aecbed`): shell-level tests in `crates/micold-client/src/main_tests.rs` drive `update` with a drop and with `AttachPicked` (`the_files_picked_give_the_composer_what_the_same_files_dropped_give_it`, `a_late_picker_result_for_an_ended_session_is_refused_and_reads_nothing`, `a_picker_result_lands_only_on_the_session_that_asked`, `the_attach_chord_opens_the_picker_like_the_button`), and the drop beside a terminal asserts the composer read the file.
+- F4, F5, F9 (`761aecbed`): `tests/gates/composer_fits.rs` asserts the tooltip text, that pressing the drawn button emits the picker request only when enabled, and that hovering files marks the drawn pane only when it accepts input.
+- F5, single pane (M6, PR #1652): `ui/panes.rs::with_drop_cue` is shared by the tiled and single-pane views; `tests/pane_drop_target.rs::a_single_pane_structured_session_reports_the_hover_and_the_drop`.
+- F10: T040 and T041 ticked; quickstart Part B results recorded (steps 2-4 not run on real platforms).
+- F11: T030 notes the as-built names.
+- F8, F12, F13: not changed.
+
 ## Mutation results
 
 Tool: none (`mutation: null` in the profile). Deliberate mutants, 9 sampled of the feature's high-risk behaviors: admission guard (FR-011), picker single-instance (FR-015), picker result route (FR-008/012), drop route guard in shell, attach chord route (FR-010), tooltip (FR-006), button disabled (FR-011), cue predicate and cue wrapping (FR-005). Not exhaustive.
