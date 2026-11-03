@@ -74,7 +74,7 @@ Measured with `cargo nextest list --workspace` on 2026-11-03 (debug profile):
 | After #1650 | 162 | 12468 | 10.8 GiB |
 
 The 18 tests fewer are copies of `inventory::tests` that three client files each compiled into their own
-binary; the module now runs once (every other test name is unchanged). GATE_NUMBERS
+binary; the module now runs once (every other test name is unchanged). A full `mise run gate` after #1650 took 513 s and wrote about 18 GB (whole-device counter, incremental build with a warm cache and other worktrees building; no matching pre-change gate run was taken, so there is no before figure for bytes written or peak target-dir size; the test-binary sizes above are the like-for-like measure).
 The remaining separate targets (core 31, client 56 minus those moved, daemon 99) set env vars, spawn
 processes, time budgets, or need a runtime; merging them is only safe under nextest, but CI also runs the
 plain test runner, which shares one process per binary.
