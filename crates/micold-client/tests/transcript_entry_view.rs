@@ -364,7 +364,11 @@ fn rows_follow_the_toggle_and_the_hidden_count_completes_the_total() {
     assert!(on.iter().all(|r| matches!(r, Row::Entry(_))));
 
     let off = rows(Some(&t), false);
-    assert_eq!(off[0], Row::Hidden(4), "the notice comes first (no omitted)");
+    assert_eq!(
+        off[0],
+        Row::Hidden(4),
+        "the notice comes first (no omitted)"
+    );
     let kept = off.iter().filter(|r| matches!(r, Row::Entry(_))).count();
     assert_eq!(kept, 2, "the error footer and the error orphan stay");
     assert_eq!(kept as u64 + 4, on.len() as u64, "SC-002");
@@ -386,7 +390,9 @@ fn the_hidden_notice_follows_omitted_and_exists_only_above_zero() {
     t.apply(7, &[unreadable(7, "x"), init(8)], false);
     let off = rows(Some(&t), false);
     assert_eq!(off, vec![Row::Omitted(7), Row::Hidden(2)]);
-    assert!(!rows(Some(&t), true).iter().any(|r| matches!(r, Row::Hidden(_))));
+    assert!(!rows(Some(&t), true)
+        .iter()
+        .any(|r| matches!(r, Row::Hidden(_))));
 
     let mut only_errors = Transcript::new();
     only_errors.apply(0, &[result(0, true)], false);

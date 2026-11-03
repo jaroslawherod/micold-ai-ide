@@ -1158,7 +1158,7 @@ impl State {
                 &self.permission_prompts,
                 &self.structured_insights,
                 session,
-            self.settings.show_raw_events,
+                self.settings.show_raw_events,
             ) {
                 self.transcript_selection.prompts_changed(&view);
             }

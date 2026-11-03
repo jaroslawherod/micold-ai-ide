@@ -14,10 +14,10 @@ use super::insights::{
 use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyState, CopyTarget};
-use crate::icons::Icon;
 use crate::features::transcript_selection::shown;
-use crate::ui::material::{Button, Scrollable};
+use crate::icons::Icon;
 use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, TypeRole};
+use crate::ui::material::{Button, Scrollable};
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
