@@ -44,8 +44,9 @@ fn the_default_profile_mounts_no_credentials() {
     assert!(mounts.credentials.is_empty());
 
     // And the host paths it *can* reach are exactly the project, the daemon's own state
-    // directory, the sandbox's own home under it, and the token. Four, and no fifth: the count is
-    // the assertion, because a convenience mount added later would pass every other check here.
+    // directory, the sandbox's own home under it, the token, and the daemon's configuration and
+    // secrets folders (#1527, read-only). Six, and no seventh: the count is the assertion, because
+    // a convenience mount added later would pass every other check here.
     //
     // The home is the application's own directory (FR-004d), which is why it appears in a test
     // about sharing *nothing*: it is reachable from the sandbox but is not the user's, and the
@@ -55,10 +56,20 @@ fn the_default_profile_mounts_no_credentials() {
         .iter()
         .map(|p| p.display().to_string())
         .collect();
-    assert_eq!(paths.len(), 4, "reachable host paths: {paths:?}");
+    assert_eq!(paths.len(), 6, "reachable host paths: {paths:?}");
     assert!(paths.iter().any(|p| p.ends_with("projects/micold")));
     assert!(paths.iter().any(|p| p.ends_with("micold-ai-ide")));
     assert!(paths.iter().any(|p| p.ends_with("sandbox.token")));
+    for folder in ["config", "secrets"] {
+        let delivered = Path::new("micold-ai-ide.delivery")
+            .join(folder)
+            .display()
+            .to_string();
+        assert!(
+            paths.iter().any(|p| p.ends_with(&delivered)),
+            "{delivered} missing: {paths:?}"
+        );
+    }
     // Spelled with the platform's own separator, so this reads the same on Windows, where the
     // host half of a mount keeps its native spelling (`pathmap` maps only the container half).
     let home_under_state = Path::new("micold-ai-ide")
