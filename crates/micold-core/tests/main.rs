@@ -15,11 +15,11 @@ mod markdown;
 mod review_comments;
 #[path = "support/stream_json.rs"]
 mod stream_json;
+#[path = "support/mod.rs"]
+mod support;
 #[allow(dead_code)]
 #[path = "support/test_wiring.rs"]
 mod test_wiring;
-#[path = "support/mod.rs"]
-mod support;
 
 mod agent_run;
 mod ai_cli_registry;

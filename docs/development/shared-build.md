@@ -62,7 +62,22 @@ isolation is still a safer runner for any further consolidation.
 Every top-level `crates/*/tests/*.rs` used to be its own test target, linked as its own executable:
 591 of them, 54 GB of test binaries for one `cargo test --workspace`. `micold-core`, `micold-client`
 and `micold-daemon` now set `autotests = false`; each has a `tests/main.rs` that declares the ordinary
-test files as modules, so one run links about 150 executables, 10 GB.
+test files as modules. (#1631 left 201 test executables, 14.7 GiB; #1650 moved 39 more files that touch no
+process-global state into those `main` executables.)
+
+Measured with `cargo nextest list --workspace` on 2026-11-03 (debug profile):
+
+| | Executables | Tests | Test binaries |
+|---|---|---|---|
+| 2026-11-01 baseline (591 `tests/*.rs`) | 591 | n/a | 54 GB |
+| After #1631 | 201 | 12486 | 14.7 GiB |
+| After #1650 | 162 | 12468 | 10.8 GiB |
+
+The 18 tests fewer are copies of `inventory::tests` that three client files each compiled into their own
+binary; the module now runs once (every other test name is unchanged). GATE_NUMBERS
+The remaining separate targets (core 31, client 56 minus those moved, daemon 99) set env vars, spawn
+processes, time budgets, or need a runtime; merging them is only safe under nextest, but CI also runs the
+plain test runner, which shares one process per binary.
 
 A test file stays its own target, listed as a `[[test]]` in the crate's `Cargo.toml`, when it
 changes process-global state (`std::env::set_var`, the working directory, a re-executed test
