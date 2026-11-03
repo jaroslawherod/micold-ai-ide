@@ -285,11 +285,24 @@ const FOLDED_BODY_REVEAL: &[&str] = &[
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).
 const FOLDED_BODY_PADDING: f32 = 8.0;
 
+/// #1664: a low-signal entry (session start, footer, orphan result, raw) is a folded
+/// `DisclosureCard`, so its row `N` of the transcript's content holds the card's body at
+/// `N/0/1/0`, the same folded `Expand` as [`FOLDED_BODY_REVEAL`], in every transcript state.
+fn is_summary_card_body(state: &str, child_path: &str) -> bool {
+    let prefix = format!("{}/", TRANSCRIPT_CONTENT[0]);
+    state.starts_with("session-transcript")
+        && child_path
+            .strip_prefix(&prefix)
+            .and_then(|rest| rest.strip_suffix("/0/1/0"))
+            .is_some_and(|row| row.parse::<u32>().is_ok())
+}
+
 /// Whether `escape`, in the covered state `state`, is a folded card's body of
 /// [`FOLDED_BODY_REVEAL`].
 fn is_folded_body(state: &str, escape: &lay::Escape) -> bool {
-    state == "session-transcript-insights"
+    (state == "session-transcript-insights"
         && FOLDED_BODY_REVEAL.contains(&escape.child_path.as_str())
+        || is_summary_card_body(state, &escape.child_path))
         && escape.edge == "bottom"
         && (escape.overhang - FOLDED_BODY_PADDING).abs() <= TOLERANCE
 }

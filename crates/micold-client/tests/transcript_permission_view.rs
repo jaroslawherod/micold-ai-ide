@@ -8,6 +8,7 @@
 use crate::support;
 
 use iced::Point;
+use iced::Size;
 use micold_client::features::permission_prompts::{Action, Msg as PromptsMsg, State as Prompts};
 use micold_client::features::structured_transcript::{State, TranscriptMsg};
 use micold_client::ui::transcript::permission::{
@@ -123,7 +124,9 @@ fn painted(state: &State, session: SessionId, prompts: &Prompts) -> Vec<Overflow
     lay::painted_text_settled_at(
         element(state, session, prompts, &cache),
         &mut renderer,
-        WINDOW,
+        // Taller than the window: the transcript's summary cards (#1664) take more room than the
+        // text lines they replace, and this draws every row, not only those in view.
+        Size::new(WINDOW.width, WINDOW.height * 2.0),
     )
     .0
 }

@@ -15,7 +15,8 @@ use crate::features::structured_insights::{self, InsightsMsg};
 use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyState, CopyTarget};
 use crate::icons::Icon;
-use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, Tooltip, TypeRole};
+use crate::ui::material::Scrollable;
+use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, TypeRole};
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
@@ -26,13 +27,15 @@ use micold_core::structured::transcript::{
 use micold_core::tokens::{spacing, Roles};
 use std::hash::{Hash, Hasher};
 
-use crate::features::transcript_selection::shown::first_line;
 pub use crate::features::transcript_selection::shown::{
     attachments_line, command_chip_description, command_chip_title, compacted_text,
     effort_changed_text, era_tag, footer_view, model_changed_text, omitted_text, oversized_text,
     subagent_count, subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
-    COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, ORPHAN_RESULT, RAW_LABEL,
-    THINKING_TITLE, USER_LABEL,
+    COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, THINKING_TITLE, USER_LABEL,
+};
+use crate::features::transcript_selection::shown::{
+    first_line, footer_summary, orphan_summary, raw_detail, raw_summary, session_start_summary,
+    SummaryLine,
 };
 
 /// A tool card's header: what it says folded and open.
@@ -100,18 +103,6 @@ pub fn rows(transcript: Option<&Transcript>) -> Vec<Row<'_>> {
     }
     rows.extend(t.entries().map(Row::Entry));
     rows
-}
-
-/// `status` drawn as an `IconLabel` in its tone, the unit at `path` when `ctx` draws a selectable
-/// row.
-fn status_unit(
-    status: Status,
-    ctx: &RenderCtx<'_>,
-    path: Vec<u16>,
-) -> Element<'static, TranscriptMsg> {
-    let label = status_label(status, ctx.roles);
-    ctx.icon_label_with(label, path, status.label.len(), std::convert::identity)
-        .into()
 }
 
 /// A muted `IconLabel` with `icon`, the row's unit at `[0]`.
@@ -234,10 +225,23 @@ pub(super) fn entry(
     };
     match entry.kind() {
         EntryKind::SessionStart { model, cwd, .. } => {
-            let mut parts = vec!["Session started".to_owned()];
-            parts.extend(model.iter().cloned());
-            parts.extend(cwd.iter().cloned());
-            unit_caption(parts.join(" · "), ctx, vec![0])
+            let line = session_start_summary(model.as_deref());
+            let detail = open.then(|| cwd.clone()).flatten();
+            summary_card(
+                &line,
+                open,
+                toggle(),
+                ctx,
+                detail.map(|cwd| {
+                    let len = cwd.len();
+                    ctx.text(
+                        Text::new(cwd, TypeRole::Caption, roles).muted(),
+                        vec![2],
+                        len,
+                    )
+                    .into()
+                }),
+            )
         }
         // A command turn is its text as typed, `/name args`, with the command list's description
         // behind it (#943 FR-003).
@@ -395,25 +399,29 @@ pub(super) fn entry(
         ),
         EntryKind::OrphanResult {
             parts, is_error, ..
-        } => column![
-            caption(ORPHAN_RESULT, roles),
-            (renderers.tool_result)(
-                &ToolResult {
-                    block: block(false, 1),
-                    tool: None,
-                    parts,
-                    is_error: *is_error,
-                },
-                ctx,
-            ),
-        ]
-        .spacing(spacing::XS)
-        .into(),
+        } => summary_card(
+            &orphan_summary(*is_error),
+            open,
+            toggle(),
+            ctx,
+            open.then(|| {
+                (renderers.tool_result)(
+                    &ToolResult {
+                        block: block(false, 2),
+                        tool: None,
+                        parts,
+                        is_error: *is_error,
+                    },
+                    ctx,
+                )
+            }),
+        ),
         EntryKind::Footer(footer) => {
             let turn = scope
                 .insights
                 .and_then(|i| i.state.turn(session, entry.key()));
-            footer_row(&footer_view_with(footer, turn), ctx)
+            let detail = open.then(|| footer_detail(&footer_view_with(footer, turn), ctx));
+            summary_card(&footer_summary(footer), open, toggle(), ctx, detail)
         }
         EntryKind::TurnEndedWithoutResult => {
             label_unit(Icon::ToolNoResult, ENDED_WITHOUT_RESULT, ctx)
@@ -438,18 +446,99 @@ pub(super) fn entry(
                 column(placeholders).spacing(spacing::SM).into()
             }
         }
-        EntryKind::Raw { text, .. } => {
-            let shown = plain_text(text);
-            let len = shown.len();
-            let raw = Text::new(shown, TypeRole::Caption, roles)
-                .muted()
-                .monospace()
-                .wrapping(Wrapping::WordOrGlyph)
-                .width(Length::Fill);
-            column![caption(RAW_LABEL, roles), ctx.text(raw, vec![1], len)]
-                .spacing(spacing::XS)
-                .into()
-        }
+        EntryKind::Raw { text, reason } => summary_card(
+            &raw_summary(text, *reason),
+            open,
+            toggle(),
+            ctx,
+            open.then(|| raw_detail_view(text, ctx)),
+        ),
+    }
+}
+
+/// How tall a raw entry's detail may grow before it scrolls (#1664 FR-004).
+const RAW_DETAIL_MAX_HEIGHT: f32 = 240.0;
+/// Lines and bytes above which a raw detail is height-bounded.
+const RAW_DETAIL_BOUND_LINES: usize = 12;
+const RAW_DETAIL_BOUND_BYTES: usize = 1200;
+
+/// A raw entry's original text, monospace; scrolling in a bounded box when it is large.
+fn raw_detail_view(text: &str, ctx: &RenderCtx<'_>) -> Element<'static, TranscriptMsg> {
+    let shown = raw_detail(text);
+    let large =
+        shown.len() > RAW_DETAIL_BOUND_BYTES || shown.lines().count() > RAW_DETAIL_BOUND_LINES;
+    let len = shown.len();
+    let raw = Text::new(shown, TypeRole::Caption, ctx.roles)
+        .muted()
+        .monospace()
+        .wrapping(Wrapping::WordOrGlyph)
+        .width(Length::Fill);
+    let leaf: Element<'static, TranscriptMsg> = ctx.text(raw, vec![2], len).into();
+    if large {
+        Scrollable::new(leaf, ctx.roles)
+            .width(Length::Fill)
+            .height(Length::Fixed(RAW_DETAIL_MAX_HEIGHT))
+            .into()
+    } else {
+        leaf
+    }
+}
+
+/// A footer's open detail: its figures (cost among them) and an error turn's text.
+fn footer_detail(view: &FooterView, ctx: &RenderCtx<'_>) -> Element<'static, TranscriptMsg> {
+    let roles = ctx.roles;
+    let mut detail = column![].spacing(spacing::XS);
+    if !view.figures.is_empty() {
+        let figures = view.figures.join(" \u{b7} ");
+        let len = figures.len();
+        detail = detail.push(ctx.text(
+            Text::new(figures, TypeRole::Caption, roles).muted(),
+            vec![2],
+            len,
+        ));
+    }
+    if let Some(error) = &view.error_text {
+        let text = Text::new(error.clone(), TypeRole::Body, roles)
+            .tint(roles.error)
+            .wrapping(Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+        detail = detail.push(ctx.text(text, vec![3], error.len()));
+    }
+    if !view.details.is_empty() {
+        let details = view.details.join("\n");
+        let len = details.len();
+        detail = detail.push(
+            ctx.text(
+                Text::new(details, TypeRole::Caption, roles)
+                    .muted()
+                    .wrapping(Wrapping::WordOrGlyph)
+                    .width(Length::Fill),
+                vec![4],
+                len,
+            ),
+        );
+    }
+    detail.into()
+}
+
+/// A low-signal entry as one folded card (#1664 FR-001, FR-003): `line` in its header, `detail`
+/// below it once open. An error one is drawn with the card's failed outline.
+fn summary_card(
+    line: &SummaryLine,
+    open: bool,
+    on_toggle: TranscriptMsg,
+    ctx: &RenderCtx<'_>,
+    detail: Option<Element<'static, TranscriptMsg>>,
+) -> Block {
+    let facts = line.facts_text();
+    let card = DisclosureCard::new(line.title.clone(), on_toggle, ctx.roles)
+        .summary(facts.clone())
+        .failed(line.failed)
+        .open(open);
+    let card = ctx.header(card, line.title.len(), facts.len());
+    match detail {
+        Some(detail) if open => card.body(detail).into(),
+        _ => card.into(),
     }
 }
 
@@ -776,35 +865,6 @@ pub fn with_trailing<'a, M: 'a>(
         .width(Length::Fill)
         .into(),
     }
-}
-
-/// A footer: its status, then its figures as one caption line, then an error turn's text; units
-/// `[0]`, `[1]` and `[2]`.
-fn footer_row(view: &FooterView, ctx: &RenderCtx<'_>) -> Block {
-    let roles = ctx.roles;
-    let mut line = row![status_unit(view.status, ctx, vec![0])]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
-    if !view.figures.is_empty() {
-        let figures = view.figures.join(" · ");
-        let len = figures.len();
-        let text = Text::new(figures, TypeRole::Caption, roles).muted();
-        line = line.push(ctx.text(text, vec![1], len));
-    }
-    let line: Element<'static, TranscriptMsg> = if view.details.is_empty() {
-        line.into()
-    } else {
-        Tooltip::new(line, view.details.join("\n"), roles).into()
-    };
-    let mut footer = column![line].spacing(spacing::XS);
-    if let Some(error) = &view.error_text {
-        let text = Text::new(error.clone(), TypeRole::Body, roles)
-            .tint(roles.error)
-            .wrapping(Wrapping::WordOrGlyph)
-            .width(Length::Fill);
-        footer = footer.push(ctx.text(text, vec![2], error.len()));
-    }
-    footer.into()
 }
 
 #[cfg(test)]

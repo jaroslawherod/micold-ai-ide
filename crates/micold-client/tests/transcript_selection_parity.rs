@@ -26,6 +26,7 @@ use micold_core::structured::selection::{
     Granularity, RowPos, Selection, TextPath, TextPos, Under,
 };
 use micold_core::structured::transcript::{EntryKey, EntryKind};
+use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
 use micold_material::test_support::ShownTexts;
 use support::layout::renderer;
 use support::transcript::{ctx, fixture_lines, sequenced};
@@ -185,6 +186,18 @@ impl Case {
         let session = SessionId::new();
         let mut state = State::default();
         state.apply(session, omitted, &sequenced(&fixture_lines(name), 0), false);
+        Self::finish(session, state, open, rich)
+    }
+
+    /// A case over `events` instead of a fixture.
+    fn of_events(events: &[SequencedEvent], open: bool) -> Self {
+        let session = SessionId::new();
+        let mut state = State::default();
+        state.apply(session, 0, events, false);
+        Self::finish(session, state, open, false)
+    }
+
+    fn finish(session: SessionId, mut state: State, open: bool, rich: bool) -> Self {
         if open {
             let keys: Vec<EntryKey> = state
                 .transcript(session)
@@ -352,5 +365,101 @@ fn a_selected_view_reports_the_same_leaves() {
         sel.release();
         let m = case.mismatches(&BlockRenderers::RICH, Some(&sel));
         assert!(m.is_empty(), "{name}: {}", m.join("\n"));
+    }
+}
+
+/// One of each low-signal kind: a session start, a raw line, an orphan result and a footer.
+fn low_signal_events() -> Vec<SequencedEvent> {
+    let at = |seq, event| SequencedEvent { seq, event };
+    vec![
+        at(
+            0,
+            StructuredEvent::Init {
+                session_id: "s".into(),
+                model: Some("opus".into()),
+                cwd: Some("/work/tree".into()),
+                tools: vec![],
+                permission_mode: None,
+                slash_commands: vec![],
+                skills: vec![],
+                terminal_slash_commands: vec![],
+                raw: "{}".into(),
+            },
+        ),
+        at(
+            1,
+            StructuredEvent::Unreadable {
+                text: "{not\tjson".into(),
+            },
+        ),
+        at(
+            2,
+            StructuredEvent::User {
+                blocks: vec![ContentBlock::ToolResult {
+                    tool_use_id: "toolu_gone".into(),
+                    content: "orphan output".into(),
+                    is_error: true,
+                }],
+                parent_tool_use_id: None,
+                is_synthetic: false,
+                raw: "{}".into(),
+            },
+        ),
+        at(
+            3,
+            StructuredEvent::Result {
+                subtype: "error_max_turns".into(),
+                is_error: true,
+                duration_ms: Some(900),
+                num_turns: Some(3),
+                total_cost_usd: Some(0.5),
+                usage: None,
+                result: Some("ran out".into()),
+                session_id: None,
+                raw: "{}".into(),
+            },
+        ),
+    ]
+}
+
+/// #1664 FR-001, FR-003: the four low-signal kinds' units are the summary line, plus their detail
+/// only while open; what is drawn is what a copy copies (`mismatches`).
+#[test]
+fn a_low_signal_entry_has_its_summary_as_unit_zero_and_detail_only_while_open() {
+    for open in [false, true] {
+        let case = Case::of_events(&low_signal_events(), open);
+        let view = case.view().expect("held");
+        let mut seen = 0;
+        for entry in view.transcript.entries() {
+            if !matches!(
+                entry.kind(),
+                EntryKind::Raw { .. }
+                    | EntryKind::SessionStart { .. }
+                    | EntryKind::Footer(_)
+                    | EntryKind::OrphanResult { .. }
+            ) {
+                continue;
+            }
+            seen += 1;
+            let listed: Vec<Vec<u16>> = units(&RowPos::Entry(entry.id(), Under::Body), &view)
+                .iter()
+                .map(|u| u.path.segments().to_vec())
+                .collect();
+            assert_eq!(
+                listed.first(),
+                Some(&vec![0]),
+                "{:?}: {listed:?}",
+                entry.kind()
+            );
+            let has_detail = listed.iter().any(|p| p[0] >= 2);
+            assert_eq!(
+                has_detail,
+                open,
+                "{:?} (open {open}): {listed:?}",
+                entry.kind()
+            );
+        }
+        assert!(seen >= 4, "{seen} low-signal entries in the fixture");
+        assert!(case.mismatches(&BlockRenderers::PLAIN, None).is_empty());
     }
 }
