@@ -23,8 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Collapsed summary lines | #… | pending |
-| M2 | T009–T021 | full | Show raw events toggle, persisted (13 tasks, no scenario split) | #… | pending |
-| M3 | T022–T025 | full | Hidden-events notice, resumed parity | #… | pending |
+| M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #… | pending |
 
 ## Decisions
 
