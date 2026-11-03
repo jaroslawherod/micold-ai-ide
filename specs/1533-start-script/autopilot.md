@@ -65,14 +65,13 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 |---|---|---|---|
 | M1 | A | F2 timeout fires after child reaped, run reported TimedOut | Window is microseconds at the exact timeout; failing closed is acceptable; revisit in M2 with the run policies |
 | M1 | A | F3 `trap EXIT`/`exec` in the script loses exports silently | Documented limitation for the host guide (M4); the Exited(0) run still starts the daemon |
+| M4 | B | F2 no red-before-green history | Accepted deviation: M4 was committed in one commit before the cycle log was kept per behaviour; red cannot be reconstructed. Tests are the acceptance evidence; recorded in the cycle log |
+| M4 | B | F3 no test for `connect_or_spawn_reading` | Declined (MINOR): the function spawns a real detached daemon, and the decision it takes (`fresh_refusal`) is unit-tested in `startup_result` (fresh, stale, absent, exit 0) |
 | tasks | analyze C3 | split T008, T015, T024 | each is one cohesive file or change; no rubric item on task size |
 
 ## Handover
 
-Done: all M4 code, tests, guide, tasks ticked, committed (feat(1533) M4). Review A and B round 1 returned.
-Fixes applied after them but NOT yet compiled or tested or committed: (A.F1) remote paths built as POSIX strings, `relocated_startup(settings, script, env)` now takes both paths; (A.F2) `write_if_changed` creates files with mode 0600 and tightens an unchanged one; (B.F1) `classify` keeps the whole "start script failed:" block as `SshFailure::Other` (test `start_script_tests`).
-Still to do: declined/pending findings: A.F3 (with_remote_home leaves placeholder if home unknown: make it a Copy-step ProvisionFailure, or decline as MINOR), B.F2 (red-before-green: cannot be reconstructed, record as accepted deviation in Declined with reason), B.F3 (connect_or_spawn_reading test, MINOR; second granularity), B.F4 reword guide so it does not imply a toggle (guide says "Show output" - ok). Then: `mise run check`; targeted tests (the earlier run passed core lib 81, daemon lib 23; the client tests were still queued behind another worktree's build lock when this unit stopped, so UNVERIFIED); round-2 sonnet re-review of fix diff; `mise run gate` detached; add PR (title `feat(1533): host and SSH start script delivery and failure display (#1533)`, body per pr.md, Refs #1533); record PR in ledger. Note: do not use `pgrep -f "cargo check ..."` in wait loops (matches itself).
-Review rounds: A r1 and B r1 snapshot 76fd9421:41b0f119 (CHANGES, fixed as above).
+None.
 
 ## Open escalation
 
