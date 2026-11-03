@@ -16,3 +16,14 @@ the effects (cwd, exports reaching sessions, no connection before the script end
 code's internals.
 
 M2 onward must run red before green (tests committed first).
+
+## M2 (T010-T017)
+
+Red was **compile-red**: the tests were committed first (`test(1533): M2 failing tests ...`) and call
+APIs that did not exist (`StartupPlan.run`/`env_file`, `inputs_hash`, `parse_env_file`,
+`StartupLock`, `DONE_FILE`, `record_report`), so they failed to build on that commit. Green came with
+`startup_script.rs` (env_file, record, lock, policies), `config_watch.rs` (script hash restart key,
+`status.startup`) and `main.rs` (`record_report`). Unit tests (17) and `--test startup_script` (12)
+pass. The precedence tests (T010/T012) needed no new merge code: they passed once the harness could
+express the tiers (research R5). Note: `session.env`/`secret_env`/`ai.cli[].env` application is not
+in the daemon yet, so the order test stands in for those tiers with the spawn pairs the daemon passes.
