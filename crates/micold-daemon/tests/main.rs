@@ -5,17 +5,17 @@
 //! (`std::env::set_var`, the working directory), time a budget, or need a container runtime stay separate
 //! targets, listed in `Cargo.toml`. `every_test_file_is_wired` fails for a file that is neither.
 
+#[path = "support/conn.rs"]
+mod conn;
+#[path = "support/history.rs"]
+mod history;
+#[path = "support/mcp.rs"]
+mod mcp;
 #[path = "support/runs.rs"]
 mod runs_support;
 #[allow(dead_code)]
 #[path = "../../micold-core/tests/support/test_wiring.rs"]
 mod test_wiring;
-#[path = "support/history.rs"]
-mod history;
-#[path = "support/conn.rs"]
-mod conn;
-#[path = "support/mcp.rs"]
-mod mcp;
 
 mod config_check;
 mod config_load;

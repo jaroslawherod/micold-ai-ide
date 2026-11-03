@@ -19,6 +19,8 @@ mod kube_daemon_common;
 mod packaging;
 #[path = "support/source_scan.rs"]
 mod source_scan;
+#[path = "support/state_scan.rs"]
+mod state_scan;
 #[path = "../../micold-core/tests/support/stream_json.rs"]
 mod stream_json;
 #[path = "support/mod.rs"]
@@ -26,8 +28,6 @@ mod support;
 #[allow(dead_code)]
 #[path = "../../micold-core/tests/support/test_wiring.rs"]
 mod test_wiring;
-#[path = "support/state_scan.rs"]
-mod state_scan;
 
 mod a_field_note_shares_its_fields_column;
 mod about_description;
