@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1664
 - **Worktree branch**: feat/1664_structured-view-raw-events-are-shown-inline-in-the
 - **Started**: 2026-11-03
-- **Phase**: plan (done)
-- **Next step**: tasks unit
+- **Phase**: tasks (in progress)
+- **Next step**: speckit-analyze, review, design PR
 
 ## Pull requests
 
@@ -22,7 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T008 | full | Collapsed summary lines | #… | pending |
+| M2 | T009–T021 | full | Show raw events toggle, persisted (13 tasks, no scenario split) | #… | pending |
+| M3 | T022–T025 | full | Hidden-events notice, resumed parity | #… | pending |
 
 ## Decisions
 
