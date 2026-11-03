@@ -42,10 +42,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks 1535 | 1 | ce0ffba1:dbb82d13 | CLEAN (1 MINOR fixed, prose only) |
 | M1 B | 1 | (part 1) | CHANGES: test gaps (view, secret, reducer); fixed in 4591aad7e |
 | M1 B | 2 | 1a970730:b5c8c822 | CLEAN (1 MINOR: comment added, prose only) |
+| M1 B | 3 | a2973481:10bfc1b5 | CHANGES: F1 PROTOCOL_VERSION 76→77 (tokens) fixed; F2 daemon never filled `startup`, now reads startup-result.json from the data dir, test added; F3 T081/Deliverable reworded to D5 (prose only); F4 declined |
 
 ## Declined review findings
 
-None.
+- M1 B r3 F4 (Spawn/FileMissing strings rendered verbatim): they hold OS errors and paths, which are set by the daemon, never script output or secret content.
 
 ## Handover
 

@@ -605,3 +605,36 @@ async fn a_busy_directory_does_not_postpone_a_reload_past_5_seconds() {
     assert!(applied_within(&runtime, "2", Duration::from_secs(5)).await);
     writer.abort();
 }
+
+// --- #1535: the start script's last run reaches the status ---
+
+#[test]
+fn the_status_carries_the_start_scripts_last_run() {
+    use micold_core::protocol::messages::{StartupOutcome, StartupReport};
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    std::fs::create_dir(&data).unwrap();
+    let file = dir.path().join("daemon.toml");
+    std::fs::write(
+        &file,
+        host("1", "info", "").replace(
+            "log = \"info\"\n",
+            &format!("log = \"info\"\ndata_dir = \"{}\"\n", data.display()),
+        ),
+    )
+    .unwrap();
+    let runtime = ConfigRuntime::open(&file).expect("a valid file opens");
+    assert_eq!(runtime.status().startup, None);
+    let report = StartupReport {
+        outcome: StartupOutcome::Ok,
+        reason: None,
+        tail: vec![],
+        finished_at_secs: 7,
+    };
+    std::fs::write(
+        data.join("startup-result.json"),
+        serde_json::to_vec(&report).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(runtime.status().startup, Some(report));
+}
