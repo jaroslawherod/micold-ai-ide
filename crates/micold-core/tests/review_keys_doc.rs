@@ -7,7 +7,7 @@
 //! without the guide following fails here. Contract:
 //! `specs/1276-review-ui-docs-sync/contracts/guide-shortcut-table.md`.
 
-mod support;
+use crate::support;
 
 use micold_core::review::keys::{ReviewKey, REVIEW_KEYS};
 use support::marked_table::{guide_page, marked_section, markers, rows};

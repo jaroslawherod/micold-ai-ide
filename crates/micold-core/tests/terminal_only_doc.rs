@@ -6,7 +6,7 @@
 //! [`CHECKED_AGAINST`]. A command added to or dropped from the list, a reason reworded, or the
 //! version moved without the guide following fails here.
 
-mod support;
+use crate::support;
 
 use micold_core::structured::commands::{CHECKED_AGAINST, TERMINAL_ONLY};
 use support::marked_table::{marked_section, rows};

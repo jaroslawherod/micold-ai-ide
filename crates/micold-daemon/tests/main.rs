@@ -10,10 +10,20 @@ mod runs_support;
 #[allow(dead_code)]
 #[path = "../../micold-core/tests/support/test_wiring.rs"]
 mod test_wiring;
+#[path = "support/history.rs"]
+mod history;
+#[path = "support/conn.rs"]
+mod conn;
+#[path = "support/mcp.rs"]
+mod mcp;
 
 mod config_check;
 mod config_load;
 mod config_projects;
 mod config_reload;
 mod every_test_file_is_wired;
+mod log_redaction;
+mod pasted_cleanup;
+mod project_registered_before_create;
+mod refused_mutations_are_logged;
 mod run_group_persist;

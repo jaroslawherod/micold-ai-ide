@@ -18,6 +18,8 @@ mod stream_json;
 #[allow(dead_code)]
 #[path = "support/test_wiring.rs"]
 mod test_wiring;
+#[path = "support/mod.rs"]
+mod support;
 
 mod agent_run;
 mod ai_cli_registry;
@@ -79,6 +81,7 @@ mod jira_jql;
 mod jira_load;
 mod jira_parse;
 mod jira_query;
+mod jira_site_release;
 mod link_corpus;
 mod macos_logout_claims_agree;
 mod macos_minimum_version;
@@ -87,6 +90,7 @@ mod macos_permission_strings;
 mod macos_registers_nothing;
 mod macos_signature_gate;
 mod markdown_stream;
+mod markdown_subset;
 mod mcp_binding_plan;
 mod mcp_jsonrpc;
 mod mcp_name_collision;
@@ -130,6 +134,7 @@ mod release_publishes_complete_sets;
 mod review_bar;
 mod review_browse;
 mod review_drawer;
+mod review_keys_doc;
 mod review_tree;
 mod runs_integrate;
 mod runs_summary;
@@ -193,6 +198,7 @@ mod terminal_history_format;
 mod terminal_history_schedule;
 mod terminal_history_snapshot;
 mod terminal_history_text;
+mod terminal_only_doc;
 mod theme;
 mod tokens;
 mod tokens_anatomy;
@@ -213,6 +219,7 @@ mod windows_installer_in_use;
 mod windows_installer_is_per_user;
 mod windows_installer_version_is_injected;
 mod workspace;
+mod workspace_lookup;
 mod worktree_branch_set;
 mod worktree_create;
 mod worktree_discovery;

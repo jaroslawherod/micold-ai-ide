@@ -36,7 +36,7 @@
 //! tests pass vacuously, so [`the_registration_list_is_actually_being_read`] holds the parse
 //! against `registry::probes()`, the runtime article.
 
-mod inventory;
+use crate::inventory;
 
 use micold_client::features::help;
 use micold_client::features::project;

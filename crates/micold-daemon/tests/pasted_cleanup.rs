@@ -1,8 +1,7 @@
 //! Feature 487, milestone M4: images pasted into a session go away with it, and a service start
 //! sweeps what a crash left (story 4, FR-013, FR-014, SC-005).
 
-#[path = "support/history.rs"]
-mod history;
+use crate::history;
 
 use std::path::{Path, PathBuf};
 

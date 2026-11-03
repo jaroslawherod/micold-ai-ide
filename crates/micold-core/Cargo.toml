@@ -119,14 +119,6 @@ name = "github_gh_cli"
 path = "tests/github_gh_cli.rs"
 
 [[test]]
-name = "jira_site_release"
-path = "tests/jira_site_release.rs"
-
-[[test]]
-name = "markdown_subset"
-path = "tests/markdown_subset.rs"
-
-[[test]]
 name = "notification_registers_nothing"
 path = "tests/notification_registers_nothing.rs"
 
@@ -149,10 +141,6 @@ path = "tests/provider_origin.rs"
 [[test]]
 name = "review_git"
 path = "tests/review_git.rs"
-
-[[test]]
-name = "review_keys_doc"
-path = "tests/review_keys_doc.rs"
 
 [[test]]
 name = "sandbox_real_basic_image"
@@ -183,20 +171,12 @@ name = "terminal_history_store"
 path = "tests/terminal_history_store.rs"
 
 [[test]]
-name = "terminal_only_doc"
-path = "tests/terminal_only_doc.rs"
-
-[[test]]
 name = "tests_never_write_the_real_data_directory"
 path = "tests/tests_never_write_the_real_data_directory.rs"
 
 [[test]]
 name = "typeahead_budget"
 path = "tests/typeahead_budget.rs"
-
-[[test]]
-name = "workspace_lookup"
-path = "tests/workspace_lookup.rs"
 
 [[test]]
 name = "worktree_leftovers"

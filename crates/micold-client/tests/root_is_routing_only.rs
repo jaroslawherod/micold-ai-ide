@@ -47,8 +47,7 @@
 //!   arms into shell modules by external system, which Phase 5 did; this file is about the pure
 //!   reducer only.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::code_only;
 

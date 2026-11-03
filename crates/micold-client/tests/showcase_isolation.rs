@@ -13,8 +13,7 @@
 //! Text scanning, not type inspection: the property is about what a source file is allowed to name.
 //! A module that cannot name `micold_core::store` cannot persist a project list.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{sources_under, strip_comments};
 

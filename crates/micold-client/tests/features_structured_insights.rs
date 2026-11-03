@@ -13,8 +13,7 @@ use micold_core::structured::{SequencedEvent, StructuredEvent, MAX_EVENTS};
 use serde_json::json;
 use std::collections::HashMap;
 
-#[path = "../../micold-core/tests/support/stream_json.rs"]
-mod stream_json;
+use crate::stream_json;
 use stream_json::{sequenced, tool_use, user_text, with_parent, RECORDED};
 
 /// One window's two features for the same session, fed as the app feeds them: the transcript

@@ -1,6 +1,6 @@
 //! T002/T004 (feature 008): cross-project session lookup + per-project running count.
 
-mod support;
+use crate::support;
 
 use micold_core::session::{SessionId, SessionLifecycle, SessionLocation};
 use std::path::Path;

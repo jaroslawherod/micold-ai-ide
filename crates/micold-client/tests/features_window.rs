@@ -21,8 +21,7 @@ use micold_client::features::window::{self, FieldId};
 use micold_client::features::Outcome;
 use micold_core::install_location::InstallLocation;
 
-#[path = "support/mod.rs"]
-mod support;
+use crate::support;
 
 #[test]
 fn focus_moves_to_whichever_field_reports_gaining_it() {

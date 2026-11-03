@@ -15,8 +15,7 @@
 //! requires naming the framework, and forbidding that would push out useful commentary while
 //! catching nothing.
 
-#[path = "support/source_scan.rs"]
-mod source_scan;
+use crate::source_scan;
 
 use source_scan::{read_rs_under, strip_line_comments};
 
