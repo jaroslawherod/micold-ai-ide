@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft
+**Status**: Closed 2026-11-03 — shipped in PRs #1667, #1668, #1672
 
 **Input**: User description: "Structured view: raw events are shown inline in the transcript; present them as collapsed summaries (GitHub issue #1664). The structured session view shows raw events (unrecognised event, unreadable line, unknown block, unknown stream event) and other low-signal rows (session start, turn footer, orphan result) inline, as they arrive. They clutter the transcript and push the conversation out of view. Proposal: one summary line per event with the raw JSON in an expandable row collapsed by default; a 'Show raw events' toggle in the view header, off by default, remembered per user. Grouping runs, a raw log in the session menu and an unsupported-event marker can follow."
 
