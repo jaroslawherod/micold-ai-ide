@@ -73,6 +73,11 @@ check one you prepared, read it on the host or run `micold-daemon config check
 ~/.micold/remote/daemon.toml`; the format is in [daemon-configuration.md](daemon-configuration.md).
 No `MICOLD_*` environment variable is set on the host: the file is the only channel.
 
+A hand edit does not survive the next connect: any file whose content differs from the one Micold
+renders is replaced, and a file left readable by others is made `0600` again. The same holds for
+the `daemon.toml` of a daemon on this computer. Adding a repository changes the rendered file, so
+the connection to that daemon is restarted once and the new file is written.
+
 ## Adding a repository that lives on the host
 
 Once the row shows **Connected**, a **Repository on the host** field appears under it. Type the

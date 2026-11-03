@@ -1102,6 +1102,30 @@ mod tests {
         assert_eq!(err.step, Step::Copy);
     }
 
+    /// I5-5 (#1526): a host with no build yet (the first connection) gets its configuration and
+    /// secrets after the copy is confirmed, before `ensure_build` returns.
+    #[tokio::test]
+    async fn a_fresh_copy_is_followed_by_the_config_and_secret_uploads() {
+        let fake = Fake::default()
+            .say("probe", ok(PROBE_ABSENT))
+            .say("copy", ok(""))
+            .say("probe", ok(PROBE_HAVE))
+            .say("config", ok(""))
+            .say("secret", ok(""));
+        let mut target = user_target(StepBounds::user_host(secs(15)));
+        target.config = Some(delivery(b"tok"));
+        let (sink, _) = recorder();
+        let (_, copied) = ensure_build(&fake, &target, &opts(), &CancelToken::new(), &sink)
+            .await
+            .unwrap();
+        assert!(copied);
+        assert_eq!(
+            fake.kinds(),
+            ["probe", "copy", "probe", "config", "secret"],
+            "uploads run after the copy is confirmed"
+        );
+    }
+
     #[tokio::test]
     async fn a_user_host_never_installs_nor_records_the_build_nor_runs_the_reach_command() {
         let mut fake = Fake::default().say("probe", ok(PROBE_HAVE));

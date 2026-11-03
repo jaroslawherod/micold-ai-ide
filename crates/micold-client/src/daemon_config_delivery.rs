@@ -11,7 +11,7 @@ use crate::daemon_config_render::{self, DaemonSettings};
 use micold_core::daemon_config::Kind;
 
 /// Renders `settings` for [`Kind::Host`] and writes it to `<data_dir>/daemon.toml`, skipping the
-/// write when the file already holds the same bytes. Returns whether it wrote.
+/// write (but not the mode fix) when the file already holds the same bytes. Returns whether it wrote.
 pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bool> {
     let text = daemon_config_render::prepare(settings, Kind::Host)
         .map_err(|errors| io::Error::other(errors[0].to_string()))?;
@@ -27,6 +27,9 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if let Ok(existing) = std::fs::read(path) {
         if existing == bytes {
+            // Same content: nothing to write, but a hand-widened mode is corrected, as the SSH
+            // path does (I5-7).
+            set_owner_only(path)?;
             return Ok(false);
         }
     }

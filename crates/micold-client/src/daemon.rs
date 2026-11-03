@@ -742,6 +742,24 @@ async fn reconnect_loop<A, Fut, S, Wait>(
     }
 }
 
+/// The host branch of [`connect_and_pump`]: deliver the config to the host's data dir, then run
+/// `connect` (which spawns the daemon on a cold start). A missing data dir or a delivery error
+/// ends in `Err` and `connect` never runs.
+async fn deliver_then_connect<T, F, Fut>(host: &HostDial, connect: F) -> std::io::Result<T>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = std::io::Result<T>>,
+{
+    let Some(dir) = host.data_dir.as_deref() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no host data dir",
+        ));
+    };
+    crate::daemon_config_delivery::deliver_host(&host.settings, dir)?;
+    connect().await
+}
+
 /// Connect (spawning the daemon on a cold start), announce `DaemonConnected`, then pump both
 /// directions with a keepalive until the connection ends. A connect failure is surfaced as
 /// `DaemonConnectFailed` and reported as a disconnect so the outer loop retries.
@@ -759,16 +777,12 @@ async fn connect_and_pump(
         // start — and any later reconnect after a settings change — always starts from the
         // current settings (#1526, FR-005/FR-014). Only the host entry ever reaches here; a
         // container daemon is never spawned by the client.
-        (Dial::Host(host), Some(endpoint)) => match host.data_dir.as_deref() {
-            Some(dir) => match crate::daemon_config_delivery::deliver_host(&host.settings, dir) {
-                Ok(_) => connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await,
-                Err(err) => Err(err),
-            },
-            None => Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "no host data dir",
-            )),
-        },
+        (Dial::Host(host), Some(endpoint)) => {
+            deliver_then_connect(host, || {
+                connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT)
+            })
+            .await
+        }
         (Dial::Host(_), None) => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "no host endpoint",
@@ -2366,6 +2380,155 @@ mod tests {
             .err()
             .expect("no runner");
         assert!(none.contains("ssh"), "{none}");
+    }
+
+    fn host_dial(data_dir: Option<std::path::PathBuf>, projects: &[&str]) -> super::HostDial {
+        let mut settings = plain_settings();
+        for p in projects {
+            settings.add_runtime_project(std::path::Path::new(p));
+        }
+        super::HostDial { settings, data_dir }
+    }
+
+    fn plain_settings() -> crate::daemon_config_render::DaemonSettings {
+        crate::daemon_config_render::DaemonSettings::new(
+            "Host",
+            micold_core::daemon_config::Listen::Socket(
+                micold_core::daemon_config::SocketSpec::Auto,
+            ),
+        )
+    }
+
+    fn hash_of<T: std::hash::Hash>(value: &T) -> u64 {
+        use std::hash::Hasher as _;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// T125 (#1526, I5-2, FR-005): the config file is on disk before the daemon is spawned.
+    #[tokio::test]
+    async fn the_host_config_is_written_before_the_daemon_is_spawned() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = host_dial(Some(dir.path().to_path_buf()), &[]);
+        let file = dir.path().join("daemon.toml");
+        let seen = super::deliver_then_connect(&host, || async { Ok(file.is_file()) })
+            .await
+            .unwrap();
+        assert!(seen, "daemon.toml must exist when the connector runs");
+    }
+
+    /// T125: no data dir, or a delivery that fails, ends in `Err` and spawns nothing.
+    #[tokio::test]
+    async fn a_host_without_a_data_dir_or_with_a_failed_delivery_never_spawns() {
+        let spawned = std::cell::Cell::new(false);
+        let connector = || async {
+            spawned.set(true);
+            Ok(())
+        };
+        let none = super::deliver_then_connect(&host_dial(None, &[]), connector).await;
+        assert_eq!(none.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+
+        // A data dir that is a file: creating `daemon.toml` under it fails.
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"").unwrap();
+        let failed = super::deliver_then_connect(&host_dial(Some(blocker), &[]), connector).await;
+        assert!(failed.is_err());
+        assert!(!spawned.get(), "a failed delivery must not spawn");
+    }
+
+    /// T126 (#1526, I5-3): an actor's identity depends on the rendered settings, so equal dials
+    /// hash alike and a settings or project change hashes differently (and restarts the actor).
+    #[test]
+    fn host_and_ssh_dials_hash_by_their_rendered_settings() {
+        let dir = Some(std::path::PathBuf::from("/data"));
+        let plain = host_dial(dir.clone(), &[]);
+        assert_eq!(hash_of(&plain), hash_of(&host_dial(dir.clone(), &[])));
+        let with_project = host_dial(dir.clone(), &["/home/me/src/app"]);
+        assert_ne!(plain, with_project, "adding a project changes the identity");
+        assert_ne!(hash_of(&plain), hash_of(&with_project));
+        assert_ne!(
+            hash_of(&plain),
+            hash_of(&host_dial(Some(std::path::PathBuf::from("/other")), &[]))
+        );
+
+        let ssh = |projects: &[&str]| {
+            let mut s = plain_settings();
+            for p in projects {
+                s.add_runtime_project(std::path::Path::new(p));
+            }
+            super::SshDial(s)
+        };
+        assert_eq!(hash_of(&ssh(&[])), hash_of(&ssh(&[])));
+        assert_ne!(hash_of(&ssh(&[])), hash_of(&ssh(&["/home/me/src/app"])));
+        let mut renamed = plain_settings();
+        renamed.name = "Other".into();
+        assert_ne!(hash_of(&ssh(&[])), hash_of(&super::SshDial(renamed)));
+    }
+
+    /// T127 (#1526, I5-4, mutant M4): a readable token file is returned as `client-token`; an
+    /// absent or unreadable one, or none configured, yields nothing.
+    #[test]
+    fn named_secrets_reads_the_client_token_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = dir.path().join("token");
+        std::fs::write(&token, b"s3cret").unwrap();
+        let mut settings = plain_settings();
+        assert!(super::named_secrets(&settings).is_empty());
+        settings.client_token_file = Some(token);
+        assert_eq!(
+            super::named_secrets(&settings),
+            vec![("client-token".to_string(), b"s3cret".to_vec())]
+        );
+        settings.client_token_file = Some(dir.path().join("absent"));
+        assert!(super::named_secrets(&settings).is_empty());
+        settings.client_token_file = Some(dir.path().to_path_buf());
+        assert!(
+            super::named_secrets(&settings).is_empty(),
+            "a directory is unreadable"
+        );
+    }
+
+    /// T127 (mutant M5): the SSH arm of `actor_specs_answered` feeds the runtime projects too.
+    #[test]
+    fn a_runtime_added_project_reaches_the_ssh_dials_settings() {
+        let (registry, id) = ssh_registry();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let mut runtime_projects = BTreeMap::new();
+        runtime_projects.insert(id, vec![std::path::PathBuf::from("/home/me/src/app")]);
+        let specs = super::actor_specs_answered(
+            &registry,
+            &states,
+            std::path::Path::new("/nonexistent"),
+            None,
+            None,
+            &BTreeMap::new(),
+            &runtime_projects,
+        );
+        let Dial::Ssh { settings, .. } = &specs[0].dial else {
+            panic!("an SSH daemon dials Dial::Ssh")
+        };
+        assert_eq!(
+            settings.0.projects[0].path,
+            std::path::PathBuf::from("/home/me/src/app")
+        );
+    }
+
+    /// T127: settings that fail `prepare` stop the attempt with the "invalid" reason, before any
+    /// `ssh` is run.
+    #[tokio::test]
+    async fn an_invalid_configuration_stops_the_ssh_attempt() {
+        let target = SshTarget::new("build-box", None, None, None).unwrap();
+        let mut settings = plain_settings();
+        // A TCP listener without a client token file fails the daemon's own check.
+        settings.listen = micold_core::daemon_config::Listen::Tcp("0.0.0.0:7000".parse().unwrap());
+        let err = ssh_attempt(Some(&NoSsh), &target, &settings, &quiet())
+            .await
+            .err()
+            .expect("an invalid configuration is refused");
+        assert!(err.contains("the daemon configuration is invalid"), "{err}");
     }
 
     /// FR-008: an SSH daemon whose link was up and went down is retried (reported as a failed
