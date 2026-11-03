@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
 - **Phase**: implement
-- **Next step**: wait on PR #1660's CI, then merge (full gate was scoped-only locally, see Local gate note below); after merge, a fresh unit starts M1b
+- **Next step**: M1b implement (T026, T028, T029)
 
 ## Pull requests
 
@@ -18,13 +18,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1656 | Design (milestone for Issue 5) | MERGED | 86a9e5d9df604be5849f8cb7a8db9e9ea487d996 |
 | #1659 | Re-cut M1 into M1a/M1b | MERGED | 1f4e769c01901d65377a3cafc8dee0ca7606009b |
-| #1660 | M1a (host delivery) | open | — |
+| #1660 | M1a (host delivery) | MERGED | 974af5dc9804ffe266f8fd9e1fd70f22f50eefdf |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | #1660 | in review |
+| M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | #1660 | merged |
 | M1b | T026, T028, T029 | full | SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone; user guide documents the SSH file | — | planned |
 
 ## Decisions
