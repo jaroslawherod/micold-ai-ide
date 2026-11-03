@@ -290,12 +290,23 @@ fn opening_a_summary_shows_its_detail() {
 #[test]
 fn error_footers_and_orphans_say_failed_or_error_in_their_title() {
     let (state, session) = state_with(&[orphan(0, true), result(1, true)]);
-    let painted = painted_of(&state, session).join("|");
-    assert!(painted.contains("error"), "{painted}");
-    assert!(painted.contains("Turn failed"), "{painted}");
+    let painted = painted_of(&state, session);
+    assert_eq!(
+        painted.iter().filter(|t| *t == "Turn failed").count(),
+        1,
+        "{painted:?}"
+    );
+    assert_eq!(
+        painted
+            .iter()
+            .filter(|t| *t == "Result without a call · error")
+            .count(),
+        1,
+        "{painted:?}"
+    );
     assert!(
-        !painted.contains("ran out of turns"),
-        "collapsed: {painted}"
+        !painted.iter().any(|t| t.contains("ran out of turns")),
+        "collapsed: {painted:?}"
     );
 }
 
@@ -455,4 +466,56 @@ fn live_and_resumed_transcripts_give_equal_rows() {
             "show_raw = {show_raw}"
         );
     }
+}
+
+/// Every distinct `ShowRawEvents` a click anywhere in the transcript view publishes.
+fn raw_events_sent(state: &State, session: SessionId, show_raw: bool) -> Vec<bool> {
+    use micold_client::features::structured_transcript::TranscriptMsg;
+    let cache = BlockCache::default();
+    let ctx = micold_client::ui::transcript::RenderCtx {
+        show_raw,
+        ..support::transcript::ctx(&cache)
+    };
+    let insights = micold_client::features::structured_insights::State::default();
+    let view = micold_client::ui::transcript::view_with_insights(
+        state,
+        micold_client::ui::transcript::InsightsCtx {
+            state: &insights,
+            cli_running: false,
+            mode: micold_core::session::PermissionMode::Default,
+        },
+        session,
+        &BlockRenderers::PLAIN,
+        ctx,
+    );
+    let mut seen = Vec::new();
+    for m in support::layout::clicks_at(
+        view,
+        &renderer(),
+        support::layout::grid(iced::Rectangle::with_size(support::layout::WINDOW), 3.0),
+    ) {
+        if let TranscriptMsg::ShowRawEvents(on) = m {
+            if !seen.contains(&on) {
+                seen.push(on);
+            }
+        }
+    }
+    seen
+}
+
+/// FR-005 (F1): the header toggle asks for the opposite of what is showing.
+#[test]
+fn pressing_the_header_toggle_asks_for_the_opposite() {
+    // Only an error footer: nothing hidden, so no "Show" button; the toggle is the only sender.
+    let (state, session) = state_with(&[result(0, true)]);
+    assert_eq!(raw_events_sent(&state, session, false), vec![true]);
+    assert_eq!(raw_events_sent(&state, session, true), vec![false]);
+}
+
+/// FR-008 (F2): the hidden notice's "Show" button turns the toggle on.
+#[test]
+fn pressing_the_hidden_notice_show_button_turns_raw_events_on() {
+    let (state, session) = state_with(&[unreadable(0, "x"), init(1)]);
+    // Off: both the toggle and the Show button send `true`, nothing sends `false`.
+    assert_eq!(raw_events_sent(&state, session, false), vec![true]);
 }

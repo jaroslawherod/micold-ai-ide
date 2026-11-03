@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1664
 - **Worktree branch**: feat/1664_structured-view-raw-events-are-shown-inline-in-the
 - **Started**: 2026-11-03
-- **Phase**: milestone M2 (PR open)
-- **Next step**: wait for CI, merge, then close unit (T026)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1667 | Design | merged | 64ed549a8651dba5cfa433fc833d4d3540904298 |
 | #1668 | M1 collapsed summary lines (PR head branch feat/1664_collapsed-raw-events-m1; local worktree branch tracks it) | merged | 4198d80c53a5109eee89f11b0b4cfa8356ad9e36 |
-| #1672 | M2 toggle (PR head branch feat/1664_collapsed-raw-events-m2; push with explicit refspec) | open | - |
+| #CLOSE | Close (PR head branch feat/1664_collapsed-raw-events-close) | open | - |
+| #1672 | M2 toggle (PR head branch feat/1664_collapsed-raw-events-m2; push with explicit refspec) | merged | 9912461a10c757d84371f39827785ca31d0c7494 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | Collapsed summary lines | #1668 | merged |
-| M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #1672 | open |
+| M2 | T009–T025 | full | Show raw events toggle, persisted, with hidden notice (17 tasks, no shippable split) | #1672 | merged |
 
 ## Decisions
 
@@ -37,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Close tdd-verify | 1 | HEAD 9667c5f0d | FAIL: F1/F2 survived mutants (toggle press, Show button), fixed with press tests; F3 Verify commands, F5 title assertion fixed; F4/F6 low, accepted. Converge not run: M2 B was CHANGES (fixed), covered instead by tdd-verify's traceability audit |
 | Spec | 1 | 2479fb2a15da66eb0accabf88bb3df2733cb7cd1:606c5bf85706c584f474b0ce2ff8fd50666a5ca5 | CHANGES: 2 MAJOR (fixed: facts match entry fields; error visibility raised as FR-013 marker); MINORs fixed, prose only |
 | Plan | 1 | 4000e8699dd9e09f40708486875fbad22d9dbf29:a5e229e469e371ec6969d16d430bbeaf68f9c9b6 | CHANGES: 3 MAJOR (selection units, Settings sites, stale selection), fixed in plan.md and ui-contract.md |
 | Plan | 2 | f10850fee75acb8a1900cc086b032d92e3ef5c23:19c23230602f2f7baa0900ae3630e275d1a4d8d3 | CLEAN (1 MINOR into_settings wording, fixed, prose only) |
@@ -69,8 +71,9 @@ None. FR-013 answered by the user (error footers/orphans stay visible); applied 
 
 ## Follow-ups not done
 
-- Visual pass (quickstart Part B) NOT RUN in M2: no Xvfb/xdotool, client cannot open a seeded transcript headlessly; layout covered by layout_snapshot gates (toggle sits on its own row under the session bar). T026 stays for the close unit.
+- Visual pass (quickstart Part B) NOT RUN (M2 and close): no Xvfb/xdotool; sway/grim exist but the client cannot open a seeded transcript and the showcase has no toggle. Recorded in quickstart.md; steps covered by tests.
 
-- Subagent thread view (`thread_body` in ui/transcript/entries.rs) still shows raw/footer entries regardless of the toggle (review A, M2).
+- Subagent thread view (`thread_body` in ui/transcript/entries.rs) still shows raw/footer entries regardless of the toggle (review A, M2). Decision: not unbuilt behaviour (spec FR-001..013 and the issue's "transcript" cover the main view); follow-up issue candidate.
+- tdd-verify F4/F6 (LOW): restart through a fresh App load and footer-updates-hidden-count tests not added.
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>

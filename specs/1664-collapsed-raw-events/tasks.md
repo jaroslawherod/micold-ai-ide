@@ -80,7 +80,7 @@ None separate. Each story below brings the core pieces it needs.
 
 ## Phase 6: Polish
 
-- [ ] T026 Record quickstart Part B (visual pass, `visual-pass` skill) results in `specs/1664-collapsed-raw-events/quickstart.md`; tick tasks (close unit, no code)
+- [x] T026 Record quickstart Part B (visual pass, `visual-pass` skill) results in `specs/1664-collapsed-raw-events/quickstart.md`; tick tasks (close unit, no code)
 
 ## Dependencies & Execution Order
 
@@ -112,10 +112,19 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T009–T025
 - **Deliverable**: a header toggle (off by default) hides low-signal entries except error footers/orphans, shows "N events hidden" with a Show button while hidden, is remembered across restarts and shared by all views, live and resumed transcripts behave alike, and hidden entries are neither selected nor copied.
 - **Satisfies**: US2 acceptance scenarios 1–5; US3 acceptance scenarios 1–2; FR-005 to FR-011, FR-013; SC-002, SC-004
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test transcript_entry_view --test transcript_selection_parity`; quickstart §B steps 2–5
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test main -- transcript_entry_view transcript_selection_parity`; quickstart §B steps 2–5
 - **Depends on**: M1
 - **Tier**: full
 
 M2 has 17 tasks (over the ~10 guideline) and no acceptance-scenario split leaves a shippable half: a toggle without the hidden-count notice hides entries silently (US2 scenario 4), and the persisted flag has no use without the toggle. Per-task diffs are small (one field, one filter, one row); kept whole.
 
 T026 (Polish) changes no code and is left to the close unit.
+
+## Phase 7: TDD remediation
+
+The feature is not done until T027 and T028 are cleared (tdd-verify FAIL, `tdd/verification.md`).
+
+- [x] T027 Fix F1: add a test in `crates/micold-client/tests/transcript_entry_view.rs` that presses the header toggle (`ui/transcript/mod.rs:224`) with `show_raw` off and on and asserts the emitted `TranscriptMsg::ShowRawEvents(true)` / `(false)`. Proof: the mutant `ShowRawEvents(ctx.show_raw)` fails `scripts/build-lock.sh cargo test -p micold-client --test main -- transcript_entry_view`.
+- [x] T028 Fix F2: add a test that presses the hidden-notice "Show" button (`ui/transcript/entries.rs:190`) and asserts `ShowRawEvents(true)`. Proof: the mutant `ShowRawEvents(false)` fails the same command.
+- [x] T029 Fix F3: correct the M1 and M2 Verify commands above to `--test main -- <modules>`. Proof: the command runs.
+- [x] T030 Fix F5: assert the orphan and footer titles exactly in `error_footers_and_orphans_say_failed_or_error_in_their_title`.
