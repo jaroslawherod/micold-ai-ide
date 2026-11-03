@@ -29,6 +29,16 @@ RUST_TEST_THREADS = "4"
 #
 # The flag is scoped to this triple because `--threads` is an lld option; a
 # build that swaps in GNU ld would reject it.
+#
+# `-Wl,--strip-debug` was evaluated for test links (issue #1632): on a throwaway crate with
+# the same `debug = "line-tables-only"` profile.test setting as this workspace, it shrank the
+# test binary by 85% (7.2 MB -> 1.1 MB), but it also stripped the `.debug_line` section that
+# "line-tables-only" deliberately keeps -- a panic's backtrace lost every `at src/....rs:L:C`
+# line, leaving only mangled symbol names. That regresses the one thing line-tables-only was
+# chosen to keep, so it stays out. `jobs`/`RUST_TEST_THREADS`/`--threads` above, plus #1631's
+# consolidation of most crates' top-level `tests/*.rs` files into one `tests/main.rs` harness,
+# already cut a `cargo test --workspace` link phase from ~54 GB / ~600 executables to ~10 GB /
+# about 150 (docs/development/shared-build.md).
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-Wl,--threads=4"]
 
