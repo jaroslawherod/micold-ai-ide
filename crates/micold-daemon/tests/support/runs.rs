@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 #[path = "conn.rs"]
-mod conn;
+pub mod conn;
 #[path = "env.rs"]
 mod env;
 
