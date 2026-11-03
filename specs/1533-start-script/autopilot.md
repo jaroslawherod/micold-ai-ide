@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1630 | Design (spec, plan, tasks) | merged | 1ede52197f6dc7022ea768f7fb884e64b175e83c |
 | #1665 | M1 | merged | d0f4739f6fe79a7e9bc2af87729e0f30597105c2 |
 | #1669 | M2 | merged | 96a41b38670b43471a568573dd143459189e139a |
+| #1673 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
-| M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | PR pending | in review |
+| M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | in review |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
