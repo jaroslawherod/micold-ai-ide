@@ -96,11 +96,11 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 ## Issue 5 — feat: deliver the configuration to host and SSH daemons (needs 3, 4)
 
 - [x] T025 [P] [US1] [U21][U22][U23] Failing test in `crates/micold-client/tests/daemon_config_delivery_host.rs`: before `spawn_detached_daemon` (`crates/micold-core/src/spawn.rs`) the file is written to `<data_dir>/daemon.toml` with mode `0600` and the daemon is started with no `MICOLD_*` env
-- [ ] T026 [P] [US1] Failing test for SSH: the provisioning copy step (`crates/micold-core/src/provision/mod.rs`) uploads `~/.micold/remote/daemon.toml` and the named secrets to `~/.micold/remote/secrets/` (`0700`/`0600`); a rotated token re-copies only that file
+- [x] T026 [P] [US1] [U24] Failing test for SSH: the provisioning copy step (`crates/micold-core/src/provision/mod.rs`) uploads `~/.micold/remote/daemon.toml` and the named secrets to `~/.micold/remote/secrets/` (`0700`/`0600`); a rotated token re-copies only that file
 - [x] T027 [US1] [U21][U22] Implement host delivery in `crates/micold-client/src/daemon.rs` (write-if-changed)
 - [x] T080a [US3] [U22] Feed `DaemonSettings::add_runtime_project` from the `ProjectAdd` the app sees, once the app writes the daemon file (nothing writes it yet); with a test through that path (moved from Issue 13: it needs the delivery of T027)
-- [ ] T028 [US1] Implement SSH delivery in `crates/micold-core/src/provision/mod.rs` and `crates/micold-core/src/ssh/argv.rs`; drop the env list for user hosts (`provision/mod.rs:142-153`)
-- [ ] T029 [US1] Update `docs/user-guide/remote-daemons.md` (where the file lives on the SSH host, how to edit it by hand)
+- [x] T028 [US1] [U24] Implement SSH delivery in `crates/micold-core/src/provision/mod.rs` and `crates/micold-core/src/ssh/argv.rs`; drop the env list for user hosts (`provision/mod.rs:142-153`)
+- [x] T029 [US1] Update `docs/user-guide/remote-daemons.md` (where the file lives on the SSH host, how to edit it by hand)
 
 ---
 

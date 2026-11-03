@@ -86,9 +86,9 @@ clone never delays connecting. Each project appears in the application as soon a
 
 A project already known to the daemon keeps its place: a restart does not change which project is
 active. A project you add in the application while the daemon runs works at once. For a **host**
-daemon it is also remembered: the next time the application writes `daemon.toml` for that daemon
-(before it next connects or starts it), the project is in the file, so a later restart serves it
-too. An SSH daemon's file does not yet carry runtime-added projects this way.
+or **SSH** daemon it is also remembered: the next time the application writes `daemon.toml` for that
+daemon (before it next connects or starts it), the project is in the file, so a later restart serves
+it too.
 
 ### `[git]`
 

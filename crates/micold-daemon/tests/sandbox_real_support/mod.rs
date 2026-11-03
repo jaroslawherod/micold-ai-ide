@@ -1105,6 +1105,7 @@ impl ProvisionRun {
                 micold_core::ssh::argv::CONTAINER_DATA_ENV.to_string(),
                 micold_core::ssh::argv::CONTAINER_DATA_DIR.to_string(),
             )],
+            config: None,
         };
         let opts = ProvisionOptions {
             platform: ClientPlatform::current(),

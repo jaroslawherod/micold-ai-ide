@@ -681,6 +681,7 @@ pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarge
             ..StepBounds::container()
         },
         env: super::credentials::daemon_env().into_iter().collect(),
+        config: None,
     }
 }
 
