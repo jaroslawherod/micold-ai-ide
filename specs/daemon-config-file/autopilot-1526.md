@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1526
 - **Worktree branch**: fix/1526_deliver-the-configuration-to-host-and-ssh-daemons
 - **Started**: 2026-11-02
-- **Phase**: implement (escalated)
-- **Next step**: awaiting user answer on the M1 split (see Open escalation)
+- **Phase**: implement
+- **Next step**: M1a (host delivery: T025, T027, T080a)
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T025–T029, T080a | full | host file written `0600` before spawn, only on change; SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone | — | planned |
+| M1a | T025, T027, T080a | full | host file written `0600` before spawn, only on change; a runtime-added project appears in the next file written | — | planned |
+| M1b | T026, T028, T029 | full | SSH file and secrets copied to `~/.micold/remote/` (`0700`/`0600`), a rotated token re-copies only that file; SSH env list for user hosts gone; user guide documents the SSH file | — | planned |
 
 ## Decisions
 
@@ -33,16 +34,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | tasks | Include T080a? | Yes: Issue 13's ledger (#1534, D2) already moved it here because it needs T027's delivery | agent-resolved | specs/daemon-config-file/autopilot-1534.md |
 | D4 | tasks | Tier | full: touches process spawn, SSH provisioning and file permissions (security-relevant); M1 is always full | agent-resolved | milestone-format.md |
 | D5 | implement | Generic secret copy (a) or `client_token_file`-only (b)? | (b): ship the copy-step plumbing against `client_token_file` only; note the rest as a follow-up for Issues 8/9/11/16 | agent-resolved | FR-005 ("deliver it, with the secret files it names, by the kind's own means" — "it names" ties the secret set to what the renderer already names, not a generic reflective walk); contracts/daemon-config.md §3.2 R3/R5; `daemon_config_render.rs:41-103`: `DaemonSettings` has exactly one secret-shaped field (`client_token_file`), and `from_entry`'s `host()` closure (used for both `Kind::Host` and `Kind::Ssh`) never sets it — only `sandbox()` does. So M1's real secret set is empty for host/SSH today; the generic mechanism is exercised by a test that constructs a `DaemonSettings` with `client_token_file` set directly, not through the real `from_entry` wiring |
+| D6 | tasks | How to split the non-converging M1? | Decided by user: Option A — split M1 into two milestones/PRs, M1a host delivery (T025, T027, T080a) and M1b SSH delivery (T026, T028, T029); M1b depends on M1a (reuses its write-if-changed helper) | decided by user | Open escalation (now resolved, see Milestones table and `specs/daemon-config-file/tasks.md`'s M1a/M1b entries) |
 
 ## Review rounds
 
 - Tasks review round 1 (snapshot a9a1e1257e80ba2b94fe9cefd52688d321ef553f:8176ca30aac5c24fca47a85695e888d3122ad2b5): CHANGES; F1 (MAJOR, Satisfies line omitted US3/FR-014 for T080a) fixed, prose only (`Satisfies: US1, US3; FR-005, FR-014, FR-029`); no re-review needed.
+- M1-split re-cut review round 1 (snapshot 45db00e65384f233e2329504c35e84c587bf14c1:251ed96cb96486391f3e171c6fc2e24a6ebe81e6): CLEAN. No findings.
 
 ## Declined review findings
 
 None.
 
 ## Handover
+
+**Note (tasks unit, M1 split into M1a/M1b, D6)**: the design below is unchanged and still settled;
+it now serves two milestone units instead of one. M1a (T025, T027, T080a) is the "T025/T027 — host
+delivery" section and the "T080a" section below. M1b (T026, T028, T029) is the "T026/T028 — SSH
+delivery" section and the "T029 — docs" section. The "Confirmed facts" and "Scope narrower than it
+looks" notes above them apply to both. The M1a unit should add its own `tdd/test-list.md` rows and
+tick only T025/T027/T080a in tasks.md; the M1b unit does the same for T026/T028/T029.
 
 Still no code written (two units in a row hit the context cap during research, not implementation)
 — **but the design is now fully settled** below; the next unit should go straight to writing tests,
@@ -251,26 +261,7 @@ PR: not opened — no code to review yet.
 
 ## Open escalation
 
-**Question**: M1 as cut (T025, T026, T027, T080a, T028, T029 in one milestone) has not converged —
-two consecutive milestone units hit the 150k context cap with the design fully settled but no code
-written (parts 2 and 3; see the Handover section). Category 5, non-convergence. How should the work
-be split?
-
-- **(Recommended) Option A — split M1 into two milestones**, each run as its own unit and PR:
-  **M1a host delivery** (T025, T027, T080a) and **M1b SSH delivery** (T026, T028, T029). The design
-  in the Handover is settled and already separates the two paths; each half then needs only its own
-  files, and they share just the write-if-changed helper, which M1a lands first. Needs a short
-  tasks unit to re-cut the `### Issue 5 (#1526) — M1` entry in
-  `specs/daemon-config-file/tasks.md` into M1a/M1b, then two milestone units.
-- **Option B — dispatch a fourth M1 part** with a hard instruction to write tests first and to
-  delegate mechanical edits to `autopilot-worker` subagents. One PR, no tasks.md change, but a
-  third no-code handover is a real risk: parts 2 and 3 spent about 315k tokens between them on
-  research alone.
-- **Option C — stop the run here** and leave the settled design in the ledger for a later session
-  or a human to implement. Nothing merges.
-
-**What is paused**: all of M1. Nothing is merged beyond the design PR #1656 (merged, `86a9e5d9d`),
-which only added the milestone entry to tasks.md. No source file has been changed on this branch.
+None.
 
 ## Follow-ups not done
 
