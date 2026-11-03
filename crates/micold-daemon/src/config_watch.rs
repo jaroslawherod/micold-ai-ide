@@ -67,6 +67,8 @@ struct State {
 pub struct ConfigRuntime {
     path: PathBuf,
     started: Arc<DaemonConfig>,
+    /// What the start script read when this process started (`None` without a `[startup]` table).
+    started_startup: Option<String>,
     state: Mutex<State>,
     listener: Mutex<Option<Listener>>,
 }
@@ -87,6 +89,7 @@ impl ConfigRuntime {
     pub fn new(loaded: LoadedFile) -> Self {
         let config = Arc::new(loaded.config);
         Self {
+            started_startup: startup_inputs(&config),
             path: loaded.path,
             started: Arc::clone(&config),
             state: Mutex::new(State {
@@ -128,7 +131,7 @@ impl ConfigRuntime {
             restart_needed: !state.restart_keys.is_empty(),
             changed_restart_keys: state.restart_keys.clone(),
             last_error: state.last_error.clone(),
-            startup: None,
+            startup: crate::startup_script::current_report(),
         }
     }
 
@@ -144,8 +147,35 @@ impl ConfigRuntime {
         outcome
     }
 
-    /// `(outcome, whether the status changed)`.
+    /// `(outcome, whether the status changed)`. The script's own bytes are not part of the applied
+    /// hash (the application compares that with what it delivered), so they are looked at beside it.
     fn look(&self, now: Instant) -> (Outcome, bool) {
+        let (outcome, changed) = self.look_file(now);
+        (outcome, self.note_startup_inputs() || changed)
+    }
+
+    /// Keeps `startup.script_file` among the restart keys exactly while the script or its
+    /// `env_file` differ from what this process started with. Never runs the script (FR-009).
+    /// `true` when that changed the keys.
+    fn note_startup_inputs(&self) -> bool {
+        let key = "startup.script_file";
+        let mut state = lock(&self.state);
+        let had = state.restart_keys.iter().any(|k| k == key);
+        let table_differs = state.restart_keys.iter().any(|k| k == "startup");
+        let now = startup_inputs(&state.applied);
+        let wanted = !table_differs && now.is_some() && now != self.started_startup;
+        if wanted == had {
+            return false;
+        }
+        if wanted {
+            state.restart_keys.push(key.to_string());
+        } else {
+            state.restart_keys.retain(|k| k != key);
+        }
+        true
+    }
+
+    fn look_file(&self, now: Instant) -> (Outcome, bool) {
         let bytes = match std::fs::read(&self.path) {
             Ok(bytes) => bytes,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -401,6 +431,14 @@ pub fn restart_keys(started: &DaemonConfig, now: &DaemonConfig) -> Vec<String> {
         .filter(|(_, changed)| *changed)
         .map(|(key, _)| key.to_string())
         .collect()
+}
+
+/// What the start script of `config` reads, now: [`crate::startup_script::StartupPlan::current_hash`].
+fn startup_inputs(config: &DaemonConfig) -> Option<String> {
+    config
+        .startup
+        .as_ref()
+        .map(|s| crate::startup_script::StartupPlan::from_config(s).current_hash())
 }
 
 static STARTUP_FILE: Mutex<Option<LoadedFile>> = Mutex::new(None);

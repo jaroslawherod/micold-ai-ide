@@ -108,7 +108,7 @@ fn start() -> std::io::Result<()> {
         let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
             std::io::Error::other("start script: no data directory can be determined")
         })?;
-        micold_daemon::startup_script::run(
+        let report = micold_daemon::startup_script::run(
             &plan,
             &micold_daemon::startup_script::RunContext {
                 data_dir: &data_dir,
@@ -117,6 +117,7 @@ fn start() -> std::io::Result<()> {
             },
         )
         .map_err(std::io::Error::other)?;
+        micold_daemon::startup_script::record_report(report);
     }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

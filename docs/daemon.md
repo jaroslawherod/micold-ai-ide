@@ -633,6 +633,21 @@ Logs never contain terminal output or anything you typed — sessions are refere
 state only, so credentials and code in a session are never written to a log. Total log size is
 hard-capped, so the log can't grow without bound even if the service runs for weeks.
 
+## The start script's files (#1533)
+
+When the configuration has a `[startup]` table, the daemon runs the script before it listens and
+keeps these files in its data directory (user guide: *The daemon configuration file*):
+
+- `startup-result.json`: how this start's run went (`Ok`, `Skipped`, `Warned` or `Failed`, the reason,
+  the last 200 lines of output). Deleted at the start of each run and rewritten before the daemon
+  listens or exits, so it always describes this start. The output may contain secrets the script
+  prints. Mode `0600`.
+- `startup.done`: `{"hash": ...}`, written after a successful run with `run = "once_per_container"`.
+  The hash covers the shell path, the script and the `env_file`. Mode `0600`.
+- `startup.lock`: held while a start reads the record and runs, so a second start waits.
+- `startup-env.json`: the names (never the values) of the variables the script exported. Mode `0600`.
+- `startup-env.dump`, `startup-env.before`: transient dumps of the environment, removed after the run.
+
 ## Surviving logout: run the service in a container
 
 Closing the window always leaves your sessions running — that is the whole point of the daemon. A

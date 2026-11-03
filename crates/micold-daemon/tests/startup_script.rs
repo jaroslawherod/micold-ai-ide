@@ -199,7 +199,10 @@ async fn a_timeout_under_refuse_never_listens() {
     );
     let (status, stderr) = f.exit_of(f.spawn_with(Stdio::piped()));
     assert_eq!(status.code(), Some(1));
-    assert!(stderr.contains("start script failed: timed out"), "{stderr}");
+    assert!(
+        stderr.contains("start script failed: timed out"),
+        "{stderr}"
+    );
     let report = startup_script::read_result(&f.data()).unwrap();
     assert_eq!(report.reason, Some(StartupReason::Timeout));
 }
@@ -221,11 +224,8 @@ async fn warn_serves_and_reports_a_warning_with_the_output() {
 #[tokio::test(flavor = "multi_thread")]
 async fn once_per_container_runs_once_until_the_script_changes() {
     let _turn = TURN.lock().await;
-    let f = Fixture::new(
-        "echo x >> \"$(dirname \"$0\")/count\"\n",
-        Some("run = \"once_per_container\""),
-    );
-    let runs = || std::fs::read_to_string(f.path("count")).map_or(0, |s| s.lines().count());
+    let f = Fixture::new("echo x >> count\n", Some("run = \"once_per_container\""));
+    let runs = || std::fs::read_to_string(f.data().join("count")).map_or(0, |s| s.lines().count());
     for _ in 0..2 {
         let daemon = f.spawn();
         f.wait_connected().await;
@@ -236,7 +236,7 @@ async fn once_per_container_runs_once_until_the_script_changes() {
         startup_script::read_result(&f.data()).unwrap().outcome,
         StartupOutcome::Skipped
     );
-    f.rewrite_script("echo x >> \"$(dirname \"$0\")/count\"\n# changed\n");
+    f.rewrite_script("echo x >> count\n# changed\n");
     let daemon = f.spawn();
     f.wait_connected().await;
     drop(daemon);
@@ -246,21 +246,21 @@ async fn once_per_container_runs_once_until_the_script_changes() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reload_never_reruns_and_reports_restart_needed() {
     use micold_daemon::config_watch::ConfigRuntime;
-    let f = Fixture::new(
-        "echo x >> \"$(dirname \"$0\")/count\"\n",
-        Some("run = \"every_start\""),
-    );
+    let f = Fixture::new("echo x >> count\n", Some("run = \"every_start\""));
     let runtime = ConfigRuntime::open(&f.path("daemon.toml")).unwrap();
     assert!(runtime.status().startup.is_none() || !runtime.status().restart_needed);
     assert!(!runtime.status().restart_needed);
-    f.rewrite_script("echo y >> \"$(dirname \"$0\")/count\"\n");
+    f.rewrite_script("echo y >> count\n");
     runtime.check(Instant::now());
     let status = runtime.status();
     assert!(status.restart_needed, "SC-005");
     assert_eq!(status.changed_restart_keys, vec!["startup.script_file"]);
-    assert!(!f.path("count").exists(), "the watcher never runs the script");
+    assert!(
+        !f.data().join("count").exists(),
+        "the watcher never runs the script"
+    );
     // Writing it back is no difference from what this process started with.
-    f.rewrite_script("echo x >> \"$(dirname \"$0\")/count\"\n");
+    f.rewrite_script("echo x >> count\n");
     runtime.check(Instant::now());
     assert!(!runtime.status().restart_needed);
     // A changed table is named `startup`.
@@ -315,14 +315,19 @@ fn child_entry() {
         },
     )
     .expect("the start script runs");
-    let own: String = std::env::vars().map(|(k, v)| format!("{k}={v}\n")).collect();
+    let own: String = std::env::vars()
+        .map(|(k, v)| format!("{k}={v}\n"))
+        .collect();
     std::fs::write(dir.join("daemon.env"), own).unwrap();
     // What environment-include, `ai.cli[].env`, `session.env` and the daemon set per session pass.
     let mut pairs = vec![(
         "STARTUP_TEST_DUMP".to_string(),
         dir.join("session.env").to_string_lossy().into_owned(),
     )];
-    for pair in var("MICOLD_STARTUP_TEST_PAIRS").unwrap_or_default().split(';') {
+    for pair in var("MICOLD_STARTUP_TEST_PAIRS")
+        .unwrap_or_default()
+        .split(';')
+    {
         if let Some((k, v)) = pair.split_once('=') {
             pairs.push((k.to_string(), v.to_string()));
         }
@@ -365,7 +370,12 @@ struct Environments {
 
 /// Runs `script` (with `env_file`'s text beside it) in a child process and returns the environment
 /// the daemon is left with and the one a session gets, `pairs` being what the daemon passes a session.
-fn environments(script: &str, env_file: Option<&str>, export_env: bool, pairs: &str) -> Environments {
+fn environments(
+    script: &str,
+    env_file: Option<&str>,
+    export_env: bool,
+    pairs: &str,
+) -> Environments {
     let dir = tempfile::tempdir().unwrap();
     let stand_in = dir.path().join("shell");
     std::fs::write(
@@ -382,7 +392,10 @@ fn environments(script: &str, env_file: Option<&str>, export_env: bool, pairs: &
     let mut cmd = Command::new(std::env::current_exe().unwrap());
     cmd.args(["child_entry", "--exact", "--nocapture", "--test-threads=1"])
         .env(CHILD_DIR, dir.path())
-        .env("MICOLD_STARTUP_TEST_EXPORT", if export_env { "1" } else { "0" })
+        .env(
+            "MICOLD_STARTUP_TEST_EXPORT",
+            if export_env { "1" } else { "0" },
+        )
         .env("MICOLD_STARTUP_TEST_PAIRS", pairs)
         .env("SHELL", &stand_in)
         .env("HOME", dir.path());
@@ -432,20 +445,34 @@ fn sessions_see_the_exports_unless_export_env_is_off() {
 #[test]
 fn an_env_file_secret_is_visible_to_the_script_and_reaches_nobody_unless_exported() {
     let secret = "TOKEN=hunter2\n";
-    let reads = "echo \"$TOKEN\" > \"$(dirname \"$0\")/data/seen\"\n";
+    let reads = "echo \"$TOKEN\" > seen\n";
     let e = environments(reads, Some(secret), true, "");
     assert_eq!(
-        std::fs::read_to_string(e.dir.path().join("data/seen")).unwrap().trim(),
+        std::fs::read_to_string(e.dir.path().join("data/seen"))
+            .unwrap()
+            .trim(),
         "hunter2",
         "the script reads it"
     );
     assert_eq!(e.daemon.get("TOKEN"), None, "US2.1 daemon (SC-003)");
     assert_eq!(e.session.get("TOKEN"), None, "US2.1 session (SC-003)");
-    let leaked = e.session.values().chain(e.daemon.values()).any(|v| v.contains("hunter2"));
+    let leaked = e
+        .session
+        .values()
+        .chain(e.daemon.values())
+        .any(|v| v.contains("hunter2"));
     assert!(!leaked);
     let e = environments("export TOKEN\n", Some(secret), true, "");
-    assert_eq!(e.daemon.get("TOKEN").map(String::as_str), Some("hunter2"), "US2.2");
-    assert_eq!(e.session.get("TOKEN").map(String::as_str), Some("hunter2"), "US2.2");
+    assert_eq!(
+        e.daemon.get("TOKEN").map(String::as_str),
+        Some("hunter2"),
+        "US2.2"
+    );
+    assert_eq!(
+        e.session.get("TOKEN").map(String::as_str),
+        Some("hunter2"),
+        "US2.2"
+    );
     let names = std::fs::read_to_string(e.dir.path().join("data/startup-env.json")).unwrap();
     assert!(names.contains("TOKEN") && !names.contains("hunter2"));
 }
@@ -461,9 +488,23 @@ fn the_variable_order_is_fixed_and_the_daemons_own_per_session_values_win() {
         true,
         "FROM_INCLUDE=include;MICOLD_SESSION_X=daemon;TERM=xterm-256color",
     );
-    assert_eq!(e.session.get("FROM_SCRIPT").map(String::as_str), Some("script"));
-    assert_eq!(e.session.get("FROM_INCLUDE").map(String::as_str), Some("include"), "US2.3");
-    assert_eq!(e.session.get("MICOLD_SESSION_X").map(String::as_str), Some("daemon"), "US2.5");
-    assert_eq!(e.session.get("TERM").map(String::as_str), Some("xterm-256color"));
+    assert_eq!(
+        e.session.get("FROM_SCRIPT").map(String::as_str),
+        Some("script")
+    );
+    assert_eq!(
+        e.session.get("FROM_INCLUDE").map(String::as_str),
+        Some("include"),
+        "US2.3"
+    );
+    assert_eq!(
+        e.session.get("MICOLD_SESSION_X").map(String::as_str),
+        Some("daemon"),
+        "US2.5"
+    );
+    assert_eq!(
+        e.session.get("TERM").map(String::as_str),
+        Some("xterm-256color")
+    );
     assert_eq!(e.daemon.get("MICOLD_SESSION_X"), None);
 }

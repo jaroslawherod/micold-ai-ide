@@ -163,6 +163,36 @@ Absent means no start script.
 | `env_file` | none | Secret. `KEY=VALUE` lines visible to the script only. |
 | `export_env` | `true` | Variables the script exports reach the daemon and its sessions. |
 
+#### What the start script does on a host daemon
+
+The daemon runs the script once per start, before it listens, as its own user, in its data
+directory. Nothing connects while it runs.
+
+- **Installs go to your home, not root.** The script runs as you, so `npm install -g`, `pip
+  install --user` or a download lands under your home directory; point `PATH` there with
+  `export PATH="$HOME/.local/bin:$PATH"`. It cannot use `sudo` or write system directories unless
+  your account may.
+- **Only what it exports reaches sessions.** A plain `FOO=1` stays in the script; `export FOO` puts
+  it in the daemon and every session. A value in `env_file` is readable as `$TOKEN` in the script
+  and reaches no session unless the script runs `export TOKEN`.
+- **Relation to environment-include.** The script's exports are the daemon's own environment.
+  Environment-include (which sources your shell profile for each folder) runs on top and wins for
+  a variable both set; then `[[ai.cli]]` `env`, `[session.env]` and `[session.secret_env]`, and
+  last the variables the daemon sets for each session (`MICOLD_*`, `TERM`, `COLORTERM`), which a
+  script cannot change.
+- **`run`.** `"every_start"` runs it each start. `"once_per_container"` skips it while the shell,
+  the script and the `env_file` are unchanged since a run that succeeded; a failed run is never
+  recorded, so it runs again.
+- **Failure.** Exit status non-zero, a signal, a timeout, a shell that does not start, or a missing
+  `script_file` or `env_file` is a failure. With `"refuse"` the daemon does not start and prints the
+  status and the last 200 lines of the output; with `"warn"` it starts, discards the script's
+  exports, and reports a warning with the same text. A timeout stops the script and its children.
+- **A change does not re-run it.** Editing the script, its `env_file` or the `[startup]` table in a
+  running daemon never runs it again; the daemon reports that a restart is needed.
+- **Secrets in output.** The output goes to the daemon log and to `startup-result.json`. A script
+  that prints a secret leaves it in both.
+- **Windows.** The default shell is PowerShell. Capturing exports works for PowerShell only.
+
 ## Loading and live reload
 
 `micold-daemon [--config <path>] [--kind host|ssh|container|kubernetes]` reads the file at start.

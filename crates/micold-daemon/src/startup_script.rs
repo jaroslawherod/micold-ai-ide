@@ -8,10 +8,12 @@
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
-use micold_core::daemon_config::{OnFailure, Startup};
+use micold_core::daemon_config::{OnFailure, RunPolicy, Startup};
 use micold_core::env_include::{is_inherited_terminal_identity, run_and_diff, ScriptEnd};
+use micold_core::protocol::hashing::sha256_hex;
 use micold_core::protocol::messages::{StartupOutcome, StartupReason, StartupReport};
 
 /// The most lines of output a report keeps (the end of the output).
@@ -20,6 +22,13 @@ pub const TAIL_LINES: usize = 200;
 pub const TAIL_LINE_BYTES: usize = 4096;
 /// The file, in the data directory, that describes the last run.
 pub const RESULT_FILE: &str = "startup-result.json";
+/// The record, in the data directory, of the last successful run (`run = "once_per_container"`).
+pub const DONE_FILE: &str = "startup.done";
+/// Held while a run reads the record and runs, so a second start waits for the first.
+pub const LOCK_FILE: &str = "startup.lock";
+/// The names (never the values) of the variables a run exported.
+pub const ENV_NAMES_FILE: &str = "startup-env.json";
+const DUMP_FILES: [&str; 2] = ["startup-env.dump", "startup-env.before"];
 
 const DEFAULT_TIMEOUT_SECS: u32 = 300;
 
@@ -31,6 +40,9 @@ pub struct StartupPlan {
     pub timeout: Duration,
     pub on_failure: OnFailure,
     pub export_env: bool,
+    pub run: RunPolicy,
+    /// `KEY=VALUE` lines the script can read and that reach no one unless it exports them.
+    pub env_file: Option<PathBuf>,
 }
 
 impl StartupPlan {
@@ -52,8 +64,81 @@ impl StartupPlan {
             timeout: Duration::from_secs(u64::from(secs)),
             on_failure: startup.on_failure.unwrap_or(OnFailure::Refuse),
             export_env: startup.export_env.unwrap_or(true),
+            run: startup.run.unwrap_or(RunPolicy::EveryStart),
+            env_file: startup.env_file.as_ref().map(|p| p.path().to_path_buf()),
         }
     }
+
+    /// [`inputs_hash`] of what is on disk now: the same value the run record holds, and the one the
+    /// configuration watcher compares to find a script changed under a running daemon.
+    pub fn current_hash(&self) -> String {
+        let script = std::fs::read(&self.script_file).ok();
+        let env = self.env_file.as_ref().and_then(|p| std::fs::read(p).ok());
+        inputs_hash(&self.shell, script.as_deref(), env.as_deref())
+    }
+}
+
+/// SHA-256 (hex) over the shell path, the script's bytes and the `env_file`'s bytes, each preceded
+/// by a presence tag and its length so that no two inputs concatenate alike.
+pub fn inputs_hash(shell: &Path, script: Option<&[u8]>, env_file: Option<&[u8]>) -> String {
+    let mut input = Vec::new();
+    let mut part = |bytes: Option<&[u8]>| {
+        input.push(u8::from(bytes.is_some()));
+        let bytes = bytes.unwrap_or_default();
+        input.extend_from_slice(&(bytes.len() as u64).to_be_bytes());
+        input.extend_from_slice(bytes);
+    };
+    part(Some(shell.to_string_lossy().as_bytes()));
+    part(script);
+    part(env_file);
+    sha256_hex(&input)
+}
+
+/// The `KEY=VALUE` lines of an `env_file`, taken literally: no quoting, no expansion. Blank lines,
+/// `#` comments and lines without `=` are skipped.
+pub fn parse_env_file(bytes: &[u8]) -> Vec<(String, String)> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .filter_map(|line| line.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.to_string()))
+        .filter(|(k, _)| !k.is_empty())
+        .collect()
+}
+
+static REPORT: Mutex<Option<StartupReport>> = Mutex::new(None);
+
+/// Keeps how this start's run went, for `ConfigStatus.startup`.
+pub fn record_report(report: StartupReport) {
+    *REPORT.lock().unwrap_or_else(|p| p.into_inner()) = Some(report);
+}
+
+/// What [`record_report`] kept; `None` when this start ran no script.
+pub fn current_report() -> Option<StartupReport> {
+    REPORT.lock().unwrap_or_else(|p| p.into_inner()).clone()
+}
+
+/// An exclusive lock on `<data_dir>/startup.lock`, held until dropped (the file closes).
+pub struct StartupLock(#[allow(dead_code)] std::fs::File);
+
+impl StartupLock {
+    /// Blocks until no other start holds it.
+    pub fn acquire(data_dir: &Path) -> std::io::Result<Self> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        let file = options.open(data_dir.join(LOCK_FILE))?;
+        file.lock()?;
+        Ok(Self(file))
+    }
+}
+
+/// The hash `startup.done` holds; `None` when absent or unparsable ("not done").
+pub fn read_done(data_dir: &Path) -> Option<String> {
+    let value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data_dir.join(DONE_FILE)).ok()?).ok()?;
+    value.get("hash")?.as_str().map(str::to_string)
 }
 
 /// What the run needs from the rest of the process.
@@ -139,12 +224,21 @@ fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// Writes `report` to `<data_dir>/startup-result.json` through a temporary file and a rename.
+/// Writes `bytes` to `<dir>/<name>` through a temporary file and a rename, readable by the owner
+/// only: a reader never sees half of it.
+fn write_private(dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
+    let temp = dir.join(format!("{name}.tmp"));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    std::io::Write::write_all(&mut options.open(&temp)?, bytes)?;
+    std::fs::rename(&temp, dir.join(name))
+}
+
 fn write_result(data_dir: &Path, report: &StartupReport) -> std::io::Result<()> {
     let bytes = serde_json::to_vec(report).map_err(std::io::Error::other)?;
-    let temp = data_dir.join(format!("{RESULT_FILE}.tmp"));
-    std::fs::write(&temp, bytes)?;
-    std::fs::rename(&temp, data_dir.join(RESULT_FILE))
+    write_private(data_dir, RESULT_FILE, &bytes)
 }
 
 /// Reads `<data_dir>/startup-result.json`; `None` when absent or unreadable.
@@ -172,17 +266,44 @@ fn create_private_dir(dir: &Path) -> std::io::Result<()> {
 /// Runs the plan and records how it went. `Err` carries the text for a start that must be refused:
 /// nothing has listened, so `main` prints it and exits.
 pub fn run(plan: &StartupPlan, ctx: &RunContext<'_>) -> Result<StartupReport, String> {
-    create_private_dir(ctx.data_dir)
-        .map_err(|e| format!("start script: {}: {e}", ctx.data_dir.display()))?;
+    let fail = |e: std::io::Error| format!("start script: {}: {e}", ctx.data_dir.display());
+    create_private_dir(ctx.data_dir).map_err(fail)?;
     let _ = std::fs::remove_file(ctx.data_dir.join(RESULT_FILE));
+    // Held to the end of the run: a second start on this data directory waits here.
+    let _lock = StartupLock::acquire(ctx.data_dir).map_err(fail)?;
+
+    let script = std::fs::read(&plan.script_file)
+        .map_err(|_| StartupReason::FileMissing(plan.script_file.display().to_string()));
+    let env_bytes = plan.env_file.as_ref().map(|path| {
+        std::fs::read(path).map_err(|_| StartupReason::FileMissing(path.display().to_string()))
+    });
+    let (script, env_bytes) = match (script, env_bytes.transpose()) {
+        (Ok(script), Ok(env)) => (script, env),
+        (Err(reason), _) | (_, Err(reason)) => {
+            return conclude(plan, ctx, Some(reason), Outcome::default());
+        }
+    };
+    let hash = inputs_hash(&plan.shell, Some(&script), env_bytes.as_deref());
+    if plan.run == RunPolicy::OncePerContainer && read_done(ctx.data_dir).as_deref() == Some(&hash)
+    {
+        let report = StartupReport {
+            outcome: StartupOutcome::Skipped,
+            reason: None,
+            tail: Vec::new(),
+            finished_at_secs: now_secs(),
+        };
+        keep_result(ctx, &report);
+        return Ok(report);
+    }
 
     let mut tail = Tail::default();
+    let extra = env_bytes.as_deref().map(parse_env_file).unwrap_or_default();
     let result = run_and_diff(
         &plan.script_file,
         &plan.shell,
         ctx.data_dir,
         plan.timeout,
-        &[],
+        &extra,
         |_stream, line| {
             tail.push(line);
             // No subscriber yet: the log file gets the line under the `startup` marker and stderr
@@ -191,21 +312,64 @@ pub fn run(plan: &StartupPlan, ctx: &RunContext<'_>) -> Result<StartupReport, St
             eprintln!("startup: {line}");
         },
     );
+    for file in DUMP_FILES {
+        let _ = std::fs::remove_file(ctx.data_dir.join(file));
+    }
+    let ended = Outcome {
+        tail: tail.into_lines(),
+        exports: result.exports,
+        hash: Some(hash),
+    };
+    conclude(plan, ctx, reason_of(&result.end), ended)
+}
 
-    let reason = reason_of(&result.end);
+/// What a finished run leaves for [`conclude`].
+#[derive(Default)]
+struct Outcome {
+    tail: Vec<String>,
+    exports: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    /// The inputs' hash, for the run record.
+    hash: Option<String>,
+}
+
+fn keep_result(ctx: &RunContext<'_>, report: &StartupReport) {
+    if let Err(e) = write_result(ctx.data_dir, report) {
+        tracing::warn!(error = %e, "could not write the start script's result");
+    }
+}
+
+/// Applies a success (the exports, the record, the names) or the failure policy, and writes the
+/// result before the daemon listens or exits.
+fn conclude(
+    plan: &StartupPlan,
+    ctx: &RunContext<'_>,
+    reason: Option<StartupReason>,
+    ended: Outcome,
+) -> Result<StartupReport, String> {
     let mut report = StartupReport {
         outcome: StartupOutcome::Ok,
         reason: reason.clone(),
-        tail: tail.into_lines(),
+        tail: ended.tail,
         finished_at_secs: now_secs(),
     };
     match &reason {
         None => {
+            let mut names = Vec::new();
             if plan.export_env {
-                for (name, value) in &result.exports {
+                for (name, value) in &ended.exports {
                     if exportable(name, value, ctx) {
                         std::env::set_var(name, value);
+                        names.push(name.to_string_lossy().into_owned());
                     }
+                }
+            }
+            if let Ok(bytes) = serde_json::to_vec(&names) {
+                let _ = write_private(ctx.data_dir, ENV_NAMES_FILE, &bytes);
+            }
+            if let (RunPolicy::OncePerContainer, Some(hash)) = (plan.run, &ended.hash) {
+                let record = serde_json::json!({ "hash": hash }).to_string();
+                if let Err(e) = write_private(ctx.data_dir, DONE_FILE, record.as_bytes()) {
+                    tracing::warn!(error = %e, "could not write the start script's run record");
                 }
             }
         }
@@ -216,9 +380,7 @@ pub fn run(plan: &StartupPlan, ctx: &RunContext<'_>) -> Result<StartupReport, St
             };
         }
     }
-    if let Err(e) = write_result(ctx.data_dir, &report) {
-        tracing::warn!(error = %e, "could not write the start script's result");
-    }
+    keep_result(ctx, &report);
     match (&reason, plan.on_failure) {
         (Some(reason), OnFailure::Refuse) => Err(failure_block(reason, &report.tail)),
         _ => Ok(report),
@@ -331,16 +493,19 @@ mod tests {
     #[test]
     fn the_hash_is_length_prefixed_and_covers_shell_script_and_env_file() {
         let sh = Path::new("/bin/sh");
-        let h = |shell: &Path, script: &[u8], env: Option<&[u8]>| {
-            inputs_hash(shell, Some(script), env)
-        };
+        let h =
+            |shell: &Path, script: &[u8], env: Option<&[u8]>| inputs_hash(shell, Some(script), env);
         let base = h(sh, b"ab", Some(b"c"));
         assert_eq!(base.len(), 64);
         assert_ne!(base, h(sh, b"a", Some(b"bc")), "no concatenation collision");
         assert_ne!(base, h(Path::new("/bin/bash"), b"ab", Some(b"c")));
         assert_ne!(base, h(sh, b"abc", Some(b"c")));
         assert_ne!(base, h(sh, b"ab", Some(b"d")));
-        assert_ne!(h(sh, b"ab", None), h(sh, b"ab", Some(b"")), "absent is not empty");
+        assert_ne!(
+            h(sh, b"ab", None),
+            h(sh, b"ab", Some(b"")),
+            "absent is not empty"
+        );
         assert_ne!(inputs_hash(sh, None, None), h(sh, b"", None));
     }
 
@@ -414,8 +579,10 @@ mod tests {
                 assert_eq!(mode(&data.join(file)), 0o600, "{file}");
             }
             assert!(!data.join("startup-env.dump").exists());
+            // `export_env` is off here, so nothing was applied and no name is kept; the names of
+            // applied exports are checked on a real child process in tests/startup_script.rs.
             let names = std::fs::read_to_string(data.join(ENV_NAMES_FILE)).unwrap();
-            assert!(names.contains("SECRET_NAME") && !names.contains("secret-value"));
+            assert_eq!(names, "[]");
         }
 
         #[test]
@@ -428,15 +595,25 @@ mod tests {
             assert_eq!(again.outcome, StartupOutcome::Skipped);
             assert_eq!(count(dir.path()), 1);
             let on_disk = read_result(&dir.path().join("data")).unwrap();
-            assert_eq!(on_disk.outcome, StartupOutcome::Skipped, "a skip is recorded too");
+            assert_eq!(
+                on_disk.outcome,
+                StartupOutcome::Skipped,
+                "a skip is recorded too"
+            );
             // Any of the three changing runs it again.
             let mut changed = plan(dir.path(), "echo x >> count\n# edited\n");
             changed.run = RunPolicy::OncePerContainer;
-            assert_eq!(go(dir.path(), &changed).unwrap().outcome, StartupOutcome::Ok);
+            assert_eq!(
+                go(dir.path(), &changed).unwrap().outcome,
+                StartupOutcome::Ok
+            );
             assert_eq!(count(dir.path()), 2);
             std::fs::write(dir.path().join("e.env"), "A=1\n").unwrap();
             changed.env_file = Some(dir.path().join("e.env"));
-            assert_eq!(go(dir.path(), &changed).unwrap().outcome, StartupOutcome::Ok);
+            assert_eq!(
+                go(dir.path(), &changed).unwrap().outcome,
+                StartupOutcome::Ok
+            );
             assert_eq!(count(dir.path()), 3);
 
             let dir = tempfile::tempdir().unwrap();
@@ -444,7 +621,10 @@ mod tests {
             failing.run = RunPolicy::OncePerContainer;
             failing.on_failure = OnFailure::Warn;
             for _ in 0..2 {
-                assert_eq!(go(dir.path(), &failing).unwrap().outcome, StartupOutcome::Warned);
+                assert_eq!(
+                    go(dir.path(), &failing).unwrap().outcome,
+                    StartupOutcome::Warned
+                );
             }
             assert_eq!(count(dir.path()), 2, "a failed run is not recorded as done");
             assert!(!dir.path().join("data").join(DONE_FILE).exists());
@@ -486,7 +666,10 @@ mod tests {
             let deadline = std::time::Instant::now() + Duration::from_secs(10);
             // SAFETY: signal 0 only tests that the process exists.
             while unsafe { libc::kill(pid, 0) } == 0 {
-                assert!(std::time::Instant::now() < deadline, "the child outlived the timeout");
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the child outlived the timeout"
+                );
                 std::thread::sleep(Duration::from_millis(50));
             }
         }
@@ -507,7 +690,10 @@ mod tests {
             p.env_file = Some(dir.path().join("absent.env"));
             let text = go(dir.path(), &p).unwrap_err();
             assert!(text.contains("absent.env"), "{text}");
-            assert!(!dir.path().join("data/ran").exists(), "the script did not run");
+            assert!(
+                !dir.path().join("data/ran").exists(),
+                "the script did not run"
+            );
         }
 
         #[test]
@@ -540,16 +726,23 @@ mod tests {
             std::thread::spawn(move || {
                 let _ = tx.send(go(&root, &p).map(|r| r.outcome));
             });
-            assert!(rx.recv_timeout(Duration::from_millis(700)).is_err(), "it ran under the lock");
+            assert!(
+                rx.recv_timeout(Duration::from_millis(700)).is_err(),
+                "it ran under the lock"
+            );
             assert!(!data.join("ran").exists());
             drop(held);
-            assert_eq!(rx.recv_timeout(Duration::from_secs(20)).unwrap(), Ok(StartupOutcome::Ok));
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(20)).unwrap(),
+                Ok(StartupOutcome::Ok)
+            );
         }
     }
 
     #[test]
     fn a_start_table_without_a_script_is_refused() {
-        let text = "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[startup]\nenv_file = \"/e\"\n";
+        let text =
+            "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[startup]\nenv_file = \"/e\"\n";
         assert!(crate::config_load::validate_text(text, "t").is_err());
     }
 }
