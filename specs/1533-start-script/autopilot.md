@@ -10,21 +10,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M1 PR merge, then milestone M2
+- **Next step**: M2 PR merge, then milestone M3
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1630 | Design (spec, plan, tasks) | merged | 1ede52197f6dc7022ea768f7fb884e64b175e83c |
-| #1665 | M1 | open | |
+| #1665 | M1 | merged | d0f4739f6fe79a7e9bc2af87729e0f30597105c2 |
+| (M2) | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | open |
-| M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | | pending |
+| M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
+| M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | (M2) | open |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | | pending |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | pending |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
@@ -73,3 +74,10 @@ None.
 ## Follow-ups not done
 
 - Dependencies #1526, #1527, #1528 are still OPEN on GitHub (no delivery commits on main); #1524 is closed. Script delivery (T075) and per-kind failure surfacing need them: plan/milestones must order or stub accordingly.
+
+## M2 notes
+
+Review A (snapshot 43c5ab91:aeebb4cf): CLEAN, 3 MINOR not fixed (exports lost on a Skipped start;
+watcher hashes after the run; FileMissing leaves tail empty, reason is the output per S2.3).
+Review B (sonnet): CLEAN, 3 MINOR (order test stands in for session.env/ai.cli tiers not yet applied
+by the daemon; compile-red only; quickstart Part A not run). Scoped gate green.
