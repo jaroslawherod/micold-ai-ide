@@ -82,7 +82,7 @@ crates/micold-client/src/
 ├── features/transcript_selection.rs         # rows()/entries_in() filtered; body_units for the four kinds; reconcile; TranscriptView gains show_raw (its 4 construction sites, incl. test/parity helpers, updated in one task)
 ├── features/structured_transcript.rs        # TranscriptMsg::ShowRawEvents(bool)
 ├── features/settings.rs                     # State.show_raw_events; SettingsMsg::ShowRawEventsToggled; ValidSettings::into_settings
-│                                            #   (~l.893) carries the window's value, a Save never changes it; test literals
+│                                            #   (~l.893) emits the default for the key and `set_changed` ignores it (`show_raw_events: _`), so a Save never changes the stored value; test literals
 ├── shell/persist.rs                         # persist_show_raw_events; window_settings takes the window copy; set_changed
 │                                            #   destructure gets `show_raw_events: _` (never set by a Save); test literals
 ├── ui/transcript/entries.rs                 # rows(.., show_raw), Row::Hidden, summary-card arms, hidden notice
