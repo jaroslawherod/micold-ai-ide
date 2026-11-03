@@ -12,6 +12,7 @@ use micold_client::features::daemons::{self, State};
 use micold_core::daemon_config::IdleStopSetting;
 use micold_core::daemon_config::{diagnose, Kind, Listen, SocketSpec};
 use micold_core::daemons::{DaemonEntry, DaemonRuntime, FileSettings, ProjectSetting};
+use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
 use micold_core::ssh::{SshSettings, SshTarget};
 
 fn invalid() -> DaemonSettings {
@@ -271,4 +272,73 @@ fn a_container_that_survives_logout_renders_idle_stop_off() {
         .unwrap();
     let (settings, _) = DaemonSettings::from_entry(w.registry.get(id).unwrap()).unwrap();
     assert_eq!(settings.idle_stop, Some(IdleStopSetting::Off));
+}
+
+#[test]
+fn a_container_that_survives_logout_overrides_the_saved_idle_stop() {
+    let mut w = World::new();
+    let mut keeper = |name: &str, port: u16, survive: bool| {
+        let DaemonRuntime::Container(mut c) = daemons_fixture::container(name, port) else {
+            unreachable!("container() is a container")
+        };
+        c.profile.survive_logout = survive;
+        let id = w
+            .registry
+            .add(name, DaemonRuntime::Container(c), false)
+            .unwrap();
+        let file = FileSettings {
+            idle_stop: Some(IdleStopSetting::Secs(600)),
+            ..FileSettings::default()
+        };
+        w.registry.set_file(id, file).unwrap();
+        DaemonSettings::from_entry(w.registry.get(id).unwrap())
+            .unwrap()
+            .0
+    };
+    assert_eq!(
+        keeper("Keeps", 7302, true).idle_stop,
+        Some(IdleStopSetting::Off)
+    );
+    assert_eq!(
+        keeper("Stops", 7303, false).idle_stop,
+        Some(IdleStopSetting::Secs(600)),
+        "without survive-logout the saved idle stop is kept"
+    );
+}
+
+#[test]
+fn the_image_a_container_or_a_pod_runs_reaches_the_rendered_file() {
+    let mut w = World::new();
+    let DaemonRuntime::Container(mut c) = daemons_fixture::container("own", 7304) else {
+        unreachable!("container() is a container")
+    };
+    c.profile.image = ImageChoice::Own(OwnImage::Reference("ghcr.io/acme/own:3".into()));
+    let own = w
+        .registry
+        .add("Own", DaemonRuntime::Container(c), false)
+        .unwrap();
+    let DaemonRuntime::Kubernetes(mut k) = daemons_fixture::kubernetes("ctx", "ns") else {
+        unreachable!("kubernetes() is a pod")
+    };
+    k.image = Some(ImageRef {
+        registry: Some("registry.example".into()),
+        repository: "acme/pod".into(),
+        tag: Some("7".into()),
+        digest: None,
+    });
+    let pod = w
+        .registry
+        .add("Pod", DaemonRuntime::Kubernetes(k), false)
+        .unwrap();
+    for (id, image) in [
+        (own, "ghcr.io/acme/own:3"),
+        (pod, "registry.example/acme/pod:7"),
+    ] {
+        let (settings, kind) = DaemonSettings::from_entry(w.registry.get(id).unwrap()).unwrap();
+        assert_eq!(settings.image.as_deref(), Some(image));
+        assert!(
+            render(&settings, kind).contains(&format!("image = \"{image}\"")),
+            "{image}"
+        );
+    }
 }

@@ -41,7 +41,7 @@ and `micold-daemon config check`. Issues 3-15 add their own behaviors under thei
 # Test list: Issue 4 (#1525), milestones M1-M2
 
 Scope: `micold-client` `daemon_config_render`, `features::daemons` config check, the Daemons row.
-Baseline: `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate` green at M2 start (4 + 2 + 5).
+Baseline: `cargo test -p micold-client --test main daemon_config` green at M2 start (4 + 2 + 5 at M2 start; 19 after the close PR).
 
 | ID | Behavior | Traces to | State |
 |---|---|---|---|

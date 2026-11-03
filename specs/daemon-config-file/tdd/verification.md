@@ -200,89 +200,108 @@ Tests tracing to nothing: none. Criteria with no test: none, but "the daemon ser
 
 ---
 
-# Issue 4 (#1525) M1: render, validate before delivery, errors in Settings → Daemons
+# Issue 4 (#1525) M1 + M2: render, validate before delivery, errors in Settings → Daemons
 
 ```yaml
-scope: Issue 4 (#1525), T021 T022 T022a T023 T024 T024a (merge 245bce5fe, PR #1620; feature commit aad9fb137)
+scope: Issue 4 (#1525), M1 (T021 T022 T022a T023 T024 T024a, PR #1620) and M2 (T116-T123, PR #1654, commits 5da87b0ae..606c5bf85); supersedes the earlier FAIL (I4-1, I4-2 at faced746b)
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
-verified_at: faced746b
-verdict: FAIL
-behaviors: 0 listed in tdd/test-list.md (none written for #1525); 11 tests audited
+verified_at: 606c5bf85 (new tests at the close PR on top of it)
+verdict: PASS_WITH_GAPS
+behaviors: 10 listed in tdd/test-list.md (I4-A1, A2, U1-U7, D1)
 proven: 0
-likely: 11
-test_after: 0
-high_findings: 2
-mutation_score: unmeasured # no tool; 2 deliberate mutants sampled, 0 caught, 2 survived
-suite: scoped - micold-client daemon_config_render 4, daemon_config_stable 2, daemon_config_validate 5 passed, 0 failed (full workspace suite not run)
+likely: 9
+test_after: 1 # I4-D1 (T117), admitted in the cycle log
+high_findings: 0
+mutation_score: unmeasured # no tool; 7 targeted hand mutants, 6 caught, 1 survived
+suite: scoped - micold-client `--test main daemon_config` 19 passed (17 at 606c5bf85, 2 added by the close PR), 0 failed; `--lib each_config_error` 1 passed (full workspace suite not run)
 ```
 
-**Verdict: FAIL.** A deliberate mutant that renders an SSH daemon as `kind = "host"` (`DaemonSettings::from_entry`)
-survives, and the "validate before delivery" criterion is met only on placeholder settings that cannot fail: nothing
-is delivered and `from_entry` never reads the daemon's real settings.
+**Verdict: PASS_WITH_GAPS.** Both earlier HIGH findings are closed: mutant A (`Kind::Ssh` to `Kind::Host`) and
+mutant B (`quote` apostrophe guard) now fail tests, and `from_entry` reads the daemon's saved `file` block, so an
+invalid real setting (relative data dir, remote project with no clone root) shows its error in the row after a save.
+I4-11, I4-12 and I4-13 were fixed in the close PR (mutant G and the swapped `.or` order now fail the two added tests, run by the worker). Remaining gaps are test strength and a stale
+verification command; no HIGH finding.
 
-Audit independence: the auditor did not write these tests; all files read cold at `faced746b`. No subagent smell pass.
+Audit independence: the auditor did not write these tests; all files read cold at `606c5bf85`. No subagent smell pass. The two tests added by the close PR were written after this audit and checked against their mutants only.
 
 ## Test-first evidence
 
 | Behavior | Class | Evidence |
 |---|---|---|
-| All 11 tests (T021, T022, T022a) | LIKELY | Cycle 21 log: tests written before the module, red = compile failure, "no separate stub run". Tests, source, goldens, docs and ticks are one commit (`aad9fb137`), so order is not visible in git. Red is a compile error, not a behavioural failure |
-| Baseline | gap | cycle log "suite: not run in full"; test list `suite_baseline: unknown` |
-| Test list | gap | `tdd/test-list.md` has no #1525 rows (header says "Issue 2, milestone M1"); no behavior ids and no `traces` for these tests |
+| I4-A1, I4-A2 (M1) | LIKELY | M1 was one commit (`aad9fb137`), red a compile error; unchanged from the earlier audit |
+| I4-U1, I4-U4 (M2) | LIKELY | cycle log records mutants A and B surviving the old tests as the red; commit `ecd13cafd` holds tests and the 5 source lines together, so the ordering is not visible in git. Mutants A and B now fail the new tests (re-observed here) |
+| I4-U2, I4-U3, I4-U5, I4-U6, I4-U7 | LIKELY | strengthened in `ecd13cafd`; same single-commit limit |
+| I4-D1 (T117) | TEST_AFTER | cycle log: "Tests were written after the code in this part, so there is no red run to record". Commit `f372e91aa` ("wip") holds source and tests together. Mutants C and F and H (below) show the tests do fail without the code |
+| Baseline | present | test list and cycle log record a baseline (4 + 2 + 5), but the command no longer works, see I4-11 |
 
-Existing tests changed by the feature range: none. The commit only adds test files; `daemons.rs` (core) gained one field
-and `features/daemons.rs` one state field and `Msg::Saved` call, with no assertion edited, no skip, filter or threshold
-touched. `tasks.md` T021-T024a are `[x]` and the code and tests exist: consistent.
+Existing tests changed in `5da87b0ae..HEAD`: `daemon_config_validate.rs` loses `every_configured_daemon_renders_a_valid_file`
+(replaced by the stronger `..._the_file_of_its_runtime`, which adds the kind/name/listen/token comparison) and the
+last-daemon `config_checked` line (now followed by an error-content assertion); `daemon_config_stable.rs` replaces the
+twice-render test by the key-order test (T123); the duplicate `a_golden_file_passes_validation` is dropped. Each is a
+strengthening or a removal of a duplicate, none a loosening. `file: Default::default()` was added to six struct literals in
+`daemon_adopt_on_restart.rs`, `per_daemon_actors.rs`, `main_tests.rs` and three core tests (mechanical). No skip, filter,
+`#[ignore]` or threshold change. `tasks.md` T116-T123 are `[x]` and each has its test or edit: consistent.
 
 ## Findings
 
 | # | Sev | Category | File | Finding |
 |---|---|---|---|---|
-| I4-1 | HIGH | test-strength | `crates/micold-client/tests/daemon_config_validate.rs:62-72`, `src/daemon_config_render.rs:91` | Surviving mutant A: `DaemonRuntime::Ssh(_) => Some((host(), Kind::Ssh))` changed to `Kind::Host`; all 11 tests green. `every_configured_daemon_renders_a_valid_file` asserts only `prepare(..).is_ok()`, and asserts `kind` for Kubernetes only. `from_entry` output (name, kind, listen, token path) is never compared to a golden or expected value for host, SSH or container |
-| I4-2 | HIGH | unbuilt behaviour | `crates/micold-client/src/daemon_config_render.rs:83-97`, `src/features/daemons.rs:669-678` | FR-013f / T024 "validate the file Settings renders, show errors, do not deliver" is wired to nothing real. (a) `from_entry` builds `DaemonSettings` from constants (`host()` = name + auto socket; `sandbox()` = placeholder port 7000 and token path) and ignores everything else the entry or Settings hold, so the checked file is never the user's file and cannot be invalid; the error path in the UI is reachable only from the test's hand-made `invalid()` fixture. (b) `check_configs` discards the `Some(text)` that `validate_config` returns, and no code delivers anything (Issues 5-7), so "an invalid file is not delivered" is a property of a function return value that no caller uses. (c) Checks run only on `Msg::Saved`, not at startup or on a load of the registry. The code comment calls the constants placeholders; tasks.md T024 and the deliverable do not |
-| I4-3 | MED | test-strength | `crates/micold-client/src/ui/settings/daemons.rs:270` | The only UI change (`for error in &view.config_errors { caution(..) }`) has no test: no test or snapshot renders the Daemons settings view with a non-empty `config_errors`. Removing the loop leaves the suite green (by inspection, not mutated; no reference to the field exists in any `tests/` file). "Show errors in Settings → Daemons" is verified only down to the view model |
-| I4-4 | MED | test-strength | `daemon_config_validate.rs:82-96` | `saving_a_daemon_checks_its_file` asserts `!out.is_empty()` and `config_checked(last entry)`. It never asserts that the stored errors are empty or what they are, and `config_checked` is true whether `validate_config` succeeded or failed. A `check_configs` that recorded wrong errors would pass |
-| I4-5 | MED | test-strength | `src/daemon_config_render.rs:181`, `daemon_config_render.rs:42-49` | Surviving mutant B: dropping `!value.contains('\'')` from `quote` (a backslash path containing `'` becomes an unparseable literal string); suite green. Only one backslash/quote test, with no apostrophe, control character, newline or empty value |
-| I4-6 | MED | test-strength | `daemon_config_render.rs:19-33` | The round-trip test compares name, kind, image, data_dir, idle_stop, listen and `projects.len()` only. `home`, `time_zone`, `log`, `client_token_file`, `ssh_dir`, `clone_root` and each project's `path`/`remote` are never read back, so a key rendered under the wrong table parses and passes. The goldens cover the bytes, but the T021 "parse(render(x)) round-trips" is not what the test shows |
-| I4-7 | MED | traceability | `tdd/test-list.md`, `tdd/cycle-log.md` | No test-list rows, no criterion mapping and no baseline for #1525 (see test-first table). FR-005 (deliver) is covered by nothing and is deferred; FR-013f is covered per I4-2 |
-| I4-8 | MED | docs | `docs/user-guide/daemon-configuration.md:22-25` | Added paragraph says Settings "writes the file for you", checks it "before it uses it" and shows each error "under that daemon's row; fix the setting it names". No file is written or used yet and no Settings field feeds the file (I4-2), so the text describes behaviour the app does not have. T024a is ticked |
-| I4-9 | LOW | test-strength | `daemon_config_stable.rs:14-17` | `rendering_twice_gives_identical_bytes` renders a pure function of the same value in one process; it would pass for any non-random implementation and cannot see a reordered key. Stability of key order is guarded by the goldens, not by this test (`a_change_to_the_settings_changes_the_bytes` is fine) |
-| I4-10 | LOW | style | `daemon_config_render.rs:35-40`, `:19-33`, `fixtures.rs:12-18` | `a_golden_file_passes_validation` duplicates `a_valid_file_is_delivered_as_rendered`; bare `assert_eq!`s (`:27`) carry no rule message (profile convention); the golden comparison prints no regeneration command, unlike the repo's `UPDATE_*_SNAPSHOT` gates (there is no regeneration path, so a golden change is hand-edited) |
+| I4-11 | MED | docs / verification command, FIXED in the close PR | `specs/daemon-config-file/tasks.md` (M2 Verify, Phase 21), `tdd/test-list.md` baseline, `tdd/cycle-log.md` | The commands `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate` no longer match a target: since `8176ca30a` the integration tests link as one `main` executable, and the run printed nothing. The proving command is `cargo test -p micold-client --test main daemon_config`. The "done when" evidence cannot be re-run as written |
+| I4-12 | MED | test-strength, FIXED in the close PR (`the_image_a_container_or_a_pod_runs_reaches_the_rendered_file`) | `crates/micold-client/tests/daemon_config_validate.rs:70-86,88-115`, `src/daemon_config_render.rs:118-127` | Surviving mutant G: the container/pod image mapping in `from_entry` (`Some(reference.clone())` changed to `None`) leaves all 17 tests (before the fix) green. The fixture containers and the pod carry no own-image reference, `expected()` has no image, and no test builds an entry with `ImageChoice::Own(Reference)` or a Kubernetes image, though the user guide promises the file carries the container image |
+| I4-13 | LOW | test-strength, FIXED in the close PR (`a_container_that_survives_logout_overrides_the_saved_idle_stop`) | `daemon_config_validate.rs:261-274` | `survives_logout` over `file.idle_stop` precedence is unpinned (by inspection, not mutated): the survive-logout test saves no file `idle_stop`, so swapping the `.or` order passes. The precedence is a stated rule in the doc comment of `from_entry` |
+| I4-14 | LOW | style | `daemon_config_validate.rs:70-86` | `expected()` mirrors the production `match` on `DaemonRuntime` (ssh to host settings, sandbox to token and port). A wrong constant is shared by both only if copied; the values are literals, so the test still catches the mutants A and C. Kept as LOW: a second place to edit when the delivery issues change the listen address |
+| I4-15 | LOW | test-strength | `src/ui/settings/daemons.rs:853-870` | `each_config_error_adds_a_line_to_the_row` counts widgets in the tree. It fails with the loop removed (mutant D) but would pass if each error rendered the wrong text or a `note` instead of a `caution`. The text is not found in the row |
+| I4-16 | LOW | unbuilt behaviour, documented | `src/features/daemons.rs:2132` (`check_configs` on `Msg::Saved` only), `daemon_config_render.rs` `from_entry` doc | Checking happens on a save only, not at startup or registry load, and no deliverer consumes the validated text (Issues 5-7). `validate_config` still returns `Some(text)` that `check_configs` discards. Tasks T117 and the docs (`docs/user-guide/daemon-configuration.md:22-29`) now state this ("until then the app only renders and checks it"), so the text is true; the user-guide phrase "a file with an error is not used" is vacuous while nothing is used. Not a test gap |
+| I4-17 | LOW | style | `tests/daemon_config_render.rs:13-18`, `fixtures.rs` | Golden comparison still prints no regeneration command (no regeneration path exists); the profile's snapshot gates print one |
 
-Smell pass: no assertion-free, tautological (except I4-9), skipped or `#[ignore]` tests; `World` fixture from
-`support/daemons_fixture.rs` is reused (no new fake); no secrets (token paths only). Deterministic: no clock, network,
-or sleep; the three test binaries run in under 1.5 s. Cost: the first scoped build waited 27 minutes behind other
-worktrees' builds.
+Earlier findings: I4-1 closed (mutant A fails), I4-2 closed to the extent built (real saved settings drive the check; the
+registry-load and delivery parts are deferred to Issues 5-7 and documented, I4-16), I4-3 closed in strength terms (I4-15 left),
+I4-4 closed (`saving_a_daemon_checks_its_file` asserts empty errors, the two invalid-save tests assert the content), I4-5
+closed (mutant B fails), I4-6 closed (`read_back` compares every setting including `home`, `time_zone`, `log`, `ssh_dir`,
+`clone_root`, project path and remote), I4-7 closed (list rows plus baseline), I4-8 closed (docs reworded), I4-9 closed (key
+order test, but see below), I4-10 mostly closed (duplicate removed, messages added, regeneration command still absent: I4-17).
+
+Smell pass: no assertion-free, tautological, skipped or `#[ignore]` tests; `World` and `daemons_fixture` are reused (no new
+fake); no secrets (paths only). `keys_are_written_in_a_fixed_order` checks nine table/key markers via `find`, so it covers the
+core order but not `[auth]`/`[ssh]` placement (goldens cover bytes). Deterministic, no clock/network; 17 tests run in 0.03 s.
 
 ## Mutation results
 
-No mutation tool (`mutation: null`). Two deliberate mutants, each restored with `git checkout` and the scoped suites re-run
-green (4 + 2 + 5 passed). Not exhaustive; none sampled in `features/daemons.rs` or the UI.
+No mutation tool (`mutation: null`). Seven deliberate mutants, one at a time, each restored with `git checkout` and the
+scoped suites re-run green afterwards (17 passed; `each_config_error` 1 passed; tree clean apart from the pre-existing
+`autopilot-1525.md` edit). Not exhaustive; none in `core` (`FileSettings`, `set_file`) or in `Draft::file_settings`.
 
 | Mutant | File | Result | Judgment |
 |---|---|---|---|
-| A `Kind::Ssh` to `Kind::Host` in `from_entry` | `daemon_config_render.rs:91` | SURVIVED | not equivalent; I4-1 |
-| B drop `!value.contains('\'')` in `quote` | `daemon_config_render.rs:181` | SURVIVED | not equivalent; I4-5 |
+| A `Kind::Ssh` to `Kind::Host` in `from_entry` | `daemon_config_render.rs` | CAUGHT (1 failed) | closes I4-1 |
+| B drop `!value.contains('\'')` in `quote` | `daemon_config_render.rs` | CAUGHT (1 failed) | closes I4-5 |
+| C `data_dir: file.data_dir.clone()` to `None` | `daemon_config_render.rs` | CAUGHT (2 failed) | I4-D1 does bite |
+| F drop `.or(file.idle_stop)` | `daemon_config_render.rs` | CAUGHT (1 failed) | fine |
+| G container image `Some(reference.clone())` to `None` | `daemon_config_render.rs` | SURVIVED at 606c5bf85; CAUGHT after the close PR | not equivalent; I4-12 |
+| H remove the `check_configs` call after a save | `features/daemons.rs` | CAUGHT (3 failed) | fine |
+| D Daemons row error loop iterates nothing | `ui/settings/daemons.rs` | CAUGHT (lib unit test) | closes I4-3 core; I4-15 |
 
 ## Traceability
 
 | Criterion | Tests | Real entry point | Status |
 |---|---|---|---|
 | T021 four kinds render byte-for-byte to goldens | `each_kind_renders_byte_for_byte_to_its_golden_file` | `render` | Covered |
-| T021 `parse(render(x))` round-trips | `the_rendered_file_parses_back_to_its_settings` | `render` + core `parse` | Partly (I4-6) |
-| T021 output passes validate | `a_golden_file_passes_validation`, `a_valid_file_is_delivered_as_rendered` | `parse`, `prepare` | Covered |
-| T022 stable bytes | `rendering_twice_*`, `a_change_to_the_settings_*` | `render` | Covered, weak (I4-9) |
-| T022a invalid yields config-check errors, not delivered | `an_invalid_file_yields_*` | `prepare` vs core `diagnose` | Covered at function level; no deliverer (I4-2) |
-| T022a / T024 errors reach Settings → Daemons | `the_errors_reach_the_daemons_view_model_*`, `saving_a_daemon_checks_its_file` | `features::daemons` view model | View model only; UI not tested (I4-3, I4-4) |
-| T023 render from the daemon entry | `every_configured_daemon_renders_a_valid_file` | `from_entry` | Weak (I4-1, I4-2) |
-| T024a docs | `docs/user-guide/daemon-configuration.md:22-25` | n/a | Present; overstates (I4-8) |
+| T021 `parse(render(x))` round-trips | `the_rendered_file_parses_back_to_its_settings`, `a_value_that_needs_quoting_survives_the_file` | `render` + core `parse` | Covered |
+| T021 output passes validate | `a_valid_file_is_delivered_as_rendered` | `prepare` | Covered |
+| T022 stable key order, changes change bytes | `keys_are_written_in_a_fixed_order`, `a_change_to_the_settings_changes_the_bytes` | `render` | Covered |
+| T022a / FR-013f invalid yields config-check errors | `an_invalid_file_yields_*` | `prepare` vs core `diagnose` | Covered |
+| FR-013f errors reach Settings → Daemons | `the_errors_reach_*`, `an_invalid_setting_typed_in_the_form_*`, `a_project_with_a_remote_*`, `saving_a_daemon_checks_its_file`, `each_config_error_adds_a_line_to_the_row` | `daemons::update(Msg::Saved)` and `daemon_row` | Covered (I4-15 on the row text) |
+| T023 / FR-005 render from the daemon's saved settings | `every_configured_daemon_renders_the_file_of_its_runtime`, `from_entry_builds_the_file_from_the_saved_settings`, `a_container_that_survives_logout_*`, `file_settings_survive_the_stored_registry` | `from_entry`, `Msg::Saved` | Covered (image: I4-12, fixed in the close PR) |
+| FR-005 deliver the file | none | n/a | Not built here (Issues 5-7) |
+| T024a docs | `docs/user-guide/daemon-configuration.md:22-29` | n/a | Present and true to what ships |
 
-Tests tracing to nothing: none. Claimed tests that do not exist: none.
+Tests tracing to nothing: none. Claimed tests that do not exist: none. All test-list rows I4-A1..I4-D1 name tests that exist and run.
 
 ## What was not audited (Issue 4)
 
-- Full workspace suite and `mise run gate`; coverage (none in profile); a full mutation sweep (2 mutants; the UI loop,
-  `check_configs` `retain`, `validate_config` error mapping and `ProjectSetting` rendering were not mutated).
-- Commit-level test-first ordering (one commit).
-- Visual behaviour of the caution rows in Settings → Daemons (no visual pass run).
-- Issues 2 and 3 (#1523, #1524): their sections above were not touched. `specs/daemon-config-file/autopilot-1525.md` showed as modified in the tree; the audit did not touch it.
+- Full workspace suite and `mise run gate`; coverage (none in profile); a full mutation sweep (7 mutants; core `FileSettings`,
+  `DaemonRegistry::set_file`, `Draft::file_settings` and the form fields were not mutated; `validate_config` error mapping not mutated).
+- Commit-level test-first ordering (M1 one commit; M2 tests and source share commits).
+- Visual behaviour of the caution rows and the three new form fields in Settings → Daemons (no visual pass run).
+- The mechanical `file: Default::default()` edits were read in the diff only.
+- Issues 2 and 3 (#1523, #1524) sections above were not touched. `specs/daemon-config-file/autopilot-1525.md` shows as modified in the tree (pre-existing); the audit did not touch it.

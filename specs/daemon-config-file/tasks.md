@@ -339,7 +339,7 @@ scenario separates them without a half-wired UI. Delivery of the rendered file i
 - **Tasks**: T021–T024, T022a, T024a
 - **Deliverable**: `render(&DaemonSettings, Kind) -> String` renders one Settings fixture per kind byte-for-byte to its golden file, identically on a second call, and the file is validated with the `micold-daemon config check` check; a file that fails is not delivered and its errors show in Settings → Daemons.
 - **Satisfies**: US1; FR-005, FR-013f
-- **Verify**: `cargo test -p micold-client --test daemon_config_render`; `cargo test -p micold-client --test daemon_config_stable --test daemon_config_validate`
+- **Verify**: `cargo test -p micold-client --test main daemon_config`
 - **Depends on**: Issue 2 (#1523), merged
 - **Tier**: full
 
@@ -412,7 +412,7 @@ Added by the close unit: `tdd/verification.md` (Issue 4) found that `DaemonSetti
 - **Tasks**: T116–T123
 - **Deliverable**: the Settings → Daemons gate is tested end to end as far as it is built (the rendered row lists each error, the saved row's stored errors are asserted, `from_entry`'s result is asserted per runtime), `render` is shown to round-trip every setting and every awkward string, and the user guide says only what ships. `from_entry` builds the checked file from the daemon's saved settings (a per-daemon `file` block with data directory, clone root, client token file, idle stop and projects, edited in the form), so an invalid setting shows its error in the row after a save. Delivering the validated text is Issues 5-7.
 - **Satisfies**: US1; FR-005, FR-013f
-- **Verify**: `cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`; a mutant changing `Kind::Ssh` to `Kind::Host` in `from_entry` fails a test
+- **Verify**: `cargo test -p micold-client --test main daemon_config`; a mutant changing `Kind::Ssh` to `Kind::Host` in `from_entry` fails a test
 - **Depends on**: M1
 - **Tier**: full
 
@@ -435,7 +435,7 @@ Verdict FAIL: Issue 2 is not done until findings 1-5 are cleared. Verify each wi
 ## Phase 21: TDD remediation (Issue 4 / #1525, from `tdd/verification.md`, section "Issue 4")
 
 Verdict FAIL: Issue 4 is not done until I4-1 and I4-2 are cleared. Verify each with
-`scripts/build-lock.sh cargo test -p micold-client --test daemon_config_render --test daemon_config_stable --test daemon_config_validate`.
+`scripts/build-lock.sh cargo test -p micold-client --test main daemon_config`.
 
 - [x] T116 [US1] I4-1: assert the full `from_entry` result (kind, name, listen, token path) per runtime in `crates/micold-client/tests/daemon_config_validate.rs:62-72`; done when changing `Kind::Ssh` to `Kind::Host` at `daemon_config_render.rs:91` fails a test
 - [x] T117 [US1] I4-2: build `DaemonSettings` from the daemon's saved settings (a per-daemon `file` block on `DaemonEntry`: data dir, idle stop, projects, clone root, token file; survive-logout and image from the runtime) instead of constants in `DaemonSettings::from_entry`, with form fields for data dir, clone root and token file. Done when a test with an invalid real setting shows an error in the row after `Msg::Saved`. (Checking at registry load and handing the validated text to a deliverer need the delivery issues, 5-7)

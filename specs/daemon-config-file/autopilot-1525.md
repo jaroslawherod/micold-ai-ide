@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1525
 - **Worktree branch**: feat/1525_the-app-renders-each-daemon-s-configuration-from
 - **Started**: 2026-10-30
-- **Phase**: milestones
-- **Next step**: M2 PR merge, then a new close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1617 | Design (milestones for Issue 4) | merged | 9f6e33d41bdea3325af5084f986fc46c8843eab2 |
 | #1620 | M1 | merged | 245bce5fe3f1a46dca57e191d46977f30d07e0ef |
-| #1654 | M2 | open | — |
+| #1654 | M2 | merged | 606c5bf85706c584f474b0ce2ff8fd50666a5ca5 |
+| close | Close the spec | opening | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T021–T024, T022a, T024a | full | `render` golden per kind, stable bytes, validate before delivery, errors in Settings → Daemons, user guide | #1620 | merged |
-| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, `from_entry` built from saved per-daemon settings (`file` block), validate gate fails on a real saved setting and shows it in Settings → Daemons, docs true to what ships | #1654 | in review |
+| M2 | T116–T123 | full | row error test, stronger render/quote/from_entry tests, `from_entry` built from saved per-daemon settings (`file` block), validate gate fails on a real saved setting and shows it in Settings → Daemons, docs true to what ships | #1654 | merged |
 
 ## Decisions
 
@@ -48,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review B | 1 | 46828eb8b47aa9e1fa97d24b4a4e4276814cb307:754b42e19131b49bb394e75091172bea9b260db7 | CHANGES: 2 MAJOR (docs, T119 wording), 2 MINOR; all fixed |
 | M2 review A (code-review high, D6 diff) | 2 | a0cb239a9628b026155438aa5050fed3b91f3ef2:a5d354f09bdbda4dae45a52ffb1579145a5ec3d6 | 9 findings; F1 real (from_entry used FileSettings::default(): fixed to entry.file), idle_stop precedence fixed (survive-logout wins), rest declined |
 | M2 review B (D6 diff) | 2 | same | CHANGES: 1 BLOCKER = same F1 (fixed); Verify not observed due to lock wait, rerun in scoped gate; 1 MINOR (UI test counts widgets) accepted |
+| Close review | 1 | 17da0d04cdadd4ece5f9dfb27f887e3591447899:606c5bf85706c584f474b0ce2ff8fd50666a5ca5 | CHANGES: 1 MAJOR (verification.md stale after the added tests: fixed, prose only), 1 MINOR (baseline label: fixed) |
 | Tasks 1525 | 1 | b494679f:b6f32a1a | CHANGES: 2 MAJOR (no failing test for validate/UI: added T022a; T022 had no file: given one), 2 MINOR (Verify made runnable; F4 accepted, rebase); test-task additions, no further round |
 
 ## Declined review findings
@@ -58,6 +60,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M2 A: file-only edit skips pending-edit/drift prompts: no delivery exists before Issues 5-7, nothing consumes the file yet.
 - M2 A: client_token_file override on sandbox kinds, idle_stop/projects without form fields, ProjectSetting move to core: D6 specified exactly this minimal slice.
+
+## Close checks
+
+converge (Issue 4 group): no gaps, all tasks ticked. tdd-verify (Issue 4, M1+M2): PASS_WITH_GAPS; I4-11 (stale Verify commands), I4-12 (image mutant), I4-13 (idle_stop precedence) fixed in the close PR; I4-14, I4-15, I4-17 (style, widget-count UI test, golden regeneration hint) and I4-16 (check runs on save only; delivery is Issues 5-7) left as follow-ups.
 
 ## Handover
 
@@ -73,3 +79,4 @@ None.
 - TDD test list not generated here; the milestone's implement run derives it.
 - `scripts/autopilot/resume.sh` only finds ledgers named `autopilot.md`, so it does not find `autopilot-1525.md` (it loops on LEDGER-ON-MAIN); not fixed here, not this flow's to touch.
 - Close skipped `speckit-converge`: M1 review B was CLEAN. tdd-verify (Issue 4) verdict FAIL; mutation was by two hand-made mutants only, no full sweep.
+- Close: tdd-verify I4-14/I4-15/I4-16/I4-17 not fixed (see tdd/verification.md Issue 4).
