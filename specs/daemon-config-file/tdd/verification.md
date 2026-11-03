@@ -305,3 +305,112 @@ Tests tracing to nothing: none. Claimed tests that do not exist: none. All test-
 - Visual behaviour of the caution rows and the three new form fields in Settings → Daemons (no visual pass run).
 - The mechanical `file: Default::default()` edits were read in the diff only.
 - Issues 2 and 3 (#1523, #1524) sections above were not touched. `specs/daemon-config-file/autopilot-1525.md` shows as modified in the tree (pre-existing); the audit did not touch it.
+
+---
+
+# Issue 14 (#1535) M1: Daemon details shows what a daemon was given
+
+```yaml
+scope: Issue 14 (#1535) M1, T081-T083, PR #1655 (merge SHA 937c03ea2fa1da5c722b42260a2c8786b151bf90, base 44cf9d37c8b416b545a9c8e6cd1b4fb3bc9e429b); view under test crates/micold-client/src/ui/daemon_details_dialog.rs, Configuration section
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 422c18e11
+verdict: FAIL
+behaviors: 0 listed # tdd/test-list.md has no Issue 14 section; 3 tasks (T081-T083) audited instead
+proven: 0
+likely: 0
+test_after: 2 # T081/T082 view tests, admitted in the cycle log; T083 is docs, not applicable
+high_findings: 4 # I14-1 .. I14-4 (I14-5 is process, also blocking)
+mutation_score: unmeasured # no tool; 6 deliberate mutants on one file, 1 caught, 5 survived
+suite: scoped - micold-client --lib daemon_details_dialog 6 passed; --test main daemon_dialog_buttons:: 6 passed and daemons_section_geometry:: 22 passed (both run under mutant M1); full workspace not run
+```
+
+**Verdict: FAIL.** An existing test was loosened (I14-1) and the two requirements T081 names explicitly,
+"Restart button when `restart_needed`" and "never the output tail", have survivors: removing the button
+and echoing the tail both leave every test green.
+
+Audit independence: the auditor did not write these tests; every file read cold at `422c18e11`. No subagent
+smell pass (one file of 125 test lines plus two existing test files, read directly).
+
+## Test-first evidence (Issue 14)
+
+No behavior ids exist for Issue 14 (`tdd/test-list.md` stops at Issue 5 M1b), which is itself a gap (I14-5).
+Graded per task:
+
+| Task | Class | Evidence |
+|---|---|---|
+| T081 view tests | TEST_AFTER | `fb15254dc` adds the view code and three inline tests in one commit; cycle log: "part 1 wrote the view code and `configuration_lines` tests together". No red recorded. The tests that now stand (`e90348806`) were written on the green tree; cycle log records mutation checks (reverts), not a red run for the view |
+| T082 Restart button | TEST_AFTER | `Button::filled("Restart to apply", ..)` landed in `fb15254dc`; the only restart tests are on the reducer (`daemons_feature.rs`, `e90348806`), none on the button (I14-2) |
+| T083 docs | NOT_APPLICABLE | `docs/user-guide/settings.md`, see I14-6 |
+
+Reducer tests in `daemons_feature.rs` (`a_reported_configuration_is_kept_per_daemon_replaced_and_cleared`,
+`stopping_a_daemon_drops_what_it_reported`, `restart_to_apply_drops_the_report_and_starts_the_daemon_again`)
+were added after `925c0ef52`/`fb15254dc` changed the reducer; cycle log records two reverted mutants for them. Also TEST_AFTER, but the
+mutation checks corroborate that they assert.
+
+## Changes to tests that already existed (Issue 14)
+
+| File:line | Before | After | Note |
+|---|---|---|---|
+| `crates/micold-client/tests/daemons_section_geometry.rs:182` (`the_details_dialog_paints_the_errors_and_the_log_and_the_page_paints_neither`, commit `2bcd26fe5`) | `assert!(lay::text_overflows(body, &mut renderer).is_empty(), "the dialog text fits")` | overflows filtered with `.filter(\|o\| !o.content.starts_with("# Written by Micold AI IDE"))` before the emptiness check | Assertion loosened. Reason given (delivered-file code block scrolls sideways) is plausible but nothing asserts that the line does scroll, and any overflowing text starting with that prefix is now exempt. A FAIL condition on its own |
+
+No tests skipped, renamed or removed; no coverage/mutation threshold exists to lower.
+
+## Findings (Issue 14)
+
+| # | Severity | Finding | Evidence |
+|---|---|---|---|
+| I14-1 | HIGH | Existing overflow assertion loosened to exempt the delivered file's first line (see table above). Should instead keep the full assertion and exclude only a code block that is horizontally scrollable, or assert the scroll container exists | `tests/daemons_section_geometry.rs:178-184` |
+| I14-2 | HIGH | "Restart to apply" button has no view test. Mutant M1 (`restart_needed && false`) left `daemon_dialog_buttons::` (6) and `daemons_section_geometry::` (22) green. `daemon_dialog_buttons.rs` sweeps only Close. The `dialog()` wiring of `delivered` (`from_entry` + `render`) and `details.config` into the section is also unasserted by any test going through `dialog()` (not mutated; likely survivor) | `src/ui/daemon_details_dialog.rs:35,42-47`; `tests/daemon_dialog_buttons.rs:96-110` |
+| I14-3 | HIGH | "Never the output tail" is untested. The fixture carries `tail: ["line"]` but no test asserts it is absent. Mutant M2 (append `run.tail.join(" ")` to the start-script line) survived 6/6 | `src/ui/daemon_details_dialog.rs:89,103-106`, tests `:193-198,203` |
+| I14-4 | HIGH | Start-script outcome/reason mapping tested for one pair only (`Warned` + `Exit(3)`) and `None`. `Ok`, `Skipped`, `Failed`, `Signal`, `Timeout`, `Spawn`, `FileMissing` are unpinned. Mutant M3 (`Skipped` text to `"ok"`) and M4 (`Timeout` reason dropped) survived. Both are inside T081's "outcome and reason" | `src/ui/daemon_details_dialog.rs:90-102` |
+| I14-5 | HIGH (process) | No test-list section, no recorded red for T081/T082; tasks ticked `[X]` with the view tests written with or after the code. Fail-closed: TEST_AFTER | `tdd/test-list.md` (no Issue 14), `tdd/cycle-log.md` "Issue 14 (#1535) M1" |
+| I14-6 | MED | Docs promise "when it ran, how it ended and the names of the variables it exported". The view shows none of the variable names (`StartupReport` has outcome, reason, tail, `finished_at_secs` only) and "when" is a raw epoch number. The code comment "the start script's variables show by name (FR-029)" is likewise untrue of this view. No test | `docs/user-guide/settings.md` (Configuration in Details); `daemon_details_dialog.rs:60-61,103-106` |
+| I14-7 | LOW | `finished_at_secs` is shown as `at 1700000000` and the test pins that string; a user cannot read it | `daemon_details_dialog.rs:103-106`, test `:210` |
+| I14-8 | LOW | Mutant M6 (delivered block `toml: true` to `false`) survived; the language flag is unasserted. Cosmetic (highlighting), likely equivalent for behavior | `daemon_details_dialog.rs:130` |
+| I14-9 | LOW | Assertion roulette: `no_report_says_so_and_still_shows_the_delivered_file` joins two checks with `&&` in one unlabelled `assert!` (`:256`) | `daemon_details_dialog.rs:256` |
+
+Positives, read cold: `no_secret_value_is_in_any_rendered_text` is a real guard (it writes a known secret,
+parses and resolves it through `micold-core`, and renders the real `resolved_view`); the pure
+`configuration_rows` split makes the section testable without a renderer; no sleeps, clock or network;
+the six unit tests run in 0.00 s. The reducer tests use the existing `daemons_feature.rs` fixtures.
+
+## Mutation results (Issue 14)
+
+No mutation tool in the profile. Six deliberate mutants on `daemon_details_dialog.rs`, one at a time,
+each restored with `git checkout` and verified (`git diff` empty after each; lib suite re-run green at the end).
+Sample is not exhaustive: only this one file, none on `features/daemons.rs` or `shell/daemons.rs`.
+
+| Mutant | Behavior | Survived | Judgment |
+|---|---|---|---|
+| M1 `restart_needed` never true in `dialog()` | T082 Restart button | Yes | Real gap (I14-2) |
+| M2 tail appended to start-script line | T081 "never the output tail" | Yes | Real gap (I14-3), a disclosure risk |
+| M3 `Skipped` text to `"ok"` | T081 outcome | Yes | Real gap (I14-4) |
+| M4 `Timeout` reason dropped | T081 reason | Yes | Real gap (I14-4) |
+| M5 `token.repos.is_empty()` inverted | T081 reach per token | No | Caught by `the_configuration_names_reach_start_script_and_restart` |
+| M6 delivered block `toml: false` | highlight flag | Yes | Cosmetic (I14-8) |
+
+Score: 1 of 6 caught (scoped to one file, hand-picked, not a mutation score).
+
+## Traceability (Issue 14)
+
+| Criterion | Tests | End to end (through `dialog()`) |
+|---|---|---|
+| US6: delivered file shown | `no_report_says_so_...`, `no_secret_value_...` (via `configuration_rows`) | No: `dialog()` wiring unasserted (I14-2) |
+| US6: resolved values | `no_delivered_file_and_a_report_...` | No |
+| US6: reach per token | `the_configuration_names_reach_...` | No |
+| US6: start script outcome and reason | `the_configuration_names_reach_...`, `a_script_that_never_ran_...` | No; one pair only (I14-4) |
+| US6: never the output tail | none | No (I14-3) |
+| US6: Restart button on `restart_needed` | none at view level; reducer tests only | No (I14-2) |
+| US6/FR-029: failed load shown | `a_failed_load_is_shown_as_not_applied` | No |
+| SC-005: no secret value | `no_secret_value_is_in_any_rendered_text` | Partly: through `configuration_rows`, not `dialog()` |
+
+Untested criteria: the output tail, the Restart button. Tests tracing to nothing: none. There is no `traces` column for Issue 14.
+
+## What was not audited (Issue 14)
+
+- Daemon side of the status (`config_watch.rs`, `startup-result.json` fill, `ConfigStatus.tokens`, protocol 77): in `config_reload.rs`, `protocol_roundtrip.rs`, not read or run here.
+- `features/daemons.rs` and `shell/daemons.rs` restart logic beyond reading the cycle log's two reverted mutants; not re-mutated.
+- Full workspace suite, clippy, CI gates; coverage (no tool); visual correctness of the section (no visual pass read).
+- The `dialog()` wiring mutants (delivered `None`, `details.config` dropped) were reasoned about, not run.
+- Mutation was six hand-picked mutants on one file, not a tool run.
+- The earlier sections of this file (Issues 2, 3, 4, 13) are kept as they are: this run appended instead of overwriting because one file serves several issues.
