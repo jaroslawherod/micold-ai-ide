@@ -191,7 +191,7 @@ pub struct ActorKey {
 pub enum Dial {
     /// Connect to the host daemon, spawning it on a cold start. The config file is written
     /// (write-if-changed) before the spawn attempt (#1526, FR-005).
-    Host(HostDial),
+    Host(Box<HostDial>),
     /// Dial a container's published loopback port with this daemon's own token. Never spawns.
     Container {
         /// The port from the daemon's own entry, not the default sandbox port.
@@ -467,10 +467,10 @@ pub fn actor_specs_answered(
                     for path in runtime_projects.get(&entry.id).into_iter().flatten() {
                         settings.add_runtime_project(path);
                     }
-                    Dial::Host(HostDial {
+                    Dial::Host(Box::new(HostDial {
                         settings,
                         data_dir: micold_core::paths::data_dir(),
-                    })
+                    }))
                 }
                 DaemonRuntime::Container(c) if states.is_legacy(entry.id) => Dial::Container {
                     port: c.port,
