@@ -33,7 +33,13 @@ fn with_startup(settings: StartupSettings) -> DaemonSettings {
 #[test]
 fn the_group_is_offered_only_for_a_kind_that_delivers() {
     for runtime in RUNTIMES {
-        let hidden = Section::of(runtime);
+        let delivered = matches!(runtime, DraftRuntime::Ssh | DraftRuntime::Host);
+        assert_eq!(
+            Section::of(runtime).contains(&Section::StartScript),
+            delivered,
+            "{runtime:?}"
+        );
+        let hidden = Section::of_with(runtime, false);
         assert!(!hidden.contains(&Section::StartScript), "{runtime:?}");
         let shown = Section::of_with(runtime, true);
         assert_eq!(shown.last(), Some(&Section::StartScript), "{runtime:?}");
@@ -188,8 +194,8 @@ fn a_script_the_kind_does_not_deliver_is_left_out_of_the_file() {
         )
         .unwrap();
     let entry = registry.get(id).unwrap();
-    let (none, _) = DaemonSettings::from_entry(entry).unwrap();
-    assert_eq!(none.startup, None, "M3 delivers no script");
+    let (none, _) = DaemonSettings::from_entry_delivering(entry, |_| false).unwrap();
+    assert_eq!(none.startup, None, "no kind delivers");
     let (some, _) =
         DaemonSettings::from_entry_delivering(entry, |kind| kind == Kind::Host).unwrap();
     assert_eq!(

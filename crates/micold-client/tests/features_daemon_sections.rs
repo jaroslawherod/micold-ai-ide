@@ -26,8 +26,12 @@ fn each_kind_lists_its_sections_in_order() {
         Section::of(Kubernetes),
         [Connection, Image, Credentials, Resources, Placement]
     );
-    assert_eq!(Section::of(Ssh), [Connection]);
-    assert_eq!(Section::of(Host), [Connection, Sessions]);
+    // Host and SSH deliver a start script (#1533), so their group follows the rest.
+    assert_eq!(Section::of(Ssh), [Connection, Section::StartScript]);
+    assert_eq!(
+        Section::of(Host),
+        [Connection, Sessions, Section::StartScript]
+    );
 }
 
 #[test]
