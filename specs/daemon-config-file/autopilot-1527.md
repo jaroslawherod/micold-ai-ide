@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1527_deliver-the-configuration-to-container-daemons
 - **Started**: 2026-11-03
 - **Phase**: tasks (review done, design PR next)
-- **Next step**: tasks unit cuts milestones for Issue 6 (T030–T035, T090) in `specs/daemon-config-file/tasks.md`
+- **Next step**: after #1671 merges, milestone M1 (T030–T035, T090)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| — | Design (milestone for Issue 6) | not opened | — |
+| #1671 | Design (milestone for Issue 6) | open | — |
 
 ## Milestones
 
