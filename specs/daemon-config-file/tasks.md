@@ -460,3 +460,17 @@ Verdict FAIL: Issue 4 is not done until I4-1 and I4-2 are cleared. Verify each w
 - [x] T121 [US1] I4-7: add the #1525 behaviors with `traces` (FR-005, FR-013f) and a baseline to `tdd/test-list.md` and `tdd/cycle-log.md`
 - [x] T122 [US1] I4-8: reword `docs/user-guide/daemon-configuration.md:22-25` to what ships (render from the saved settings and check, no delivery yet)
 - [x] T123 [US1] I4-9, I4-10: drop or fold the duplicate `a_golden_file_passes_validation`, give bare `assert_eq!`s a message, and replace the twice-render test with a key-order assertion
+
+## Phase 22: TDD remediation (Issue 14 / #1535, from `tdd/verification.md`, section "Issue 14")
+
+Verdict FAIL: Issue 14 is not done until I14-1 to I14-5 are cleared. Verify each with
+`scripts/build-lock.sh cargo test -p micold-client --lib daemon_details_dialog` and
+`scripts/build-lock.sh cargo test -p micold-client --test main daemon_dialog_buttons:: daemons_section_geometry::` (one filter per run).
+
+- [ ] T124 [US6] I14-2: in `crates/micold-client/tests/daemon_dialog_buttons.rs` open the details of a daemon whose `ConfigStatus` has `restart_needed` and assert `sweep` finds `DaemonsMsg::RestartRequested(id)`; assert it is absent when not needed; done when `restart_needed && false` at `daemon_details_dialog.rs:35` fails the test
+- [ ] T125 [US6] I14-2: add a test through `dialog()` that painted text holds the rendered delivered file and the resolved values of a reported status (`lay::painted_text`, as `daemons_section_geometry.rs:143-153`); done when dropping `delivered` or `details.config` from the body fails it
+- [ ] T126 [US6] I14-3: give the `status()` tail a distinctive string and assert it is absent from `configuration_lines` and `configuration_rows` output (`daemon_details_dialog.rs:193-198`); done when appending `run.tail` to the start-script line fails it
+- [ ] T127 [US6] I14-4: table-drive the start-script line over every `StartupOutcome` and `StartupReason` (`Exit`, `Signal`, `Timeout`, `Spawn`, `FileMissing`) asserting the exact line; done when the `Skipped` and `Timeout` mutants fail
+- [ ] T128 [US6] I14-1: restore the full `text_overflows(...).is_empty()` assertion at `tests/daemons_section_geometry.rs:178-184`, exempting only what is shown to scroll (assert the delivered-file code block's scroll container), or fix the wrapping; done when an overflowing non-code line starting with `# Written by Micold AI IDE` would fail
+- [ ] T129 [US6] I14-5: add an Issue 14 section with behaviors, `traces` (US6, FR-029, SC-005) and a baseline to `tdd/test-list.md`, and record the red runs of T124-T127 in `tdd/cycle-log.md`
+- [ ] T130 [US6] I14-6, I14-7: make `docs/user-guide/settings.md` say what ships (outcome, reason, time; no variable names) or show the exported names and a readable time, with a test; fix the comment at `daemon_details_dialog.rs:60-61`
