@@ -56,3 +56,17 @@ Deviations from the task text, recorded: delivered locations follow the merged #
 file. "Show output" is a heading above an always-shown output block, not a toggle. The
 `connect_or_spawn_reading` loop is covered through `fresh_refusal` unit tests, not by spawning a real
 daemon. `RestartKeysReported` now has its producer (the daemon's `ConfigStatus`).
+
+## M5 (T030-T033)
+
+Not red-before-green in git: tests and code were committed together in one wip commit. Behaviours
+covered: `deliver_container` writes `startup.sh` under `/run/micold/config` and `startup.env` under
+`/run/micold/secrets` and removes stale copies when the settings drop them; the boot plan carries the
+startup data and a refresh keeps it (`service_control.rs`); the container kind shows the Start script
+group (client section tests updated to seven sections); `entrypoint.sh` names a non-zero daemon exit
+(`scripts/tests/basic-entrypoint.test.sh`); `sandbox_real_startup` runs the script as the daemon's
+own user and shows a refusal over SSH (compiled and run at Verify, `mise run test-sandbox`).
+
+Deviations, recorded: `crates/micold-daemon/src/remote.rs` needed no change, since the refusal path
+is the M1/M4 one (`startup-result.json`, read at the next connection); a refusal at container boot is
+covered by the entrypoint script test, not a real-runtime test.
