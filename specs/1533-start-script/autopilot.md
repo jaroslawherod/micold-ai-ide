@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
-| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | PR pending | gate green, PR open |
+| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | in review |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
 
