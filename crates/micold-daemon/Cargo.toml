@@ -310,6 +310,10 @@ name = "sandbox_real_idle"
 path = "tests/sandbox_real_idle.rs"
 
 [[test]]
+name = "sandbox_real_startup"
+path = "tests/sandbox_real_startup.rs"
+
+[[test]]
 name = "sandbox_real_limits"
 path = "tests/sandbox_real_limits.rs"
 

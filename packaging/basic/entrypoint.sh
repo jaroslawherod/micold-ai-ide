@@ -7,7 +7,8 @@
 # 2. Create the home's `~/.local/bin` and mise's shims folder, which #1289 puts on every session's
 #    `PATH`, so a session that lists them sees what exists (#1439, FR-011).
 # 3. When provisioning has started a daemon build here before, start it again in the background,
-#    so a restart-policy restart runs the daemon unattended (feature 027's survive-logout).
+#    so a restart-policy restart runs the daemon unattended (feature 027's survive-logout). The
+#    daemon runs the container's start script itself; a refusal is named on stderr (#1533).
 # 4. Take the directory of sshd's host key and authorized keys from `[ssh] dir` of the daemon's
 #    configuration file, `/run/micold/config/daemon.toml` (#1527), by default `/run/micold/ssh`.
 # 5. Run sshd as this container's main process and, when the runtime stops the container, stop every
@@ -70,7 +71,14 @@ last="$HOME/.micold/remote/last"
 if [ -f "$last" ]; then
   daemon="$HOME/.micold/remote/$(cat "$last")/micold-daemon"
   if [ -x "$daemon" ]; then
-    "$daemon" &
+    # The daemon runs the start script of `/run/micold/config/daemon.toml` itself, as this user,
+    # before it listens (#1533). One that refuses exits non-zero: say so in the container's log;
+    # the application shows the failure when it next connects.
+    (
+      status=0
+      "$daemon" || status=$?
+      [ "$status" -eq 0 ] || echo "micold-entrypoint: the daemon exited with status ${status}; if its start script refused, the output is in the daemon log and startup-result.json" >&2
+    ) &
   fi
 fi
 

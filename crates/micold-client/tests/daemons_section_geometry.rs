@@ -274,7 +274,7 @@ fn the_container_form_paints_six_titles_with_only_connection_open() {
             .count()
     };
     assert_eq!(count(Icon::MoveUp, &shown), 1, "one open header");
-    assert_eq!(count(Icon::MoveDown, &shown), 5, "five closed headers");
+    assert_eq!(count(Icon::MoveDown, &shown), 6, "six closed headers");
 
     state.update(Message::Daemons(DaemonsMsg::SectionToggled(
         Section::Network,
@@ -1068,8 +1068,8 @@ fn the_start_script_group_follows_delivery_and_fits_when_forced_on() {
         DraftRuntime::Host,
     ] {
         let (mut state, shown) = add_form(runtime);
-        // Host and SSH deliver a script since M4; container and pod do not yet.
-        let delivered = matches!(runtime, DraftRuntime::Ssh | DraftRuntime::Host);
+        // Host and SSH deliver a script since M4, container since M5; the pod does not yet.
+        let delivered = !matches!(runtime, DraftRuntime::Kubernetes);
         assert_eq!(
             has(&shown, "Start script"),
             delivered,

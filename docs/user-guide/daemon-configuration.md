@@ -198,7 +198,7 @@ directory. Nothing connects while it runs.
 
 #### Setting it up in Settings, and how it reaches the daemon
 
-**Settings → Daemons → Start script** (host and SSH daemons) edits the script and the other
+**Settings → Daemons → Start script** (host, SSH and container daemons) edits the script and the other
 `[startup]` keys without hand-writing the file. Pick a script file, or write the script in the
 inline editor; the inline text is kept as a file in the application's data directory and used like a
 picked one. Set the shell, timeout (1 to 3600 seconds), failure policy, run policy, secret
@@ -213,15 +213,16 @@ daemon:
 |---|---|---|
 | Host | the daemon's data directory: `startup.sh` and `startup.env` beside `daemon.toml` | `0600` |
 | SSH | `~/.micold/remote/secrets/startup.sh` and `startup.env` on the remote machine | `0600` |
+| Container | `startup.sh` in the folder mounted at `/run/micold/config`, `startup.env` in the one mounted at `/run/micold/secrets` | `0600` |
 
-`daemon.toml` holds only the paths of these copies, never the script text or a secret value. Container
-and Kubernetes daemons do not receive a start script yet, and Settings does not offer the group for
-them.
+`daemon.toml` holds only the paths of these copies, never the script text or a secret value.
+Kubernetes daemons do not receive a start script yet, and Settings does not offer the group for
+them. For a container, see [the daemon's configuration](sandboxed-daemon.md#the-daemons-configuration).
 
 #### When it fails
 
 A start the script refused shows the daemon in an error state with the exit status and the last 200
-lines of the script's output, for a host daemon and for an SSH daemon. With `on_failure = "warn"`
+lines of the script's output, for a host, an SSH and a container daemon. With `on_failure = "warn"`
 the daemon serves, and **Daemon details → Configuration** shows the failure as a warning with
 **Show output** and the same lines. The output is also in the daemon log under the `startup` target.
 The output can echo what the script read: do not print secrets.

@@ -194,7 +194,7 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(true), home, &delivery).unwrap());
+        assert!(deliver_container("box", &profile(true), home, &delivery, None).unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
         assert!(errors.is_empty(), "{errors:?}\n{text}");
@@ -227,10 +227,104 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(false), home, &delivery).unwrap());
+        assert!(deliver_container("box", &profile(false), home, &delivery, None).unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         assert!(!text.contains("idle_stop"), "{text}");
-        assert!(!deliver_container("box", &profile(false), home, &delivery).unwrap());
-        assert!(deliver_container("box", &profile(true), home, &delivery).unwrap());
+        assert!(!deliver_container("box", &profile(false), home, &delivery, None).unwrap());
+        assert!(deliver_container("box", &profile(true), home, &delivery, None).unwrap());
+    }
+
+    fn startup_in(app: &Path, with_env: bool) -> micold_client::daemon_config_render::StartupTable {
+        use micold_core::daemons::{StartupScript, StartupSettings};
+        let script = app.join("mine.sh");
+        std::fs::write(&script, "echo SCRIPT_BODY\n").unwrap();
+        let mut settings = StartupSettings::new(StartupScript::File(script.clone()));
+        if with_env {
+            let env = app.join("mine.env");
+            std::fs::write(&env, "TOKEN=SECRET_VALUE\n").unwrap();
+            settings.env_file = Some(env);
+        }
+        micold_client::daemon_config_render::StartupTable {
+            script_file: script,
+            settings,
+        }
+    }
+
+    /// #1533 M5 (FR-011, US1.2, US5.4): the script goes into the folder mounted at
+    /// `/run/micold/config` and the `env_file` into the one mounted at `/run/micold/secrets`; the
+    /// file names the paths inside the container, and holds neither the script nor a secret.
+    #[test]
+    fn the_script_and_env_file_go_to_the_config_and_secrets_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let startup = startup_in(dir.path(), true);
+
+        deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            Some(&startup),
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(delivery.config.join("startup.sh")).unwrap(),
+            "echo SCRIPT_BODY\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(delivery.secrets.join("startup.env")).unwrap(),
+            "TOKEN=SECRET_VALUE\n"
+        );
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(
+            text.contains("script_file = \"/run/micold/config/startup.sh\""),
+            "{text}"
+        );
+        assert!(
+            text.contains("env_file = \"/run/micold/secrets/startup.env\""),
+            "{text}"
+        );
+        assert!(
+            !text.contains("SCRIPT_BODY") && !text.contains("SECRET_VALUE"),
+            "{text}"
+        );
+        let (_, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+    }
+
+    /// A script taken away leaves no stale copy of it or of its secret in the folders.
+    #[test]
+    fn a_daemon_without_a_script_leaves_no_stale_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let home = Path::new("/home/jaro");
+        let startup = startup_in(dir.path(), true);
+        deliver_container("box", &profile(false), home, &delivery, Some(&startup)).unwrap();
+
+        deliver_container("box", &profile(false), home, &delivery, None).unwrap();
+
+        assert!(!delivery.config.join("startup.sh").exists());
+        assert!(!delivery.secrets.join("startup.env").exists());
+    }
+
+    #[test]
+    fn an_unreadable_script_stops_the_delivery_naming_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let mut startup = startup_in(dir.path(), false);
+        startup.settings.script =
+            micold_core::daemons::StartupScript::File(dir.path().join("gone.sh"));
+        startup.script_file = dir.path().join("gone.sh");
+
+        let err = deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            Some(&startup),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("gone.sh"), "{err}");
     }
 }

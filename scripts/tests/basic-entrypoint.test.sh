@@ -145,6 +145,29 @@ else
 fi
 rm -rf "$home" "$(dirname "$marker")" "$err"
 
+# A daemon the entrypoint starts that exits non-zero (a start script that refused, #1533, US4.1) is
+# named on stderr with its status; one that exits 0 is not.
+for status in 3 0; do
+  home="$(mktemp -d)"
+  mkdir -p "$home/.micold/remote/v1"
+  printf 'v1\n' >"$home/.micold/remote/last"
+  printf '#!/bin/sh\nexit %s\n' "$status" >"$home/.micold/remote/v1/micold-daemon"
+  chmod 0755 "$home/.micold/remote/v1/micold-daemon"
+  run_home "$home"
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    grep -q 'the daemon exited' "$err" && break
+    sleep 0.1
+  done
+  said=no
+  grep -q "the daemon exited with status $status" "$err" && said=yes
+  if { [ "$status" -ne 0 ] && [ "$said" = yes ]; } || { [ "$status" -eq 0 ] && ! grep -q 'the daemon exited' "$err"; }; then
+    pass "a daemon that exits with status $status: stderr says so only for a failure"
+  else
+    fail "a daemon that exits with status $status: stderr says so only for a failure" "$(cat "$err")"
+  fi
+  rm -rf "$home"
+done
+
 rm -rf "$(dirname "$jaro")"
 
 [ "$failures" -eq 0 ]

@@ -111,14 +111,20 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// started by the entrypoint and the one started over SSH both read it. The client reaches the
 /// container through its SSH server, so the daemon listens on its socket, as it did when `-e` values
 /// told it so. Returns whether it wrote.
+///
+/// A start script goes into `delivery.config` and its `env_file` into `delivery.secrets`, and the
+/// file names them at `/run/micold/config/startup.sh` and `/run/micold/secrets/startup.env`
+/// (#1533, FR-011). Without a script, a copy left by an earlier one is removed.
 pub fn deliver_container(
     name: &str,
     profile: &micold_core::sandbox::SandboxProfile,
     home: &Path,
     delivery: &micold_core::sandbox::DeliveryMount,
+    startup: Option<&StartupTable>,
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
     use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
+    use micold_core::sandbox::{CONTAINER_CONFIG_DIR, CONTAINER_SECRETS_DIR};
     use micold_core::ssh::argv::CONTAINER_DATA_DIR;
     let settings = DaemonSettings {
         data_dir: Some(CONTAINER_DATA_DIR.into()),
@@ -126,7 +132,18 @@ pub fn deliver_container(
         image: Some(profile.image.reference().to_string()),
         idle_stop: profile.survive_logout.then_some(IdleStopSetting::Off),
         ssh_dir: Some(CONTAINER_SSH_DIR.into()),
+        startup: startup.cloned(),
         ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
+    };
+    let files = read_startup_files(&settings)?;
+    // POSIX paths inside the container, whatever this client is.
+    let settings = match &files {
+        Some(_) => relocated_startup(
+            &settings,
+            format!("{CONTAINER_CONFIG_DIR}/{SCRIPT_NAME}").into(),
+            format!("{CONTAINER_SECRETS_DIR}/{ENV_NAME}").into(),
+        ),
+        None => settings,
     };
     let text = daemon_config_render::prepare(&settings, Kind::Container)
         .map_err(|errors| io::Error::other(errors[0].to_string()))?;
@@ -134,10 +151,36 @@ pub fn deliver_container(
     // home), and the secrets directory exists for the files delivered into it.
     micold_core::owner_only::ensure_dir(&delivery.config)?;
     micold_core::owner_only::ensure_dir(&delivery.secrets)?;
-    write_if_changed(
+    let script = delivery.config.join(SCRIPT_NAME);
+    let env = delivery.secrets.join(ENV_NAME);
+    let mut wrote = false;
+    match &files {
+        Some(files) => {
+            wrote |= write_if_changed(&script, &files.script)?;
+            match &files.env {
+                Some(bytes) => wrote |= write_if_changed(&env, bytes)?,
+                None => wrote |= remove_if_present(&env)?,
+            }
+        }
+        None => {
+            wrote |= remove_if_present(&script)?;
+            wrote |= remove_if_present(&env)?;
+        }
+    }
+    let config = write_if_changed(
         &delivery.config.join(daemon_config_render::ORIGIN),
         text.as_bytes(),
-    )
+    )?;
+    Ok(wrote | config)
+}
+
+/// Removes `path` when it exists; whether it did.
+fn remove_if_present(path: &Path) -> io::Result<bool> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 /// Writes `bytes` to `path` only when the file does not already hold them, by writing a temporary

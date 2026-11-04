@@ -208,6 +208,7 @@ mod tests {
             projects: Vec::new(),
             container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
             port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
+            startup: None,
         });
 
         let _ = on_restart_service_requested(&mut app);
@@ -337,6 +338,7 @@ mod tests {
             projects: Vec::new(),
             container_name: "Box-ctr".to_string(),
             port: 7001,
+            startup: None,
         });
         assert_eq!(
             app.sandbox_daemon(),
@@ -354,6 +356,45 @@ mod tests {
 
         view_worktree_on(&mut app, first);
         assert!(matches!(restart_target(&app), RestartTarget::Boot));
+    }
+
+    /// #1533 M5: a Settings save that adds a start script reaches the boot plan, so the next
+    /// restart of the boot container delivers it.
+    #[test]
+    fn a_saved_start_script_reaches_the_boot_plan() {
+        use micold_core::daemons::{FileSettings, StartupScript, StartupSettings};
+        let mut app = base_app();
+        let [first] = with_containers(&mut app, &["Box"])[..] else {
+            unreachable!()
+        };
+        app.sandbox_boot = Some(crate::shell::sandbox::BootPlan {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            state_dir: std::path::PathBuf::from("/tmp/micold-test"),
+            projects: Vec::new(),
+            container_name: "Box-ctr".to_string(),
+            port: 7001,
+            startup: None,
+        });
+        let mut registry = app.core.settings.daemons.clone();
+        registry
+            .set_file(
+                first,
+                FileSettings {
+                    startup: Some(StartupSettings::new(StartupScript::File("/s.sh".into()))),
+                    ..FileSettings::default()
+                },
+            )
+            .unwrap();
+
+        app.apply_daemon_outcome(&micold_client::features::Outcome::DaemonRegistryChanged(
+            registry,
+        ));
+
+        let startup = app.sandbox_boot.as_ref().unwrap().startup.as_ref();
+        assert_eq!(
+            startup.map(|t| t.script_file.clone()),
+            Some(std::path::PathBuf::from("/s.sh"))
+        );
     }
 
     /// A daemon on a host the app does not own is not stopped from here: its row says how.

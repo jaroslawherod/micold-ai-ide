@@ -334,6 +334,10 @@ pub struct ContainerBringUp {
     /// What the container may reach and run. `SandboxProfile` is not `Hash`, so its serialised
     /// form is hashed.
     pub profile: Box<micold_core::sandbox::SandboxProfile>,
+    /// The daemon's start script and its `[startup]` keys, delivered with its configuration (#1533).
+    /// Only the path and keys are identity: a change to the script's text applies at the next start,
+    /// which delivers it again.
+    pub startup: Option<daemon_config_render::StartupTable>,
 }
 
 impl std::hash::Hash for ContainerBringUp {
@@ -342,6 +346,12 @@ impl std::hash::Hash for ContainerBringUp {
         serde_json::to_string(&self.profile)
             .unwrap_or_default()
             .hash(state);
+        if let Some(startup) = &self.startup {
+            startup.script_file.hash(state);
+            serde_json::to_string(&startup.settings)
+                .unwrap_or_default()
+                .hash(state);
+        }
     }
 }
 
@@ -506,6 +516,8 @@ pub fn actor_specs_answered(
                                 ContainerBringUp {
                                     state_dir,
                                     profile: Box::new(c.profile.clone()),
+                                    startup: DaemonSettings::from_entry(entry)
+                                        .and_then(|(settings, _)| settings.startup),
                                 }
                             })
                         })

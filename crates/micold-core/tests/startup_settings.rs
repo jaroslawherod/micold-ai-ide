@@ -47,11 +47,11 @@ fn the_entry_holds_the_inline_marker_and_no_text() {
 }
 
 #[test]
-fn only_host_and_ssh_deliver_a_script_so_far() {
+fn only_a_pod_does_not_deliver_a_script_yet() {
     for (kind, delivered) in [
         (Kind::Host, true),
         (Kind::Ssh, true),
-        (Kind::Container, false),
+        (Kind::Container, true),
         (Kind::Kubernetes, false),
     ] {
         assert_eq!(start_script_delivered(kind), delivered, "{kind:?}");

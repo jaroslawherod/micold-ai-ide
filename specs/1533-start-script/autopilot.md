@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M4: verify fixes compile (`mise run check`), run targeted tests (core `startup_settings` is a mod of tests/main.rs, not its own target; client `daemon_config_delivery_host`, `--lib ssh_delivery`, core `ssh::classify`), re-review round 2 (sonnet) of the fix diff, full gate, PR
+- **Next step**: M5: review A and B, full gate, PR (container delivery, tasks T030-T033); M6 waits for #1528
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1665 | M1 | merged | d0f4739f6fe79a7e9bc2af87729e0f30597105c2 |
 | #1669 | M2 | merged | 96a41b38670b43471a568573dd143459189e139a |
 | #1673 | M3 | merged | b146a398d5597cc67bbd2e2db4994b1bc2649fcf |
+| #1682 | M4 | merged | 3af058506bbe0e95b0b8e3e31801c8388b23604c |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
-| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | in review |
+| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | merged |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
 
@@ -73,7 +74,10 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-None.
+M5 implemented, uncommitted until this handover commit; no PR yet. Done: T030-T033 ticked; deliver_container(.., startup) writes startup.sh to config dir, startup.env to secrets dir (paths /run/micold/config|secrets), removes stale copies; startup threaded through ContainerBringUp, BootPlan (+startup_of, refresh in routing.rs refresh_sandbox_boot, test in service_control.rs), start_attempt; start_script_delivered now true for Container; entrypoint.sh names a non-zero daemon exit (+ test in scripts/tests/basic-entrypoint.test.sh); docs in sandboxed-daemon.md and daemon-configuration.md; sandbox_real_startup.rs (wired in micold-daemon Cargo.toml, not yet compiled/run).
+Review A round 1 (snapshot 33749c64:2a88331e): F1 MAJOR fixed (boot plan refresh), F2 MINOR doc added.
+Next: (1) scoped gate: 4 client tests were updated for container showing the group (daemons_feature, daemons_section_geometry x2 incl. test name `the_container_form_paints_six_titles...`, features_daemon_sections) - rerun `scripts/autopilot/scoped-gate.sh` (detached, hold.sh) and fix; also compile `cargo test -p micold-daemon --features sandbox-real-runtime --no-run --test sandbox_real_startup`; (2) `mise run image` + `mise run test-sandbox` (podman present) for Verify; (3) Review B (conformance, sonnet) once; (4) visual pass for the container form's Start script group; (5) full gate, PR "feat(1533): deliver the start script to container daemons (#1533)", body Refs #1533, then record PR in ledger. Prior PR #1682 merge SHA 3af058506bbe0e95b0b8e3e31801c8388b23604c.
+Follow-up: a content change to the script alone does not change the actor identity; delivered at next start.
 
 ## Open escalation
 

@@ -81,10 +81,10 @@
 
 ## Phase 8: Container delivery (needs #1527)
 
-- [ ] T030 [P] [US4] Failing tests in `crates/micold-client/src/shell/daemon_sync.rs` (script under `/run/micold/config`, `env_file` under `/run/micold/secrets`) and a `mise run test-sandbox` case (script runs as the daemon's own user, never root, at boot and over SSH; `HOME` equals `MICOLD_HOME`; failure visible, US1.2, US4.1)
-- [ ] T031 [US4] Deliver script and `env_file` for the container kind in `crates/micold-client/src/shell/daemon_sync.rs` and enable the group for it
-- [ ] T032 [US4] Container entrypoint start path and error display for a refused container daemon (`packaging/basic/entrypoint.sh` and `crates/micold-daemon/src/remote.rs`)
-- [ ] T033 [US4] User guide: container delivery and installs under `~/.local` in `docs/user-guide/sandboxed-daemon.md`
+- [x] T030 [P] [US4] Failing tests in `crates/micold-client/src/shell/daemon_sync.rs` (script under `/run/micold/config`, `env_file` under `/run/micold/secrets`) and a `mise run test-sandbox` case (script runs as the daemon's own user, never root, at boot and over SSH; `HOME` equals `MICOLD_HOME`; failure visible, US1.2, US4.1)
+- [x] T031 [US4] Deliver script and `env_file` for the container kind in `crates/micold-client/src/shell/daemon_sync.rs` and enable the group for it
+- [x] T032 [US4] Container entrypoint start path and error display for a refused container daemon (`packaging/basic/entrypoint.sh` and `crates/micold-daemon/src/remote.rs`)
+- [x] T033 [US4] User guide: container delivery and installs under `~/.local` in `docs/user-guide/sandboxed-daemon.md`
 
 **Checkpoint (M5)**: T030 to T033, after #1527 merges.
 
