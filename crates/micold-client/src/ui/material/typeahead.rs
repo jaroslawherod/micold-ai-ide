@@ -279,98 +279,100 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
     }
 }
 
-/// `.on_submit` (feature 1186, research R8): Enter runs the field's own action when the list has no
-/// enabled row under the keyboard, and picks that row when it has one.
 #[cfg(test)]
-mod on_submit_tests {
-    use super::super::picker::Row;
-    use super::super::test_support::{named_key, roles, Mounted};
-    use super::Typeahead;
-    use iced::keyboard::key::Named;
-    use iced::mouse;
+mod tests {
+    /// `.on_submit` (feature 1186, research R8): Enter runs the field's own action when the list
+    /// has no enabled row under the keyboard, and picks that row when it has one.
+    mod on_submit_tests {
+        use super::super::super::picker::Row;
+        use super::super::super::test_support::{named_key, roles, Mounted};
+        use super::super::Typeahead;
+        use iced::keyboard::key::Named;
+        use iced::mouse;
 
-    fn rows() -> Vec<Row> {
-        vec![
-            Row::new("ABC-1 First", Vec::new()),
-            Row::new("ABC-2 Second", Vec::new()),
-        ]
+        fn rows() -> Vec<Row> {
+            vec![
+                Row::new("ABC-1 First", Vec::new()),
+                Row::new("ABC-2 Second", Vec::new()),
+            ]
+        }
+
+        /// An open list laid out in flow, so the keys reach it through the base tree, with the
+        /// field focused; what Enter publishes.
+        fn enter(typeahead: Typeahead<'_, String>) -> Vec<String> {
+            let mut mounted = Mounted::new(typeahead.open(true).in_flow(true));
+            mounted.focus_next();
+            mounted.send(named_key(Named::Enter), mouse::Cursor::Unavailable)
+        }
+
+        fn typeahead<'a>(query: &'a str) -> Typeahead<'a, String> {
+            Typeahead::new(query, rows(), |q: String| format!("typed {q}"), roles())
+                .on_pick(|i: usize| format!("picked {i}"))
+        }
+
+        #[test]
+        fn enter_with_no_highlighted_row_publishes_the_submit_message() {
+            let published = enter(typeahead("status = Done").on_submit("run".to_string()));
+            assert_eq!(published, vec!["run".to_string()]);
+        }
+
+        #[test]
+        fn enter_on_a_highlighted_enabled_row_still_picks() {
+            let published = enter(
+                typeahead("status = Done")
+                    .highlighted(Some(1))
+                    .on_submit("run".to_string()),
+            );
+            assert_eq!(published, vec!["picked 1".to_string()]);
+        }
+
+        #[test]
+        fn without_on_submit_enter_publishes_nothing() {
+            let published = enter(typeahead("status = Done"));
+            assert!(published.is_empty(), "published {published:?}");
+        }
     }
 
-    /// An open list laid out in flow, so the keys reach it through the base tree, with the field
-    /// focused; what Enter publishes.
-    fn enter(typeahead: Typeahead<'_, String>) -> Vec<String> {
-        let mut mounted = Mounted::new(typeahead.open(true).in_flow(true));
-        mounted.focus_next();
-        mounted.send(named_key(Named::Enter), mouse::Cursor::Unavailable)
-    }
+    /// With no rows, [`Typeahead::empty_message`] stands in their place rather than nothing
+    /// (contract §4.2): a caller that opens the list over a result set that turned out empty — a
+    /// model picker whose CLI query failed, say — has a way to say so instead of a bare field
+    /// (BUG-1679 acceptance bullet 2).
+    mod empty_message_tests {
+        use super::super::super::test_support::{roles, Mounted};
+        use super::super::Typeahead;
 
-    fn typeahead<'a>(query: &'a str) -> Typeahead<'a, String> {
-        Typeahead::new(query, rows(), |q: String| format!("typed {q}"), roles())
-            .on_pick(|i: usize| format!("picked {i}"))
-    }
+        fn words(m: &mut Mounted<'_>) -> Vec<String> {
+            m.painted_text().into_iter().map(|p| p.content).collect()
+        }
 
-    #[test]
-    fn enter_with_no_highlighted_row_publishes_the_submit_message() {
-        let published = enter(typeahead("status = Done").on_submit("run".to_string()));
-        assert_eq!(published, vec!["run".to_string()]);
-    }
+        #[test]
+        fn no_rows_draws_the_message_instead_of_nothing() {
+            let t: Typeahead<'static, String> =
+                Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
+                    .in_flow(true)
+                    .open(true)
+                    .empty_message("No models to choose from. Type a model id and press Enter.");
+            let drawn = words(&mut Mounted::new(t));
+            assert!(
+                drawn
+                    .iter()
+                    .any(|d| d == "No models to choose from. Type a model id and press Enter."),
+                "{drawn:?}"
+            );
+        }
 
-    #[test]
-    fn enter_on_a_highlighted_enabled_row_still_picks() {
-        let published = enter(
-            typeahead("status = Done")
-                .highlighted(Some(1))
-                .on_submit("run".to_string()),
-        );
-        assert_eq!(published, vec!["picked 1".to_string()]);
-    }
-
-    #[test]
-    fn without_on_submit_enter_publishes_nothing() {
-        let published = enter(typeahead("status = Done"));
-        assert!(published.is_empty(), "published {published:?}");
-    }
-}
-
-/// With no rows, [`Typeahead::empty_message`] stands in their place rather than nothing (contract
-/// §4.2): a caller that opens the list over a result set that turned out empty — a model picker
-/// whose CLI query failed, say — has a way to say so instead of a bare field (BUG-1679 acceptance
-/// bullet 2).
-#[cfg(test)]
-mod empty_message_tests {
-    use super::super::test_support::{roles, Mounted};
-    use super::Typeahead;
-
-    fn words(m: &mut Mounted<'_>) -> Vec<String> {
-        m.painted_text().into_iter().map(|p| p.content).collect()
-    }
-
-    #[test]
-    fn no_rows_draws_the_message_instead_of_nothing() {
-        let t: Typeahead<'static, String> =
-            Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
-                .in_flow(true)
-                .open(true)
-                .empty_message("No models to choose from. Type a model id and press Enter.");
-        let drawn = words(&mut Mounted::new(t));
-        assert!(
-            drawn
-                .iter()
-                .any(|d| d == "No models to choose from. Type a model id and press Enter."),
-            "{drawn:?}"
-        );
-    }
-
-    /// Without the message, an empty list draws nothing extra — the gap this fix closes for the
-    /// model picker specifically (`ui::composer::model_control`), pinned here so a caller that
-    /// forgets `.empty_message()` again shows up as a behaviour change, not a silent one.
-    #[test]
-    fn no_rows_and_no_message_draws_nothing_extra() {
-        let t: Typeahead<'static, String> =
-            Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
-                .in_flow(true)
-                .open(true);
-        let drawn = words(&mut Mounted::new(t));
-        assert!(!drawn.iter().any(|d| d.contains("model")), "{drawn:?}");
+        /// Without the message, an empty list draws nothing extra — the gap this fix closes for
+        /// the model picker specifically (`ui::composer::model_control`), pinned here so a
+        /// caller that forgets `.empty_message()` again shows up as a behaviour change, not a
+        /// silent one.
+        #[test]
+        fn no_rows_and_no_message_draws_nothing_extra() {
+            let t: Typeahead<'static, String> =
+                Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
+                    .in_flow(true)
+                    .open(true);
+            let drawn = words(&mut Mounted::new(t));
+            assert!(!drawn.iter().any(|d| d.contains("model")), "{drawn:?}");
+        }
     }
 }
