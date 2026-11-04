@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1528_deliver-the-configuration-to-kubernetes-daemons
 - **Started**: 2026-11-03
 - **Phase**: implement
-- **Next step**: M1 PR CI; T039 kind check pending on CI
+- **Next step**: M1 PR open; wait for CI (T039 kind check runs there), merge, then close
 
 ## Pull requests
 
@@ -40,6 +40,8 @@ Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 20
 
 - Tasks review round 1 (snapshot 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722): CHANGES; F1 (MAJOR, T091 test not before code, T036 env list contradicted T091) fixed, prose only (T036 golden now expects `TZ`/`LANG`, T091 implements); F2 (MINOR) declined, column order is cosmetic; F3 (MINOR) left, T091 ID stable.
 - Tasks review round 2 (fix diff vs 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722, sonnet): CLEAN; F1 fix holds. One MINOR (T036 fully green only after T091) fixed with a note on T038.
+
+- Rebase-conflict review (sonnet, after rebase onto 2a88331e6 / #1527): CLEAN; one MINOR (POD_ENV doc comment wording) left. Full gate green on the rebased tree; one unrelated flake (`structured_permission::two_sessions_waiting_are_marked_separately`, passes 3/3 alone) on the first run.
 
 ## Declined review findings
 
