@@ -997,6 +997,52 @@ mod container_git_tests {
         assert_eq!(lang(Some("/x"), false), None);
     }
 
+    /// #1527, FR-039: `env_hygiene` takes the container signal from the installed settings (the
+    /// configuration file's `data_dir`), not from a variable the SSH-started daemon is never passed;
+    /// `session.env` is applied after it and beats the default `LANG`; `TZ` is left alone.
+    #[test]
+    fn env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win() {
+        crate::settings::install(crate::settings::DaemonSettings::resolve(None, &|name| {
+            (name == micold_core::paths::DATA_DIR_ENV).then(|| DATA.into())
+        }));
+        assert_eq!(
+            crate::settings::current().data_dir.as_deref(),
+            Some(Path::new(DATA)),
+            "another test installed settings first"
+        );
+        let inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
+
+        let mut cmd = CommandBuilder::new("true");
+        cmd.env("TZ", "Europe/Berlin");
+        let edits = env_hygiene(&cmd);
+        assert!(
+            !edits
+                .iter()
+                .any(|e| matches!(e, EnvEdit::Remove(k) if k == "TZ")),
+            "TZ is removed from a session"
+        );
+        // Whatever LANG the test process inherited, the git environment is the container signal.
+        assert!(
+            set(&edits).contains_key("GIT_CONFIG_COUNT"),
+            "the installed data_dir was not read"
+        );
+        if !inherited {
+            assert_eq!(set(&edits).get("LANG").map(String::as_str), Some("C.UTF-8"));
+        }
+
+        // The session's own variables follow the hygiene edits, as in `spawn_shell`/`spawn_ai_cli`.
+        apply_env_hygiene(&mut cmd);
+        cmd.env("LANG", "de_DE.UTF-8");
+        assert_eq!(
+            cmd.get_env("LANG").and_then(|v| v.to_str()),
+            Some("de_DE.UTF-8")
+        );
+        assert_eq!(
+            cmd.get_env("TZ").and_then(|v| v.to_str()),
+            Some("Europe/Berlin")
+        );
+    }
+
     #[test]
     fn a_helper_path_with_a_space_is_one_shell_word() {
         assert_eq!(shell_word("/a b/it's"), r"'/a b/it'\''s'");

@@ -666,3 +666,92 @@ Tests tracing to nothing: none. Claimed tests that do not exist: none (`tests/ma
 - I8-7, I8-11: `GithubTokenSetting::from_store` is not wired into `DaemonSettings::from_entry` until the delivery issues mount token files into containers; the entry-point test follows with that wiring. Tracked in the ledger's follow-ups.
 - I8-9: near-equivalent (`list()` hides the duplicate); left.
 - `<data_dir>/github-reach.json` (contract) is not implemented: Settings shows reach for the filter or the listing of a token pasted this session. Tracked in the ledger's follow-ups.
+
+---
+
+# Issue 6 (#1527) M1: container daemons read the delivered configuration
+
+```yaml
+scope: Issue 6 (#1527), tasks T030-T035 and T090; merged in PR #1687 (merge SHA 335ea366160866c9a3e36ddf00cafe8501fb85f1); range 766badc46..335ea3661 (code, tests, scripts, packaging)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 335ea3661
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md; 7 task-derived behaviors audited (T030, T031, T032, T033/T034, T090, V3 relaxation, MadeBeforeConfigDelivery)
+proven: 0
+likely: 0
+test_after: 7
+no_test: 0
+high_findings: 1 # at 335ea3661, before remediation; I6-1 to I6-3 are closed in the close PR
+mutants_tried: 7 # an eighth (G) was a malformed command and is discarded
+mutants_caught: 5
+mutants_survived: 2
+mutation_score: unmeasured # no tool; hand mutants only
+```
+
+**Verdict: FAIL.** The container delivery call in `shell/sandbox.rs::start_attempt` can be deleted and every test passes, so nothing shows
+that a real start writes the `daemon.toml` the container now depends on. The units are sound (5 of 7 mutants caught; H only by an unrelated test).
+
+## Test-first evidence (Issue 6)
+
+All seven behaviors are `TEST_AFTER`. `cycle-log.md` states "the `tdd.run` hook did not run ... tests and code were written together";
+commit `59b77f27b` carries code and tests in one commit, and no baseline or red run is recorded. The log's "red evidence by mutation on the
+green tree" is not in the log. `test-list.md` has no #1527 rows; `tasks.md` T030-T035, T090 are `[x]` with no list row to cross-check.
+
+Existing tests changed (all read in the diff): no skip, filter, ignore or threshold change. Assertions removed, each replaced:
+`sandbox_argv.rs`/`sandbox_parity.rs`: the `IDLE_STOP_ENV` `-e` expectations became "no `MICOLD_*` `-e`" (the opt-in now asserted by
+`deliver_container` tests and `sandbox_real_idle.rs`, which is feature-gated); `sandbox_argv.rs` allow-list lost `MICOLD_` (tightened);
+`daemon.rs` container_env tests lost `MICOLD_DATA_DIR`/`IMAGE_REFERENCE`/`IDLE_STOP` and now assert none starts with `MICOLD_`;
+`daemon_config/tests.rs` V3 tests flipped for kind `container` (spec-mandated). Mount-count expectations 4/7/9 became 6/9/11
+(`sandbox_credentials.rs:59`, `argv.rs:535,601`) with delivery paths asserted. No weakening found.
+
+## Findings (Issue 6)
+
+- **I6-1 HIGH.** `crates/micold-client/src/shell/sandbox.rs:359` (`deliver_container` call): mutant M-F (never delivers) SURVIVED the 50
+  `--bin micold-ai-ide sandbox` tests. `start_attempt` tests at `:819`, `:987` assert nothing about the file. Add a test that a start writes
+  `daemon.toml` and that a delivery error becomes `preparation_failed`.
+  **Remediation (done, tests only):** `shell/sandbox.rs` tests `a_bring_up_writes_the_daemons_configuration_into_the_delivery_folder` and `a_delivery_that_cannot_be_written_stops_the_start_as_preparation_failed`. Mutant (skip `deliver_container`) now fails both; restored.
+- **I6-2 MEDIUM.** `daemon_config_delivery_host.rs:182-209`: `ssh_dir` of the delivered file is never asserted (mutant M-D survived). Value
+  equals the entrypoint default, so near-equivalent today, but T032's `[ssh] dir` read has no producer-side test.
+  **Remediation (done, tests only):** `daemon_config_delivery_host.rs::container::the_file_carries_...` asserts `[ssh] dir` equals `CONTAINER_SSH_DIR` (the unset table resolves to None). Mutant `ssh_dir: None` now fails; restored.
+- **I6-3 MEDIUM.** T090 (`supervisor.rs:983`): the test covers `env_hygiene_with` only. Not asserted: `TZ` reaching a session on boot and
+  SSH paths (the task says the same test does), `session.env` beating `LANG`, and `env_hygiene`'s read of `settings::current().data_dir`
+  (mutant M-H fails only an unrelated log test, not the LANG test).
+  **Remediation (done, tests only):** `supervisor.rs::container_git_tests::env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win` installs settings with the container `data_dir` and asserts `env_hygiene` reads it, TZ is not removed, and a later `session.env` LANG beats the default. Mutant (data_dir `None`) now fails; restored. Not covered: the call order inside `spawn_shell`/`spawn_ai_cli` (needs a real PTY session).
+- **I6-4 MEDIUM.** All behaviors `TEST_AFTER`, log admits it, no mutation red recorded.
+- **I6-5 LOW.** No #1527 rows in `test-list.md`; T033/T034 have no test of their own beyond T030/T032.
+- **I6-6 LOW.** `entrypoint-config.test.sh` covers `[ssh] dir`; the `$HOME` fallback of `MICOLD_HOME` is left to `basic-entrypoint.test.sh` (not run here).
+- Smells: none HIGH. Messages are rule-style in `argv.rs`; `{kind}: {args:?}` messages in the new argv tests are value-style (style only).
+
+## Mutation results (Issue 6)
+
+No tool; 7 deliberate mutants, one at a time, restored with `git checkout -- <file>`, `git status` clean after each.
+
+| Mutant | File | Result |
+|---|---|---|
+| A config mount writable | `sandbox/argv.rs` | CAUGHT (`the_configuration_and_secrets_are_read_only...`) |
+| B adoption guard off | `sandbox/lifecycle.rs` | CAUGHT (`a_container_without_the_configuration_mount...`) |
+| C LANG condition inverted | `supervisor.rs` | CAUGHT (`a_container_session_gets_a_utf8_locale...`; first run matched 0 tests, rerun) |
+| D `ssh_dir: None` | `daemon_config_delivery.rs` | SURVIVED (I6-2) |
+| E ignore configured ssh dir | `entrypoint.sh` | CAUGHT (2 shell cases) |
+| F skip `deliver_container` | `shell/sandbox.rs` | SURVIVED (I6-1) |
+| H env_hygiene data_dir `None` | `supervisor.rs` | CAUGHT only by unrelated test (I6-3) |
+
+Sampling: 7 mutants on the highest-risk behaviors (FR-029 read-only, adoption, LANG, delivery, entrypoint); not exhaustive.
+
+## Traceability (Issue 6)
+
+| Criterion | Tests | Status |
+|---|---|---|
+| FR-005 no `MICOLD_*` on boot path (T030, T033) | `argv::...environment_is_small`, `sandbox_argv`, `sandbox_parity` | Covered |
+| FR-005 SSH path (T031) | `daemon::tests` container_env | Covered |
+| FR-005 file is written and mounted (T033) | `deliver_container` unit tests and the two `shell/sandbox.rs` bring-up tests | Covered (I6-1 closed) |
+| FR-029 read-only mounts | `argv` tests; `:ro` asserted | Covered at argv level; real runtime not run |
+| `[ssh] dir` (T032/T034) | `entrypoint-config.test.sh` | Covered |
+| FR-039 LANG/TZ (T090) | `supervisor` tests | Covered for the data_dir read and the LANG default; TZ and session.env precedence are contract illustrations, and the call order in `spawn_shell`/`spawn_ai_cli` is untested (I6-3) |
+
+## What was not audited (Issue 6)
+
+- Full workspace suite, `mise run gate`, `mise run test-sandbox` real-runtime cases (T035); Windows; `docs/user-guide/sandboxed-daemon.md`.
+- Mutants on `DeliveryMount::beside`, `mount_paths`, `write_if_changed` rename, `kube/manifest.rs`. No coverage tool.
+- Earlier sections untouched. Tasks not appended to `tasks.md` (request scoped writes to this file).
