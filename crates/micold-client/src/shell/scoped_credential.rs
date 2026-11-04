@@ -20,12 +20,14 @@ use std::time::Duration;
 use iced::futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use iced::futures::stream::{self, BoxStream, StreamExt};
 
+use micold_core::daemon_config::RepoPattern;
 use micold_core::daemons::DaemonId;
 use micold_core::github::GithubRepo;
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::scoped_credential::pat::{self, Reply, Transport};
+use micold_core::scoped_credential::pat::{self, Checked, Reply, Transport};
 use micold_core::scoped_credential::pat_store::{PatStore, StoredPat};
 use micold_core::scoped_credential::schedule::{RenewPolicy, Schedule};
+use micold_core::scoped_credential::token_choice::{choose, Filter};
 use micold_core::scoped_credential::{
     CredentialSource, CredentialStatus, CredentialTarget, Grant, NoCredentialReason,
     ScopedCredential, SecretToken, UnixTime, EXPIRY_WARNING_SECS,
@@ -124,8 +126,8 @@ impl CredentialSource for PatSource {
         _grant: Grant,
     ) -> Result<ScopedCredential, NoCredentialReason> {
         let store = self.store.as_ref();
-        let stored = store
-            .and_then(|s| s.get(repo))
+        let (name, stored) = store
+            .and_then(|s| token_for(s, repo))
             .ok_or(NoCredentialReason::SourceNotSetUp)?;
         let now = (self.now)();
         if stored.expires_at <= now {
@@ -135,11 +137,11 @@ impl CredentialSource for PatSource {
         let credential = ScopedCredential::pasted(repo, stored.token.clone(), expires_at, now)?;
         if expires_at != stored.expires_at {
             let refreshed = StoredPat {
-                token: stored.token,
                 expires_at,
+                ..stored
             };
             if let Some(store) = store {
-                let _ = store.put(repo, &refreshed);
+                let _ = store.put(&name, &refreshed);
             }
         }
         Ok(credential)
@@ -150,23 +152,58 @@ impl CredentialSource for PatSource {
     }
 }
 
-/// Check a pasted token for `repo` and, only when GitHub accepts it, store it (Settings, Add or
-/// Replace). Returns the expiry, or the reason for the form; nothing is stored on a refusal.
+/// The stored token `repo` uses, with its name: an exact filter beats `owner/*` beats no filter,
+/// and the first in the store's order wins a tie (#1529, FR-007).
+fn token_for(store: &PatStore, repo: &GithubRepo) -> Option<(String, StoredPat)> {
+    let tokens = store.list();
+    let filters: Vec<Filter<'_>> = tokens
+        .iter()
+        .map(|(name, pat)| Filter {
+            name,
+            repos: &pat.repos,
+        })
+        .collect();
+    let chosen = choose(&filters, repo)?;
+    tokens.into_iter().nth(chosen)
+}
+
+/// Check a pasted token named `name` and, only when GitHub accepts it, store it narrowed to `repos`
+/// (Settings, Add or Replace). Returns the expiry and the reach GitHub reports, or the reason for
+/// the form; nothing is stored on a refusal.
 pub fn check_and_store(
     transport: &dyn Transport,
     store: Option<&PatStore>,
-    repo: &GithubRepo,
+    name: &str,
+    repos: Vec<RepoPattern>,
     token: SecretToken,
     now: UnixTime,
-) -> Result<UnixTime, String> {
+) -> Result<Checked, String> {
     let store = store.ok_or("No data directory to keep the token in.")?;
-    let expires_at = pat::check(transport, repo, &token, now).map_err(|r| r.message())?;
+    // Push access is probed on the first repository the filter names exactly.
+    let probe = repos.iter().find_map(|p| match p {
+        RepoPattern::Exact(o, r) => {
+            GithubRepo::from_remote_url(&format!("https://github.com/{o}/{r}"))
+        }
+        RepoPattern::Owner(_) => None,
+    });
+    let checked =
+        pat::check_added(transport, &token, probe.as_ref(), now).map_err(|r| r.message())?;
     // The same acceptance the source applies, so a token stored here is one `issue` will hold.
-    ScopedCredential::pasted(repo, token.clone(), expires_at, now).map_err(|r| r.message())?;
+    if let Some(repo) = &probe {
+        ScopedCredential::pasted(repo, token.clone(), checked.expires_at, now)
+            .map_err(|r| r.message())?;
+    }
     store
-        .put(repo, &StoredPat { token, expires_at })
+        .put(
+            name,
+            &StoredPat {
+                token,
+                expires_at: checked.expires_at,
+                repos,
+            },
+        )
         .map_err(|e| format!("Could not store the token: {e}"))?;
-    Ok(expires_at)
+    Ok(checked)
 }
 
 /// Where a daemon's messages go: its connection.
@@ -297,10 +334,11 @@ impl Manager {
         }
     }
 
-    /// The token of `repo` was replaced or removed: every daemon using it checks it again now.
-    pub fn refresh(&mut self, repo: &GithubRepo, now: UnixTime) {
+    /// A token was added, replaced, removed or reordered: every daemon checks every repository again
+    /// now, because which token a repository uses may have changed.
+    pub fn refresh_all(&mut self, now: UnixTime) {
         for entry in self.daemons.values_mut() {
-            entry.schedule.refresh(repo, now);
+            entry.schedule.refresh_all(now);
         }
     }
 
@@ -419,9 +457,10 @@ impl GitCredentials {
         self.post(move |m, _| m.stopped(daemon));
     }
 
-    /// The token of `repo` was replaced or removed in Settings: check it again for every daemon.
-    pub fn refresh(&self, repo: GithubRepo) {
-        self.post(move |m, now| m.refresh(&repo, now));
+    /// A token was added, replaced, removed or reordered in Settings: check every repository
+    /// again for every daemon.
+    pub fn refresh_all(&self) {
+        self.post(|m, now| m.refresh_all(now));
     }
 }
 

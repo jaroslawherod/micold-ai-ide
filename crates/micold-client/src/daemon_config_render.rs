@@ -11,12 +11,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use micold_core::daemon_config::{
-    diagnose, ConfigError, IdleStopSetting, Kind, Listen, OnFailure, RunPolicy, SocketSpec,
+    diagnose, ConfigError, IdleStopSetting, Kind, Listen, OnFailure, RepoPattern, RunPolicy,
+    SocketSpec,
 };
 use micold_core::daemons::{
     start_script_delivered, DaemonEntry, DaemonId, DaemonRuntime, StartupScript, StartupSettings,
 };
 use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
+use micold_core::scoped_credential::pat_store::PatStore;
 
 /// The first line of every rendered file.
 pub const HEADER: &str = "# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.";
@@ -63,6 +65,33 @@ pub fn load_inline_script(app_data: &Path, id: DaemonId) -> String {
     std::fs::read_to_string(inline_script_path(app_data, id)).unwrap_or_default()
 }
 
+/// One `[[github.tokens]]` entry: the token's name, the file it is kept in and its filter (#1529).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GithubTokenSetting {
+    pub name: String,
+    pub token_file: PathBuf,
+    /// Empty = every repository the token reaches (the key is left out).
+    pub repos: Vec<RepoPattern>,
+}
+
+impl GithubTokenSetting {
+    /// The tokens `store` holds, in the order Settings shows them: the order that decides which of
+    /// two equally specific tokens a repository uses.
+    pub fn from_store(store: &PatStore) -> Vec<Self> {
+        store
+            .list()
+            .into_iter()
+            .filter_map(|(name, pat)| {
+                Some(Self {
+                    token_file: store.token_file(&name)?,
+                    name,
+                    repos: pat.repos,
+                })
+            })
+            .collect()
+    }
+}
+
 /// What one daemon's file is rendered from. Unset values are left out, so the daemon uses the
 /// kind's default.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +111,8 @@ pub struct DaemonSettings {
     /// The `[startup]` table; `None` when the daemon has no start script, or its kind does not
     /// deliver one yet ([`start_script_delivered`]).
     pub startup: Option<StartupTable>,
+    /// The `[[github.tokens]]` entries, in file order (#1529).
+    pub github_tokens: Vec<GithubTokenSetting>,
 }
 
 impl DaemonSettings {
@@ -101,6 +132,7 @@ impl DaemonSettings {
             clone_root: None,
             projects: Vec::new(),
             startup: None,
+            github_tokens: Vec::new(),
         }
     }
 
@@ -227,6 +259,19 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     table(&mut out, "storage", |out| {
         key_path(out, "clone_root", &settings.clone_root)
     });
+    for token in &settings.github_tokens {
+        out.push_str("\n[[github.tokens]]\n");
+        let _ = writeln!(out, "name = {}", quote(&token.name));
+        let _ = writeln!(
+            out,
+            "token_file = {}",
+            quote(&token.token_file.to_string_lossy())
+        );
+        if !token.repos.is_empty() {
+            let list: Vec<String> = token.repos.iter().map(|p| quote(&p.to_string())).collect();
+            let _ = writeln!(out, "repos = [{}]", list.join(", "));
+        }
+    }
     for project in &settings.projects {
         out.push_str("\n[[projects]]\n");
         let _ = writeln!(out, "path = {}", quote(&project.path.to_string_lossy()));

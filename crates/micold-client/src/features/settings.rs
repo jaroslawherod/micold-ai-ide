@@ -1994,28 +1994,35 @@ pub enum Msg {
     JiraRemoveRequested,
     /// The Keep-or-Remove question was answered (US2 AS5, US3 AS4).
     JiraKeepOrRemoveChosen(KeepOrRemove),
-    /// *GitHub access tokens*: **Repository** was edited (#1002).
-    GithubPatRepoChanged(String),
-    /// *GitHub access tokens*: **Token** was edited; the text never shows in `Debug`.
+    /// *GitHub tokens*: **Name** was edited (#1002, #1529).
+    GithubPatNameChanged(String),
+    /// *GitHub tokens*: **Repositories** (the optional filter) was edited (#1529).
+    GithubPatReposChanged(String),
+    /// *GitHub tokens*: **Token** was edited; the text never shows in `Debug`.
     GithubPatTokenChanged(TokenInput),
-    /// *GitHub access tokens*: **Add** was pressed; the shell checks the token off the UI thread.
+    /// *GitHub tokens*: **Add** was pressed; the shell checks the token off the UI thread.
     GithubPatAddRequested,
-    /// *GitHub access tokens*: **Replace** on a row.
-    GithubPatReplaceRequested(micold_core::github::GithubRepo),
-    /// *GitHub access tokens*: **Remove** on a row; the shell deletes the stored token.
-    GithubPatRemoveRequested(micold_core::github::GithubRepo),
-    /// *GitHub access tokens*: a token's check finished. `Ok` carries the expiry GitHub reported
-    /// (the token is stored); `Err` the reason, and nothing was stored.
+    /// *GitHub tokens*: **Replace** on a row, by token name.
+    GithubPatReplaceRequested(String),
+    /// *GitHub tokens*: **Remove** on a row; the shell deletes the stored token.
+    GithubPatRemoveRequested(String),
+    /// *GitHub tokens*: a row was moved up or down; the shell keeps the new order.
+    GithubPatMoved(usize, micold_core::typeahead::Direction),
+    /// *GitHub tokens*: a token's check finished. `Ok` carries what GitHub reported (the token is
+    /// stored); `Err` the reason, and nothing was stored.
     GithubPatChecked {
-        /// The repository the token is for.
-        repo: micold_core::github::GithubRepo,
-        /// The expiry, or why the token was refused.
-        result: Result<micold_core::scoped_credential::UnixTime, String>,
+        /// The name the token is stored under.
+        name: String,
+        /// The filter it was stored with.
+        repos: Vec<micold_core::daemon_config::RepoPattern>,
+        /// The expiry and reach, or why the token was refused.
+        result: Result<github_tokens::Checked, String>,
     },
-    /// *GitHub access tokens*: the stored tokens were read (Settings opened).
+    /// *GitHub tokens*: the stored tokens were read (Settings opened): name, filter, expiry, in order.
     GithubPatsLoaded(
         Vec<(
-            micold_core::github::GithubRepo,
+            String,
+            Vec<micold_core::daemon_config::RepoPattern>,
             micold_core::scoped_credential::UnixTime,
         )>,
     ),
@@ -2164,15 +2171,23 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
                 }
             }
         }),
-        Msg::GithubPatRepoChanged(text) => state.settings.github_tokens.repo_edited(text),
+        Msg::GithubPatNameChanged(text) => state.settings.github_tokens.name_edited(text),
+        Msg::GithubPatReposChanged(text) => state.settings.github_tokens.repos_edited(text),
+        Msg::GithubPatMoved(index, direction) => {
+            state.settings.github_tokens.moved(index, direction);
+        }
         Msg::GithubPatTokenChanged(text) => state.settings.github_tokens.token_edited(text),
         Msg::GithubPatAddRequested => state.settings.github_tokens.add_requested(),
-        Msg::GithubPatReplaceRequested(repo) => {
-            state.settings.github_tokens.replace_requested(&repo);
+        Msg::GithubPatReplaceRequested(name) => {
+            state.settings.github_tokens.replace_requested(&name);
         }
-        Msg::GithubPatRemoveRequested(repo) => state.settings.github_tokens.removed(&repo),
-        Msg::GithubPatChecked { repo, result } => {
-            state.settings.github_tokens.checked(repo, result);
+        Msg::GithubPatRemoveRequested(name) => state.settings.github_tokens.removed(&name),
+        Msg::GithubPatChecked {
+            name,
+            repos,
+            result,
+        } => {
+            state.settings.github_tokens.checked(name, repos, result);
         }
         Msg::GithubPatsLoaded(stored) => state.settings.github_tokens.load(stored),
         Msg::Saved => saved(state),

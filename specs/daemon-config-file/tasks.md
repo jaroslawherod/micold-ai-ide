@@ -128,12 +128,12 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 ## Issue 8 — feat: one GitHub token for many repositories (needs 4)
 
-- [ ] T040 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat_store.rs`: store keyed `github-pat/<name>`; migration of each `github-pat/<owner>/<repo>` to a token named `<owner>-<repo>` with `repos = ["owner/repo"]`
-- [ ] T041 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat.rs`: the one-repository reach refusal (`parse_reach`, `:191-219`) is gone; a token reaching N repositories is accepted and its reach list returned
-- [ ] T042 [P] [US2] Failing test in `crates/micold-client/tests/github_tokens_reach.rs` (wired into `tests/main.rs`, module name contains `github`): the rendered `[[github.tokens]]` block carries name, token file and repos; Settings lists tokens in file order and shows, per repository in a token's reach, which token it uses and which are shadowed (two tokens with `repos = ["acme/*"]`: the first wins; reordering changes the winner)
-- [ ] T043 [US2] Implement the store and migration in `crates/micold-core/src/scoped_credential/pat_store.rs`; remove the reach refusal in `pat.rs`
-- [ ] T044 [US2] Settings → GitHub (`crates/micold-client/src/ui/settings/github.rs`): name, token, optional repos filter, the reach list per token; render into `[[github.tokens]]`
-- [ ] T045 [US2] Update `docs/user-guide/settings.md` (GitHub tokens section)
+- [x] T040 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat_store.rs`: store keyed `github-pat/<name>`; migration of each `github-pat/<owner>/<repo>` to a token named `<owner>-<repo>` with `repos = ["owner/repo"]`
+- [x] T041 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat.rs`: the one-repository reach refusal (`parse_reach`, `:191-219`) is gone; a token reaching N repositories is accepted and its reach list returned
+- [x] T042 [P] [US2] Failing test in `crates/micold-client/tests/github_tokens_reach.rs` (wired into `tests/main.rs`, module name contains `github`): the rendered `[[github.tokens]]` block carries name, token file and repos; Settings lists tokens in file order and shows, per repository in a token's reach, which token it uses and which are shadowed (two tokens with `repos = ["acme/*"]`: the first wins; reordering changes the winner)
+- [x] T043 [US2] Implement the store and migration in `crates/micold-core/src/scoped_credential/pat_store.rs`; remove the reach refusal in `pat.rs`
+- [x] T044 [US2] Settings → GitHub (`crates/micold-client/src/ui/settings/github.rs`): name, token, optional repos filter, the reach list per token; render into `[[github.tokens]]`
+- [x] T045 [US2] Update `docs/user-guide/settings.md` (GitHub tokens section)
 
 ---
 

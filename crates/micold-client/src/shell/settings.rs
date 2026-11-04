@@ -15,6 +15,7 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::settings::Msg;
 
+use micold_client::features::settings::github_tokens;
 use micold_core::scoped_credential::pat;
 use micold_core::scoped_credential::pat_store::PatStore;
 
@@ -28,7 +29,7 @@ fn load_github_tokens(app: &mut App) {
         .map(|store| store.list())
         .unwrap_or_default()
         .into_iter()
-        .map(|(repo, pat)| (repo, pat.expires_at))
+        .map(|(name, pat)| (name, pat.repos, pat.expires_at))
         .collect();
     app.core
         .update(Message::Settings(Msg::GithubPatsLoaded(stored)));
@@ -36,8 +37,8 @@ fn load_github_tokens(app: &mut App) {
 
 /// Tell the credential wiring about the tokens the section replaced or removed.
 fn refresh_github_tokens(app: &mut App) {
-    for repo in app.core.settings.github_tokens.take_refresh() {
-        app.git_credentials.refresh(repo);
+    if app.core.settings.github_tokens.take_refresh() {
+        app.git_credentials.refresh_all();
     }
 }
 
@@ -47,14 +48,15 @@ fn check_github_token(app: &mut App) -> Task<Message> {
     let Some(request) = app.core.settings.github_tokens.take_request() else {
         return Task::none();
     };
-    let answered = request.repo.clone();
+    let (answered, filter) = (request.name.clone(), request.repos.clone());
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
                 check_and_store(
                     &UreqTransport::default(),
                     PatStore::on_device().as_ref(),
-                    &request.repo,
+                    &request.name,
+                    request.repos,
                     pat::normalize(request.token.as_str()),
                     micold_core::unix_time::unix_secs(),
                 )
@@ -64,8 +66,12 @@ fn check_github_token(app: &mut App) -> Task<Message> {
         },
         move |result| {
             Message::Settings(Msg::GithubPatChecked {
-                repo: answered.clone(),
-                result,
+                name: answered.clone(),
+                repos: filter.clone(),
+                result: result.map(|c| github_tokens::Checked {
+                    expires_at: c.expires_at,
+                    reach: c.reach,
+                }),
             })
         },
     )
@@ -93,12 +99,24 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             refresh_github_tokens(app);
             Task::none()
         }
-        Msg::GithubPatRemoveRequested(repo) => {
-            let removed = PatStore::on_device().map_or(Ok(()), |store| store.remove(&repo));
+        // #1529: the order decides which of two equally specific tokens wins; keep it.
+        Msg::GithubPatMoved(..) => {
+            app.core.update(Message::Settings(msg));
+            let names = app.core.settings.github_tokens.names();
+            match PatStore::on_device().map_or(Ok(()), |store| store.set_order(&names)) {
+                Ok(()) => refresh_github_tokens(app),
+                Err(e) => app
+                    .core
+                    .notify_error(format!("Couldn't keep the order of the GitHub tokens: {e}")),
+            }
+            Task::none()
+        }
+        Msg::GithubPatRemoveRequested(name) => {
+            let removed = PatStore::on_device().map_or(Ok(()), |store| store.remove(&name));
             match removed {
                 Ok(()) => {
                     app.core
-                        .update(Message::Settings(Msg::GithubPatRemoveRequested(repo)));
+                        .update(Message::Settings(Msg::GithubPatRemoveRequested(name)));
                     refresh_github_tokens(app);
                 }
                 Err(e) => app
