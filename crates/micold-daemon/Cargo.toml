@@ -155,6 +155,10 @@ name = "git_credential_grant"
 path = "tests/git_credential_grant.rs"
 
 [[test]]
+name = "git_credential_pod"
+path = "tests/git_credential_pod.rs"
+
+[[test]]
 name = "history_damaged"
 path = "tests/history_damaged.rs"
 

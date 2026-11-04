@@ -253,3 +253,28 @@ mod install {
         assert!(!cancel_kube_start(&client.env, NAME), "the start is over");
     }
 }
+
+/// I7-1: the host time zone the shell installed reaches the pod's config map and its `TZ`.
+/// `install_time_zone` is first-call-wins for the process; no other test in this binary sets it.
+#[tokio::test]
+async fn the_host_time_zone_reaches_the_config_map_and_the_pod_env() {
+    micold_client::daemon::install_time_zone(Some("Europe/Berlin".into()));
+    let cluster = cluster();
+    attempt(&client(&cluster, welcoming()))
+        .await
+        .expect("the start connects");
+    let map = cluster
+        .manifest(NS, ObjectKind::ConfigMap, &names().config_map())
+        .expect("the config map was created");
+    let file = map["data"]["daemon.toml"].as_str().expect("daemon.toml");
+    assert!(file.contains("Europe/Berlin"), "{file}");
+    let pod = cluster
+        .manifest(NS, ObjectKind::Pod, &names().pod())
+        .expect("the pod was created");
+    let env = pod["spec"]["containers"][0]["env"].as_array().unwrap();
+    assert!(
+        env.iter()
+            .any(|e| e["name"] == "TZ" && e["value"] == "Europe/Berlin"),
+        "{env:?}"
+    );
+}

@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1528
 - **Worktree branch**: feat/1528_deliver-the-configuration-to-kubernetes-daemons
 - **Started**: 2026-11-03
-- **Phase**: implement
-- **Next step**: M1 PR #1690 CI; T039 kind check pending on CI
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1680 | design (milestone cut) | merged | 90a1522a392025444b33f429255ad10ca9314dbd |
-| #1690 | M1 | open | — |
+| #1690 | M1 | merged | 95163863755822fdf0369e6a68904fc08e9d8347 |
+| close PR (number below) | close | open | — |
 
 ## Milestones
 
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
-| M1 | pod daemons read ConfigMap `<name>-config` at `/run/micold/config` and directory-mounted Secrets under `/run/micold/secrets/…`; no `MICOLD_*` env; `TZ`, `LANG=C.UTF-8` | T036–T039, T091 | full | — |
+| M1 | pod daemons read ConfigMap `<name>-config` at `/run/micold/config` and directory-mounted Secrets under `/run/micold/secrets/…`; no `MICOLD_*` env; `TZ`, `LANG=C.UTF-8` | T036–T039, T091 | full | #1690 |
 
 Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 2026-11-03.
 
@@ -43,6 +44,8 @@ Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 20
 - Tasks review round 2 (fix diff vs 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722, sonnet): CLEAN; F1 fix holds. One MINOR (T036 fully green only after T091) fixed with a note on T038.
 
 - Rebase-conflict review (sonnet, after rebase onto 2a88331e6 / #1527): CLEAN; one MINOR (POD_ENV doc comment wording) left. Full gate green on the rebased tree; one unrelated flake (`structured_permission::two_sessions_waiting_are_marked_separately`, passes 3/3 alone) on the first run.
+
+- Close: converge (Issue 7 scope): no unbuilt behaviour. tdd-verify: FAIL at 951638637, I7-1 (HIGH), I7-2, I7-3 fixed (tests only), I7-4 to I7-6 accepted. Close diff review (snapshot 6fc6b7d446fd360b4ba9feb67ccc16d2ea40459b:95163863755822fdf0369e6a68904fc08e9d8347, sonnet): CLEAN, three MINORs left (F3: kind propagation delay not captured from CI log). T039 ticked: PR #1690 kube-cluster job log shows `kube_real_the_pod_reads_its_configuration_from_the_config_map ... ok`.
 
 ## Declined review findings
 
