@@ -269,7 +269,7 @@ rules:
   resources: ["pods/log", "pods/exec", "events"]
   verbs: ["get","list","watch","create"]
 - apiGroups: [""]
-  resources: ["secrets", "persistentvolumeclaims"]
+  resources: ["secrets", "configmaps", "persistentvolumeclaims"]
   verbs: ["get","list","watch","create","update","patch","delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

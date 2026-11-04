@@ -144,6 +144,11 @@ impl ResourceNames {
             .collect()
     }
 
+    /// The config map holding the daemon's `daemon.toml` (daemon-config-file contract §3.4).
+    pub fn config_map(&self) -> String {
+        format!("{}-config", self.base)
+    }
+
     /// The image pull secret.
     pub fn pull_secret(&self) -> String {
         format!("{}-pull", self.base)

@@ -26,6 +26,8 @@ pub struct Leftovers {
     pub pvc: String,
     /// The secrets: the access secret first, then one per allowed credential.
     pub secrets: Vec<String>,
+    /// The config map holding `daemon.toml`.
+    pub config_map: String,
 }
 
 /// Delete `name` if it exists and is ours, by the UID read now. The UID deleted, if anything was;
@@ -105,6 +107,15 @@ pub async fn remove(
     {
         delete_ours(cluster, namespace, names, ObjectKind::Secret, &secret).await?;
     }
+    let config_map = names.config_map();
+    delete_ours(
+        cluster,
+        namespace,
+        names,
+        ObjectKind::ConfigMap,
+        &config_map,
+    )
+    .await?;
     let pvc = names.pvc();
     delete_ours(
         cluster,
@@ -124,6 +135,7 @@ pub fn leftovers(allowed: &BTreeSet<KubeCredential>, names: &ResourceNames) -> L
         pod: names.pod(),
         pvc: names.pvc(),
         secrets: names.all_secrets(allowed),
+        config_map: names.config_map(),
     }
 }
 
@@ -165,6 +177,7 @@ mod tests {
         let n = names();
         fake.insert(NS, ObjectKind::Pod, &n.pod(), n.labels());
         fake.insert(NS, ObjectKind::PersistentVolumeClaim, &n.pvc(), n.labels());
+        fake.insert(NS, ObjectKind::ConfigMap, &n.config_map(), n.labels());
         for secret in [
             n.access_secret(),
             n.secret(&KubeCredential::GitConfig),
@@ -229,6 +242,7 @@ mod tests {
         remove(&fake, NS, &names(), &allowed()).await.unwrap();
         assert!(fake.names(NS, ObjectKind::Pod).is_empty());
         assert!(fake.names(NS, ObjectKind::PersistentVolumeClaim).is_empty());
+        assert!(fake.names(NS, ObjectKind::ConfigMap).is_empty());
         assert_eq!(
             fake.names(NS, ObjectKind::Secret),
             [foreign],
@@ -278,6 +292,7 @@ mod tests {
                     n.secret(&KubeCredential::GitConfig),
                     n.secret(&KubeCredential::SignIn { cli: AiCli::Codex }),
                 ],
+                config_map: n.config_map(),
             },
             "the access secret is among the names the cluster keeps"
         );

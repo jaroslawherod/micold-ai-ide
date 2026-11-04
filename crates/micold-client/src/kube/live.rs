@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use k8s_openapi::api::authorization::v1::SelfSubjectAccessReview;
-use k8s_openapi::api::core::v1::{Namespace, PersistentVolumeClaim, Pod, Secret};
+use k8s_openapi::api::core::v1::{ConfigMap, Namespace, PersistentVolumeClaim, Pod, Secret};
 use kube::api::{
     Api, ApiResource, DeleteParams, DynamicObject, ListParams, LogParams, PostParams, Preconditions,
 };
@@ -376,6 +376,7 @@ impl LiveCluster {
             ObjectKind::Pod => ApiResource::erase::<Pod>(&()),
             ObjectKind::PersistentVolumeClaim => ApiResource::erase::<PersistentVolumeClaim>(&()),
             ObjectKind::Secret => ApiResource::erase::<Secret>(&()),
+            ObjectKind::ConfigMap => ApiResource::erase::<ConfigMap>(&()),
         };
         Api::namespaced_with(self.client.clone(), namespace, &resource)
     }

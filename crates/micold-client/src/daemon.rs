@@ -1901,6 +1901,14 @@ pub async fn kube_attempt(
     let _registered = Registered::new(env, name, &cancel);
     let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let read = |path: &Path| std::fs::read_to_string(path);
+    // The file the pod's config map holds. Checked as every delivered file is: one that does not
+    // validate is not delivered (contract §4).
+    let time_zone = HOST_TIME_ZONE.get().and_then(|z| z.as_deref());
+    let config = crate::daemon_config_render::prepare(
+        &crate::daemon_config_render::DaemonSettings::for_pod(name, &image, time_zone),
+        micold_core::daemon_config::Kind::Kubernetes,
+    )
+    .map_err(|errors| format!("the pod's configuration is invalid: {}", errors[0]))?;
     let request = StartRequest {
         cluster: &*cluster,
         keys: &*env.keygen,
@@ -1912,6 +1920,8 @@ pub async fn kube_attempt(
         drift,
         home: &env.home,
         read: &read,
+        config: &config,
+        time_zone,
     };
     let started = match start(&request, &mut |_| {}).await {
         StartOutcome::Ready(started) => started,
@@ -2591,7 +2601,9 @@ mod tests {
         let target = SshTarget::new("build-box", None, None, None).unwrap();
         let mut settings = plain_settings();
         // A TCP listener without a client token file fails the daemon's own check.
-        settings.listen = micold_core::daemon_config::Listen::Tcp("0.0.0.0:7000".parse().unwrap());
+        settings.listen = Some(micold_core::daemon_config::Listen::Tcp(
+            "0.0.0.0:7000".parse().unwrap(),
+        ));
         let err = ssh_attempt(Some(&NoSsh), &target, &settings, &quiet())
             .await
             .err()

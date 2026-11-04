@@ -37,6 +37,8 @@ pub enum ObjectKind {
     PersistentVolumeClaim,
     /// A credential or pull secret.
     Secret,
+    /// The daemon's configuration file (`<name>-config`).
+    ConfigMap,
 }
 
 impl ObjectKind {
@@ -46,6 +48,7 @@ impl ObjectKind {
             ObjectKind::Pod => "Pod",
             ObjectKind::PersistentVolumeClaim => "PersistentVolumeClaim",
             ObjectKind::Secret => "Secret",
+            ObjectKind::ConfigMap => "ConfigMap",
         }
     }
 
@@ -55,6 +58,7 @@ impl ObjectKind {
             ObjectKind::Pod => "pod",
             ObjectKind::PersistentVolumeClaim => "volume claim",
             ObjectKind::Secret => "secret",
+            ObjectKind::ConfigMap => "config map",
         }
     }
 }

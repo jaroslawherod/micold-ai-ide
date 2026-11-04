@@ -28,8 +28,22 @@ pub const POD_HOME: &str = "/data/home";
 /// Where the access secret is mounted, read-only.
 pub const ACCESS_MOUNT: &str = "/run/micold/ssh";
 
-/// The environment variable that tells the image's SSH server where [`ACCESS_MOUNT`] is.
-pub const ACCESS_DIR_ENV: &str = "MICOLD_SSH_DIR";
+/// Where the config map holding `daemon.toml` is mounted, read-only.
+pub const CONFIG_MOUNT: &str = "/run/micold/config";
+
+/// The config map's key, which is the file's name under [`CONFIG_MOUNT`].
+pub const CONFIG_FILE: &str = "daemon.toml";
+
+/// The config map's annotation that holds the SHA-256 of its file, so a start rewrites it only
+/// when the file changed (the API returns a config map's data as text, a secret's as base64).
+pub const CONFIG_HASH_ANNOTATION: &str = "micold.dev/config-sha256";
+
+/// The volume of the config map.
+const CONFIG_VOLUME: &str = "daemon-config";
+
+/// The `LANG` of the pod: the image has no locale of its own (`sandbox/argv.rs` gives a container
+/// the same).
+pub const POD_LANG: &str = "C.UTF-8";
 
 /// The container's name.
 pub const CONTAINER: &str = "daemon";
@@ -50,6 +64,9 @@ impl PodStamp {
             "node_selector": settings.node_selector,
             "tolerations": settings.tolerations,
             "allowed": settings.allowed,
+            // Not a setting: it marks a pod made with the config map mounted, so an older one
+            // (the daemon's start-up variables, no `daemon.toml`) is recreated.
+            "config_map": true,
         });
         Self(value.to_string())
     }
@@ -89,6 +106,16 @@ pub fn holds_retired_credential(on_pod: &str) -> bool {
             .iter()
             .any(|c| RETIRED_KINDS.contains(&c["kind"].as_str().unwrap_or_default()))
     })
+}
+
+/// The pod's stamp is a readable one from before the config map was mounted: such a pod has no
+/// `daemon.toml` and runs on start-up variables the daemon no longer is given, so it is recreated
+/// whatever the user chose about drift. An unreadable stamp is not this (it asks, as always).
+pub fn lacks_config_map(on_pod: &str) -> bool {
+    serde_json::from_str::<Value>(on_pod)
+        .ok()
+        .and_then(|stamp| stamp.as_object().map(|o| !o.contains_key("config_map")))
+        .unwrap_or(false)
 }
 
 /// The metadata every object carries: `name`, our labels and the daemon-name annotation.
@@ -175,22 +202,35 @@ fn credential_mount(names: &ResourceNames, credential: &KubeCredential) -> Optio
     Some(out)
 }
 
-fn container(settings: &KubeSettings, names: &ResourceNames, image: &str) -> Value {
+fn container(
+    settings: &KubeSettings,
+    names: &ResourceNames,
+    image: &str,
+    time_zone: Option<&str>,
+) -> Value {
     let mut out = json!({
         "securityContext": container_security(),
         "name": CONTAINER,
         "image": image,
+        // No `MICOLD_*`: the daemon reads `daemon.toml` (FR-005, FR-039).
         "env": [
             { "name": "HOME", "value": POD_HOME },
             { "name": "TMPDIR", "value": "/tmp" },
-            { "name": ACCESS_DIR_ENV, "value": ACCESS_MOUNT },
+            { "name": "LANG", "value": POD_LANG },
         ],
         "volumeMounts": [
             { "name": "data", "mountPath": DATA_MOUNT },
             { "name": "tmp", "mountPath": "/tmp" },
             { "name": "ssh-access", "mountPath": ACCESS_MOUNT, "readOnly": true },
+            { "name": CONFIG_VOLUME, "mountPath": CONFIG_MOUNT, "readOnly": true },
         ],
     });
+    if let Some(zone) = time_zone {
+        out["env"]
+            .as_array_mut()
+            .expect("env is an array")
+            .push(json!({ "name": "TZ", "value": zone }));
+    }
     for credential in &settings.allowed {
         if let Some(mount) = credential_mount(names, credential) {
             out["volumeMounts"]
@@ -248,12 +288,14 @@ fn home_dirs(settings: &KubeSettings, main: &Value) -> Option<Value> {
 }
 
 /// The access reviews the start asks before it creates anything (contract §3): verb and resource.
-pub fn access_reviews() -> [(&'static str, &'static str); 6] {
+pub fn access_reviews() -> [(&'static str, &'static str); 8] {
     [
         ("create", "pods"),
         ("create", "persistentvolumeclaims"),
         ("create", "secrets"),
         ("update", "secrets"),
+        ("create", "configmaps"),
+        ("update", "configmaps"),
         ("create", "pods/portforward"),
         ("delete", "pods"),
     ]
@@ -263,18 +305,27 @@ pub fn access_reviews() -> [(&'static str, &'static str); 6] {
 const GIT_CREDENTIAL_VOLUME: &str = "git-credential";
 
 /// The pod that runs `image` for the daemon `names`.
-pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &PodStamp) -> Value {
+/// `time_zone` is the daemon's `daemon.time_zone`, the pod's `TZ`.
+pub fn pod(
+    settings: &KubeSettings,
+    names: &ResourceNames,
+    image: &str,
+    stamp: &PodStamp,
+    time_zone: Option<&str>,
+) -> Value {
     let mut spec = json!({
         "restartPolicy": "Always",
         "automountServiceAccountToken": false,
         "enableServiceLinks": false,
         "securityContext": pod_security(),
-        "containers": [container(settings, names, image)],
+        "containers": [container(settings, names, image, time_zone)],
         "volumes": [
             { "name": "data", "persistentVolumeClaim": { "claimName": names.pvc() } },
             { "name": "tmp", "emptyDir": {} },
             { "name": "ssh-access",
               "secret": { "secretName": names.access_secret(), "defaultMode": 0o440 } },
+            { "name": CONFIG_VOLUME,
+              "configMap": { "name": names.config_map(), "defaultMode": 0o444 } },
         ],
     });
     for credential in &settings.allowed {
@@ -314,6 +365,18 @@ pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &
         "kind": "Pod",
         "metadata": metadata(names, names.pod(), &[(POD_STAMP_ANNOTATION, stamp.as_str())]),
         "spec": spec,
+    })
+}
+
+/// The config map `<name>-config`: the daemon's `daemon.toml` under [`CONFIG_FILE`], stamped with
+/// its hash ([`CONFIG_HASH_ANNOTATION`]).
+pub fn config_map(names: &ResourceNames, text: &str) -> Value {
+    let hash = crate::protocol::hashing::sha256_hex(text.as_bytes());
+    json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": metadata(names, names.config_map(), &[(CONFIG_HASH_ANNOTATION, &hash)]),
+        "data": { CONFIG_FILE: text },
     })
 }
 
@@ -378,7 +441,7 @@ mod tests {
     fn all() -> [Value; 3] {
         let s = settings();
         [
-            pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE)),
+            pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None),
             pvc(&s, &names()),
             secret(&names(), "x-ssh-access", &BTreeMap::new()),
         ]
@@ -470,6 +533,7 @@ mod tests {
             &names(),
             "other:1",
             &PodStamp::of(&settings(), "other:1"),
+            None,
         );
         assert_eq!(other["spec"]["containers"][0]["image"], "other:1");
         assert_eq!((SSH_PORT, IMAGE_USER_UID), (2222, 10001));
@@ -492,11 +556,11 @@ mod tests {
     }
 
     #[test]
-    fn the_container_env_is_home_tmp_and_the_access_secret_directory_only() {
+    fn the_container_env_is_home_tmp_and_lang_only_and_no_micold_variable() {
         let want: BTreeMap<String, String> = [
             ("HOME", "/data/home"),
             ("TMPDIR", "/tmp"),
-            (ACCESS_DIR_ENV, ACCESS_MOUNT),
+            ("LANG", "C.UTF-8"),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -510,7 +574,7 @@ mod tests {
     fn the_claim_is_mounted_at_data_with_an_empty_dir_at_tmp() {
         let p = &all()[0];
         let volumes = p["spec"]["volumes"].as_array().unwrap();
-        assert_eq!(volumes.len(), 4);
+        assert_eq!(volumes.len(), 5);
         assert_eq!(volumes[0]["name"], "data");
         assert_eq!(
             volumes[0]["persistentVolumeClaim"]["claimName"],
@@ -573,7 +637,7 @@ mod tests {
             Toleration::parse("spot:Exists:NoExecute").unwrap(),
             Toleration::parse("dedicated:PreferNoSchedule").unwrap(),
         ];
-        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE));
+        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None);
         assert_eq!(p["spec"]["nodeSelector"], json!({"pool": "agents"}));
         assert_eq!(
             p["spec"]["tolerations"],
@@ -594,7 +658,7 @@ mod tests {
             memory_request: None,
             memory_limit: Some(Bytes(4 * GIB)),
         };
-        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE));
+        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None);
         let r = &p["spec"]["containers"][0]["resources"];
         assert_eq!(r["requests"], json!({"cpu": "500m"}));
         assert_eq!(r["limits"], json!({"cpu": "2000m", "memory": "4Gi"}));
@@ -604,7 +668,7 @@ mod tests {
             memory_request: None,
             memory_limit: None,
         };
-        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE));
+        let p = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None);
         assert!(p["spec"]["containers"][0].get("resources").is_none());
     }
 
@@ -621,7 +685,7 @@ mod tests {
     fn the_pod_carries_its_stamp_and_the_stamp_follows_the_pod_shaping_settings() {
         let s = settings();
         let stamp = PodStamp::of(&s, IMAGE);
-        let p = pod(&s, &names(), IMAGE, &stamp);
+        let p = pod(&s, &names(), IMAGE, &stamp, None);
         assert_eq!(
             p["metadata"]["annotations"][POD_STAMP_ANNOTATION],
             stamp.as_str()
@@ -684,7 +748,7 @@ mod tests {
     fn with_allowed(allowed: &[KubeCredential]) -> Value {
         let mut s = settings();
         s.allowed = allowed.iter().cloned().collect();
-        pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE))
+        pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None)
     }
 
     /// #1439 FR-019 (BUG-1500): the folders credential files are mounted into are made by the image
@@ -705,7 +769,7 @@ mod tests {
         assert_eq!(init["image"], IMAGE);
         assert_eq!(
             init["command"],
-            json!(["mkdir", "-p", "/data/home", "/data/home/.claude"])
+            json!(["mkdir", "-p", "/data/home/.claude"])
         );
         let main = &p["spec"]["containers"][0];
         assert_eq!(init["securityContext"], main["securityContext"]);
@@ -754,7 +818,7 @@ mod tests {
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();
-        assert_eq!(mounts.len(), 4);
+        assert_eq!(mounts.len(), 5);
     }
 
     #[test]
@@ -779,8 +843,9 @@ mod tests {
             .unwrap();
         let find = |name: String| mounts.iter().find(|m| m["name"] == name).unwrap();
         let config = find(n.secret(&KubeCredential::GitConfig));
-        assert_eq!(config["mountPath"], "/data/home/.gitconfig");
-        assert_eq!(config["subPath"], "gitconfig");
+        // A directory of its own: no single-file mount (FR-029).
+        assert_eq!(config["mountPath"], "/run/micold/secrets/git");
+        assert!(config.get("subPath").is_none());
         assert_eq!(config["readOnly"], true);
         let auth = find(n.secret(&signin));
         assert_eq!(auth["mountPath"], "/data/home/.claude/.credentials.json");
@@ -788,7 +853,90 @@ mod tests {
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
         );
-        assert_eq!(mounts.len(), 4 + 2);
+        assert_eq!(mounts.len(), 5 + 2);
+    }
+
+    fn golden(name: &str) -> Value {
+        let path = format!("{}/tests/golden/kube/{name}", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("{path}: {e}"))
+    }
+
+    /// T036: the whole pod as the daemon sees it: `daemon.toml` from the config map, the shared git
+    /// configuration as a directory Secret, a time zone, and not one `MICOLD_*`.
+    #[test]
+    fn golden_pod_mounts_the_config_map_and_the_secrets_as_directories() {
+        let mut s = settings();
+        s.allowed = [KubeCredential::GitConfig].into_iter().collect();
+        let p = pod(
+            &s,
+            &names(),
+            IMAGE,
+            &PodStamp::of(&s, IMAGE),
+            Some("Europe/Berlin"),
+        );
+        assert_eq!(p["spec"], golden("pod_spec.json"));
+    }
+
+    #[test]
+    fn golden_config_map_holds_the_file_under_its_hash() {
+        let cm = config_map(&names(), "schema = 1\n");
+        assert_eq!(cm, golden("config_map.json"));
+        assert_eq!(cm["metadata"]["name"], format!("{}-config", names().pod()));
+        let again = config_map(&names(), "schema = 1\n# changed\n");
+        assert_ne!(
+            again["metadata"]["annotations"][CONFIG_HASH_ANNOTATION],
+            cm["metadata"]["annotations"][CONFIG_HASH_ANNOTATION]
+        );
+    }
+
+    /// T036/FR-029: every config and secret volume is read-only and no mount is a single file,
+    /// except the sign-in's, which the AI CLI group (T065) moves to a directory.
+    #[test]
+    fn config_and_secret_mounts_are_read_only_and_the_git_one_has_no_sub_path() {
+        let signin = KubeCredential::SignIn {
+            cli: crate::session::AiCli::ClaudeCode,
+        };
+        let p = with_allowed(&[KubeCredential::GitConfig, signin.clone()]);
+        let n = names();
+        let mounts = p["spec"]["containers"][0]["volumeMounts"]
+            .as_array()
+            .unwrap();
+        for m in mounts {
+            let path = m["mountPath"].as_str().unwrap();
+            // The scoped git credential's directory is the daemon's to write.
+            if path.starts_with("/run/micold/") && !path.starts_with("/run/micold/git") {
+                assert_eq!(m["readOnly"], true, "{path}");
+                if m["name"] != n.secret(&signin) {
+                    assert!(m.get("subPath").is_none(), "{path}");
+                }
+            }
+        }
+        let paths: Vec<&str> = mounts
+            .iter()
+            .filter_map(|m| m["mountPath"].as_str())
+            .collect();
+        assert!(paths.contains(&CONFIG_MOUNT), "{paths:?}");
+    }
+
+    #[test]
+    fn the_pod_has_tz_only_when_the_daemon_has_a_time_zone() {
+        let s = settings();
+        let with = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), Some("UTC"));
+        assert_eq!(env(&with)["TZ"], "UTC");
+        assert!(!env(&all()[0]).contains_key("TZ"));
+    }
+
+    #[test]
+    fn a_stamp_from_before_the_config_map_is_recreated_and_an_unreadable_one_is_not() {
+        let s = settings();
+        let now = PodStamp::of(&s, IMAGE);
+        assert!(!lacks_config_map(now.as_str()));
+        let old = now.as_str().replace(",\"config_map\":true", "");
+        assert_ne!(old, now.as_str());
+        assert!(lacks_config_map(&old));
+        assert!(!lacks_config_map("not json"));
+        assert!(!lacks_config_map(""));
     }
 
     #[test]

@@ -103,7 +103,8 @@ pub struct DaemonSettings {
     pub image: Option<String>,
     pub idle_stop: Option<IdleStopSetting>,
     pub log: Option<String>,
-    pub listen: Listen,
+    /// `None` leaves out `[listen]`, which only a pod's file may ([`Self::for_pod`]).
+    pub listen: Option<Listen>,
     pub client_token_file: Option<PathBuf>,
     pub ssh_dir: Option<PathBuf>,
     pub clone_root: Option<PathBuf>,
@@ -126,13 +127,29 @@ impl DaemonSettings {
             image: None,
             idle_stop: None,
             log: None,
-            listen,
+            listen: Some(listen),
             client_token_file: None,
             ssh_dir: None,
             clone_root: None,
             projects: Vec::new(),
             startup: None,
             github_tokens: Vec::new(),
+        }
+    }
+
+    /// What a pod's `daemon.toml` is rendered from: the paths the pod's mounts fix, the idle stop
+    /// off (the pod outlives its client), and the image and time zone it runs. No `[listen]` and no
+    /// client token: the pod is reached through the bridge its SSH server starts, which relays to
+    /// the daemon's socket, so there is no address to serve and no token to check.
+    pub fn for_pod(name: &str, image: &str, time_zone: Option<&str>) -> Self {
+        Self {
+            listen: None,
+            image: Some(image.to_string()),
+            time_zone: time_zone.map(str::to_string),
+            idle_stop: Some(IdleStopSetting::Off),
+            ssh_dir: Some(PathBuf::from(micold_core::kube::manifest::ACCESS_MOUNT)),
+            clone_root: Some(PathBuf::from(micold_core::kube::credentials::REPOS_ROOT)),
+            ..Self::new(name, Listen::Socket(SocketSpec::Auto))
         }
     }
 
@@ -240,14 +257,16 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     }
     key_str(&mut out, "log", &settings.log);
 
-    out.push_str("\n[listen]\n");
-    match &settings.listen {
-        Listen::Socket(SocketSpec::Auto) => out.push_str("socket = \"auto\"\n"),
-        Listen::Socket(SocketSpec::Path(path)) => {
-            let _ = writeln!(out, "socket = {}", quote(&path.to_string_lossy()));
-        }
-        Listen::Tcp(addr) => {
-            let _ = writeln!(out, "tcp = {}", quote(&addr.to_string()));
+    if let Some(listen) = &settings.listen {
+        out.push_str("\n[listen]\n");
+        match listen {
+            Listen::Socket(SocketSpec::Auto) => out.push_str("socket = \"auto\"\n"),
+            Listen::Socket(SocketSpec::Path(path)) => {
+                let _ = writeln!(out, "socket = {}", quote(&path.to_string_lossy()));
+            }
+            Listen::Tcp(addr) => {
+                let _ = writeln!(out, "tcp = {}", quote(&addr.to_string()));
+            }
         }
     }
     table(&mut out, "auth", |out| {

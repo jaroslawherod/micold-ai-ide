@@ -88,3 +88,107 @@ async fn kube_real_the_pod_is_locked_down_and_accepts_only_the_access_keys() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// #1528 (daemon-config-file quickstart §2, pod row): the pod's env has no `MICOLD_*`, its
+/// `daemon.toml` is the config map mounted read-only (no `subPath`), the daemon started from it, and a
+/// config map the application replaces reaches the file in the pod (the kubelet's own delay, printed).
+#[tokio::test(flavor = "multi_thread")]
+async fn kube_real_the_pod_reads_its_configuration_from_the_config_map() {
+    let test = "kube_real_the_pod_reads_its_configuration_from_the_config_map";
+    let Some(_suite) = suite_or_skip(test) else {
+        return;
+    };
+    let ns = Namespace::create("kt-cfg");
+    let client = client();
+    let events = Events::default();
+    let (_conn, _welcome, _relay) = start(&client, "Config box", &settings(&ns.0, &[]), &events)
+        .await
+        .expect("starts");
+    let names = ResourceNames::new(CONTEXT, &ns.0, "Config box");
+    let get = |kind: &str, name: &str| -> serde_json::Value {
+        let json = kubectl(&["-n", &ns.0, "get", kind, name, "-o", "json"], None).unwrap();
+        serde_json::from_str(&json).unwrap()
+    };
+    let pod = get("pod", &names.pod());
+    let container = &pod["spec"]["containers"][0];
+    let env: Vec<&str> = container["env"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["name"].as_str())
+        .collect();
+    assert!(env.iter().all(|n| !n.starts_with("MICOLD_")), "{env:?}");
+    assert!(env.contains(&"LANG"), "{env:?}");
+    let mount = container["volumeMounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["mountPath"] == "/run/micold/config")
+        .expect("the config map is mounted");
+    assert_eq!(mount["readOnly"], true, "{mount}");
+    assert!(mount.get("subPath").is_none(), "{mount}");
+
+    let map = get("configmap", &names.config_map());
+    let file = map["data"]["daemon.toml"].as_str().unwrap().to_string();
+    let in_pod = kubectl(
+        &[
+            "-n",
+            &ns.0,
+            "exec",
+            &names.pod(),
+            "--",
+            "cat",
+            "/run/micold/config/daemon.toml",
+        ],
+        None,
+    )
+    .unwrap();
+    assert_eq!(in_pod, file, "the pod sees the config map's file");
+    assert!(file.contains("kind = \"kubernetes\""), "{file}");
+
+    // The application updates the config map; the kubelet's own propagation delay is measured.
+    let edited = format!("{file}# edited\n");
+    let patch = serde_json::json!({ "data": { "daemon.toml": edited } }).to_string();
+    kubectl(
+        &[
+            "-n",
+            &ns.0,
+            "patch",
+            "configmap",
+            &names.config_map(),
+            "--type=merge",
+            "-p",
+            &patch,
+        ],
+        None,
+    )
+    .unwrap();
+    let began = std::time::Instant::now();
+    loop {
+        let now = kubectl(
+            &[
+                "-n",
+                &ns.0,
+                "exec",
+                &names.pod(),
+                "--",
+                "cat",
+                "/run/micold/config/daemon.toml",
+            ],
+            None,
+        )
+        .unwrap();
+        if now == edited {
+            break;
+        }
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(180),
+            "the edited file never reached the pod"
+        );
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    println!(
+        "config map update reached the pod after {:?}",
+        began.elapsed()
+    );
+}

@@ -755,9 +755,10 @@ mod kubernetes {
         let secrets = n.all_secrets(&stored(&w, id).allowed).join(", ");
         assert!(
             text.starts_with(&format!(
-                "Remove Cluster? This deletes from prod/dev: pod {}, volume {} with its worktrees, secrets {secrets}. This computer's SSH key for Cluster is deleted too.",
+                "Remove Cluster? This deletes from prod/dev: pod {}, volume {} with its worktrees, config map {}, secrets {secrets}. This computer's SSH key for Cluster is deleted too.",
                 n.pod(),
-                n.pvc()
+                n.pvc(),
+                n.config_map()
             )),
             "{text}"
         );
@@ -820,8 +821,8 @@ mod kubernetes {
         assert_eq!(
             state.prompt().unwrap().text,
             format!(
-                "The cluster could not be reached (timed out). Forget Cluster on this computer only? These stay in prod/dev: {}, {}, {secrets}; this computer's key stays authorized in {} until they are deleted.",
-                n.pod(), n.pvc(), n.access_secret()
+                "The cluster could not be reached (timed out). Forget Cluster on this computer only? These stay in prod/dev: {}, {}, {}, {secrets}; this computer's key stays authorized in {} until they are deleted.",
+                n.pod(), n.pvc(), n.config_map(), n.access_secret()
             )
         );
         let out = send(&mut state, &mut w, Msg::RemovalConfirmed);

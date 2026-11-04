@@ -1833,13 +1833,14 @@ fn request_kube_removal(state: &mut State, model: &Model<'_>, id: DaemonId) {
         model.sessions.get(&id).map_or(0, Vec::len),
     );
     let text = format!(
-        "Remove {name}? This deletes from {}/{}: pod {}, volume {} with its worktrees, secrets {}. \
+        "Remove {name}? This deletes from {}/{}: pod {}, volume {} with its worktrees, config map {}, secrets {}. \
          This computer's SSH key for {name} is deleted too. {} will show \"no daemon\" until bound \
          again, and {} will stop.",
         settings.context.0,
         settings.namespace.0,
         left.pod,
         left.pvc,
+        left.config_map,
         left.secrets.join(", "),
         plural(wt, "worktree", "worktrees"),
         plural(sessions, "running session", "running sessions"),
@@ -1880,12 +1881,13 @@ fn request_forget_locally(
         .map(|e| format!("The cluster could not be reached ({e}). "))
         .unwrap_or_default();
     let text = format!(
-        "{why}Forget {name} on this computer only? These stay in {}/{}: {}, {}, {}; this \
+        "{why}Forget {name} on this computer only? These stay in {}/{}: {}, {}, {}, {}; this \
          computer's key stays authorized in {} until they are deleted.",
         settings.context.0,
         settings.namespace.0,
         left.pod,
         left.pvc,
+        left.config_map,
         left.secrets.join(", "),
         names.access_secret(),
     );

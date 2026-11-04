@@ -501,6 +501,8 @@ impl Checker<'_, '_> {
         let sandbox = self.kind().is_sandbox();
         let pod = self.kind() == Kind::Kubernetes;
         let Some(table) = &self.config.listen else {
+            // A pod's daemon is reached through the bridge its SSH server starts, which relays to
+            // the daemon's socket: it has no address to serve (daemon-config-file #1528).
             if pod {
                 self.at_key(
                     "V3",

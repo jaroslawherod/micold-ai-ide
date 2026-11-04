@@ -63,6 +63,7 @@ Everything is labelled `app.kubernetes.io/managed-by=micold-ai-ide` and `micold.
 | Pod | `micold-<name>-<key>` | Stop or Remove |
 | Volume claim (your worktrees, the daemon, the AI CLIs) | `micold-<name>-<key>-data` | Remove |
 | Secret, SSH access (the pod's host key and your computer's public key) | `micold-<name>-<key>-ssh-access` | Remove |
+| Config map, the daemon's `daemon.toml` | `micold-<name>-<key>-config` | Remove |
 | One secret per allowed credential | `...-gitconfig`, `...-git-credentials`, `...-git-ssh`, `...-signin-<cli>`, `...-pull` | the next start after you withdraw it, or Remove |
 
 **No Service, Ingress, network policy, service account, role or namespace is created.** Micold
@@ -70,8 +71,8 @@ reaches the pod only through the Kubernetes API's port-forward, so nothing is ex
 or on your computer beyond loopback. Your private key stays on your computer, readable by you only.
 A resource of the same name that Micold did not create is never touched: start fails and names it.
 
-Your account needs to create pods, volume claims and secrets, update secrets, delete pods and use
-`pods/portforward` in the namespace. A missing permission is refused before anything is created.
+Your account needs to create pods, volume claims, secrets and config maps, update secrets and config
+maps, delete pods and use `pods/portforward` in the namespace. A missing permission is refused before anything is created.
 
 ## The pod's security settings
 
@@ -81,19 +82,44 @@ profile. It does not mount a service account token. Its SSH server listens on lo
 only the key in the access secret, and refuses passwords, root login and any forwarding but the
 daemon's own.
 
+## The daemon's configuration
+
+The daemon in the pod reads one file, `/run/micold/config/daemon.toml`, which Micold writes from
+Settings into the config map `micold-<name>-<key>-config` at every start (it replaces the file only
+when it changed). The config map is mounted as a read-only directory, never as a single file, so
+the kubelet can update it in place; a session cannot write under `/run/micold/config` or
+`/run/micold/secrets`. The pod's environment is `HOME`, `TMPDIR`, `LANG=C.UTF-8` and, when Settings
+has a time zone, `TZ`: no `MICOLD_*` variable. `kubectl get pod <pod> -o yaml` shows exactly that.
+The daemon sets its own `TZ` from the file, so a changed time zone reaches new sessions with the
+file; the pod's own `TZ` changes when the pod is next recreated. A pod has no `[listen]` table: the
+client reaches it through the SSH server's bridge.
+
+The daemon notices a changed file within about 5 seconds of the file changing in the pod, but the
+kubelet copies a changed config map or secret into a running pod on its own schedule first
+(its sync period, up to about a minute by default). A change you make in Settings reaches the config map at the next start; a pod that
+was made before the config map existed is recreated at that start without asking (its volume is
+kept).
+
 ## Allowed credentials
 
 **Nothing reaches the pod unless it is ticked.** Each tick becomes a secret in the namespace,
 mounted read-only, and never goes into the image:
 
-- **the git config**, as `~/.gitconfig` on the volume, as a copy without credential helpers,
-  tokens embedded in URLs, extra HTTP headers, includes, or a custom SSH or askpass command;
+- **the git config**, as the file `gitconfig` in the read-only directory `/run/micold/secrets/git`
+  (git is told with `GIT_CONFIG_GLOBAL`), as a copy without credential helpers, tokens embedded in
+  URLs, extra HTTP headers, includes, or a custom SSH or askpass command;
 - **the sign-in** of each AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent), at the path that
   CLI reads under its home;
 - **the registry credentials**, with its **Registry credentials file**, as an image-pull secret.
 
 A ticked credential whose file is missing fails the start (`<credential> is allowed but <path> does
 not exist`). Unticking one deletes its secret on the next start.
+
+A credential that changes on your computer reaches the pod when the application updates its secret
+(at the next start). The kubelet then copies the new file into the mounted directory on its own
+schedule (up to about a minute by default; the cluster test
+`kube_real_the_pod_reads_its_configuration_from_the_config_map` prints the delay it saw); the
+daemon's own 5-second check comes after that.
 
 The **git credentials** and **SSH key** items were removed: they handed the pod your whole git
 identity. A daemon that had them ticked keeps working without them; its entry in the daemon list
@@ -163,11 +189,11 @@ fetches the existing clone instead of cloning again.
 - **Stop** deletes the pod and keeps the volume, so worktrees survive. It asks first when sessions
   are running ("Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept.").
   **Start** creates a new pod on the same volume.
-- **Remove** deletes the pod, the volume with its worktrees, the secrets and this computer's key,
+- **Remove** deletes the pod, the volume with its worktrees, the config map, the secrets and this computer's key,
   after a confirmation that names each of them and the cluster, namespace and counts of bound
   worktrees.
 - **Forget locally** only drops the entry and this computer's key. It is offered when Remove cannot
-  reach the cluster; the pod, volume and secrets stay in the cluster, and your key stays authorized
+  reach the cluster; the pod, volume, config map and secrets stay in the cluster, and your key stays authorized
   in the access secret until they are deleted.
 
 ## Logs
